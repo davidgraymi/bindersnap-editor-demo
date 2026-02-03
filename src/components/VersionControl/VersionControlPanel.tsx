@@ -5,21 +5,27 @@ import { BranchControl } from './BranchControl';
 import { CommitHistory } from './CommitHistory';
 import { CommitAction } from './CommitAction';
 import { ConflictResolver } from './ConflictResolver';
+import { CommitDetailOverlay } from './CommitDetailOverlay';
 import { GitGraph } from 'lucide-react';
 
 interface VersionControlPanelProps {
   getEditorContent: () => string;
   onContentChange: (content: string) => void;
+  onPreviewDiff: (base: string, head: string) => void;
+  isPreviewMode: boolean;
 }
 
 export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({ 
   getEditorContent, 
-  onContentChange 
+  onContentChange,
+  onPreviewDiff,
+  isPreviewMode
 }) => {
   const [branches, setBranches] = useState<string[]>([]);
   const [currentBranch, setCurrentBranch] = useState<string>('');
   const [history, setHistory] = useState<Commit[]>([]);
   const [headId, setHeadId] = useState<string | null>(null);
+  const [comparisonState, setComparisonState] = useState<{ headId: string; baseId: string } | null>(null);
   
   const [showMerge, setShowMerge] = useState(false);
   const [conflictState, setConflictState] = useState<{
@@ -29,6 +35,8 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
     baseContent: string;
     ourContent: string;
   } | null>(null);
+
+  const [selectedCommit, setSelectedCommit] = useState<{ commit: Commit; parentContent: string } | null>(null);
 
   const refreshState = () => {
     setBranches(gitService.getBranches());
@@ -50,6 +58,13 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
     const unsubscribe = gitService.subscribe(refreshState);
     return unsubscribe;
   }, []);
+
+  // Clear selection if preview is exited
+  useEffect(() => {
+    if (!isPreviewMode) {
+      setComparisonState(null);
+    }
+  }, [isPreviewMode]);
 
   const handleBranchChange = (branch: string) => {
     try {
@@ -102,6 +117,25 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
     setShowMerge(false);
   };
 
+  const handleSelectCommit = (commit: Commit) => {
+    // Ideally fetch this async or have a better way, but for now we look up parent synchronously
+    const parentId = commit.parentId;
+    let parentContent = '';
+    
+    if (parentId) {
+      const parent = gitService.getCommit(parentId);
+       if (parent) parentContent = parent.content;
+    }
+
+    setComparisonState({
+      headId: commit.id,
+      baseId: parentId || ''
+    });
+    
+    // Instead of local overlay, trigger preview in editor
+    onPreviewDiff(parentContent, commit.content);
+  };
+
   const handleResolveConflict = (resolvedContent: string) => {
     if (conflictState) {
       gitService.commit(`Merge branch '${conflictState.mergeBranch}' into '${currentBranch}'`, resolvedContent);
@@ -151,9 +185,14 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
       <CommitHistory
         history={history}
         currentHeadId={headId}
+        selectedHeadId={comparisonState?.headId || null}
+        selectedBaseId={comparisonState?.baseId || null}
+        onSelectCommit={handleSelectCommit}
       />
 
       <CommitAction onCommit={handleCommit} />
+
+
 
       {conflictState && (
         <ConflictResolver 

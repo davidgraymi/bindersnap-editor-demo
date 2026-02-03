@@ -9,8 +9,8 @@ export function App() {
     setContent(html);
   };
 
-  const handleContentUpdate = (newContent: string) => {
-    setContent(newContent);
+  const handleContentUpdate = (head: string) => {
+    setContent(head);
   };
 
 

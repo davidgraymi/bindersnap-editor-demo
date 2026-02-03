@@ -6,9 +6,12 @@ import { History, Clock, User } from 'lucide-react';
 interface CommitHistoryProps {
   history: Commit[];
   currentHeadId: string | null;
+  selectedHeadId: string | null;
+  selectedBaseId: string | null;
+  onSelectCommit: (commit: Commit) => void;
 }
 
-export const CommitHistory: React.FC<CommitHistoryProps> = ({ history, currentHeadId }) => {
+export const CommitHistory: React.FC<CommitHistoryProps> = ({ history, currentHeadId, selectedHeadId, selectedBaseId, onSelectCommit }) => {
   return (
     <div className="vc-section flex-1 min-h-0 flex flex-col">
       <div className="vc-header">
@@ -20,10 +23,25 @@ export const CommitHistory: React.FC<CommitHistoryProps> = ({ history, currentHe
         {history.length === 0 ? (
           <div className="empty-state">No commits yet</div>
         ) : (
-          history.map(commit => (
+          history.map(commit => {
+            const isComparing = !!selectedHeadId;
+            let className = 'commit-item clickable';
+            
+            if (commit.id === selectedHeadId) {
+              className += ' selected-head';
+            } else if (commit.id === selectedBaseId) {
+              className += ' selected-base';
+            } else if (commit.id === currentHeadId && !isComparing) {
+              // Only highlight current head if we are NOT in comparison mode
+              className += ' active';
+            }
+
+            return (
             <div 
               key={commit.id} 
-              className={`commit-item ${commit.id === currentHeadId ? 'active' : ''}`}
+              className={className}
+              onClick={() => onSelectCommit(commit)}
+              title="Click to view details"
             >
               <div className="commit-message" title={commit.message}>{commit.message}</div>
               <div className="commit-meta">
@@ -37,8 +55,9 @@ export const CommitHistory: React.FC<CommitHistoryProps> = ({ history, currentHe
               </div>
               <div className="commit-id">{commit.id.substring(0, 7)}</div>
             </div>
-          ))
-        )}
+          );
+        })
+      )}
       </div>
     </div>
   );

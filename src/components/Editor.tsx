@@ -26,9 +26,12 @@ import {
   Undo, Redo, Link as LinkIcon, Image as ImageIcon, 
   Highlighter, Minus, Eraser, Quote, Subscript as SubscriptIcon,
   Superscript as SuperscriptIcon, Indent, Outdent, Table as TableIcon,
-  ChevronDown, Type, Palette, GitGraph, X
+  ChevronDown, Type, Palette, GitGraph, X, Eye, EyeOff
 } from 'lucide-react';
+
 import { VersionControlPanel } from './VersionControl/VersionControlPanel';
+import { VersionHistory } from '../extensions/VersionHistory';
+import { gitService } from '../services/GitService';
 
 // --- Types ---
 interface ToolbarProps {
@@ -647,6 +650,7 @@ export const DemoEditor = ({
       TableRow,
       TableCell,
       TableHeader,
+      VersionHistory,
     ],
     content: initialContent,
     onUpdate: ({ editor }) => {
@@ -659,17 +663,121 @@ export const DemoEditor = ({
     },
   });
 
+  // State
   const [showVcPanel, setShowVcPanel] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(300);
+  const [isResizing, setIsResizing] = useState(false);
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [originalContent, setOriginalContent] = useState('');
+
+  // Resize Handlers
+  const startResizing = useCallback((mouseDownEvent: React.MouseEvent) => {
+    mouseDownEvent.preventDefault();
+    setIsResizing(true);
+  }, []);
+
+  const stopResizing = useCallback(() => {
+    setIsResizing(false);
+  }, []);
+
+  const resize = useCallback(
+    (mouseMoveEvent: MouseEvent) => {
+      if (isResizing) {
+        // Calculate new width based on mouse position from right edge of container
+        // Assuming the panel is on the right
+        const editorRect = document.querySelector('.demo-editor')?.getBoundingClientRect();
+        if (editorRect) {
+          const newWidth = editorRect.right - mouseMoveEvent.clientX;
+          if (newWidth > 200 && newWidth < 800) { // Min/Max constraints
+            setSidebarWidth(newWidth);
+          }
+        }
+      }
+    },
+    [isResizing]
+  );
+
+  useEffect(() => {
+    window.addEventListener("mousemove", resize);
+    window.addEventListener("mouseup", stopResizing);
+    return () => {
+      window.removeEventListener("mousemove", resize);
+      window.removeEventListener("mouseup", stopResizing);
+    };
+  }, [resize, stopResizing]);
 
   // Update editor content if initialContent changes externally (e.g. branch switch)
   useEffect(() => {
-    if (editor && initialContent !== editor.getHTML()) {
+    if (editor && !isPreviewMode && initialContent !== editor.getHTML()) {
       editor.commands.setContent(initialContent);
     }
-  }, [initialContent, editor]);
+  }, [initialContent, editor, isPreviewMode]);
+
+  // Update editable state
+  useEffect(() => {
+    if (editor) {
+      editor.setEditable(!isPreviewMode);
+    }
+  }, [isPreviewMode, editor]);
+
+  // Handle Keyboard Shortcuts (Ctrl+S / Cmd+S)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        if (editor && !isPreviewMode) {
+          const content = editor.getHTML();
+          const timestamp = new Date().toLocaleTimeString();
+          gitService.commit(`Auto-save at ${timestamp}`, content);
+          
+          // Force panel refresh by dispatching a custom event or relying on prop updates
+          // For this simple demo, we rely on the user opening/interacting with panel to see changes, 
+          // or we could expose a refresh trigger. 
+          // However, since VersionControlPanel is inside Editor, we can pass a refresh signal if we lift state,
+          // but simpler is that gitService is shared.
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [editor, isPreviewMode]);
+
+  const handlePreviewDiff = (base: string, head: string) => {
+    if (!editor) return;
+    
+    if (!isPreviewMode) {
+      setOriginalContent(editor.getHTML());
+    }
+    
+    // Use the extension command
+    editor.commands.setDiffContent(base, head);
+    setIsPreviewMode(true);
+  };
+
+  const handleExitPreview = () => {
+    if (!editor) return;
+    editor.commands.setContent(originalContent);
+    setIsPreviewMode(false);
+    setOriginalContent('');
+  };
 
   return (
     <div className={`demo-editor ${className}`}>
+      {isPreviewMode && (
+        <div style={{ background: '#fff7ed', padding: '8px 16px', borderBottom: '1px solid #fed7aa', display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#c2410c', fontSize: '13px', fontWeight: 500 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Eye size={16} /> 
+            Previewing Changes (Read Only)
+          </span>
+          <button 
+            onClick={handleExitPreview}
+            style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'white', border: '1px solid #fdba74', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', color: '#c2410c' }}
+          >
+            <EyeOff size={14} /> Exit Preview
+          </button>
+        </div>
+      )}
       <Toolbar editor={editor} showVcPanel={showVcPanel} onToggleVcCtrl={() => setShowVcPanel(!showVcPanel)} />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <div className="editor-content-wrapper" style={{ flex: 1 }}>
@@ -677,12 +785,18 @@ export const DemoEditor = ({
         </div>
         
         {showVcPanel && (
-          <div style={{ width: '300px', flexShrink: 0, height: '100%', borderLeft: '1px solid #e0e0e0' }}>
+          <div style={{ width: sidebarWidth, flexShrink: 0, height: '100%', position: 'relative' }}>
+             <div 
+               className={`resize-handle ${isResizing ? 'resizing' : ''}`}
+               onMouseDown={startResizing}
+             />
              <VersionControlPanel 
-               getEditorContent={() => editor?.getHTML() || ''}
+               getEditorContent={() => isPreviewMode ? originalContent : (editor?.getHTML() || '')}
                onContentChange={(content) => {
                  editor?.commands.setContent(content);
                }}
+               onPreviewDiff={handlePreviewDiff}
+               isPreviewMode={isPreviewMode}
              />
           </div>
         )}

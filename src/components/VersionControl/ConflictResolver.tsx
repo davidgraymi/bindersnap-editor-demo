@@ -79,8 +79,8 @@ export const ConflictResolver: React.FC<ConflictResolverProps> = ({
             ) : (
               <div className="diff-preview-area">
                 <DiffViewer 
-                   oldContent={resolution === 'ours' ? theirContent : ourContent} 
-                   newContent={resolution === 'ours' ? ourContent : theirContent} 
+                   base={resolution === 'ours' ? theirContent : ourContent} 
+                   head={resolution === 'ours' ? ourContent : theirContent} 
                 />
               </div>
             )}

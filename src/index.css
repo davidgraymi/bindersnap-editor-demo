@@ -485,6 +485,37 @@ body {
   }
 }
 
+/* Diff Styling */
+.ProseMirror ins {
+  background-color: #dcfce7;
+  /* Light green */
+  color: #166534;
+  /* Dark green */
+  text-decoration: none;
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+.ProseMirror span[data-deletion] {
+  background-color: #fee2e2;
+  /* Light red */
+  color: #991b1b;
+  /* Dark red */
+  text-decoration: line-through;
+  border-radius: 2px;
+  padding: 0 2px;
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+.ProseMirror .format-change {
+  background-color: #e0f2fe;
+  /* Light blue */
+  color: #0369a1;
+  /* Dark blue */
+  border-radius: 2px;
+}
+
 /* ====================
    Responsive
    ==================== */
@@ -532,14 +563,33 @@ body {
    Version Control Panel
    ==================== */
 .vc-panel {
-  width: 300px;
+  /* width removal: width is now inline-style controlled */
   background: white;
   border-left: 1px solid var(--editor-border);
   /* Changed to left border */
   display: flex;
   flex-direction: column;
   height: 100%;
-  overflow: hidden;
+  overflow-y: auto;
+  /* Enable scroll */
+  position: relative;
+}
+
+.resize-handle {
+  width: 5px;
+  background: transparent;
+  cursor: col-resize;
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 10;
+  transition: background 0.2s;
+}
+
+.resize-handle:hover,
+.resize-handle.resizing {
+  background: var(--focus-ring);
 }
 
 .vc-panel-header {
@@ -657,11 +707,34 @@ body {
   background: #fff;
   margin-bottom: 8px;
   font-size: 13px;
+  transition: all 0.1s ease;
+}
+
+.commit-item.clickable {
+  cursor: pointer;
+}
+
+.commit-item:hover {
+  border-color: #93c5fd;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .commit-item.active {
+  /* Default active/head */
   border-color: #3b82f6;
   background: #eff6ff;
+}
+
+.commit-item.selected-head {
+  border-color: #3b82f6;
+  background: #eff6ff;
+  box-shadow: none;
+}
+
+.commit-item.selected-base {
+  border-color: #f97316;
+  background: #ffedd5;
+  box-shadow: none;
 }
 
 .commit-message {
@@ -707,7 +780,7 @@ body {
   border-radius: 4px;
   font-family: inherit;
   font-size: 13px;
-  resize: vertical;
+  resize: none;
 }
 
 .commit-btn {

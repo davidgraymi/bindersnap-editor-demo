@@ -3,15 +3,15 @@ import React, { useMemo } from 'react';
 import * as Diff from 'diff';
 
 interface DiffViewerProps {
-  oldContent: string;
-  newContent: string;
+  base: string;
+  head: string;
 }
 
-export const DiffViewer: React.FC<DiffViewerProps> = ({ oldContent, newContent }) => {
+export const DiffViewer: React.FC<DiffViewerProps> = ({ base, head }) => {
   const diff = useMemo(() => {
     // We diff words to make it more readable for text
-    return Diff.diffWords(oldContent || '', newContent || '');
-  }, [oldContent, newContent]);
+    return Diff.diffWords(base || '', head || '');
+  }, [base, head]);
 
   return (
     <div className="diff-viewer">
