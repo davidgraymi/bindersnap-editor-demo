@@ -1,10 +1,18 @@
 import { DemoEditor } from './components/Editor';
 import "./index.css";
+import React, { useState } from 'react';
 
 export function App() {
+  const [content, setContent] = useState('');
+
   const handleChange = (html: string) => {
-    console.log('Editor content:', html);
+    setContent(html);
   };
+
+  const handleContentUpdate = (newContent: string) => {
+    setContent(newContent);
+  };
+
 
   const sampleContent = `
     <h1>Welcome to the Rich Text Editor</h1>
@@ -39,6 +47,12 @@ export function App() {
     <p>Start editing to see the changes in real-time!</p>
   `;
 
+  // Initialize content on first load if empty
+  React.useEffect(() => {
+    if (!content) setContent(sampleContent);
+  }, []);
+
+
   return (
     <div className="app">
       <div className="app-header">
@@ -48,7 +62,7 @@ export function App() {
       
       <div className="editor-demo-container">
         <DemoEditor 
-          initialContent={sampleContent}
+          initialContent={content}
           onChange={handleChange}
           placeholder="Start typing your document..."
         />

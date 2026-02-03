@@ -26,12 +26,15 @@ import {
   Undo, Redo, Link as LinkIcon, Image as ImageIcon, 
   Highlighter, Minus, Eraser, Quote, Subscript as SubscriptIcon,
   Superscript as SuperscriptIcon, Indent, Outdent, Table as TableIcon,
-  ChevronDown, Type, Palette
+  ChevronDown, Type, Palette, GitGraph, X
 } from 'lucide-react';
+import { VersionControlPanel } from './VersionControl/VersionControlPanel';
 
 // --- Types ---
 interface ToolbarProps {
   editor: Editor | null;
+  showVcPanel: boolean;
+  onToggleVcCtrl: () => void;
 }
 
 interface EditorProps {
@@ -192,7 +195,7 @@ const MenuButton = ({ onClick, isActive, disabled, children, title }: MenuButton
 const Divider = () => <div className="editor-toolbar-divider" />;
 
 // --- Toolbar Component ---
-const Toolbar = ({ editor }: ToolbarProps) => {
+const Toolbar = ({ editor, showVcPanel, onToggleVcCtrl }: ToolbarProps) => {
   const [textColor, setTextColor] = useState('#000000');
   const [highlightColor, setHighlightColor] = useState('#ffff00');
   const [, forceUpdate] = useState({});
@@ -573,6 +576,16 @@ const Toolbar = ({ editor }: ToolbarProps) => {
         >
           <Eraser size={16} />
         </MenuButton>
+
+        <Divider />
+
+        <MenuButton 
+          onClick={onToggleVcCtrl} 
+          isActive={showVcPanel}
+          title="Version Control"
+        >
+          <GitGraph size={16} />
+        </MenuButton>
       </div>
     </div>
   );
@@ -646,11 +659,33 @@ export const DemoEditor = ({
     },
   });
 
+  const [showVcPanel, setShowVcPanel] = useState(false);
+
+  // Update editor content if initialContent changes externally (e.g. branch switch)
+  useEffect(() => {
+    if (editor && initialContent !== editor.getHTML()) {
+      editor.commands.setContent(initialContent);
+    }
+  }, [initialContent, editor]);
+
   return (
     <div className={`demo-editor ${className}`}>
-      <Toolbar editor={editor} />
-      <div className="editor-content-wrapper">
-        <EditorContent editor={editor} />
+      <Toolbar editor={editor} showVcPanel={showVcPanel} onToggleVcCtrl={() => setShowVcPanel(!showVcPanel)} />
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        <div className="editor-content-wrapper" style={{ flex: 1 }}>
+          <EditorContent editor={editor} />
+        </div>
+        
+        {showVcPanel && (
+          <div style={{ width: '300px', flexShrink: 0, height: '100%', borderLeft: '1px solid #e0e0e0' }}>
+             <VersionControlPanel 
+               getEditorContent={() => editor?.getHTML() || ''}
+               onContentChange={(content) => {
+                 editor?.commands.setContent(content);
+               }}
+             />
+          </div>
+        )}
       </div>
     </div>
   );
