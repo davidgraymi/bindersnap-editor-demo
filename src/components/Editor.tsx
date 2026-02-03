@@ -668,7 +668,7 @@ export const DemoEditor = ({
   const [sidebarWidth, setSidebarWidth] = useState(300);
   const [isResizing, setIsResizing] = useState(false);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
-  const [originalContent, setOriginalContent] = useState('');
+  const [originalContent, setOriginalContent] = useState<Record<string, any>>({});
 
   // Resize Handlers
   const startResizing = useCallback((mouseDownEvent: React.MouseEvent) => {
@@ -726,7 +726,7 @@ export const DemoEditor = ({
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault();
         if (editor && !isPreviewMode) {
-          const content = editor.getHTML();
+          const content = editor.getJSON();
           const timestamp = new Date().toLocaleTimeString();
           gitService.commit(`Auto-save at ${timestamp}`, content);
           
@@ -743,23 +743,24 @@ export const DemoEditor = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [editor, isPreviewMode]);
 
-  const handlePreviewDiff = (base: string, head: string) => {
+  const handlePreviewDiff = useCallback((base: Record<string, any>, head: Record<string, any>) => {
     if (!editor) return;
     
     if (!isPreviewMode) {
-      setOriginalContent(editor.getHTML());
+      setOriginalContent(editor.getJSON());
     }
     
-    // Use the extension command
+    // Use the extension command via setContent for now, or update extension to accept JSON
+    // We'll update the extension to handle JSON objects
     editor.commands.setDiffContent(base, head);
     setIsPreviewMode(true);
-  };
+  }, [editor, isPreviewMode]);
 
   const handleExitPreview = () => {
     if (!editor) return;
     editor.commands.setContent(originalContent);
     setIsPreviewMode(false);
-    setOriginalContent('');
+    setOriginalContent({});
   };
 
   return (
@@ -791,7 +792,7 @@ export const DemoEditor = ({
                onMouseDown={startResizing}
              />
              <VersionControlPanel 
-               getEditorContent={() => isPreviewMode ? originalContent : (editor?.getHTML() || '')}
+               getEditorContent={() => isPreviewMode ? originalContent : (editor?.getJSON() || {})}
                onContentChange={(content) => {
                  editor?.commands.setContent(content);
                }}

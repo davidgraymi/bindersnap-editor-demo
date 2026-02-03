@@ -1,5 +1,5 @@
 import { Extension, Mark, mergeAttributes } from '@tiptap/core';
-import { diffHtml } from '../utils/htmlDiff';
+import { diffJson } from '../utils/jsonDiff';
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
@@ -73,9 +73,9 @@ export const VersionHistory = Extension.create({
 
   addCommands() {
     return {
-      setDiffContent: (base: string, head: string) => ({ commands }) => {
-        const html = diffHtml(base, head);
-        return commands.setContent(html);
+      setDiffContent: (base: Record<string, any>, head: Record<string, any>) => ({ commands }) => {
+        const mergedDoc = diffJson(base, head);
+        return commands.setContent(mergedDoc);
       },
     };
   },

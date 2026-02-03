@@ -5,9 +5,9 @@ import { DiffViewer } from './DiffViewer';
 interface ConflictResolverProps {
   baseBranch: string;
   mergeBranch: string;
-  ourContent: string;
-  theirContent: string;
-  onResolve: (resolvedContent: string) => void;
+  ourContent: Record<string, any>;
+  theirContent: Record<string, any>;
+  onResolve: (resolvedContent: Record<string, any>) => void;
   onCancel: () => void;
 }
 
@@ -20,12 +20,25 @@ export const ConflictResolver: React.FC<ConflictResolverProps> = ({
   onCancel
 }) => {
   const [resolution, setResolution] = useState<'ours' | 'theirs' | 'manual'>('manual');
-  const [manualContent, setManualContent] = useState(ourContent);
+  
+  // For manual merge, we can't easily edit JSON in a textarea. 
+  // Simplified for Demo: Manual merge just picks one, or we show a JSON string editor.
+  // Ideally this would be a real 3-way merge editor.
+  // We'll stick to simple choice for now or JSON editor.
+  const [manualContentJson, setManualContentJson] = useState(JSON.stringify(ourContent, null, 2));
 
   const handleApply = () => {
-    let content = manualContent;
+    let content = ourContent;
     if (resolution === 'ours') content = ourContent;
     if (resolution === 'theirs') content = theirContent;
+    if (resolution === 'manual') {
+        try {
+            content = JSON.parse(manualContentJson);
+        } catch (e) {
+            alert('Invalid JSON');
+            return;
+        }
+    }
     
     onResolve(content);
   };
@@ -62,18 +75,19 @@ export const ConflictResolver: React.FC<ConflictResolverProps> = ({
                 checked={resolution === 'manual'} 
                 onChange={() => setResolution('manual')}
               />
-              Manual Merge
+              Manual JSON Merge
             </label>
           </div>
 
           <div className="conflict-preview">
             {resolution === 'manual' ? (
               <div className="manual-merge-area">
-                <p className="help-text">Edit the content below to resolve the conflict:</p>
+                <p className="help-text">Edit the JSON below to resolve (Advanced):</p>
                 <textarea 
                   className="manual-editor"
-                  value={manualContent} 
-                  onChange={(e) => setManualContent(e.target.value)}
+                  value={manualContentJson} 
+                  onChange={(e) => setManualContentJson(e.target.value)}
+                  style={{ fontFamily: 'monospace', fontSize: '12px' }}
                 />
               </div>
             ) : (

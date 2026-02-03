@@ -9,9 +9,9 @@ import { CommitDetailOverlay } from './CommitDetailOverlay';
 import { GitGraph } from 'lucide-react';
 
 interface VersionControlPanelProps {
-  getEditorContent: () => string;
-  onContentChange: (content: string) => void;
-  onPreviewDiff: (base: string, head: string) => void;
+  getEditorContent: () => Record<string, any>;
+  onContentChange: (content: Record<string, any>) => void;
+  onPreviewDiff: (base: Record<string, any>, head: Record<string, any>) => void;
   isPreviewMode: boolean;
 }
 
@@ -31,12 +31,12 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
   const [conflictState, setConflictState] = useState<{
     isConflict: boolean;
     mergeBranch: string;
-    theirContent: string;
-    baseContent: string;
-    ourContent: string;
+    theirContent: Record<string, any>;
+    baseContent: Record<string, any>;
+    ourContent: Record<string, any>;
   } | null>(null);
 
-  const [selectedCommit, setSelectedCommit] = useState<{ commit: Commit; parentContent: string } | null>(null);
+  const [selectedCommit, setSelectedCommit] = useState<{ commit: Commit; parentContent: Record<string, any> } | null>(null);
 
   const refreshState = () => {
     setBranches(gitService.getBranches());
@@ -50,7 +50,7 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
     // Initialize if needed (empty repo)
     // We check once on mount
     const content = getEditorContent();
-    if (gitService.getHistory().length === 0 && content) {
+    if (gitService.getHistory().length === 0 && content && Object.keys(content).length > 0) {
       gitService.init(content);
     }
     
@@ -120,7 +120,7 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
   const handleSelectCommit = (commit: Commit) => {
     // Ideally fetch this async or have a better way, but for now we look up parent synchronously
     const parentId = commit.parentId;
-    let parentContent = '';
+    let parentContent: Record<string, any> = {};
     
     if (parentId) {
       const parent = gitService.getCommit(parentId);
@@ -136,7 +136,7 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
     onPreviewDiff(parentContent, commit.content);
   };
 
-  const handleResolveConflict = (resolvedContent: string) => {
+  const handleResolveConflict = (resolvedContent: Record<string, any>) => {
     if (conflictState) {
       gitService.commit(`Merge branch '${conflictState.mergeBranch}' into '${currentBranch}'`, resolvedContent);
       onContentChange(resolvedContent);

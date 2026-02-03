@@ -7,7 +7,7 @@ export interface Commit {
   message: string;
   timestamp: number;
   author: string;
-  content: string; // Storing full HTML content for simplicity in this demo
+  content: Record<string, any>; // Storing ProseMirror JSON
 }
 
 export interface Branch {
@@ -22,7 +22,7 @@ export interface RepoState {
   HEAD: string | null; // commitId
 }
 
-const STORAGE_KEY = 'bindersnap_git_repo';
+const STORAGE_KEY = 'bindersnap_git_repo_v2'; // Versioned key for new format
 
 
 export class GitService {
@@ -64,7 +64,7 @@ export class GitService {
 
   // --- Core Operations ---
 
-  public init(initialContent: string) {
+  public init(initialContent: Record<string, any>) {
     if (this.state.HEAD) return; // Already initialized
 
     const commitId = uuidv4();
@@ -84,7 +84,7 @@ export class GitService {
     this.notify();
   }
 
-  public commit(message: string, content: string, author: string = 'User'): Commit {
+  public commit(message: string, content: Record<string, any>, author: string = 'User'): Commit {
     if (!this.state.HEAD) {
       throw new Error('Repository not initialized');
     }
@@ -124,7 +124,7 @@ export class GitService {
     this.notify();
   }
 
-  public checkout(branchName: string): string {
+  public checkout(branchName: string): Record<string, any> {
     if (!this.state.branches[branchName]) {
       throw new Error(`Branch '${branchName}' does not exist`);
     }
@@ -194,9 +194,9 @@ export class GitService {
   public merge(sourceBranch: string, author: string = 'User'): { 
     success: boolean; 
     conflict?: boolean; 
-    mergedContent?: string;
-    theirContent?: string;
-    baseContent?: string;
+    mergedContent?: Record<string, any>;
+    theirContent?: Record<string, any>;
+    baseContent?: Record<string, any>;
   } {
     const sourceCommitId = this.state.branches[sourceBranch];
     if (!sourceCommitId) throw new Error(`Branch '${sourceBranch}' not found`);
@@ -216,38 +216,40 @@ export class GitService {
 
     const ancestor = this.findCommonAncestor(headId, sourceCommitId);
     
-    // Simple 3-way merge logic check
-    // If HEAD is unchanged from ancestor, fast-forward/clean merge to source.
-    // If Source is unchanged from ancestor, do nothing.
-    // If BOTH changed, CONFLICT (for this simple demo).
-    
     const headContent = headCommit.content;
     const sourceContent = sourceCommit.content;
-    const baseContent = ancestor ? ancestor.content : '';
+    const baseContent = ancestor ? ancestor.content : {};
 
-    if (headContent === baseContent) {
-        // Fast-forward-ish: User hasn't changed anything since ancestor, so take incoming
-        // Note: In real git this changes the commit graph, here we just return content to be committed as a merge commit
+    // For Demo: JSON structure comparison is simpler.
+    // If exact match -> no conflict
+    // If diff -> just take "theirs" (source) for now to avoid complexity of JSON tree merging in this demo step,
+    // OR we can rely on standard JSON comparison.
+    // Real implementation would use ProseMirror's mapping/step merging.
+    
+    // Naive equality check
+    const headJson = JSON.stringify(headContent);
+    const sourceJson = JSON.stringify(sourceContent);
+    const baseJson = JSON.stringify(baseContent);
+
+    if (headJson === baseJson) {
         return { success: true, mergedContent: sourceContent };
     }
 
-    if (sourceContent === baseContent) {
-        // Incoming hasn't changed, keep ours
+    if (sourceJson === baseJson) {
         return { success: true, mergedContent: headContent };
     }
 
-    if (headContent === sourceContent) {
-        // Identical changes
+    if (headJson === sourceJson) {
         return { success: true, mergedContent: headContent };
     }
 
-    // Both changed and different -> Conflict
+    // JSON-level Conflict
     return { 
         success: false, 
         conflict: true, 
         theirContent: sourceContent,
         baseContent: baseContent,
-        mergedContent: undefined // UI needs to resolve
+        mergedContent: undefined 
     };
   }
 }
