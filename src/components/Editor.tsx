@@ -193,10 +193,25 @@ const Divider = () => <div className="editor-toolbar-divider" />;
 
 // --- Toolbar Component ---
 const Toolbar = ({ editor }: ToolbarProps) => {
-  if (!editor) return null;
-
   const [textColor, setTextColor] = useState('#000000');
   const [highlightColor, setHighlightColor] = useState('#ffff00');
+  const [, forceUpdate] = useState({});
+
+  // Force re-render when selection or content changes so dropdowns reflect current text state
+  useEffect(() => {
+    if (!editor) return;
+    
+    const updateHandler = () => forceUpdate({});
+    editor.on('selectionUpdate', updateHandler);
+    editor.on('transaction', updateHandler);
+    
+    return () => {
+      editor.off('selectionUpdate', updateHandler);
+      editor.off('transaction', updateHandler);
+    };
+  }, [editor]);
+
+  if (!editor) return null;
 
   const addImage = useCallback(() => {
     const url = window.prompt('Enter image URL:');
@@ -218,11 +233,87 @@ const Toolbar = ({ editor }: ToolbarProps) => {
     editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
   }, [editor]);
 
-  const getCurrentHeading = () => {
-    for (let i = 1; i <= 6; i++) {
-      if (editor.isActive('heading', { level: i })) return i;
+  // Helper to get consistent style value across selection, returns sentinel if mixed
+  const getSelectionFontFamily = (): string => {
+    const { from, to } = editor.state.selection;
+    if (from === to) {
+      // Cursor position, no selection
+      return editor.getAttributes('textStyle').fontFamily || '';
     }
-    return 0;
+    
+    let fontFamily: string | null = null;
+    let hasMixed = false;
+    
+    editor.state.doc.nodesBetween(from, to, (node) => {
+      if (node.isText && node.marks) {
+        const textStyleMark = node.marks.find(m => m.type.name === 'textStyle');
+        const currentFont = textStyleMark?.attrs?.fontFamily || '';
+        
+        if (fontFamily === null) {
+          fontFamily = currentFont;
+        } else if (fontFamily !== currentFont) {
+          hasMixed = true;
+        }
+      }
+    });
+    
+    // Return sentinel that won't match any option when mixed
+    return hasMixed ? '__mixed__' : (fontFamily || '');
+  };
+
+  const getSelectionFontSize = (): string => {
+    const { from, to } = editor.state.selection;
+    if (from === to) {
+      // Cursor position, no selection
+      return editor.getAttributes('textStyle').fontSize || '16px';
+    }
+    
+    let fontSize: string | null = null;
+    let hasMixed = false;
+    
+    editor.state.doc.nodesBetween(from, to, (node) => {
+      if (node.isText && node.marks) {
+        const textStyleMark = node.marks.find(m => m.type.name === 'textStyle');
+        const currentSize = textStyleMark?.attrs?.fontSize || '16px';
+        
+        if (fontSize === null) {
+          fontSize = currentSize;
+        } else if (fontSize !== currentSize) {
+          hasMixed = true;
+        }
+      }
+    });
+    // Return sentinel that won't match any option when mixed
+    return hasMixed ? '__mixed__' : (fontSize || '16px');
+  };
+
+  const getCurrentHeading = (): number => {
+    const { from, to } = editor.state.selection;
+    if (from === to) {
+      // Cursor position, check active heading
+      for (let i = 1; i <= 6; i++) {
+        if (editor.isActive('heading', { level: i })) return i;
+      }
+      return 0;
+    }
+    
+    // Check if selection spans multiple block types
+    let headingLevel: number | null = null;
+    let hasMixed = false;
+    
+    editor.state.doc.nodesBetween(from, to, (node) => {
+      if (node.isBlock && (node.type.name === 'heading' || node.type.name === 'paragraph')) {
+        const currentLevel = node.type.name === 'heading' ? (node.attrs.level as number) : 0;
+        
+        if (headingLevel === null) {
+          headingLevel = currentLevel;
+        } else if (headingLevel !== currentLevel) {
+          hasMixed = true;
+        }
+      }
+    });
+    
+    return hasMixed ? -1 : (headingLevel ?? 0);
   };
 
   const handleHeadingChange = (level: string | number) => {
@@ -270,7 +361,7 @@ const Toolbar = ({ editor }: ToolbarProps) => {
 
         <Dropdown
           label="Font"
-          value={editor.getAttributes('textStyle').fontFamily || ''}
+          value={getSelectionFontFamily()}
           options={FONT_FAMILIES}
           onChange={handleFontFamilyChange}
           width="120px"
@@ -278,7 +369,7 @@ const Toolbar = ({ editor }: ToolbarProps) => {
 
         <Dropdown
           label="Size"
-          value={editor.getAttributes('textStyle').fontSize || '16px'}
+          value={getSelectionFontSize()}
           options={FONT_SIZES}
           onChange={handleFontSizeChange}
           width="70px"
@@ -287,7 +378,7 @@ const Toolbar = ({ editor }: ToolbarProps) => {
         <Divider />
 
         <Dropdown
-          label="Normal"
+          label="Style"
           value={String(getCurrentHeading())}
           options={HEADING_OPTIONS}
           onChange={handleHeadingChange}
