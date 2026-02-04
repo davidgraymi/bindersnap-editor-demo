@@ -1,24 +1,19 @@
 import React, { useCallback, useState, useRef, useEffect } from 'react';
 import { useEditor, EditorContent, Editor } from '@tiptap/react';
-import { Extension } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import Link from '@tiptap/extension-link';
 import Image from '@tiptap/extension-image';
 import TextAlign from '@tiptap/extension-text-align';
-import { Color } from '@tiptap/extension-color';
-import { TextStyle } from '@tiptap/extension-text-style';
+import Color from '@tiptap/extension-color';
+import { FontSize, LineHeight, TextStyle, FontFamily } from '@tiptap/extension-text-style';
 import Highlight from '@tiptap/extension-highlight';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
-import FontFamily from '@tiptap/extension-font-family';
 import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
 import Placeholder from '@tiptap/extension-placeholder';
-import { Table } from '@tiptap/extension-table';
-import { TableRow } from '@tiptap/extension-table-row';
-import { TableCell } from '@tiptap/extension-table-cell';
-import { TableHeader } from '@tiptap/extension-table-header';
+import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table';
 import { 
   Bold, Italic, Underline as UnderlineIcon, Strikethrough, Code, 
   Heading1, Heading2, Heading3, List, ListOrdered, CheckSquare,
@@ -50,12 +45,48 @@ interface EditorProps {
 // --- Font Options ---
 const FONT_FAMILIES = [
   { label: 'Default', value: '' },
-  { label: 'Arial', value: 'Arial, sans-serif' },
-  { label: 'Georgia', value: 'Georgia, serif' },
-  { label: 'Times New Roman', value: 'Times New Roman, serif' },
-  { label: 'Courier New', value: 'Courier New, monospace' },
-  { label: 'Verdana', value: 'Verdana, sans-serif' },
-  { label: 'Comic Sans MS', value: 'Comic Sans MS, cursive' },
+  { label: 'Arial', value: 'Arial, "Helvetica Neue", Helvetica, sans-serif' },
+  { label: 'Arial Black', value: '"Arial Black", "Arial Bold", Gadget, sans-serif' },
+  { label: 'Bodoni', value: '"Bodoni 72", "Bodoni MT", Bodoni, "Huppert", serif' },
+  { label: 'Book Antiqua', value: '"Book Antiqua", Palatino, "Palatino Linotype", "Palatino LT STD", "Georgia", serif' },
+  { label: 'Bradley Hand', value: '"Bradley Hand", "Bradley Hand ITC", cursive' },
+  { label: 'Brush Script MT', value: '"Brush Script MT", "Brush Script Std", cursive' },
+  { label: 'Calibri', value: 'Calibri, Candara, Segoe, "Segoe UI", Optima, Arial, sans-serif' },
+  { label: 'Cambria', value: 'Cambria, Georgia, serif' },
+  { label: 'Candara', value: 'Candara, sans-serif' },
+  { label: 'Century Gothic', value: '"Century Gothic", CenturyGothic, AppleGothic, sans-serif' },
+  { label: 'Comic Sans MS', value: '"Comic Sans MS", cursive, sans-serif' },
+  { label: 'Consolas', value: 'Consolas, monaco, monospace' },
+  { label: 'Copperplate', value: 'Copperplate, "Copperplate Gothic Light", sans-serif' },
+  { label: 'Courier New', value: '"Courier New", Courier, "Lucida Sans Typewriter", "Lucida Typewriter", monospace' },
+  { label: 'Didot', value: 'Didot, "Didot LT STD", "Hoefler Text", Garamond, "Times New Roman", serif' },
+  { label: 'Franklin Gothic', value: '"Franklin Gothic Medium", "Franklin Gothic", "ITC Franklin Gothic", Arial, sans-serif' },
+  { label: 'Garamond', value: '"EB Garamond", Garamond, "Baskerville", "Baskerville Old Face", "Hoefler Text", "Times New Roman", serif' },
+  { label: 'Georgia', value: 'Georgia, Times, "Times New Roman", serif' },
+  { label: 'Helvetica', value: '"Helvetica Neue", Helvetica, Arial, sans-serif' },
+  { label: 'Impact', value: 'Impact, Haettenschweiler, "Franklin Gothic Bold", Charcoal, "Helvetica Inserat", "Bitstream Vera Sans Bold", "Arial Black", sans-serif' },
+  { label: 'Lato', value: '"Lato", sans-serif' },
+  { label: 'Lora', value: '"Lora", serif' },
+  { label: 'Lucida Console', value: '"Lucida Console", "Lucida Sans Typewriter", "Monaco", "Bitstream Vera Sans Mono", monospace' },
+  { label: 'Lucida Sans Unicode', value: '"Lucida Sans Unicode", "Lucida Grande", sans-serif' },
+  { label: 'Merriweather', value: '"Merriweather", serif' },
+  { label: 'Monaco', value: 'Monaco, "Bitstream Vera Sans Mono", "Lucida Console", Terminal, monospace' },
+  { label: 'Montserrat', value: '"Montserrat", sans-serif' },
+  { label: 'Open Sans', value: '"Open Sans", sans-serif' },
+  { label: 'Oswald', value: '"Oswald", sans-serif' },
+  { label: 'Palatino', value: 'Palatino, "Palatino Linotype", "Palatino LT STD", "Book Antiqua", Georgia, serif' },
+  { label: 'Papyrus', value: 'Papyrus, fantasy' },
+  { label: 'Perpetua', value: 'Perpetua, Baskerville, "Big Caslon", "Palatino Linotype", Palatino, "URW Palladio L", "Nimbus Roman No9 L", serif' },
+  { label: 'Playfair Display', value: '"Playfair Display", serif' },
+  { label: 'Roboto', value: '"Roboto", sans-serif' },
+  { label: 'Rockwell', value: 'Rockwell, "Courier Bold", Courier, Georgia, Times, "Times New Roman", serif' },
+  { label: 'Segoe UI', value: '"Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' },
+  { label: 'Source Sans Pro', value: '"Source Sans Pro", sans-serif' },
+  { label: 'Tahoma', value: 'Tahoma, Verdana, Segoe, sans-serif' },
+  { label: 'Times New Roman', value: '"Times New Roman", Times, Baskerville, Georgia, serif' },
+  { label: 'Trebuchet MS', value: '"Trebuchet MS", "Lucida Grande", "Lucida Sans Unicode", "Lucida Sans", Tahoma, sans-serif' },
+  { label: 'Ubuntu', value: '"Ubuntu", sans-serif' },
+  { label: 'Verdana', value: 'Verdana, Geneva, sans-serif' },
 ];
 
 const FONT_SIZES = [
@@ -339,7 +370,7 @@ const Toolbar = ({ editor, showVcPanel, onToggleVcCtrl }: ToolbarProps) => {
   };
 
   const handleFontSizeChange = (size: string | number) => {
-    editor.chain().focus().setMark('textStyle', { fontSize: size }).run();
+    editor.chain().focus().setFontSize(size as string).run();
   };
 
   const handleTextColorChange = (color: string) => {
@@ -594,30 +625,6 @@ const Toolbar = ({ editor, showVcPanel, onToggleVcCtrl }: ToolbarProps) => {
   );
 };
 
-// --- Custom FontSize Extension ---
-
-const FontSize = Extension.create({
-  name: 'fontSize',
-  
-  addGlobalAttributes() {
-    return [
-      {
-        types: ['textStyle'],
-        attributes: {
-          fontSize: {
-            default: null,
-            parseHTML: element => element.style.fontSize || null,
-            renderHTML: attributes => {
-              if (!attributes.fontSize) return {};
-              return { style: `font-size: ${attributes.fontSize}` };
-            },
-          },
-        },
-      },
-    ];
-  },
-});
-
 // --- Main Editor Component ---
 export const DemoEditor = ({ 
   initialContent = '', 
@@ -638,6 +645,7 @@ export const DemoEditor = ({
       FontSize,
       FontFamily,
       TextStyle,
+      LineHeight,
       Color,
       Highlight.configure({ multicolor: true }),
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
