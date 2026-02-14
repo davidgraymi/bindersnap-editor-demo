@@ -1,20 +1,9 @@
 import { DemoEditor } from './components/Editor';
 import "./index.css";
 import React, { useState } from 'react';
+import { gitService } from './services/GitService';
 
-export function App() {
-  const [content, setContent] = useState('');
-
-  const handleChange = (html: string) => {
-    setContent(html);
-  };
-
-  const handleContentUpdate = (head: string) => {
-    setContent(head);
-  };
-
-
-  const sampleContent = `
+const sampleContent = `
     <h1>Welcome to the Rich Text Editor</h1>
     <p>This is a fully-featured <strong>TipTap</strong> editor with a <em>Google Docs-like</em> toolbar. Try out all the formatting options!</p>
     
@@ -47,10 +36,21 @@ export function App() {
     <p>Start editing to see the changes in real-time!</p>
   `;
 
-  // Initialize content on first load if empty
-  React.useEffect(() => {
-    if (!content) setContent(sampleContent);
-  }, []);
+export function App() {
+  const [content, setContent] = useState(() => {
+    const history = gitService.getHistory();
+    if (history.length > 0) {
+      // Use the content of the latest commit (HEAD)
+      const head = history[0];
+      if (head) return head.content;
+    }
+    return sampleContent;
+  });
+
+  const handleChange = (html: string) => {
+    setContent(html);
+  };
+
 
 
   return (

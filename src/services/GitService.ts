@@ -22,8 +22,7 @@ export interface RepoState {
   HEAD: string | null; // commitId
 }
 
-const STORAGE_KEY = 'bindersnap_git_repo';
-
+const STORAGE_KEY = 'bindersnap_demo_git_repo';
 
 export class GitService {
   private state: RepoState;

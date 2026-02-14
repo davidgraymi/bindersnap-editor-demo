@@ -3,9 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { gitService, type Commit } from '../../services/GitService';
 import { BranchControl } from './BranchControl';
 import { CommitHistory } from './CommitHistory';
-import { CommitAction } from './CommitAction';
 import { ConflictResolver } from './ConflictResolver';
-import { CommitDetailOverlay } from './CommitDetailOverlay';
 import { GitGraph } from 'lucide-react';
 
 interface VersionControlPanelProps {
@@ -35,8 +33,6 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
     baseContent: string;
     ourContent: string;
   } | null>(null);
-
-  const [selectedCommit, setSelectedCommit] = useState<{ commit: Commit; parentContent: string } | null>(null);
 
   const refreshState = () => {
     setBranches(gitService.getBranches());

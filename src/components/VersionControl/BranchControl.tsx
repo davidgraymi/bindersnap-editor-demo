@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { GitBranch, Plus } from 'lucide-react';
-import { gitService } from '../../services/GitService';
 
 interface BranchControlProps {
   currentBranch: string;
