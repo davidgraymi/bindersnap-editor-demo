@@ -61,6 +61,33 @@ body {
 }
 
 /* ====================
+   Utilities
+   ==================== */
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.flex-1 {
+  flex: 1 1 0%;
+}
+
+.flex-none {
+  flex: none;
+}
+
+.min-h-0 {
+  min-height: 0;
+}
+
+.overflow-y-auto {
+  overflow-y: auto;
+}
+
+/* ====================
    Editor Container (Demo)
    ==================== */
 .editor-demo-container {
@@ -572,8 +599,6 @@ body {
   display: flex;
   flex-direction: column;
   height: 100%;
-  overflow-y: auto;
-  /* Enable scroll */
   position: relative;
 }
 
@@ -697,7 +722,6 @@ body {
 
 /* History */
 .commit-list {
-  max-height: 400px;
   overflow-y: auto;
   padding-right: 4px;
 }

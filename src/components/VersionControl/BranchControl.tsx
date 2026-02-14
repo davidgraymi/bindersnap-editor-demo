@@ -29,7 +29,7 @@ export const BranchControl: React.FC<BranchControlProps> = ({
   };
 
   return (
-    <div className="vc-section">
+    <div>
       <div className="vc-header">
         <GitBranch size={16} />
         <span className="vc-title">Branches</span>

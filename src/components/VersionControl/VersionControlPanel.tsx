@@ -151,14 +151,16 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
         <h2>Version Control</h2>
       </div>
 
-      <BranchControl
-        branches={branches}
-        currentBranch={currentBranch}
-        onBranchChange={handleBranchChange}
-        onNewBranch={handleNewBranch}
-      />
+      <div className="vc-section flex-none">
+        <BranchControl
+          branches={branches}
+          currentBranch={currentBranch}
+          onBranchChange={handleBranchChange}
+          onNewBranch={handleNewBranch}
+        />
 
-       <div className="vc-section">
+        <div style={{ height: '16px' }}></div>
+
          <button 
            className="merge-toggle-btn" 
            onClick={() => setShowMerge(!showMerge)}
@@ -189,10 +191,6 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
         selectedBaseId={comparisonState?.baseId || null}
         onSelectCommit={handleSelectCommit}
       />
-
-      <CommitAction onCommit={handleCommit} />
-
-
 
       {conflictState && (
         <ConflictResolver 

@@ -13,7 +13,7 @@ interface CommitHistoryProps {
 
 export const CommitHistory: React.FC<CommitHistoryProps> = ({ history, currentHeadId, selectedHeadId, selectedBaseId, onSelectCommit }) => {
   return (
-    <div className="vc-section flex-1 min-h-0 flex flex-col">
+    <div className="vc-section flex flex-1 min-h-0 flex-col">
       <div className="vc-header">
         <History size={16} />
         <span className="vc-title">History</span>
