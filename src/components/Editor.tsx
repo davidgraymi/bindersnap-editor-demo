@@ -68,6 +68,7 @@ const FONT_FAMILIES = [
   { label: 'Georgia', value: 'Georgia, Times, "Times New Roman", serif' },
   { label: 'Helvetica', value: '"Helvetica Neue", Helvetica, Arial, sans-serif' },
   { label: 'Impact', value: 'Impact, Haettenschweiler, "Franklin Gothic Bold", Charcoal, "Helvetica Inserat", "Bitstream Vera Sans Bold", "Arial Black", sans-serif' },
+  { label: 'Inter', value: '"Inter", sans-serif' },
   { label: 'Lato', value: '"Lato", sans-serif' },
   { label: 'Lora', value: '"Lora", serif' },
   { label: 'Lucida Console', value: '"Lucida Console", "Lucida Sans Typewriter", "Monaco", "Bitstream Vera Sans Mono", monospace' },
