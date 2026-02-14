@@ -21,7 +21,8 @@ import {
   Undo, Redo, Link as LinkIcon, Image as ImageIcon, 
   Highlighter, Minus, Eraser, Quote, Subscript as SubscriptIcon,
   Superscript as SuperscriptIcon, Indent, Outdent, Table as TableIcon,
-  ChevronDown, Type, Palette, GitGraph, X, Eye, EyeOff
+  ChevronDown, Type, Palette, GitGraph, X, Eye, EyeOff,
+  Maximize, Minimize
 } from 'lucide-react';
 
 import { VersionControlPanel } from './VersionControl/VersionControlPanel';
@@ -33,6 +34,8 @@ interface ToolbarProps {
   editor: Editor | null;
   showVcPanel: boolean;
   onToggleVcCtrl: () => void;
+  isFullScreen: boolean;
+  onToggleFullScreen: () => void;
 }
 
 interface EditorProps {
@@ -229,7 +232,7 @@ const MenuButton = ({ onClick, isActive, disabled, children, title }: MenuButton
 const Divider = () => <div className="editor-toolbar-divider" />;
 
 // --- Toolbar Component ---
-const Toolbar = ({ editor, showVcPanel, onToggleVcCtrl }: ToolbarProps) => {
+const Toolbar = ({ editor, showVcPanel, onToggleVcCtrl, isFullScreen, onToggleFullScreen }: ToolbarProps) => {
   const [textColor, setTextColor] = useState('#000000');
   const [highlightColor, setHighlightColor] = useState('#ffff00');
   const [, forceUpdate] = useState({});
@@ -421,6 +424,16 @@ const Toolbar = ({ editor, showVcPanel, onToggleVcCtrl }: ToolbarProps) => {
           onChange={handleHeadingChange}
           width="110px"
         />
+
+        <div style={{ marginLeft: 'auto' }}>
+          <MenuButton
+            onClick={onToggleFullScreen}
+            title={isFullScreen ? "Exit Full Screen" : "Full Screen"}
+            isActive={isFullScreen}
+          >
+            {isFullScreen ? <Minimize size={16} /> : <Maximize size={16} />}
+          </MenuButton>
+        </div>
       </div>
 
       {/* Row 2: Formatting, Colors, Alignment, Lists, Blocks, Insert */}
@@ -770,8 +783,28 @@ export const DemoEditor = ({
     setOriginalContent('');
   };
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isFullScreen, setIsFullScreen] = useState(false);
+
+  const toggleFullScreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      containerRef.current?.requestFullscreen();
+    } else {
+      document.exitFullscreen();
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleFullScreenChange = () => {
+      setIsFullScreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullScreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullScreenChange);
+  }, []);
+
   return (
-    <div className={`demo-editor ${className}`}>
+    <div className={`demo-editor ${className}`} ref={containerRef}>
       {isPreviewMode && (
         <div style={{ background: '#fff7ed', padding: '8px 16px', borderBottom: '1px solid #fed7aa', display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#c2410c', fontSize: '13px', fontWeight: 500 }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -786,7 +819,13 @@ export const DemoEditor = ({
           </button>
         </div>
       )}
-      <Toolbar editor={editor} showVcPanel={showVcPanel} onToggleVcCtrl={() => setShowVcPanel(!showVcPanel)} />
+      {!isPreviewMode && (<Toolbar 
+        editor={editor} 
+        showVcPanel={showVcPanel} 
+        onToggleVcCtrl={() => setShowVcPanel(!showVcPanel)}
+        isFullScreen={isFullScreen}
+        onToggleFullScreen={toggleFullScreen}
+      />)}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <div className="editor-content-wrapper" style={{ flex: 1 }}>
           <EditorContent editor={editor} />
