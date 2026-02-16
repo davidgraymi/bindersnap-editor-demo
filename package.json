@@ -9,6 +9,7 @@
     "start": "NODE_ENV=production bun src/index.ts"
   },
   "dependencies": {
+    "@tiptap/extension-bubble-menu": "^3.19.0",
     "@tiptap/extension-color": "^3.18.0",
     "@tiptap/extension-font-family": "^3.18.0",
     "@tiptap/extension-highlight": "^3.18.0",

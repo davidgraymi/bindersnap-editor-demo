@@ -58,6 +58,74 @@ body {
   margin: 0;
   opacity: 0.9;
   font-size: 1rem;
+  opacity: 0.9;
+  font-size: 1rem;
+}
+
+/* ====================
+   Merge Controls
+   ==================== */
+.merge-bubble-menu {
+  background: white;
+  border: 1px solid var(--editor-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 6px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  z-index: 50;
+}
+
+.merge-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.merge-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  padding-right: 8px;
+  border-right: 1px solid var(--editor-border);
+}
+
+.merge-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.merge-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.merge-btn.accept {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.merge-btn.accept:hover {
+  background: #bbf7d0;
+}
+
+.merge-btn.reject {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.merge-btn.reject:hover {
+  background: #fecaca;
 }
 
 /* ====================

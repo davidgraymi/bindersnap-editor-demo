@@ -4,14 +4,11 @@ import type { Commit } from '../../services/GitService';
 import { History, Clock, User } from 'lucide-react';
 
 interface CommitHistoryProps {
-  history: Commit[];
-  currentHeadId: string | null;
-  selectedHeadId: string | null;
-  selectedBaseId: string | null;
-  onSelectCommit: (commit: Commit) => void;
+  commits: Commit[];
+  currentBranch: string;
 }
 
-export const CommitHistory: React.FC<CommitHistoryProps> = ({ history, currentHeadId, selectedHeadId, selectedBaseId, onSelectCommit }) => {
+export const CommitHistory: React.FC<CommitHistoryProps> = ({ commits, currentBranch }) => {
   return (
     <div className="vc-section flex flex-1 min-h-0 flex-col">
       <div className="vc-header">
@@ -20,27 +17,16 @@ export const CommitHistory: React.FC<CommitHistoryProps> = ({ history, currentHe
       </div>
       
       <div className="vc-content flex-1 overflow-y-auto commit-list">
-        {history.length === 0 ? (
+        {commits.length === 0 ? (
           <div className="empty-state">No commits yet</div>
         ) : (
-          history.map(commit => {
-            const isComparing = !!selectedHeadId;
-            let className = 'commit-item clickable';
-            
-            if (commit.id === selectedHeadId) {
-              className += ' selected-head';
-            } else if (commit.id === selectedBaseId) {
-              className += ' selected-base';
-            } else if (commit.id === currentHeadId && !isComparing) {
-              // Only highlight current head if we are NOT in comparison mode
-              className += ' active';
-            }
+          commits.map(commit => {
+            const className = 'commit-item';
 
             return (
             <div 
               key={commit.id} 
               className={className}
-              onClick={() => onSelectCommit(commit)}
               title="Click to view details"
             >
               <div className="commit-message" title={commit.message}>{commit.message}</div>

@@ -5,6 +5,7 @@ import { BranchControl } from './BranchControl';
 import { CommitHistory } from './CommitHistory';
 import { ConflictResolver } from './ConflictResolver';
 import { GitGraph } from 'lucide-react';
+import { diffHtml } from '../../utils/htmlDiff';
 
 interface VersionControlPanelProps {
   getEditorContent: () => string;
@@ -22,24 +23,14 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
   const [branches, setBranches] = useState<string[]>([]);
   const [currentBranch, setCurrentBranch] = useState<string>('');
   const [history, setHistory] = useState<Commit[]>([]);
-  const [headId, setHeadId] = useState<string | null>(null);
-  const [comparisonState, setComparisonState] = useState<{ headId: string; baseId: string } | null>(null);
   
   const [showMerge, setShowMerge] = useState(false);
-  const [conflictState, setConflictState] = useState<{
-    isConflict: boolean;
-    mergeBranch: string;
-    theirContent: string;
-    baseContent: string;
-    ourContent: string;
-  } | null>(null);
 
   const refreshState = () => {
     setBranches(gitService.getBranches());
     setCurrentBranch(gitService.getCurrentBranch());
     setHistory(gitService.getHistory());
     const head = gitService.getCommit(gitService.getHistory()[0]?.id || '');
-    setHeadId(head?.id || null);
   };
 
   useEffect(() => {
@@ -55,12 +46,7 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
     return unsubscribe;
   }, []);
 
-  // Clear selection if preview is exited
-  useEffect(() => {
-    if (!isPreviewMode) {
-      setComparisonState(null);
-    }
-  }, [isPreviewMode]);
+  /* Removed comparisonState tracking */
 
   const handleBranchChange = (branch: string) => {
     try {
@@ -99,13 +85,15 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
         // Content updates via listener automatically, but we might need to push the new content to the editor
         onContentChange(result.mergedContent);
       } else if (result.conflict) {
-        setConflictState({
-          isConflict: true,
-          mergeBranch: branchToMerge,
-          theirContent: result.theirContent!,
-          baseContent: result.baseContent!,
-          ourContent: getEditorContent()
-        });
+        // Granular Merge:
+        // Generate diff between CURRENT (Ours) and INCOMING (Theirs)
+        // and set it as the editor content. The editor's MergeControls will allow resolution.
+        if (result.theirContent) {
+           const diffContent = diffHtml(getEditorContent(), result.theirContent);
+           onContentChange(diffContent);
+           // We might want to notify the user
+           // alert("Merge conflicts detected. Please resolve them in the editor.");
+        }
       }
     } catch (e: any) {
       alert(e.message);
@@ -113,32 +101,10 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
     setShowMerge(false);
   };
 
-  const handleSelectCommit = (commit: Commit) => {
-    // Ideally fetch this async or have a better way, but for now we look up parent synchronously
-    const parentId = commit.parentId;
-    let parentContent = '';
-    
-    if (parentId) {
-      const parent = gitService.getCommit(parentId);
-       if (parent) parentContent = parent.content;
-    }
 
-    setComparisonState({
-      headId: commit.id,
-      baseId: parentId || ''
-    });
-    
-    // Instead of local overlay, trigger preview in editor
-    onPreviewDiff(parentContent, commit.content);
-  };
 
-  const handleResolveConflict = (resolvedContent: string) => {
-    if (conflictState) {
-      gitService.commit(`Merge branch '${conflictState.mergeBranch}' into '${currentBranch}'`, resolvedContent);
-      onContentChange(resolvedContent);
-      setConflictState(null);
-    }
-  };
+  // Removed handleResolveConflict as it is now done in editor via MergeControls (which just modifies content)
+  // When user is done, they can "Commit" via the panel or Ctrl+S as usual.
 
   return (
     <div className="vc-panel">
@@ -180,24 +146,12 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
          )}
        </div>
 
-      <CommitHistory
-        history={history}
-        currentHeadId={headId}
-        selectedHeadId={comparisonState?.headId || null}
-        selectedBaseId={comparisonState?.baseId || null}
-        onSelectCommit={handleSelectCommit}
+      <CommitHistory 
+        commits={history}
+        currentBranch={currentBranch} 
       />
 
-      {conflictState && (
-        <ConflictResolver 
-          baseBranch={currentBranch}
-          mergeBranch={conflictState.mergeBranch}
-          ourContent={conflictState.ourContent}
-          theirContent={conflictState.theirContent}
-          onResolve={handleResolveConflict}
-          onCancel={() => setConflictState(null)}
-        />
-      )}
+
     </div>
   );
 };

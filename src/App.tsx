@@ -1,4 +1,4 @@
-import { DemoEditor } from './components/Editor';
+import { Editor } from './components/Editor';
 import "./index.css";
 import React, { useState } from 'react';
 import { gitService } from './services/GitService';
@@ -61,7 +61,7 @@ export function App() {
       </div>
       
       <div className="editor-demo-container">
-        <DemoEditor 
+        <Editor 
           initialContent={content}
           onChange={handleChange}
           placeholder="Start typing your document..."
