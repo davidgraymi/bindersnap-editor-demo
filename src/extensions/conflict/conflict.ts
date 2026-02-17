@@ -1,11 +1,11 @@
 import { Node, mergeAttributes } from "@tiptap/core";
 import { ReactNodeViewRenderer } from "@tiptap/react";
-import { ConflictMenu } from "../components/ConflictMenu";
+import { ConflictNodeView } from "./components/ConflictNodeView";
 
 export const Conflict = Node.create({
   name: "conflict",
   group: "block",
-  content: "conflictOption* block*", // Allows hidden options + editable content
+  content: "conflictOption* block*",
   defining: true,
   selectable: true,
 
@@ -27,8 +27,7 @@ export const Conflict = Node.create({
   },
 
   addNodeView() {
-    // This is where we link the UI component for the "Pick a winner" buttons
-    return ReactNodeViewRenderer(ConflictMenu);
+    return ReactNodeViewRenderer(ConflictNodeView);
   },
 
   addExtensions() {
@@ -38,7 +37,7 @@ export const Conflict = Node.create({
 
 export const ConflictOption = Node.create({
   name: "conflictOption",
-  content: "block+", // Allows paragraphs, lists, etc.
+  content: "block+",
   addAttributes() {
     return {
       branch: { default: undefined },

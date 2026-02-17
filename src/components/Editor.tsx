@@ -68,7 +68,7 @@ import {
 import { VersionControlPanel } from "./VersionControl/VersionControlPanel";
 import { VersionHistory } from "../extensions/VersionHistory";
 import { gitService } from "../services/GitService";
-import { Conflict } from "../extensions/Conflict";
+import { Conflict, ConflictMenu } from "../extensions/conflict";
 
 // --- Types ---
 interface ToolbarProps {
@@ -1040,6 +1040,7 @@ export const DemoEditor = ({
       )}
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         <div className="editor-content-wrapper" style={{ flex: 1 }}>
+          <ConflictMenu editor={editor} />
           <EditorContent editor={editor} />
         </div>
 
