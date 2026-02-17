@@ -6,15 +6,15 @@ import {
   getMarkRange,
   getMarksBetween,
 } from "@tiptap/core";
-import { diffHtml } from "../utils/htmlDiff";
 import type { CommandProps, Editor, MarkRange } from "@tiptap/core";
+import * as jsondiffpatch from "jsondiffpatch";
 
 const LOG_ENABLED = true;
 
 export const MARK_DELETION = "deletion";
 export const MARK_INSERTION = "insertion";
 export const MARK_FORMAT_CHANGE = "formatChange";
-export const EXTENSION_NAME = "versionHistory";
+export const EXTENSION_NAME = "versionControl";
 
 // Merge operations
 export const MERGE_COMMAND_OURS = "ours";
@@ -28,7 +28,7 @@ export type VERSION_CONTROL_TYPE = "none" | "compare" | "merge";
 
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
-    versionHistory: {
+    versionControl: {
       /**
        * Set the content of the editor
        * @param ours The content of the editor that is being merged into
@@ -63,12 +63,12 @@ declare module "@tiptap/core" {
   }
 }
 
-export interface VersionHistoryOptions {
+export interface VersionControlOptions {
   view: VERSION_CONTROL_TYPE;
   onViewChange: (view: VERSION_CONTROL_TYPE) => void;
 }
 
-export interface VersionHistoryStorage {
+export interface VersionControlStorage {
   ours: string;
   theirs: string;
   base?: string;
@@ -269,9 +269,9 @@ const applyMergeOperation = (
   return false;
 };
 
-export const VersionHistory = Extension.create<
-  VersionHistoryOptions,
-  VersionHistoryStorage
+export const VersionControl = Extension.create<
+  VersionControlOptions,
+  VersionControlStorage
 >({
   name: EXTENSION_NAME,
 

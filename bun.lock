@@ -28,7 +28,7 @@
         "@tiptap/starter-kit": "^3.18.0",
         "@types/diff-match-patch": "^1.0.36",
         "diff": "^8.0.3",
-        "diff-match-patch": "^1.0.5",
+        "jsondiffpatch": "^0.7.3",
         "lucide-react": "^0.563.0",
         "react": "^19",
         "react-dom": "^19",
@@ -44,6 +44,8 @@
     },
   },
   "packages": {
+    "@dmsnell/diff-match-patch": ["@dmsnell/diff-match-patch@1.1.0", "", {}, "sha512-yejLPmM5pjsGvxS9gXablUSbInW7H976c/FJ4iQxWIm7/38xBySRemTPDe34lhg1gVLbJntX0+sH0jYfU+PN9A=="],
+
     "@floating-ui/core": ["@floating-ui/core@1.7.4", "", { "dependencies": { "@floating-ui/utils": "^0.2.10" } }, "sha512-C3HlIdsBxszvm5McXlB8PeOEWfBhcGBTZGkGlWc2U0KFY5IwG5OQEuQ8rq52DZmcHDlPLd+YFBK+cZcytwIFWg=="],
 
     "@floating-ui/dom": ["@floating-ui/dom@1.7.5", "", { "dependencies": { "@floating-ui/core": "^1.7.4", "@floating-ui/utils": "^0.2.10" } }, "sha512-N0bD2kIPInNHUHehXhMke1rBGs1dwqvC9O9KYMyyjK7iXt7GAhnro7UlcuYcGdS/yYOlq0MAVgrow8IbWJwyqg=="],
@@ -170,13 +172,13 @@
 
     "diff": ["diff@8.0.3", "", {}, "sha512-qejHi7bcSD4hQAZE0tNAawRK1ZtafHDmMTMkrrIGgSLl7hTnQHmKCeB45xAcbfTqK2zowkM3j3bHt/4b/ARbYQ=="],
 
-    "diff-match-patch": ["diff-match-patch@1.0.5", "", {}, "sha512-IayShXAgj/QMXgB0IWmKx+rOPuGMhqm5w6jvFxmVenXKIzRqTAAsbBPT3kWQeGANj3jGgvcvv4yK6SxqYmikgw=="],
-
     "entities": ["entities@4.5.0", "", {}, "sha512-V0hjH4dGPh9Ao5p0MoRY6BVqtwCjhz6vI5LT8AJ55H+4g9/4vbHx1I54fS0XuclLhDHArPQCiMjDxjaL8fPxhw=="],
 
     "escape-string-regexp": ["escape-string-regexp@4.0.0", "", {}, "sha512-TtpcNJ3XAzx3Gq8sWRzJaVajRs0uVxA2YAkdb1jm2YkPz4G6egUFAyA3n5vtEIZefPk5Wa4UXbKuS5fKkJWdgA=="],
 
     "fast-equals": ["fast-equals@5.4.0", "", {}, "sha512-jt2DW/aNFNwke7AUd+Z+e6pz39KO5rzdbbFCg2sGafS4mk13MI7Z8O5z9cADNn5lhGODIgLwug6TZO2ctf7kcw=="],
+
+    "jsondiffpatch": ["jsondiffpatch@0.7.3", "", { "dependencies": { "@dmsnell/diff-match-patch": "^1.1.0" }, "bin": { "jsondiffpatch": "bin/jsondiffpatch.js" } }, "sha512-zd4dqFiXSYyant2WgSXAZ9+yYqilNVvragVNkNRn2IFZKgjyULNrKRznqN4Zon0MkLueCg+3QaPVCnDAVP20OQ=="],
 
     "linkify-it": ["linkify-it@5.0.0", "", { "dependencies": { "uc.micro": "^2.0.0" } }, "sha512-5aHCbzQRADcdP+ATqnDuhhJ/MRIqDkZX5pyjFHRRysS8vZ5AbqGEoFIb6pYHPZ+L/OC2Lc+xT8uHVVR5CAK/wQ=="],
 

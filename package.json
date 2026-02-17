@@ -32,7 +32,7 @@
     "@tiptap/starter-kit": "^3.18.0",
     "@types/diff-match-patch": "^1.0.36",
     "diff": "^8.0.3",
-    "diff-match-patch": "^1.0.5",
+    "jsondiffpatch": "^0.7.3",
     "lucide-react": "^0.563.0",
     "react": "^19",
     "react-dom": "^19",

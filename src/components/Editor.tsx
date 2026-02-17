@@ -1,25 +1,35 @@
-import React, { useCallback, useState, useRef, useEffect } from 'react';
-import { useEditor, EditorContent } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
-import Underline from '@tiptap/extension-underline';
-import Link from '@tiptap/extension-link';
-import Image from '@tiptap/extension-image';
-import TextAlign from '@tiptap/extension-text-align';
-import Color from '@tiptap/extension-color';
-import { FontSize, LineHeight, TextStyle, FontFamily } from '@tiptap/extension-text-style';
-import Highlight from '@tiptap/extension-highlight';
-import TaskList from '@tiptap/extension-task-list';
-import TaskItem from '@tiptap/extension-task-item';
-import Subscript from '@tiptap/extension-subscript';
-import Superscript from '@tiptap/extension-superscript';
-import Placeholder from '@tiptap/extension-placeholder';
-import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table';
-import { Eye, EyeOff } from 'lucide-react';
-import BubbleMenuExtension from '@tiptap/extension-bubble-menu';
-import { VersionControlPanel } from './VersionControl/VersionControlPanel';
-import { VersionHistory } from '../extensions/VersionHistory';
-import { gitService } from '../services/GitService';
-import { RichTextToolbar } from './RichTextToolbar';
+import React, { useCallback, useState, useRef, useEffect } from "react";
+import { useEditor, EditorContent } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import Underline from "@tiptap/extension-underline";
+import Link from "@tiptap/extension-link";
+import Image from "@tiptap/extension-image";
+import TextAlign from "@tiptap/extension-text-align";
+import Color from "@tiptap/extension-color";
+import {
+  FontSize,
+  LineHeight,
+  TextStyle,
+  FontFamily,
+} from "@tiptap/extension-text-style";
+import Highlight from "@tiptap/extension-highlight";
+import TaskList from "@tiptap/extension-task-list";
+import TaskItem from "@tiptap/extension-task-item";
+import Subscript from "@tiptap/extension-subscript";
+import Superscript from "@tiptap/extension-superscript";
+import Placeholder from "@tiptap/extension-placeholder";
+import {
+  Table,
+  TableRow,
+  TableCell,
+  TableHeader,
+} from "@tiptap/extension-table";
+import { Eye, EyeOff } from "lucide-react";
+import BubbleMenuExtension from "@tiptap/extension-bubble-menu";
+import { VersionControlPanel } from "./VersionControl/VersionControlPanel";
+import { VersionControl } from "../extensions/VersionControl";
+import { gitService } from "../services/GitService";
+import { RichTextToolbar } from "./RichTextToolbar";
 
 interface EditorProps {
   initialContent?: string;
@@ -28,11 +38,11 @@ interface EditorProps {
   className?: string;
 }
 
-export const Editor = ({ 
-  initialContent = '', 
+export const Editor = ({
+  initialContent = "",
   onChange,
-  placeholder = 'Start typing your document...',
-  className = ''
+  placeholder = "Start typing your document...",
+  className = "",
 }: EditorProps) => {
   const editor = useEditor({
     extensions: [
@@ -50,7 +60,7 @@ export const Editor = ({
       LineHeight,
       Color,
       Highlight.configure({ multicolor: true }),
-      TextAlign.configure({ types: ['heading', 'paragraph'] }),
+      TextAlign.configure({ types: ["heading", "paragraph"] }),
       TaskList,
       TaskItem.configure({ nested: true }),
       Subscript,
@@ -60,13 +70,13 @@ export const Editor = ({
       TableRow,
       TableCell,
       TableHeader,
-      VersionHistory,
+      VersionControl,
       BubbleMenuExtension.configure({
-        pluginKey: 'mergeBubbleMenu',
+        pluginKey: "mergeBubbleMenu",
         shouldShow: ({ editor }) => {
           // Custom logic handled in component, but extension needs to be active
-          return editor.isActive('insertion') || editor.isActive('deletion');
-        }
+          return editor.isActive("insertion") || editor.isActive("deletion");
+        },
       }),
     ],
     content: initialContent,
@@ -75,7 +85,7 @@ export const Editor = ({
     },
     editorProps: {
       attributes: {
-        class: 'editor-content-area',
+        class: "editor-content-area",
       },
     },
   });
@@ -85,7 +95,7 @@ export const Editor = ({
   const [sidebarWidth, setSidebarWidth] = useState(300);
   const [isResizing, setIsResizing] = useState(false);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
-  const [originalContent, setOriginalContent] = useState('');
+  const [originalContent, setOriginalContent] = useState("");
 
   // Resize Handlers
   const startResizing = useCallback((mouseDownEvent: React.MouseEvent) => {
@@ -102,16 +112,19 @@ export const Editor = ({
       if (isResizing) {
         // Calculate new width based on mouse position from right edge of container
         // Assuming the panel is on the right
-        const editorRect = document.querySelector('.demo-editor')?.getBoundingClientRect();
+        const editorRect = document
+          .querySelector(".demo-editor")
+          ?.getBoundingClientRect();
         if (editorRect) {
           const newWidth = editorRect.right - mouseMoveEvent.clientX;
-          if (newWidth > 200 && newWidth < 800) { // Min/Max constraints
+          if (newWidth > 200 && newWidth < 800) {
+            // Min/Max constraints
             setSidebarWidth(newWidth);
           }
         }
       }
     },
-    [isResizing]
+    [isResizing],
   );
 
   useEffect(() => {
@@ -140,35 +153,35 @@ export const Editor = ({
   // Handle Keyboard Shortcuts (Ctrl+S / Cmd+S)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+      if ((e.metaKey || e.ctrlKey) && e.key === "s") {
         e.preventDefault();
         if (editor && !isPreviewMode) {
           const content = editor.getHTML();
           const timestamp = new Date().toLocaleTimeString();
           gitService.commit(`Auto-save at ${timestamp}`, content);
-          
+
           // Force panel refresh by dispatching a custom event or relying on prop updates
-          // For this simple demo, we rely on the user opening/interacting with panel to see changes, 
-          // or we could expose a refresh trigger. 
+          // For this simple demo, we rely on the user opening/interacting with panel to see changes,
+          // or we could expose a refresh trigger.
           // However, since VersionControlPanel is inside Editor, we can pass a refresh signal if we lift state,
           // but simpler is that gitService is shared.
         }
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [editor, isPreviewMode]);
 
-  const handlePreviewDiff = (base: string, head: string) => {
+  const handlePreviewDiff = (ours: string, theirs: string) => {
     if (!editor) return;
-    
+
     if (!isPreviewMode) {
       setOriginalContent(editor.getHTML());
     }
-    
+
     // Use the extension command
-    editor.commands.setDiffContent(base, head, null);
+    editor.commands.setDiffContent(ours, theirs);
     setIsPreviewMode(true);
   };
 
@@ -176,7 +189,7 @@ export const Editor = ({
     if (!editor) return;
     editor.commands.setContent(originalContent);
     setIsPreviewMode(false);
-    setOriginalContent('');
+    setOriginalContent("");
   };
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -195,52 +208,86 @@ export const Editor = ({
       setIsFullScreen(!!document.fullscreenElement);
     };
 
-    document.addEventListener('fullscreenchange', handleFullScreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullScreenChange);
+    document.addEventListener("fullscreenchange", handleFullScreenChange);
+    return () =>
+      document.removeEventListener("fullscreenchange", handleFullScreenChange);
   }, []);
 
   return (
     <div className={`demo-editor ${className}`} ref={containerRef}>
       {isPreviewMode && (
-        <div style={{ background: '#fff7ed', padding: '8px 16px', borderBottom: '1px solid #fed7aa', display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#c2410c', fontSize: '13px', fontWeight: 500 }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Eye size={16} /> 
+        <div
+          style={{
+            background: "#fff7ed",
+            padding: "8px 16px",
+            borderBottom: "1px solid #fed7aa",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            color: "#c2410c",
+            fontSize: "13px",
+            fontWeight: 500,
+          }}
+        >
+          <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <Eye size={16} />
             Previewing Changes (Read Only)
           </span>
-          <button 
+          <button
             onClick={handleExitPreview}
-            style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'white', border: '1px solid #fdba74', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', color: '#c2410c' }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+              background: "white",
+              border: "1px solid #fdba74",
+              padding: "4px 10px",
+              borderRadius: "4px",
+              cursor: "pointer",
+              color: "#c2410c",
+            }}
           >
             <EyeOff size={14} /> Exit Preview
           </button>
         </div>
       )}
-      {!isPreviewMode && (<RichTextToolbar 
-        editor={editor} 
-        showVcPanel={showVcPanel} 
-        onToggleVcCtrl={() => setShowVcPanel(!showVcPanel)}
-        isFullScreen={isFullScreen}
-        onToggleFullScreen={toggleFullScreen}
-      />)}
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+      {!isPreviewMode && (
+        <RichTextToolbar
+          editor={editor}
+          showVcPanel={showVcPanel}
+          onToggleVcCtrl={() => setShowVcPanel(!showVcPanel)}
+          isFullScreen={isFullScreen}
+          onToggleFullScreen={toggleFullScreen}
+        />
+      )}
+      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         <div className="editor-content-wrapper" style={{ flex: 1 }}>
           <EditorContent editor={editor} />
         </div>
-        
+
         {showVcPanel && (
-          <div style={{ width: sidebarWidth, flexShrink: 0, height: '100%', position: 'relative' }}>
-             <div 
-               className={`resize-handle ${isResizing ? 'resizing' : ''}`}
-               onMouseDown={startResizing}
-             />
-             <VersionControlPanel 
-               getEditorContent={() => isPreviewMode ? originalContent : (editor?.getHTML() || '')}
-               onContentChange={(content) => {
-                 editor?.commands.setContent(content);
-               }}
-               onPreviewDiff={handlePreviewDiff}
-               isPreviewMode={isPreviewMode}
-             />
+          <div
+            style={{
+              width: sidebarWidth,
+              flexShrink: 0,
+              height: "100%",
+              position: "relative",
+            }}
+          >
+            <div
+              className={`resize-handle ${isResizing ? "resizing" : ""}`}
+              onMouseDown={startResizing}
+            />
+            <VersionControlPanel
+              getEditorContent={() =>
+                isPreviewMode ? originalContent : editor?.getHTML() || ""
+              }
+              onContentChange={(content) => {
+                editor?.commands.setContent(content);
+              }}
+              onPreviewDiff={handlePreviewDiff}
+              isPreviewMode={isPreviewMode}
+            />
           </div>
         )}
       </div>
