@@ -54,6 +54,7 @@ import {
   ChevronDown,
   Type,
   GitGraph,
+  GitMergeConflict,
   Eye,
   EyeOff,
   Maximize,
@@ -413,6 +414,10 @@ const Toolbar = ({
       .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
       .run();
   }, [editor]);
+
+  const storage = editor.storage as any;
+  const resolvedCount = storage.conflict?.resolved ?? 0;
+  const totalCount = storage.conflict?.total ?? 0;
 
   // Helper to get consistent style value across selection, returns sentinel if mixed
   const getSelectionFontFamily = (): string => {
@@ -803,6 +808,10 @@ const Toolbar = ({
           title="Version Control"
         >
           <GitGraph size={16} />
+        </MenuButton>
+
+        <MenuButton onClick={() => {}} isActive={showVcPanel} title="Conflicts">
+          {`${resolvedCount}/${totalCount}`}
         </MenuButton>
       </div>
     </div>

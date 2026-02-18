@@ -77,7 +77,7 @@ const sampleJson = {
     {
       type: "conflict",
       attrs: {
-        conflictId: 1,
+        conflictId: 2,
         ourContent: [],
         theirContent: [
           {

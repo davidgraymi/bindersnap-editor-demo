@@ -27,7 +27,7 @@
     "@tiptap/react": "^3.18.0",
     "@tiptap/starter-kit": "^3.18.0",
     "diff": "^8.0.3",
-    "lucide-react": "^0.563.0",
+    "lucide-react": "^0.574.0",
     "react": "^19",
     "react-dom": "^19",
     "uuid": "^13.0.0"
