@@ -12,6 +12,8 @@ import {
   GitCommitVertical,
 } from "lucide-react";
 
+type BranchType = "ours" | "theirs" | "manual";
+
 /**
  * Renders ProseMirror content JSON using the editor's own schema
  * via DOMSerializer — identical rendering to the main editor.
@@ -80,10 +82,11 @@ const RichTextPreview = ({
 };
 
 export const ConflictNodeView = (props: ReactNodeViewProps) => {
-  const { editor, node, getPos } = props;
+  const { editor, node, getPos, extension } = props;
 
   const resolved = node.attrs.resolved;
   const acceptedBranch = node.attrs.acceptedBranch;
+  const replaceNodeOnResolve = extension.options.replaceNodeOnResolve;
   const [isExpanded, setIsExpanded] = useState(false);
 
   const wrapperClass = useMemo(() => {
@@ -94,7 +97,7 @@ export const ConflictNodeView = (props: ReactNodeViewProps) => {
   }, [resolved]);
 
   const handleResolve = useCallback(
-    (branch: "ours" | "theirs" | "manual") => {
+    (branch: BranchType) => {
       const pos = getPos();
       if (pos === undefined) return;
 
@@ -103,21 +106,38 @@ export const ConflictNodeView = (props: ReactNodeViewProps) => {
       if (!conflictNode) return;
 
       const tr = state.tr;
-      const contentJson =
-        branch === "theirs"
-          ? conflictNode.attrs.theirContent
-          : conflictNode.attrs.ourContent;
 
-      if (contentJson && branch !== "manual") {
-        // Parse the JSON content back into ProseMirror nodes
-        // TODO: is this necessary?
-        const nodes = contentJson.map((nodeJson: any) =>
-          state.schema.nodeFromJSON(nodeJson),
-        );
+      /** In the case the user chooses to accept a manual resolution and the replaceNodeOnResolve
+       * option is false, we just update the attributes to mark as resolved.
+       */
+      if (!(branch === "manual" && !replaceNodeOnResolve)) {
+        const getContent = () => {
+          switch (branch) {
+            case "theirs":
+              // Parse the JSON content back into ProseMirror nodes
+              // TODO: is this necessary?
+              return conflictNode.attrs.theirContent.map((nodeJson: any) =>
+                state.schema.nodeFromJSON(nodeJson),
+              );
+            case "ours":
+              // Parse the JSON content back into ProseMirror nodes
+              // TODO: is this necessary?
+              return conflictNode.attrs.ourContent.map((nodeJson: any) =>
+                state.schema.nodeFromJSON(nodeJson),
+              );
+            case "manual":
+              return conflictNode.content;
+            default:
+              console.error("Invalid branch type: ", branch);
+              return [];
+          }
+        };
+        const nodes = getContent();
 
         // Replace the conflict node's content
-        const start = pos + 1;
-        const end = pos + conflictNode.nodeSize - 1;
+        const offset = replaceNodeOnResolve ? 0 : 1;
+        const start = pos + offset;
+        const end = pos + conflictNode.nodeSize - offset;
         tr.replaceWith(start, end, nodes);
       }
 

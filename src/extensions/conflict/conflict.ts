@@ -3,12 +3,34 @@ import { ReactNodeViewRenderer } from "@tiptap/react";
 
 import { ConflictNodeView } from "./components/ConflictNodeView";
 
-export const Conflict = Node.create({
+type ConflictExtensionOptions = {
+  /**
+   * When `true` the conflict node is replaced after resolution. When `false` the conflict nodes
+   * **content** is replaced after resolution, allowing for the user to choose a different
+   * resolution.
+   * @default false
+   */
+  replaceNodeOnResolve: boolean;
+};
+
+declare module "@tiptap/core" {
+  interface ConflictOptions {
+    conflict: ConflictExtensionOptions;
+  }
+}
+
+export const Conflict = Node.create<ConflictExtensionOptions>({
   name: "conflict",
   group: "block",
   content: "block*",
   defining: true,
   selectable: true,
+
+  addOptions() {
+    return {
+      replaceNodeOnResolve: false,
+    };
+  },
 
   addAttributes() {
     return {
