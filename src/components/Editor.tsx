@@ -31,9 +31,6 @@ import {
   Underline as UnderlineIcon,
   Strikethrough,
   Code,
-  Heading1,
-  Heading2,
-  Heading3,
   List,
   ListOrdered,
   CheckSquare,
@@ -56,9 +53,7 @@ import {
   Table as TableIcon,
   ChevronDown,
   Type,
-  Palette,
   GitGraph,
-  X,
   Eye,
   EyeOff,
   Maximize,
@@ -67,8 +62,8 @@ import {
 
 import { VersionControlPanel } from "./VersionControl/VersionControlPanel";
 import { VersionHistory } from "../extensions/VersionHistory";
+import { Conflict } from "../extensions/conflict";
 import { gitService } from "../services/GitService";
-import { Conflict, ConflictMenu } from "../extensions/conflict";
 
 // --- Types ---
 interface ToolbarProps {
@@ -1040,7 +1035,6 @@ export const DemoEditor = ({
       )}
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         <div className="editor-content-wrapper" style={{ flex: 1 }}>
-          <ConflictMenu editor={editor} />
           <EditorContent editor={editor} />
         </div>
 

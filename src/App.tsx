@@ -1,8 +1,10 @@
-import type { Content } from "@tiptap/react";
-import { DemoEditor } from "./components/Editor";
-import "./index.css";
-import { gitService } from "./services/GitService";
 import { useState } from "react";
+import type { Content } from "@tiptap/react";
+
+import { DemoEditor } from "./components/Editor";
+import { gitService } from "./services/GitService";
+
+import "./index.css";
 
 const sampleJson = {
   type: "doc",
@@ -10,32 +12,42 @@ const sampleJson = {
     {
       type: "conflict",
       attrs: {
+        conflictId: 1,
+        oursContent: [
+          {
+            type: "paragraph",
+            content: [{ type: "text", text: "Current Change (Ours)" }],
+          },
+        ],
+        theirsContent: [
+          {
+            type: "paragraph",
+            content: [
+              { type: "text", text: "This is the " },
+              {
+                type: "text",
+                marks: [{ type: "bold" }],
+                text: "incoming change",
+              },
+              { type: "text", text: " from the other branch with " },
+              {
+                type: "text",
+                marks: [{ type: "italic" }],
+                text: "different formatting",
+              },
+              { type: "text", text: "." },
+            ],
+          },
+        ],
+        ourBranch: "main",
+        theirBranch: "feature/update",
         base: "Original Content",
         baseBranch: "main",
         baseCommitHash: "abc123",
-        conflictId: 1,
+        resolved: false,
+        acceptedBranch: null,
       },
       content: [
-        {
-          type: "conflictOption",
-          attrs: { branch: "theirs" },
-          content: [
-            {
-              type: "paragraph",
-              content: [{ type: "text", text: "Incoming Change (Theirs)" }],
-            },
-          ],
-        },
-        {
-          type: "conflictOption",
-          attrs: { branch: "ours" },
-          content: [
-            {
-              type: "paragraph",
-              content: [{ type: "text", text: "Current Change (Ours)" }],
-            },
-          ],
-        },
         {
           type: "paragraph",
           content: [{ type: "text", text: "Current Change (Ours)" }],
