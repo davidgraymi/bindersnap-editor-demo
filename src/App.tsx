@@ -13,13 +13,13 @@ const sampleJson = {
       type: "conflict",
       attrs: {
         conflictId: 1,
-        oursContent: [
+        ourContent: [
           {
             type: "paragraph",
             content: [{ type: "text", text: "Current Change (Ours)" }],
           },
         ],
-        theirsContent: [
+        theirContent: [
           {
             type: "paragraph",
             content: [
@@ -39,11 +39,18 @@ const sampleJson = {
             ],
           },
         ],
+        baseContent: [
+          {
+            type: "paragraph",
+            content: [{ type: "text", text: "Base Content" }],
+          },
+        ],
         ourBranch: "main",
         theirBranch: "feature/update",
-        base: "Original Content",
         baseBranch: "main",
-        baseCommitHash: "abc123",
+        ourCommitHash: "our123",
+        theirCommitHash: "their456",
+        baseCommitHash: "base789",
         resolved: false,
         acceptedBranch: null,
       },
@@ -66,6 +73,52 @@ const sampleJson = {
           text: "Welcome to the Rich Text Editor",
         },
       ],
+    },
+    {
+      type: "conflict",
+      attrs: {
+        conflictId: 1,
+        ourContent: [],
+        theirContent: [
+          {
+            type: "heading",
+            attrs: {
+              textAlign: null,
+              level: 1,
+            },
+            content: [
+              {
+                type: "text",
+                text: "Welcome to the Rich Text Editor",
+              },
+            ],
+          },
+        ],
+        baseContent: [
+          {
+            type: "heading",
+            attrs: {
+              textAlign: null,
+              level: 1,
+            },
+            content: [
+              {
+                type: "text",
+                text: "Welcome to the Bindersnap Editor",
+              },
+            ],
+          },
+        ],
+        ourBranch: "main",
+        theirBranch: "feature/update",
+        baseBranch: "main",
+        ourCommitHash: "our123",
+        theirCommitHash: "their456",
+        baseCommitHash: "base789",
+        resolved: false,
+        acceptedBranch: null,
+      },
+      content: [],
     },
     {
       type: "paragraph",

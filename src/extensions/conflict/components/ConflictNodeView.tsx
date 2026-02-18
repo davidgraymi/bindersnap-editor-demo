@@ -1,6 +1,8 @@
 import { useMemo, useState, useCallback } from "react";
 import { NodeViewWrapper, NodeViewContent } from "@tiptap/react";
 import type { ReactNodeViewProps } from "@tiptap/react";
+import { DOMSerializer } from "@tiptap/pm/model";
+import type { Editor } from "@tiptap/core";
 import {
   AlertTriangle,
   Check,
@@ -11,17 +13,18 @@ import {
 } from "lucide-react";
 
 /**
- * Renders a single ProseMirror content JSON array as read-only HTML.
- * This is a lightweight approach — we parse the JSON into simple HTML
- * rather than spinning up a full Tiptap editor instance.
+ * Renders ProseMirror content JSON using the editor's own schema
+ * via DOMSerializer — identical rendering to the main editor.
  */
 const RichTextPreview = ({
+  editor,
   content,
   label,
   branchName,
   color,
   icon: Icon,
 }: {
+  editor: Editor;
   content: any[] | null;
   label: string;
   branchName: string;
@@ -30,17 +33,25 @@ const RichTextPreview = ({
 }) => {
   const c = {
     border: `border-${color}-200`,
-    bg: `bg-${color}-50/40`,
     header: `bg-${color}-50`,
     text: `text-${color}-700`,
     dimText: `text-${color}-400`,
   };
 
-  // Convert ProseMirror JSON to simple HTML for preview
+  // Use ProseMirror's DOMSerializer to render using the editor's schema
   const html = useMemo(() => {
-    if (!content) return "<p><em>No content</em></p>";
-    return content.map((node: any) => renderNodeToHTML(node)).join("");
-  }, [content]);
+    try {
+      const { schema } = editor;
+      const doc = schema.nodeFromJSON({ type: "doc", content });
+      const serializer = DOMSerializer.fromSchema(schema);
+      const fragment = serializer.serializeFragment(doc.content);
+      const wrapper = document.createElement("div");
+      wrapper.appendChild(fragment);
+      return wrapper.innerHTML;
+    } catch {
+      return "";
+    }
+  }, [content, editor]);
 
   return (
     <div
@@ -60,7 +71,7 @@ const RichTextPreview = ({
         </span>
       </div>
       <div
-        className={`p-3 text-sm leading-relaxed ${c.bg} prose prose-sm max-w-none`}
+        className={`p-3`}
         // biome-ignore lint: Rich text preview from trusted source
         dangerouslySetInnerHTML={{ __html: html }}
       />
@@ -68,74 +79,8 @@ const RichTextPreview = ({
   );
 };
 
-/** Recursively convert a ProseMirror JSON node to HTML string */
-function renderNodeToHTML(node: any): string {
-  if (!node) return "";
-
-  if (node.type === "text") {
-    let text = escapeHTML(node.text || "");
-    if (node.marks) {
-      for (const mark of node.marks) {
-        switch (mark.type) {
-          case "bold":
-            text = `<strong>${text}</strong>`;
-            break;
-          case "italic":
-            text = `<em>${text}</em>`;
-            break;
-          case "underline":
-            text = `<u>${text}</u>`;
-            break;
-          case "strike":
-            text = `<s>${text}</s>`;
-            break;
-          case "code":
-            text = `<code>${text}</code>`;
-            break;
-        }
-      }
-    }
-    return text;
-  }
-
-  const children = (node.content || [])
-    .map((child: any) => renderNodeToHTML(child))
-    .join("");
-
-  switch (node.type) {
-    case "paragraph":
-      return `<p>${children || "&nbsp;"}</p>`;
-    case "heading": {
-      const level = node.attrs?.level || 1;
-      return `<h${level}>${children}</h${level}>`;
-    }
-    case "bulletList":
-      return `<ul>${children}</ul>`;
-    case "orderedList":
-      return `<ol>${children}</ol>`;
-    case "listItem":
-      return `<li>${children}</li>`;
-    case "blockquote":
-      return `<blockquote>${children}</blockquote>`;
-    case "codeBlock":
-      return `<pre><code>${children}</code></pre>`;
-    case "hardBreak":
-      return "<br />";
-    default:
-      return children;
-  }
-}
-
-function escapeHTML(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
 export const ConflictNodeView = (props: ReactNodeViewProps) => {
-  const { editor, node, getPos, updateAttributes } = props;
+  const { editor, node, getPos } = props;
 
   const resolved = node.attrs.resolved;
   const acceptedBranch = node.attrs.acceptedBranch;
@@ -160,11 +105,12 @@ export const ConflictNodeView = (props: ReactNodeViewProps) => {
       const tr = state.tr;
       const contentJson =
         branch === "theirs"
-          ? conflictNode.attrs.theirsContent
-          : conflictNode.attrs.oursContent;
+          ? conflictNode.attrs.theirContent
+          : conflictNode.attrs.ourContent;
 
       if (contentJson && branch !== "manual") {
         // Parse the JSON content back into ProseMirror nodes
+        // TODO: is this necessary?
         const nodes = contentJson.map((nodeJson: any) =>
           state.schema.nodeFromJSON(nodeJson),
         );
@@ -267,14 +213,16 @@ export const ConflictNodeView = (props: ReactNodeViewProps) => {
         >
           <div className="grid grid-cols-2 gap-3 mb-3">
             <RichTextPreview
-              content={node.attrs.oursContent}
+              editor={editor}
+              content={node.attrs.ourContent}
               label="Ours"
               branchName={node.attrs.ourBranch}
               color="orange"
               icon={GitCommitVertical}
             />
             <RichTextPreview
-              content={node.attrs.theirsContent}
+              editor={editor}
+              content={node.attrs.theirContent}
               label="Theirs"
               branchName={node.attrs.theirBranch}
               color="blue"
