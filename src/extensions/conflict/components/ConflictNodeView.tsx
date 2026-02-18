@@ -7,7 +7,7 @@ import {
   ChevronDown,
   ChevronUp,
   GitBranch,
-  User,
+  GitCommitVertical,
 } from "lucide-react";
 
 /**
@@ -25,27 +25,16 @@ const RichTextPreview = ({
   content: any[] | null;
   label: string;
   branchName: string;
-  color: "blue" | "emerald";
+  color: string;
   icon: React.ComponentType<{ size: number }>;
 }) => {
-  const colors = {
-    blue: {
-      border: "border-blue-200",
-      bg: "bg-blue-50/40",
-      header: "bg-blue-50",
-      text: "text-blue-700",
-      dimText: "text-blue-400",
-    },
-    emerald: {
-      border: "border-emerald-200",
-      bg: "bg-emerald-50/40",
-      header: "bg-emerald-50",
-      text: "text-emerald-700",
-      dimText: "text-emerald-400",
-    },
+  const c = {
+    border: `border-${color}-200`,
+    bg: `bg-${color}-50/40`,
+    header: `bg-${color}-50`,
+    text: `text-${color}-700`,
+    dimText: `text-${color}-400`,
   };
-
-  const c = colors[color];
 
   // Convert ProseMirror JSON to simple HTML for preview
   const html = useMemo(() => {
@@ -203,18 +192,21 @@ export const ConflictNodeView = (props: ReactNodeViewProps) => {
   const branchLabel = useMemo(() => {
     switch (acceptedBranch) {
       case "ours":
-        return node.attrs.ourBranch || "Ours";
+        return `${node.attrs.ourBranch} (ours)`;
       case "theirs":
-        return node.attrs.theirBranch || "Theirs";
+        return `${node.attrs.theirBranch} (theirs)`;
       case "manual":
-        return "Manual Edit";
+        return "manual";
       default:
         return "";
     }
   }, [acceptedBranch, node.attrs.ourBranch, node.attrs.theirBranch]);
 
   return (
-    <NodeViewWrapper className={wrapperClass}>
+    <NodeViewWrapper
+      className={wrapperClass}
+      id={`conflict-id-${node.attrs.conflictId}`}
+    >
       {/* Header bar */}
       {resolved ? (
         <div className="flex justify-between">
@@ -270,39 +262,39 @@ export const ConflictNodeView = (props: ReactNodeViewProps) => {
       {/* Side-by-side comparison panel (inline, not a portal) */}
       {isExpanded && (
         <div
-          className="border-t border-gray-200 bg-gray-50/50 p-3"
+          className="rounded-b-md border-t border-gray-200 bg-gray-50/50 p-3"
           contentEditable={false}
         >
           <div className="grid grid-cols-2 gap-3 mb-3">
             <RichTextPreview
-              content={node.attrs.theirsContent}
-              label="Incoming"
-              branchName={node.attrs.theirBranch || "theirs"}
-              color="blue"
-              icon={GitBranch}
+              content={node.attrs.oursContent}
+              label="Ours"
+              branchName={node.attrs.ourBranch}
+              color="orange"
+              icon={GitCommitVertical}
             />
             <RichTextPreview
-              content={node.attrs.oursContent}
-              label="Current"
-              branchName={node.attrs.ourBranch || "ours"}
-              color="emerald"
-              icon={User}
+              content={node.attrs.theirsContent}
+              label="Theirs"
+              branchName={node.attrs.theirBranch}
+              color="blue"
+              icon={GitBranch}
             />
           </div>
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => handleResolve("theirs")}
-              className="flex-1 rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-colors"
+              onClick={() => handleResolve("ours")}
+              className="flex-1 rounded-md border border-orange-200 bg-orange-50 px-3 py-1.5 text-xs font-semibold text-orange-700 hover:bg-orange-100 transition-colors"
             >
-              Accept Incoming
+              Accept Ours
             </button>
             <button
               type="button"
-              onClick={() => handleResolve("ours")}
-              className="flex-1 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors"
+              onClick={() => handleResolve("theirs")}
+              className="flex-1 rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-colors"
             >
-              Accept Current
+              Accept Theirs
             </button>
             <button
               type="button"
