@@ -54,7 +54,6 @@ import {
   ChevronDown,
   Type,
   GitGraph,
-  GitMergeConflict,
   Eye,
   EyeOff,
   Maximize,
@@ -226,7 +225,7 @@ const FONT_SIZES = [
 ];
 
 const HEADING_OPTIONS = [
-  { label: "Normal", value: 0 },
+  { label: "Normal text", value: 0 },
   { label: "Heading 1", value: 1 },
   { label: "Heading 2", value: 2 },
   { label: "Heading 3", value: 3 },
@@ -242,6 +241,7 @@ interface DropdownProps {
   options: { label: string; value: string | number }[];
   onChange: (value: string | number) => void;
   width?: string;
+  isEditable?: boolean;
 }
 
 const Dropdown = ({
@@ -250,33 +250,66 @@ const Dropdown = ({
   options,
   onChange,
   width = "100px",
+  isEditable = false,
 }: DropdownProps) => {
   const [isOpen, setIsOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [inputValue, setInputValue] = useState(String(value));
+
+  useEffect(() => {
+    setInputValue(String(value));
+  }, [value]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
+      setIsOpen(false);
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const selectedLabel =
-    options.find((o) => String(o.value) === String(value))?.label || label;
+    options.find((o) => String(o.value) === String(value))?.label || value;
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (isEditable && inputValue !== String(value)) {
+        onChange(inputValue + "px");
+      }
+      (e.target as HTMLInputElement).blur();
+    }
+  };
 
   return (
-    <div className="editor-dropdown" ref={ref} style={{ width }}>
-      <button
-        className="editor-dropdown-trigger"
-        onClick={() => setIsOpen(!isOpen)}
-        type="button"
-      >
-        <span className="editor-dropdown-label">{selectedLabel}</span>
-        <ChevronDown size={14} />
-      </button>
+    <div className="editor-dropdown" style={{ width }}>
+      <div className="editor-dropdown-trigger-wrapper">
+        {isEditable ? (
+          <input
+            className="editor-dropdown-input"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onMouseUp={() => setIsOpen(!isOpen)}
+            type="text"
+            autoComplete="off"
+          />
+        ) : (
+          <button
+            className="editor-dropdown-trigger"
+            onClick={() => setIsOpen(!isOpen)}
+            type="button"
+          >
+            <span className="editor-dropdown-label">{selectedLabel}</span>
+          </button>
+        )}
+        <button
+          className="editor-dropdown-chevron"
+          onClick={() => setIsOpen(!isOpen)}
+          type="button"
+        >
+          <ChevronDown size={14} />
+        </button>
+      </div>
       {isOpen && (
         <div className="editor-dropdown-menu">
           {options.map((option) => (
@@ -284,10 +317,17 @@ const Dropdown = ({
               key={String(option.value)}
               className={`editor-dropdown-item ${String(option.value) === String(value) ? "active" : ""}`}
               onClick={() => {
+                console.log("option", option);
+                console.log("value", value);
                 onChange(option.value);
                 setIsOpen(false);
               }}
               type="button"
+              style={
+                typeof option.value === "string"
+                  ? { fontFamily: option.value }
+                  : {}
+              }
             >
               {option.label}
             </button>
@@ -374,12 +414,19 @@ const Toolbar = ({
   const [textColor, setTextColor] = useState("#000000");
   const [highlightColor, setHighlightColor] = useState("#ffff00");
   const [, forceUpdate] = useState({});
+  const lastSelection = useRef<{ from: number; to: number } | null>(null);
 
   // Force re-render when selection or content changes so dropdowns reflect current text state
   useEffect(() => {
     if (!editor) return;
 
-    const updateHandler = () => forceUpdate({});
+    const updateHandler = () => {
+      const { from, to } = editor.state.selection;
+      if (from !== to) {
+        lastSelection.current = { from, to };
+      }
+      forceUpdate({});
+    };
     editor.on("selectionUpdate", updateHandler);
     editor.on("transaction", updateHandler);
 
@@ -450,10 +497,12 @@ const Toolbar = ({
   };
 
   const getSelectionFontSize = (): string => {
+    const strip = (val: any) => (val ? String(val).replace(/\D/g, "") : "");
+
     const { from, to } = editor.state.selection;
     if (from === to) {
       // Cursor position, no selection
-      return editor.getAttributes("textStyle").fontSize || "16px";
+      return strip(editor.getAttributes("textStyle").fontSize) || "16";
     }
 
     let fontSize: string | null = null;
@@ -464,17 +513,17 @@ const Toolbar = ({
         const textStyleMark = node.marks.find(
           (m) => m.type.name === "textStyle",
         );
-        const currentSize = textStyleMark?.attrs?.fontSize || "16px";
+        const currentSize = textStyleMark?.attrs?.fontSize || "16";
 
         if (fontSize === null) {
-          fontSize = currentSize;
+          fontSize = strip(currentSize);
         } else if (fontSize !== currentSize) {
           hasMixed = true;
         }
       }
     });
     // Return sentinel that won't match any option when mixed
-    return hasMixed ? "__mixed__" : fontSize || "16px";
+    return hasMixed ? "__mixed__" : fontSize || "16";
   };
 
   const getCurrentHeading = (): number => {
@@ -535,11 +584,20 @@ const Toolbar = ({
   };
 
   const handleFontSizeChange = (size: string | number) => {
-    editor
-      .chain()
-      .focus()
-      .setFontSize(size as string)
-      .run();
+    console.log("handleFontSizeChange", size);
+    const finalSize = String(size);
+    const chain = editor.chain();
+
+    // If editor is not focused, re-apply last non-empty selection
+    if (!editor.isFocused && lastSelection.current) {
+      console.log(
+        "Re-applying last non-empty selection: ",
+        lastSelection.current,
+      );
+      chain.setTextSelection(lastSelection.current);
+    }
+
+    chain.focus().setFontSize(finalSize).run();
   };
 
   const handleTextColorChange = (color: string) => {
@@ -574,6 +632,14 @@ const Toolbar = ({
         <Divider />
 
         <Dropdown
+          label="Style"
+          value={String(getCurrentHeading())}
+          options={HEADING_OPTIONS}
+          onChange={handleHeadingChange}
+          width="110px"
+        />
+
+        <Dropdown
           label="Font"
           value={getSelectionFontFamily()}
           options={FONT_FAMILIES}
@@ -587,17 +653,10 @@ const Toolbar = ({
           options={FONT_SIZES}
           onChange={handleFontSizeChange}
           width="70px"
+          isEditable={true}
         />
 
         <Divider />
-
-        <Dropdown
-          label="Style"
-          value={String(getCurrentHeading())}
-          options={HEADING_OPTIONS}
-          onChange={handleHeadingChange}
-          width="110px"
-        />
 
         <div style={{ marginLeft: "auto" }}>
           <MenuButton
@@ -810,7 +869,7 @@ const Toolbar = ({
           <GitGraph size={16} />
         </MenuButton>
 
-        <MenuButton onClick={() => {}} isActive={showVcPanel} title="Conflicts">
+        <MenuButton onClick={() => {}} isActive={false} title="Conflicts">
           {`${resolvedCount}/${totalCount}`}
         </MenuButton>
       </div>
