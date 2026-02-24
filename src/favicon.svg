@@ -4,9 +4,9 @@
 <svg
    version="1.1"
    id="svg1"
-   width="32.240002"
-   height="32.240002"
-   viewBox="0 0 32.240001 32.240001"
+   width="31.112486"
+   height="31.112486"
+   viewBox="0 0 31.112485 31.112485"
    xmlns:xlink="http://www.w3.org/1999/xlink"
    xmlns="http://www.w3.org/2000/svg"
    xmlns:svg="http://www.w3.org/2000/svg">
@@ -33,7 +33,7 @@
   </defs>
   <g
      id="g1"
-     transform="matrix(0.09873921,0,0,0.09873921,-4.0078389,-3.9734471)">
+     transform="matrix(0.09528605,0,0,0.09528605,-3.8676746,-3.8344856)">
     <image
        width="400"
        height="400"
