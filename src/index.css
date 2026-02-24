@@ -65,7 +65,7 @@ body {
   max-width: 100%;
   height: 700px;
   margin: 0 auto;
-  border-radius: 8px;
+  border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
 }
@@ -79,7 +79,6 @@ body {
   height: 100%;
   width: 100%;
   background: var(--editor-bg);
-  border: 1px solid var(--editor-border);
 }
 
 /* ====================
@@ -541,10 +540,6 @@ body {
 }
 
 @media (max-width: 600px) {
-  .app {
-    padding: 20px 10px;
-  }
-
   .editor-demo-container {
     max-height: 500px;
   }
@@ -941,13 +936,13 @@ body {
    Landing Page Styles (from home.css)
    ==================== */
 
-.home .hero {
+.landing-hero {
   position: relative;
   z-index: 2;
 }
 
-.home .hero h1.ui.header,
-.home .hero h2 {
+.landing-hero h1.ui.header,
+.landing-hero h2 {
   color: var(--theme-text-dark);
 }
 
@@ -963,8 +958,8 @@ body {
 
 @media (max-width: 767.98px) {
 
-  .home .hero h1.ui.header,
-  .home .alternative-cta h1.ui.header {
+  .landing-hero h1.ui.header,
+  .landing-alternative-cta h1.ui.header {
     font-size: 3em;
     margin-top: 2em;
     font-weight: 700;
@@ -973,12 +968,12 @@ body {
     color: var(--theme-text-dark);
   }
 
-  .home .alternative-cta h1.ui.header {
+  .landing-alternative-cta h1.ui.header {
     margin-top: 0;
   }
 
-  .home .hero h2,
-  .home .alternative-cta h2 {
+  .landing-hero h2,
+  .landing-alternative-cta h2 {
     font-size: 1.5em;
     line-height: 1.3em;
     letter-spacing: 0.15px;
@@ -1015,7 +1010,7 @@ body {
     border: #070707e8 solid;
   }
 
-  .home .ui.cta {
+  .landing-cta {
     background-color: var(--theme-success-bg);
     color: var(--color-white);
     width: 100%;
@@ -1072,7 +1067,7 @@ body {
 
 @media (min-width: 768px) {
 
-  .home .landing-intro {
+  .landing-intro {
     width: 100%;
     height: 200vh;
     position: absolute;
@@ -1085,8 +1080,8 @@ body {
     z-index: 1;
   }
 
-  .home .hero h1.ui.header,
-  .home .alternative-cta h1.ui.header {
+  .landing-hero h1.ui.header,
+  .landing-alternative-cta h1.ui.header {
     font-size: 4.5em;
     margin-top: 2.5em;
     font-weight: 700;
@@ -1095,12 +1090,12 @@ body {
     color: var(--theme-text-dark);
   }
 
-  .home .alternative-cta h1.ui.header {
+  .landing-alternative-cta h1.ui.header {
     margin-top: 0;
   }
 
-  .home .hero h2,
-  .home .alternative-cta h2 {
+  .landing-hero h2,
+  .landing-alternative-cta h2 {
     font-size: 1.5em;
     line-height: 1.3em;
     letter-spacing: 0.15px;
@@ -1140,7 +1135,7 @@ body {
     font-size: 16px;
   }
 
-  .home .ui.cta {
+  .landing-cta {
     background-color: var(--theme-success-bg);
     color: var(--color-white);
     width: 218px;
@@ -1392,21 +1387,21 @@ body {
   width: auto;
 }
 
-.home .landing-price {
+.landing-price {
   display: flex;
   flex-direction: column;
   align-items: center;
   margin-bottom: 8em;
 }
 
-.home .landing-price h1 {
+.landing-price h1 {
   font-size: 4.1em;
   line-height: 1.15em;
   letter-spacing: -0.25px;
   text-align: center;
 }
 
-.home .landing-price h2 {
+.landing-price h2 {
   font-size: 1.4em;
   line-height: 1.6em;
   margin-bottom: 2.5em;
@@ -1520,7 +1515,7 @@ body {
   font-weight: 400;
 }
 
-.home .outro {
+.outro {
   width: 100%;
   background-color: var(--theme-brand-primary);
   display: flex;
@@ -1528,7 +1523,7 @@ body {
   color: var(--color-white);
 }
 
-.home .alternative-cta {
+.landing-alternative-cta {
   margin-top: 5em;
   margin-bottom: 5em;
   color: var(--color-white);

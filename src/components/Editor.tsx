@@ -379,7 +379,11 @@ const Toolbar = ({
   useEffect(() => {
     if (!editor) return;
 
-    const updateHandler = () => forceUpdate({});
+    const updateHandler = () => {
+      queueMicrotask(() => {
+        forceUpdate({});
+      });
+    };
     editor.on("selectionUpdate", updateHandler);
     editor.on("transaction", updateHandler);
 
@@ -856,7 +860,9 @@ export const DemoEditor = ({
     ],
     content: initialContent,
     onUpdate: ({ editor }) => {
-      onChange?.(editor.getJSON());
+      queueMicrotask(() => {
+        onChange?.(editor.getJSON());
+      });
     },
     editorProps: {
       attributes: {
