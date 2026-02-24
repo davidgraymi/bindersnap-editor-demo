@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />
-    <link rel="alternate icon" type="image/png" href="./assets/favicon.png" />
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+    <link rel="alternate icon" type="image/png" href="assets/favicon.png" />
     <title>Bindersnap</title>
     <meta
       name="description"
@@ -16,77 +16,119 @@
       href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap"
       rel="stylesheet"
     />
-    <script src="https://cdn.tailwindcss.com"></script>
   </head>
 
   <body>
-    <nav class="navbar" style="display: flex; justify-content: space-between; padding: 15px 40px; align-items: center; background-color: #fff; border-bottom: 1px solid #e0e0e0; position: sticky; top: 0; z-index: 100;">
-      <div class="navbar-left">
-        <a href="#" style="font-size: 24px; font-weight: bold; text-decoration: none; color: #1976d2; display: flex; align-items: center; gap: 8px;">
-          <img src="./assets/logo.svg" alt="Bindersnap Logo" style="height: 32px;">
-          Bindersnap
-        </a>
-      </div>
-      <div class="navbar-right" style="display: flex; gap: 20px; align-items: center;">
-        <a href="#" style="text-decoration: none; color: #333; font-weight: 500;">Help</a>
-        <a href="#" style="text-decoration: none; color: #333; font-weight: 500;">Sign in</a>
-        <a href="#" style="text-decoration: none; background-color: #1976d2; color: #fff; padding: 8px 16px; border-radius: 4px; font-weight: 600;">Sign up</a>
-      </div>
-    </nav>
-
+    <!-- <img src="assets/logo.svg" alt="Bindersnap Logo" style="height: 32px" /> -->
     <div role="main" aria-label="home" class="home">
       <div class="landing-intro"></div>
-      <div class="ui center aligned container hero" style="display: flex; flex-direction: column; align-items: center; text-align: center;">
-        <h1 class="ui header">Replace shared drives with a single, collaborative platform.</h1>
-        <h2>Join the headache free, all-in-one document management platform.</h2>
-        
-        <div id="root" class="editor-demo-container" style="margin-top: 3em; margin-bottom: 3em; text-align: left; z-index: 10;"></div>
+      <div
+        class="ui center aligned container hero"
+        style="
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          text-align: center;
+        "
+      >
+        <h1 class="ui header">
+          Replace shared drives with a single, collaborative platform.
+        </h1>
+        <h2>
+          Join the headache free, all-in-one document management platform.
+        </h2>
+
+        <div
+          id="root"
+          class="editor-demo-container"
+          style="
+            margin-top: 3em;
+            margin-bottom: 3em;
+            text-align: left;
+            z-index: 10;
+          "
+        ></div>
       </div>
 
       <div class="landing-benefits">
         <div class="landing-benefits-item item-1">
           <div class="landing-benefits-left">
             <h3>Securely store your documents</h3>
-            <p>Every document is tracked, creating a tamper-proof audit trail to support legal compliance and protect your work.</p>
+            <p>
+              Every document is tracked, creating a tamper-proof audit trail to
+              support legal compliance and protect your work.
+            </p>
           </div>
           <div class="landing-benefits-right">
-            <img src="./assets/commits_laptop.png" alt="secure storage" aria-hidden="true">
+            <img
+              src="assets/commits_laptop.png"
+              alt="secure storage"
+              aria-hidden="true"
+            />
           </div>
         </div>
         <div class="landing-benefits-item item-2">
           <div class="landing-benefits-left">
             <h3>Work from anywhere</h3>
-            <p>Access and edit documents from any browser. No installs, no compatibility issues, no excuses.</p>
+            <p>
+              Access and edit documents from any browser. No installs, no
+              compatibility issues, no excuses.
+            </p>
           </div>
           <div class="landing-benefits-right">
-            <img src="./assets/iphone_review.png" alt="mobile website" aria-hidden="true">
+            <img
+              src="assets/iphone_review.png"
+              alt="mobile website"
+              aria-hidden="true"
+            />
           </div>
         </div>
         <div class="landing-benefits-item item-3">
           <div class="landing-benefits-left">
             <h3>Collaborate effortlessly</h3>
-            <p>Discuss changes, ask questions, and make decisions without leaving the platform — no extra tools or lost context.</p>
+            <p>
+              Discuss changes, ask questions, and make decisions without leaving
+              the platform — no extra tools or lost context.
+            </p>
           </div>
           <div class="landing-benefits-right">
-            <img src="./assets/collab_laptop.png" alt="collaboration page" aria-hidden="true">
+            <img
+              src="assets/collab_laptop.png"
+              alt="collaboration page"
+              aria-hidden="true"
+            />
           </div>
         </div>
         <div class="landing-benefits-item item-4">
           <div class="landing-benefits-left">
             <h3>Streamline reviews</h3>
-            <p>Enforce approvals, catch issues early, and eliminate bottlenecks — without endless back-and-forth emails.</p>
+            <p>
+              Enforce approvals, catch issues early, and eliminate bottlenecks —
+              without endless back-and-forth emails.
+            </p>
           </div>
           <div class="landing-benefits-right">
-            <img src="./assets/approval_laptop.png" alt="approval page" aria-hidden="true">
+            <img
+              src="assets/approval_laptop.png"
+              alt="approval page"
+              aria-hidden="true"
+            />
           </div>
         </div>
         <div class="landing-benefits-item item-5">
           <div class="landing-benefits-left">
             <h3>Meet deadlines</h3>
-            <p>Create issues, assign tasks, resolve blockers and never lose sight of your goals with projects.</p>
+            <p>
+              Create issues, assign tasks, resolve blockers and never lose sight
+              of your goals with projects.
+            </p>
           </div>
           <div class="landing-benefits-right">
-            <img src="./assets/project_laptop.png" alt="project page" aria-hidden="true">
+            <img
+              src="assets/project_laptop.png"
+              alt="project page"
+              aria-hidden="true"
+            />
           </div>
         </div>
       </div>
@@ -103,7 +145,9 @@
             </div>
             <div class="tier-spacer"></div>
             <div class="landing-price-feature-label">Features include:</div>
-            <div class="landing-price-feature">5 public/private repositories</div>
+            <div class="landing-price-feature">
+              5 public/private repositories
+            </div>
             <div class="landing-price-feature">issues and milestones</div>
             <div class="landing-price-feature">50MB of storage per repo</div>
           </div>
@@ -114,10 +158,14 @@
                 <span class="landing-price-bold-old-text">$15</span>
                 <span class="landing-price-bold-text">$5</span>
               </div>
-              <div class="landing-price-info-text">per user / month,<br>billed annually</div>
+              <div class="landing-price-info-text">
+                per user / month,<br />billed annually
+              </div>
             </div>
             <div class="tier-spacer"></div>
-            <div class="landing-price-feature-label">Everything from Free, plus:</div>
+            <div class="landing-price-feature-label">
+              Everything from Free, plus:
+            </div>
             <div class="landing-price-feature">unlimited repositories</div>
             <div class="landing-price-feature">project management</div>
             <div class="landing-price-feature">multiple reviewers</div>
@@ -130,13 +178,19 @@
           <div class="tier-container-ultimate">
             <h3>Ultimate</h3>
             <div class="landing-price-row-pad">
-              <div class="landing-price-talk-text">Talk to sales for pricing</div>
+              <div class="landing-price-talk-text">
+                Talk to sales for pricing
+              </div>
             </div>
             <div class="tier-spacer"></div>
-            <div class="landing-price-feature-label">Everything from Premium, plus:</div>
+            <div class="landing-price-feature-label">
+              Everything from Premium, plus:
+            </div>
             <div class="landing-price-feature">data residence</div>
             <div class="landing-price-feature">enterprise managed users</div>
-            <div class="landing-price-feature">user provisioning through SCIM</div>
+            <div class="landing-price-feature">
+              user provisioning through SCIM
+            </div>
             <div class="landing-price-feature">SAML single sign-on</div>
             <div class="landing-price-feature">white glove onboarding</div>
           </div>
@@ -144,29 +198,38 @@
       </div>
 
       <div class="outro">
-        <div class="ui center aligned container alternative-cta" style="display: flex; flex-direction: column; align-items: center; text-align: center; width: 100%;">
+        <div
+          class="ui center aligned container alternative-cta"
+          style="
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            width: 100%;
+          "
+        >
           <h1 class="ui header">Deliver better work, without the chaos.</h1>
-          <h2>See what your team can do with the intelligent document platform.</h2>
+          <h2>
+            See what your team can do with the intelligent document platform.
+          </h2>
           <div class="landing-cta-container">
             <div class="landing-cta-input-container">
-              <input class="landing-email" type="email" id="email" name="user_email" size="50" placeholder="Enter your email">
-              <button class="ui button cta"><span>Sign up for Bindersnap</span></button>
+              <input
+                class="landing-email"
+                type="email"
+                id="email"
+                name="user_email"
+                size="50"
+                placeholder="Enter your email"
+              />
+              <button class="ui button cta">
+                <span>Sign up for Bindersnap</span>
+              </button>
             </div>
           </div>
         </div>
       </div>
     </div>
-    <footer class="page-footer">
-      <div class="left-links">
-        <a href="#" style="text-decoration: none; color: inherit;">© 2026 Bindersnap</a>
-        <a href="#" style="text-decoration: none; color: inherit;">Terms of Service</a>
-        <a href="#" style="text-decoration: none; color: inherit;">Privacy Policy</a>
-      </div>
-      <div class="right-links">
-        <a href="#" style="text-decoration: none; color: inherit;">Language</a>
-        <a href="#" style="text-decoration: none; color: inherit;">Help</a>
-      </div>
-    </footer>
     <script type="module" src="./frontend.tsx"></script>
   </body>
 </html>

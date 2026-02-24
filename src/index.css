@@ -1,9 +1,32 @@
+
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lato:ital,wght@0,400;0,700;1,400&family=Lora:ital,wght@0,400;0,700;1,400&family=Merriweather:ital,wght@0,400;0,700;1,400&family=Montserrat:wght@400;700&family=Open+Sans:ital,wght@0,400;0,700;1,400&family=Oswald:wght@400;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Roboto:ital,wght@0,400;0,700;1,400&family=Source+Sans+Pro:ital,wght@0,400;0,700;1,400&family=Ubuntu:ital,wght@0,400;0,700;1,400&display=swap');
 
 /* ====================
    Base Styles
    ==================== */
 :root {
+  --theme-text-dark: #080707;
+  --theme-success-bg: #1a8037;
+  --theme-brand-primary: #8179f8;
+  --theme-border-light: #e2e2e2;
+  --theme-border-accent: #2188ff;
+  --theme-shadow-color: rgb(0, 0, 0);
+  --theme-shadow-color-alpha: #0000001a;
+  --theme-shadow-color-alpha-2: #0000001e;
+  --theme-shadow-color-alpha-3: #0000000f;
+  
+  --theme-bg-blob-blue-1: #4b6bec62;
+  --theme-bg-blob-blue-2: #4bbcec62;
+  --theme-bg-blob-purple-1: #894bec50;
+  --theme-bg-blob-purple-2: #bc4bec42;
+  --theme-bg-blob-yellow-1: #ecd14b62;
+  --theme-bg-blob-yellow-2: #ecd64b62;
+  --theme-bg-blob-yellow-3: #eca34b62;
+  --theme-bg-blob-green-1: #a9ec4b62;
+  --theme-bg-blob-red-1: #ec4b5362;
+  --theme-bg-blob-purple-3: #794bec5a;
+  --theme-bg-blob-purple-4: #6232c34d;
+
   --editor-bg: #ffffff;
   --editor-border: #e0e0e0;
   --toolbar-bg: #f8f9fa;
@@ -32,37 +55,6 @@ body {
   margin: 0;
   min-height: 100vh;
   background-color: var(--color-white);
-}
-
-/* ====================
-   App Container (Removed)
-   ==================== */
-
-/* ====================
-   Utilities
-   ==================== */
-.flex {
-  display: flex;
-}
-
-.flex-col {
-  flex-direction: column;
-}
-
-.flex-1 {
-  flex: 1 1 0%;
-}
-
-.flex-none {
-  flex: none;
-}
-
-.min-h-0 {
-  min-height: 0;
-}
-
-.overflow-y-auto {
-  overflow-y: auto;
 }
 
 /* ====================
@@ -956,7 +948,7 @@ body {
 
 .home .hero h1.ui.header,
 .home .hero h2 {
-  color: #080707;
+  color: var(--theme-text-dark);
 }
 
 @keyframes scale-benefits-item {
@@ -978,7 +970,7 @@ body {
     font-weight: 700;
     line-height: 120%;
     letter-spacing: -3%;
-    color: #080707;
+    color: var(--theme-text-dark);
   }
 
   .home .alternative-cta h1.ui.header {
@@ -991,7 +983,7 @@ body {
     line-height: 1.3em;
     letter-spacing: 0.15px;
     font-weight: 500;
-    color: #080707;
+    color: var(--theme-text-dark);
   }
 
   .landing-cta-container {
@@ -1024,7 +1016,7 @@ body {
   }
 
   .home .ui.cta {
-    background-color: #1a8037;
+    background-color: var(--theme-success-bg);
     color: var(--color-white);
     width: 100%;
     height: 47px;
@@ -1086,9 +1078,9 @@ body {
     position: absolute;
     top: 50px;
     left: 0;
-    background: radial-gradient(circle at 50% 425px, #4b6bec62, transparent 300px),
-      radial-gradient(circle at calc(50% + 180px) 515px, #4bbcec62, transparent 190px),
-      radial-gradient(circle at calc(50% - 220px) 360px, #894bec50, transparent 190px);
+    background: radial-gradient(circle at 50% 425px, var(--theme-bg-blob-blue-1), transparent 300px),
+      radial-gradient(circle at calc(50% + 180px) 515px, var(--theme-bg-blob-blue-2), transparent 190px),
+      radial-gradient(circle at calc(50% - 220px) 360px, var(--theme-bg-blob-purple-1), transparent 190px);
     background-color: transparent;
     z-index: 1;
   }
@@ -1100,7 +1092,7 @@ body {
     font-weight: 700;
     line-height: 120%;
     letter-spacing: -3%;
-    color: #080707;
+    color: var(--theme-text-dark);
   }
 
   .home .alternative-cta h1.ui.header {
@@ -1113,7 +1105,7 @@ body {
     line-height: 1.3em;
     letter-spacing: 0.15px;
     font-weight: 500;
-    color: #080707;
+    color: var(--theme-text-dark);
   }
 
   .landing-cta-container {
@@ -1137,7 +1129,7 @@ body {
     align-items: center;
     justify-content: center;
     padding: 3px;
-    box-shadow: 8px 8px 0 0 rgb(0, 0, 0);
+    box-shadow: 8px 8px 0 0 var(--theme-shadow-color);
   }
 
   .landing-email {
@@ -1149,7 +1141,7 @@ body {
   }
 
   .home .ui.cta {
-    background-color: #1a8037;
+    background-color: var(--theme-success-bg);
     color: var(--color-white);
     width: 218px;
     height: 47px;
@@ -1261,29 +1253,29 @@ body {
 } */
 
 .landing-secondary-cta:link {
-  color: #080707;
+  color: var(--theme-text-dark);
 }
 
 /* visited link */
 .landing-secondary-cta:visited {
-  color: #080707;
+  color: var(--theme-text-dark);
 }
 
 /* mouse over link */
 .landing-secondary-cta:hover {
-  color: #080707;
+  color: var(--theme-text-dark);
 }
 
 /* selected link */
 .landing-secondary-cta:active {
-  color: #080707;
+  color: var(--theme-text-dark);
 }
 
 .landing-benefits-item {
   display: flex;
   flex-direction: row;
   border-radius: 16px;
-  box-shadow: 0 -8px 10px #0000001a;
+  box-shadow: 0 -8px 10px var(--theme-shadow-color-alpha);
   height: 548px;
   overflow: hidden;
   position: sticky;
@@ -1291,15 +1283,15 @@ body {
   animation: scale-benefits-item linear both;
   will-change: transform;
   background-color: var(--color-white);
-  color: #080707;
+  color: var(--theme-text-dark);
 }
 
 .landing-benefits-item.item-1 {
   top: calc(64px + 10vh);
   z-index: 4;
   margin-bottom: 154px;
-  background: radial-gradient(circle at 50% -20%, #4b6bec62, transparent 35%),
-    radial-gradient(circle at 65% -10%, #4bbcec62, transparent 25%);
+  background: radial-gradient(circle at 50% -20%, var(--theme-bg-blob-blue-1), transparent 35%),
+    radial-gradient(circle at 65% -10%, var(--theme-bg-blob-blue-2), transparent 25%);
   background-color: var(--color-white);
 }
 
@@ -1307,8 +1299,8 @@ body {
   top: calc(94px + 10vh);
   z-index: 5;
   margin-bottom: 124px;
-  background: radial-gradient(circle at 40% -20%, #ecd14b62, transparent 35%),
-    radial-gradient(circle at 25% -10%, #a9ec4b62, transparent 25%);
+  background: radial-gradient(circle at 40% -20%, var(--theme-bg-blob-yellow-1), transparent 35%),
+    radial-gradient(circle at 25% -10%, var(--theme-bg-blob-green-1), transparent 25%);
   background-color: var(--color-white);
 }
 
@@ -1316,8 +1308,8 @@ body {
   top: calc(124px + 10vh);
   z-index: 6;
   margin-bottom: 94px;
-  background: radial-gradient(circle at 70% -20%, #ec4b5362, transparent 35%),
-    radial-gradient(circle at 60% -10%, #bc4bec42, transparent 25%);
+  background: radial-gradient(circle at 70% -20%, var(--theme-bg-blob-red-1), transparent 35%),
+    radial-gradient(circle at 60% -10%, var(--theme-bg-blob-purple-2), transparent 25%);
   background-color: var(--color-white);
 }
 
@@ -1325,8 +1317,8 @@ body {
   top: calc(154px + 10vh);
   z-index: 7;
   margin-bottom: 64px;
-  background: radial-gradient(circle at 40% -20%, #794bec5a, transparent 35%),
-    radial-gradient(circle at 50% -10%, #6232c34d, transparent 25%);
+  background: radial-gradient(circle at 40% -20%, var(--theme-bg-blob-purple-3), transparent 35%),
+    radial-gradient(circle at 50% -10%, var(--theme-bg-blob-purple-4), transparent 25%);
   background-color: var(--color-white);
 }
 
@@ -1334,8 +1326,8 @@ body {
   top: calc(204px + 10vh);
   z-index: 8;
   margin-bottom: 12px;
-  background: radial-gradient(circle at 15% -20%, #ecd64b62, transparent 35%),
-    radial-gradient(circle at 25% -10%, #eca34b62, transparent 25%);
+  background: radial-gradient(circle at 15% -20%, var(--theme-bg-blob-yellow-2), transparent 35%),
+    radial-gradient(circle at 25% -10%, var(--theme-bg-blob-yellow-3), transparent 25%);
   background-color: var(--color-white);
 }
 
@@ -1352,7 +1344,7 @@ body {
 
 .landing-benefits-item.item-1 .landing-benefits-right img {
   border-radius: 16px;
-  box-shadow: 0 -8px 10px #0000001a;
+  box-shadow: 0 -8px 10px var(--theme-shadow-color-alpha);
   position: relative;
   top: 5em;
   left: 3em;
@@ -1362,7 +1354,7 @@ body {
 
 .landing-benefits-item.item-2 .landing-benefits-right img {
   border-radius: 28px;
-  box-shadow: 0 -8px 10px #0000001a;
+  box-shadow: 0 -8px 10px var(--theme-shadow-color-alpha);
   position: relative;
   top: 3em;
   left: 15%;
@@ -1372,7 +1364,7 @@ body {
 
 .landing-benefits-item.item-3 .landing-benefits-right img {
   border-radius: 16px;
-  box-shadow: 0 -8px 10px #0000001a;
+  box-shadow: 0 -8px 10px var(--theme-shadow-color-alpha);
   position: relative;
   top: 5em;
   left: 3em;
@@ -1382,7 +1374,7 @@ body {
 
 .landing-benefits-item.item-4 .landing-benefits-right img {
   border-radius: 16px;
-  box-shadow: 0 -8px 10px #0000001a;
+  box-shadow: 0 -8px 10px var(--theme-shadow-color-alpha);
   position: relative;
   top: 5em;
   left: 3em;
@@ -1392,7 +1384,7 @@ body {
 
 .landing-benefits-item.item-5 .landing-benefits-right img {
   border-radius: 16px;
-  box-shadow: 0 -8px 10px #0000001a;
+  box-shadow: 0 -8px 10px var(--theme-shadow-color-alpha);
   position: relative;
   top: 5em;
   left: 3em;
@@ -1428,14 +1420,14 @@ body {
   padding: 20px;
   overflow: hidden;
   border-radius: 24px;
-  box-shadow: 0 1px 3px #0000001e,
-    0 4px 8px 3px #0000000f;
+  box-shadow: 0 1px 3px var(--theme-shadow-color-alpha-2),
+    0 4px 8px 3px var(--theme-shadow-color-alpha-3);
   display: flex;
   flex-direction: column;
   gap: 20px;
   height: fit-content;
   background-color: var(--color-white);
-  color: #080707;
+  color: var(--theme-text-dark);
 }
 
 .tier-container-free h3,
@@ -1447,17 +1439,17 @@ body {
 }
 
 .tier-container-free {
-  border: 1px solid #e2e2e2;
+  border: 1px solid var(--theme-border-light);
 }
 
 .tier-container-premium {
-  border: 1px solid #2188ff;
+  border: 1px solid var(--theme-border-accent);
 }
 
 .tier-container-ultimate {
-  box-shadow: 0 4px 8px #0000001e;
+  box-shadow: 0 4px 8px var(--theme-shadow-color-alpha-2);
   background: linear-gradient(white, white) padding-box,
-    linear-gradient(141deg, #8179f8 31%, #c05696 61%, #ff3333) border-box;
+    linear-gradient(141deg, var(--theme-brand-primary) 31%, #c05696 61%, #ff3333) border-box;
 
   border: 1px solid transparent;
 }
@@ -1530,7 +1522,7 @@ body {
 
 .home .outro {
   width: 100%;
-  background-color: #8179f8;
+  background-color: var(--theme-brand-primary);
   display: flex;
   margin-bottom: -80px;
   color: var(--color-white);
