@@ -23,15 +23,9 @@
     <div role="main" aria-label="home">
       <div class="landing-intro"></div>
       <div
-        class="ui center aligned container landing-hero"
-        style="
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          text-align: center;
-        "
+        class="container mx-auto flex flex-col items-center text-center landing-hero"
       >
-        <h1 class="ui header">
+        <h1 class="text-4xl md:text-5xl font-bold mb-4">
           Replace shared drives with a single, collaborative platform.
         </h1>
         <h2>
@@ -199,16 +193,11 @@
 
       <div class="outro">
         <div
-          class="ui center aligned container landing-alternative-cta"
-          style="
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            text-align: center;
-            width: 100%;
-          "
+          class="container mx-auto flex flex-col items-center text-center w-full landing-alternative-cta"
         >
-          <h1 class="ui header">Deliver better work, without the chaos.</h1>
+          <h1 class="text-3xl md:text-4xl font-bold mb-4">
+            Deliver better work, without the chaos.
+          </h1>
           <h2>
             See what your team can do with the intelligent document platform.
           </h2>
@@ -222,7 +211,9 @@
                 size="50"
                 placeholder="Enter your email"
               />
-              <button class="ui button landing-cta">
+              <button
+                class="landing-cta cursor-pointer flex items-center justify-center transition hover:opacity-90"
+              >
                 <span>Sign up for Bindersnap</span>
               </button>
             </div>
