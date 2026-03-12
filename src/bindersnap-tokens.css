@@ -1,0 +1,668 @@
+/**
+ * ╔══════════════════════════════════════════════════════════════╗
+ * ║           BINDERSNAP  ·  Design Token System  ·  v1.0       ║
+ * ║                                                              ║
+ * ║  Drop this file into any web project and import it once.    ║
+ * ║  Then use var(--color-coral), var(--font-serif), etc.        ║
+ * ║  everywhere — never hardcode hex values in components.       ║
+ * ╚══════════════════════════════════════════════════════════════╝
+ *
+ * Google Fonts import (add to your <head> or top of this file):
+ * https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap');
+
+/* ─────────────────────────────────────────────────────────────
+   ROOT TOKENS
+   ───────────────────────────────────────────────────────────── */
+:root {
+
+  /* ── COLORS ─────────────────────────────────────────────── */
+
+  /* Primary */
+  --color-coral:          #E85D26;   /* Brand accent — CTAs, highlights, key emphasis */
+  --color-coral-dark:     #C94D1A;   /* Hover state for coral elements */
+  --color-coral-dim:      rgba(232, 93, 38, 0.10);  /* Tinted bg behind coral text/icons */
+  --color-coral-glow:     rgba(232, 93, 38, 0.06);  /* Subtle hero/section wash */
+  --color-coral-mid:      #F5D5C4;   /* Light coral for decorative use only */
+
+  --color-ink:            #1C1917;   /* Primary text, headings, dark backgrounds */
+  --color-ink-mid:        #292524;   /* Dark nav bar, code blocks, footer */
+  --color-ink-soft:       #44403C;   /* Body copy, secondary headings */
+
+  --color-paper:          #FAFAF7;   /* DEFAULT page background — warm white */
+  --color-paper-warm:     #F5F0E8;   /* Section alternating bg, card backgrounds */
+  --color-paper-mid:      #EDE8DF;   /* Tags, pills, divider fills */
+
+  --color-muted:          #78716C;   /* Secondary body text, descriptions */
+  --color-muted-light:    #A8A29E;   /* Captions, hints, placeholders, timestamps */
+  --color-rule:           #E7E4DF;   /* All borders and horizontal rules */
+
+  /* Functional */
+  --color-green:          #16A34A;   /* Success states, compliance badges, "after" column */
+  --color-green-dim:      rgba(22, 163, 74, 0.10);   /* Tinted bg behind green elements */
+
+
+  /* ── TYPOGRAPHY ─────────────────────────────────────────── */
+
+  --font-serif:   'Lora', Georgia, 'Times New Roman', serif;
+  --font-sans:    'Geist', system-ui, -apple-system, sans-serif;
+  --font-mono:    'Geist Mono', 'Fira Code', Consolas, monospace;
+
+  /* Font weights */
+  --weight-light:    300;
+  --weight-regular:  400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+
+
+  /* ── TYPE SCALE ─────────────────────────────────────────── */
+  /*
+   * Rule: All display/h1-h3 use --font-serif.
+   *       All body, UI, labels use --font-sans.
+   *       All code, metadata, tags use --font-mono.
+   */
+
+  --text-display:  clamp(3rem, 6.5vw, 5.5rem);   /* font-serif bold — hero only */
+  --text-h1:       3rem;                           /* font-serif bold */
+  --text-h2:       clamp(1.875rem, 3.5vw, 2.625rem); /* font-serif semibold */
+  --text-h3:       1.5rem;                         /* font-serif semibold */
+  --text-body-lg:  1.125rem;                       /* font-sans light — hero subtext */
+  --text-body:     1rem;                           /* font-sans regular — standard copy */
+  --text-sm:       0.875rem;                       /* font-sans regular — secondary */
+  --text-xs:       0.75rem;                        /* font-sans regular — hints/captions */
+  --text-label:    0.6875rem;                      /* font-mono medium — tags, badges */
+
+  /* Line heights */
+  --leading-tight:  1.08;   /* Display headlines */
+  --leading-snug:   1.2;    /* H2/H3 */
+  --leading-normal: 1.5;    /* UI copy */
+  --leading-relaxed:1.7;    /* Body paragraphs */
+
+  /* Letter spacing */
+  --tracking-tight:  -0.025em;  /* Display headlines */
+  --tracking-snug:   -0.015em;  /* H1/H2 */
+  --tracking-normal:  0em;
+  --tracking-wide:    0.08em;   /* Mono labels */
+  --tracking-wider:   0.12em;   /* Section tags */
+  --tracking-widest:  0.15em;   /* Eyebrow caps */
+
+
+  /* ── SPACING (base-8 system) ─────────────────────────────── */
+
+  --space-1:    4px;
+  --space-2:    8px;
+  --space-3:    12px;
+  --space-4:    16px;
+  --space-5:    20px;
+  --space-6:    24px;
+  --space-8:    32px;
+  --space-10:   40px;
+  --space-12:   48px;
+  --space-16:   64px;
+  --space-20:   80px;
+  --space-24:   96px;
+  --space-30:   120px;
+
+
+  /* ── BORDER RADIUS ──────────────────────────────────────── */
+
+  --radius-xs:   2px;    /* Sharp: table rows, code blocks, compliance badges */
+  --radius-sm:   4px;    /* Small interactive: tags, pills, mini chips */
+  --radius-md:   8px;    /* Standard: nav, feature icons, small cards */
+  --radius-lg:   12px;   /* Inputs, form elements, standard cards */
+  --radius-xl:   16px;   /* Large cards, feature panels */
+  --radius-2xl:  24px;   /* CTA boxes, hero containers, modals */
+  --radius-full: 9999px; /* Pills, avatar badges */
+
+
+  /* ── SHADOWS ────────────────────────────────────────────── */
+
+  --shadow-sm:
+    0 1px 3px  rgba(28, 25, 23, 0.08),
+    0 1px 2px  rgba(28, 25, 23, 0.04);
+
+  --shadow-md:
+    0 4px 16px rgba(28, 25, 23, 0.10),
+    0 2px 4px  rgba(28, 25, 23, 0.06);
+
+  --shadow-lg:
+    0 20px 60px rgba(28, 25, 23, 0.15),
+    0 4px  12px rgba(28, 25, 23, 0.08);
+
+  --shadow-xl:
+    0 40px 100px rgba(28, 25, 23, 0.18);
+
+  --shadow-coral:
+    0 4px 16px rgba(232, 93, 38, 0.20),
+    0 2px 4px  rgba(232, 93, 38, 0.10);
+
+
+  /* ── TRANSITIONS ────────────────────────────────────────── */
+
+  --transition-fast:   0.15s ease;
+  --transition-base:   0.2s ease;
+  --transition-slow:   0.3s ease;
+  --transition-reveal: 0.7s ease;    /* Scroll-reveal animations */
+
+
+  /* ── Z-INDEX SCALE ──────────────────────────────────────── */
+
+  --z-base:    0;
+  --z-raised:  10;
+  --z-overlay: 50;
+  --z-nav:     100;
+  --z-modal:   200;
+  --z-toast:   300;
+  --z-texture: 9999;  /* Grain overlay — always on top, pointer-events: none */
+
+
+  /* ── LAYOUT ─────────────────────────────────────────────── */
+
+  --max-width:         1200px;
+  --max-width-text:    680px;    /* Max width for readable prose */
+  --max-width-narrow:  560px;    /* Hero subtext, CTA copy */
+  --max-width-form:    500px;    /* Email capture forms */
+
+  --nav-height:        64px;
+
+  --page-padding-x:    40px;     /* Horizontal page gutter — desktop */
+  --page-padding-x-sm: 20px;     /* Mobile */
+
+  --section-padding-y:     120px;  /* Standard vertical section padding */
+  --section-padding-y-sm:  72px;   /* Compressed sections */
+}
+
+
+/* ─────────────────────────────────────────────────────────────
+   BASE RESETS & GLOBAL STYLES
+   ───────────────────────────────────────────────────────────── */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+  font-size: 16px;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: var(--leading-relaxed);
+}
+
+/* Paper grain texture overlay — add to body::after */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-texture);
+  pointer-events: none;
+  opacity: 0.022;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 200px;
+}
+
+
+/* ─────────────────────────────────────────────────────────────
+   TYPOGRAPHY UTILITY CLASSES
+   ───────────────────────────────────────────────────────────── */
+
+.bs-display {
+  font-family: var(--font-serif);
+  font-size: var(--text-display);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--color-ink);
+}
+
+.bs-h1 {
+  font-family: var(--font-serif);
+  font-size: var(--text-h1);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-snug);
+  color: var(--color-ink);
+}
+
+.bs-h2 {
+  font-family: var(--font-serif);
+  font-size: var(--text-h2);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-snug);
+  letter-spacing: var(--tracking-snug);
+  color: var(--color-ink);
+}
+
+.bs-h3 {
+  font-family: var(--font-serif);
+  font-size: var(--text-h3);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-snug);
+  color: var(--color-ink);
+}
+
+.bs-body-lg {
+  font-family: var(--font-sans);
+  font-size: var(--text-body-lg);
+  font-weight: var(--weight-light);
+  line-height: var(--leading-relaxed);
+  color: var(--color-muted);
+}
+
+.bs-body {
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  font-weight: var(--weight-regular);
+  line-height: var(--leading-relaxed);
+  color: var(--color-ink-soft);
+}
+
+.bs-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+  color: var(--color-coral);
+}
+
+.bs-code {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  background: var(--color-paper-warm);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-xs);
+  padding: 2px 6px;
+  color: var(--color-muted);
+}
+
+/* Coral italic accent for headlines */
+.bs-accent {
+  color: var(--color-coral);
+  font-style: italic;
+}
+
+
+/* ─────────────────────────────────────────────────────────────
+   COMPONENT CLASSES
+   ───────────────────────────────────────────────────────────── */
+
+/* ── Buttons ── */
+.bs-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: var(--weight-semibold);
+  line-height: 1;
+  letter-spacing: 0.01em;
+  padding: 13px 24px;
+  border-radius: var(--radius-md);
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    background var(--transition-base),
+    transform  var(--transition-fast),
+    box-shadow var(--transition-base);
+  white-space: nowrap;
+}
+
+.bs-btn:hover { transform: translateY(-1px); }
+.bs-btn:active { transform: translateY(0); }
+
+.bs-btn-primary {
+  background: var(--color-coral);
+  color: #ffffff;
+}
+.bs-btn-primary:hover {
+  background: var(--color-coral-dark);
+  box-shadow: var(--shadow-coral);
+}
+
+.bs-btn-secondary {
+  background: #ffffff;
+  color: var(--color-ink);
+  border: 1.5px solid var(--color-rule);
+}
+.bs-btn-secondary:hover {
+  border-color: var(--color-coral);
+  box-shadow: var(--shadow-sm);
+}
+
+.bs-btn-dark {
+  background: var(--color-ink);
+  color: #F5F0E8;
+}
+.bs-btn-dark:hover {
+  background: var(--color-ink-mid);
+}
+
+
+/* ── Cards ── */
+.bs-card {
+  background: #ffffff;
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-xl);
+  padding: 36px 32px;
+  position: relative;
+  overflow: hidden;
+  transition:
+    transform    var(--transition-slow),
+    box-shadow   var(--transition-slow),
+    border-color var(--transition-slow);
+}
+
+.bs-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--color-coral);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--transition-slow);
+}
+
+.bs-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+  border-color: transparent;
+}
+.bs-card:hover::before {
+  transform: scaleX(1);
+}
+
+
+/* ── Form Input ── */
+.bs-input {
+  width: 100%;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: var(--weight-regular);
+  color: var(--color-ink);
+  background: #ffffff;
+  border: 1.5px solid var(--color-rule);
+  border-radius: var(--radius-lg);
+  padding: 15px 18px;
+  outline: none;
+  transition:
+    border-color var(--transition-base),
+    box-shadow   var(--transition-base);
+}
+
+.bs-input::placeholder {
+  color: var(--color-muted-light);
+}
+
+.bs-input:focus {
+  border-color: var(--color-coral);
+  box-shadow: 0 0 0 4px var(--color-coral-dim);
+}
+
+/* Combo: email input + button side by side */
+.bs-email-row {
+  display: flex;
+  background: #ffffff;
+  border: 1.5px solid var(--color-rule);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-md), 0 0 0 4px var(--color-coral-glow);
+  transition:
+    border-color var(--transition-base),
+    box-shadow   var(--transition-base);
+}
+.bs-email-row:focus-within {
+  border-color: var(--color-coral);
+  box-shadow: var(--shadow-md), 0 0 0 4px var(--color-coral-dim);
+}
+.bs-email-row input {
+  flex: 1;
+  border: none;
+  outline: none;
+  padding: 15px 18px;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--color-ink);
+  background: transparent;
+}
+.bs-email-row input::placeholder { color: var(--color-muted-light); }
+.bs-email-row button {
+  background: var(--color-coral);
+  color: white;
+  border: none;
+  padding: 13px 24px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  margin: 3px 3px 3px 0;
+  border-radius: 9px;
+  transition: background var(--transition-base);
+}
+.bs-email-row button:hover { background: var(--color-coral-dark); }
+
+
+/* ── Section Eyebrow (mono tag with flanking lines) ── */
+.bs-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  font-weight: var(--weight-medium);
+  color: var(--color-coral);
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+}
+.bs-eyebrow::before,
+.bs-eyebrow::after {
+  content: '';
+  width: 24px;
+  height: 1px;
+  background: var(--color-coral);
+  opacity: 0.4;
+  flex-shrink: 0;
+}
+
+
+/* ── Nav Badge (live dot + count) ── */
+.bs-nav-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-muted);
+  background: var(--color-paper-warm);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-full);
+  padding: 5px 12px;
+}
+.bs-nav-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #16A34A;
+  animation: bs-breathe 2.5s ease-in-out infinite;
+}
+
+
+/* ── Comparison table row ── */
+.bs-compare-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: 14px 28px;
+  border-bottom: 1px solid rgba(28,25,23,0.06);
+  font-size: 14px;
+  color: var(--color-ink-soft);
+  line-height: 1.5;
+}
+.bs-compare-item:last-child { border-bottom: none; }
+
+
+/* ── Pill / tag chip ── */
+.bs-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: var(--weight-regular);
+  color: var(--color-muted);
+  background: #ffffff;
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-full);
+  padding: 8px 16px 8px 10px;
+  box-shadow: var(--shadow-sm);
+}
+
+.bs-file-chip {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--color-paper-warm);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-sm);
+  padding: 3px 8px;
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+
+
+/* ─────────────────────────────────────────────────────────────
+   LAYOUT UTILITIES
+   ───────────────────────────────────────────────────────────── */
+
+.bs-container {
+  width: 100%;
+  max-width: var(--max-width);
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: var(--page-padding-x);
+  padding-right: var(--page-padding-x);
+}
+
+.bs-section {
+  padding-top: var(--section-padding-y);
+  padding-bottom: var(--section-padding-y);
+}
+
+.bs-section-sm {
+  padding-top: var(--section-padding-y-sm);
+  padding-bottom: var(--section-padding-y-sm);
+}
+
+
+/* ─────────────────────────────────────────────────────────────
+   SCROLL REVEAL ANIMATION
+   ───────────────────────────────────────────────────────────── */
+
+.bs-reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity   var(--transition-reveal),
+    transform var(--transition-reveal);
+}
+.bs-reveal.bs-in {
+  opacity: 1;
+  transform: none;
+}
+.bs-reveal-d1 { transition-delay: 0.1s; }
+.bs-reveal-d2 { transition-delay: 0.2s; }
+.bs-reveal-d3 { transition-delay: 0.3s; }
+.bs-reveal-d4 { transition-delay: 0.4s; }
+
+
+/* ─────────────────────────────────────────────────────────────
+   KEYFRAMES
+   ───────────────────────────────────────────────────────────── */
+
+@keyframes bs-breathe {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.75); }
+}
+
+@keyframes bs-fade-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes bs-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+
+/* ─────────────────────────────────────────────────────────────
+   SCROLL REVEAL — JS SNIPPET
+   ─────────────────────────────────────────────────────────────
+   Paste this into your main JS file:
+
+   const io = new IntersectionObserver(entries => {
+     entries.forEach(e => {
+       if (e.isIntersecting) {
+         e.target.classList.add('bs-in');
+         io.unobserve(e.target);
+       }
+     });
+   }, { threshold: 0.1 });
+   document.querySelectorAll('.bs-reveal').forEach(el => io.observe(el));
+   ───────────────────────────────────────────────────────────── */
+
+
+/* ─────────────────────────────────────────────────────────────
+   RESPONSIVE
+   ───────────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  :root {
+    --page-padding-x: var(--page-padding-x-sm);
+    --section-padding-y: 72px;
+    --section-padding-y-sm: 48px;
+  }
+
+  .bs-email-row {
+    flex-direction: column;
+    border-radius: var(--radius-lg);
+  }
+  .bs-email-row button {
+    margin: 0 3px 3px 3px;
+    border-radius: 9px;
+    width: calc(100% - 6px);
+    padding: 13px;
+  }
+}
+
+
+/* ─────────────────────────────────────────────────────────────
+   DARK MODE OVERRIDES
+   ─────────────────────────────────────────────────────────────
+   Bindersnap's dark mode is ink-first, not pure black.
+   ───────────────────────────────────────────────────────────── */
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-paper:       #1C1917;
+    --color-paper-warm:  #292524;
+    --color-paper-mid:   #44403C;
+    --color-rule:        rgba(255, 255, 255, 0.08);
+    --color-ink:         #F5F0E8;
+    --color-ink-soft:    #E7E4DF;
+    --color-muted:       #A8A29E;
+    --color-muted-light: #78716C;
+  }
+}
