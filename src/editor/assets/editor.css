@@ -1,0 +1,639 @@
+/* ====================
+   Editor CSS Variables
+   ==================== */
+:root {
+  --editor-bg: #ffffff;
+  --editor-border: #e0e0e0;
+  --toolbar-bg: #f8f9fa;
+  --toolbar-border: #e0e0e0;
+  --btn-hover: #e8e8e8;
+  --btn-active: #e3f2fd;
+  --btn-active-text: #1976d2;
+  --text-primary: #333333;
+  --text-secondary: #666666;
+  --text-muted: #999999;
+  --dropdown-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  --focus-ring: #1976d2;
+}
+
+/* ====================
+   Editor Container
+   ==================== */
+.editor-demo-container {
+  width: 1250px;
+  max-width: 100%;
+  height: 700px;
+  margin: 0 auto;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.demo-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background: var(--editor-bg);
+}
+
+/* ====================
+   Toolbar
+   ==================== */
+.editor-toolbar {
+  display: flex;
+  flex-direction: column;
+  background: var(--toolbar-bg);
+  border-bottom: 1px solid var(--toolbar-border);
+  padding: 6px 8px;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.editor-toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+}
+
+.editor-toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.editor-toolbar-btn:hover:not(:disabled) {
+  background: var(--btn-hover);
+  color: var(--text-primary);
+}
+
+.editor-toolbar-btn.active {
+  background: var(--btn-active);
+  color: var(--btn-active-text);
+}
+
+.editor-toolbar-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.editor-toolbar-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--toolbar-border);
+  margin: 0 6px;
+  flex-shrink: 0;
+}
+
+/* ====================
+   Dropdown
+   ==================== */
+.editor-dropdown {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.editor-dropdown-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--toolbar-border);
+  border-radius: 4px;
+  background: white;
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  gap: 4px;
+}
+
+.editor-dropdown-trigger:hover {
+  border-color: #ccc;
+  background: #fafafa;
+}
+
+.editor-dropdown-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  text-align: left;
+}
+
+.editor-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: white;
+  border: 1px solid var(--toolbar-border);
+  border-radius: 6px;
+  box-shadow: var(--dropdown-shadow);
+  z-index: 100;
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.editor-dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+
+.editor-dropdown-item:hover {
+  background: #f0f0f0;
+}
+
+.editor-dropdown-item.active {
+  background: var(--btn-active);
+  color: var(--btn-active-text);
+}
+
+/* ====================
+   Color Picker
+   ==================== */
+.editor-color-picker {
+  position: relative;
+}
+
+.editor-color-indicator {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 14px;
+  height: 3px;
+  border-radius: 1px;
+}
+
+.editor-color-input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ====================
+   Editor Content
+   ==================== */
+.editor-content-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--editor-bg);
+}
+
+.editor-content-wrapper::-webkit-scrollbar {
+  width: 10px;
+}
+
+.editor-content-wrapper::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.editor-content-wrapper::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 5px;
+}
+
+.editor-content-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #aaa;
+}
+
+.editor-content-area {
+  padding: 40px 60px;
+  min-height: 100%;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+/* ====================
+   Version Control Panel
+   ==================== */
+.vc-panel {
+  background: white;
+  border-left: 1px solid var(--editor-border);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: relative;
+}
+
+.resize-handle {
+  width: 5px;
+  background: transparent;
+  cursor: col-resize;
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 10;
+  transition: background 0.2s;
+}
+
+.resize-handle:hover,
+.resize-handle.resizing {
+  background: var(--focus-ring);
+}
+
+.vc-panel-header {
+  padding: 16px;
+  background: var(--toolbar-bg);
+  border-bottom: 1px solid var(--toolbar-border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.vc-panel-header h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.vc-section {
+  padding: 16px;
+  border-bottom: 1px solid var(--toolbar-border);
+}
+
+.vc-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.vc-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Branch Control */
+.branch-selector {
+  display: flex;
+  gap: 8px;
+}
+
+.branch-select {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid var(--editor-border);
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--editor-border);
+  border-radius: 4px;
+  background: white;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0;
+}
+
+.icon-btn:hover {
+  background: var(--btn-hover);
+  color: var(--text-primary);
+}
+
+.new-branch-form {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.branch-input {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid var(--editor-border);
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.confirm-btn {
+  padding: 0 12px;
+  background: #4ade80;
+  border: none;
+  border-radius: 4px;
+  color: #064e3b;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.confirm-btn:hover {
+  background: #22c55e;
+}
+
+/* History */
+.commit-list {
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.commit-item {
+  padding: 10px;
+  border: 1px solid var(--editor-border);
+  border-radius: 6px;
+  background: #fff;
+  margin-bottom: 8px;
+  font-size: 13px;
+  transition: all 0.1s ease;
+}
+
+.commit-item.clickable {
+  cursor: pointer;
+}
+
+.commit-item:hover {
+  border-color: #93c5fd;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.commit-item.active {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.commit-item.selected-head {
+  border-color: #3b82f6;
+  background: #eff6ff;
+  box-shadow: none;
+}
+
+.commit-item.selected-base {
+  border-color: #f97316;
+  background: #ffedd5;
+  box-shadow: none;
+}
+
+.commit-message {
+  font-weight: 500;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.commit-meta {
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.commit-author,
+.commit-date {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.commit-id {
+  font-family: monospace;
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* Commit Action */
+.commit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.commit-input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--editor-border);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 13px;
+  resize: none;
+}
+
+.commit-btn {
+  padding: 8px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.commit-btn:hover {
+  background: #2563eb;
+}
+
+.commit-btn:disabled {
+  background: #93c5fd;
+  cursor: not-allowed;
+}
+
+.empty-state {
+  text-align: center;
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 20px 0;
+}
+
+/* Diff Viewer */
+.diff-viewer {
+  font-size: 13px;
+  line-height: 1.5;
+  background: #f9fafb;
+  padding: 10px;
+  border-radius: 4px;
+  border: 1px solid var(--editor-border);
+}
+
+.diff-content {
+  font-family: monospace;
+  white-space: pre-wrap;
+}
+
+/* ====================
+   Conflict Resolver Modal
+   ==================== */
+.conflict-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.conflict-modal {
+  background: white;
+  width: 600px;
+  max-width: 90%;
+  max-height: 80vh;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.conflict-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--editor-border);
+}
+
+.conflict-header h3 {
+  margin: 0 0 4px 0;
+}
+
+.conflict-header p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.conflict-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.conflict-options {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.conflict-options label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.manual-merge-area {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 300px;
+}
+
+.manual-editor {
+  flex: 1;
+  padding: 10px;
+  border: 1px solid var(--editor-border);
+  border-radius: 4px;
+  font-family: monospace;
+  resize: none;
+}
+
+.conflict-footer {
+  padding: 16px 20px;
+  border-top: 1px solid var(--editor-border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.resolve-btn {
+  background: #2563eb;
+  color: white;
+  padding: 8px 16px;
+  border-radius: 4px;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cancel-btn {
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 8px 16px;
+  border: 1px solid var(--editor-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.cancel-btn:hover {
+  background: #f3f4f6;
+}
+
+/* ====================
+   Responsive
+   ==================== */
+@media (max-width: 900px) {
+  .editor-demo-container {
+    width: 100%;
+    max-width: 850px;
+    max-height: 600px;
+  }
+
+  .editor-content-area {
+    padding: 24px 32px;
+  }
+}
+
+@media (max-width: 600px) {
+  .editor-demo-container {
+    max-height: 500px;
+  }
+
+  .editor-content-area {
+    padding: 20px;
+  }
+
+  .editor-toolbar-row {
+    gap: 1px;
+  }
+
+  .editor-toolbar-btn {
+    width: 28px;
+    height: 28px;
+  }
+
+  .editor-dropdown-trigger {
+    height: 28px;
+    font-size: 12px;
+  }
+}

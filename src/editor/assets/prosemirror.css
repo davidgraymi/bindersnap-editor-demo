@@ -1,0 +1,240 @@
+/* ====================
+   ProseMirror Styles
+   ==================== */
+.ProseMirror {
+  outline: none;
+  min-height: 100%;
+}
+
+.ProseMirror > * + * {
+  margin-top: 0.75em;
+}
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--text-muted);
+  pointer-events: none;
+  height: 0;
+}
+
+/* Headings */
+.ProseMirror h1 {
+  font-size: 2em;
+  font-weight: 700;
+  margin: 1em 0 0.5em;
+  line-height: 1.3;
+}
+
+.ProseMirror h2 {
+  font-size: 1.5em;
+  font-weight: 600;
+  margin: 0.9em 0 0.4em;
+  line-height: 1.35;
+}
+
+.ProseMirror h3 {
+  font-size: 1.25em;
+  font-weight: 600;
+  margin: 0.8em 0 0.4em;
+  line-height: 1.4;
+}
+
+.ProseMirror h4,
+.ProseMirror h5,
+.ProseMirror h6 {
+  font-size: 1.1em;
+  font-weight: 600;
+  margin: 0.7em 0 0.3em;
+}
+
+/* Links */
+.ProseMirror a {
+  color: #1976d2;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.ProseMirror a:hover {
+  color: #1565c0;
+}
+
+/* Lists */
+.ProseMirror ul,
+.ProseMirror ol {
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+}
+
+.ProseMirror ul {
+  list-style-type: disc;
+}
+
+.ProseMirror ol {
+  list-style-type: decimal;
+}
+
+.ProseMirror li {
+  margin: 0.25em 0;
+}
+
+.ProseMirror li > p {
+  margin: 0;
+}
+
+/* Task Lists */
+.ProseMirror ul[data-type="taskList"] {
+  list-style: none;
+  padding: 0;
+}
+
+.ProseMirror ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0.25em 0;
+}
+
+.ProseMirror ul[data-type="taskList"] li > label {
+  margin-top: 2px;
+  user-select: none;
+}
+
+.ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--btn-active-text);
+}
+
+.ProseMirror ul[data-type="taskList"] li > div {
+  flex: 1;
+}
+
+/* Blockquote */
+.ProseMirror blockquote {
+  border-left: 4px solid #ddd;
+  margin: 1em 0;
+  padding: 0.5em 0 0.5em 1.5em;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+/* Code */
+.ProseMirror code {
+  background: #f4f4f4;
+  border-radius: 4px;
+  padding: 0.2em 0.4em;
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  font-size: 0.9em;
+}
+
+.ProseMirror pre {
+  background: #282c34;
+  border-radius: 8px;
+  color: #abb2bf;
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  padding: 1em;
+  margin: 1em 0;
+  overflow-x: auto;
+}
+
+.ProseMirror pre code {
+  background: none;
+  padding: 0;
+  color: inherit;
+  font-size: 0.9em;
+}
+
+/* Horizontal Rule */
+.ProseMirror hr {
+  border: none;
+  border-top: 2px solid #eee;
+  margin: 2em 0;
+}
+
+/* Images */
+.ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  margin: 1em 0;
+}
+
+/* Tables */
+.ProseMirror table {
+  border-collapse: collapse;
+  margin: 1em 0;
+  width: 100%;
+  table-layout: fixed;
+  overflow: hidden;
+}
+
+.ProseMirror th,
+.ProseMirror td {
+  border: 1px solid #ddd;
+  padding: 10px 14px;
+  vertical-align: top;
+  text-align: left;
+  min-width: 80px;
+}
+
+.ProseMirror th {
+  background: #f8f9fa;
+  font-weight: 600;
+}
+
+.ProseMirror .selectedCell {
+  background: #e8f4fd;
+}
+
+/* Selection */
+.ProseMirror ::selection {
+  background: #b3d4fc;
+}
+
+/* Gapcursor */
+.ProseMirror .ProseMirror-gapcursor {
+  display: none;
+  pointer-events: none;
+  position: absolute;
+}
+
+.ProseMirror .ProseMirror-gapcursor:after {
+  content: "";
+  display: block;
+  position: absolute;
+  top: -2px;
+  width: 20px;
+  border-top: 1px solid black;
+  animation: ProseMirror-cursor-blink 1.1s steps(2, start) infinite;
+}
+
+@keyframes ProseMirror-cursor-blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+/* Diff / conflict styling */
+.ProseMirror ins {
+  background-color: #dcfce7;
+  color: #166534;
+  text-decoration: none;
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+.ProseMirror span[data-deletion] {
+  background-color: #fee2e2;
+  color: #991b1b;
+  text-decoration: line-through;
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+.ProseMirror .format-change {
+  background-color: #e0f2fe;
+  color: #0369a1;
+  border-radius: 2px;
+}

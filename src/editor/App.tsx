@@ -4,7 +4,7 @@ import type { Content } from "@tiptap/react";
 import { DemoEditor } from "./components/Editor";
 import { gitService } from "./services/GitService";
 
-import "./index.css";
+import "./assets/index.css";
 
 const sampleJson = {
   type: "doc",

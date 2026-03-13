@@ -1,10 +1,9 @@
-
-import React, { useEffect, useState } from 'react';
-import { gitService, type Commit } from '../../services/GitService';
-import { BranchControl } from './BranchControl';
-import { CommitHistory } from './CommitHistory';
-import { ConflictResolver } from './ConflictResolver';
-import { GitGraph } from 'lucide-react';
+import React, { useEffect, useState } from "react";
+import { gitService, type Commit } from "../../services/GitService";
+import { BranchControl } from "./BranchControl";
+import { CommitHistory } from "./CommitHistory";
+import { ConflictResolver } from "./ConflictResolver";
+import { GitGraph } from "lucide-react";
 
 interface VersionControlPanelProps {
   getEditorContent: () => string;
@@ -13,18 +12,21 @@ interface VersionControlPanelProps {
   isPreviewMode: boolean;
 }
 
-export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({ 
-  getEditorContent, 
+export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
+  getEditorContent,
   onContentChange,
   onPreviewDiff,
-  isPreviewMode
+  isPreviewMode,
 }) => {
   const [branches, setBranches] = useState<string[]>([]);
-  const [currentBranch, setCurrentBranch] = useState<string>('');
+  const [currentBranch, setCurrentBranch] = useState<string>("");
   const [history, setHistory] = useState<Commit[]>([]);
   const [headId, setHeadId] = useState<string | null>(null);
-  const [comparisonState, setComparisonState] = useState<{ headId: string; baseId: string } | null>(null);
-  
+  const [comparisonState, setComparisonState] = useState<{
+    headId: string;
+    baseId: string;
+  } | null>(null);
+
   const [showMerge, setShowMerge] = useState(false);
   const [conflictState, setConflictState] = useState<{
     isConflict: boolean;
@@ -38,7 +40,7 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
     setBranches(gitService.getBranches());
     setCurrentBranch(gitService.getCurrentBranch());
     setHistory(gitService.getHistory());
-    const head = gitService.getCommit(gitService.getHistory()[0]?.id || '');
+    const head = gitService.getCommit(gitService.getHistory()[0]?.id || "");
     setHeadId(head?.id || null);
   };
 
@@ -49,7 +51,7 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
     if (gitService.getHistory().length === 0 && content) {
       gitService.init(content);
     }
-    
+
     refreshState();
     const unsubscribe = gitService.subscribe(refreshState);
     return unsubscribe;
@@ -95,7 +97,10 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
       const result = gitService.merge(branchToMerge);
       if (result.success && result.mergedContent !== undefined) {
         // Auto-merge successful
-        gitService.commit(`Merge branch '${branchToMerge}' into '${currentBranch}'`, result.mergedContent);
+        gitService.commit(
+          `Merge branch '${branchToMerge}' into '${currentBranch}'`,
+          result.mergedContent,
+        );
         // Content updates via listener automatically, but we might need to push the new content to the editor
         onContentChange(result.mergedContent);
       } else if (result.conflict) {
@@ -104,7 +109,7 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
           mergeBranch: branchToMerge,
           theirContent: result.theirContent!,
           baseContent: result.baseContent!,
-          ourContent: getEditorContent()
+          ourContent: getEditorContent(),
         });
       }
     } catch (e: any) {
@@ -116,25 +121,28 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
   const handleSelectCommit = (commit: Commit) => {
     // Ideally fetch this async or have a better way, but for now we look up parent synchronously
     const parentId = commit.parentId;
-    let parentContent = '';
-    
+    let parentContent = "";
+
     if (parentId) {
       const parent = gitService.getCommit(parentId);
-       if (parent) parentContent = parent.content;
+      if (parent) parentContent = parent.content;
     }
 
     setComparisonState({
       headId: commit.id,
-      baseId: parentId || ''
+      baseId: parentId || "",
     });
-    
+
     // Instead of local overlay, trigger preview in editor
     onPreviewDiff(parentContent, commit.content);
   };
 
   const handleResolveConflict = (resolvedContent: string) => {
     if (conflictState) {
-      gitService.commit(`Merge branch '${conflictState.mergeBranch}' into '${currentBranch}'`, resolvedContent);
+      gitService.commit(
+        `Merge branch '${conflictState.mergeBranch}' into '${currentBranch}'`,
+        resolvedContent,
+      );
       onContentChange(resolvedContent);
       setConflictState(null);
     }
@@ -155,30 +163,59 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
           onNewBranch={handleNewBranch}
         />
 
-        <div style={{ height: '16px' }}></div>
+        <div style={{ height: "16px" }}></div>
 
-         <button 
-           className="merge-toggle-btn" 
-           onClick={() => setShowMerge(!showMerge)}
-           style={{ width: '100%', padding: '6px', fontSize: '13px', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: '4px', cursor: 'pointer' }}
-         >
-           Merge...
-         </button>
-         {showMerge && (
-           <div className="merge-selector" style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-             {branches.filter(b => b !== currentBranch).map(b => (
-               <button 
-                 key={b} 
-                 onClick={() => handleMergeStart(b)}
-                 style={{ textAlign: 'left', padding: '6px', background: 'white', border: '1px solid #e5e7eb', cursor: 'pointer', fontSize: '13px' }}
-               >
-                 Merge <strong>{b}</strong>
-               </button>
-             ))}
-             {branches.filter(b => b !== currentBranch).length === 0 && <div style={{ fontSize: '12px', color: '#888' }}>No other branches</div>}
-           </div>
-         )}
-       </div>
+        <button
+          className="merge-toggle-btn"
+          onClick={() => setShowMerge(!showMerge)}
+          style={{
+            width: "100%",
+            padding: "6px",
+            fontSize: "13px",
+            background: "#f3f4f6",
+            border: "1px solid #e5e7eb",
+            borderRadius: "4px",
+            cursor: "pointer",
+          }}
+        >
+          Merge...
+        </button>
+        {showMerge && (
+          <div
+            className="merge-selector"
+            style={{
+              marginTop: "8px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "4px",
+            }}
+          >
+            {branches
+              .filter((b) => b !== currentBranch)
+              .map((b) => (
+                <button
+                  key={b}
+                  onClick={() => handleMergeStart(b)}
+                  style={{
+                    textAlign: "left",
+                    padding: "6px",
+                    background: "white",
+                    border: "1px solid #e5e7eb",
+                    cursor: "pointer",
+                    fontSize: "13px",
+                  }}
+                >
+                  Merge <strong>{b}</strong>
+                </button>
+              ))}
+            {branches.filter((b) => b !== currentBranch).length === 0 && (
+              <div style={{ fontSize: "12px", color: "#888" }}>
+                No other branches
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       <CommitHistory
         history={history}
@@ -189,7 +226,7 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
       />
 
       {conflictState && (
-        <ConflictResolver 
+        <ConflictResolver
           baseBranch={currentBranch}
           mergeBranch={conflictState.mergeBranch}
           ourContent={conflictState.ourContent}
