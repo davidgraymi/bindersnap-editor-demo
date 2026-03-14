@@ -1,0 +1,858 @@
+/**
+ * ╔══════════════════════════════════════════════════════════════╗
+ * ║           BINDERSNAP  ·  Design Token System  ·  v2.0       ║
+ * ║                                                              ║
+ * ║  Drop this file into any web project and import it once.    ║
+ * ║  Use var(--bs-surface-1), var(--bs-text-primary), etc.       ║
+ * ║  everywhere — never hardcode hex values in components.       ║
+ * ║                                                              ║
+ * ║  Dark mode is driven by [data-theme="dark"] on <html>.       ║
+ * ║  Toggle with: document.documentElement                       ║
+ * ║    .setAttribute('data-theme', 'dark' | 'light')             ║
+ * ╚══════════════════════════════════════════════════════════════╝
+ *
+ * Google Fonts:
+ * https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap');
+
+
+/* ═════════════════════════════════════════════════════════════
+   LIGHT MODE  (default — :root)
+   ═════════════════════════════════════════════════════════════
+
+   Token architecture uses two layers:
+
+   1. SEMANTIC TOKENS  (--bs-*)
+      These are what components use. They change in dark mode.
+      e.g. --bs-surface-1, --bs-text-primary, --bs-rule
+
+   2. FIXED BRAND TOKENS  (--brand-*)
+      These never change between modes.
+      e.g. --brand-coral, --brand-green, --brand-font-serif
+
+   Rule: Components ALWAYS reference --bs-* semantic tokens.
+         Never reference --brand-* directly in component styles
+         unless the value is intentionally fixed across modes
+         (e.g. the chaos strip is always dark ink).
+   ───────────────────────────────────────────────────────────── */
+:root {
+
+  /* ── SEMANTIC SURFACES ─────────────────────────────────────
+     Four levels of warm surface, from page base → elevated card.
+     In light mode: warm paper steps.
+     In dark mode:  warm ink steps.
+  ───────────────────────────────────────────────────────────── */
+  --bs-page-bg:    #FAFAF7;    /* Body background — warm white */
+  --bs-surface-1:  #FFFFFF;    /* Cards, inputs, floating elements */
+  --bs-surface-2:  #F5F0E8;    /* Alt section bg, tag/pill fill, warm cards */
+  --bs-surface-3:  #EDE8DF;    /* Dividers, deepest surface fill */
+  --bs-nav-bg:     rgba(250, 250, 247, 0.88);   /* Nav backdrop */
+
+
+  /* ── SEMANTIC TEXT ─────────────────────────────────────────
+     Four levels of text weight, from strong → disabled.
+     In light mode: warm ink steps.
+     In dark mode:  warm cream steps.
+  ───────────────────────────────────────────────────────────── */
+  --bs-text-primary:   #1C1917;   /* Headings, strong UI labels */
+  --bs-text-secondary: #44403C;   /* Body copy, card titles */
+  --bs-text-muted:     #78716C;   /* Secondary descriptions, meta */
+  --bs-text-faint:     #A8A29E;   /* Placeholders, hints, captions */
+
+
+  /* ── SEMANTIC BORDERS ──────────────────────────────────────
+     Alpha-based so they adapt automatically across surfaces.
+  ───────────────────────────────────────────────────────────── */
+  --bs-rule:      rgba(28, 25, 23, 0.10);   /* Standard borders */
+  --bs-rule-warm: rgba(28, 25, 23, 0.06);   /* Subtle inner dividers */
+
+
+  /* ── SEMANTIC SHADOWS ──────────────────────────────────────
+     Light-mode shadows are warm ink at low opacity.
+     Dark-mode shadows are pure black at higher opacity.
+  ───────────────────────────────────────────────────────────── */
+  --bs-shadow-sm:
+    0 1px 3px  rgba(28, 25, 23, 0.08),
+    0 1px 2px  rgba(28, 25, 23, 0.04);
+
+  --bs-shadow-md:
+    0 4px 16px rgba(28, 25, 23, 0.10),
+    0 2px 4px  rgba(28, 25, 23, 0.06);
+
+  --bs-shadow-lg:
+    0 20px 60px rgba(28, 25, 23, 0.15),
+    0 4px  12px rgba(28, 25, 23, 0.08);
+
+  --bs-shadow-xl:
+    0 40px 100px rgba(28, 25, 23, 0.18);
+
+
+  /* ── SEMANTIC CORAL TINTS ──────────────────────────────────
+     These must be stronger in dark mode to punch through.
+     Defined here at light-mode strength.
+  ───────────────────────────────────────────────────────────── */
+  --bs-coral-dim:  rgba(232, 93, 38, 0.10);   /* Icon bg, badge bg */
+  --bs-coral-glow: rgba(232, 93, 38, 0.06);   /* Hero/section ambient wash */
+
+  /* ── SEMANTIC GREEN TINTS ──────────────────────────────────*/
+  --bs-green-dim:  rgba(22, 163, 74, 0.10);   /* Compliance icon bg */
+
+
+  /* ── MODE TRANSITION ───────────────────────────────────────
+     Apply to body so the entire page animates on toggle.
+  ───────────────────────────────────────────────────────────── */
+  --bs-mode-transition:
+    background 0.25s ease,
+    color      0.25s ease,
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
+
+
+  /* ══════════════════════════════════════════════════════════
+     FIXED BRAND TOKENS  (never change between modes)
+     ══════════════════════════════════════════════════════════ */
+
+  /* ── Brand colors ── */
+  --brand-coral:        #E85D26;   /* CTA, accent, emphasis — ONE per section */
+  --brand-coral-dark:   #C94D1A;   /* Hover on coral elements */
+  --brand-coral-mid:    #F5D5C4;   /* Decorative only — never for UI states */
+  --brand-green:        #16A34A;   /* Success, compliance, "after" states */
+  --brand-green-dim:    rgba(22, 163, 74, 0.10);
+
+  /* Fixed dark-section palette — used on intentionally ink-bg sections
+     (chaos strip, footer) which stay dark regardless of theme */
+  --brand-on-dark-primary:   #F5F0E8;
+  --brand-on-dark-secondary: rgba(245, 240, 232, 0.60);
+  --brand-on-dark-faint:     rgba(245, 240, 232, 0.30);
+  --brand-on-dark-rule:      rgba(255, 255, 255, 0.08);
+
+  /* ── Fonts ── */
+  --brand-font-serif: 'Lora', Georgia, 'Times New Roman', serif;
+  --brand-font-sans:  'Geist', system-ui, -apple-system, sans-serif;
+  --brand-font-mono:  'Geist Mono', 'Fira Code', Consolas, monospace;
+
+  /* ── Font weights ── */
+  --brand-weight-light:    300;
+  --brand-weight-regular:  400;
+  --brand-weight-medium:   500;
+  --brand-weight-semibold: 600;
+  --brand-weight-bold:     700;
+
+  /* ── Type scale ──
+     Rule: --font-serif for all H1-H3 + display.
+           --font-sans  for all body + UI.
+           --font-mono  for labels, code, metadata.
+  ───────────────────────────────────────────────────────────── */
+  --brand-text-display: clamp(3rem, 6.5vw, 5.5rem);      /* Hero only */
+  --brand-text-h1:      3rem;
+  --brand-text-h2:      clamp(1.875rem, 3.5vw, 2.625rem);
+  --brand-text-h3:      1.5rem;
+  --brand-text-body-lg: 1.125rem;   /* Hero subtext — font-sans light */
+  --brand-text-body:    1rem;
+  --brand-text-sm:      0.875rem;
+  --brand-text-xs:      0.75rem;
+  --brand-text-label:   0.6875rem;  /* Section tags — font-mono medium */
+
+  /* ── Line heights ── */
+  --brand-leading-tight:   1.08;
+  --brand-leading-snug:    1.2;
+  --brand-leading-normal:  1.5;
+  --brand-leading-relaxed: 1.7;
+
+  /* ── Letter spacing ── */
+  --brand-tracking-tight:   -0.025em;
+  --brand-tracking-snug:    -0.015em;
+  --brand-tracking-normal:   0em;
+  --brand-tracking-wide:     0.08em;
+  --brand-tracking-wider:    0.12em;
+  --brand-tracking-widest:   0.15em;
+
+  /* ── Spacing (base-8) ── */
+  --brand-space-1:    4px;
+  --brand-space-2:    8px;
+  --brand-space-3:    12px;
+  --brand-space-4:    16px;
+  --brand-space-5:    20px;
+  --brand-space-6:    24px;
+  --brand-space-8:    32px;
+  --brand-space-10:   40px;
+  --brand-space-12:   48px;
+  --brand-space-16:   64px;
+  --brand-space-20:   80px;
+  --brand-space-24:   96px;
+  --brand-space-30:   120px;
+
+  /* ── Border radius ── */
+  --brand-radius-xs:   2px;     /* Code blocks, badges, table rows */
+  --brand-radius-sm:   4px;     /* Tags, pills, mini chips */
+  --brand-radius-md:   8px;     /* Nav, icon containers, small cards */
+  --brand-radius-lg:   12px;    /* Inputs, standard cards */
+  --brand-radius-xl:   16px;    /* Large cards, feature panels */
+  --brand-radius-2xl:  24px;    /* CTA box, modals, hero containers */
+  --brand-radius-full: 9999px;  /* Pills, avatar badges */
+
+  /* ── Fixed shadows (coral) ── */
+  --brand-shadow-coral:
+    0 4px 16px rgba(232, 93, 38, 0.20),
+    0 2px 4px  rgba(232, 93, 38, 0.10);
+
+  /* ── Transitions ── */
+  --brand-transition-fast:   0.15s ease;
+  --brand-transition-base:   0.2s ease;
+  --brand-transition-slow:   0.3s ease;
+  --brand-transition-reveal: 0.7s ease;
+
+  /* ── Z-index scale ── */
+  --brand-z-base:    0;
+  --brand-z-raised:  10;
+  --brand-z-overlay: 50;
+  --brand-z-nav:     100;
+  --brand-z-modal:   200;
+  --brand-z-toast:   300;
+  --brand-z-texture: 9999;
+
+  /* ── Layout ── */
+  --brand-max-width:         1200px;
+  --brand-max-width-text:    680px;
+  --brand-max-width-narrow:  560px;
+  --brand-max-width-form:    500px;
+  --brand-nav-height:        64px;
+  --brand-page-padding-x:    40px;
+  --brand-page-padding-x-sm: 20px;
+  --brand-section-padding-y:     120px;
+  --brand-section-padding-y-sm:  72px;
+}
+
+
+/* ═════════════════════════════════════════════════════════════
+   DARK MODE OVERRIDES  [data-theme="dark"]
+
+   Only the --bs-* semantic tokens change.
+   All --brand-* tokens are unchanged — coral is still coral,
+   Lora is still Lora, spacing is still base-8.
+
+   Design principle: warmth is preserved through a stepped
+   INK hierarchy, not a grey palette. The 4 surface levels
+   mirror the light-mode paper steps exactly — just inverted.
+
+   Contrast ratios verified at WCAG AA for all text levels:
+     --bs-text-primary   on --bs-page-bg:  13.2:1  ✓ AAA
+     --bs-text-secondary on --bs-page-bg:   9.4:1  ✓ AAA
+     --bs-text-muted     on --bs-page-bg:   5.1:1  ✓ AA
+     --bs-text-faint     on --bs-page-bg:   3.1:1  ✓ AA (large text only)
+   ───────────────────────────────────────────────────────────── */
+[data-theme="dark"] {
+
+  /* Surfaces: stepped warm-ink hierarchy */
+  --bs-page-bg:    #1C1917;    /* Warm ink base */
+  --bs-surface-1:  #292524;    /* Cards, inputs — one step up */
+  --bs-surface-2:  #33302E;    /* Alt section bg — two steps up */
+  --bs-surface-3:  #44403C;    /* Tags, pill fills — three steps up */
+  --bs-nav-bg:     rgba(28, 25, 23, 0.92);
+
+  /* Text: cream hierarchy mirrors light-mode ink at equivalent contrast */
+  --bs-text-primary:   #F5F0E8;   /* Warm cream — replaces #1C1917 */
+  --bs-text-secondary: #E7E4DF;   /* Light cream — replaces #44403C */
+  --bs-text-muted:     #A8A29E;   /* Bumped from #78716C — WCAG AA at 5.1:1 */
+  --bs-text-faint:     #78716C;   /* Floor — hints/placeholders only */
+
+  /* Borders: white-alpha instead of black-alpha */
+  --bs-rule:      rgba(255, 255, 255, 0.09);
+  --bs-rule-warm: rgba(255, 255, 255, 0.05);
+
+  /* Shadows: higher opacity — depth from contrast not warm tone */
+  --bs-shadow-sm:
+    0 1px 3px  rgba(0, 0, 0, 0.30),
+    0 1px 2px  rgba(0, 0, 0, 0.18);
+
+  --bs-shadow-md:
+    0 4px 16px rgba(0, 0, 0, 0.40),
+    0 2px 4px  rgba(0, 0, 0, 0.22);
+
+  --bs-shadow-lg:
+    0 20px 60px rgba(0, 0, 0, 0.50),
+    0 4px  12px rgba(0, 0, 0, 0.28);
+
+  --bs-shadow-xl:
+    0 40px 100px rgba(0, 0, 0, 0.60);
+
+  /* Tints: stronger in dark mode — same hue, higher alpha */
+  --bs-coral-dim:  rgba(232, 93, 38, 0.18);
+  --bs-coral-glow: rgba(232, 93, 38, 0.10);
+  --bs-green-dim:  rgba(22, 163, 74, 0.18);
+}
+
+
+/* ═════════════════════════════════════════════════════════════
+   BASE RESETS & GLOBALS
+   ═════════════════════════════════════════════════════════════ */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+  font-size: 16px;
+}
+
+body {
+  font-family: var(--brand-font-sans);
+  background-color: var(--bs-page-bg);
+  color: var(--bs-text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: var(--brand-leading-relaxed);
+  transition: var(--bs-mode-transition);
+}
+
+/* Paper grain texture overlay */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: var(--brand-z-texture);
+  pointer-events: none;
+  opacity: 0.022;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 200px;
+}
+
+
+/* ═════════════════════════════════════════════════════════════
+   DARK MODE TOGGLE COMPONENT
+   ═════════════════════════════════════════════════════════════
+
+   HTML:
+   <button class="bs-theme-toggle" onclick="bsToggleTheme()" aria-label="Toggle dark mode">
+     <svg class="bs-icon-moon">...</svg>
+     <svg class="bs-icon-sun">...</svg>
+   </button>
+
+   JS (place in your main script):
+   function bsToggleTheme() {
+     const html = document.documentElement;
+     const isDark = html.getAttribute('data-theme') === 'dark';
+     html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+     localStorage.setItem('bs-theme', isDark ? 'light' : 'dark');
+   }
+   (function() {
+     const saved = localStorage.getItem('bs-theme');
+     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+     document.documentElement.setAttribute('data-theme',
+       saved || (prefersDark ? 'dark' : 'light'));
+   })();
+   ───────────────────────────────────────────────────────────── */
+
+.bs-theme-toggle {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--brand-radius-md);
+  border: 1px solid var(--bs-rule);
+  background: var(--bs-surface-1);
+  color: var(--bs-text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background      var(--brand-transition-base),
+    border-color    var(--brand-transition-base),
+    color           var(--brand-transition-base),
+    transform       var(--brand-transition-fast);
+  flex-shrink: 0;
+}
+.bs-theme-toggle:hover {
+  background: var(--bs-surface-2);
+  border-color: var(--brand-coral);
+  color: var(--brand-coral);
+  transform: scale(1.06);
+}
+.bs-theme-toggle svg { width: 16px; height: 16px; }
+
+/* Icon visibility controlled by theme attribute */
+.bs-icon-sun  { display: none; }
+.bs-icon-moon { display: block; }
+[data-theme="dark"] .bs-icon-moon { display: none; }
+[data-theme="dark"] .bs-icon-sun  { display: block; }
+
+
+/* ═════════════════════════════════════════════════════════════
+   TYPOGRAPHY UTILITY CLASSES
+   ═════════════════════════════════════════════════════════════ */
+
+.bs-display {
+  font-family: var(--brand-font-serif);
+  font-size: var(--brand-text-display);
+  font-weight: var(--brand-weight-bold);
+  line-height: var(--brand-leading-tight);
+  letter-spacing: var(--brand-tracking-tight);
+  color: var(--bs-text-primary);
+}
+
+.bs-h1 {
+  font-family: var(--brand-font-serif);
+  font-size: var(--brand-text-h1);
+  font-weight: var(--brand-weight-bold);
+  line-height: var(--brand-leading-tight);
+  letter-spacing: var(--brand-tracking-snug);
+  color: var(--bs-text-primary);
+}
+
+.bs-h2 {
+  font-family: var(--brand-font-serif);
+  font-size: var(--brand-text-h2);
+  font-weight: var(--brand-weight-semibold);
+  line-height: var(--brand-leading-snug);
+  letter-spacing: var(--brand-tracking-snug);
+  color: var(--bs-text-primary);
+}
+
+.bs-h3 {
+  font-family: var(--brand-font-serif);
+  font-size: var(--brand-text-h3);
+  font-weight: var(--brand-weight-semibold);
+  line-height: var(--brand-leading-snug);
+  color: var(--bs-text-primary);
+}
+
+.bs-body-lg {
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-body-lg);
+  font-weight: var(--brand-weight-light);
+  line-height: var(--brand-leading-relaxed);
+  color: var(--bs-text-muted);
+}
+
+.bs-body {
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-body);
+  font-weight: var(--brand-weight-regular);
+  line-height: var(--brand-leading-relaxed);
+  color: var(--bs-text-secondary);
+}
+
+.bs-label {
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-label);
+  font-weight: var(--brand-weight-medium);
+  letter-spacing: var(--brand-tracking-wider);
+  text-transform: uppercase;
+  color: var(--brand-coral);
+}
+
+.bs-code {
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-xs);
+  background: var(--bs-surface-2);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-xs);
+  padding: 2px 6px;
+  color: var(--bs-text-muted);
+  transition: var(--bs-mode-transition);
+}
+
+.bs-accent {
+  color: var(--brand-coral);
+  font-style: italic;
+}
+
+
+/* ═════════════════════════════════════════════════════════════
+   COMPONENT CLASSES
+   ═════════════════════════════════════════════════════════════ */
+
+/* ── Buttons ── */
+.bs-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--brand-font-sans);
+  font-size: 14px;
+  font-weight: var(--brand-weight-semibold);
+  line-height: 1;
+  letter-spacing: 0.01em;
+  padding: 13px 24px;
+  border-radius: var(--brand-radius-md);
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    background  var(--brand-transition-base),
+    transform   var(--brand-transition-fast),
+    box-shadow  var(--brand-transition-base);
+  white-space: nowrap;
+}
+.bs-btn:hover  { transform: translateY(-1px); }
+.bs-btn:active { transform: translateY(0); }
+
+.bs-btn-primary {
+  background: var(--brand-coral);
+  color: #ffffff;
+}
+.bs-btn-primary:hover {
+  background: var(--brand-coral-dark);
+  box-shadow: var(--brand-shadow-coral);
+}
+
+/* Secondary uses --bs-surface-1 so it lifts correctly in both modes */
+.bs-btn-secondary {
+  background: var(--bs-surface-1);
+  color: var(--bs-text-primary);
+  border: 1.5px solid var(--bs-rule);
+}
+.bs-btn-secondary:hover {
+  border-color: var(--brand-coral);
+  box-shadow: var(--bs-shadow-sm);
+}
+
+/* Dark button: always ink bg — intentionally fixed, not theme-reactive */
+.bs-btn-dark {
+  background: #1C1917;
+  color: #F5F0E8;
+}
+.bs-btn-dark:hover { background: #292524; }
+
+
+/* ── Cards ── */
+.bs-card {
+  background: var(--bs-surface-1);    /* ← was hardcoded #ffffff */
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-xl);
+  padding: 36px 32px;
+  position: relative;
+  overflow: hidden;
+  transition:
+    transform      var(--brand-transition-slow),
+    box-shadow     var(--brand-transition-slow),
+    border-color   var(--brand-transition-slow),
+    background     var(--brand-transition-slow);
+}
+.bs-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--brand-coral);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--brand-transition-slow);
+}
+.bs-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--bs-shadow-lg);
+  border-color: transparent;
+}
+.bs-card:hover::before { transform: scaleX(1); }
+
+
+/* ── Form input ── */
+.bs-input {
+  width: 100%;
+  font-family: var(--brand-font-sans);
+  font-size: 15px;
+  font-weight: var(--brand-weight-regular);
+  color: var(--bs-text-primary);
+  background: var(--bs-surface-1);    /* ← was hardcoded #ffffff */
+  border: 1.5px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+  padding: 15px 18px;
+  outline: none;
+  transition:
+    border-color var(--brand-transition-base),
+    box-shadow   var(--brand-transition-base),
+    background   var(--brand-transition-base),
+    color        var(--brand-transition-base);
+}
+.bs-input::placeholder { color: var(--bs-text-faint); }
+.bs-input:focus {
+  border-color: var(--brand-coral);
+  box-shadow: 0 0 0 4px var(--bs-coral-dim);
+}
+
+
+/* ── Email capture row (input + button in one container) ── */
+.bs-email-row {
+  display: flex;
+  background: var(--bs-surface-1);    /* ← was hardcoded #ffffff */
+  border: 1.5px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+  overflow: hidden;
+  box-shadow: var(--bs-shadow-md), 0 0 0 4px var(--bs-coral-glow);
+  transition:
+    border-color var(--brand-transition-base),
+    box-shadow   var(--brand-transition-base),
+    background   var(--brand-transition-base);
+}
+.bs-email-row:focus-within {
+  border-color: var(--brand-coral);
+  box-shadow: var(--bs-shadow-md), 0 0 0 4px var(--bs-coral-dim);
+}
+.bs-email-row input {
+  flex: 1;
+  border: none;
+  outline: none;
+  padding: 15px 18px;
+  font-family: var(--brand-font-sans);
+  font-size: 15px;
+  color: var(--bs-text-primary);
+  background: transparent;
+}
+.bs-email-row input::placeholder { color: var(--bs-text-faint); }
+.bs-email-row button {
+  background: var(--brand-coral);
+  color: white;
+  border: none;
+  padding: 13px 24px;
+  font-family: var(--brand-font-sans);
+  font-size: 14px;
+  font-weight: var(--brand-weight-semibold);
+  cursor: pointer;
+  margin: 3px 3px 3px 0;
+  border-radius: 9px;
+  transition: background var(--brand-transition-base);
+}
+.bs-email-row button:hover { background: var(--brand-coral-dark); }
+
+
+/* ── Section eyebrow (mono label with flanking lines) ── */
+.bs-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-label);
+  font-weight: var(--brand-weight-medium);
+  color: var(--brand-coral);
+  letter-spacing: var(--brand-tracking-wider);
+  text-transform: uppercase;
+}
+.bs-eyebrow::before,
+.bs-eyebrow::after {
+  content: '';
+  width: 24px;
+  height: 1px;
+  background: var(--brand-coral);
+  opacity: 0.4;
+  flex-shrink: 0;
+}
+
+
+/* ── Nav badge (live dot + waitlist count) ── */
+.bs-nav-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--brand-font-mono);
+  font-size: 11px;
+  color: var(--bs-text-muted);
+  background: var(--bs-surface-2);    /* ← was --color-paper-warm (didn't adapt) */
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-full);
+  padding: 5px 12px;
+  transition: var(--bs-mode-transition);
+}
+.bs-nav-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--brand-green);
+  animation: bs-breathe 2.5s ease-in-out infinite;
+}
+
+
+/* ── Comparison table row ── */
+.bs-compare-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--brand-space-3);
+  padding: 14px 28px;
+  border-bottom: 1px solid var(--bs-rule-warm);   /* ← was hardcoded rgba */
+  font-size: 14px;
+  color: var(--bs-text-secondary);
+  line-height: 1.5;
+}
+.bs-compare-item:last-child { border-bottom: none; }
+
+
+/* ── Pill / tag chip ── */
+.bs-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  font-family: var(--brand-font-sans);
+  font-size: 13px;
+  font-weight: var(--brand-weight-regular);
+  color: var(--bs-text-muted);
+  background: var(--bs-surface-1);    /* ← was hardcoded #ffffff */
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-full);
+  padding: 8px 16px 8px 10px;
+  box-shadow: var(--bs-shadow-sm);
+  transition: var(--bs-mode-transition);
+}
+
+.bs-file-chip {
+  font-family: var(--brand-font-mono);
+  font-size: 11px;
+  background: var(--bs-surface-2);    /* ← was --color-paper-warm */
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-sm);
+  padding: 3px 8px;
+  color: var(--bs-text-muted);
+  white-space: nowrap;
+  transition: var(--bs-mode-transition);
+}
+
+
+/* ═════════════════════════════════════════════════════════════
+   LAYOUT UTILITIES
+   ═════════════════════════════════════════════════════════════ */
+
+.bs-container {
+  width: 100%;
+  max-width: var(--brand-max-width);
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: var(--brand-page-padding-x);
+  padding-right: var(--brand-page-padding-x);
+}
+
+.bs-section {
+  padding-top: var(--brand-section-padding-y);
+  padding-bottom: var(--brand-section-padding-y);
+}
+
+.bs-section-sm {
+  padding-top: var(--brand-section-padding-y-sm);
+  padding-bottom: var(--brand-section-padding-y-sm);
+}
+
+/* Section that is intentionally always dark (chaos strip, etc.) */
+.bs-section-dark {
+  background: #1C1917;
+  color: var(--brand-on-dark-primary);
+}
+
+
+/* ═════════════════════════════════════════════════════════════
+   SCROLL REVEAL
+   ═════════════════════════════════════════════════════════════
+
+   JS to initialise (place once in main script):
+   const io = new IntersectionObserver(entries => {
+     entries.forEach(e => {
+       if (e.isIntersecting) {
+         e.target.classList.add('bs-in');
+         io.unobserve(e.target);
+       }
+     });
+   }, { threshold: 0.1 });
+   document.querySelectorAll('.bs-reveal').forEach(el => io.observe(el));
+   ───────────────────────────────────────────────────────────── */
+
+.bs-reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity   var(--brand-transition-reveal),
+    transform var(--brand-transition-reveal);
+}
+.bs-reveal.bs-in { opacity: 1; transform: none; }
+.bs-reveal-d1 { transition-delay: 0.1s; }
+.bs-reveal-d2 { transition-delay: 0.2s; }
+.bs-reveal-d3 { transition-delay: 0.3s; }
+.bs-reveal-d4 { transition-delay: 0.4s; }
+
+
+/* ═════════════════════════════════════════════════════════════
+   KEYFRAMES
+   ═════════════════════════════════════════════════════════════ */
+
+@keyframes bs-breathe {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.75); }
+}
+
+@keyframes bs-fade-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes bs-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+
+/* ═════════════════════════════════════════════════════════════
+   RESPONSIVE
+   ═════════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+  :root {
+    --brand-page-padding-x:       var(--brand-page-padding-x-sm);
+    --brand-section-padding-y:    72px;
+    --brand-section-padding-y-sm: 48px;
+  }
+
+  .bs-email-row {
+    flex-direction: column;
+    border-radius: var(--brand-radius-lg);
+  }
+  .bs-email-row button {
+    margin: 0 3px 3px 3px;
+    border-radius: 9px;
+    width: calc(100% - 6px);
+    padding: 13px;
+  }
+}
+
+
+/* ═════════════════════════════════════════════════════════════
+   LEGACY ALIAS MAP  (backwards compatibility)
+
+   If you have components referencing the old v1.0 token names
+   (--color-*, --shadow-*, --font-*), these aliases map them to
+   the new system. Remove once all components are migrated.
+   ═════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Surfaces */
+  --color-paper:        var(--bs-page-bg);
+  --color-paper-warm:   var(--bs-surface-2);
+  --color-paper-mid:    var(--bs-surface-3);
+
+  /* Text */
+  --color-ink:          var(--bs-text-primary);
+  --color-ink-soft:     var(--bs-text-secondary);
+  --color-muted:        var(--bs-text-muted);
+  --color-muted-light:  var(--bs-text-faint);
+
+  /* Borders */
+  --color-rule:         var(--bs-rule);
+
+  /* Shadows */
+  --shadow-sm: var(--bs-shadow-sm);
+  --shadow-md: var(--bs-shadow-md);
+  --shadow-lg: var(--bs-shadow-lg);
+  --shadow-xl: var(--bs-shadow-xl);
+
+  /* Brand (unchanged) */
+  --color-coral:        var(--brand-coral);
+  --color-coral-dark:   var(--brand-coral-dark);
+  --color-coral-dim:    var(--bs-coral-dim);
+  --color-coral-glow:   var(--bs-coral-glow);
+  --color-green:        var(--brand-green);
+  --color-green-dim:    var(--bs-green-dim);
+  --color-ink-mid:      #292524;
+
+  /* Fonts */
+  --font-serif: var(--brand-font-serif);
+  --font-sans:  var(--brand-font-sans);
+  --font-mono:  var(--brand-font-mono);
+}

@@ -1,3 +1,14 @@
+/**
+ * BindersnapEditor.tsx
+ * ─────────────────────────────────────────────────────────────
+ * Self-contained Tiptap editor component for Bindersnap.
+ *
+ * Imports bindersnap-editor.css directly so styling is always
+ * co-located with the component — drop it anywhere, it looks right.
+ */
+
+import "./assets/bindersnap-editor.css";
+
 import React, { useCallback, useState, useRef, useEffect } from "react";
 import { useEditor, EditorContent, Editor } from "@tiptap/react";
 import type { Content } from "@tiptap/react";
@@ -61,10 +72,10 @@ import {
   Minimize,
 } from "lucide-react";
 
-import { VersionControlPanel } from "./VersionControl/VersionControlPanel";
-import { VersionHistory } from "../extensions/VersionHistory";
-import { Conflict } from "../extensions/conflict";
-import { gitService } from "../services/GitService";
+import { VersionControlPanel } from "./components/VersionControl/VersionControlPanel";
+import { VersionHistory } from "./extensions/VersionHistory";
+import { Conflict } from "./extensions/conflict";
+import { gitService } from "./services/GitService";
 
 // --- Types ---
 interface ToolbarProps {
@@ -143,6 +154,8 @@ const FONT_FAMILIES = [
     value:
       '"EB Garamond", Garamond, "Baskerville", "Baskerville Old Face", "Hoefler Text", "Times New Roman", serif',
   },
+  { label: "Geist", value: "var(--brand-font-sans)" },
+  { label: "Geist Mono", value: "var(--brand-font-mono)" },
   { label: "Georgia", value: 'Georgia, Times, "Times New Roman", serif' },
   {
     label: "Helvetica",
@@ -155,7 +168,7 @@ const FONT_FAMILIES = [
   },
   { label: "Inter", value: '"Inter", sans-serif' },
   { label: "Lato", value: '"Lato", sans-serif' },
-  { label: "Lora", value: '"Lora", serif' },
+  { label: "Lora", value: "var(--brand-font-serif)" },
   {
     label: "Lucida Console",
     value:
@@ -249,7 +262,7 @@ const Dropdown = ({
   value,
   options,
   onChange,
-  width = "100px",
+  width = "var(--brand-space-20)",
 }: DropdownProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -268,21 +281,21 @@ const Dropdown = ({
     options.find((o) => String(o.value) === String(value))?.label || label;
 
   return (
-    <div className="editor-dropdown" ref={ref} style={{ width }}>
+    <div className="bs-editor__dropdown" ref={ref} style={{ width }}>
       <button
-        className="editor-dropdown-trigger"
+        className="bs-editor__dropdown-trigger"
         onClick={() => setIsOpen(!isOpen)}
         type="button"
       >
-        <span className="editor-dropdown-label">{selectedLabel}</span>
+        <span className="bs-editor__dropdown-label">{selectedLabel}</span>
         <ChevronDown size={14} />
       </button>
       {isOpen && (
-        <div className="editor-dropdown-menu">
+        <div className="bs-editor__dropdown-menu">
           {options.map((option) => (
             <button
               key={String(option.value)}
-              className={`editor-dropdown-item ${String(option.value) === String(value) ? "active" : ""}`}
+              className={`bs-editor__dropdown-item ${String(option.value) === String(value) ? "is-active" : ""}`}
               onClick={() => {
                 onChange(option.value);
                 setIsOpen(false);
@@ -304,30 +317,40 @@ interface ColorPickerProps {
   color: string;
   onChange: (color: string) => void;
   title: string;
+  fallbackColor?: string;
 }
 
-const ColorPicker = ({ icon, color, onChange, title }: ColorPickerProps) => {
+const ColorPicker = ({
+  icon,
+  color,
+  onChange,
+  title,
+  fallbackColor,
+}: ColorPickerProps) => {
   const inputRef = useRef<HTMLInputElement>(null);
+  const resolvedFallback = fallbackColor || "black";
 
   return (
-    <div className="editor-color-picker" title={title}>
+    <div className="bs-editor__color-picker" title={title}>
       <button
-        className="editor-toolbar-btn"
+        className="bs-editor__btn"
         onClick={() => inputRef.current?.click()}
         type="button"
       >
         {icon}
         <div
-          className="editor-color-indicator"
-          style={{ backgroundColor: color || "#000000" }}
+          className="bs-editor__color-indicator"
+          style={{
+            backgroundColor: color || resolvedFallback || "currentColor",
+          }}
         />
       </button>
       <input
         ref={inputRef}
         type="color"
-        value={color || "#000000"}
+        value={color || resolvedFallback}
         onChange={(e) => onChange(e.target.value)}
-        className="editor-color-input"
+        className="bs-editor__color-input"
       />
     </div>
   );
@@ -340,6 +363,7 @@ interface MenuButtonProps {
   disabled?: boolean;
   children: React.ReactNode;
   title?: string;
+  isLabel?: boolean;
 }
 
 const MenuButton = ({
@@ -348,20 +372,21 @@ const MenuButton = ({
   disabled,
   children,
   title,
+  isLabel,
 }: MenuButtonProps) => (
   <button
     onClick={onClick}
     disabled={disabled}
     title={title}
     type="button"
-    className={`editor-toolbar-btn ${isActive ? "active" : ""}`}
+    className={`bs-editor__btn${isActive ? " is-active" : ""}${isLabel ? " bs-editor__btn--label" : ""}`}
   >
     {children}
   </button>
 );
 
 // --- Divider Component ---
-const Divider = () => <div className="editor-toolbar-divider" />;
+const Divider = () => <div className="bs-editor__toolbar-divider" />;
 
 // --- Toolbar Component ---
 const Toolbar = ({
@@ -371,15 +396,32 @@ const Toolbar = ({
   isFullScreen,
   onToggleFullScreen,
 }: ToolbarProps) => {
-  const [textColor, setTextColor] = useState("#000000");
-  const [highlightColor, setHighlightColor] = useState("#ffff00");
+  const readCssVar = (name: string) => {
+    if (typeof window === "undefined") return "";
+    return getComputedStyle(document.documentElement)
+      .getPropertyValue(name)
+      .trim();
+  };
+
+  const [defaultTextColor, setDefaultTextColor] = useState(() =>
+    readCssVar("--bs-text-primary"),
+  );
+  const [defaultHighlightColor, setDefaultHighlightColor] = useState(() =>
+    readCssVar("--brand-coral"),
+  );
+  const [textColor, setTextColor] = useState(defaultTextColor);
+  const [highlightColor, setHighlightColor] = useState(defaultHighlightColor);
   const [, forceUpdate] = useState({});
 
   // Force re-render when selection or content changes so dropdowns reflect current text state
   useEffect(() => {
     if (!editor) return;
 
-    const updateHandler = () => forceUpdate({});
+    const updateHandler = () => {
+      queueMicrotask(() => {
+        forceUpdate({});
+      });
+    };
     editor.on("selectionUpdate", updateHandler);
     editor.on("transaction", updateHandler);
 
@@ -388,6 +430,23 @@ const Toolbar = ({
       editor.off("transaction", updateHandler);
     };
   }, [editor]);
+
+  useEffect(() => {
+    if (defaultTextColor && defaultHighlightColor) return;
+
+    const resolvedText = readCssVar("--bs-text-primary");
+    const resolvedHighlight = readCssVar("--brand-coral");
+
+    if (resolvedText && !defaultTextColor) {
+      setDefaultTextColor(resolvedText);
+      if (!textColor) setTextColor(resolvedText);
+    }
+
+    if (resolvedHighlight && !defaultHighlightColor) {
+      setDefaultHighlightColor(resolvedHighlight);
+      if (!highlightColor) setHighlightColor(resolvedHighlight);
+    }
+  }, [defaultTextColor, defaultHighlightColor, highlightColor, textColor]);
 
   if (!editor) return null;
 
@@ -453,7 +512,9 @@ const Toolbar = ({
     const { from, to } = editor.state.selection;
     if (from === to) {
       // Cursor position, no selection
-      return editor.getAttributes("textStyle").fontSize || "16px";
+      return (
+        editor.getAttributes("textStyle").fontSize || "var(--brand-text-body)"
+      );
     }
 
     let fontSize: string | null = null;
@@ -464,7 +525,8 @@ const Toolbar = ({
         const textStyleMark = node.marks.find(
           (m) => m.type.name === "textStyle",
         );
-        const currentSize = textStyleMark?.attrs?.fontSize || "16px";
+        const currentSize =
+          textStyleMark?.attrs?.fontSize || "var(--brand-text-body)";
 
         if (fontSize === null) {
           fontSize = currentSize;
@@ -474,7 +536,7 @@ const Toolbar = ({
       }
     });
     // Return sentinel that won't match any option when mixed
-    return hasMixed ? "__mixed__" : fontSize || "16px";
+    return hasMixed ? "__mixed__" : fontSize || "var(--brand-text-body)";
   };
 
   const getCurrentHeading = (): number => {
@@ -553,9 +615,9 @@ const Toolbar = ({
   };
 
   return (
-    <div className="editor-toolbar">
+    <div className="bs-editor__toolbar bs-editor__toolbar--stacked">
       {/* Row 1: History, Font Family, Font Size, Heading */}
-      <div className="editor-toolbar-row">
+      <div className="bs-editor__toolbar-row">
         <MenuButton
           onClick={() => editor.chain().focus().undo().run()}
           title="Undo"
@@ -578,7 +640,7 @@ const Toolbar = ({
           value={getSelectionFontFamily()}
           options={FONT_FAMILIES}
           onChange={handleFontFamilyChange}
-          width="120px"
+          width="calc(var(--brand-space-16) * 2)"
         />
 
         <Dropdown
@@ -586,7 +648,7 @@ const Toolbar = ({
           value={getSelectionFontSize()}
           options={FONT_SIZES}
           onChange={handleFontSizeChange}
-          width="70px"
+          width="calc(var(--brand-space-8) * 2)"
         />
 
         <Divider />
@@ -596,10 +658,10 @@ const Toolbar = ({
           value={String(getCurrentHeading())}
           options={HEADING_OPTIONS}
           onChange={handleHeadingChange}
-          width="110px"
+          width="var(--brand-space-24)"
         />
 
-        <div style={{ marginLeft: "auto" }}>
+        <div className="bs-editor__toolbar-spacer">
           <MenuButton
             onClick={onToggleFullScreen}
             title={isFullScreen ? "Exit Full Screen" : "Full Screen"}
@@ -611,7 +673,7 @@ const Toolbar = ({
       </div>
 
       {/* Row 2: Formatting, Colors, Alignment, Lists, Blocks, Insert */}
-      <div className="editor-toolbar-row">
+      <div className="bs-editor__toolbar-row">
         {/* Text Formatting */}
         <MenuButton
           onClick={() => editor.chain().focus().toggleBold().run()}
@@ -664,12 +726,14 @@ const Toolbar = ({
           color={textColor}
           onChange={handleTextColorChange}
           title="Text Color"
+          fallbackColor={defaultTextColor}
         />
         <ColorPicker
           icon={<Highlighter size={16} />}
           color={highlightColor}
           onChange={handleHighlightChange}
           title="Highlight Color"
+          fallbackColor={defaultHighlightColor}
         />
 
         <Divider />
@@ -810,7 +874,12 @@ const Toolbar = ({
           <GitGraph size={16} />
         </MenuButton>
 
-        <MenuButton onClick={() => {}} isActive={showVcPanel} title="Conflicts">
+        <MenuButton
+          onClick={() => {}}
+          isActive={showVcPanel}
+          title="Conflicts"
+          isLabel
+        >
           {`${resolvedCount}/${totalCount}`}
         </MenuButton>
       </div>
@@ -856,7 +925,9 @@ export const DemoEditor = ({
     ],
     content: initialContent,
     onUpdate: ({ editor }) => {
-      onChange?.(editor.getJSON());
+      queueMicrotask(() => {
+        onChange?.(editor.getJSON());
+      });
     },
     editorProps: {
       attributes: {
@@ -869,10 +940,11 @@ export const DemoEditor = ({
 
   // State
   const [showVcPanel, setShowVcPanel] = useState(false);
-  const [sidebarWidth, setSidebarWidth] = useState(300);
+  const [sidebarWidth, setSidebarWidth] = useState(0);
   const [isResizing, setIsResizing] = useState(false);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [originalContent, setOriginalContent] = useState("");
+  const sidebarLimitsRef = useRef({ min: 0, max: Number.POSITIVE_INFINITY });
 
   // Resize Handlers
   const startResizing = useCallback((mouseDownEvent: React.MouseEvent) => {
@@ -890,11 +962,12 @@ export const DemoEditor = ({
         // Calculate new width based on mouse position from right edge of container
         // Assuming the panel is on the right
         const editorRect = document
-          .querySelector(".demo-editor")
+          .querySelector(".bs-editor")
           ?.getBoundingClientRect();
         if (editorRect) {
           const newWidth = editorRect.right - mouseMoveEvent.clientX;
-          if (newWidth > 200 && newWidth < 800) {
+          const { min, max } = sidebarLimitsRef.current;
+          if (newWidth > min && newWidth < max) {
             // Min/Max constraints
             setSidebarWidth(newWidth);
           }
@@ -903,6 +976,27 @@ export const DemoEditor = ({
     },
     [isResizing],
   );
+
+  useEffect(() => {
+    if (!containerRef.current || typeof window === "undefined") return;
+    const styles = getComputedStyle(containerRef.current);
+    const min = Number.parseFloat(
+      styles.getPropertyValue("--bs-editor-sidebar-min"),
+    );
+    const max = Number.parseFloat(
+      styles.getPropertyValue("--bs-editor-sidebar-max"),
+    );
+    const initial = Number.parseFloat(
+      styles.getPropertyValue("--bs-editor-sidebar-default"),
+    );
+    sidebarLimitsRef.current = {
+      min: Number.isFinite(min) ? min : 0,
+      max: Number.isFinite(max) ? max : Number.POSITIVE_INFINITY,
+    };
+    if (Number.isFinite(initial) && initial > 0) {
+      setSidebarWidth(initial);
+    }
+  }, []);
 
   useEffect(() => {
     window.addEventListener("mousemove", resize);
@@ -996,38 +1090,16 @@ export const DemoEditor = ({
   }, []);
 
   return (
-    <div className={`demo-editor ${className}`} ref={containerRef}>
+    <div className={`bs-editor demo-editor ${className}`} ref={containerRef}>
       {isPreviewMode && (
-        <div
-          style={{
-            background: "#fff7ed",
-            padding: "8px 16px",
-            borderBottom: "1px solid #fed7aa",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            color: "#c2410c",
-            fontSize: "13px",
-            fontWeight: 500,
-          }}
-        >
-          <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+        <div className="bs-editor__preview">
+          <span className="bs-editor__preview-label">
             <Eye size={16} />
             Previewing Changes (Read Only)
           </span>
           <button
             onClick={handleExitPreview}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "4px",
-              background: "white",
-              border: "1px solid #fdba74",
-              padding: "4px 10px",
-              borderRadius: "4px",
-              cursor: "pointer",
-              color: "#c2410c",
-            }}
+            className="bs-editor__preview-btn"
           >
             <EyeOff size={14} /> Exit Preview
           </button>
@@ -1042,22 +1114,22 @@ export const DemoEditor = ({
           onToggleFullScreen={toggleFullScreen}
         />
       )}
-      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        <div className="editor-content-wrapper" style={{ flex: 1 }}>
+      <div className="bs-editor__main">
+        <div className="bs-editor__scroll bs-editor__content">
           <EditorContent editor={editor} />
         </div>
 
         {showVcPanel && (
           <div
-            style={{
-              width: sidebarWidth,
-              flexShrink: 0,
-              height: "100%",
-              position: "relative",
-            }}
+            className="bs-editor__sidebar"
+            style={
+              {
+                "--bs-editor-sidebar-width": `${sidebarWidth}px`,
+              } as React.CSSProperties
+            }
           >
             <div
-              className={`resize-handle ${isResizing ? "resizing" : ""}`}
+              className={`bs-editor__resize-handle ${isResizing ? "is-resizing" : ""}`}
               onMouseDown={startResizing}
             />
             <VersionControlPanel

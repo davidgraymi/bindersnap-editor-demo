@@ -1,10 +1,8 @@
 import { useState } from "react";
 import type { Content } from "@tiptap/react";
 
-import { DemoEditor } from "./components/Editor";
-import { gitService } from "./services/GitService";
-
-import "./index.css";
+import { DemoEditor } from "./editor/Editor";
+import { gitService } from "./editor/services/GitService";
 
 const sampleJson = {
   type: "doc",
@@ -470,20 +468,11 @@ export function App() {
   };
 
   return (
-    <div className="app">
-      <div className="app-header">
-        <h1>Rich Text Editor Demo</h1>
-        <p>A TipTap-powered editor with Google Docs-like features</p>
-      </div>
-
-      <div className="editor-demo-container">
-        <DemoEditor
-          initialContent={sampleJson}
-          onChange={handleChange}
-          placeholder="Start typing your document..."
-        />
-      </div>
-    </div>
+    <DemoEditor
+      initialContent={sampleJson}
+      onChange={handleChange}
+      placeholder="Start typing your document..."
+    />
   );
 }
 
