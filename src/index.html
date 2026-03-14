@@ -4,9 +4,30 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Bindersnap — Finally Kill the Email Approval Chain</title>
+    <meta
+      name="description"
+      content="Bindersnap is the document approval workspace for regulated teams—write, collaborate, and approve with a clean audit trail built in."
+    />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="src/assets/css/index.css" />
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap"
+    />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap"
+    />
+    <link
+      rel="preload"
+      as="style"
+      href="src/assets/css/index.css"
+      onload="this.onload=null;this.rel='stylesheet'"
+    />
+    <noscript>
+      <link rel="stylesheet" href="src/assets/css/index.css" />
+    </noscript>
   </head>
   <body>
     <!-- NAV -->
@@ -84,8 +105,9 @@
       </div>
     </nav>
 
-    <!-- HERO -->
-    <section class="hero">
+    <main id="main-content">
+      <!-- HERO -->
+      <section class="hero">
       <div class="hero-inner">
         <div class="chaos-pill">
           <span class="chaos-pill-emoji">😩</span>
@@ -168,11 +190,14 @@
             </div>
           </div>
           <div class="mockup-editor">
-            <div
-              id="root"
-              class="editor-demo-root"
-              aria-label="Editor demo"
-            ></div>
+            <div id="root" class="editor-demo-root" aria-label="Editor demo">
+              <div class="editor-loading">
+                <div class="editor-loading-text">Click to load the editor</div>
+                <button class="editor-load-btn" id="editor-load-btn">
+                  Load Editor
+                </button>
+              </div>
+            </div>
             <noscript>
               <div class="editor-fallback">
                 This demo requires JavaScript enabled to render the editor.
@@ -183,8 +208,8 @@
       </div>
     </section>
 
-    <!-- CHAOS STRIP -->
-    <section class="chaos-strip">
+      <!-- CHAOS STRIP -->
+      <section class="chaos-strip">
       <div class="chaos-inner">
         <div class="chaos-left reveal">
           <div class="overline">The Problem</div>
@@ -575,29 +600,49 @@
         <div class="cert-grid reveal reveal-d2">
           <div class="cert-card">
             <img
-              src="https://www.figma.com/api/mcp/asset/583911eb-f155-4291-a7ed-77f03827bf48"
+              src="src/assets/img/certs/soc2.webp"
+              width="80"
+              height="80"
               alt="SOC2"
+              loading="lazy"
+              decoding="async"
+              fetchpriority="low"
             />
             <span>SOC 2</span>
           </div>
           <div class="cert-card">
             <img
-              src="https://www.figma.com/api/mcp/asset/f9060a52-203e-4740-ae34-aae4e6f79f54"
+              src="src/assets/img/certs/gdpr.webp"
+              width="80"
+              height="80"
               alt="GDPR"
+              loading="lazy"
+              decoding="async"
+              fetchpriority="low"
             />
             <span>GDPR</span>
           </div>
           <div class="cert-card">
             <img
-              src="https://www.figma.com/api/mcp/asset/1a281380-268c-49af-ad5e-cad460a0a458"
+              src="src/assets/img/certs/hipaa.webp"
+              width="80"
+              height="80"
               alt="HIPAA"
+              loading="lazy"
+              decoding="async"
+              fetchpriority="low"
             />
             <span>HIPAA</span>
           </div>
           <div class="cert-card">
             <img
-              src="https://www.figma.com/api/mcp/asset/588cb20a-facd-4371-9b33-92d87fddf42e"
+              src="src/assets/img/certs/iso27001.webp"
+              width="80"
+              height="80"
               alt="ISO 27001"
+              loading="lazy"
+              decoding="async"
+              fetchpriority="low"
             />
             <span>ISO 27001</span>
           </div>
@@ -605,8 +650,8 @@
       </div>
     </section>
 
-    <!-- FINAL CTA -->
-    <section class="section-cta" id="waitlist">
+      <!-- FINAL CTA -->
+      <section class="section-cta" id="waitlist">
       <div class="cta-inner reveal">
         <div class="cta-tag">Join the Waitlist</div>
         <h2>Kill the email chain.<br /><em>Finally.</em></h2>
@@ -645,7 +690,8 @@
           </div>
         </div>
       </div>
-    </section>
+      </section>
+    </main>
 
     <!-- FOOTER -->
     <footer>
@@ -765,6 +811,6 @@
         });
       });
     </script>
-    <script type="module" src="src/frontend.tsx"></script>
+    <script type="module" src="src/frontend-loader.ts"></script>
   </body>
 </html>

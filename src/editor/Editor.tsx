@@ -336,6 +336,7 @@ const ColorPicker = ({
         className="bs-editor__btn"
         onClick={() => inputRef.current?.click()}
         type="button"
+        aria-label={title}
       >
         {icon}
         <div
@@ -351,6 +352,7 @@ const ColorPicker = ({
         value={color || resolvedFallback}
         onChange={(e) => onChange(e.target.value)}
         className="bs-editor__color-input"
+        aria-label={title}
       />
     </div>
   );

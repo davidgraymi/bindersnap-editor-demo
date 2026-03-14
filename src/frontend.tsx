@@ -8,20 +8,30 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
-import { App } from "./App";
+const elem = document.getElementById("root");
+if (!elem) {
+  throw new Error("Missing #root element for editor mount.");
+}
 
-const elem = document.getElementById("root")!;
-const app = (
-  <StrictMode>
-    <App />
-  </StrictMode>
-);
+const win = window as typeof window & {
+  __bindersnapRoot?: ReturnType<typeof createRoot>;
+};
+const root = win.__bindersnapRoot ?? createRoot(elem);
+win.__bindersnapRoot = root;
+
+const render = async () => {
+  const { App } = await import("./App");
+  const isProd = process.env.NODE_ENV === "production";
+  root.render(isProd ? <App /> : (
+    <StrictMode>
+      <App />
+    </StrictMode>
+  ));
+};
 
 if (import.meta.hot) {
-  // With hot module reloading, `import.meta.hot.data` is persisted.
-  const root = (import.meta.hot.data.root ??= createRoot(elem));
-  root.render(app);
+  render();
+  import.meta.hot.accept("./App", render);
 } else {
-  // The hot module reloading API is not available in production.
-  createRoot(elem).render(app);
+  render();
 }
