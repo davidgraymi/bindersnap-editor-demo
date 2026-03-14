@@ -136,8 +136,8 @@ nav {
   gap: 6px;
   font-family: var(--brand-font-mono);
   font-size: 11px;
-  color: var(--bs-text-muted);
-  background: var(--bs-surface-2);
+  color: var(--bs-text-secondary);
+  background: var(--bs-surface-1);
   border: 1px solid var(--bs-rule);
   border-radius: var(--brand-radius-full);
   padding: 5px 12px;
@@ -529,6 +529,43 @@ nav {
   font-family: var(--brand-font-sans);
   font-size: var(--brand-text-sm);
   color: var(--bs-text-muted);
+}
+
+.editor-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--brand-space-3);
+  height: 100%;
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-sm);
+  color: var(--bs-text-faint);
+  letter-spacing: var(--brand-tracking-wide);
+  text-transform: uppercase;
+}
+
+.editor-loading-text {
+  font-size: var(--brand-text-label);
+  color: var(--bs-text-muted);
+}
+
+.editor-load-btn {
+  border: none;
+  border-radius: var(--brand-radius-md);
+  padding: var(--brand-space-2) var(--brand-space-4);
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-sm);
+  font-weight: var(--brand-weight-medium);
+  background: var(--brand-coral);
+  color: var(--bs-page-bg);
+  cursor: pointer;
+  transition: transform var(--brand-transition-fast), opacity var(--brand-transition-fast);
+}
+
+.editor-load-btn:hover {
+  transform: translateY(-1px);
+  opacity: 0.9;
 }
 
 
@@ -1372,7 +1409,7 @@ footer {
 .footer-tagline {
   font-size: 14px;
   font-weight: var(--brand-weight-light);
-  color: var(--brand-on-dark-faint);
+  color: var(--brand-on-dark-secondary);
   line-height: var(--brand-leading-relaxed);
   max-width: 420px;
 }
@@ -1398,14 +1435,14 @@ footer {
 .footer-copy {
   font-family: var(--brand-font-mono);
   font-size: 11px;
-  color: rgba(245,240,232,0.25);
+  color: var(--brand-on-dark-secondary);
   letter-spacing: var(--brand-tracking-wide);
 }
 
 .footer-love {
   font-family: var(--brand-font-mono);
   font-size: 11px;
-  color: rgba(245,240,232,0.25);
+  color: var(--brand-on-dark-secondary);
   letter-spacing: 0.06em;
 }
 
