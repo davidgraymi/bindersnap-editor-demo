@@ -29,7 +29,7 @@
  *   className       — Extra classes for the outer wrapper
  * ───────────────────────────────────────────────────────────── */
 
-import "./bindersnap-editor.css";
+import "./assets/bindersnap-editor.css";
 
 import React, { useCallback, useEffect, useMemo } from "react";
 import { useEditor, EditorContent, Editor, BubbleMenu } from "@tiptap/react";

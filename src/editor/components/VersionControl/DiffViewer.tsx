@@ -18,12 +18,15 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({ base, head }) => {
       <h3>Changes</h3>
       <div className="diff-content">
         {diff.map((part, index) => {
-          const color = part.added ? '#dcfce7' : part.removed ? '#fee2e2' : 'transparent';
-          const textDecoration = part.removed ? 'line-through' : 'none';
+          const tokenClass = part.added
+            ? "diff-token diff-token--added"
+            : part.removed
+              ? "diff-token diff-token--removed"
+              : "diff-token";
           return (
             <span 
               key={index} 
-              style={{ backgroundColor: color, textDecoration, padding: '2px 0' }}
+              className={tokenClass}
             >
               {part.value}
             </span>

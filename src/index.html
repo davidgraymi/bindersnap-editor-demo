@@ -167,11 +167,18 @@
               app.bindersnap.com &mdash; Q4 Vendor Agreement &middot; In Review
             </div>
           </div>
-          <img
-            class="mockup-img"
-            src="https://www.figma.com/api/mcp/asset/8717e37d-1d56-453d-95f5-1f92f86676d0"
-            alt="Bindersnap document editor with approval workflow"
-          />
+          <div class="mockup-editor">
+            <div
+              id="root"
+              class="editor-demo-root"
+              aria-label="Editor demo"
+            ></div>
+            <noscript>
+              <div class="editor-fallback">
+                This demo requires JavaScript enabled to render the editor.
+              </div>
+            </noscript>
+          </div>
         </div>
       </div>
     </section>
@@ -758,5 +765,6 @@
         });
       });
     </script>
+    <script type="module" src="/src/frontend.tsx"></script>
   </body>
 </html>

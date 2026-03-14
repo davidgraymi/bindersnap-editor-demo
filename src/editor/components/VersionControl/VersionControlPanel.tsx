@@ -163,55 +163,29 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
           onNewBranch={handleNewBranch}
         />
 
-        <div style={{ height: "16px" }}></div>
+        <div className="vc-spacer" />
 
         <button
           className="merge-toggle-btn"
           onClick={() => setShowMerge(!showMerge)}
-          style={{
-            width: "100%",
-            padding: "6px",
-            fontSize: "13px",
-            background: "#f3f4f6",
-            border: "1px solid #e5e7eb",
-            borderRadius: "4px",
-            cursor: "pointer",
-          }}
         >
           Merge...
         </button>
         {showMerge && (
-          <div
-            className="merge-selector"
-            style={{
-              marginTop: "8px",
-              display: "flex",
-              flexDirection: "column",
-              gap: "4px",
-            }}
-          >
+          <div className="merge-selector">
             {branches
               .filter((b) => b !== currentBranch)
               .map((b) => (
                 <button
                   key={b}
                   onClick={() => handleMergeStart(b)}
-                  style={{
-                    textAlign: "left",
-                    padding: "6px",
-                    background: "white",
-                    border: "1px solid #e5e7eb",
-                    cursor: "pointer",
-                    fontSize: "13px",
-                  }}
+                  className="merge-option-btn"
                 >
                   Merge <strong>{b}</strong>
                 </button>
               ))}
             {branches.filter((b) => b !== currentBranch).length === 0 && (
-              <div style={{ fontSize: "12px", color: "#888" }}>
-                No other branches
-              </div>
+              <div className="merge-empty">No other branches</div>
             )}
           </div>
         )}

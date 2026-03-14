@@ -495,6 +495,42 @@ nav {
   box-shadow: var(--bs-shadow-xl);
 }
 
+/* Editor demo mount */
+.mockup-editor {
+  display: block;
+  width: 100%;
+  border: calc(var(--brand-space-1) * 0.375) solid var(--bs-rule);
+  border-top: none;
+  border-radius: 0 0 var(--brand-radius-lg) var(--brand-radius-lg);
+  box-shadow: var(--bs-shadow-xl);
+  background: var(--bs-page-bg);
+  overflow: hidden;
+  min-height: calc(var(--brand-space-16) * 6);
+  height: min(72vh, calc(var(--brand-space-16) * 10));
+}
+
+.mockup-editor .editor-demo-root,
+.mockup-editor .demo-editor,
+.mockup-editor .bs-editor {
+  height: 100%;
+}
+
+.mockup-editor .bs-editor {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.editor-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-sm);
+  color: var(--bs-text-muted);
+}
+
 
 /* ─────────────────────────────────────
    CHAOS STRIP
