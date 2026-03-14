@@ -1,13 +1,14 @@
 {
   "name": "bindersnap-editor-demo",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "bun --hot src/index.ts",
     "clean": "rm -rf dist",
     "build": "bun run clean && bun build ./src/index.html --outdir=dist --target=browser --minify --splitting --define:process.env.NODE_ENV='\"production\"' --env='BUN_PUBLIC_*'",
-    "lighthouse": "bun run build && sh -c 'python3 -m http.server 4173 --directory dist >/dev/null 2>&1 & SERVER_PID=$!; sleep 1; bunx lighthouse http://localhost:4173 --output=json --output-path=./lighthouse.json --quiet --chrome-flags=\"--headless --no-sandbox --disable-gpu\" --no-enable-error-reporting; kill $SERVER_PID'",
+    "lighthouse": "bun run build && sh -c 'python3 -m http.server 4173 --directory dist >/dev/null 2>&1 & SERVER_PID=$!; sleep 1; bunx lighthouse http://localhost:4173 --output=json --output-path=./lighthouse.json --quiet --chrome-flags=\"--headless --no-sandbox --disable-gpu\" --no-enable-error-reporting; kill $SERVER_PID' && bun run summarize",
+    "summarize": "bun scripts/summarize-lighthouse.ts",
     "start": "NODE_ENV=production bun src/index.ts"
   },
   "dependencies": {
