@@ -349,8 +349,8 @@ body::after {
    ───────────────────────────────────────────────────────────── */
 
 .bs-theme-toggle {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border-radius: var(--brand-radius-md);
   border: 1px solid var(--bs-rule);
   background: var(--bs-surface-1);
