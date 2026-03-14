@@ -1,10 +1,8 @@
 import { useState } from "react";
 import type { Content } from "@tiptap/react";
 
-import { DemoEditor } from "./components/Editor";
-import { gitService } from "./services/GitService";
-
-import "./assets/index.css";
+import { DemoEditor } from "./editor/Editor";
+import { gitService } from "./editor/services/GitService";
 
 const sampleJson = {
   type: "doc",

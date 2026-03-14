@@ -1,0 +1,1459 @@
+/*
+ * bindersnap-editor.css
+ * ─────────────────────────────────────────────────────────────
+ * Self-contained stylesheet for the Bindersnap document editor.
+ * Built for Tiptap / ProseMirror.
+ *
+ * This file is designed to ship INSIDE the React editor component
+ * and be imported directly — it is fully self-sufficient and does
+ * not require bindersnap-tokens.css to be present on the page.
+ *
+ * All brand tokens are re-declared locally inside .bs-editor so
+ * the component is portable: drop it anywhere and it looks right.
+ *
+ * Dark mode is driven by [data-theme="dark"] on any ancestor
+ * element (typically <html>), matching the rest of the Bindersnap
+ * token system. The editor also respects @media prefers-color-scheme
+ * as a fallback when no data-theme attribute is present.
+ *
+ * File structure:
+ *   1.  Local token re-declaration (.bs-editor scope)
+ *   2.  Dark mode token overrides
+ *   3.  Editor shell & layout
+ *   4.  Toolbar
+ *   5.  Prose typography (headings, paragraphs, lists, etc.)
+ *   6.  Inline marks (bold, italic, code, link, highlight)
+ *   7.  Block elements (blockquote, code block, hr, table)
+ *   8.  Placeholder
+ *   9.  Selection & focus
+ *  10.  Bindersnap extensions
+ *         — Merge conflict blocks
+ *         — Tracked changes (insertions / deletions)
+ *         — Approval states (pending / approved / rejected)
+ *         — Comment anchors
+ *         — Version diff view
+ *  11.  Status bar
+ *  12.  Responsive
+ *  13.  Print styles
+ * ───────────────────────────────────────────────────────────── */
+
+
+/* ═════════════════════════════════════════════════════════════
+   1. LOCAL TOKEN SCOPE
+   All tokens are scoped to .bs-editor so the component never
+   bleeds into or is contaminated by the host page's CSS.
+   ═════════════════════════════════════════════════════════════ */
+
+.bs-editor {
+  /* ── Surfaces ── */
+  --e-bg:         #FAFAF7;
+  --e-surface:    #FFFFFF;
+  --e-surface-2:  #F5F0E8;
+  --e-surface-3:  #EDE8DF;
+
+  /* ── Text ── */
+  --e-text:       #1C1917;
+  --e-text-2:     #44403C;
+  --e-text-3:     #78716C;
+  --e-text-4:     #A8A29E;
+
+  /* ── Borders ── */
+  --e-rule:       rgba(28, 25, 23, 0.10);
+  --e-rule-2:     rgba(28, 25, 23, 0.06);
+
+  /* ── Brand ── */
+  --e-coral:      #E85D26;
+  --e-coral-dk:   #C94D1A;
+  --e-coral-dim:  rgba(232, 93, 38, 0.10);
+  --e-coral-glow: rgba(232, 93, 38, 0.06);
+  --e-green:      #16A34A;
+  --e-green-dim:  rgba(22, 163, 74, 0.10);
+
+  /* ── Semantic extension colours ── */
+  /* Merge conflicts */
+  --e-conflict-ours:    rgba(22,  163, 74,  0.10);  /* green tint — our changes */
+  --e-conflict-theirs:  rgba(59,  130, 246, 0.10);  /* blue tint  — their changes */
+  --e-conflict-base:    rgba(168, 162, 158, 0.12);  /* grey tint  — common ancestor */
+  --e-conflict-bar-our: #16A34A;
+  --e-conflict-bar-th:  #3B82F6;
+  --e-conflict-bar-base:#A8A29E;
+
+  /* Tracked changes */
+  --e-insert:     rgba(22,  163, 74,  0.14);
+  --e-insert-txt: #15803D;
+  --e-delete:     rgba(220, 38,  38,  0.10);
+  --e-delete-txt: #DC2626;
+
+  /* Approval states */
+  --e-approved:   rgba(22,  163, 74,  0.08);
+  --e-approved-b: #16A34A;
+  --e-pending:    rgba(245, 158, 11,  0.10);
+  --e-pending-b:  #D97706;
+  --e-rejected:   rgba(220, 38,  38,  0.08);
+  --e-rejected-b: #DC2626;
+
+  /* Comments */
+  --e-comment:    rgba(232, 93,  38,  0.12);
+  --e-comment-b:  #E85D26;
+
+  /* ── Typography ── */
+  --e-font-serif: 'Lora', Georgia, 'Times New Roman', serif;
+  --e-font-sans:  'Geist', system-ui, -apple-system, sans-serif;
+  --e-font-mono:  'Geist Mono', 'Fira Code', Consolas, monospace;
+
+  /* ── Shadows ── */
+  --e-shadow-sm:  0 1px 3px rgba(28,25,23,0.08), 0 1px 2px rgba(28,25,23,0.04);
+  --e-shadow-md:  0 4px 16px rgba(28,25,23,0.10), 0 2px 4px rgba(28,25,23,0.06);
+
+  /* ── Transitions ── */
+  --e-t-fast: 0.15s ease;
+  --e-t-base: 0.2s ease;
+
+  /* ── Layout ── */
+  --e-content-width: 720px;  /* comfortable prose line length */
+  --e-gutter:        48px;
+}
+
+
+/* ═════════════════════════════════════════════════════════════
+   2. DARK MODE TOKEN OVERRIDES
+   ═════════════════════════════════════════════════════════════ */
+
+[data-theme="dark"] .bs-editor,
+@media (prefers-color-scheme: dark) {
+  .bs-editor:not([data-theme="light"] .bs-editor) {
+    --e-bg:        #1C1917;
+    --e-surface:   #292524;
+    --e-surface-2: #33302E;
+    --e-surface-3: #44403C;
+
+    --e-text:      #F5F0E8;
+    --e-text-2:    #E7E4DF;
+    --e-text-3:    #A8A29E;
+    --e-text-4:    #78716C;
+
+    --e-rule:      rgba(255,255,255,0.09);
+    --e-rule-2:    rgba(255,255,255,0.05);
+
+    --e-coral-dim:  rgba(232, 93, 38, 0.18);
+    --e-coral-glow: rgba(232, 93, 38, 0.10);
+    --e-green-dim:  rgba(22, 163, 74, 0.18);
+
+    /* Extension tints — brighter on dark */
+    --e-conflict-ours:   rgba(22,  163, 74,  0.16);
+    --e-conflict-theirs: rgba(59,  130, 246, 0.16);
+    --e-conflict-base:   rgba(168, 162, 158, 0.16);
+    --e-insert:    rgba(22,  163, 74,  0.20);
+    --e-insert-txt:#4ADE80;
+    --e-delete:    rgba(220, 38,  38,  0.18);
+    --e-delete-txt:#FCA5A5;
+    --e-approved:  rgba(22,  163, 74,  0.14);
+    --e-pending:   rgba(245, 158, 11,  0.16);
+    --e-rejected:  rgba(220, 38,  38,  0.14);
+    --e-comment:   rgba(232, 93,  38,  0.18);
+
+    --e-shadow-sm: 0 1px 3px rgba(0,0,0,0.30), 0 1px 2px rgba(0,0,0,0.18);
+    --e-shadow-md: 0 4px 16px rgba(0,0,0,0.40), 0 2px 4px rgba(0,0,0,0.22);
+  }
+}
+
+/* Explicit override when host sets data-theme="dark" directly */
+[data-theme="dark"] .bs-editor {
+  --e-bg:        #1C1917;
+  --e-surface:   #292524;
+  --e-surface-2: #33302E;
+  --e-surface-3: #44403C;
+  --e-text:      #F5F0E8;
+  --e-text-2:    #E7E4DF;
+  --e-text-3:    #A8A29E;
+  --e-text-4:    #78716C;
+  --e-rule:      rgba(255,255,255,0.09);
+  --e-rule-2:    rgba(255,255,255,0.05);
+  --e-coral-dim:  rgba(232,93,38,0.18);
+  --e-coral-glow: rgba(232,93,38,0.10);
+  --e-green-dim:  rgba(22,163,74,0.18);
+  --e-conflict-ours:   rgba(22, 163,74,0.16);
+  --e-conflict-theirs: rgba(59,130,246,0.16);
+  --e-conflict-base:   rgba(168,162,158,0.16);
+  --e-insert:    rgba(22,163,74,0.20);
+  --e-insert-txt:#4ADE80;
+  --e-delete:    rgba(220,38,38,0.18);
+  --e-delete-txt:#FCA5A5;
+  --e-approved:  rgba(22,163,74,0.14);
+  --e-pending:   rgba(245,158,11,0.16);
+  --e-rejected:  rgba(220,38,38,0.14);
+  --e-comment:   rgba(232,93,38,0.18);
+  --e-shadow-sm: 0 1px 3px rgba(0,0,0,0.30), 0 1px 2px rgba(0,0,0,0.18);
+  --e-shadow-md: 0 4px 16px rgba(0,0,0,0.40), 0 2px 4px rgba(0,0,0,0.22);
+}
+
+
+/* ═════════════════════════════════════════════════════════════
+   3. EDITOR SHELL & LAYOUT
+   ═════════════════════════════════════════════════════════════ */
+
+.bs-editor {
+  display: flex;
+  flex-direction: column;
+  background: var(--e-bg);
+  border: 1px solid var(--e-rule);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: border-color var(--e-t-base), box-shadow var(--e-t-base), background var(--e-t-base);
+  font-family: var(--e-font-sans);
+  color: var(--e-text);
+}
+
+.bs-editor:focus-within {
+  border-color: var(--e-coral);
+  box-shadow: 0 0 0 3px var(--e-coral-glow), var(--e-shadow-md);
+}
+
+/* Scroll container */
+.bs-editor__scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Custom scrollbar */
+  scrollbar-width: thin;
+  scrollbar-color: var(--e-rule) transparent;
+}
+
+.bs-editor__scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.bs-editor__scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.bs-editor__scroll::-webkit-scrollbar-thumb {
+  background: var(--e-rule);
+  border-radius: 3px;
+}
+
+.bs-editor__scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--e-text-4);
+}
+
+/* ProseMirror root — the editable content area */
+.bs-editor .ProseMirror {
+  min-height: 480px;
+  max-width: var(--e-content-width);
+  width: 100%;
+  margin: 0 auto;
+  padding: var(--e-gutter) var(--e-gutter) 120px;
+  outline: none;
+  caret-color: var(--e-coral);
+  font-family: var(--e-font-sans);
+  font-size: 16px;
+  line-height: 1.75;
+  color: var(--e-text-2);
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Full-width variant (for split diff view, etc.) */
+.bs-editor--fullwidth .ProseMirror {
+  max-width: 100%;
+}
+
+/* Read-only mode */
+.bs-editor--readonly .ProseMirror {
+  caret-color: transparent;
+  user-select: text;
+  cursor: default;
+}
+
+.bs-editor--readonly {
+  border-color: var(--e-rule);
+}
+
+.bs-editor--readonly:focus-within {
+  border-color: var(--e-rule);
+  box-shadow: none;
+}
+
+
+/* ═════════════════════════════════════════════════════════════
+   4. TOOLBAR
+   ═════════════════════════════════════════════════════════════ */
+
+.bs-editor__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 12px;
+  background: var(--e-surface);
+  border-bottom: 1px solid var(--e-rule);
+  flex-wrap: wrap;
+  transition: background var(--e-t-base), border-color var(--e-t-base);
+}
+
+.bs-editor__toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+/* Divider between toolbar groups */
+.bs-editor__toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--e-rule);
+  margin: 0 6px;
+  flex-shrink: 0;
+}
+
+/* Individual toolbar button */
+.bs-editor__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--e-text-3);
+  cursor: pointer;
+  transition:
+    background var(--e-t-fast),
+    color      var(--e-t-fast);
+  flex-shrink: 0;
+}
+
+.bs-editor__btn svg {
+  width: 15px;
+  height: 15px;
+  pointer-events: none;
+}
+
+.bs-editor__btn:hover {
+  background: var(--e-surface-2);
+  color: var(--e-text);
+}
+
+.bs-editor__btn:focus-visible {
+  outline: 2px solid var(--e-coral);
+  outline-offset: 1px;
+}
+
+/* Active / pressed state */
+.bs-editor__btn.is-active {
+  background: var(--e-coral-dim);
+  color: var(--e-coral);
+}
+
+.bs-editor__btn.is-active:hover {
+  background: var(--e-coral-dim);
+  color: var(--e-coral-dk);
+}
+
+/* Disabled state */
+.bs-editor__btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* Wider text-labelled toolbar buttons */
+.bs-editor__btn--label {
+  width: auto;
+  padding: 0 8px;
+  font-family: var(--e-font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  gap: 5px;
+}
+
+/* Heading picker dropdown trigger */
+.bs-editor__heading-select {
+  font-family: var(--e-font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--e-text-3);
+  background: transparent;
+  border: 1px solid var(--e-rule);
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  height: 30px;
+  appearance: none;
+  outline: none;
+  transition: border-color var(--e-t-fast), color var(--e-t-fast);
+}
+
+.bs-editor__heading-select:hover {
+  border-color: var(--e-text-4);
+  color: var(--e-text);
+}
+
+.bs-editor__heading-select:focus {
+  border-color: var(--e-coral);
+}
+
+
+/* ═════════════════════════════════════════════════════════════
+   5. PROSE TYPOGRAPHY
+   All rules scoped to .ProseMirror to avoid leaking.
+   ═════════════════════════════════════════════════════════════ */
+
+/* ── Headings ── */
+
+.bs-editor .ProseMirror h1,
+.bs-editor .ProseMirror h2,
+.bs-editor .ProseMirror h3,
+.bs-editor .ProseMirror h4,
+.bs-editor .ProseMirror h5,
+.bs-editor .ProseMirror h6 {
+  font-family: var(--e-font-serif);
+  color: var(--e-text);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  margin-top: 2em;
+  margin-bottom: 0.5em;
+}
+
+/* Remove top margin from first heading in doc */
+.bs-editor .ProseMirror > h1:first-child,
+.bs-editor .ProseMirror > h2:first-child,
+.bs-editor .ProseMirror > h3:first-child {
+  margin-top: 0;
+}
+
+.bs-editor .ProseMirror h1 { font-size: 2.25rem;  font-weight: 700; letter-spacing: -0.025em; }
+.bs-editor .ProseMirror h2 { font-size: 1.75rem;  }
+.bs-editor .ProseMirror h3 { font-size: 1.375rem; }
+.bs-editor .ProseMirror h4 { font-size: 1.125rem; font-weight: 600; font-family: var(--e-font-sans); }
+.bs-editor .ProseMirror h5 { font-size: 1rem;     font-weight: 600; font-family: var(--e-font-sans); }
+.bs-editor .ProseMirror h6 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-family: var(--e-font-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--e-text-3);
+}
+
+/* Coral accent underline on h1 */
+.bs-editor .ProseMirror h1 {
+  position: relative;
+  padding-bottom: 0.4em;
+}
+
+.bs-editor .ProseMirror h1::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 48px;
+  height: 3px;
+  background: var(--e-coral);
+  border-radius: 2px;
+  opacity: 0.5;
+}
+
+/* ── Paragraphs ── */
+
+.bs-editor .ProseMirror p {
+  margin: 0 0 1em;
+  line-height: 1.75;
+  color: var(--e-text-2);
+}
+
+.bs-editor .ProseMirror p:last-child { margin-bottom: 0; }
+
+/* ── Lists ── */
+
+.bs-editor .ProseMirror ul,
+.bs-editor .ProseMirror ol {
+  margin: 0 0 1em;
+  padding-left: 1.6em;
+  color: var(--e-text-2);
+}
+
+.bs-editor .ProseMirror li {
+  margin-bottom: 0.35em;
+  line-height: 1.75;
+}
+
+.bs-editor .ProseMirror li > p {
+  margin: 0;
+}
+
+/* Custom bullet style */
+.bs-editor .ProseMirror ul > li {
+  list-style: none;
+  position: relative;
+}
+
+.bs-editor .ProseMirror ul > li::before {
+  content: '';
+  position: absolute;
+  left: -1.1em;
+  top: 0.7em;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--e-coral);
+  opacity: 0.7;
+}
+
+/* Nested lists */
+.bs-editor .ProseMirror ul ul > li::before {
+  background: none;
+  border: 1.5px solid var(--e-coral);
+  opacity: 0.5;
+}
+
+.bs-editor .ProseMirror ul ul ul > li::before {
+  border-radius: 0;
+  width: 5px;
+  height: 2px;
+  top: 0.8em;
+  background: var(--e-text-4);
+  border: none;
+  opacity: 1;
+}
+
+/* Ordered list number color */
+.bs-editor .ProseMirror ol {
+  list-style: none;
+  counter-reset: list-counter;
+}
+
+.bs-editor .ProseMirror ol > li {
+  counter-increment: list-counter;
+  position: relative;
+}
+
+.bs-editor .ProseMirror ol > li::before {
+  content: counter(list-counter) ".";
+  position: absolute;
+  left: -1.6em;
+  color: var(--e-coral);
+  font-family: var(--e-font-mono);
+  font-size: 0.8em;
+  font-weight: 500;
+  top: 0.15em;
+  width: 1.4em;
+  text-align: right;
+}
+
+/* Task list (Tiptap TaskList extension) */
+.bs-editor .ProseMirror ul[data-type="taskList"] {
+  padding-left: 0;
+}
+
+.bs-editor .ProseMirror ul[data-type="taskList"] > li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.bs-editor .ProseMirror ul[data-type="taskList"] > li::before {
+  display: none;
+}
+
+.bs-editor .ProseMirror ul[data-type="taskList"] > li > label {
+  flex-shrink: 0;
+  padding-top: 0.15em;
+  cursor: pointer;
+}
+
+.bs-editor .ProseMirror ul[data-type="taskList"] input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  border-radius: 4px;
+  border: 1.5px solid var(--e-rule);
+  appearance: none;
+  background: var(--e-surface);
+  cursor: pointer;
+  transition: background var(--e-t-fast), border-color var(--e-t-fast);
+  position: relative;
+}
+
+.bs-editor .ProseMirror ul[data-type="taskList"] input[type="checkbox"]:checked {
+  background: var(--e-coral);
+  border-color: var(--e-coral);
+}
+
+.bs-editor .ProseMirror ul[data-type="taskList"] input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 1px;
+  width: 5px;
+  height: 8px;
+  border: 1.5px solid white;
+  border-top: none;
+  border-left: none;
+  transform: rotate(45deg);
+}
+
+.bs-editor .ProseMirror ul[data-type="taskList"] li[data-checked="true"] > div {
+  color: var(--e-text-4);
+  text-decoration: line-through;
+}
+
+/* ── Blockquote ── */
+
+.bs-editor .ProseMirror blockquote {
+  margin: 1.5em 0;
+  padding: 16px 24px;
+  border-left: 3px solid var(--e-coral);
+  background: var(--e-coral-glow);
+  border-radius: 0 8px 8px 0;
+  font-style: italic;
+  color: var(--e-text-3);
+  font-family: var(--e-font-serif);
+  font-size: 1.05em;
+}
+
+.bs-editor .ProseMirror blockquote p {
+  margin: 0;
+  color: inherit;
+}
+
+/* ── Horizontal rule ── */
+
+.bs-editor .ProseMirror hr {
+  border: none;
+  height: 1px;
+  background: var(--e-rule);
+  margin: 2.5em 0;
+  position: relative;
+}
+
+/* ── Hard break ── */
+.bs-editor .ProseMirror br { display: block; }
+
+
+/* ═════════════════════════════════════════════════════════════
+   6. INLINE MARKS
+   ═════════════════════════════════════════════════════════════ */
+
+.bs-editor .ProseMirror strong {
+  font-weight: 700;
+  color: var(--e-text);
+}
+
+.bs-editor .ProseMirror em {
+  font-style: italic;
+  color: inherit;
+}
+
+.bs-editor .ProseMirror s,
+.bs-editor .ProseMirror del {
+  text-decoration: line-through;
+  color: var(--e-text-4);
+}
+
+.bs-editor .ProseMirror u {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Inline code */
+.bs-editor .ProseMirror code {
+  font-family: var(--e-font-mono);
+  font-size: 0.875em;
+  background: var(--e-surface-2);
+  border: 1px solid var(--e-rule);
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: var(--e-coral);
+}
+
+/* Links */
+.bs-editor .ProseMirror a {
+  color: var(--e-coral);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: var(--e-coral-dim);
+  transition: text-decoration-color var(--e-t-fast);
+  cursor: pointer;
+}
+
+.bs-editor .ProseMirror a:hover {
+  text-decoration-color: var(--e-coral);
+}
+
+/* Highlight mark (e.g. Tiptap Highlight extension) */
+.bs-editor .ProseMirror mark {
+  background: rgba(254, 240, 138, 0.50);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+[data-theme="dark"] .bs-editor .ProseMirror mark {
+  background: rgba(161, 98, 7, 0.40);
+}
+
+/* Subscript / superscript */
+.bs-editor .ProseMirror sub  { vertical-align: sub;   font-size: 0.8em; }
+.bs-editor .ProseMirror sup  { vertical-align: super; font-size: 0.8em; }
+
+
+/* ═════════════════════════════════════════════════════════════
+   7. BLOCK ELEMENTS
+   ═════════════════════════════════════════════════════════════ */
+
+/* ── Code block ── */
+
+.bs-editor .ProseMirror pre {
+  background: var(--e-text);         /* always ink — code blocks are dark */
+  border-radius: 10px;
+  padding: 20px 24px;
+  margin: 1.5em 0;
+  overflow-x: auto;
+  position: relative;
+}
+
+.bs-editor .ProseMirror pre code {
+  font-family: var(--e-font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.7;
+  color: #F5F0E8;              /* always light cream on dark code bg */
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+/* Language label on code block */
+.bs-editor .ProseMirror pre[data-language]::before {
+  content: attr(data-language);
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  font-family: var(--e-font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(245,240,232,0.35);
+}
+
+/* Scrollbar inside code blocks */
+.bs-editor .ProseMirror pre::-webkit-scrollbar {
+  height: 4px;
+}
+
+.bs-editor .ProseMirror pre::-webkit-scrollbar-track {
+  background: rgba(255,255,255,0.05);
+  border-radius: 2px;
+}
+
+.bs-editor .ProseMirror pre::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.18);
+  border-radius: 2px;
+}
+
+/* ── Table ── */
+
+.bs-editor .ProseMirror table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5em 0;
+  font-size: 0.9375em;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--e-rule);
+}
+
+.bs-editor .ProseMirror th,
+.bs-editor .ProseMirror td {
+  padding: 10px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--e-rule);
+  border-right: 1px solid var(--e-rule-2);
+  color: var(--e-text-2);
+  vertical-align: top;
+}
+
+.bs-editor .ProseMirror th:last-child,
+.bs-editor .ProseMirror td:last-child {
+  border-right: none;
+}
+
+.bs-editor .ProseMirror tr:last-child td { border-bottom: none; }
+
+.bs-editor .ProseMirror thead th {
+  background: var(--e-surface-2);
+  font-family: var(--e-font-mono);
+  font-size: 0.75em;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--e-text-3);
+  border-bottom: 1.5px solid var(--e-rule);
+}
+
+.bs-editor .ProseMirror tbody tr:nth-child(even) td {
+  background: var(--e-surface-2);
+}
+
+/* Selected cell */
+.bs-editor .ProseMirror .selectedCell {
+  background: var(--e-coral-dim);
+}
+
+/* Column resize handle */
+.bs-editor .ProseMirror .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background-color: var(--e-coral);
+  opacity: 0;
+  cursor: col-resize;
+  transition: opacity var(--e-t-fast);
+}
+
+.bs-editor .ProseMirror table:hover .column-resize-handle { opacity: 0.4; }
+
+/* ── Image ── */
+
+.bs-editor .ProseMirror img {
+  max-width: 100%;
+  border-radius: 8px;
+  margin: 1em 0;
+  display: block;
+  border: 1px solid var(--e-rule);
+}
+
+.bs-editor .ProseMirror img.ProseMirror-selectednode {
+  outline: 2px solid var(--e-coral);
+  outline-offset: 2px;
+}
+
+
+/* ═════════════════════════════════════════════════════════════
+   8. PLACEHOLDER
+   ═════════════════════════════════════════════════════════════ */
+
+.bs-editor .ProseMirror p.is-editor-empty:first-child::before,
+.bs-editor .ProseMirror .is-empty::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--e-text-4);
+  pointer-events: none;
+  height: 0;
+  font-style: italic;
+}
+
+
+/* ═════════════════════════════════════════════════════════════
+   9. SELECTION & FOCUS
+   ═════════════════════════════════════════════════════════════ */
+
+.bs-editor .ProseMirror ::selection {
+  background: var(--e-coral-dim);
+  color: inherit;
+}
+
+.bs-editor .ProseMirror:focus {
+  outline: none;
+}
+
+/* Drag selection cursor */
+.bs-editor .ProseMirror.resize-cursor {
+  cursor: col-resize;
+}
+
+/* Gapcursor (ProseMirror) */
+.bs-editor .ProseMirror .ProseMirror-gapcursor {
+  display: none;
+  pointer-events: none;
+  position: absolute;
+}
+
+.bs-editor .ProseMirror .ProseMirror-gapcursor::after {
+  content: '';
+  display: block;
+  position: absolute;
+  top: -2px;
+  width: 20px;
+  border-top: 1px solid var(--e-coral);
+  animation: ProseMirror-cursor-blink 1.1s steps(2, start) infinite;
+}
+
+@keyframes ProseMirror-cursor-blink {
+  to { visibility: hidden; }
+}
+
+.bs-editor .ProseMirror:focus .ProseMirror-gapcursor { display: block; }
+
+
+/* ═════════════════════════════════════════════════════════════
+   10. BINDERSNAP EXTENSIONS
+   ═════════════════════════════════════════════════════════════ */
+
+/* ──────────────────────────────────────
+   10a. MERGE CONFLICT BLOCKS
+   Three-zone display: ours / divider / theirs
+   Mirrors GitHub conflict markers visually
+   but in warm Bindersnap palette.
+   ──────────────────────────────────────
+   Expected HTML from extension:
+   <div class="bs-conflict">
+     <div class="bs-conflict__zone bs-conflict__zone--ours">
+       <div class="bs-conflict__label">Current (yours)</div>
+       ... content ...
+     </div>
+     <div class="bs-conflict__divider">
+       <span>======= base</span>
+       <button class="bs-conflict__resolve-btn">Resolve</button>
+     </div>
+     <div class="bs-conflict__zone bs-conflict__zone--theirs">
+       <div class="bs-conflict__label">Incoming</div>
+       ... content ...
+     </div>
+   </div>
+   ────────────────────────────────────── */
+
+.bs-editor .bs-conflict {
+  margin: 1.5em 0;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--e-rule);
+  box-shadow: var(--e-shadow-sm);
+}
+
+/* Our changes zone */
+.bs-editor .bs-conflict__zone--ours {
+  background: var(--e-conflict-ours);
+  border-left: 3px solid var(--e-conflict-bar-our);
+  padding: 12px 16px 12px 20px;
+}
+
+/* Their changes zone */
+.bs-editor .bs-conflict__zone--theirs {
+  background: var(--e-conflict-theirs);
+  border-left: 3px solid var(--e-conflict-bar-th);
+  padding: 12px 16px 12px 20px;
+}
+
+/* Common ancestor (base) zone — shown when 3-way merge */
+.bs-editor .bs-conflict__zone--base {
+  background: var(--e-conflict-base);
+  border-left: 3px solid var(--e-conflict-bar-base);
+  padding: 12px 16px 12px 20px;
+}
+
+/* Zone label */
+.bs-editor .bs-conflict__label {
+  font-family: var(--e-font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bs-editor .bs-conflict__zone--ours   .bs-conflict__label { color: var(--e-conflict-bar-our); }
+.bs-editor .bs-conflict__zone--theirs .bs-conflict__label { color: var(--e-conflict-bar-th);  }
+.bs-editor .bs-conflict__zone--base   .bs-conflict__label { color: var(--e-conflict-bar-base);}
+
+.bs-editor .bs-conflict__label::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.8;
+  flex-shrink: 0;
+}
+
+/* Content inside zones — remove bottom margin on last child */
+.bs-editor .bs-conflict__zone > *:last-child { margin-bottom: 0; }
+
+/* Divider bar between zones */
+.bs-editor .bs-conflict__divider {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 16px;
+  background: var(--e-surface-2);
+  border-top: 1px solid var(--e-rule);
+  border-bottom: 1px solid var(--e-rule);
+}
+
+.bs-editor .bs-conflict__divider > span {
+  font-family: var(--e-font-mono);
+  font-size: 10px;
+  color: var(--e-text-4);
+  letter-spacing: 0.08em;
+}
+
+/* Resolve actions row */
+.bs-editor .bs-conflict__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: var(--e-surface);
+  border-top: 1px solid var(--e-rule);
+}
+
+.bs-editor .bs-conflict__resolve-btn {
+  font-family: var(--e-font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 5px;
+  border: 1px solid var(--e-rule);
+  background: var(--e-surface);
+  color: var(--e-text-3);
+  cursor: pointer;
+  transition: background var(--e-t-fast), border-color var(--e-t-fast), color var(--e-t-fast);
+}
+
+.bs-editor .bs-conflict__resolve-btn:hover {
+  border-color: var(--e-text-4);
+  color: var(--e-text);
+  background: var(--e-surface-2);
+}
+
+.bs-editor .bs-conflict__resolve-btn--accept-ours:hover {
+  border-color: var(--e-conflict-bar-our);
+  color: var(--e-conflict-bar-our);
+}
+
+.bs-editor .bs-conflict__resolve-btn--accept-theirs:hover {
+  border-color: var(--e-conflict-bar-th);
+  color: var(--e-conflict-bar-th);
+}
+
+.bs-editor .bs-conflict__resolve-btn--accept-both:hover {
+  border-color: var(--e-coral);
+  color: var(--e-coral);
+}
+
+/* Resolved state — collapses with a success indicator */
+.bs-editor .bs-conflict--resolved {
+  border-color: var(--e-green);
+  opacity: 0.7;
+}
+
+.bs-editor .bs-conflict--resolved .bs-conflict__zone--ours,
+.bs-editor .bs-conflict--resolved .bs-conflict__zone--theirs {
+  background: rgba(22,163,74,0.06);
+}
+
+
+/* ──────────────────────────────────────
+   10b. TRACKED CHANGES
+   Inline insertion and deletion marks.
+   Designed to be unobtrusive while still
+   clearly visible on close reading.
+   ──────────────────────────────────────
+   Expected marks from extension:
+   <span class="bs-insert" data-author="..." data-date="...">text</span>
+   <span class="bs-delete" data-author="..." data-date="...">text</span>
+   ────────────────────────────────────── */
+
+/* Insertion */
+.bs-editor .bs-insert {
+  background: var(--e-insert);
+  color: var(--e-insert-txt);
+  text-decoration: underline;
+  text-decoration-color: var(--e-insert-txt);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  border-radius: 2px;
+  padding: 0 1px;
+  cursor: default;
+}
+
+/* Deletion */
+.bs-editor .bs-delete {
+  background: var(--e-delete);
+  color: var(--e-delete-txt);
+  text-decoration: line-through;
+  text-decoration-color: var(--e-delete-txt);
+  text-decoration-thickness: 1.5px;
+  border-radius: 2px;
+  padding: 0 1px;
+  cursor: default;
+}
+
+/* Author tooltip on hover */
+.bs-editor .bs-insert[data-author]::after,
+.bs-editor .bs-delete[data-author]::after {
+  content: attr(data-author) ' · ' attr(data-date);
+  display: none;   /* surfaced via JS tooltip in the component */
+}
+
+/* Change bar in the margin — enabled via a class on .ProseMirror */
+.bs-editor .ProseMirror.show-change-bar p:has(.bs-insert),
+.bs-editor .ProseMirror.show-change-bar p:has(.bs-delete),
+.bs-editor .ProseMirror.show-change-bar li:has(.bs-insert),
+.bs-editor .ProseMirror.show-change-bar li:has(.bs-delete) {
+  position: relative;
+  margin-left: -16px;
+  padding-left: 12px;
+  border-left: 3px solid var(--e-coral);
+}
+
+/* Accept/reject inline buttons (rendered by extension JS) */
+.bs-editor .bs-change-actions {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+.bs-editor .bs-change-actions button {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--e-font-mono);
+  font-weight: 500;
+  opacity: 0.7;
+  transition: opacity var(--e-t-fast), background var(--e-t-fast);
+}
+
+.bs-editor .bs-change-actions button:hover { opacity: 1; }
+
+.bs-editor .bs-change-actions .bs-accept { color: var(--e-green); }
+.bs-editor .bs-change-actions .bs-accept:hover { background: var(--e-green-dim); }
+
+.bs-editor .bs-change-actions .bs-reject { color: var(--e-delete-txt); }
+.bs-editor .bs-change-actions .bs-reject:hover { background: var(--e-delete); }
+
+
+/* ──────────────────────────────────────
+   10c. APPROVAL STATES
+   Block-level wrappers that indicate the
+   approval status of a section or document.
+   ──────────────────────────────────────
+   Expected structure:
+   <div class="bs-approval bs-approval--pending" data-approver="..." data-date="...">
+     <div class="bs-approval__badge">Pending Review</div>
+     ... content ...
+   </div>
+   ────────────────────────────────────── */
+
+.bs-editor .bs-approval {
+  position: relative;
+  margin: 1.5em 0;
+  border-radius: 10px;
+  border: 1px solid var(--e-rule);
+  overflow: hidden;
+}
+
+/* Top accent bar */
+.bs-editor .bs-approval::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+}
+
+.bs-editor .bs-approval--pending::before  { background: var(--e-pending-b); }
+.bs-editor .bs-approval--approved::before { background: var(--e-approved-b); }
+.bs-editor .bs-approval--rejected::before { background: var(--e-rejected-b); }
+
+/* Background tint */
+.bs-editor .bs-approval--pending  { background: var(--e-pending); }
+.bs-editor .bs-approval--approved { background: var(--e-approved); }
+.bs-editor .bs-approval--rejected { background: var(--e-rejected); }
+
+/* Badge */
+.bs-editor .bs-approval__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-family: var(--e-font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--e-rule-2);
+  width: 100%;
+}
+
+.bs-editor .bs-approval--pending  .bs-approval__badge { color: var(--e-pending-b); }
+.bs-editor .bs-approval--approved .bs-approval__badge { color: var(--e-approved-b); }
+.bs-editor .bs-approval--rejected .bs-approval__badge { color: var(--e-rejected-b); }
+
+.bs-editor .bs-approval__badge::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+  animation: none;
+}
+
+/* Pulse animation for pending */
+.bs-editor .bs-approval--pending .bs-approval__badge::before {
+  animation: approval-pulse 2s ease-in-out infinite;
+}
+
+@keyframes approval-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.7); }
+}
+
+/* Content area */
+.bs-editor .bs-approval__content {
+  padding: 16px 20px;
+}
+
+.bs-editor .bs-approval__content > *:last-child { margin-bottom: 0; }
+
+/* Meta row */
+.bs-editor .bs-approval__meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 20px;
+  border-top: 1px solid var(--e-rule-2);
+  font-family: var(--e-font-mono);
+  font-size: 10px;
+  color: var(--e-text-4);
+  letter-spacing: 0.06em;
+}
+
+/* Locked approved content — visually sealed */
+.bs-editor .bs-approval--approved .bs-approval__content {
+  opacity: 0.85;
+}
+
+.bs-editor .bs-approval--approved .bs-approval__content::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: all;  /* blocks editing of approved sections */
+  cursor: not-allowed;
+  background: transparent;
+}
+
+
+/* ──────────────────────────────────────
+   10d. COMMENT ANCHORS
+   Inline highlights that indicate an
+   active comment is attached.
+   ──────────────────────────────────────
+   <span class="bs-comment-anchor" data-comment-id="...">text</span>
+   ────────────────────────────────────── */
+
+.bs-editor .bs-comment-anchor {
+  background: var(--e-comment);
+  border-bottom: 2px solid var(--e-comment-b);
+  border-radius: 2px 2px 0 0;
+  padding: 0 1px;
+  cursor: pointer;
+  transition: background var(--e-t-fast);
+}
+
+.bs-editor .bs-comment-anchor:hover {
+  background: rgba(232, 93, 38, 0.22);
+}
+
+.bs-editor .bs-comment-anchor--active {
+  background: rgba(232, 93, 38, 0.25);
+  outline: 1px solid var(--e-coral);
+  outline-offset: 1px;
+}
+
+
+/* ──────────────────────────────────────
+   10e. VERSION DIFF VIEW
+   Side-by-side or unified diff rendering
+   for comparing document versions.
+   Activated by class on the editor wrapper.
+   ────────────────────────────────────── */
+
+/* Unified diff — changes shown inline with +/- gutter */
+.bs-editor--diff-unified .ProseMirror {
+  font-family: var(--e-font-mono);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.bs-editor .bs-diff-added {
+  display: block;
+  background: var(--e-insert);
+  border-left: 3px solid var(--e-conflict-bar-our);
+  margin: 0 -48px;
+  padding: 2px 48px 2px 45px;
+}
+
+.bs-editor .bs-diff-removed {
+  display: block;
+  background: var(--e-delete);
+  border-left: 3px solid var(--e-conflict-bar-th);
+  margin: 0 -48px;
+  padding: 2px 48px 2px 45px;
+  text-decoration: line-through;
+  color: var(--e-delete-txt);
+}
+
+.bs-editor .bs-diff-unchanged {
+  display: block;
+  color: var(--e-text-3);
+  margin: 0;
+  padding: 2px 0;
+}
+
+/* Gutter character (+/-/space) */
+.bs-editor .bs-diff-added::before   { content: '+'; color: var(--e-conflict-bar-our); margin-left: -16px; margin-right: 10px; font-weight: 700; }
+.bs-editor .bs-diff-removed::before { content: '-'; color: var(--e-delete-txt); margin-left: -16px; margin-right: 10px; font-weight: 700; }
+
+/* Diff hunk header */
+.bs-editor .bs-diff-hunk {
+  display: block;
+  font-family: var(--e-font-mono);
+  font-size: 11px;
+  color: var(--e-text-4);
+  background: var(--e-surface-2);
+  padding: 4px 48px;
+  margin: 8px -48px;
+  letter-spacing: 0.06em;
+}
+
+
+/* ═════════════════════════════════════════════════════════════
+   11. STATUS BAR
+   Bottom bar showing word count, approval state, save status
+   ═════════════════════════════════════════════════════════════ */
+
+.bs-editor__statusbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 16px;
+  background: var(--e-surface);
+  border-top: 1px solid var(--e-rule);
+  font-family: var(--e-font-mono);
+  font-size: 10px;
+  color: var(--e-text-4);
+  letter-spacing: 0.06em;
+  transition: background var(--e-t-base), border-color var(--e-t-base);
+  flex-shrink: 0;
+}
+
+.bs-editor__statusbar-left,
+.bs-editor__statusbar-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.bs-editor__status-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.bs-editor__status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.bs-editor__status-dot--saved    { background: var(--e-green); }
+.bs-editor__status-dot--saving   { background: var(--e-pending-b); animation: approval-pulse 1.5s infinite; }
+.bs-editor__status-dot--error    { background: var(--e-rejected-b); }
+.bs-editor__status-dot--readonly { background: var(--e-text-4); }
+
+
+/* ═════════════════════════════════════════════════════════════
+   12. RESPONSIVE
+   ═════════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+  .bs-editor .ProseMirror {
+    padding: 24px 20px 80px;
+    font-size: 15px;
+  }
+
+  .bs-editor__toolbar {
+    padding: 6px 8px;
+    gap: 1px;
+  }
+
+  .bs-editor__btn {
+    width: 28px;
+    height: 28px;
+  }
+
+  .bs-editor .bs-conflict__zone--ours,
+  .bs-editor .bs-conflict__zone--theirs {
+    padding: 10px 12px;
+  }
+
+  .bs-editor .bs-approval__content { padding: 12px 14px; }
+}
+
+@media (max-width: 480px) {
+  .bs-editor .ProseMirror {
+    padding: 16px 16px 60px;
+  }
+
+  /* Hide less important toolbar groups on small screens */
+  .bs-editor__toolbar-group--secondary {
+    display: none;
+  }
+}
+
+
+/* ═════════════════════════════════════════════════════════════
+   13. PRINT STYLES
+   ═════════════════════════════════════════════════════════════ */
+
+@media print {
+  .bs-editor {
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .bs-editor__toolbar,
+  .bs-editor__statusbar {
+    display: none;
+  }
+
+  .bs-editor .ProseMirror {
+    padding: 0;
+    max-width: 100%;
+  }
+
+  /* Print conflict blocks with clear markers */
+  .bs-editor .bs-conflict {
+    border: 1px solid #ccc;
+    break-inside: avoid;
+  }
+
+  .bs-editor .bs-conflict__zone--ours::before   { content: '<<<<<<< OURS'; display: block; font-family: monospace; font-size: 10px; color: #666; margin-bottom: 4px; }
+  .bs-editor .bs-conflict__zone--theirs::before { content: '>>>>>>> THEIRS'; display: block; font-family: monospace; font-size: 10px; color: #666; margin-bottom: 4px; }
+
+  /* Print tracked changes clearly */
+  .bs-editor .bs-insert { background: none; text-decoration: underline; }
+  .bs-editor .bs-delete { background: none; }
+
+  /* Hide comment highlights on print */
+  .bs-editor .bs-comment-anchor { background: none; border-bottom: none; }
+}

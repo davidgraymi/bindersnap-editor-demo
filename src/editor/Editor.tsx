@@ -1,3 +1,14 @@
+/**
+ * BindersnapEditor.tsx
+ * ─────────────────────────────────────────────────────────────
+ * Self-contained Tiptap editor component for Bindersnap.
+ *
+ * Imports bindersnap-editor.css directly so styling is always
+ * co-located with the component — drop it anywhere, it looks right.
+ */
+
+import "./assets/bindersnap-editor.css";
+
 import React, { useCallback, useState, useRef, useEffect } from "react";
 import { useEditor, EditorContent, Editor } from "@tiptap/react";
 import type { Content } from "@tiptap/react";
@@ -61,10 +72,10 @@ import {
   Minimize,
 } from "lucide-react";
 
-import { VersionControlPanel } from "./VersionControl/VersionControlPanel";
-import { VersionHistory } from "../extensions/VersionHistory";
-import { Conflict } from "../extensions/conflict";
-import { gitService } from "../services/GitService";
+import { VersionControlPanel } from "./components/VersionControl/VersionControlPanel";
+import { VersionHistory } from "./extensions/VersionHistory";
+import { Conflict } from "./extensions/conflict";
+import { gitService } from "./services/GitService";
 
 // --- Types ---
 interface ToolbarProps {
