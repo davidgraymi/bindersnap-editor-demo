@@ -1,362 +1,778 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Bindersnap — Social Media Cheat Sheet</title>
-  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,600;0,700;1,600&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet"/>
-  <style>
-    :root {
-      --coral:       #E85D26;
-      --coral-dark:  #C94D1A;
-      --coral-dim:   rgba(232,93,38,0.08);
-      --ink:         #1C1917;
-      --ink-soft:    #44403C;
-      --muted:       #78716C;
-      --muted-lt:    #A8A29E;
-      --paper:       #FAFAF7;
-      --paper-warm:  #F5F0E8;
-      --rule:        #E7E4DF;
-      --green:       #16A34A;
-      --serif:       'Lora', Georgia, serif;
-      --sans:        'Geist', system-ui, sans-serif;
-      --mono:        'Geist Mono', monospace;
-    }
-    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:var(--sans);background:var(--paper);color:var(--ink);-webkit-font-smoothing:antialiased;padding:40px}
-    @media print{body{padding:20px}@page{margin:15mm}}
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bindersnap — Social Media Cheat Sheet</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,600;0,700;1,600&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --coral: #e85d26;
+        --coral-dark: #c94d1a;
+        --coral-dim: rgba(232, 93, 38, 0.08);
+        --ink: #1c1917;
+        --ink-soft: #44403c;
+        --muted: #78716c;
+        --muted-lt: #a8a29e;
+        --paper: #fafaf7;
+        --paper-warm: #f5f0e8;
+        --rule: #e7e4df;
+        --green: #16a34a;
+        --serif: "Lora", Georgia, serif;
+        --sans: "Geist", system-ui, sans-serif;
+        --mono: "Geist Mono", monospace;
+      }
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: var(--sans);
+        background: var(--paper);
+        color: var(--ink);
+        -webkit-font-smoothing: antialiased;
+        padding: 40px;
+      }
+      @media print {
+        body {
+          padding: 20px;
+        }
+        @page {
+          margin: 15mm;
+        }
+      }
 
-    /* Header */
-    .page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:40px;padding-bottom:24px;border-bottom:2px solid var(--ink)}
-    .logo-row{display:flex;align-items:center;gap:12px}
-    .logo-mark{width:36px;height:36px;background:var(--ink);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-    .logo-mark svg{width:20px;height:20px}
-    .logo-name{font-family:var(--serif);font-size:20px;font-weight:700}
-    .page-title{text-align:right}
-    .page-title h1{font-family:var(--serif);font-size:18px;font-weight:700;color:var(--ink)}
-    .page-title p{font-family:var(--mono);font-size:10px;color:var(--muted-lt);letter-spacing:0.1em;margin-top:2px}
+      /* Header */
+      .page-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 40px;
+        padding-bottom: 24px;
+        border-bottom: 2px solid var(--ink);
+      }
+      .logo-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .logo-mark {
+        width: 36px;
+        height: 36px;
+        background: var(--ink);
+        border-radius: 9px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+      .logo-mark svg {
+        width: 20px;
+        height: 20px;
+      }
+      .logo-name {
+        font-family: var(--serif);
+        font-size: 20px;
+        font-weight: 700;
+      }
+      .page-title {
+        text-align: right;
+      }
+      .page-title h1 {
+        font-family: var(--serif);
+        font-size: 18px;
+        font-weight: 700;
+        color: var(--ink);
+      }
+      .page-title p {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--muted-lt);
+        letter-spacing: 0.1em;
+        margin-top: 2px;
+      }
 
-    /* Section label */
-    .section-lbl{font-family:var(--mono);font-size:10px;font-weight:500;color:var(--coral);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:16px;display:flex;align-items:center;gap:10px}
-    .section-lbl::before{content:'';width:20px;height:1px;background:var(--coral);flex-shrink:0}
+      /* Section label */
+      .section-lbl {
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 500;
+        color: var(--coral);
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .section-lbl::before {
+        content: "";
+        width: 20px;
+        height: 1px;
+        background: var(--coral);
+        flex-shrink: 0;
+      }
 
-    /* Grids */
-    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px}
-    .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:24px}
-    .grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+      /* Grids */
+      .grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-bottom: 24px;
+      }
+      .grid-3 {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 16px;
+        margin-bottom: 24px;
+      }
+      .grid-4 {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        margin-bottom: 24px;
+      }
 
-    /* Platform card */
-    .platform{background:#fff;border:1px solid var(--rule);border-radius:14px;overflow:hidden}
-    .platform-hdr{padding:14px 18px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--rule)}
-    .platform-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
-    .platform-name{font-size:13px;font-weight:600;color:var(--ink)}
-    .platform-body{padding:14px 18px}
+      /* Platform card */
+      .platform {
+        background: #fff;
+        border: 1px solid var(--rule);
+        border-radius: 14px;
+        overflow: hidden;
+      }
+      .platform-hdr {
+        padding: 14px 18px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border-bottom: 1px solid var(--rule);
+      }
+      .platform-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+      .platform-name {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--ink);
+      }
+      .platform-body {
+        padding: 14px 18px;
+      }
 
-    /* Format row */
-    .fmt-row{display:flex;align-items:baseline;gap:8px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--rule)}
-    .fmt-row:last-child{margin-bottom:0;padding-bottom:0;border-bottom:none}
-    .fmt-name{font-size:11px;font-weight:600;color:var(--ink);min-width:90px;flex-shrink:0}
-    .fmt-dims{font-family:var(--mono);font-size:10px;color:var(--coral);min-width:90px;flex-shrink:0}
-    .fmt-note{font-size:11px;color:var(--muted);line-height:1.4;flex:1}
+      /* Format row */
+      .fmt-row {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        margin-bottom: 8px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--rule);
+      }
+      .fmt-row:last-child {
+        margin-bottom: 0;
+        padding-bottom: 0;
+        border-bottom: none;
+      }
+      .fmt-name {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--ink);
+        min-width: 90px;
+        flex-shrink: 0;
+      }
+      .fmt-dims {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--coral);
+        min-width: 90px;
+        flex-shrink: 0;
+      }
+      .fmt-note {
+        font-size: 11px;
+        color: var(--muted);
+        line-height: 1.4;
+        flex: 1;
+      }
 
-    /* Strategy tag */
-    .strategy{margin-top:10px;padding:10px 12px;background:var(--paper-warm);border-radius:8px;font-size:11px;color:var(--ink-soft);line-height:1.55}
-    .strategy strong{color:var(--coral);font-weight:600}
+      /* Strategy tag */
+      .strategy {
+        margin-top: 10px;
+        padding: 10px 12px;
+        background: var(--paper-warm);
+        border-radius: 8px;
+        font-size: 11px;
+        color: var(--ink-soft);
+        line-height: 1.55;
+      }
+      .strategy strong {
+        color: var(--coral);
+        font-weight: 600;
+      }
 
-    /* Color swatches */
-    .swatch-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
-    .swatch{border-radius:8px;overflow:hidden;width:80px}
-    .swatch-fill{height:44px;position:relative}
-    .swatch-hex{font-family:var(--mono);font-size:9px;font-weight:500;padding:4px 6px;color:var(--ink);background:var(--paper-warm);border-top:1px solid var(--rule)}
-    .swatch-name{font-size:10px;color:var(--muted);padding:2px 6px 4px;background:var(--paper-warm)}
+      /* Color swatches */
+      .swatch-row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+      }
+      .swatch {
+        border-radius: 8px;
+        overflow: hidden;
+        width: 80px;
+      }
+      .swatch-fill {
+        height: 44px;
+        position: relative;
+      }
+      .swatch-hex {
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 500;
+        padding: 4px 6px;
+        color: var(--ink);
+        background: var(--paper-warm);
+        border-top: 1px solid var(--rule);
+      }
+      .swatch-name {
+        font-size: 10px;
+        color: var(--muted);
+        padding: 2px 6px 4px;
+        background: var(--paper-warm);
+      }
 
-    /* Voice examples */
-    .voice-row{padding:10px 14px;margin-bottom:6px;border-radius:8px}
-    .voice-row.good{background:rgba(22,163,74,0.07);border-left:3px solid var(--green)}
-    .voice-row.bad{background:rgba(232,93,38,0.06);border-left:3px solid var(--muted-lt)}
-    .voice-row .tag{font-family:var(--mono);font-size:9px;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:3px}
-    .voice-row.good .tag{color:var(--green)}
-    .voice-row.bad .tag{color:var(--muted-lt)}
-    .voice-row p{font-size:12px;color:var(--ink-soft);line-height:1.5}
+      /* Voice examples */
+      .voice-row {
+        padding: 10px 14px;
+        margin-bottom: 6px;
+        border-radius: 8px;
+      }
+      .voice-row.good {
+        background: rgba(22, 163, 74, 0.07);
+        border-left: 3px solid var(--green);
+      }
+      .voice-row.bad {
+        background: rgba(232, 93, 38, 0.06);
+        border-left: 3px solid var(--muted-lt);
+      }
+      .voice-row .tag {
+        font-family: var(--mono);
+        font-size: 9px;
+        font-weight: 500;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        margin-bottom: 3px;
+      }
+      .voice-row.good .tag {
+        color: var(--green);
+      }
+      .voice-row.bad .tag {
+        color: var(--muted-lt);
+      }
+      .voice-row p {
+        font-size: 12px;
+        color: var(--ink-soft);
+        line-height: 1.5;
+      }
 
-    /* Rule */
-    hr{border:none;border-top:1px solid var(--rule);margin:28px 0}
+      /* Rule */
+      hr {
+        border: none;
+        border-top: 1px solid var(--rule);
+        margin: 28px 0;
+      }
 
-    /* Footer */
-    .page-footer{margin-top:32px;padding-top:16px;border-top:1px solid var(--rule);display:flex;justify-content:space-between;align-items:center}
-    .page-footer p{font-family:var(--mono);font-size:9px;color:var(--muted-lt);letter-spacing:0.08em}
+      /* Footer */
+      .page-footer {
+        margin-top: 32px;
+        padding-top: 16px;
+        border-top: 1px solid var(--rule);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .page-footer p {
+        font-family: var(--mono);
+        font-size: 9px;
+        color: var(--muted-lt);
+        letter-spacing: 0.08em;
+      }
 
-    /* Print button */
-    .print-btn{display:inline-flex;align-items:center;gap:6px;background:var(--ink);color:#F5F0E8;font-family:var(--sans);font-size:12px;font-weight:600;padding:8px 16px;border-radius:7px;border:none;cursor:pointer;text-decoration:none;transition:background 0.2s}
-    .print-btn:hover{background:#292524}
-    @media print{.print-btn{display:none}}
-  </style>
-</head>
-<body>
-
-<div class="page-header">
-  <div class="logo-row">
-    <div class="logo-mark">
-      <svg viewBox="0 0 20 20" fill="none">
-        <rect x="2" y="1" width="10" height="15" rx="1.5" stroke="white" stroke-width="1.5" fill="none"/>
-        <rect x="7" y="4" width="10" height="15" rx="1.5" stroke="white" stroke-width="1.5" fill="none"/>
-      </svg>
+      /* Print button */
+      .print-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--ink);
+        color: #f5f0e8;
+        font-family: var(--sans);
+        font-size: 12px;
+        font-weight: 600;
+        padding: 8px 16px;
+        border-radius: 7px;
+        border: none;
+        cursor: pointer;
+        text-decoration: none;
+        transition: background 0.2s;
+      }
+      .print-btn:hover {
+        background: #292524;
+      }
+      @media print {
+        .print-btn {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page-header">
+      <div class="logo-row">
+        <div class="logo-mark">
+          <svg viewBox="0 0 20 20" fill="none">
+            <rect
+              x="2"
+              y="1"
+              width="10"
+              height="15"
+              rx="1.5"
+              stroke="white"
+              stroke-width="1.5"
+              fill="none"
+            />
+            <rect
+              x="7"
+              y="4"
+              width="10"
+              height="15"
+              rx="1.5"
+              stroke="white"
+              stroke-width="1.5"
+              fill="none"
+            />
+          </svg>
+        </div>
+        <span class="logo-name">Bindersnap</span>
+      </div>
+      <div class="page-title">
+        <h1>Social Media Cheat Sheet</h1>
+        <p>BRAND RESOURCES · V1.0 · 2026</p>
+      </div>
     </div>
-    <span class="logo-name">Bindersnap</span>
-  </div>
-  <div class="page-title">
-    <h1>Social Media Cheat Sheet</h1>
-    <p>BRAND RESOURCES  ·  V1.0  ·  2025</p>
-  </div>
-</div>
 
-<!-- PLATFORM SPECS -->
-<div class="section-lbl">Platform Dimensions & Strategy</div>
+    <!-- PLATFORM SPECS -->
+    <div class="section-lbl">Platform Dimensions & Strategy</div>
 
-<div class="grid-2">
-  <div class="platform">
-    <div class="platform-hdr">
-      <div class="platform-dot" style="background:#0A66C2"></div>
-      <span class="platform-name">LinkedIn</span>
-    </div>
-    <div class="platform-body">
-      <div class="fmt-row">
-        <span class="fmt-name">Profile Banner</span>
-        <span class="fmt-dims">1584 × 396 px</span>
-        <span class="fmt-note">Dark ink bg, centered logo + tagline</span>
+    <div class="grid-2">
+      <div class="platform">
+        <div class="platform-hdr">
+          <div class="platform-dot" style="background: #0a66c2"></div>
+          <span class="platform-name">LinkedIn</span>
+        </div>
+        <div class="platform-body">
+          <div class="fmt-row">
+            <span class="fmt-name">Profile Banner</span>
+            <span class="fmt-dims">1584 × 396 px</span>
+            <span class="fmt-note">Dark ink bg, centered logo + tagline</span>
+          </div>
+          <div class="fmt-row">
+            <span class="fmt-name">Post Image</span>
+            <span class="fmt-dims">1200 × 628 px</span>
+            <span class="fmt-note"
+              >Paper bg, coral accent, Lora serif headline</span
+            >
+          </div>
+          <div class="fmt-row">
+            <span class="fmt-name">Company Logo</span>
+            <span class="fmt-dims">300 × 300 px</span>
+            <span class="fmt-note"
+              >Logo mark only on ink (#1C1917) background</span
+            >
+          </div>
+          <div class="fmt-row">
+            <span class="fmt-name">Article Cover</span>
+            <span class="fmt-dims">1200 × 644 px</span>
+            <span class="fmt-note">Bold headline, coral underline accent</span>
+          </div>
+          <div class="strategy">
+            <strong>Strategy:</strong> B2B-first. Lead with the pain — email
+            thread horror stories land. Long-form outperforms short. Founder POV
+            &gt; brand voice. Max 5 hashtags:
+            <strong
+              >#DocumentManagement #Compliance #LegalTech #RegTech
+              #FutureOfWork</strong
+            >
+          </div>
+        </div>
       </div>
-      <div class="fmt-row">
-        <span class="fmt-name">Post Image</span>
-        <span class="fmt-dims">1200 × 628 px</span>
-        <span class="fmt-note">Paper bg, coral accent, Lora serif headline</span>
-      </div>
-      <div class="fmt-row">
-        <span class="fmt-name">Company Logo</span>
-        <span class="fmt-dims">300 × 300 px</span>
-        <span class="fmt-note">Logo mark only on ink (#1C1917) background</span>
-      </div>
-      <div class="fmt-row">
-        <span class="fmt-name">Article Cover</span>
-        <span class="fmt-dims">1200 × 644 px</span>
-        <span class="fmt-note">Bold headline, coral underline accent</span>
-      </div>
-      <div class="strategy">
-        <strong>Strategy:</strong> B2B-first. Lead with the pain — email thread horror stories land. Long-form outperforms short. Founder POV &gt; brand voice. Max 5 hashtags: <strong>#DocumentManagement #Compliance #LegalTech #RegTech #FutureOfWork</strong>
-      </div>
-    </div>
-  </div>
 
-  <div class="platform">
-    <div class="platform-hdr">
-      <div class="platform-dot" style="background:#000000"></div>
-      <span class="platform-name">Twitter / X</span>
-    </div>
-    <div class="platform-body">
-      <div class="fmt-row">
-        <span class="fmt-name">Header</span>
-        <span class="fmt-dims">1500 × 500 px</span>
-        <span class="fmt-note">Dark ink bg, wordmark centered, coral accent</span>
+      <div class="platform">
+        <div class="platform-hdr">
+          <div class="platform-dot" style="background: #000000"></div>
+          <span class="platform-name">Twitter / X</span>
+        </div>
+        <div class="platform-body">
+          <div class="fmt-row">
+            <span class="fmt-name">Header</span>
+            <span class="fmt-dims">1500 × 500 px</span>
+            <span class="fmt-note"
+              >Dark ink bg, wordmark centered, coral accent</span
+            >
+          </div>
+          <div class="fmt-row">
+            <span class="fmt-name">Post Image</span>
+            <span class="fmt-dims">1200 × 675 px</span>
+            <span class="fmt-note"
+              >Bold coral headline on Paper Warm background</span
+            >
+          </div>
+          <div class="fmt-row">
+            <span class="fmt-name">Profile Avatar</span>
+            <span class="fmt-dims">400 × 400 px</span>
+            <span class="fmt-note">Logo mark on ink background</span>
+          </div>
+          <div class="fmt-row">
+            <span class="fmt-name">Card Image</span>
+            <span class="fmt-dims">800 × 418 px</span>
+            <span class="fmt-note">Minimum for link preview cards</span>
+          </div>
+          <div class="strategy">
+            <strong>Strategy:</strong> Short + punchy. Lead with the
+            frustration. The filename pill tweet —
+            <em
+              >"contract_FINAL_v2_JanEdits_APPROVED(1).docx — who approved
+              this?"</em
+            >
+            — is peak Bindersnap. Threads &gt; single tweets for launches. Max
+            2–3 hashtags.
+          </div>
+        </div>
       </div>
-      <div class="fmt-row">
-        <span class="fmt-name">Post Image</span>
-        <span class="fmt-dims">1200 × 675 px</span>
-        <span class="fmt-note">Bold coral headline on Paper Warm background</span>
-      </div>
-      <div class="fmt-row">
-        <span class="fmt-name">Profile Avatar</span>
-        <span class="fmt-dims">400 × 400 px</span>
-        <span class="fmt-note">Logo mark on ink background</span>
-      </div>
-      <div class="fmt-row">
-        <span class="fmt-name">Card Image</span>
-        <span class="fmt-dims">800 × 418 px</span>
-        <span class="fmt-note">Minimum for link preview cards</span>
-      </div>
-      <div class="strategy">
-        <strong>Strategy:</strong> Short + punchy. Lead with the frustration. The filename pill tweet — <em>"contract_FINAL_v2_JanEdits_APPROVED(1).docx — who approved this?"</em> — is peak Bindersnap. Threads &gt; single tweets for launches. Max 2–3 hashtags.
-      </div>
-    </div>
-  </div>
 
-  <div class="platform">
-    <div class="platform-hdr">
-      <div class="platform-dot" style="background:#E1306C"></div>
-      <span class="platform-name">Instagram</span>
-    </div>
-    <div class="platform-body">
-      <div class="fmt-row">
-        <span class="fmt-name">Square Post</span>
-        <span class="fmt-dims">1080 × 1080 px</span>
-        <span class="fmt-note">Paper Warm bg, coral accent text, clean layout</span>
+      <div class="platform">
+        <div class="platform-hdr">
+          <div class="platform-dot" style="background: #e1306c"></div>
+          <span class="platform-name">Instagram</span>
+        </div>
+        <div class="platform-body">
+          <div class="fmt-row">
+            <span class="fmt-name">Square Post</span>
+            <span class="fmt-dims">1080 × 1080 px</span>
+            <span class="fmt-note"
+              >Paper Warm bg, coral accent text, clean layout</span
+            >
+          </div>
+          <div class="fmt-row">
+            <span class="fmt-name">Story</span>
+            <span class="fmt-dims">1080 × 1920 px</span>
+            <span class="fmt-note"
+              >Full-bleed ink bg, large Lora serif headline</span
+            >
+          </div>
+          <div class="fmt-row">
+            <span class="fmt-name">Carousel</span>
+            <span class="fmt-dims">1080 × 1080 px</span>
+            <span class="fmt-note">Before/After slides — 5–8 cards max</span>
+          </div>
+          <div class="fmt-row">
+            <span class="fmt-name">Reel Thumbnail</span>
+            <span class="fmt-dims">1080 × 1920 px</span>
+            <span class="fmt-note">30-sec problem/solution demo thumbnail</span>
+          </div>
+          <div class="strategy">
+            <strong>Strategy:</strong> Visual-first storytelling. Carousels for
+            before/after comparisons. Stories for product builds. The audience
+            here is design/ops/startup community — lean into the warmth and
+            craft of the visual identity.
+          </div>
+        </div>
       </div>
-      <div class="fmt-row">
-        <span class="fmt-name">Story</span>
-        <span class="fmt-dims">1080 × 1920 px</span>
-        <span class="fmt-note">Full-bleed ink bg, large Lora serif headline</span>
-      </div>
-      <div class="fmt-row">
-        <span class="fmt-name">Carousel</span>
-        <span class="fmt-dims">1080 × 1080 px</span>
-        <span class="fmt-note">Before/After slides — 5–8 cards max</span>
-      </div>
-      <div class="fmt-row">
-        <span class="fmt-name">Reel Thumbnail</span>
-        <span class="fmt-dims">1080 × 1920 px</span>
-        <span class="fmt-note">30-sec problem/solution demo thumbnail</span>
-      </div>
-      <div class="strategy">
-        <strong>Strategy:</strong> Visual-first storytelling. Carousels for before/after comparisons. Stories for product builds. The audience here is design/ops/startup community — lean into the warmth and craft of the visual identity.
-      </div>
-    </div>
-  </div>
 
-  <div class="platform">
-    <div class="platform-hdr">
-      <div class="platform-dot" style="background:#DA552F"></div>
-      <span class="platform-name">Product Hunt</span>
-    </div>
-    <div class="platform-body">
-      <div class="fmt-row">
-        <span class="fmt-name">Logo</span>
-        <span class="fmt-dims">240 × 240 px</span>
-        <span class="fmt-note">Logo mark on Paper (#FAFAF7) background</span>
-      </div>
-      <div class="fmt-row">
-        <span class="fmt-name">Gallery Image</span>
-        <span class="fmt-dims">1270 × 760 px</span>
-        <span class="fmt-note">Product screenshots + coral callout annotations</span>
-      </div>
-      <div class="fmt-row">
-        <span class="fmt-name">Thumbnail</span>
-        <span class="fmt-dims">240 × 240 px</span>
-        <span class="fmt-note">Logo mark, coral on paper</span>
-      </div>
-      <div class="strategy">
-        <strong>Gallery order:</strong> (1) Hero editor UI, (2) Approval workflow, (3) Audit log view, (4) Before/After split. <strong>Tagline:</strong> "Finally kill the email approval chain." Schedule launch for a Tuesday–Thursday 12:01 AM PST.
+      <div class="platform">
+        <div class="platform-hdr">
+          <div class="platform-dot" style="background: #da552f"></div>
+          <span class="platform-name">Product Hunt</span>
+        </div>
+        <div class="platform-body">
+          <div class="fmt-row">
+            <span class="fmt-name">Logo</span>
+            <span class="fmt-dims">240 × 240 px</span>
+            <span class="fmt-note"
+              >Logo mark on Paper (#FAFAF7) background</span
+            >
+          </div>
+          <div class="fmt-row">
+            <span class="fmt-name">Gallery Image</span>
+            <span class="fmt-dims">1270 × 760 px</span>
+            <span class="fmt-note"
+              >Product screenshots + coral callout annotations</span
+            >
+          </div>
+          <div class="fmt-row">
+            <span class="fmt-name">Thumbnail</span>
+            <span class="fmt-dims">240 × 240 px</span>
+            <span class="fmt-note">Logo mark, coral on paper</span>
+          </div>
+          <div class="strategy">
+            <strong>Gallery order:</strong> (1) Hero editor UI, (2) Approval
+            workflow, (3) Audit log view, (4) Before/After split.
+            <strong>Tagline:</strong> "Finally kill the email approval chain."
+            Schedule launch for a Tuesday–Thursday 12:01 AM PST.
+          </div>
+        </div>
       </div>
     </div>
-  </div>
-</div>
 
-<hr/>
+    <hr />
 
-<!-- COLOR SWATCHES -->
-<div class="section-lbl">Brand Colors — Quick Reference</div>
-<div class="swatch-row">
-  <div class="swatch">
-    <div class="swatch-fill" style="background:#E85D26"></div>
-    <div class="swatch-hex">#E85D26</div>
-    <div class="swatch-name">Coral</div>
-  </div>
-  <div class="swatch">
-    <div class="swatch-fill" style="background:#C94D1A"></div>
-    <div class="swatch-hex">#C94D1A</div>
-    <div class="swatch-name">Coral Dark</div>
-  </div>
-  <div class="swatch">
-    <div class="swatch-fill" style="background:#1C1917"></div>
-    <div class="swatch-hex">#1C1917</div>
-    <div class="swatch-name">Ink</div>
-  </div>
-  <div class="swatch">
-    <div class="swatch-fill" style="background:#FAFAF7;border:1px solid #E7E4DF"></div>
-    <div class="swatch-hex">#FAFAF7</div>
-    <div class="swatch-name">Paper</div>
-  </div>
-  <div class="swatch">
-    <div class="swatch-fill" style="background:#F5F0E8;border:1px solid #E7E4DF"></div>
-    <div class="swatch-hex">#F5F0E8</div>
-    <div class="swatch-name">Paper Warm</div>
-  </div>
-  <div class="swatch">
-    <div class="swatch-fill" style="background:#78716C"></div>
-    <div class="swatch-hex">#78716C</div>
-    <div class="swatch-name">Muted</div>
-  </div>
-  <div class="swatch">
-    <div class="swatch-fill" style="background:#16A34A"></div>
-    <div class="swatch-hex">#16A34A</div>
-    <div class="swatch-name">Green</div>
-  </div>
-  <div class="swatch">
-    <div class="swatch-fill" style="background:#E7E4DF"></div>
-    <div class="swatch-hex">#E7E4DF</div>
-    <div class="swatch-name">Rule</div>
-  </div>
-</div>
+    <!-- COLOR SWATCHES -->
+    <div class="section-lbl">Brand Colors — Quick Reference</div>
+    <div class="swatch-row">
+      <div class="swatch">
+        <div class="swatch-fill" style="background: #e85d26"></div>
+        <div class="swatch-hex">#E85D26</div>
+        <div class="swatch-name">Coral</div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-fill" style="background: #c94d1a"></div>
+        <div class="swatch-hex">#C94D1A</div>
+        <div class="swatch-name">Coral Dark</div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-fill" style="background: #1c1917"></div>
+        <div class="swatch-hex">#1C1917</div>
+        <div class="swatch-name">Ink</div>
+      </div>
+      <div class="swatch">
+        <div
+          class="swatch-fill"
+          style="background: #fafaf7; border: 1px solid #e7e4df"
+        ></div>
+        <div class="swatch-hex">#FAFAF7</div>
+        <div class="swatch-name">Paper</div>
+      </div>
+      <div class="swatch">
+        <div
+          class="swatch-fill"
+          style="background: #f5f0e8; border: 1px solid #e7e4df"
+        ></div>
+        <div class="swatch-hex">#F5F0E8</div>
+        <div class="swatch-name">Paper Warm</div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-fill" style="background: #78716c"></div>
+        <div class="swatch-hex">#78716C</div>
+        <div class="swatch-name">Muted</div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-fill" style="background: #16a34a"></div>
+        <div class="swatch-hex">#16A34A</div>
+        <div class="swatch-name">Green</div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-fill" style="background: #e7e4df"></div>
+        <div class="swatch-hex">#E7E4DF</div>
+        <div class="swatch-name">Rule</div>
+      </div>
+    </div>
 
-<hr/>
+    <hr />
 
-<!-- VOICE EXAMPLES -->
-<div class="section-lbl">Voice & Copy — Do's & Don'ts</div>
-<div class="grid-2">
-  <div>
-    <div class="voice-row good">
-      <div class="tag">✓ Write this</div>
-      <p>"Your approval process is a mess. We fixed it."</p>
+    <!-- VOICE EXAMPLES -->
+    <div class="section-lbl">Voice & Copy — Do's & Don'ts</div>
+    <div class="grid-2">
+      <div>
+        <div class="voice-row good">
+          <div class="tag">✓ Write this</div>
+          <p>"Your approval process is a mess. We fixed it."</p>
+        </div>
+        <div class="voice-row bad">
+          <div class="tag">✕ Not this</div>
+          <p>"Bindersnap offers advanced document governance workflows."</p>
+        </div>
+        <div class="voice-row good">
+          <div class="tag">✓ Write this</div>
+          <p>"Kill the email approval chain. Finally."</p>
+        </div>
+        <div class="voice-row bad">
+          <div class="tag">✕ Not this</div>
+          <p>
+            "Leverage our rule-based approval infrastructure to streamline
+            compliance."
+          </p>
+        </div>
+      </div>
+      <div>
+        <div class="voice-row good">
+          <div class="tag">✓ Write this</div>
+          <p>"Every approval. Logged. Tamper-proof."</p>
+        </div>
+        <div class="voice-row bad">
+          <div class="tag">✕ Not this</div>
+          <p>
+            "Bindersnap may help facilitate more efficient document sign-off
+            processes."
+          </p>
+        </div>
+        <div class="voice-row good">
+          <div class="tag">✓ Write this</div>
+          <p>
+            "contract_FINAL_v2_JanEdits_APPROVED(1).docx — Sound familiar? 😩"
+          </p>
+        </div>
+        <div class="voice-row bad">
+          <div class="tag">✕ Not this</div>
+          <p>
+            "Our AI-powered platform synergizes your document management
+            ecosystem."
+          </p>
+        </div>
+      </div>
     </div>
-    <div class="voice-row bad">
-      <div class="tag">✕ Not this</div>
-      <p>"Bindersnap offers advanced document governance workflows."</p>
-    </div>
-    <div class="voice-row good">
-      <div class="tag">✓ Write this</div>
-      <p>"Kill the email approval chain. Finally."</p>
-    </div>
-    <div class="voice-row bad">
-      <div class="tag">✕ Not this</div>
-      <p>"Leverage our rule-based approval infrastructure to streamline compliance."</p>
-    </div>
-  </div>
-  <div>
-    <div class="voice-row good">
-      <div class="tag">✓ Write this</div>
-      <p>"Every approval. Logged. Tamper-proof."</p>
-    </div>
-    <div class="voice-row bad">
-      <div class="tag">✕ Not this</div>
-      <p>"Bindersnap may help facilitate more efficient document sign-off processes."</p>
-    </div>
-    <div class="voice-row good">
-      <div class="tag">✓ Write this</div>
-      <p>"contract_FINAL_v2_JanEdits_APPROVED(1).docx — Sound familiar? 😩"</p>
-    </div>
-    <div class="voice-row bad">
-      <div class="tag">✕ Not this</div>
-      <p>"Our AI-powered platform synergizes your document management ecosystem."</p>
-    </div>
-  </div>
-</div>
 
-<hr/>
+    <hr />
 
-<!-- TYPOGRAPHY QUICK REF -->
-<div class="section-lbl">Typography Quick Reference</div>
-<div class="grid-3" style="margin-bottom:0">
-  <div style="background:#fff;border:1px solid var(--rule);border-radius:12px;padding:16px">
-    <div style="font-family:'Lora',serif;font-size:22px;font-weight:700;line-height:1.15;color:#1C1917;margin-bottom:8px">Headlines</div>
-    <div style="font-family:'Geist Mono',monospace;font-size:10px;color:#A8A29E;margin-bottom:4px">Lora  ·  Bold / SemiBold</div>
-    <div style="font-size:11px;color:#78716C;line-height:1.5">All H1–H3. The "soul" of the brand. Always warm and authoritative. Italic for accent phrases.</div>
-  </div>
-  <div style="background:#fff;border:1px solid var(--rule);border-radius:12px;padding:16px">
-    <div style="font-family:'Geist',sans-serif;font-size:15px;font-weight:400;line-height:1.6;color:#44403C;margin-bottom:8px">Body copy and UI</div>
-    <div style="font-family:'Geist Mono',monospace;font-size:10px;color:#A8A29E;margin-bottom:4px">Geist  ·  Light / Regular / Medium</div>
-    <div style="font-size:11px;color:#78716C;line-height:1.5">All body text, buttons, nav, labels. Clean and modern. Pairs with Lora without competing.</div>
-  </div>
-  <div style="background:#fff;border:1px solid var(--rule);border-radius:12px;padding:16px">
-    <div style="font-family:'Geist Mono',monospace;font-size:12px;font-weight:500;color:#E85D26;margin-bottom:8px;letter-spacing:0.08em">SECTION TAGS · CODE</div>
-    <div style="font-family:'Geist Mono',monospace;font-size:10px;color:#A8A29E;margin-bottom:4px">Geist Mono  ·  Regular / Medium</div>
-    <div style="font-size:11px;color:#78716C;line-height:1.5">Section eyebrows, code snippets, file names, timestamps, badges. Technical and precise.</div>
-  </div>
-</div>
+    <!-- TYPOGRAPHY QUICK REF -->
+    <div class="section-lbl">Typography Quick Reference</div>
+    <div class="grid-3" style="margin-bottom: 0">
+      <div
+        style="
+          background: #fff;
+          border: 1px solid var(--rule);
+          border-radius: 12px;
+          padding: 16px;
+        "
+      >
+        <div
+          style="
+            font-family: &quot;Lora&quot;, serif;
+            font-size: 22px;
+            font-weight: 700;
+            line-height: 1.15;
+            color: #1c1917;
+            margin-bottom: 8px;
+          "
+        >
+          Headlines
+        </div>
+        <div
+          style="
+            font-family: &quot;Geist Mono&quot;, monospace;
+            font-size: 10px;
+            color: #a8a29e;
+            margin-bottom: 4px;
+          "
+        >
+          Lora · Bold / SemiBold
+        </div>
+        <div style="font-size: 11px; color: #78716c; line-height: 1.5">
+          All H1–H3. The "soul" of the brand. Always warm and authoritative.
+          Italic for accent phrases.
+        </div>
+      </div>
+      <div
+        style="
+          background: #fff;
+          border: 1px solid var(--rule);
+          border-radius: 12px;
+          padding: 16px;
+        "
+      >
+        <div
+          style="
+            font-family: &quot;Geist&quot;, sans-serif;
+            font-size: 15px;
+            font-weight: 400;
+            line-height: 1.6;
+            color: #44403c;
+            margin-bottom: 8px;
+          "
+        >
+          Body copy and UI
+        </div>
+        <div
+          style="
+            font-family: &quot;Geist Mono&quot;, monospace;
+            font-size: 10px;
+            color: #a8a29e;
+            margin-bottom: 4px;
+          "
+        >
+          Geist · Light / Regular / Medium
+        </div>
+        <div style="font-size: 11px; color: #78716c; line-height: 1.5">
+          All body text, buttons, nav, labels. Clean and modern. Pairs with Lora
+          without competing.
+        </div>
+      </div>
+      <div
+        style="
+          background: #fff;
+          border: 1px solid var(--rule);
+          border-radius: 12px;
+          padding: 16px;
+        "
+      >
+        <div
+          style="
+            font-family: &quot;Geist Mono&quot;, monospace;
+            font-size: 12px;
+            font-weight: 500;
+            color: #e85d26;
+            margin-bottom: 8px;
+            letter-spacing: 0.08em;
+          "
+        >
+          SECTION TAGS · CODE
+        </div>
+        <div
+          style="
+            font-family: &quot;Geist Mono&quot;, monospace;
+            font-size: 10px;
+            color: #a8a29e;
+            margin-bottom: 4px;
+          "
+        >
+          Geist Mono · Regular / Medium
+        </div>
+        <div style="font-size: 11px; color: #78716c; line-height: 1.5">
+          Section eyebrows, code snippets, file names, timestamps, badges.
+          Technical and precise.
+        </div>
+      </div>
+    </div>
 
-<div class="page-footer">
-  <p>BINDERSNAP BRAND SYSTEM  ·  FOR INTERNAL USE & APPROVED PARTNERS  ·  bindersnap.com</p>
-  <button class="print-btn" onclick="window.print()">
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-    Print / Save PDF
-  </button>
-</div>
-
-</body>
+    <div class="page-footer">
+      <p>
+        BINDERSNAP BRAND SYSTEM · FOR INTERNAL USE & APPROVED PARTNERS ·
+        bindersnap.com
+      </p>
+      <button class="print-btn" onclick="window.print()">
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+        >
+          <polyline points="6 9 6 2 18 2 18 9" />
+          <path
+            d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"
+          />
+          <rect x="6" y="14" width="12" height="8" />
+        </svg>
+        Print / Save PDF
+      </button>
+    </div>
+  </body>
 </html>
