@@ -126,6 +126,7 @@
    ═════════════════════════════════════════════════════════════ */
 
 .bs-editor {
+  position: relative;
   display: flex;
   flex-direction: column;
   background: var(--e-bg);
@@ -147,6 +148,7 @@
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
+  touch-action: pan-y;
   /* Custom scrollbar */
   scrollbar-width: thin;
   scrollbar-color: var(--e-rule) transparent;
@@ -236,6 +238,24 @@
   gap: var(--brand-space-1);
   flex-wrap: wrap;
 }
+
+.bs-editor__toolbar-mobile {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--brand-space-1);
+  padding: var(--brand-space-2);
+  background: color-mix(in srgb, var(--e-surface) 90%, transparent);
+  border: var(--e-border-1) solid var(--e-rule);
+  border-radius: var(--brand-radius-lg);
+  box-shadow: var(--e-shadow-lg);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.bs-editor__toolbar-mobile::-webkit-scrollbar { display: none; }
 
 .bs-editor__toolbar-spacer {
   margin-left: auto;
@@ -397,6 +417,23 @@
   overflow-y: auto;
 }
 
+.bs-editor__dropdown-menu--floating {
+  position: fixed;
+  top: auto;
+  bottom: auto;
+  left: auto;
+  z-index: calc(var(--brand-z-overlay) + 4);
+}
+
+.bs-editor__dropdown-backdrop {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, var(--e-bg) 70%, transparent);
+  backdrop-filter: blur(6px) saturate(120%);
+  -webkit-backdrop-filter: blur(6px) saturate(120%);
+  z-index: calc(var(--brand-z-overlay) + 1);
+}
+
 .bs-editor__dropdown-item {
   display: block;
   width: 100%;
@@ -480,6 +517,59 @@
 .bs-editor__preview-btn:hover {
   border-color: var(--brand-coral);
   color: var(--brand-coral-dark);
+}
+
+/* Selection bubble (mobile, iOS-notes feel) */
+.bs-editor__selection-menu {
+  display: none;
+  position: fixed;
+  left: var(--bs-selection-x, 0px);
+  top: var(--bs-selection-y, 0px);
+  transform: translate(-50%, -100%) translateY(calc(-1 * var(--brand-space-2)));
+  gap: var(--brand-space-1);
+  padding: var(--brand-space-1);
+  background: var(--e-surface);
+  border: var(--e-border-1) solid var(--e-rule);
+  border-radius: var(--brand-radius-full);
+  box-shadow: var(--e-shadow-lg);
+  z-index: calc(var(--brand-z-overlay) + 2);
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+}
+
+.bs-editor__selection-menu[data-placement="below"] {
+  transform: translate(-50%, 0) translateY(var(--brand-space-2));
+}
+
+.bs-editor__selection-btn {
+  border: none;
+  background: transparent;
+  color: var(--e-text-2);
+  padding: var(--brand-space-1);
+  border-radius: var(--brand-radius-full);
+  cursor: pointer;
+  transition: background var(--e-t-fast), color var(--e-t-fast), transform var(--e-t-fast);
+  width: var(--brand-space-8);
+  height: var(--brand-space-8);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bs-editor__selection-btn:hover {
+  background: var(--e-surface-2);
+  color: var(--e-text);
+}
+
+.bs-editor__selection-btn:active {
+  background: var(--e-coral-dim);
+  color: var(--e-coral);
+  transform: scale(0.96);
+}
+
+.bs-editor__selection-btn svg {
+  width: var(--brand-space-4);
+  height: var(--brand-space-4);
 }
 
 /* Main layout */
@@ -1960,19 +2050,85 @@
    ═════════════════════════════════════════════════════════════ */
 
 @media (max-width: 48rem) {
+  .bs-editor {
+    --bs-editor-mobile-toolbar-h: var(--brand-space-12);
+    overflow: visible;
+    border-radius: var(--brand-radius-xl);
+  }
+
   .bs-editor .ProseMirror {
-    padding: var(--brand-space-6) var(--brand-space-5) var(--brand-space-20);
+    padding: var(--brand-space-6) var(--brand-space-5) calc(var(--brand-space-20) + var(--bs-editor-mobile-toolbar-h) + env(safe-area-inset-bottom, 0px));
     font-size: var(--brand-text-sm);
   }
 
   .bs-editor__toolbar {
-    padding: var(--brand-space-2) var(--brand-space-2);
+    padding: 0;
+    border-bottom: none;
+    background: transparent;
     gap: var(--e-border-1);
   }
 
   .bs-editor__btn {
     width: var(--brand-space-6);
     height: var(--brand-space-6);
+  }
+
+  .bs-editor__toolbar-row {
+    display: none;
+  }
+
+  .bs-editor__toolbar-mobile {
+    display: flex;
+    position: absolute;
+    left: var(--e-border-1);
+    right: var(--e-border-1);
+    bottom: var(--e-border-1);
+    height: calc(var(--bs-editor-mobile-toolbar-h) + env(safe-area-inset-bottom, 0px));
+    z-index: var(--brand-z-overlay);
+    padding-bottom: calc(var(--brand-space-2) + env(safe-area-inset-bottom, 0px));
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .bs-editor__selection-menu {
+    display: inline-flex;
+  }
+
+  .bs-editor__toolbar-mobile .bs-editor__dropdown-menu {
+    z-index: calc(var(--brand-z-overlay) + 3);
+    top: auto;
+    bottom: calc(100% + var(--brand-space-2));
+  }
+
+  .bs-editor__toolbar-mobile .bs-editor__btn {
+    width: var(--brand-space-10);
+    height: var(--brand-space-10);
+    border-radius: var(--brand-radius-lg);
+    background: color-mix(in srgb, var(--e-surface) 75%, transparent);
+  }
+
+  .bs-editor__toolbar-mobile .bs-editor__btn.is-active {
+    background: var(--e-coral-dim);
+  }
+
+  .bs-editor__sidebar {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    border-left: none;
+    border-top: var(--e-border-1) solid var(--e-rule);
+    box-shadow: var(--e-shadow-lg);
+    z-index: calc(var(--brand-z-overlay) + 1);
+  }
+
+  .bs-editor__main {
+    overflow: hidden;
+    border-radius: inherit;
+  }
+
+  .bs-editor__resize-handle {
+    display: none;
   }
 
   .bs-editor .bs-conflict__zone--ours,
@@ -1985,7 +2141,7 @@
 
 @media (max-width: 30rem) {
   .bs-editor .ProseMirror {
-    padding: var(--brand-space-4) var(--brand-space-4) var(--brand-space-16);
+    padding: var(--brand-space-4) var(--brand-space-4) calc(var(--brand-space-16) + var(--bs-editor-mobile-toolbar-h) + env(safe-area-inset-bottom, 0px));
   }
 
   /* Hide less important toolbar groups on small screens */

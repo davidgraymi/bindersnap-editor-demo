@@ -10,6 +10,7 @@
 import "./assets/bindersnap-editor.css";
 
 import React, { useCallback, useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useEditor, EditorContent, Editor } from "@tiptap/react";
 import type { Content } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -42,6 +43,8 @@ import {
   Underline as UnderlineIcon,
   Strikethrough,
   Code,
+  Copy,
+  ClipboardPaste,
   List,
   ListOrdered,
   CheckSquare,
@@ -266,10 +269,18 @@ const Dropdown = ({
 }: DropdownProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        ref.current &&
+        !ref.current.contains(target) &&
+        !(menuRef.current && menuRef.current.contains(target))
+      ) {
         setIsOpen(false);
       }
     };
@@ -277,36 +288,77 @@ const Dropdown = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    if (!isOpen || typeof window === "undefined") return;
+    const isMobile = window.matchMedia("(max-width: 48rem)").matches;
+    if (!isMobile || !triggerRef.current) return;
+
+    const rect = triggerRef.current.getBoundingClientRect();
+    const width = Math.max(rect.width, 220);
+    const left = Math.min(
+      Math.max(rect.left, 12),
+      window.innerWidth - width - 12,
+    );
+    const bottom = window.innerHeight - rect.top + 8;
+
+    setMenuStyle({
+      position: "fixed",
+      left,
+      bottom,
+      width,
+      maxHeight: "45vh",
+    });
+  }, [isOpen]);
+
   const selectedLabel =
     options.find((o) => String(o.value) === String(value))?.label || label;
+
+  const renderMenu = (floating = false) => (
+    <>
+      {floating && (
+        <div
+          className="bs-editor__dropdown-backdrop"
+          onClick={() => setIsOpen(false)}
+        />
+      )}
+      <div
+        className="bs-editor__dropdown-menu bs-editor__dropdown-menu--floating"
+        style={menuStyle}
+        ref={menuRef}
+      >
+        {options.map((option) => (
+          <button
+            key={String(option.value)}
+            className={`bs-editor__dropdown-item ${String(option.value) === String(value) ? "is-active" : ""}`}
+            onClick={() => {
+              onChange(option.value);
+              setIsOpen(false);
+            }}
+            type="button"
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </>
+  );
 
   return (
     <div className="bs-editor__dropdown" ref={ref} style={{ width }}>
       <button
         className="bs-editor__dropdown-trigger"
+        ref={triggerRef}
         onClick={() => setIsOpen(!isOpen)}
         type="button"
       >
         <span className="bs-editor__dropdown-label">{selectedLabel}</span>
         <ChevronDown size={14} />
       </button>
-      {isOpen && (
-        <div className="bs-editor__dropdown-menu">
-          {options.map((option) => (
-            <button
-              key={String(option.value)}
-              className={`bs-editor__dropdown-item ${String(option.value) === String(value) ? "is-active" : ""}`}
-              onClick={() => {
-                onChange(option.value);
-                setIsOpen(false);
-              }}
-              type="button"
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      )}
+      {isOpen &&
+        (typeof document !== "undefined" &&
+        window.matchMedia("(max-width: 48rem)").matches
+          ? createPortal(renderMenu(true), document.body)
+          : renderMenu())}
     </div>
   );
 };
@@ -885,6 +937,167 @@ const Toolbar = ({
           {`${resolvedCount}/${totalCount}`}
         </MenuButton>
       </div>
+
+      {/* Mobile bottom toolbar (touch-friendly) */}
+      <div className="bs-editor__toolbar-mobile" aria-label="Mobile formatting toolbar">
+        <MenuButton
+          onClick={() => editor.chain().focus().undo().run()}
+          title="Undo"
+          disabled={!editor.can().undo()}
+        >
+          <Undo size={16} />
+        </MenuButton>
+        <MenuButton
+          onClick={() => editor.chain().focus().redo().run()}
+          title="Redo"
+          disabled={!editor.can().redo()}
+        >
+          <Redo size={16} />
+        </MenuButton>
+
+        <Dropdown
+          label="Font"
+          value={getSelectionFontFamily()}
+          options={FONT_FAMILIES}
+          onChange={handleFontFamilyChange}
+          width="calc(var(--brand-space-16) * 2)"
+        />
+
+        <Dropdown
+          label="Size"
+          value={getSelectionFontSize()}
+          options={FONT_SIZES}
+          onChange={handleFontSizeChange}
+          width="calc(var(--brand-space-8) * 2)"
+        />
+
+        <Dropdown
+          label="Style"
+          value={String(getCurrentHeading())}
+          options={HEADING_OPTIONS}
+          onChange={handleHeadingChange}
+          width="var(--brand-space-20)"
+        />
+
+        <MenuButton
+          onClick={() => editor.chain().focus().setTextAlign("left").run()}
+          isActive={editor.isActive({ textAlign: "left" })}
+          title="Align Left"
+        >
+          <AlignLeft size={16} />
+        </MenuButton>
+        <MenuButton
+          onClick={() => editor.chain().focus().setTextAlign("center").run()}
+          isActive={editor.isActive({ textAlign: "center" })}
+          title="Align Center"
+        >
+          <AlignCenter size={16} />
+        </MenuButton>
+        <MenuButton
+          onClick={() => editor.chain().focus().setTextAlign("right").run()}
+          isActive={editor.isActive({ textAlign: "right" })}
+          title="Align Right"
+        >
+          <AlignRight size={16} />
+        </MenuButton>
+        <MenuButton
+          onClick={() => editor.chain().focus().setTextAlign("justify").run()}
+          isActive={editor.isActive({ textAlign: "justify" })}
+          title="Justify"
+        >
+          <AlignJustify size={16} />
+        </MenuButton>
+
+        <MenuButton
+          onClick={() => editor.chain().focus().sinkListItem("listItem").run()}
+          title="Increase Indent"
+          disabled={!editor.can().sinkListItem("listItem")}
+        >
+          <Indent size={16} />
+        </MenuButton>
+        <MenuButton
+          onClick={() => editor.chain().focus().liftListItem("listItem").run()}
+          title="Decrease Indent"
+          disabled={!editor.can().liftListItem("listItem")}
+        >
+          <Outdent size={16} />
+        </MenuButton>
+
+        <MenuButton
+          onClick={() => editor.chain().focus().toggleBulletList().run()}
+          isActive={editor.isActive("bulletList")}
+          title="Bullet List"
+        >
+          <List size={16} />
+        </MenuButton>
+        <MenuButton
+          onClick={() => editor.chain().focus().toggleOrderedList().run()}
+          isActive={editor.isActive("orderedList")}
+          title="Numbered List"
+        >
+          <ListOrdered size={16} />
+        </MenuButton>
+        <MenuButton
+          onClick={() => editor.chain().focus().toggleTaskList().run()}
+          isActive={editor.isActive("taskList")}
+          title="Checklist"
+        >
+          <CheckSquare size={16} />
+        </MenuButton>
+
+        <MenuButton
+          onClick={() => editor.chain().focus().toggleBlockquote().run()}
+          isActive={editor.isActive("blockquote")}
+          title="Block Quote"
+        >
+          <Quote size={16} />
+        </MenuButton>
+        <MenuButton
+          onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+          isActive={editor.isActive("codeBlock")}
+          title="Code Block"
+        >
+          <Code size={16} />
+        </MenuButton>
+        <MenuButton
+          onClick={() => editor.chain().focus().setHorizontalRule().run()}
+          title="Horizontal Rule"
+        >
+          <Minus size={16} />
+        </MenuButton>
+
+        <MenuButton onClick={addImage} title="Insert Image">
+          <ImageIcon size={16} />
+        </MenuButton>
+        <MenuButton onClick={insertTable} title="Insert Table">
+          <TableIcon size={16} />
+        </MenuButton>
+
+        <MenuButton
+          onClick={() =>
+            editor.chain().focus().unsetAllMarks().clearNodes().run()
+          }
+          title="Clear Formatting"
+        >
+          <Eraser size={16} />
+        </MenuButton>
+
+        <MenuButton
+          onClick={onToggleVcCtrl}
+          isActive={showVcPanel}
+          title="Version Control"
+        >
+          <GitGraph size={16} />
+        </MenuButton>
+
+        <MenuButton
+          onClick={onToggleFullScreen}
+          title={isFullScreen ? "Exit Full Screen" : "Full Screen"}
+          isActive={isFullScreen}
+        >
+          {isFullScreen ? <Minimize size={16} /> : <Maximize size={16} />}
+        </MenuButton>
+      </div>
     </div>
   );
 };
@@ -934,6 +1147,10 @@ export const DemoEditor = ({
     editorProps: {
       attributes: {
         class: "editor-content-area",
+        autocorrect: "on",
+        autocapitalize: "sentences",
+        spellcheck: "true",
+        inputmode: "text",
       },
     },
   });
@@ -946,7 +1163,14 @@ export const DemoEditor = ({
   const [isResizing, setIsResizing] = useState(false);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [originalContent, setOriginalContent] = useState("");
+  const [selectionMenu, setSelectionMenu] = useState({
+    visible: false,
+    x: 0,
+    y: 0,
+    placement: "above" as "above" | "below",
+  });
   const sidebarLimitsRef = useRef({ min: 0, max: Number.POSITIVE_INFINITY });
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   // Resize Handlers
   const startResizing = useCallback((mouseDownEvent: React.MouseEvent) => {
@@ -1091,6 +1315,113 @@ export const DemoEditor = ({
       document.removeEventListener("fullscreenchange", handleFullScreenChange);
   }, []);
 
+  const updateSelectionMenu = useCallback(() => {
+    if (!editor) return;
+    const { from, to, empty } = editor.state.selection;
+    if (empty) {
+      setSelectionMenu((prev) => ({ ...prev, visible: false }));
+      return;
+    }
+
+    try {
+      const start = editor.view.coordsAtPos(from);
+      const end = editor.view.coordsAtPos(to);
+      const padding = 16;
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const rawX = (start.left + end.right) / 2;
+      const aboveY = Math.min(start.top, end.top);
+      const belowY = Math.max(start.bottom, end.bottom);
+      const placement = aboveY < 96 ? "below" : "above";
+      const rawY = placement === "below" ? belowY : aboveY;
+
+      const x = Math.min(
+        Math.max(rawX, padding),
+        viewportWidth - padding,
+      );
+      const y = Math.min(
+        Math.max(rawY, padding),
+        viewportHeight - padding,
+      );
+
+      setSelectionMenu({ visible: true, x, y, placement });
+    } catch {
+      setSelectionMenu((prev) => ({ ...prev, visible: false }));
+    }
+  }, [editor]);
+
+  useEffect(() => {
+    if (!editor) return;
+
+    const handleSelection = () => {
+      requestAnimationFrame(updateSelectionMenu);
+    };
+
+    const handleBlur = () => {
+      setSelectionMenu((prev) => ({ ...prev, visible: false }));
+    };
+
+    editor.on("selectionUpdate", handleSelection);
+    editor.on("blur", handleBlur);
+
+    const scrollEl = scrollRef.current;
+    scrollEl?.addEventListener("scroll", handleSelection, { passive: true });
+    window.addEventListener("resize", handleSelection, { passive: true });
+
+    return () => {
+      editor.off("selectionUpdate", handleSelection);
+      editor.off("blur", handleBlur);
+      scrollEl?.removeEventListener("scroll", handleSelection);
+      window.removeEventListener("resize", handleSelection);
+    };
+  }, [editor, updateSelectionMenu]);
+
+  const handleCopySelection = useCallback(async () => {
+    if (!editor) return;
+    const { from, to, empty } = editor.state.selection;
+    if (empty) return;
+    const text = editor.state.doc.textBetween(from, to, "\n");
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      document.execCommand("copy");
+    }
+    setSelectionMenu((prev) => ({ ...prev, visible: false }));
+  }, [editor]);
+
+  const handlePasteSelection = useCallback(async () => {
+    if (!editor) return;
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        editor.chain().focus().insertContent(text).run();
+      }
+    } catch {
+      // Clipboard API may be blocked; fail silently.
+    }
+    setSelectionMenu((prev) => ({ ...prev, visible: false }));
+  }, [editor]);
+
+  const handleSetLink = useCallback(() => {
+    if (!editor) return;
+    const previousUrl = editor.getAttributes("link").href;
+    const url = window.prompt("Enter URL:", previousUrl);
+    if (url === null) return;
+    if (url === "") {
+      editor.chain().focus().extendMarkRange("link").unsetLink().run();
+      return;
+    }
+    editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
+  }, [editor]);
+
+  const resolveCssColor = (name: string, fallback: string) => {
+    if (typeof window === "undefined") return fallback;
+    const value = getComputedStyle(document.documentElement)
+      .getPropertyValue(name)
+      .trim();
+    return value || fallback;
+  };
+
   return (
     <div className={`bs-editor demo-editor ${className}`} ref={containerRef}>
       {isPreviewMode && (
@@ -1116,8 +1447,104 @@ export const DemoEditor = ({
           onToggleFullScreen={toggleFullScreen}
         />
       )}
+      {selectionMenu.visible &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            className="bs-editor__selection-menu"
+            data-placement={selectionMenu.placement}
+            style={
+              {
+                "--bs-selection-x": `${selectionMenu.x}px`,
+                "--bs-selection-y": `${selectionMenu.y}px`,
+              } as React.CSSProperties
+            }
+            role="menu"
+            aria-label="Selection actions"
+          >
+            <button
+              type="button"
+              className="bs-editor__selection-btn"
+              onClick={handleCopySelection}
+              onMouseDown={(event) => event.preventDefault()}
+              aria-label="Copy"
+              title="Copy"
+            >
+              <Copy size={16} />
+            </button>
+            <button
+              type="button"
+              className="bs-editor__selection-btn"
+              onClick={handlePasteSelection}
+              onMouseDown={(event) => event.preventDefault()}
+              aria-label="Paste"
+              title="Paste"
+            >
+              <ClipboardPaste size={16} />
+            </button>
+            <button
+              type="button"
+              className="bs-editor__selection-btn"
+              onClick={() => editor?.chain().focus().toggleBold().run()}
+              onMouseDown={(event) => event.preventDefault()}
+              aria-label="Bold"
+              title="Bold"
+            >
+              <Bold size={16} />
+            </button>
+            <button
+              type="button"
+              className="bs-editor__selection-btn"
+              onClick={() => editor?.chain().focus().toggleItalic().run()}
+              onMouseDown={(event) => event.preventDefault()}
+              aria-label="Italic"
+              title="Italic"
+            >
+              <Italic size={16} />
+            </button>
+            <button
+              type="button"
+              className="bs-editor__selection-btn"
+              onClick={() => editor?.chain().focus().toggleUnderline().run()}
+              onMouseDown={(event) => event.preventDefault()}
+              aria-label="Underline"
+              title="Underline"
+            >
+              <UnderlineIcon size={16} />
+            </button>
+            <button
+              type="button"
+              className="bs-editor__selection-btn"
+              onClick={() =>
+                editor
+                  ?.chain()
+                  .focus()
+                  .toggleHighlight({
+                    color: resolveCssColor("--brand-coral", "#E85D26"),
+                  })
+                .run()
+              }
+              onMouseDown={(event) => event.preventDefault()}
+              aria-label="Highlight"
+              title="Highlight"
+            >
+              <Highlighter size={16} />
+            </button>
+            <button
+              type="button"
+              className="bs-editor__selection-btn"
+              onClick={handleSetLink}
+              onMouseDown={(event) => event.preventDefault()}
+              aria-label="Insert Link"
+              title="Insert Link"
+            >
+              <LinkIcon size={16} />
+            </button>
+          </div>,
+          document.body,
+        )}
       <div className="bs-editor__main">
-        <div className="bs-editor__scroll bs-editor__content">
+        <div className="bs-editor__scroll bs-editor__content" ref={scrollRef}>
           <EditorContent editor={editor} />
         </div>
 

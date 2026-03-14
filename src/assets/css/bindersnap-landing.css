@@ -1450,6 +1450,130 @@ footer {
 
 
 /* ─────────────────────────────────────
+   RESPONSIVE
+───────────────────────────────────── */
+
+@media (max-width: 1100px) {
+  .hero-inner { padding: var(--brand-space-16) var(--brand-page-padding-x) 0; }
+  .hero-mockup { max-width: 980px; }
+  .features-grid { grid-template-columns: repeat(2, 1fr); }
+  .section-compliance { gap: var(--brand-space-16); }
+}
+
+@media (max-width: 900px) {
+  .nav-badge {
+    position: static;
+    transform: none;
+    order: 3;
+    margin-top: var(--brand-space-2);
+  }
+
+  .nav-inner {
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: var(--brand-space-2);
+    padding: var(--brand-space-2) 0;
+  }
+
+  .nav-right { gap: var(--brand-space-2); }
+
+  .hero { padding-top: calc(var(--brand-nav-height) + var(--brand-space-8)); }
+  .hero-inner { padding: var(--brand-space-12) var(--brand-page-padding-x) 0; }
+  .hero-sub { font-size: 16px; }
+  .waitlist-row { flex-wrap: wrap; justify-content: center; }
+  .hero-mockup { margin-top: var(--brand-space-12); }
+
+  .chaos-inner {
+    grid-template-columns: 1fr;
+    gap: var(--brand-space-12);
+  }
+
+  .compare-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .section-compliance {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  nav { height: auto; }
+  .nav-cta-link { padding: 8px 16px; font-size: 12px; }
+
+  .hero { min-height: 100vh; }
+  .hero-h1 {
+    font-size: clamp(36px, 8vw, 52px);
+    max-width: 100%;
+  }
+  .hero-sub { margin-bottom: var(--brand-space-8); }
+
+  .email-row {
+    flex-direction: column;
+    border-radius: var(--brand-radius-lg);
+  }
+  .email-row button {
+    margin: 0 3px 3px 3px;
+    border-radius: 9px;
+    width: calc(100% - 6px);
+    padding: 13px;
+  }
+
+  .hero-mockup::after { height: 80px; }
+  .hero-mockup {
+    margin-top: var(--brand-space-10);
+    height: calc(100vh - var(--brand-nav-height) - var(--brand-space-10));
+    position: sticky;
+    top: var(--brand-nav-height);
+  }
+  .mockup-chrome { display: none; }
+  .mockup-editor {
+    height: 100%;
+    border-top: var(--e-border-1) solid var(--bs-rule);
+    border-radius: var(--brand-radius-xl);
+  }
+
+  .features-grid { grid-template-columns: 1fr; }
+  .feat { padding: 28px 24px; }
+
+  .section-compare { padding: var(--brand-section-padding-y-sm) var(--brand-page-padding-x); }
+  .compare-item { padding: 12px 20px; }
+
+  .cert-grid { grid-template-columns: 1fr; }
+
+  .cta-inner { padding: var(--brand-space-16) var(--brand-space-8); }
+
+  .footer-bottom {
+    flex-direction: column;
+    gap: var(--brand-space-2);
+  }
+}
+
+@media (max-width: 560px) {
+  .hero-inner { padding: var(--brand-space-10) var(--brand-page-padding-x) 0; }
+  .chaos-pill { flex-wrap: wrap; justify-content: center; }
+  .chaos-file { font-size: 10px; }
+  .waitlist-text { text-align: center; }
+  .mockup-editor { border-radius: var(--brand-radius-lg); }
+  .comp-item { padding: 14px 16px; }
+  .cta-inner { padding: var(--brand-space-12) var(--brand-space-6); }
+}
+
+@media (max-width: 420px) {
+  .nav-inner { align-items: flex-start; }
+  .nav-cta-link { width: 100%; text-align: center; }
+  .hero-h1 { font-size: clamp(30px, 9vw, 44px); }
+  .hero-sub { font-size: 15px; }
+  .email-row input { padding: 13px 14px; font-size: 14px; }
+  .cta-email-row { flex-direction: column; }
+  .cta-email-row button {
+    margin: 0 3px 3px 3px;
+    width: calc(100% - 6px);
+  }
+}
+
+
+/* ─────────────────────────────────────
    SCROLL REVEAL
    (uses same logic as .bs-reveal in
    tokens, but with page-specific class
