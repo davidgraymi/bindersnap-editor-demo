@@ -1,9 +1,11 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Bindersnap — Finally Kill the Email Approval Chain</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="/src/assets/css/index.css" />
   </head>
   <body>
@@ -37,21 +39,57 @@
           </div>
           <span class="logo-name">Bindersnap</span>
         </a>
-        <div class="bs-nav-badge">
-          <div class="bs-nav-badge-dot"></div>
-          <span id="nav-count">247 on the waitlist</span>
+        <div class="nav-right">
+          <div class="nav-badge">
+            <div class="nav-badge-dot"></div>
+            <span id="nav-count">247 on the waitlist</span>
+          </div>
+          <button
+            class="bs-theme-toggle theme-toggle"
+            onclick="toggleTheme()"
+            aria-label="Toggle dark mode"
+            title="Toggle dark / light mode"
+          >
+            <svg
+              class="icon-moon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            >
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+            </svg>
+            <svg
+              class="icon-sun"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            >
+              <circle cx="12" cy="12" r="5" />
+              <line x1="12" y1="1" x2="12" y2="3" />
+              <line x1="12" y1="21" x2="12" y2="23" />
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+              <line x1="1" y1="12" x2="3" y2="12" />
+              <line x1="21" y1="12" x2="23" y2="12" />
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+            </svg>
+          </button>
+          <a href="#waitlist" class="nav-cta-link">Join the Waitlist</a>
         </div>
-        <a href="#waitlist" class="nav-cta-link">Join the Waitlist</a>
       </div>
     </nav>
 
     <!-- HERO -->
     <section class="hero">
       <div class="hero-inner">
-        <!-- Empathy hook pill -->
-        <div class="bs-pill chaos-pill">
+        <div class="chaos-pill">
           <span class="chaos-pill-emoji">😩</span>
-          <span class="bs-file-chip"
+          <span class="chaos-file"
             >contract_FINAL_v2_JanEdits_APPROVED(1).docx</span
           >
           <span class="chaos-pill-text">Sound familiar?</span>
@@ -64,7 +102,7 @@
         </h1>
 
         <p class="hero-sub">
-          Bindersnap is the document tool your team will actually use —
+          Bindersnap is the document tool your team will actually use &mdash;
           <strong>as easy as Word, as collaborative as Notion,</strong>
           with GitHub-style version control and a real approval trail. No more
           reply-all nightmares.
@@ -81,14 +119,14 @@
         </div>
 
         <div class="hero-form-wrap" id="hero-area">
-          <div class="bs-email-row" id="hero-form">
+          <div class="email-row" id="hero-form">
             <input
               type="email"
               id="hero-email"
               placeholder="your@company.com"
               autocomplete="email"
             />
-            <button onclick="signup('hero')">Get Early Access →</button>
+            <button onclick="signup('hero')">Get Early Access &rarr;</button>
           </div>
           <p class="form-hint">
             <svg
@@ -100,7 +138,7 @@
               <circle cx="6" cy="6" r="5" />
               <path d="M6 4v2.5l1.5 1" />
             </svg>
-            Free to join · No credit card · First when we launch
+            Free to join &middot; No credit card &middot; First when we launch
           </p>
           <div class="hero-success" id="hero-success">
             <div class="success-ring">
@@ -126,7 +164,7 @@
               <span></span><span></span><span></span>
             </div>
             <div class="mockup-bar">
-              app.bindersnap.com — Q4 Vendor Agreement · In Review
+              app.bindersnap.com &mdash; Q4 Vendor Agreement &middot; In Review
             </div>
           </div>
           <img
@@ -138,16 +176,16 @@
       </div>
     </section>
 
-    <!-- CHAOS STRIP — The villain -->
+    <!-- CHAOS STRIP -->
     <section class="chaos-strip">
       <div class="chaos-inner">
         <div class="chaos-left reveal">
           <div class="overline">The Problem</div>
           <h2>Email was never built for<br /><em>document governance.</em></h2>
           <p>
-            Every approval process eventually collapses into the same chaos — a
-            trail of reply-alls, mismatched attachments, and the haunting
-            question:
+            Every approval process eventually collapses into the same chaos
+            &mdash; a trail of reply-alls, mismatched attachments, and the
+            haunting question:
             <em style="color: rgba(245, 240, 232, 0.5)"
               >"Wait, which version did we actually sign off on?"</em
             >
@@ -155,7 +193,7 @@
             You deserve better than that.
           </p>
         </div>
-        <!-- The villain: an email thread mockup -->
+
         <div class="email-thread reveal reveal-d2">
           <div class="thread-header">
             <div class="thread-dots">
@@ -194,8 +232,8 @@
                 <span class="email-time">Mon 11:43 AM</span>
               </div>
               <div class="email-body">
-                Wait — did anyone approve the clause on page 4? I'm seeing two
-                different versions floating around.
+                Wait &mdash; did anyone approve the clause on page 4? I'm seeing
+                two different versions floating around.
               </div>
             </div>
             <div class="email-msg">
@@ -238,7 +276,7 @@
     <section>
       <div class="section-features">
         <div class="features-eyebrow reveal">
-          <div class="bs-eyebrow">The Solution</div>
+          <div class="eyebrow-tag">The Solution</div>
         </div>
         <h2 class="features-title reveal">
           One tool that <em>actually</em> handles the whole process
@@ -265,10 +303,11 @@
             <h3>Familiar as Word</h3>
             <p>
               A rich document editor your whole team can use without a training
-              session. If they can use Word, they can use Bindersnap — on day
-              one.
+              session. If they can use Word, they can use Bindersnap &mdash; on
+              day one.
             </p>
           </div>
+
           <div class="feat reveal reveal-d2">
             <div class="feat-tag">Collaborate</div>
             <div class="feat-icon">
@@ -290,6 +329,7 @@
               and forth.
             </p>
           </div>
+
           <div class="feat reveal reveal-d3">
             <div class="feat-tag">Approve</div>
             <div class="feat-icon">
@@ -307,7 +347,7 @@
             <p>
               Every change is tracked. Every approval is logged. Propose changes
               as pull requests, get explicit sign-off, and know exactly who
-              approved what — and when.
+              approved what &mdash; and when.
             </p>
           </div>
         </div>
@@ -319,7 +359,7 @@
       <div class="compare-inner">
         <div class="compare-header reveal">
           <h2>Before Bindersnap.<br /><em>After</em> Bindersnap.</h2>
-          <p>The same workflow — completely transformed.</p>
+          <p>The same workflow &mdash; completely transformed.</p>
         </div>
         <div class="compare-grid">
           <div class="compare-col before reveal reveal-d1">
@@ -385,6 +425,7 @@
               </div>
             </div>
           </div>
+
           <div class="compare-col after reveal reveal-d2">
             <div class="compare-col-header">
               <div class="col-dot"></div>
@@ -459,7 +500,7 @@
           <div class="overline">Enterprise-Ready</div>
           <h2>Built for teams that<br />answer to <em>auditors.</em></h2>
           <p>
-            Bindersnap isn't just convenient — it's built to the security
+            Bindersnap isn't just convenient &mdash; it's built to the security
             standards that regulated industries demand. Whether you're in law,
             finance, or healthcare, your documents are safe.
           </p>
@@ -523,6 +564,7 @@
             </div>
           </div>
         </div>
+
         <div class="cert-grid reveal reveal-d2">
           <div class="cert-card">
             <img
@@ -575,7 +617,9 @@
             />
             <button onclick="signup('cta')">Join the Waitlist</button>
           </div>
-          <p class="cta-hint">No spam · No commitment · Just first access</p>
+          <p class="cta-hint">
+            No spam &middot; No commitment &middot; Just first access
+          </p>
           <div class="cta-success" id="cta-success">
             <div class="cta-success-ring">
               <svg
@@ -634,17 +678,37 @@
         </p>
         <div class="footer-rule"></div>
         <div class="footer-bottom">
-          <span class="footer-copy">© 2025 BINDERSNAP</span>
+          <span class="footer-copy">&copy; 2025 BINDERSNAP</span>
           <span class="footer-love"
             >Made for teams that answer to auditors
-            <span class="heart">♥</span></span
+            <span class="heart">&hearts;</span></span
           >
         </div>
       </div>
     </footer>
 
     <script>
-      /* ── Scroll reveal ── */
+      /* Theme toggle */
+      function toggleTheme() {
+        const html = document.documentElement;
+        const isDark = html.getAttribute("data-theme") === "dark";
+        html.setAttribute("data-theme", isDark ? "light" : "dark");
+        localStorage.setItem("bs-theme", isDark ? "light" : "dark");
+      }
+
+      /* Restore saved theme or follow OS preference */
+      (function () {
+        const saved = localStorage.getItem("bs-theme");
+        const prefersDark = window.matchMedia(
+          "(prefers-color-scheme: dark)",
+        ).matches;
+        document.documentElement.setAttribute(
+          "data-theme",
+          saved || (prefersDark ? "dark" : "light"),
+        );
+      })();
+
+      /* Scroll reveal */
       const io = new IntersectionObserver(
         (entries) => {
           entries.forEach((e) => {
@@ -658,7 +722,7 @@
       );
       document.querySelectorAll(".reveal").forEach((el) => io.observe(el));
 
-      /* ── Signup ── */
+      /* Waitlist signup */
       let count = 247;
 
       function signup(src) {
@@ -670,8 +734,6 @@
           setTimeout(() => (inp.style.outline = ""), 1500);
           return;
         }
-
-        // Hide form, show success
         document.getElementById(
           src === "hero" ? "hero-form" : "cta-form",
         ).style.display = "none";
@@ -681,18 +743,15 @@
         document
           .querySelectorAll(".form-hint, .cta-hint")
           .forEach((h) => (h.style.display = "none"));
-
-        // Update counters
         count++;
         document.getElementById("waitlist-count").textContent = count;
         document.getElementById("nav-count").textContent =
           count + " on the waitlist";
-
         console.log("Waitlist signup:", email);
-        // → POST to your backend / Mailchimp / Resend here
+        /* TODO: POST to your backend / Mailchimp / Resend here */
       }
 
-      // Enter key
+      /* Enter key submits form */
       ["hero-email", "cta-email"].forEach((id) => {
         document.getElementById(id)?.addEventListener("keydown", (e) => {
           if (e.key === "Enter") signup(id.replace("-email", ""));
