@@ -56,14 +56,16 @@
   --e-coral-glow: var(--bs-coral-glow);
   --e-green:      var(--brand-green);
   --e-green-dim:  var(--bs-green-dim);
+  --e-blue:       hsl(212 92% 58%);
+  --e-blue-dim:   color-mix(in srgb, var(--e-blue) 14%, var(--e-surface-1));
 
   /* ── Semantic extension colours ── */
   /* Merge conflicts */
   --e-conflict-ours:    color-mix(in srgb, var(--brand-green) 14%, var(--e-surface-1));
-  --e-conflict-theirs:  color-mix(in srgb, var(--brand-coral) 12%, var(--e-surface-1));
+  --e-conflict-theirs:  var(--e-blue-dim);
   --e-conflict-base:    color-mix(in srgb, var(--bs-text-faint) 18%, var(--e-surface-1));
   --e-conflict-bar-our: var(--brand-green);
-  --e-conflict-bar-th:  var(--brand-coral);
+  --e-conflict-bar-th:  var(--e-blue);
   --e-conflict-bar-base:var(--bs-text-faint);
 
   /* Tracked changes */
@@ -112,6 +114,10 @@
   --bs-editor-sidebar-default: calc(var(--brand-space-16) * 4);
   --bs-editor-sidebar-min:     calc(var(--brand-space-16) * 3);
   --bs-editor-sidebar-max:     calc(var(--brand-space-16) * 10);
+
+  /* ── Code block colors (fixed dark surface) ── */
+  --e-code-bg:   color-mix(in srgb, black 85%, var(--bs-text-primary));
+  --e-code-text: var(--brand-on-dark-primary);
 }
 
 
@@ -821,7 +827,7 @@
 /* ── Code block ── */
 
 .bs-editor .ProseMirror pre {
-  background: var(--e-text);         /* always ink — code blocks are dark */
+  background: var(--e-code-bg);         /* always ink — code blocks are dark */
   border-radius: var(--brand-radius-lg);
   padding: var(--brand-space-5) var(--brand-space-6);
   margin: 1.5em 0;
@@ -833,7 +839,7 @@
   font-family: var(--e-font-mono);
   font-size: var(--brand-text-xs);
   line-height: 1.7;
-  color: var(--brand-on-dark-primary);              /* always light cream on dark code bg */
+  color: var(--e-code-text);              /* always light cream on dark code bg */
   background: transparent;
   border: none;
   padding: 0;
@@ -1074,6 +1080,13 @@
   gap: var(--brand-space-2);
 }
 
+.bs-editor .bs-conflict__branch {
+  margin-left: auto;
+  font-size: var(--brand-text-label);
+  color: var(--e-text-4);
+  letter-spacing: var(--brand-tracking-wide);
+}
+
 .bs-editor .bs-conflict__zone--ours   .bs-conflict__label { color: var(--e-conflict-bar-our); }
 .bs-editor .bs-conflict__zone--theirs .bs-conflict__label { color: var(--e-conflict-bar-th);  }
 .bs-editor .bs-conflict__zone--base   .bs-conflict__label { color: var(--e-conflict-bar-base);}
@@ -1092,6 +1105,19 @@
 /* Content inside zones — remove bottom margin on last child */
 .bs-editor .bs-conflict__zone > *:last-child { margin-bottom: 0; }
 
+.bs-editor .bs-conflict__content,
+.bs-editor .bs-conflict__preview {
+  color: var(--e-text-2);
+}
+
+.bs-editor .bs-conflict__preview > *:last-child {
+  margin-bottom: 0;
+}
+
+.bs-editor .bs-conflict__preview p {
+  margin: 0 0 1em;
+}
+
 /* Divider bar between zones */
 .bs-editor .bs-conflict__divider {
   display: flex;
@@ -1104,6 +1130,13 @@
 }
 
 .bs-editor .bs-conflict__divider > span {
+  font-family: var(--e-font-mono);
+  font-size: var(--brand-text-label);
+  color: var(--e-text-4);
+  letter-spacing: var(--brand-tracking-wide);
+}
+
+.bs-editor .bs-conflict__resolved-note {
   font-family: var(--e-font-mono);
   font-size: var(--brand-text-label);
   color: var(--e-text-4);

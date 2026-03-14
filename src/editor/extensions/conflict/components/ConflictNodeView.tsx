@@ -1,16 +1,8 @@
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useCallback } from "react";
 import { NodeViewWrapper, NodeViewContent } from "@tiptap/react";
 import type { ReactNodeViewProps } from "@tiptap/react";
 import { DOMSerializer } from "@tiptap/pm/model";
 import type { Editor } from "@tiptap/core";
-import {
-  AlertTriangle,
-  Check,
-  ChevronDown,
-  ChevronUp,
-  GitBranch,
-  GitCommitVertical,
-} from "lucide-react";
 
 type BranchType = "ours" | "theirs" | "manual";
 
@@ -21,27 +13,12 @@ type BranchType = "ours" | "theirs" | "manual";
 const RichTextPreview = ({
   editor,
   content,
-  label,
-  branchName,
-  color,
-  icon: Icon,
 }: {
   editor: Editor;
-  content: any[] | null;
-  label: string;
-  branchName: string;
-  color: string;
-  icon: React.ComponentType<{ size: number }>;
+  content: any[] | null | undefined;
 }) => {
-  const c = {
-    border: `border-${color}-200`,
-    header: `bg-${color}-50`,
-    text: `text-${color}-700`,
-    dimText: `text-${color}-400`,
-  };
-
-  // Use ProseMirror's DOMSerializer to render using the editor's schema
   const html = useMemo(() => {
+    if (!content || content.length === 0) return "";
     try {
       const { schema } = editor;
       const doc = schema.nodeFromJSON({ type: "doc", content });
@@ -57,27 +34,10 @@ const RichTextPreview = ({
 
   return (
     <div
-      className={`flex flex-col rounded-md border ${c.border} overflow-hidden`}
-    >
-      <div
-        className={`flex items-center justify-between px-3 py-1.5 ${c.header}`}
-      >
-        <span
-          className={`flex items-center gap-1.5 text-xs font-semibold ${c.text}`}
-        >
-          <Icon size={12} />
-          {label}
-        </span>
-        <span className={`text-[10px] font-medium ${c.dimText}`}>
-          {branchName}
-        </span>
-      </div>
-      <div
-        className={`p-3`}
-        // biome-ignore lint: Rich text preview from trusted source
-        dangerouslySetInnerHTML={{ __html: html }}
-      />
-    </div>
+      className="bs-conflict__preview"
+      // biome-ignore lint: Rich text preview from trusted source
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
   );
 };
 
@@ -87,14 +47,7 @@ export const ConflictNodeView = (props: ReactNodeViewProps) => {
   const resolved = node.attrs.resolved;
   const acceptedBranch = node.attrs.acceptedBranch;
   const replaceNodeOnResolve = extension.options.replaceNodeOnResolve;
-  const [isExpanded, setIsExpanded] = useState(false);
-
-  const wrapperClass = useMemo(() => {
-    if (resolved) {
-      return "conflict-node relative rounded-md border-2 border-green-400 transition-all my-2";
-    }
-    return "conflict-node relative rounded-md border-2 border-amber-400 transition-all my-2";
-  }, [resolved]);
+  const hasBase = Array.isArray(node.attrs.baseContent);
 
   const handleResolve = useCallback(
     (branch: BranchType) => {
@@ -114,21 +67,16 @@ export const ConflictNodeView = (props: ReactNodeViewProps) => {
         const getContent = () => {
           switch (branch) {
             case "theirs":
-              // Parse the JSON content back into ProseMirror nodes
-              // TODO: is this necessary?
-              return conflictNode.attrs.theirContent.map((nodeJson: any) =>
+              return (conflictNode.attrs.theirContent ?? []).map((nodeJson: any) =>
                 state.schema.nodeFromJSON(nodeJson),
               );
             case "ours":
-              // Parse the JSON content back into ProseMirror nodes
-              // TODO: is this necessary?
-              return conflictNode.attrs.ourContent.map((nodeJson: any) =>
+              return (conflictNode.attrs.ourContent ?? []).map((nodeJson: any) =>
                 state.schema.nodeFromJSON(nodeJson),
               );
             case "manual":
               return conflictNode.content;
             default:
-              console.error("Invalid branch type: ", branch);
               return [];
           }
         };
@@ -142,7 +90,6 @@ export const ConflictNodeView = (props: ReactNodeViewProps) => {
       }
 
       // Update attributes to mark as resolved
-      // After replaceWith, we need to re-find the node at pos
       tr.setNodeMarkup(pos, undefined, {
         ...conflictNode.attrs,
         resolved: true,
@@ -150,15 +97,14 @@ export const ConflictNodeView = (props: ReactNodeViewProps) => {
       });
 
       editor.view.dispatch(tr);
-      setIsExpanded(false);
     },
-    [editor, getPos],
+    [editor, getPos, replaceNodeOnResolve],
   );
 
   const branchLabel = useMemo(() => {
     switch (acceptedBranch) {
       case "ours":
-        return `${node.attrs.ourBranch} (ours)`;
+        return `${node.attrs.ourBranch} (yours)`;
       case "theirs":
         return `${node.attrs.theirBranch} (theirs)`;
       case "manual":
@@ -170,108 +116,78 @@ export const ConflictNodeView = (props: ReactNodeViewProps) => {
 
   return (
     <NodeViewWrapper
-      className={wrapperClass}
+      className={`bs-conflict${resolved ? " bs-conflict--resolved" : ""}`}
       id={`conflict-id-${node.attrs.conflictId}`}
     >
-      {/* Header bar */}
-      {resolved ? (
-        <div className="flex justify-between">
-          <div className="flex w-fit items-center gap-1 rounded-br-md bg-green-400 px-2 py-0.5 text-xs font-medium text-green-900">
-            <Check size={12} strokeWidth={3} />
-            Resolved — {branchLabel}
+      <div className="bs-conflict__zone bs-conflict__zone--ours">
+        <div className="bs-conflict__label">
+          Current (yours)
+          <span className="bs-conflict__branch">{node.attrs.ourBranch}</span>
+        </div>
+        <NodeViewContent className="bs-conflict__content" />
+      </div>
+
+      {hasBase && (
+        <>
+          <div className="bs-conflict__divider">
+            <span>======= base</span>
           </div>
-          <button
-            type="button"
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium bg-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+          <div
+            className="bs-conflict__zone bs-conflict__zone--base"
             contentEditable={false}
           >
-            {isExpanded ? (
-              <>
-                <ChevronUp size={12} /> Collapse
-              </>
-            ) : (
-              <>
-                <ChevronDown size={12} /> Compare
-              </>
-            )}
-          </button>
-        </div>
-      ) : (
-        <div className="flex justify-between">
-          <div className="flex w-fit items-center gap-1 rounded-br-md bg-amber-400 px-2 py-0.5 text-xs font-medium text-gray-700">
-            <AlertTriangle size={12} />
-            Conflict
+            <div className="bs-conflict__label">
+              Base
+              <span className="bs-conflict__branch">
+                {node.attrs.baseBranch || "base"}
+              </span>
+            </div>
+            <RichTextPreview editor={editor} content={node.attrs.baseContent} />
           </div>
-          <button
-            type="button"
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium bg-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
-            contentEditable={false}
-          >
-            {isExpanded ? (
-              <>
-                <ChevronUp size={12} /> Collapse
-              </>
-            ) : (
-              <>
-                <ChevronDown size={12} /> Compare
-              </>
-            )}
-          </button>
-        </div>
+        </>
       )}
 
-      {/* Main content (editable) */}
-      <NodeViewContent className="conflict-content px-3 py-2" />
+      <div className="bs-conflict__divider">
+        <span>======= incoming</span>
+        {resolved && branchLabel ? (
+          <span className="bs-conflict__resolved-note">Resolved — {branchLabel}</span>
+        ) : null}
+      </div>
 
-      {/* Side-by-side comparison panel (inline, not a portal) */}
-      {isExpanded && (
-        <div
-          className="rounded-b-md border-t border-gray-200 bg-gray-50/50 p-3"
-          contentEditable={false}
-        >
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <RichTextPreview
-              editor={editor}
-              content={node.attrs.ourContent}
-              label="Ours"
-              branchName={node.attrs.ourBranch}
-              color="orange"
-              icon={GitCommitVertical}
-            />
-            <RichTextPreview
-              editor={editor}
-              content={node.attrs.theirContent}
-              label="Theirs"
-              branchName={node.attrs.theirBranch}
-              color="blue"
-              icon={GitBranch}
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => handleResolve("ours")}
-              className="flex-1 rounded-md border border-orange-200 bg-orange-50 px-3 py-1.5 text-xs font-semibold text-orange-700 hover:bg-orange-100 transition-colors"
-            >
-              Accept Ours
-            </button>
-            <button
-              type="button"
-              onClick={() => handleResolve("theirs")}
-              className="flex-1 rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-colors"
-            >
-              Accept Theirs
-            </button>
-            <button
-              type="button"
-              onClick={() => handleResolve("manual")}
-              className="rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-50 transition-colors"
-            >
-              Keep as-is
-            </button>
-          </div>
+      <div
+        className="bs-conflict__zone bs-conflict__zone--theirs"
+        contentEditable={false}
+      >
+        <div className="bs-conflict__label">
+          Incoming
+          <span className="bs-conflict__branch">{node.attrs.theirBranch}</span>
+        </div>
+        <RichTextPreview editor={editor} content={node.attrs.theirContent} />
+      </div>
+
+      {!resolved && (
+        <div className="bs-conflict__actions" contentEditable={false}>
+          <button
+            type="button"
+            onClick={() => handleResolve("ours")}
+            className="bs-conflict__resolve-btn bs-conflict__resolve-btn--accept-ours"
+          >
+            Accept Yours
+          </button>
+          <button
+            type="button"
+            onClick={() => handleResolve("theirs")}
+            className="bs-conflict__resolve-btn bs-conflict__resolve-btn--accept-theirs"
+          >
+            Accept Theirs
+          </button>
+          <button
+            type="button"
+            onClick={() => handleResolve("manual")}
+            className="bs-conflict__resolve-btn bs-conflict__resolve-btn--accept-both"
+          >
+            Keep Both
+          </button>
         </div>
       )}
     </NodeViewWrapper>
