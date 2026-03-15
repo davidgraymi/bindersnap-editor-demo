@@ -267,61 +267,143 @@ state, enabling efficient lookup by change ID without scanning the entire doc.
 
 ---
 
-#### 3. `ApprovalBlock` — Status: Planned
+#### 3. `ApprovalStatus` — Status: Planned
 
-**What it does:** Wraps a section of a document (or the entire document) in
-an approval state container. The container has three states: `pending`,
-`approved`, `rejected`. Approved content is locked — the ProseMirror schema
-and plugin layer prevent edits inside an approved block. Editing an approved
-block requires explicitly "unlocking" it, which creates a new review cycle.
+**What it does:** Renders a read-only status banner above the editor reflecting
+the current approval state of the document — its Gitea PR status. This is a
+**decoration rendered outside the document content area**, not a ProseMirror
+node. It does not exist in the document's serialized JSON and has no effect
+on what gets committed to Gitea.
 
-**Why it's important:** This is the core differentiator. Most document tools
-add approvals as a metadata field on the document. Bindersnap makes approval
-a _structural property of the document content itself_. A contract can have
-an approved boilerplate section and a pending negotiated section in the same
-document, at the same time.
+**Why not `ApprovalBlock` (section-level locking)?** An earlier design proposed
+an `approvalBlock` ProseMirror node that would lock sections of a document via
+a client-side transaction filter. This was rejected for three reasons:
+
+1. **Git branch protection is the correct locking primitive.** When `main` is
+   protected and requires approvals to merge, the API enforces that rule — not
+   the frontend. A client-side transaction filter is theater: it can be bypassed,
+   it pollutes the document schema with approval metadata that has no business
+   being in the document content, and it creates a false sense of security.
+
+2. **Section-level approval granularity is solved by the clause library.**
+   The real user need behind `ApprovalBlock` — "I don't want reviewers to change
+   this pre-approved boilerplate" — is correctly addressed by embedding approved
+   clause documents via the `ClauseEmbed` extension (see below). Each clause is
+   its own document with its own git history and branch protection. The host
+   document simply references it.
+
+3. **What gets committed to Gitea should be clean document content.** Approval
+   status, lock state, and review metadata are workflow concerns. They belong in
+   the Postgres `approval_events` table and the Gitea PR state — not embedded as
+   nodes or attributes inside the document JSON.
 
 **Architecture:**
 
 ```
-Node: approvalBlock
-  attrs: {
-    status:    "pending" | "approved" | "rejected",
-    approver:  string | null,
-    approvedAt: number | null,
-    gitSha:    string | null  // Gitea commit SHA at time of approval — tamper-evident anchor
-  }
-  content: block+
-  selectable: true
-  draggable: false
+ApprovalStatusBanner (React component, rendered outside EditorContent)
+  — driven by: Gitea PR status fetched via REST API
+  — states: "Draft" | "In Review" | "Changes Requested" | "Approved"
+  — does NOT affect document serialization in any way
 ```
 
-The locking mechanism: A ProseMirror plugin filters transactions that would
-modify the content of an `approvalBlock` with `status: "approved"`. These
-transactions are silently dropped unless they come with a special
-`{meta: {unlock: true}}` flag set by the `unlockApprovalBlock` command (which
-triggers a confirmation UI before proceeding).
-
-The `gitSha` attribute is the Gitea commit SHA of the document at the moment
-the block was approved. This provides a tamper-evident anchor — an auditor can
-independently verify the approved content by checking that SHA in the Gitea
-repository. No proprietary hashing scheme is required; it's just git.
-
-**Key commands:**
-
-- `submitForApproval(pos)` — set status to `pending`
-- `approveBlock(pos, approver)` — set status to `approved`, lock, stamp hash
-- `rejectBlock(pos, approver, note)` — set status to `rejected`, add note
-- `unlockApprovalBlock(pos)` — begin new review cycle (requires confirmation)
+The banner is passed into `BindersnapEditor` as a prop (`approvalStatus`) and
+rendered above the ProseMirror scroll area. Enforcement of the approval gate
+happens at the Gitea branch protection layer when a merge is attempted — the
+banner is purely informational.
 
 **CSS classes:** `.bs-approval`, `.bs-approval--pending`,
-`.bs-approval--approved`, `.bs-approval--rejected`, `.bs-approval__badge`,
-`.bs-approval__content`, `.bs-approval__meta` (see `bindersnap-editor.css`
-section 10c)
+`.bs-approval--approved`, `.bs-approval--rejected`, `.bs-approval__badge`
+(see `bindersnap-editor.css` section 10c — these classes remain for the banner,
+they are just no longer applied to document-content nodes)
 
 ---
 
-#### 4. `CommentAnchor` — Status: Planned
+#### 4. `ClauseEmbed` — Status: Planned
+
+**What it does:** Embeds a referenced clause document inline in the editor as
+a visually distinct, read-only block. A clause is a separate Bindersnap
+document — with its own file in the Gitea repository, its own version history,
+and its own CODEOWNERS-enforced branch protection. The host document stores
+only a reference (the clause's file path and pinned commit SHA). The
+`ClauseEmbed` extension fetches the clause content at render time and displays
+it in place.
+
+**Why this is the correct architecture for "approved sections":**
+
+Rather than locking a section _inside_ a document using client-side ProseMirror
+tricks, Bindersnap promotes approved standard language to _separate files_ in
+the git repository — the clause library. A contract that needs an approved
+liability waiver embeds a reference to that clause file. The clause lives at a
+known path in the repo, protected by CODEOWNERS. Nobody edits the clause inline
+in the contract — they edit the clause file through its own review cycle, and
+the contract author updates the pinned SHA when they want to pull in the newer
+version. The contract's JSON remains clean document content with no approval
+metadata embedded in it.
+
+This maps directly to how legal operations teams actually work: standard
+boilerplate is managed centrally and versioned independently of the contracts
+that use it.
+
+**Frontend rendering:** Because `clauseEmbed` stores a document ID and SHA as
+node attributes, the editor renders it as a fully interactive embedded view —
+showing the clause title, approval status, version number, and the actual
+rendered content, all inline in the reading flow. The user experience is a
+unified document. The data model is clean separation of concerns. The clause
+content is never literally in the host document's JSON — only the reference
+is. The display is assembled by the editor at render time from the fetched
+clause file.
+
+**CODEOWNERS integration:** Each clause file in the workspace Gitea repository
+has an entry in `CODEOWNERS` mapping it to the team responsible for approving
+changes:
+
+```
+# .gitea/CODEOWNERS
+/clauses/liability-waiver.json          @legal-team
+/clauses/payment-terms.json             @finance-team @legal-team
+/clauses/data-processing-addendum.json  @privacy-team
+```
+
+Any PR that modifies a clause file requires sign-off from the designated owners,
+enforced by Gitea at the API level. No frontend locking required. The clause
+library is just git, with CODEOWNERS providing the governance layer.
+
+**Architecture:**
+
+```
+Node: clauseEmbed
+  attrs: {
+    clauseId:  string   // Bindersnap document ID of the clause
+    gitSha:    string   // pinned commit SHA — which version is embedded
+    title:     string   // display name, cached at embed time for offline rendering
+  }
+  atom: true      (not editable inline — it is a reference, not content)
+  draggable: true
+```
+
+The node is rendered via a NodeView (React component) that:
+
+1. Reads `clauseId` and `gitSha` from node attrs.
+2. Fetches the clause document JSON from Gitea at the pinned SHA (aggressively
+   cached — clause content at a given SHA is immutable).
+3. Renders clause content using a nested read-only `BindersnapEditor` instance.
+4. Shows the clause title, version, approval badge, and a link to the source.
+5. Shows a "newer version available" badge when the clause has been updated
+   since the pinned SHA, with a one-click update action.
+
+**Key commands:**
+
+- `insertClause(clauseId, gitSha)` — insert a `clauseEmbed` node at cursor
+- `updateClausePinnedSha(pos, newSha)` — pin to a newer clause version
+- `detachClause(pos)` — convert the embed to editable inline content (with a
+  prominent warning that the content is now unmanaged)
+
+**CSS classes:** `.bs-clause-embed`, `.bs-clause-embed__header`,
+`.bs-clause-embed__content`, `.bs-clause-embed__update-badge`
+
+---
+
+#### 5. `CommentAnchor` — Status: Planned
 
 **What it does:** Anchors inline comment threads to specific text ranges in
 the document. Comments are _not_ stored inside the document — they live in the
@@ -360,7 +442,7 @@ range.
 
 ---
 
-#### 5. `VersionSnapshot` — Status: Planned
+#### 6. `VersionSnapshot` — Status: Planned
 
 **What it does:** Surfaces Gitea commit history inside the editor UI as named
 document versions. A "version" in Bindersnap terms is a Gitea commit on the
@@ -407,7 +489,7 @@ semantically-aware ProseMirror diff is computed.
 
 ---
 
-#### 6. `DocumentHeader` — Status: Planned
+#### 7. `DocumentHeader` — Status: Planned
 
 **What it does:** A structured metadata block that always appears at the top
 of a Bindersnap document. Unlike a heading (which is free text), the document
@@ -533,36 +615,62 @@ action (Cmd+S), on approval transitions, and on a debounced interval (30s).
 
 ## The Approval Workflow Model
 
-The approval system is the core business logic of Bindersnap. It works at two
-levels:
+The approval system is the core business logic of Bindersnap. It operates at
+the document level only. There is no sub-document locking — that concern is
+handled by the clause library architecture instead.
 
-### Document-level approval
+### Document-level approval via Gitea PRs
 
-A document as a whole can be submitted for review, approved, or rejected. This
-transitions the document's `status` field and triggers notifications to
-reviewers. This is a metadata operation — it does not affect the editor state.
+A document is approved by merging its `review/*` branch into `main` through a
+Gitea pull request. The PR must satisfy the branch protection rules configured
+for `main` — typically: N required approvals from designated reviewers, no
+outstanding change requests, all status checks passing. This is enforced by
+Gitea at the API level. Bindersnap's UI surfaces the PR workflow as human
+language ("Submit for Review", "Approve", "Request Changes", "Merge") — users
+never interact with git directly.
 
-### Block-level approval
-
-Individual `approvalBlock` nodes within a document can be approved
-independently. This is where Bindersnap is genuinely novel — you can have a
-contract where the boilerplate sections are approved and locked, and the
-negotiated terms sections are still in review, all in the same document at the
-same time.
-
-**The audit log:** Every approval event (submit, approve, reject, unlock) is
-written as an immutable append-only record to an `approval_events` table:
+The approval states map to Gitea PR states:
 
 ```
-{ documentId, gitSha, action, actorId, timestamp, note }
+Draft               → document on draft/* branch, no open PR
+In Review           → open PR from review/* to main
+Changes Requested   → PR has review requesting changes
+Approved            → PR has required approvals, ready to merge
+Merged / Approved   → PR merged, document on main
 ```
 
-The `gitSha` is the Gitea commit SHA of the document at the moment the approval
-event occurred. This is what makes the audit log legally defensible — the SHA
-is independently verifiable against the Gitea repository. Any third party (an
-auditor, a court) can clone the Gitea repo and confirm that the commit
-referenced by the approval event contains exactly the content that was approved.
-There is no proprietary hash to trust — it's just git.
+### Clause-level protection via CODEOWNERS
+
+The "approved section" problem — preventing casual edits to standard approved
+language inside a document — is solved architecturally by the clause library,
+not by in-editor locking. Standard clauses live as separate files in the Gitea
+repository. `CODEOWNERS` maps each clause file to the team that must approve
+changes to it. When a clause file is modified in a PR, Gitea automatically
+requires sign-off from the designated owners before the PR can merge.
+
+The host document contains only a reference to the clause (its file path and
+pinned SHA). The `ClauseEmbed` extension renders the clause content inline for
+reading. Editing the clause requires opening the clause document itself and
+going through its own review cycle.
+
+This architecture enforces the rule at the API layer (Gitea CODEOWNERS) rather
+than the UI layer (a JavaScript transaction filter). It is robust, independently
+auditable, and requires zero custom implementation beyond configuring CODEOWNERS.
+
+### The audit log
+
+Every approval event (submit, approve, reject, merge) is recorded as an
+immutable append-only entry in the `approval_events` Postgres table:
+
+```
+{ documentId, gitSha, prId, action, actorId, timestamp, note }
+```
+
+The `gitSha` is the Gitea commit SHA of the document file at the moment the
+event occurred. The `prId` is the Gitea PR number. Both are independently
+verifiable — an auditor can inspect the Gitea repository and confirm that the
+referenced SHA contains exactly the content that was approved. No proprietary
+hash to trust. It's just git.
 
 ---
 
@@ -716,12 +824,14 @@ src/
           plugin.ts              ← Transaction interceptor plugin
           commands.ts
           TrackedChanges.test.ts
-        ApprovalBlock/
-          index.ts
-          ApprovalBlockView.tsx
+        ApprovalStatus/
+          index.ts               ← ApprovalStatus banner decoration
+          ApprovalStatus.test.ts
+        ClauseEmbed/
+          index.ts               ← ClauseEmbed node + NodeView
+          ClauseEmbedView.tsx    ← React NodeView — fetches + renders clause
           commands.ts
-          plugin.ts
-          ApprovalBlock.test.ts
+          ClauseEmbed.test.ts
         CommentAnchor/
           index.ts
           plugin.ts
@@ -751,6 +861,7 @@ src/
       branches.ts                ← branch management for draft/review/main
     conflictParser.ts            ← Parses git conflict markers → ProseMirror nodes
     diffEngine.ts                ← ProseMirror JSON diff (Myers at text level for MVP)
+    clauseCache.ts               ← LRU cache for clause content at pinned SHAs
 
   assets/
     css/
@@ -838,8 +949,7 @@ means every version of every document has a cryptographically verifiable
 identity. Tampering with a historical version would require rewriting the
 commit history, which is detectable by anyone with a clone of the repository.
 
-The `gitSha` stored in `approvalBlock` nodes and `approval_events` records
-serves as a legally defensible reference point. An auditor, regulator, or court
+The `gitSha` stored in `approval_events` records serves as a legally defensible reference point. An auditor, regulator, or court
 can independently verify that the SHA in an approval record corresponds to
 specific document content by inspecting the Gitea repository directly — no
 Bindersnap-specific tooling required.
@@ -876,9 +986,10 @@ the approval workflow must be end-to-end._
 - [x] Tiptap base setup with all core extensions configured
 - [x] `bindersnap-editor.css` — full prose typography and extension styles
 - [x] `BindersnapEditor.tsx` component with toolbar and status bar
-- [ ] `ApprovalBlock` extension — pending / approved / rejected states
-- [ ] Document-level approval API integration (submit, approve, reject)
-- [ ] Basic version history (save + restore, no diff view yet)
+- [ ] `ApprovalStatus` banner — decoration reflecting Gitea PR state
+- [ ] Document-level approval via Gitea PR workflow (submit, approve, reject)
+- [ ] Gitea integration — Phase 1 subset: commit on save, basic PR lifecycle
+- [ ] Basic version history (commit list, restore from SHA, no diff view yet)
 - [ ] Hocuspocus real-time collaboration integration
 - [ ] Comment system (sidebar + `CommentAnchor` extension)
 - [ ] PDF export of approved document with approval metadata watermark
@@ -895,10 +1006,12 @@ document governance tool, not just a rich text editor._
 - [ ] `MergeConflict` extension — conflict marker parser + three-way merge via Gitea
 - [ ] Version diff view — ProseMirror-level diff renderer, side-by-side and unified
 - [ ] `VersionSnapshot` sidebar — commit history, open any version in read-only view
+- [ ] `ClauseEmbed` extension — insert clause references, fetch + render inline
+- [ ] Clause library UI — browse, search, and insert approved clauses
+- [ ] CODEOWNERS scaffolding — auto-generate CODEOWNERS for clause files
 - [ ] Review request workflow (assign reviewer, request changes, re-submit)
-- [ ] Block-level approval with `gitSha` anchor
 - [ ] Compare any two commits in diff view
-- [ ] Approval signature (typed name or drawn signature on `approvalBlock`)
+- [ ] Approval signature (typed name capture on PR merge event)
 
 ### Phase 3: Enterprise and compliance depth
 
@@ -907,11 +1020,11 @@ _Goal: Support regulated industry customers with strict compliance requirements.
 - [ ] `DocumentHeader` extension — structured document metadata
 - [ ] HIPAA compliance mode (audit all access, not just approvals)
 - [ ] SSO / SAML integration with Hocuspocus auth
-- [ ] Document templates with pre-approved boilerplate sections
-- [ ] Clause library — approved text blocks that can be inserted and are
-      version-tracked independently
-- [ ] Automated clause detection (surface when a clause matches a known
-      approved template)
+- [ ] Document templates (workspace-level templates with pre-inserted clause embeds)
+- [ ] Clause drift detection (surface when an embedded clause's pinned SHA is
+      behind the latest approved version of that clause)
+- [ ] Automated clause recognition (detect when inline text matches a known
+      clause and offer to convert it to a managed `clauseEmbed`)
 - [ ] eSignature integration (via DocuSign or native)
 - [ ] SOC 2 Type II audit log export format
 
@@ -920,8 +1033,8 @@ _Goal: Support regulated industry customers with strict compliance requirements.
 _Goal: Make Bindersnap the smartest document tool for regulated teams._
 
 - [ ] Inline AI drafting assistant (context-aware, trained on document type)
-- [ ] Clause comparison ("this clause differs from the approved version in your
-      template library in these ways")
+- [ ] Clause comparison ("this embedded clause differs from the latest approved
+      version of the clause in these ways — update or keep pinned version")
 - [ ] Risk flagging ("this section contains language that has been rejected in
       past approval cycles")
 - [ ] Auto-summary of changes between versions
@@ -935,10 +1048,12 @@ These are architectural questions that have not been definitively resolved
 and should be discussed before implementation begins on the relevant phase.
 
 **Q1: ProseMirror schema strictness vs. content flexibility**  
-The `ApprovalBlock` and `MergeConflict` nodes need to accept arbitrary block
-content. ProseMirror's `content` expression `block+` works, but it can cause
+The `MergeConflict` node needs to accept arbitrary block content inside each
+conflict zone. ProseMirror's `content` expression `block+` works, but can cause
 issues with paste handling and schema validation. Should we define a tighter
-allowed content list, or accept the flexibility trade-off?
+allowed content list, or accept the flexibility trade-off? (Note: `ApprovalBlock`
+has been removed as a document node — this question now applies only to
+`MergeConflict` and `ClauseEmbed`.)
 
 **Q2: Tracked changes storage — in-doc marks vs. out-of-doc store**  
 The current design stores tracked changes as ProseMirror marks inside the
@@ -993,6 +1108,26 @@ surrounding top-level node as conflicted and present it as raw text with a
 manual resolution UI, or (b) attempt to reconstruct valid JSON on both sides by
 context. Approach (a) is safer but may produce large conflict blocks for minor
 changes. Decision pending.
+
+**Q8: `ClauseEmbed` rendering — nested editor vs. HTML render**  
+The `ClauseEmbed` NodeView needs to render clause content inline. Two approaches:
+(a) instantiate a nested read-only `BindersnapEditor` inside the NodeView —
+gives full prose typography and extension support but has real performance
+implications if a document contains many clauses, and (b) render the clause
+content as static HTML using a lightweight serializer — faster, simpler, but
+loses interactive features like comment anchors inside embedded clauses. Leaning
+toward (b) for the MVP with (a) as a Phase 3 upgrade once performance
+characteristics are understood. Decision pending.
+
+**Q9: `ApprovalBlock` removal — CSS and editor stylesheet**  
+The `bindersnap-editor.css` file contains styling for `.bs-approval`,
+`.bs-approval--pending`, `.bs-approval--approved`, `.bs-approval--rejected`,
+etc. (section 10c). With `ApprovalBlock` removed as a document node, these
+classes are retained for the `ApprovalStatus` banner component but the
+`bs-approval__content` and `bs-approval__meta` classes that assumed document
+node structure should be reviewed and potentially removed. The editor stylesheet
+should be audited for any lock-related styles that were predicated on the old
+`approvalBlock` architecture.
 
 ---
 
