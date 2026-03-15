@@ -57,7 +57,7 @@ ProseMirror. This was a deliberate choice over alternatives:
   collaborative cursors) are solved problems. ProseMirror solves them extremely
   well. We should build novelty on solid ground.
 
-### Hocuspocus + Yjs for Collaboration
+### Hocuspocus + Yjs for Real-Time Collaboration
 
 Real-time collaboration is handled by
 [Hocuspocus](https://tiptap.dev/hocuspocus/) (Tiptap's collaboration server)
@@ -65,14 +65,63 @@ with [Yjs](https://yjs.dev/) CRDTs under the hood. This gives us:
 
 - Conflict-free real-time editing between multiple users
 - Presence indicators (cursors, selections) via `y-prosemirror`
-- Offline persistence with sync-on-reconnect
-- A foundation for the version history system (Yjs snapshots)
+- Offline persistence and sync-on-reconnect via IndexedDB
+- Operational transforms that resolve simultaneous keystrokes without conflict
 
-The key architectural principle here: **Yjs handles concurrent editing state,
-but Bindersnap's own version system handles approved snapshots.** These are
-different things and should never be conflated. A Yjs "update" is ephemeral
-coordination state. A Bindersnap "version" is an immutable, signed snapshot
-that represents a meaningful document state (a draft, a review, an approval).
+Yjs has a single, narrow responsibility: **making concurrent live editing work
+in the browser session.** It is the real-time coordination layer, nothing more.
+It is explicitly NOT responsible for version history, branching, merging, or
+approvals. Those concerns belong to Gitea (see below).
+
+### Gitea as the Version Control Backend
+
+Immutable version history, branching, merging, and approval workflows are
+handled by a self-hosted [Gitea](https://gitea.io/) instance via its REST API.
+
+This is a deliberate architectural choice over building a custom version control
+system. The reasoning:
+
+- **Legal defensibility.** Git's SHA-1/SHA-256 commit chain is cryptographically
+  well-understood and has established legal precedent. Courts and compliance
+  auditors have accepted git history as tamper-evident evidence because the hash
+  chain is independently verifiable without trusting any particular vendor's
+  implementation. A custom `contentHash` field in a Postgres table cannot make
+  that claim.
+
+- **Merge is already solved.** libgit2 (which Gitea uses internally) implements
+  a battle-tested three-way merge algorithm. Reimplementing three-way merge from
+  scratch — identifying common ancestors, diffing both sides, emitting conflict
+  markers — would mean owning a large, subtle, and security-critical piece of
+  infrastructure indefinitely.
+
+- **Protected branches map directly to approval workflows.** Gitea's branch
+  protection rules (require N approvals, require status checks, restrict who can
+  push to `main`) are a near-direct analogue to Bindersnap's approval workflow.
+  The approval system is essentially a configured branch protection policy.
+
+- **Pull requests as the review primitive.** Gitea PRs give us review threads,
+  change requests, approval gates, and a merge history for free. These are the
+  exact primitives Bindersnap's review workflow needs.
+
+- **Compliance standards.** Gitea can be self-hosted on-premises, which is a
+  hard requirement for many regulated industry customers (healthcare, defense,
+  certain finance). A SaaS-only version control backend would be a blocker.
+
+**What Gitea stores:** Each Bindersnap document is a file (ProseMirror JSON,
+serialized to a `.json` file) in a Gitea repository. Each workspace or team has
+its own repository. Saves become commits. Reviews become pull requests. Approvals
+become merge events on protected branches.
+
+**What Gitea does NOT do:** Gitea has no awareness of the editor UI, real-time
+collaboration, or the ProseMirror schema. It is a pure backend data store that
+happens to have excellent version control semantics built in.
+
+### React
+
+The editor ships as a self-contained React component (`BindersnapEditor.tsx`)
+with its own CSS (`bindersnap-editor.css`) imported directly. It is designed
+to be portable — drop it into any React application and it renders correctly
+regardless of the host page's stylesheet.
 
 ### React
 
@@ -240,7 +289,7 @@ Node: approvalBlock
     status:    "pending" | "approved" | "rejected",
     approver:  string | null,
     approvedAt: number | null,
-    version:   string  // hash of approved content for tamper detection
+    gitSha:    string | null  // Gitea commit SHA at time of approval — tamper-evident anchor
   }
   content: block+
   selectable: true
@@ -253,9 +302,10 @@ transactions are silently dropped unless they come with a special
 `{meta: {unlock: true}}` flag set by the `unlockApprovalBlock` command (which
 triggers a confirmation UI before proceeding).
 
-The `version` attribute stores a SHA-256 hash of the serialized block content
-at the time of approval. Any subsequent read of the block can verify this hash
-to detect tampering.
+The `gitSha` attribute is the Gitea commit SHA of the document at the moment
+the block was approved. This provides a tamper-evident anchor — an auditor can
+independently verify the approved content by checking that SHA in the Gitea
+repository. No proprietary hashing scheme is required; it's just git.
 
 **Key commands:**
 
@@ -312,37 +362,48 @@ range.
 
 #### 5. `VersionSnapshot` — Status: Planned
 
-**What it does:** Produces and restores named snapshots of the document, built
-on top of Yjs's snapshot mechanism. Bindersnap versions are distinct from Yjs
-updates — a version is an intentional, named, immutable checkpoint.
+**What it does:** Surfaces Gitea commit history inside the editor UI as named
+document versions. A "version" in Bindersnap terms is a Gitea commit on the
+document's repository. The extension provides the UI integration: the version
+history panel, the ability to open any version in a read-only diff view, and
+the commands that trigger a Gitea commit via the REST API.
 
 **Architecture:**
 
-A version is created by calling `Y.snapshot(doc)` on the underlying Yjs
-document and storing the resulting binary blob in the backend, alongside a
-version record:
+Versions are Gitea commits. There is no separate Bindersnap version record —
+the commit is the record. The Gitea REST API provides everything needed:
 
-```typescript
-interface DocumentVersion {
-  id: string;
-  documentId: string;
-  name: string; // "v1.2 - After legal review"
-  createdBy: string;
-  createdAt: number;
-  snapshot: Uint8Array; // Y.encodeSnapshot(Y.snapshot(doc))
-  contentHash: string; // SHA-256 of ProseMirror JSON at this version
-  status: "draft" | "in-review" | "approved";
-}
+```
+GET  /api/v1/repos/{owner}/{repo}/commits       → version list
+GET  /api/v1/repos/{owner}/{repo}/git/commits/{sha} → version metadata
+GET  /api/v1/repos/{owner}/{repo}/raw/{filepath}?ref={sha} → file at version
+GET  /api/v1/repos/{owner}/{repo}/compare/{base}...{head}  → diff between versions
 ```
 
-Restoring a version renders the document in a read-only diff view using
-`Y.createDocFromSnapshot`, which reconstructs the Yjs document state at that
-point in time. The diff between two versions is computed by diffing their
-ProseMirror JSON representations.
+When a user saves a named version ("Submit for review", "After legal edits"):
 
-The diff display uses the `DiffView` mode of the editor (activated by
-`diffMode="unified"` prop), which renders the computed diff using
-`.bs-diff-added` / `.bs-diff-removed` / `.bs-diff-unchanged` spans.
+1. The editor serializes the current ProseMirror document to JSON.
+2. The frontend calls the Gitea API to commit the file with the version name as
+   the commit message and the committer set to the authenticated Bindersnap user.
+3. The Gitea SHA becomes the canonical version ID, stored alongside the
+   Bindersnap document metadata.
+
+When a user opens the version history panel:
+
+1. Fetch the commit list from Gitea for the document's file path.
+2. Display commits as named versions with author, timestamp, and message.
+3. Clicking a version fetches the raw file content at that commit SHA.
+4. The editor renders the historical content in read-only mode.
+
+**Diff rendering:** When comparing two versions, the frontend fetches both
+ProseMirror JSON files from Gitea at their respective SHAs, then runs the
+ProseMirror-level diff algorithm (see _The Diff and Merge Architecture_ below)
+to produce the visual diff. The raw git text diff from Gitea is NOT used for
+display — it is only used to confirm that changes exist before the more
+semantically-aware ProseMirror diff is computed.
+
+**CSS classes:** `.bs-diff-added`, `.bs-diff-removed`, `.bs-diff-unchanged`,
+`.bs-diff-hunk` (see `bindersnap-editor.css` section 10e)
 
 ---
 
@@ -380,8 +441,7 @@ controlled from the sidebar UI, not the editor.
 
 ## The Document Data Model
 
-Bindersnap documents are ProseMirror JSON under the hood. The canonical
-serialized format is:
+Bindersnap documents are ProseMirror JSON. The canonical serialized format is:
 
 ```json
 {
@@ -393,7 +453,7 @@ serialized format is:
     },
     {
       "type": "approvalBlock",
-      "attrs": { "status": "approved", "approver": "priya@company.com", "version": "sha256:abc..." },
+      "attrs": { "status": "approved", "approver": "priya@company.com", "gitSha": "a3f8c1d..." },
       "content": [...]
     },
     {
@@ -404,31 +464,70 @@ serialized format is:
 }
 ```
 
-This JSON is stored in the backend as the canonical document state. The Yjs
-CRDT layer is ephemeral coordination — it ensures concurrent edits from
-multiple users merge correctly in real time. But the backend is the source of
-truth for _persisted_ document state.
+This JSON is the file that lives in the Gitea repository. Every save is a
+commit of this file. The file is the document. Git is the database.
 
-**Two-layer persistence model:**
+**Three-layer persistence model:**
 
 ```
-┌─────────────────────┐         ┌──────────────────────────────────┐
-│  Yjs CRDT (in-memory│◄────────│  Hocuspocus server (WebSocket)   │
-│  + IndexedDB cache) │         │  Ephemeral collaboration state   │
-└──────────┬──────────┘         └──────────────────────────────────┘
-           │  on deliberate save
-           ▼
-┌─────────────────────┐
-│  Backend (Postgres) │  ← source of truth, immutable version history
-│  ProseMirror JSON   │
-│  + version records  │
-└─────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│  LAYER 1 — Real-time collaboration (ephemeral, in-session)            │
+│                                                                        │
+│  Yjs CRDT (in-memory + IndexedDB)  ◄──►  Hocuspocus WebSocket server  │
+│                                                                        │
+│  Handles: concurrent keystrokes, live cursors, offline resilience.    │
+│  Does NOT handle: version history, branches, approvals, or merges.    │
+└─────────────────────────────┬────────────────────────────────────────┘
+                              │  on deliberate save (Cmd+S,
+                              │  approval transition, 30s debounce)
+                              ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│  LAYER 2 — Version control (immutable, tamper-evident)                │
+│                                                                        │
+│  Gitea (self-hosted) — REST API                                        │
+│    document.json file committed to repo on each save                  │
+│    Branches = document workflow states (draft, review, main)          │
+│    Pull requests = review cycles                                       │
+│    Protected branch rules = approval requirements                     │
+│    Commit SHA = canonical version ID                                   │
+│                                                                        │
+│  Handles: version history, branching, merging, approval gates.        │
+│  Does NOT handle: real-time editing, UI state, or user metadata.      │
+└─────────────────────────────┬────────────────────────────────────────┘
+                              │  document metadata, user records,
+                              │  team permissions, comment threads
+                              ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│  LAYER 3 — Application metadata (relational)                          │
+│                                                                        │
+│  Postgres — application database                                       │
+│    Documents table (id, gitea_repo, gitea_path, workspace_id, ...)   │
+│    Users, teams, permissions                                           │
+│    Comment threads (keyed to document + git SHA + anchor position)    │
+│    Approval events log (immutable append-only, references git SHA)    │
+│                                                                        │
+│  Handles: everything that isn't document content or version history.  │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
-Documents are NOT auto-saved on every keystroke to the backend. They are
-auto-saved to the Yjs persistence layer (IndexedDB) for resilience, and saved
-to the backend on explicit user action (Cmd+S), on approval transitions, and
-on a debounced interval (30s) for safety.
+**Branch conventions:**
+
+Each document in Bindersnap maps to a single file in a Gitea repo. The branch
+structure mirrors the document workflow:
+
+```
+main          ← approved, protected. Only mergeable via PR with required approvals.
+review/*      ← submitted-for-review branches. e.g. review/q4-vendor-v2
+draft/*       ← work-in-progress branches. e.g. draft/priya-edits
+```
+
+Bindersnap manages branch creation and PR lifecycle automatically — users never
+see git branch names. They see "Submit for Review", "Request Changes", "Approve
+and Merge" buttons that map to Gitea API calls under the hood.
+
+Documents are NOT auto-saved on every keystroke to Gitea. Keystrokes go to
+the Yjs layer (IndexedDB) for resilience. Gitea commits happen on explicit user
+action (Cmd+S), on approval transitions, and on a debounced interval (30s).
 
 ---
 
@@ -452,56 +551,116 @@ negotiated terms sections are still in review, all in the same document at the
 same time.
 
 **The audit log:** Every approval event (submit, approve, reject, unlock) is
-written as an immutable record to an `approval_events` table with:
+written as an immutable append-only record to an `approval_events` table:
 
 ```
-{ documentId, blockId, action, actorId, timestamp, contentHash, note }
+{ documentId, gitSha, action, actorId, timestamp, note }
 ```
 
-The content hash at time of approval is stored with the event. This is what
-makes the audit log tamper-evident — you can verify that the content being
-pointed to by the approval event matches what's in the document today.
+The `gitSha` is the Gitea commit SHA of the document at the moment the approval
+event occurred. This is what makes the audit log legally defensible — the SHA
+is independently verifiable against the Gitea repository. Any third party (an
+auditor, a court) can clone the Gitea repo and confirm that the commit
+referenced by the approval event contains exactly the content that was approved.
+There is no proprietary hash to trust — it's just git.
 
 ---
 
 ## The Diff and Merge Architecture
 
-### How diffs are computed
+This is the most important architectural section to understand. There are two
+distinct diff/merge contexts in Bindersnap, and they must not be confused:
 
-Document diffs in Bindersnap are computed at the ProseMirror JSON level, not
-at the raw text level. This means structural changes (a paragraph becoming a
-heading, a list item being promoted) are represented as structural diff
-operations, not just text insertions/deletions.
+**Context A — Live editing:** Two users editing the same document simultaneously.
+This is handled entirely by Yjs CRDTs. There are no conflicts, no merge step,
+no involvement from git. Yjs resolves concurrent operations automatically.
 
-The diff algorithm:
+**Context B — Version merging:** Two separate _saved versions_ of a document
+being reconciled. This is where Gitea and ProseMirror both come into play.
 
-1. Serialize both document versions to ProseMirror JSON.
-2. Run a tree diff algorithm (similar to `fast-diff` but operating on the node
-   tree rather than text strings) to produce a sequence of add/remove/unchanged
-   node operations.
-3. Convert the diff to a set of Tiptap transactions that can be applied to
-   produce the diff view.
+---
 
-For the MVP, step 2 is simplified: we serialize both versions to plain text and
-use Myers diff algorithm (`fast-diff`) to produce a character-level diff, then
-map character positions back to ProseMirror document positions. This is less
-structurally aware but sufficient for the initial approval review flow.
+### How version diffs are displayed (frontend)
 
-### How merges work
+When a user opens the version comparison view or a merge conflict view, the
+frontend needs to display what changed between two document versions in a way
+that is native to the editor — not a raw text diff.
 
-A merge produces a `mergeConflictBlock` node wherever the two document versions
-diverge in incompatible ways. The merge algorithm:
+The process:
 
-1. Identify the common ancestor version (the last approved or branched-from
-   version).
-2. Compute diffs from ancestor → ours and ancestor → theirs.
-3. Regions where both diffs are identical: auto-merge (no conflict).
-4. Regions where only one side changed: auto-merge with the changed side.
-5. Regions where both sides changed differently: emit a `mergeConflictBlock`.
+1. **Fetch both versions from Gitea.** Using the REST API, fetch the
+   `document.json` file at each of the two commit SHAs being compared.
+2. **Deserialize both to ProseMirror JSON.**
+3. **Run the ProseMirror-level diff algorithm.** This operates on the node
+   tree rather than raw text. Structural changes (a paragraph becoming a
+   heading, a list item being promoted) are represented as structural operations.
+   For the MVP this is simplified: serialize both versions to plain text, apply
+   Myers diff (`fast-diff`), then map character positions back to ProseMirror
+   document positions. The full tree diff is a Phase 2 improvement.
+4. **Render the diff in the editor** using `.bs-diff-added` /
+   `.bs-diff-removed` / `.bs-diff-unchanged` decorations (not nodes — diffs are
+   display-only and must not affect the document schema).
 
-This is a three-way merge at the document level. It is intentionally similar
-to how git handles text merges, but operating on the ProseMirror document tree
-rather than raw text.
+The raw git text diff from Gitea is deliberately NOT used for the visual
+display. Git's text diff produces line-level hunks over raw JSON, which is
+unreadable. The ProseMirror-level diff produces a semantically meaningful,
+prose-aware comparison that makes sense to a non-technical user.
+
+---
+
+### How merges work (Gitea three-way merge)
+
+When two branches of a document need to be reconciled — e.g., two reviewers
+made independent changes and their work needs to be combined — Bindersnap
+delegates the merge entirely to Gitea.
+
+The process:
+
+1. **Both branches exist as Gitea branches.** Reviewer A's changes are on
+   `draft/alice-edits`, Reviewer B's changes are on `draft/bob-edits`. Both
+   branched from the same base commit on `review/q4-vendor`.
+2. **Bindersnap calls the Gitea merge API.** Gitea performs a three-way merge
+   using libgit2, with the common ancestor as the base. Auto-mergeable regions
+   are resolved automatically.
+3. **Gitea returns the merge result.** If there are conflicts, the merged file
+   contains standard git conflict markers:
+   ```
+   <<<<<<< HEAD
+   { "type": "paragraph", "content": [{ "type": "text", "text": "Alice's version..." }] }
+   =======
+   { "type": "paragraph", "content": [{ "type": "text", "text": "Bob's version..." }] }
+   >>>>>>> draft/bob-edits
+   ```
+4. **The frontend parses the conflict markers** from the returned file content
+   and converts each conflict region into a `mergeConflictBlock` ProseMirror
+   node. This is the bridge between git's output and the editor's display.
+5. **The user resolves conflicts in the editor** using the `MergeConflict`
+   extension UI (accept ours, accept theirs, accept both, edit manually).
+6. **Once all conflicts are resolved**, the clean ProseMirror JSON is committed
+   back to Gitea as the merge commit, completing the merge.
+
+The key insight: **Bindersnap does not implement merge logic.** It implements
+conflict _display and resolution_ in the editor, delegating the actual merge
+computation to Gitea. The `MergeConflict` extension is a renderer for git
+conflict markers, not a merge algorithm.
+
+---
+
+### The conflict marker parser
+
+The bridge between Gitea's output and the ProseMirror editor is a conflict
+marker parser. When the merge result contains conflict markers, this parser:
+
+1. Splits the JSON file content at `<<<<<<<`, `=======`, and `>>>>>>>` markers.
+2. Attempts to parse each region as valid ProseMirror JSON.
+3. If a region is valid ProseMirror JSON, wraps it in a `mergeConflictZone` node.
+4. If a region is not valid JSON (e.g., the conflict bisects a JSON structure),
+   falls back to treating the region as raw text with a warning.
+
+Edge case: Conflicts that bisect a JSON object boundary (e.g., the `<<<` marker
+lands inside a serialized string value) are inherently malformed. The parser
+must handle this gracefully, treating the entire surrounding node as conflicted
+rather than attempting to parse partial JSON.
 
 ---
 
@@ -569,7 +728,7 @@ src/
           commands.ts
         VersionSnapshot/
           index.ts
-          commands.ts
+          commands.ts            ← Calls Gitea API to commit/fetch versions
         DocumentHeader/
           index.ts
           DocumentHeaderView.tsx
@@ -581,8 +740,17 @@ src/
         StatusBar.tsx
       sidebar/
         CommentSidebar.tsx
-        VersionSidebar.tsx
+        VersionSidebar.tsx       ← Displays Gitea commit history
         ApprovalSidebar.tsx
+
+  services/
+    gitea/
+      client.ts                  ← Gitea REST API client (typed)
+      documents.ts               ← commit, fetch, list versions for a document
+      pullRequests.ts            ← create/merge/close PRs (review cycles)
+      branches.ts                ← branch management for draft/review/main
+    conflictParser.ts            ← Parses git conflict markers → ProseMirror nodes
+    diffEngine.ts                ← ProseMirror JSON diff (Myers at text level for MVP)
 
   assets/
     css/
@@ -642,9 +810,14 @@ Key performance decisions:
 - **Merge conflict blocks:** These are rendered via NodeViews (React
   components), which ProseMirror renders lazily. Large blocks are not mounted
   until they scroll into view.
-- **Version snapshots:** Snapshots are stored as binary Yjs blobs and only
-  decoded on demand (when a user opens the version history panel). They are
-  never decoded as part of the main document load.
+- **Version history:** Gitea commit metadata (SHA, message, author, timestamp)
+  is fetched as a lightweight list. The actual document content at a historical
+  version is only fetched on demand when a user opens that version in the diff
+  view. The full ProseMirror JSON is never pre-fetched.
+- **Conflict marker parsing:** The conflict marker parser runs only once per
+  merge operation, not on every editor transaction. The resulting
+  `mergeConflictBlock` nodes are standard ProseMirror nodes and have no ongoing
+  parsing cost.
 
 ---
 
@@ -657,12 +830,19 @@ The allowed schema mirrors the Tiptap StarterKit schema exactly — any HTML
 element or attribute not in the schema is stripped. This prevents XSS via
 document content.
 
-### Approval tamper detection
+### Version integrity via git
 
-The `contentHash` stored with each approval event is computed over the
-canonical ProseMirror JSON serialization of the approved block. On any future
-read of that block, the hash can be recomputed and compared. A mismatch
-indicates tampering and should be surfaced to the user as a security warning.
+Document version integrity is provided by Gitea's commit chain, not a
+proprietary hashing system. Git's SHA-1/SHA-256 content-addressed storage
+means every version of every document has a cryptographically verifiable
+identity. Tampering with a historical version would require rewriting the
+commit history, which is detectable by anyone with a clone of the repository.
+
+The `gitSha` stored in `approvalBlock` nodes and `approval_events` records
+serves as a legally defensible reference point. An auditor, regulator, or court
+can independently verify that the SHA in an approval record corresponds to
+specific document content by inspecting the Gitea repository directly — no
+Bindersnap-specific tooling required.
 
 ### Collaboration authentication
 
@@ -671,6 +851,15 @@ Each WebSocket connection carries a token that encodes the user's identity and
 document permissions. The Hocuspocus server validates this token before
 allowing the connection. Document read/write permissions are enforced at the
 server, not just the UI.
+
+### Gitea authentication
+
+The Bindersnap backend communicates with Gitea using a service account token
+with scoped repository permissions. Individual user identities are mapped to
+Gitea committer metadata (name and email in commit records) so the git history
+reflects real human actors, not a generic service account. This is important
+for the legal audit trail — the git log should be human-readable as a record
+of who changed what and when.
 
 ---
 
@@ -700,13 +889,15 @@ the approval workflow must be end-to-end._
 _Goal: First enterprise logos. The editor must feel like a professional
 document governance tool, not just a rich text editor._
 
+- [ ] Gitea integration — service layer, commit on save, branch management
+- [ ] Pull request workflow mapped to Bindersnap review UI (no git exposed to user)
 - [ ] `TrackedChanges` extension — full accept/reject cycle
-- [ ] `MergeConflict` extension — three-way merge conflict resolution
-- [ ] Version diff view — side-by-side and unified diff rendering
-- [ ] `VersionSnapshot` extension — named versions, branching
+- [ ] `MergeConflict` extension — conflict marker parser + three-way merge via Gitea
+- [ ] Version diff view — ProseMirror-level diff renderer, side-by-side and unified
+- [ ] `VersionSnapshot` sidebar — commit history, open any version in read-only view
 - [ ] Review request workflow (assign reviewer, request changes, re-submit)
-- [ ] Block-level approval (approve individual sections independently)
-- [ ] Compare any two versions in diff view
+- [ ] Block-level approval with `gitSha` anchor
+- [ ] Compare any two commits in diff view
 - [ ] Approval signature (typed name or drawn signature on `approvalBlock`)
 
 ### Phase 3: Enterprise and compliance depth
@@ -753,22 +944,27 @@ allowed content list, or accept the flexibility trade-off?
 The current design stores tracked changes as ProseMirror marks inside the
 document. An alternative is to store them out-of-band (in the backend, keyed
 by document position ranges), similar to how GitHub stores PR review comments.
-The in-doc approach is simpler but makes the document larger and complicates
-export. The out-of-band approach is cleaner but requires position mapping on
-every document change. Decision pending.
+The in-doc approach is simpler but makes the document larger, complicates the
+Gitea commit diff (the raw JSON diff will contain mark metadata noise), and
+makes export harder. The out-of-band approach is cleaner but requires position
+mapping on every document change and a separate reconciliation step when the
+document is committed to Gitea. Decision pending.
 
-**Q3: Version branching model**  
-Should Bindersnap support true document branching (like git branches), or only
-linear version history? Branching is more powerful but dramatically more
-complex to implement and explain to non-technical users. The ICP (compliance
-manager, not developer) may find branching confusing. Leaning toward linear
-history with a "compare any two" capability rather than branches.
+**Q3: Version branching model — RESOLVED**  
+~~Should Bindersnap support true document branching?~~  
+**Decision:** Bindersnap uses Gitea branches as the branching primitive.
+`draft/*` branches for work-in-progress, `review/*` branches for submitted
+reviews, `main` as the protected approved branch. Users never see branch names
+— they see workflow actions that map to git operations. Linear history is
+enforced on `main` (squash merge only) to keep the audit trail readable.
 
 **Q4: Conflict resolution UX — inline or modal?**  
 The current design resolves conflicts inline (buttons inside the
 `MergeConflictBlock`). An alternative is a dedicated side-by-side modal review
 view. Inline is more like Google Docs review. Modal is more like a proper code
-review tool. Given that our ICP is non-technical, inline may be more approachable.
+review tool. Given that our ICP is non-technical, inline may be more
+approachable. However, for complex multi-conflict merges, a modal may be
+necessary to give adequate context.
 
 **Q5: Export format**  
 The primary export format is currently HTML (for PDF generation via headless
@@ -776,6 +972,27 @@ Chrome). Should we also support native `.docx` export (via `docx.js`)? Legal
 teams often require Word format for their own document management systems.
 This is likely a Phase 2 or 3 requirement but the architecture should not
 preclude it.
+
+**Q6: Gitea repo structure — one repo per workspace or one repo per document?**  
+Each document is a single `.json` file. The question is whether documents are
+stored as individual files in a shared workspace repository, or each document
+gets its own repository. One-repo-per-workspace is simpler (fewer repos to
+manage, cross-document links are easier) but means the git history for any one
+document is noisier. One-repo-per-document is cleaner from a version control
+perspective but creates repo proliferation at scale. Leaning toward
+one-repo-per-workspace with a file-per-document, using Gitea's file-level
+history API (`GET /repos/{owner}/{repo}/commits?path={filepath}`) to scope
+history to a specific document.
+
+**Q7: Conflict marker parsing edge cases**  
+When Gitea's merge produces conflict markers that bisect a JSON structure (e.g.,
+`<<<<<<<` lands inside a serialized string value or between two sibling nodes),
+the resulting file is not valid JSON and cannot be parsed directly. The conflict
+marker parser must handle this gracefully. Two approaches: (a) treat the entire
+surrounding top-level node as conflicted and present it as raw text with a
+manual resolution UI, or (b) attempt to reconstruct valid JSON on both sides by
+context. Approach (a) is safer but may produce large conflict blocks for minor
+changes. Decision pending.
 
 ---
 
@@ -785,6 +1002,9 @@ preclude it.
 - ProseMirror guide: https://prosemirror.net/docs/guide/
 - Yjs documentation: https://docs.yjs.dev/
 - Hocuspocus documentation: https://tiptap.dev/hocuspocus/
+- Gitea REST API documentation: https://gitea.io/api/swagger
+- Gitea installation guide: https://docs.gitea.com/installation/install-from-binary
+- libgit2 merge documentation: https://libgit2.org/libgit2/#HEAD/group/merge
 - ProseMirror change tracking reference implementation:
   https://marijnhaverbeke.nl/blog/collaborative-editing-cm.html
 - Design tokens and brand system: see `AGENTS.md` and
