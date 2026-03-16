@@ -287,8 +287,8 @@ a client-side transaction filter. This was rejected for three reasons:
 
 3. **What gets committed to Gitea should be clean document content.** Approval
    status, lock state, and review metadata are workflow concerns. They belong in
-   the Postgres `approval_events` table and the Gitea PR state — not embedded as
-   nodes or attributes inside the document JSON.
+   the Gitea PR state and git commit history — not embedded as nodes or
+   attributes inside the document JSON.
 
 **Architecture:**
 
@@ -565,12 +565,15 @@ Bindersnap documents are ProseMirror JSON. The canonical serialized format is:
   "content": [
     {
       "type": "documentHeader",
-      "attrs": { "title": "Q4 Vendor Agreement", "docType": "Contract", "status": "in-review" }
+      "attrs": { "title": "Q4 Vendor Agreement", "docType": "Contract" }
     },
     {
-      "type": "approvalBlock",
-      "attrs": { "status": "approved", "approver": "priya@company.com", "gitSha": "a3f8c1d..." },
-      "content": [...]
+      "type": "clauseEmbed",
+      "attrs": {
+        "clauseId": "clause_abc",
+        "gitSha": "a3f8c1d...",
+        "title": "Standard Liability Waiver"
+      }
     },
     {
       "type": "paragraph",
@@ -583,7 +586,14 @@ Bindersnap documents are ProseMirror JSON. The canonical serialized format is:
 This JSON is the file that lives in the Gitea repository. Every save is a
 commit of this file. The file is the document. Git is the database.
 
-**Three-layer persistence model:**
+**Two-layer persistence model:**
+
+Bindersnap has deliberately avoided building a third "application database"
+layer for anything Gitea already owns. Gitea is not just the version control
+backend — it is the user directory, the permissions system, the organization
+and team manager, the issue tracker, the audit log, and the notification system.
+Duplicating any of that in Postgres would create sync drift and redundant
+infrastructure.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
@@ -598,34 +608,40 @@ commit of this file. The file is the document. Git is the database.
                               │  approval transition, 30s debounce)
                               ▼
 ┌──────────────────────────────────────────────────────────────────────┐
-│  LAYER 2 — Version control (immutable, tamper-evident)                │
+│  LAYER 2 — Everything persistent (Gitea, self-hosted)                 │
 │                                                                        │
-│  Gitea (self-hosted) — REST API                                        │
-│    document.json file committed to repo on each save                  │
-│    Branches = working copies (flat names, no state prefix)            │
-│    Pull requests = review cycles (PR state = workflow state)          │
-│    Protected branch rules on main = approval requirements             │
-│    Annotated tags on main = published versions (manual or semver)     │
-│    Commit SHA = canonical version ID for audit log                    │
+│  Documents     → .json files committed to repos                       │
+│  Workspaces    → Gitea organizations                                  │
+│  Members/roles → Gitea organization teams + permissions               │
+│  Users/auth    → Gitea user accounts (OAuth2, SSH, API tokens)        │
+│  Branches      → git branches (flat slugs, no state prefix)          │
+│  PRs/review    → Gitea pull requests (state = workflow state)         │
+│  Approvals     → Gitea PR reviews + protected branch rules            │
+│  Audit trail   → git commit history + PR event history               │
+│  Versions      → annotated git tags on main (manual or semver)        │
+│  Issues        → branch display names + work item descriptions        │
+│  Notifications → Gitea webhooks → frontend event stream              │
+│  CODEOWNERS    → clause-level approval requirements                   │
 │                                                                        │
-│  Handles: version history, branching, merging, approval gates.        │
-│  Does NOT handle: real-time editing, UI state, or user metadata.      │
-└─────────────────────────────┬────────────────────────────────────────┘
-                              │  document metadata, user records,
-                              │  team permissions, comment threads
-                              ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│  LAYER 3 — Application metadata (relational)                          │
-│                                                                        │
-│  Postgres — application database                                       │
-│    Documents table (id, gitea_repo, gitea_path, workspace_id, ...)   │
-│    Users, teams, permissions                                           │
-│    Comment threads (keyed to document + git SHA + anchor position)    │
-│    Approval events log (immutable append-only, references git SHA)    │
-│                                                                        │
-│  Handles: everything that isn't document content or version history.  │
+│  Does NOT handle: real-time editing or ephemeral session state.       │
 └──────────────────────────────────────────────────────────────────────┘
 ```
+
+**What Gitea does not store (the only reason to have any additional storage):**
+
+- **Hocuspocus session state** — which document a user is actively editing
+  in real time. This is transient and lives in Redis (or in-memory), not a
+  relational database. It is discarded when the session ends.
+- **Editor UI preferences** — theme, notification preferences, anything
+  that is purely a product UI concern with no git analogue. This is the
+  only data that might warrant a minimal Postgres table, and only if it
+  cannot reasonably be stored in Gitea user settings via the API.
+- **Bindersnap product config** — workspace-level settings such as
+  auto-semver enabled/disabled. These could live in a Gitea repository
+  topic or a committed config file in the repo, which would keep them
+  version-controlled and eliminate even this need for external storage.
+
+The north star: **if Gitea can store it, Gitea stores it.**
 
 **Branch conventions:**
 
@@ -657,23 +673,15 @@ is the URL-safe slug; the issue title is what users see. They are permanently
 decoupled — the user can rename their working branch's display name at any time
 without touching git.
 
-```typescript
-interface DocumentBranch {
-  id: string;
-  documentId: string;
-  gitBranch: string; // "update-inclusive-language" — immutable slug
-  giteaIssueId: number; // Gitea issue ID — owns display name + assignees
-  displayName: string; // cached from issue title for fast rendering
-  createdAt: number;
-  baseCommitSha: string; // the SHA this branch forked from
-  prId: number | null; // Gitea PR ID once submitted for review
-}
-```
-
 A user can have as many concurrent working branches as they need — there is no
 per-user branch limit. Multiple collaborators can push to the same branch freely,
 which is the correct git model. The issue is the unit of ownership, not the
 branch name.
+
+There is no `DocumentBranch` database record. Branches are queried directly
+from Gitea via `GET /api/v1/repos/{owner}/{repo}/branches`. Display names are
+the titles of their associated Gitea issues. Bindersnap stores nothing about
+branches that Gitea does not already know.
 
 Documents are NOT auto-saved on every keystroke to Gitea. Keystrokes go to
 the Yjs layer (IndexedDB) for resilience. Gitea commits happen on explicit user
@@ -727,18 +735,23 @@ auditable, and requires zero custom implementation beyond configuring CODEOWNERS
 
 ### The audit log
 
-Every approval event (submit, approve, reject, merge) is recorded as an
-immutable append-only entry in the `approval_events` Postgres table:
+The audit trail is the git commit history and Gitea PR event history. There is
+no separate `approval_events` table in Postgres — that would be a redundant
+copy of data Gitea already owns and keeps immutably.
 
-```
-{ documentId, gitSha, prId, action, actorId, timestamp, note }
-```
+Every meaningful approval event is already recorded in Gitea:
 
-The `gitSha` is the Gitea commit SHA of the document file at the moment the
-event occurred. The `prId` is the Gitea PR number. Both are independently
-verifiable — an auditor can inspect the Gitea repository and confirm that the
-referenced SHA contains exactly the content that was approved. No proprietary
-hash to trust. It's just git.
+- **Commit pushed** → git commit with author identity, timestamp, and SHA
+- **PR opened** → Gitea PR event with author, branch, and target
+- **Review submitted** → Gitea review event (approve / request changes / comment)
+- **PR merged** → git merge commit with merge SHA, merger identity, and timestamp
+- **Tag created** → annotated git tag recording the published version
+
+An auditor or regulator querying the approval history for a document queries
+the Gitea PR list and commit log for that file path. The commit SHAs are
+independently verifiable. The reviewer identities are Gitea user accounts.
+No Bindersnap-specific tooling is required to read the record — it is plain
+git history accessible to anyone with repository access.
 
 ---
 
@@ -923,13 +936,17 @@ src/
 
   services/
     gitea/
-      client.ts                  ← Gitea REST API client (typed)
-      documents.ts               ← commit, fetch, list versions for a document
-      pullRequests.ts            ← create/merge/close PRs (review cycles)
-      branches.ts                ← branch management for draft/review/main
+      client.ts                  ← Gitea REST API client (typed, token-authenticated)
+      documents.ts               ← commit, fetch, list versions for a file path
+      pullRequests.ts            ← create/review/merge PRs
+      branches.ts                ← branch list, create, delete
+      tags.ts                    ← list tags, create annotated tag on merge
+      orgs.ts                    ← workspace (org) + team + member queries
+      issues.ts                  ← branch display names via issue titles
     conflictParser.ts            ← Parses git conflict markers → ProseMirror nodes
     diffEngine.ts                ← ProseMirror JSON diff (Myers at text level for MVP)
     clauseCache.ts               ← LRU cache for clause content at pinned SHAs
+    versionLabel.ts              ← git describe equivalent (tag + commit count)
 
   assets/
     css/
@@ -1017,27 +1034,31 @@ means every version of every document has a cryptographically verifiable
 identity. Tampering with a historical version would require rewriting the
 commit history, which is detectable by anyone with a clone of the repository.
 
-The `gitSha` stored in `approval_events` records serves as a legally defensible reference point. An auditor, regulator, or court
-can independently verify that the SHA in an approval record corresponds to
-specific document content by inspecting the Gitea repository directly — no
-Bindersnap-specific tooling required.
+Every commit, PR review, and merge is recorded in Gitea with the acting
+user's identity and a cryptographically verifiable SHA. An auditor, regulator,
+or court can verify the complete approval history by inspecting the Gitea
+repository directly — no Bindersnap-specific tooling or records required.
+The repository is the proof.
 
-### Collaboration authentication
+### Authentication model
 
-Hocuspocus connections are authenticated via JWT tokens issued by the backend.
-Each WebSocket connection carries a token that encodes the user's identity and
-document permissions. The Hocuspocus server validates this token before
-allowing the connection. Document read/write permissions are enforced at the
-server, not just the UI.
+Authentication flows through Gitea. Bindersnap does not maintain its own user
+database or session system. Users authenticate with Gitea directly (username
+and password, SSH key, or OAuth2). Gitea issues an API token that the
+Bindersnap frontend uses for all subsequent Gitea API calls. The token carries
+the user's full Gitea identity — their username, organization memberships, and
+repository permissions are all resolved by Gitea natively.
 
-### Gitea authentication
+This means commits made via the Bindersnap UI are committed under the actual
+user's Gitea identity, not a service account. The git log is a human-readable
+record of who changed what and when, with no indirection through a proprietary
+user ID system.
 
-The Bindersnap backend communicates with Gitea using a service account token
-with scoped repository permissions. Individual user identities are mapped to
-Gitea committer metadata (name and email in commit records) so the git history
-reflects real human actors, not a generic service account. This is important
-for the legal audit trail — the git log should be human-readable as a record
-of who changed what and when.
+**Hocuspocus authentication:** Hocuspocus WebSocket connections are
+authenticated by validating the user's Gitea token server-side before the
+connection is established. Repository read access in Gitea is the permission
+gate — if a user cannot read the repo, they cannot join the Hocuspocus session
+for a document in that repo.
 
 ---
 
@@ -1054,14 +1075,15 @@ the approval workflow must be end-to-end._
 - [x] Tiptap base setup with all core extensions configured
 - [x] `bindersnap-editor.css` — full prose typography and extension styles
 - [x] `BindersnapEditor.tsx` component with toolbar and status bar
+- [ ] Gitea authentication — token-based auth, user identity from Gitea directly
+- [ ] Gitea service layer — typed API client, commit on save, PR lifecycle
 - [ ] `ApprovalStatus` banner — decoration reflecting Gitea PR state
 - [ ] Document-level approval via Gitea PR workflow (submit, approve, reject)
-- [ ] Gitea integration — Phase 1 subset: commit on save, basic PR lifecycle
 - [ ] Basic version history (commit list, restore from SHA, no diff view yet)
 - [ ] Hocuspocus real-time collaboration integration
 - [ ] Comment system (sidebar + `CommentAnchor` extension)
-- [ ] PDF export of approved document with approval metadata watermark
-- [ ] Audit log export (CSV + PDF)
+- [ ] PDF export of approved document
+- [ ] Audit log export via Gitea PR + commit history (CSV + PDF)
 
 ### Phase 2: Git-style review flow (Series A story)
 
@@ -1163,16 +1185,17 @@ teams often require Word format for their own document management systems.
 This is likely a Phase 2 or 3 requirement but the architecture should not
 preclude it.
 
-**Q6: Gitea repo structure — one repo per workspace or one repo per document?**  
-Each document is a single `.json` file. The question is whether documents are
-stored as individual files in a shared workspace repository, or each document
-gets its own repository. One-repo-per-workspace is simpler (fewer repos to
-manage, cross-document links are easier) but means the git history for any one
-document is noisier. One-repo-per-document is cleaner from a version control
-perspective but creates repo proliferation at scale. Leaning toward
-one-repo-per-workspace with a file-per-document, using Gitea's file-level
-history API (`GET /repos/{owner}/{repo}/commits?path={filepath}`) to scope
-history to a specific document.
+**Q6: Gitea repo structure — RESOLVED**  
+~~One repo per workspace or one repo per document?~~  
+**Decision:** One Gitea repository per workspace (Gitea organization). Documents
+are individual `.json` files within that repository. A workspace is a collection
+of documents that are versioned and published together — which maps exactly to a
+git repository containing multiple files. Documents that need independent
+versioning get their own workspace (repository). This is the standard git
+answer to the question and requires no special handling. File-level history is
+scoped using Gitea's `GET /repos/{owner}/{repo}/commits?path={filepath}` API.
+Clause files live in the same repo under a `/clauses/` directory, governed by
+CODEOWNERS.
 
 **Q7: Conflict marker parsing edge cases**  
 When Gitea's merge produces conflict markers that bisect a JSON structure (e.g.,
