@@ -123,13 +123,6 @@ with its own CSS (`bindersnap-editor.css`) imported directly. It is designed
 to be portable — drop it into any React application and it renders correctly
 regardless of the host page's stylesheet.
 
-### React
-
-The editor ships as a self-contained React component (`BindersnapEditor.tsx`)
-with its own CSS (`bindersnap-editor.css`) imported directly. It is designed
-to be portable — drop it into any React application and it renders correctly
-regardless of the host page's stylesheet.
-
 ---
 
 ## The Extension Architecture
@@ -444,45 +437,86 @@ range.
 
 #### 6. `VersionSnapshot` — Status: Planned
 
-**What it does:** Surfaces Gitea commit history inside the editor UI as named
-document versions. A "version" in Bindersnap terms is a Gitea commit on the
-document's repository. The extension provides the UI integration: the version
-history panel, the ability to open any version in a read-only diff view, and
-the commands that trigger a Gitea commit via the REST API.
+**What it does:** Surfaces Gitea commit history and release tags inside the
+editor UI as a version timeline. Handles both the _published version_ display
+(derived from Gitea annotated tags) and the _branch-in-progress version_ display
+(derived from `git describe` output). Also provides the commands that trigger
+commits and the version history panel.
+
+---
+
+**The versioning model:**
+
+Bindersnap uses two complementary version representations depending on context.
+
+**Published versions — Gitea annotated tags, manually named or auto-semver:**
+
+When a PR is merged to `main`, the backend creates an annotated tag on the
+resulting commit. The tag name is the canonical published version of that
+document. Users have two options at merge time:
+
+- **Manual:** Enter a version label explicitly. This can be any string —
+  `"v2"`, `"2024-Q4-Final"`, `"2.1"`. No format is enforced. Legal and
+  compliance teams often prefer meaningful labels over strict semver.
+- **Auto (semver):** The backend increments automatically. The user picks
+  `major`, `minor`, or `patch` from a dropdown at PR creation time; the
+  backend computes the next semver tag from the latest tag on `main` and
+  applies it on merge. Default when no preference is set: `patch`.
+
+The tag is permanent and immutable. `v2.0.1` on the commit is the proof of
+what was approved.
+
+**Branch versions — computed from `git describe`, never stored:**
+
+While a document is on a working branch, its version is computed on demand
+using the equivalent of `git describe --tags --long`, then the commit SHA is
+stripped:
+
+```
+git describe output:   v2.0.0-3-gabcdef7
+displayed in UI:       v2.0.0-3
+```
+
+This reads as "3 commits since the published version v2.0.0" — immediately
+meaningful to any user without requiring explanation.
+
+**Pre-first-release fallback:** If no tag is reachable from the branch (the
+document has never been published), `git describe` will fail. The fallback
+display is `0.0.0-{n}` where `n` is the total commit count on the branch.
+This gives a meaningful version number from day one without special-casing.
+
+**These versions are never stored.** The branch version is computed from Gitea
+API responses at display time and discarded. No Postgres column, no cache, no
+sync concern. The published version is the git tag — it lives in Gitea and
+nowhere else.
+
+---
 
 **Architecture:**
 
-Versions are Gitea commits. There is no separate Bindersnap version record —
-the commit is the record. The Gitea REST API provides everything needed:
+The Gitea REST API provides everything needed:
 
 ```
-GET  /api/v1/repos/{owner}/{repo}/commits       → version list
-GET  /api/v1/repos/{owner}/{repo}/git/commits/{sha} → version metadata
-GET  /api/v1/repos/{owner}/{repo}/raw/{filepath}?ref={sha} → file at version
-GET  /api/v1/repos/{owner}/{repo}/compare/{base}...{head}  → diff between versions
+GET  /api/v1/repos/{owner}/{repo}/commits?path={file}    → commit list for file
+GET  /api/v1/repos/{owner}/{repo}/raw/{file}?ref={sha}   → file content at sha
+GET  /api/v1/repos/{owner}/{repo}/compare/{base}...{head} → diff between shas
+GET  /api/v1/repos/{owner}/{repo}/tags                   → published version tags
+POST /api/v1/repos/{owner}/{repo}/tags                   → create tag on merge
 ```
 
-When a user saves a named version ("Submit for review", "After legal edits"):
-
-1. The editor serializes the current ProseMirror document to JSON.
-2. The frontend calls the Gitea API to commit the file with the version name as
-   the commit message and the committer set to the authenticated Bindersnap user.
-3. The Gitea SHA becomes the canonical version ID, stored alongside the
-   Bindersnap document metadata.
+`git describe` is not a Gitea REST endpoint — the equivalent is computed by
+the Bindersnap backend: fetch the commit's reachable tags via
+`GET /api/v1/repos/{owner}/{repo}/git/commits/{sha}`, walk back to find the
+nearest tag, count intervening commits. This is a lightweight operation and
+can be cached aggressively since it only changes on new commits.
 
 When a user opens the version history panel:
 
-1. Fetch the commit list from Gitea for the document's file path.
-2. Display commits as named versions with author, timestamp, and message.
-3. Clicking a version fetches the raw file content at that commit SHA.
-4. The editor renders the historical content in read-only mode.
-
-**Diff rendering:** When comparing two versions, the frontend fetches both
-ProseMirror JSON files from Gitea at their respective SHAs, then runs the
-ProseMirror-level diff algorithm (see _The Diff and Merge Architecture_ below)
-to produce the visual diff. The raw git text diff from Gitea is NOT used for
-display — it is only used to confirm that changes exist before the more
-semantically-aware ProseMirror diff is computed.
+1. Fetch the commit list for the document file from Gitea.
+2. Fetch the tag list to identify which commits are published versions.
+3. For each commit: if it has a tag, display the tag name as the version.
+   If not, display the `git describe`-equivalent (`{nearest_tag}-{n}`).
+4. Clicking any commit fetches the file at that SHA and opens it read-only.
 
 **CSS classes:** `.bs-diff-added`, `.bs-diff-removed`, `.bs-diff-unchanged`,
 `.bs-diff-hunk` (see `bindersnap-editor.css` section 10e)
@@ -568,10 +602,11 @@ commit of this file. The file is the document. Git is the database.
 │                                                                        │
 │  Gitea (self-hosted) — REST API                                        │
 │    document.json file committed to repo on each save                  │
-│    Branches = document workflow states (draft, review, main)          │
-│    Pull requests = review cycles                                       │
-│    Protected branch rules = approval requirements                     │
-│    Commit SHA = canonical version ID                                   │
+│    Branches = working copies (flat names, no state prefix)            │
+│    Pull requests = review cycles (PR state = workflow state)          │
+│    Protected branch rules on main = approval requirements             │
+│    Annotated tags on main = published versions (manual or semver)     │
+│    Commit SHA = canonical version ID for audit log                    │
 │                                                                        │
 │  Handles: version history, branching, merging, approval gates.        │
 │  Does NOT handle: real-time editing, UI state, or user metadata.      │
@@ -594,18 +629,51 @@ commit of this file. The file is the document. Git is the database.
 
 **Branch conventions:**
 
-Each document in Bindersnap maps to a single file in a Gitea repo. The branch
-structure mirrors the document workflow:
+Each document in Bindersnap maps to a single file in a Gitea repo. The only
+structurally special branch is `main` — the protected, approved trunk. All
+working branches are flat, human-named slugs with no state-encoding prefix.
 
 ```
-main          ← approved, protected. Only mergeable via PR with required approvals.
-review/*      ← submitted-for-review branches. e.g. review/q4-vendor-v2
-draft/*       ← work-in-progress branches. e.g. draft/priya-edits
+main                        ← protected. Merges require passing PR approvals.
+update-inclusive-language   ← an active working branch (any name, any author)
+fix-payment-terms           ← another active working branch
 ```
 
-Bindersnap manages branch creation and PR lifecycle automatically — users never
-see git branch names. They see "Submit for Review", "Request Changes", "Approve
-and Merge" buttons that map to Gitea API calls under the hood.
+**Why no `draft/*` or `review/*` prefixes:** A prefix scheme that encodes
+workflow state (draft → review) requires renaming the branch when the state
+transitions. That creates a race condition: Yjs sessions holding a reference
+to the old branch name are broken the moment it is renamed, and any in-flight
+Gitea commit could push to a branch that no longer exists. The PR itself is the
+canonical answer to "is this branch in review?" — the branch name does not need
+to duplicate that information. The only prefix worth encoding in the branch name
+is one that is stable for the lifetime of the branch.
+
+**Branch display names:** Git branches have no intrinsic ownership and no
+concept of a friendly display name. Both of those live in the application layer.
+Each branch has a corresponding Gitea issue whose title is the human-readable
+display name ("Update Inclusive Language", "Fix Payment Terms Q4"). The issue
+is also where assignees, descriptions, and status are tracked. The branch name
+is the URL-safe slug; the issue title is what users see. They are permanently
+decoupled — the user can rename their working branch's display name at any time
+without touching git.
+
+```typescript
+interface DocumentBranch {
+  id: string;
+  documentId: string;
+  gitBranch: string; // "update-inclusive-language" — immutable slug
+  giteaIssueId: number; // Gitea issue ID — owns display name + assignees
+  displayName: string; // cached from issue title for fast rendering
+  createdAt: number;
+  baseCommitSha: string; // the SHA this branch forked from
+  prId: number | null; // Gitea PR ID once submitted for review
+}
+```
+
+A user can have as many concurrent working branches as they need — there is no
+per-user branch limit. Multiple collaborators can push to the same branch freely,
+which is the correct git model. The issue is the unit of ownership, not the
+branch name.
 
 Documents are NOT auto-saved on every keystroke to Gitea. Keystrokes go to
 the Yjs layer (IndexedDB) for resilience. Gitea commits happen on explicit user
@@ -621,7 +689,7 @@ handled by the clause library architecture instead.
 
 ### Document-level approval via Gitea PRs
 
-A document is approved by merging its `review/*` branch into `main` through a
+A document is approved by merging a working branch into `main` through a
 Gitea pull request. The PR must satisfy the branch protection rules configured
 for `main` — typically: N required approvals from designated reviewers, no
 outstanding change requests, all status checks passing. This is enforced by
@@ -629,14 +697,14 @@ Gitea at the API level. Bindersnap's UI surfaces the PR workflow as human
 language ("Submit for Review", "Approve", "Request Changes", "Merge") — users
 never interact with git directly.
 
-The approval states map to Gitea PR states:
+The approval states map to Gitea PR and branch states:
 
 ```
-Draft               → document on draft/* branch, no open PR
-In Review           → open PR from review/* to main
-Changes Requested   → PR has review requesting changes
-Approved            → PR has required approvals, ready to merge
-Merged / Approved   → PR merged, document on main
+Working    → branch exists, no open PR
+In Review  → open PR from branch to main
+Changes Requested → PR has a review requesting changes
+Approved   → PR has required approvals, ready to merge
+Published  → PR merged, document on main, tagged with a version
 ```
 
 ### Clause-level protection via CODEOWNERS
@@ -1005,7 +1073,9 @@ document governance tool, not just a rich text editor._
 - [ ] `TrackedChanges` extension — full accept/reject cycle
 - [ ] `MergeConflict` extension — conflict marker parser + three-way merge via Gitea
 - [ ] Version diff view — ProseMirror-level diff renderer, side-by-side and unified
-- [ ] `VersionSnapshot` sidebar — commit history, open any version in read-only view
+- [ ] `VersionSnapshot` sidebar — commit history with computed versions, read-only view
+- [ ] Published version tagging on merge — manual label or auto-semver
+- [ ] Branch version display (`git describe` equivalent, computed on demand)
 - [ ] `ClauseEmbed` extension — insert clause references, fetch + render inline
 - [ ] Clause library UI — browse, search, and insert approved clauses
 - [ ] CODEOWNERS scaffolding — auto-generate CODEOWNERS for clause files
@@ -1067,11 +1137,16 @@ document is committed to Gitea. Decision pending.
 
 **Q3: Version branching model — RESOLVED**  
 ~~Should Bindersnap support true document branching?~~  
-**Decision:** Bindersnap uses Gitea branches as the branching primitive.
-`draft/*` branches for work-in-progress, `review/*` branches for submitted
-reviews, `main` as the protected approved branch. Users never see branch names
-— they see workflow actions that map to git operations. Linear history is
-enforced on `main` (squash merge only) to keep the audit trail readable.
+**Decision:** Bindersnap uses Gitea branches as the branching primitive. Any
+number of working branches per document, per user, with no enforced naming
+scheme beyond being a valid git slug. `main` is the single protected approved
+trunk. Workflow state (in review, changes requested, approved) is read from the
+Gitea PR attached to the branch — it is never encoded in the branch name.
+Branch display names live in the associated Gitea issue title, decoupled from
+the git branch name. Published versions are annotated git tags on `main`,
+either manually named or auto-incremented semver. Branch-in-progress versions
+are computed on demand using `git describe` logic (nearest tag + commit count),
+displayed as `{tag}-{n}`, and never persisted.
 
 **Q4: Conflict resolution UX — inline or modal?**  
 The current design resolves conflicts inline (buttons inside the
