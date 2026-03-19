@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+
+<!--
+  com.claudedev.orchestrator.plist
+  ─────────────────────────────────────────────────────────────────
+  Installation:
+    1. Copy this file to ~/Library/LaunchAgents/
+    2. Replace YOUR_USERNAME with your macOS username (run: whoami)
+    3. Adjust schedule intervals below to your preference
+    4. Run: launchctl load ~/Library/LaunchAgents/com.claudedev.orchestrator.plist
+    5. To unload: launchctl unload ~/Library/LaunchAgents/com.claudedev.orchestrator.plist
+    6. To run immediately: launchctl start com.claudedev.orchestrator
+
+  The script reads all Claude config from ~/.claude-dev.env — edit
+  that file to change project paths, models, labels, etc.
+  ─────────────────────────────────────────────────────────────────
+-->
+
+<plist version="1.0">
+<dict>
+
+  <key>Label</key>
+  <string>com.claudedev.orchestrator</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <!-- UPDATE: Replace YOUR_USERNAME with your macOS username -->
+    <string>/Users/YOUR_USERNAME/your-project/scripts/orchestrate.sh</string>
+  </array>
+
+  <!--
+    Schedule: Runs twice on weekdays (Mon–Fri).
+    Weekday values: 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri
+    Adjust Hour/Minute to your timezone and work schedule.
+    To add more slots, duplicate a <dict> block.
+  -->
+  <key>StartCalendarInterval</key>
+  <array>
+
+    <!-- Monday 08:00 -->
+    <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
+    <!-- Monday 13:00 -->
+    <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>13</integer><key>Minute</key><integer>0</integer></dict>
+
+    <!-- Tuesday 08:00 -->
+    <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
+    <!-- Tuesday 13:00 -->
+    <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>13</integer><key>Minute</key><integer>0</integer></dict>
+
+    <!-- Wednesday 08:00 -->
+    <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
+    <!-- Wednesday 13:00 -->
+    <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>13</integer><key>Minute</key><integer>0</integer></dict>
+
+    <!-- Thursday 08:00 -->
+    <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
+    <!-- Thursday 13:00 -->
+    <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>13</integer><key>Minute</key><integer>0</integer></dict>
+
+    <!-- Friday 08:00 -->
+    <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
+    <!-- Friday 13:00 -->
+    <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>13</integer><key>Minute</key><integer>0</integer></dict>
+
+  </array>
+
+  <!-- Passes the env file path so orchestrate.sh knows where to load config from -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <!-- UPDATE: Replace YOUR_USERNAME with your macOS username -->
+    <key>CLAUDE_DEV_ENV_FILE</key>
+    <string>/Users/YOUR_USERNAME/.claude-dev.env</string>
+
+    <!-- Ensures homebrew-installed binaries (claude, gh, git) are on PATH -->
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+
+    <!-- Required for git operations via launchd (no GUI keychain access) -->
+    <key>HOME</key>
+    <!-- UPDATE: Replace YOUR_USERNAME with your macOS username -->
+    <string>/Users/YOUR_USERNAME</string>
+  </dict>
+
+  <!-- Restart automatically if the script crashes -->
+  <key>KeepAlive</key>
+  <false/>
+
+  <!-- Log output paths — these mirror CLAUDE_DEV_LOG_DIR for launchd-level errors -->
+  <!-- UPDATE: Replace YOUR_USERNAME with your macOS username -->
+  <key>StandardOutPath</key>
+  <string>/Users/YOUR_USERNAME/claude-logs/launchd.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/YOUR_USERNAME/claude-logs/launchd-error.log</string>
+
+</dict>
+</plist>
