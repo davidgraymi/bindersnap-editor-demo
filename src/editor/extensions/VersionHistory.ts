@@ -1,4 +1,5 @@
 import { Extension, Mark, mergeAttributes } from "@tiptap/core";
+import { sanitizeHtml } from "../../services/sanitizer";
 
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
@@ -85,7 +86,7 @@ export const VersionHistory = Extension.create({
         (base: string, head: string) =>
         ({ commands }) => {
           // const html = diffHtml(base, head);
-          return commands.setContent(head);
+          return commands.setContent(sanitizeHtml(head));
         },
     };
   },
