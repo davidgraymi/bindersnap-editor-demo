@@ -26,10 +26,9 @@ Use this checklist when validating agent GitHub operations in this repository.
 
 ## 5) Open PR
 
-- Prefer `gh pr create --body-file /tmp/pr-body.md` to avoid shell quoting bugs.
-- If you use `--body`, avoid backticks and complex shell characters.
-- If `gh` reports it cannot connect to `api.github.com`, rerun with approved
-  network escalation.
+- Prefer GitHub MCP `create_pull_request`.
+- If using `gh`, prefer `gh pr create --body-file /tmp/pr-body.md` to avoid
+  shell quoting bugs.
 - Include:
   - what was validated
   - friction encountered
@@ -41,3 +40,7 @@ Use this checklist when validating agent GitHub operations in this repository.
 - This is resolved by creating a `codex/` branch before making edits.
 - Inline multi-line `gh pr create --body` text can break on shell quoting.
 - This is resolved by using `--body-file` and simple ASCII content.
+- `git fetch` can fail in sandboxed worktrees when `.git/worktrees/...` is not
+  writable from the agent sandbox.
+- This is resolved by proceeding from local refs and documenting the limitation
+  in the PR.

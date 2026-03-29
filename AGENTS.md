@@ -316,14 +316,14 @@ Use this sequence for every agent-run implementation or smoke test:
    - `git commit -m "chore: <what changed>"`
 6. Push and open PR:
    - `git push origin <branch>`
-   - `gh pr create --fill`
+   - Prefer GitHub MCP `create_pull_request` for deterministic agent runs
 
 ### Anti-clunk guardrails
 
 - Never start edits while in detached HEAD
 - Never open a PR from `main`
 - Keep smoke-test PRs doc-only unless code execution is required
-- Prefer `gh pr create --body-file <file>` over inline multi-line `--body` strings
-- If `gh` cannot reach `api.github.com`, rerun with approved network escalation
+- If using `gh`, prefer `gh pr create --body-file <file>` over inline multi-line `--body` strings
+- If `git fetch` fails in a sandboxed worktree due `.git/worktrees/.../FETCH_HEAD` permissions, continue from current local refs and open a note in the PR
 - In PR body, call out any tooling friction and the exact fix applied so later
   agents do not rediscover it
