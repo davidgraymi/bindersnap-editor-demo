@@ -299,3 +299,29 @@ When generating new pages, components, or templates:
 5. Every new section needs: a `.bs-eyebrow` label, a Lora serif headline, and
    a single clear action — never two competing CTAs
 6. Add `.bs-reveal` to any block-level element introduced below the fold
+
+---
+
+## GitHub Agent Workflow (Issue -> Branch -> PR)
+
+Use this sequence for every agent-run implementation or smoke test:
+
+1. Read a real issue first (capture issue number and acceptance criteria)
+2. Verify git state before edits (`git status --short --branch`)
+3. If HEAD is detached, create a branch immediately:
+   - `git checkout -b codex/issue-<number>-<short-slug>`
+4. Make smallest safe change set first (docs/tests over broad refactors)
+5. Commit with an explicit scope:
+   - `git add <files>`
+   - `git commit -m "chore: <what changed>"`
+6. Push and open PR:
+   - `git push origin <branch>`
+   - `gh pr create --fill`
+
+### Anti-clunk guardrails
+
+- Never start edits while in detached HEAD
+- Never open a PR from `main`
+- Keep smoke-test PRs doc-only unless code execution is required
+- In PR body, call out any tooling friction and the exact fix applied so later
+  agents do not rediscover it
