@@ -1,55 +1,44 @@
 import { afterEach, expect, mock, test } from 'bun:test';
 
-import { createGiteaClient, GiteaApiError } from './client';
+const mockedClient = {
+  repos: {},
+  issues: {},
+  user: {},
+  orgs: {},
+};
 
-const originalFetch = globalThis.fetch;
+const giteaApiMock = mock(() => mockedClient);
+
+mock.module('gitea-js', () => ({
+  giteaApi: giteaApiMock,
+}));
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  giteaApiMock.mockClear();
 });
 
-test('attaches the Gitea authorization header', async () => {
-  const fetchMock = mock(
-    async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-      const headers = new Headers(init?.headers);
-      expect(headers.get('Authorization')).toBe('token secret-token');
-      return new Response(JSON.stringify({ ok: true }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    },
-  );
-
-  globalThis.fetch = fetchMock as typeof fetch;
-
-  const client = createGiteaClient('https://gitea.example.com/', 'secret-token');
-  const result = await client.get<{ ok: boolean }>('/api/v1/user');
-
-  expect(result).toEqual({ ok: true });
-  expect(fetchMock).toHaveBeenCalledTimes(1);
-  expect(fetchMock.mock.calls[0]?.[0]).toBe('https://gitea.example.com/api/v1/user');
-});
-
-test('throws a typed GiteaApiError for non-2xx responses', async () => {
-  const fetchMock = mock(async (): Promise<Response> => {
-    return new Response(JSON.stringify({ message: 'repository not found' }), {
-      status: 404,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  });
-
-  globalThis.fetch = fetchMock as typeof fetch;
+test('creates a thin gitea-js client with the expected namespaces', async () => {
+  const { createGiteaClient } = await import('./client');
 
   const client = createGiteaClient('https://gitea.example.com', 'secret-token');
 
-  try {
-    await client.get('/api/v1/repos/example/missing');
-    throw new Error('Expected request to fail');
-  } catch (error: unknown) {
-    expect(error).toBeInstanceOf(GiteaApiError);
+  expect(giteaApiMock).toHaveBeenCalledTimes(1);
+  expect(giteaApiMock).toHaveBeenCalledWith('https://gitea.example.com', { token: 'secret-token' });
+  expect(client).toBe(mockedClient);
+  expect(client.repos).toBeDefined();
+  expect(client.issues).toBeDefined();
+  expect(client.user).toBeDefined();
+  expect(client.orgs).toBeDefined();
+});
 
-    const apiError = error as GiteaApiError;
-    expect(apiError.status).toBe(404);
-    expect(apiError.message).toBe('repository not found');
-  }
+test('exposes a typed GiteaApiError status property', async () => {
+  const { GiteaApiError } = await import('./client');
+
+  const error = new GiteaApiError(404, 'repository not found');
+
+  expect(error).toBeInstanceOf(Error);
+  expect(error).toBeInstanceOf(GiteaApiError);
+  expect(error.name).toBe('GiteaApiError');
+  expect(error.status).toBe(404);
+  expect(error.message).toBe('repository not found');
 });
