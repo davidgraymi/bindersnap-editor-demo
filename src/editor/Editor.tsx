@@ -82,6 +82,8 @@ import {
 } from "lucide-react";
 
 import { VersionControlPanel } from "./components/VersionControl/VersionControlPanel";
+import { CommentSidebar, type CommentThread } from "./sidebar/CommentSidebar";
+import { CommentAnchor, getCommentAnchorState } from "./extensions/CommentAnchor";
 import { VersionHistory } from "./extensions/VersionHistory";
 import { Conflict } from "./extensions/conflict";
 import { gitService } from "./services/GitService";
@@ -101,6 +103,7 @@ interface EditorProps {
   onChange?: (content: Content) => void;
   placeholder?: string;
   className?: string;
+  comments?: CommentThread[];
 }
 
 const sanitizeContentForEditor = (content: Content): Content => {
@@ -121,6 +124,32 @@ const sanitizeContentForEditor = (content: Content): Content => {
 
   return content;
 };
+
+const findTextRange = (editor: Editor, targetText: string) => {
+  let match: { from: number; to: number } | null = null;
+
+  editor.state.doc.descendants((node, pos) => {
+    if (match || !node.isText) {
+      return !match;
+    }
+
+    const index = node.text?.indexOf(targetText) ?? -1;
+    if (index >= 0) {
+      match = {
+        from: pos + index,
+        to: pos + index + targetText.length,
+      };
+      return false;
+    }
+
+    return true;
+  });
+
+  return match;
+};
+
+const resolveCommentAnchor = (editor: Editor, comment: CommentThread) =>
+  comment.anchor ?? (comment.targetText ? findTextRange(editor, comment.targetText) : null);
 
 // --- Font Options ---
 const FONT_FAMILIES = [
@@ -1134,6 +1163,7 @@ export const DemoEditor = ({
   onChange,
   placeholder = "Start typing your document...",
   className = "",
+  comments = [],
 }: EditorProps) => {
   const sanitizedInitialContent = useMemo(
     () => sanitizeContentForEditor(initialContent),
@@ -1166,6 +1196,7 @@ export const DemoEditor = ({
       TableRow,
       TableCell,
       TableHeader,
+      CommentAnchor,
       VersionHistory,
       Conflict,
     ],
@@ -1282,6 +1313,48 @@ export const DemoEditor = ({
       editor.setEditable(!isPreviewMode);
     }
   }, [isPreviewMode, editor]);
+
+  useEffect(() => {
+    if (!editor) {
+      return;
+    }
+
+    const pluginState = getCommentAnchorState(editor.state);
+    if (!pluginState) {
+      return;
+    }
+
+    const staleCommentIds = new Set(pluginState.anchors.keys());
+
+    comments.forEach((comment) => {
+      const anchorRange = resolveCommentAnchor(editor, comment);
+
+      if (!anchorRange) {
+        return;
+      }
+
+      const existing = pluginState?.anchors.get(comment.id);
+      if (
+        existing?.from === anchorRange.from &&
+        existing?.to === anchorRange.to
+      ) {
+        staleCommentIds.delete(comment.id);
+        return;
+      }
+
+      editor.commands.addCommentAnchor(
+        anchorRange.from,
+        anchorRange.to,
+        comment.id,
+      );
+
+      staleCommentIds.delete(comment.id);
+    });
+
+    staleCommentIds.forEach((commentId) => {
+      editor.commands.removeCommentAnchor(commentId);
+    });
+  }, [comments, editor, sanitizedInitialContent]);
 
   // Handle Keyboard Shortcuts (Ctrl+S / Cmd+S)
   useEffect(() => {
@@ -1453,6 +1526,11 @@ export const DemoEditor = ({
     return value || fallback;
   };
 
+  const showSidebar = showVcPanel || comments.length > 0;
+  const sidebarClassName = showVcPanel
+    ? "bs-editor__sidebar"
+    : "bs-editor__sidebar bs-editor__sidebar--comments";
+
   return (
     <div className={`bs-editor demo-editor ${className}`} ref={containerRef}>
       {isPreviewMode && (
@@ -1579,9 +1657,9 @@ export const DemoEditor = ({
           <EditorContent editor={editor} />
         </div>
 
-        {showVcPanel && (
+        {showSidebar && (
           <div
-            className="bs-editor__sidebar"
+            className={sidebarClassName}
             style={
               {
                 "--bs-editor-sidebar-width": `${sidebarWidth}px`,
@@ -1592,16 +1670,20 @@ export const DemoEditor = ({
               className={`bs-editor__resize-handle ${isResizing ? "is-resizing" : ""}`}
               onMouseDown={startResizing}
             />
-            <VersionControlPanel
-              getEditorContent={() =>
-                isPreviewMode ? originalContent : editor?.getHTML() || ""
-              }
-              onContentChange={(content) => {
-                editor?.commands.setContent(sanitizeContentForEditor(content));
-              }}
-              onPreviewDiff={handlePreviewDiff}
-              isPreviewMode={isPreviewMode}
-            />
+            {showVcPanel ? (
+              <VersionControlPanel
+                getEditorContent={() =>
+                  isPreviewMode ? originalContent : editor?.getHTML() || ""
+                }
+                onContentChange={(content) => {
+                  editor?.commands.setContent(sanitizeContentForEditor(content));
+                }}
+                onPreviewDiff={handlePreviewDiff}
+                isPreviewMode={isPreviewMode}
+              />
+            ) : (
+              <CommentSidebar editor={editor} comments={comments} />
+            )}
           </div>
         )}
       </div>

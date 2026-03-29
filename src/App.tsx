@@ -3,6 +3,7 @@ import type { Content } from "@tiptap/react";
 
 import { DemoEditor } from "./editor/Editor";
 import { gitService } from "./editor/services/GitService";
+import type { CommentThread } from "./editor/sidebar/CommentSidebar";
 
 const sampleJson = {
   type: "doc",
@@ -452,6 +453,23 @@ const sampleJson = {
   ],
 };
 
+const sampleComments: CommentThread[] = [
+  {
+    id: "comment-1",
+    author: "Ava Chen",
+    createdAt: "2h ago",
+    body: "This reads like the kind of paragraph reviewers usually question first.",
+    targetText: "TipTap",
+  },
+  {
+    id: "comment-2",
+    author: "Jordan Lee",
+    createdAt: "17m ago",
+    body: "Keep the heading clear here. This is the part stakeholders will quote back.",
+    targetText: "Welcome to the Rich Text Editor",
+  },
+];
+
 export function App() {
   const [content, setContent] = useState<Content>(() => {
     const history = gitService.getHistory();
@@ -472,6 +490,7 @@ export function App() {
       initialContent={sampleJson}
       onChange={handleChange}
       placeholder="Start typing your document..."
+      comments={sampleComments}
     />
   );
 }
