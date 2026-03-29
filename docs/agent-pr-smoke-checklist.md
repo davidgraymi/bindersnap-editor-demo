@@ -26,7 +26,10 @@ Use this checklist when validating agent GitHub operations in this repository.
 
 ## 5) Open PR
 
-- `gh pr create --fill`
+- Prefer `gh pr create --body-file /tmp/pr-body.md` to avoid shell quoting bugs.
+- If you use `--body`, avoid backticks and complex shell characters.
+- If `gh` reports it cannot connect to `api.github.com`, rerun with approved
+  network escalation.
 - Include:
   - what was validated
   - friction encountered
@@ -36,3 +39,5 @@ Use this checklist when validating agent GitHub operations in this repository.
 
 - Initial worktree state can be detached HEAD.
 - This is resolved by creating a `codex/` branch before making edits.
+- Inline multi-line `gh pr create --body` text can break on shell quoting.
+- This is resolved by using `--body-file` and simple ASCII content.

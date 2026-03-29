@@ -323,5 +323,7 @@ Use this sequence for every agent-run implementation or smoke test:
 - Never start edits while in detached HEAD
 - Never open a PR from `main`
 - Keep smoke-test PRs doc-only unless code execution is required
+- Prefer `gh pr create --body-file <file>` over inline multi-line `--body` strings
+- If `gh` cannot reach `api.github.com`, rerun with approved network escalation
 - In PR body, call out any tooling friction and the exact fix applied so later
   agents do not rediscover it
