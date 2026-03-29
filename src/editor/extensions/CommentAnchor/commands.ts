@@ -1,3 +1,4 @@
+import type { CommandProps } from "@tiptap/core";
 import type { EditorState } from "@tiptap/pm/state";
 
 import { commentAnchorPluginKey } from "./plugin";
@@ -8,7 +9,7 @@ const clampPosition = (state: EditorState, position: number) =>
 export const commentAnchorCommands = () => ({
   addCommentAnchor:
     (from: number, to: number, commentId: string) =>
-    ({ state, tr, dispatch }) => {
+    ({ state, tr, dispatch }: CommandProps) => {
       const safeFrom = clampPosition(state, Math.min(from, to));
       const safeTo = clampPosition(state, Math.max(from, to));
 
@@ -32,7 +33,7 @@ export const commentAnchorCommands = () => ({
 
   removeCommentAnchor:
     (commentId: string) =>
-    ({ tr, dispatch }) => {
+    ({ tr, dispatch }: CommandProps) => {
       if (!commentId) {
         return false;
       }
@@ -51,7 +52,7 @@ export const commentAnchorCommands = () => ({
 
   setActiveComment:
     (commentId: string | null) =>
-    ({ tr, dispatch }) => {
+    ({ tr, dispatch }: CommandProps) => {
       tr.setMeta(commentAnchorPluginKey, {
         type: "set-active",
         commentId,
