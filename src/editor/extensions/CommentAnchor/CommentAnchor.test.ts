@@ -7,6 +7,7 @@ import { JSDOM } from "jsdom";
 import { CommentAnchor, getCommentAnchorState } from "./index";
 
 const { window } = new JSDOM("<!doctype html><html><body></body></html>");
+type TextRange = { from: number; to: number };
 
 beforeAll(() => {
   Object.assign(globalThis, {
@@ -33,6 +34,7 @@ beforeAll(() => {
 
 const createEditor = () =>
   new Editor({
+    element: window.document.createElement("div"),
     extensions: [StarterKit, CommentAnchor],
     content: "<p>Alpha Beta Gamma</p>",
   });
@@ -47,8 +49,8 @@ const getAnchorState = (editor: Editor) => {
   return pluginState;
 };
 
-const findTextRange = (editor: Editor, targetText: string) => {
-  let range: { from: number; to: number } | null = null;
+const findTextRange = (editor: Editor, targetText: string): TextRange => {
+  let range: TextRange | null = null;
 
   editor.state.doc.descendants((node, pos) => {
     if (range || !node.isText || !node.text) {
@@ -74,6 +76,18 @@ const findTextRange = (editor: Editor, targetText: string) => {
   }
 
   return range;
+};
+
+const getCommentAnchorElement = (editor: Editor, commentId: string) => {
+  const element = editor.view.dom.querySelector<HTMLElement>(
+    `[data-comment-id="${commentId}"]`,
+  );
+
+  if (!element) {
+    throw new Error(`Could not find anchor element for comment "${commentId}".`);
+  }
+
+  return element;
 };
 
 describe("CommentAnchor", () => {
@@ -111,25 +125,17 @@ describe("CommentAnchor", () => {
     editor.commands.addCommentAnchor(range.from, range.to, "comment-1");
     editor.commands.setActiveComment("comment-1");
 
-    const activeDecoration = getAnchorState(editor).decorations.find(
-      range.from,
-      range.to,
-      (spec) => spec.commentId === "comment-1",
-    )[0];
+    const activeAnchor = getCommentAnchorElement(editor, "comment-1");
 
-    expect(activeDecoration?.type.attrs.class).toContain(
+    expect(activeAnchor.className).toContain(
       "bs-comment-anchor--active",
     );
 
     editor.commands.setActiveComment(null);
 
-    const inactiveDecoration = getAnchorState(editor).decorations.find(
-      range.from,
-      range.to,
-      (spec) => spec.commentId === "comment-1",
-    )[0];
+    const inactiveAnchor = getCommentAnchorElement(editor, "comment-1");
 
-    expect(inactiveDecoration?.type.attrs.class).not.toContain(
+    expect(inactiveAnchor.className).not.toContain(
       "bs-comment-anchor--active",
     );
 
