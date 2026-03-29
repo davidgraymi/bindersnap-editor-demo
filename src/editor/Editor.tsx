@@ -9,7 +9,13 @@
 
 import "./assets/bindersnap-editor.css";
 
-import React, { useCallback, useState, useRef, useEffect } from "react";
+import React, {
+  useCallback,
+  useState,
+  useRef,
+  useEffect,
+  useMemo,
+} from "react";
 import { createPortal } from "react-dom";
 import { useEditor, EditorContent, Editor } from "@tiptap/react";
 import type { Content } from "@tiptap/react";
@@ -79,6 +85,7 @@ import { VersionControlPanel } from "./components/VersionControl/VersionControlP
 import { VersionHistory } from "./extensions/VersionHistory";
 import { Conflict } from "./extensions/conflict";
 import { gitService } from "./services/GitService";
+import { sanitizeHtml, sanitizeProseMirrorJson } from "../services/sanitizer";
 
 // --- Types ---
 interface ToolbarProps {
@@ -95,6 +102,25 @@ interface EditorProps {
   placeholder?: string;
   className?: string;
 }
+
+const sanitizeContentForEditor = (content: Content): Content => {
+  if (typeof content === "string") {
+    return sanitizeHtml(content);
+  }
+
+  if (Array.isArray(content)) {
+    return sanitizeProseMirrorJson({
+      type: "doc",
+      content,
+    });
+  }
+
+  if (content && typeof content === "object") {
+    return sanitizeProseMirrorJson(content);
+  }
+
+  return content;
+};
 
 // --- Font Options ---
 const FONT_FAMILIES = [
@@ -1109,6 +1135,11 @@ export const DemoEditor = ({
   placeholder = "Start typing your document...",
   className = "",
 }: EditorProps) => {
+  const sanitizedInitialContent = useMemo(
+    () => sanitizeContentForEditor(initialContent),
+    [initialContent],
+  );
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -1138,7 +1169,7 @@ export const DemoEditor = ({
       VersionHistory,
       Conflict,
     ],
-    content: initialContent,
+    content: sanitizedInitialContent,
     onUpdate: ({ editor }) => {
       queueMicrotask(() => {
         onChange?.(editor.getJSON());
@@ -1238,12 +1269,12 @@ export const DemoEditor = ({
     if (
       editor &&
       !isPreviewMode &&
-      initialContent !== undefined &&
-      JSON.stringify(initialContent) !== JSON.stringify(editor.getJSON())
+      sanitizedInitialContent !== undefined &&
+      JSON.stringify(sanitizedInitialContent) !== JSON.stringify(editor.getJSON())
     ) {
-      editor.commands.setContent(initialContent);
+      editor.commands.setContent(sanitizedInitialContent);
     }
-  }, [initialContent, editor, isPreviewMode]);
+  }, [sanitizedInitialContent, editor, isPreviewMode]);
 
   // Update editable state
   useEffect(() => {
@@ -1289,7 +1320,7 @@ export const DemoEditor = ({
 
   const handleExitPreview = () => {
     if (!editor) return;
-    editor.commands.setContent(originalContent);
+    editor.commands.setContent(sanitizeContentForEditor(originalContent));
     setIsPreviewMode(false);
     setOriginalContent("");
   };
@@ -1566,7 +1597,7 @@ export const DemoEditor = ({
                 isPreviewMode ? originalContent : editor?.getHTML() || ""
               }
               onContentChange={(content) => {
-                editor?.commands.setContent(content);
+                editor?.commands.setContent(sanitizeContentForEditor(content));
               }}
               onPreviewDiff={handlePreviewDiff}
               isPreviewMode={isPreviewMode}
