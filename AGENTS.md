@@ -315,8 +315,8 @@ Use this sequence for every agent-run implementation or smoke test:
    - `git add <files>`
    - `git commit -m "chore: <what changed>"`
 6. Push and open PR:
-   - `git push origin <branch>`
-   - Prefer GitHub MCP `create_pull_request` for deterministic agent runs
+    - `git push origin <branch>`
+   - Prefer GitHub MCP `create_pull_request`; if it returns `404`, fall back to `gh pr create --body-file <file>`
 
 ### Anti-clunk guardrails
 

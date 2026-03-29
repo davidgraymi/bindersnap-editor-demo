@@ -27,6 +27,7 @@ Use this checklist when validating agent GitHub operations in this repository.
 ## 5) Open PR
 
 - Prefer GitHub MCP `create_pull_request`.
+- If MCP `create_pull_request` returns `404`, fall back to `gh pr create`.
 - If using `gh`, prefer `gh pr create --body-file /tmp/pr-body.md` to avoid
   shell quoting bugs.
 - Include:
@@ -44,3 +45,5 @@ Use this checklist when validating agent GitHub operations in this repository.
   writable from the agent sandbox.
 - This is resolved by proceeding from local refs and documenting the limitation
   in the PR.
+- GitHub MCP may be read-capable (issues/branches) while PR create returns 404.
+- This is resolved by falling back to `gh pr create` until MCP write access is fixed.
