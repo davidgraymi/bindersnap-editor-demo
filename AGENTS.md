@@ -299,3 +299,42 @@ When generating new pages, components, or templates:
 5. Every new section needs: a `.bs-eyebrow` label, a Lora serif headline, and
    a single clear action — never two competing CTAs
 6. Add `.bs-reveal` to any block-level element introduced below the fold
+
+---
+
+## GitHub Agent Workflow (Issue → Branch → PR)
+
+Use this sequence to avoid common handoff failures when automating GitHub work:
+
+1. Run preflight checks before any branch or file changes:
+
+```bash
+scripts/agent-gh-preflight.sh <issue-number>
+```
+
+2. Create a task branch from `main` using the required prefix:
+
+```bash
+git checkout main
+git pull --ff-only
+git checkout -b codex/<short-task-name>
+```
+
+3. Keep changes scoped and explicit:
+
+- Keep commits focused on one issue or one troubleshooting test
+- Include the issue number in commit and PR text for traceability
+- Do not mix formatting-only churn with behavior changes in the same commit
+
+4. Open PR with deterministic metadata so review automation can parse it:
+
+```bash
+gh pr create \
+  --base main \
+  --head codex/<short-task-name> \
+  --title "<type>: <short summary>" \
+  --body "Closes #<issue-number>"
+```
+
+5. If any step fails, capture the exact command + stderr in the PR or issue comment
+   before retrying so the next agent has concrete diagnostics.
