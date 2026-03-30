@@ -25,12 +25,8 @@ After Gitea is healthy, the seed script runs automatically and creates:
 - Three documents in different approval states (see `gitea-seed/documents/`)
 - An open PR from `bob/feature/q2-amendments` → `main` with a "Changes Requested" review
 
-**Alice's token** is printed to stdout after seeding for manual UI login. Set it in your shell:
-
-```bash
-export VITE_GITEA_TOKEN=<printed-token>
-export VITE_GITEA_URL=http://localhost:3000
-```
+The app auto-signs into `/app` in the dev stack by minting a token server-side,
+so no manual token copy/paste is required for UI testing.
 
 Integration tests no longer require manual token copy/paste; they can seed and mint their own token.
 You can still copy `dev/.env.example` to `dev/.env` for local overrides.

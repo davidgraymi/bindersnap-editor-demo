@@ -30,6 +30,10 @@ Gitea is pre-seeded with demo users and documents — see `dev/README.md`.
 
 Users log in with a Gitea personal access token. No separate Bindersnap auth database exists. The token is stored in `sessionStorage` (cleared on tab close) and passed to both the Gitea service layer and the Hocuspocus provider. See `src/services/gitea/auth.ts`.
 
+In the Docker dev stack, `/app` can auto-sign in when `BINDERSNAP_DEV_AUTO_LOGIN=true`.
+The Bun server mints a dev token using seeded admin credentials and the UI stores it in `sessionStorage`.
+If auto-login is disabled or fails, the manual token gate is shown.
+
 ## Never published
 
 This app is intentionally excluded from the GitHub Pages build. It is only served via the Docker dev stack locally, or a private deployment. There is no sign-in page exposed on the public landing site.
