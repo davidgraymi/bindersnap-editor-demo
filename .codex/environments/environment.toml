@@ -3,7 +3,19 @@ version = 1
 name = "bindersnap-editor-demo"
 
 [setup]
-script = '''
-bun install
+script = "bun install"
 
-'''
+[[actions]]
+name = "dev server"
+icon = "run"
+command = "bun dev"
+
+[[actions]]
+name = "lighthouse"
+icon = "debug"
+command = "bun lighthouse"
+
+[[actions]]
+name = "test"
+icon = "test"
+command = "bun test"
