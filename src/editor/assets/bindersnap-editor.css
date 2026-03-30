@@ -146,6 +146,7 @@
 /* Scroll container */
 .bs-editor__scroll {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
   touch-action: pan-y;
@@ -582,6 +583,9 @@
 
 .bs-editor__content {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .bs-editor__sidebar {
@@ -1376,114 +1380,184 @@
 
 
 /* ──────────────────────────────────────
-   10c. APPROVAL STATES
-   Block-level wrappers that indicate the
-   approval status of a section or document.
-   ──────────────────────────────────────
-   Expected structure:
-   <div class="bs-approval bs-approval--pending" data-approver="..." data-date="...">
-     <div class="bs-approval__badge">Pending Review</div>
-     ... content ...
-   </div>
+   10c. APPROVAL STATUS BANNER
+   External banner rendered above the
+   ProseMirror scroll area.
    ────────────────────────────────────── */
 
 .bs-editor .bs-approval {
+  --bs-approval-accent: var(--color-muted);
+  --bs-approval-copy: var(--color-ink-soft);
+  --bs-approval-surface: color-mix(in srgb, var(--color-muted) 8%, var(--color-paper));
+  --bs-approval-badge-bg: color-mix(in srgb, var(--color-muted) 10%, var(--color-paper));
+  --bs-approval-badge-text: var(--color-muted);
+  --bs-approval-link: var(--color-ink-soft);
+
   position: relative;
-  margin: 1.5em 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-3);
+  padding: var(--brand-space-4) var(--brand-space-5);
+  border: var(--e-border-1) solid color-mix(in srgb, var(--bs-approval-accent) 22%, var(--color-rule));
   border-radius: var(--brand-radius-lg);
-  border: var(--e-border-1) solid var(--e-rule);
+  background: var(--bs-approval-surface);
+  box-shadow: var(--e-shadow-sm);
   overflow: hidden;
 }
 
-/* Top accent bar */
 .bs-editor .bs-approval::before {
   content: '';
   position: absolute;
-  top: 0; left: 0; right: 0;
+  top: 0;
+  left: 0;
+  right: 0;
   height: var(--e-border-3);
+  background: var(--bs-approval-accent);
 }
 
-.bs-editor .bs-approval--pending::before  { background: var(--e-pending-b); }
-.bs-editor .bs-approval--approved::before { background: var(--e-approved-b); }
-.bs-editor .bs-approval--rejected::before { background: var(--e-rejected-b); }
+.bs-editor .bs-approval--approved {
+  --bs-approval-accent: var(--color-green);
+  --bs-approval-copy: var(--color-ink-soft);
+  --bs-approval-surface: color-mix(in srgb, var(--color-green) 10%, var(--color-paper));
+  --bs-approval-badge-bg: color-mix(in srgb, var(--color-green) 12%, var(--color-paper));
+  --bs-approval-badge-text: var(--color-green);
+  --bs-approval-link: var(--color-ink-soft);
+}
 
-/* Background tint */
-.bs-editor .bs-approval--pending  { background: var(--e-pending); }
-.bs-editor .bs-approval--approved { background: var(--e-approved); }
-.bs-editor .bs-approval--rejected { background: var(--e-rejected); }
+.bs-editor .bs-approval--pending {
+  --bs-approval-accent: var(--color-coral);
+  --bs-approval-copy: var(--color-ink-soft);
+  --bs-approval-surface: color-mix(in srgb, var(--color-coral) 10%, var(--color-paper));
+  --bs-approval-badge-bg: color-mix(in srgb, var(--color-coral) 10%, var(--color-paper));
+  --bs-approval-badge-text: var(--color-coral);
+  --bs-approval-link: var(--color-ink-soft);
+}
 
-/* Badge */
+.bs-editor .bs-approval--rejected {
+  --bs-approval-accent: var(--color-coral-dark);
+  --bs-approval-copy: var(--color-ink-soft);
+  --bs-approval-surface: color-mix(in srgb, var(--color-coral-dark) 10%, var(--color-paper));
+  --bs-approval-badge-bg: color-mix(in srgb, var(--color-coral-dark) 10%, var(--color-paper));
+  --bs-approval-badge-text: var(--color-coral-dark);
+  --bs-approval-link: var(--color-ink-soft);
+}
+
 .bs-editor .bs-approval__badge {
   display: inline-flex;
   align-items: center;
+  width: fit-content;
   gap: var(--brand-space-2);
-  padding: var(--brand-space-2) var(--brand-space-4);
+  padding: var(--brand-space-1) var(--brand-space-3);
+  border: var(--e-border-1) solid color-mix(in srgb, var(--bs-approval-badge-text) 24%, var(--color-rule));
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-approval-badge-bg);
+  color: var(--bs-approval-badge-text);
   font-family: var(--e-font-mono);
   font-size: var(--brand-text-label);
   font-weight: 500;
   letter-spacing: var(--brand-tracking-wide);
   text-transform: uppercase;
-  border-bottom: var(--e-border-1) solid var(--e-rule-2);
-  width: 100%;
 }
 
-.bs-editor .bs-approval--pending  .bs-approval__badge { color: var(--e-pending-b); }
-.bs-editor .bs-approval--approved .bs-approval__badge { color: var(--e-approved-b); }
-.bs-editor .bs-approval--rejected .bs-approval__badge { color: var(--e-rejected-b); }
-
-.bs-editor .bs-approval__badge::before {
-  content: '';
-  display: inline-block;
-  width: var(--brand-space-2);
-  height: var(--brand-space-2);
-  border-radius: 50%;
-  background: currentColor;
-  flex-shrink: 0;
-  animation: none;
+.bs-editor .bs-approval__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-2);
 }
 
-/* Pulse animation for pending */
-.bs-editor .bs-approval--pending .bs-approval__badge::before {
-  animation: approval-pulse 2s ease-in-out infinite;
+.bs-editor .bs-approval__title {
+  margin: 0;
+  color: var(--color-ink);
+  font-family: var(--e-font-serif);
+  font-size: var(--brand-text-h3);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: var(--brand-tracking-snug);
+}
+
+.bs-editor .bs-approval__copy {
+  margin: 0;
+  color: var(--bs-approval-copy);
+  font-family: var(--e-font-sans);
+  font-size: var(--brand-text-body);
+  line-height: 1.6;
+}
+
+.bs-editor .bs-approval__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--brand-space-2);
+}
+
+.bs-editor .bs-approval__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--brand-space-8);
+  padding: 0 var(--brand-space-1);
+  color: var(--bs-approval-link);
+  font-family: var(--e-font-mono);
+  font-size: var(--brand-text-label);
+  font-weight: 500;
+  letter-spacing: var(--brand-tracking-wide);
+  text-decoration: underline;
+  text-decoration-color: var(--e-rule);
+  text-underline-offset: 0.2em;
+  transition: color var(--e-t-fast), text-decoration-color var(--e-t-fast);
+}
+
+.bs-editor .bs-approval__link:hover {
+  color: var(--color-ink);
+  text-decoration-color: var(--bs-approval-accent);
+}
+
+.bs-editor .bs-approval--working {
+  --bs-approval-accent: var(--color-muted);
+  --bs-approval-copy: var(--color-muted);
+  --bs-approval-surface: color-mix(in srgb, var(--color-muted) 8%, var(--color-paper));
+  --bs-approval-badge-bg: color-mix(in srgb, var(--color-muted) 10%, var(--color-paper));
+  --bs-approval-badge-text: var(--color-muted);
+  --bs-approval-link: var(--color-muted);
+}
+
+.bs-editor .bs-approval--in-review {
+  --bs-approval-accent: var(--color-coral);
+  --bs-approval-copy: var(--color-ink-soft);
+  --bs-approval-surface: color-mix(in srgb, var(--color-coral) 10%, var(--color-paper));
+  --bs-approval-badge-bg: color-mix(in srgb, var(--color-coral) 10%, var(--color-paper));
+  --bs-approval-badge-text: var(--color-coral);
+  --bs-approval-link: var(--color-ink-soft);
+}
+
+.bs-editor .bs-approval--changes-requested {
+  --bs-approval-accent: var(--color-coral-dark);
+  --bs-approval-copy: var(--color-ink-soft);
+  --bs-approval-surface: color-mix(in srgb, var(--color-coral-dark) 10%, var(--color-paper));
+  --bs-approval-badge-bg: color-mix(in srgb, var(--color-coral-dark) 10%, var(--color-paper));
+  --bs-approval-badge-text: var(--color-coral-dark);
+  --bs-approval-link: var(--color-ink-soft);
+}
+
+.bs-editor .bs-approval--published {
+  --bs-approval-accent: var(--color-ink);
+  --bs-approval-copy: var(--color-ink-soft);
+  --bs-approval-surface: color-mix(in srgb, var(--color-ink) 4%, var(--color-paper));
+  --bs-approval-badge-bg: color-mix(in srgb, var(--color-green) 12%, var(--color-paper));
+  --bs-approval-badge-text: var(--color-green);
+  --bs-approval-link: var(--color-ink);
 }
 
 @keyframes approval-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50%       { opacity: 0.5; transform: scale(0.7); }
-}
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 
-/* Content area */
-.bs-editor .bs-approval__content {
-  padding: var(--brand-space-4) var(--brand-space-5);
-}
-
-.bs-editor .bs-approval__content > *:last-child { margin-bottom: 0; }
-
-/* Meta row */
-.bs-editor .bs-approval__meta {
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-3);
-  padding: var(--brand-space-2) var(--brand-space-5);
-  border-top: var(--e-border-1) solid var(--e-rule-2);
-  font-family: var(--e-font-mono);
-  font-size: var(--brand-text-label);
-  color: var(--e-text-4);
-  letter-spacing: var(--brand-tracking-wide);
-}
-
-/* Locked approved content — visually sealed */
-.bs-editor .bs-approval--approved .bs-approval__content {
-  opacity: 0.85;
-}
-
-.bs-editor .bs-approval--approved .bs-approval__content::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: all;  /* blocks editing of approved sections */
-  cursor: not-allowed;
-  background: transparent;
+  50% {
+    opacity: 0.5;
+    transform: scale(0.7);
+  }
 }
 
 
@@ -2298,8 +2372,6 @@
   .bs-editor .bs-conflict__zone--theirs {
     padding: var(--brand-space-2) var(--brand-space-3);
   }
-
-  .bs-editor .bs-approval__content { padding: var(--brand-space-3) var(--brand-space-3); }
 }
 
 @media (max-width: 30rem) {

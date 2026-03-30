@@ -84,6 +84,7 @@ import {
 
 import { VersionControlPanel } from "./components/VersionControl/VersionControlPanel";
 import { CommentSidebar, type CommentThread } from "./sidebar/CommentSidebar";
+import { ApprovalStatusBanner } from "./extensions/ApprovalStatus";
 import {
   CommentAnchor,
   getCommentAnchorState,
@@ -92,6 +93,7 @@ import { VersionHistory } from "./extensions/VersionHistory";
 import { Conflict } from "./extensions/conflict";
 import { gitService } from "./services/GitService";
 import { sanitizeHtml, sanitizeProseMirrorJson } from "../services/sanitizer";
+import type { ApprovalState } from "../services/gitea/pullRequests";
 
 // --- Types ---
 interface ToolbarProps {
@@ -111,6 +113,11 @@ interface EditorProps {
   placeholder?: string;
   className?: string;
   comments?: CommentThread[];
+  approvalState?: ApprovalState;
+  prUrl?: string;
+  onSubmitForReview?: () => void;
+  onApprove?: () => void;
+  onRequestChanges?: () => void;
 }
 
 const sanitizeContentForEditor = (content: Content): Content => {
@@ -1191,6 +1198,11 @@ export const DemoEditor = ({
   placeholder = "Start typing your document...",
   className = "",
   comments = [],
+  approvalState,
+  prUrl,
+  onSubmitForReview,
+  onApprove,
+  onRequestChanges,
 }: EditorProps) => {
   const sanitizedInitialContent = useMemo(
     () => sanitizeContentForEditor(initialContent),
@@ -1760,10 +1772,21 @@ export const DemoEditor = ({
             </button>
           </div>,
           document.body,
-        )}
+      )}
       <div className="bs-editor__main">
-        <div className="bs-editor__scroll bs-editor__content" ref={scrollRef}>
-          <EditorContent editor={editor} />
+        <div className="bs-editor__content">
+          {approvalState && (
+            <ApprovalStatusBanner
+              approvalState={approvalState}
+              prUrl={prUrl}
+              onSubmitForReview={onSubmitForReview}
+              onApprove={onApprove}
+              onRequestChanges={onRequestChanges}
+            />
+          )}
+          <div className="bs-editor__scroll" ref={scrollRef}>
+            <EditorContent editor={editor} />
+          </div>
         </div>
 
         {showSidebar && (
