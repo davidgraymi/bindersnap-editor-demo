@@ -1,0 +1,57 @@
+# Bindersnap local development stack
+# Run: docker compose up
+# See dev/README.md for full usage.
+
+services:
+  gitea:
+    image: gitea/gitea:latest
+    container_name: bindersnap-gitea
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      - GITEA__server__ROOT_URL=http://localhost:3000
+      - GITEA__server__HTTP_PORT=3000
+      - GITEA__database__DB_TYPE=sqlite3
+      - GITEA__database__PATH=/data/gitea.db
+      - GITEA__security__INSTALL_LOCK=true
+      - GITEA__service__DISABLE_REGISTRATION=false
+      - GITEA__log__LEVEL=warn
+    ports:
+      - "3000:3000"
+    volumes:
+      - gitea-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/v1/settings/api"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+
+  seed:
+    image: curlimages/curl:latest
+    container_name: bindersnap-seed
+    depends_on:
+      gitea:
+        condition: service_healthy
+    volumes:
+      - ./gitea-seed:/seed
+    entrypoint: ["/bin/sh", "/seed/setup.sh"]
+    environment:
+      - GITEA_URL=http://gitea:3000
+
+  hocuspocus:
+    image: node:22-alpine
+    container_name: bindersnap-hocuspocus
+    working_dir: /app
+    # TODO (Issue: Dev stack): replace with a proper hocuspocus Dockerfile
+    # For now this is a placeholder that agents should flesh out
+    command: echo "hocuspocus placeholder - see dev stack issue"
+    ports:
+      - "1234:1234"
+
+volumes:
+  gitea-data:
+
+networks:
+  default:
+    name: bindersnap-dev
