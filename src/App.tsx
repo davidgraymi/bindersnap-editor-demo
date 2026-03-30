@@ -453,22 +453,67 @@ const sampleJson = {
   ],
 };
 
-const sampleComments: CommentThread[] = [
+type DemoPersistedComment = {
+  gitea: {
+    id: number;
+    body: string;
+    created_at: string;
+    path: string;
+    position: number;
+    original_position: number;
+    user: {
+      login: string;
+    };
+  };
+  anchor: {
+    from: number;
+    to: number;
+  };
+  resolved?: boolean;
+};
+
+const demoPersistedComments: DemoPersistedComment[] = [
   {
-    id: "comment-1",
-    author: "Ava Chen",
-    createdAt: "2h ago",
-    body: "This reads like the kind of paragraph reviewers usually question first.",
-    targetText: "TipTap",
+    gitea: {
+      id: 101,
+      body: "This reads like the kind of paragraph reviewers usually question first.",
+      created_at: "2026-03-30T09:15:00Z",
+      path: "docs/contract.json",
+      position: 14,
+      original_position: 14,
+      user: { login: "ava.chen" },
+    },
+    anchor: { from: 157, to: 163 },
   },
   {
-    id: "comment-2",
-    author: "Jordan Lee",
-    createdAt: "17m ago",
-    body: "Keep the heading clear here. This is the part stakeholders will quote back.",
-    targetText: "Welcome to the Rich Text Editor",
+    gitea: {
+      id: 102,
+      body: "Keep the heading clear here. This is the part stakeholders will quote back.",
+      created_at: "2026-03-30T09:58:00Z",
+      path: "docs/contract.json",
+      position: 8,
+      original_position: 8,
+      user: { login: "jordan.lee" },
+    },
+    anchor: { from: 81, to: 113 },
   },
 ];
+
+const sampleComments: CommentThread[] = demoPersistedComments.map(
+  ({ gitea, anchor, resolved }) => ({
+    id: String(gitea.id),
+    author: gitea.user.login,
+    createdAt: new Date(gitea.created_at).toLocaleString(),
+    body: gitea.body,
+    resolved: resolved ?? false,
+    anchor,
+    source: {
+      path: gitea.path,
+      position: gitea.position,
+      originalPosition: gitea.original_position,
+    },
+  }),
+);
 
 export function App() {
   const [content, setContent] = useState<Content>(() => {

@@ -9,10 +9,14 @@ export type CommentThread = {
   body: string;
   createdAt?: string;
   resolved?: boolean;
-  targetText?: string;
   anchor?: {
     from: number;
     to: number;
+  };
+  source?: {
+    path?: string;
+    position?: number;
+    originalPosition?: number;
   };
 };
 
@@ -106,7 +110,9 @@ export const CommentSidebar = ({
             const isAnchored = sidebarState.anchoredCommentIds.has(comment.id);
             const excerpt =
               sidebarState.anchorTextById.get(comment.id) ??
-              comment.targetText ??
+              (comment.source?.path
+                ? `Unanchored review comment on ${comment.source.path}`
+                : null) ??
               "Anchor unavailable";
 
             return (

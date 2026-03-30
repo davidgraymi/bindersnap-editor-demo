@@ -75,6 +75,7 @@ import {
   Type,
   GitGraph,
   GitMergeConflict,
+  MessageSquare,
   Eye,
   EyeOff,
   Maximize,
@@ -83,7 +84,10 @@ import {
 
 import { VersionControlPanel } from "./components/VersionControl/VersionControlPanel";
 import { CommentSidebar, type CommentThread } from "./sidebar/CommentSidebar";
-import { CommentAnchor, getCommentAnchorState } from "./extensions/CommentAnchor";
+import {
+  CommentAnchor,
+  getCommentAnchorState,
+} from "./extensions/CommentAnchor";
 import { VersionHistory } from "./extensions/VersionHistory";
 import { Conflict } from "./extensions/conflict";
 import { gitService } from "./services/GitService";
@@ -93,7 +97,10 @@ import { sanitizeHtml, sanitizeProseMirrorJson } from "../services/sanitizer";
 interface ToolbarProps {
   editor: Editor | null;
   showVcPanel: boolean;
+  showCommentsPanel: boolean;
+  hasComments: boolean;
   onToggleVcCtrl: () => void;
+  onToggleCommentsPanel: () => void;
   isFullScreen: boolean;
   onToggleFullScreen: () => void;
 }
@@ -125,31 +132,27 @@ const sanitizeContentForEditor = (content: Content): Content => {
   return content;
 };
 
-const findTextRange = (editor: Editor, targetText: string) => {
-  let match: { from: number; to: number } | null = null;
+const resolveCommentAnchor = (comment: CommentThread) => comment.anchor ?? null;
 
-  editor.state.doc.descendants((node, pos) => {
-    if (match || !node.isText) {
-      return !match;
-    }
+const readCssLengthPx = (element: HTMLElement, propertyName: string) => {
+  const styles = getComputedStyle(element);
+  const raw = styles.getPropertyValue(propertyName).trim();
 
-    const index = node.text?.indexOf(targetText) ?? -1;
-    if (index >= 0) {
-      match = {
-        from: pos + index,
-        to: pos + index + targetText.length,
-      };
-      return false;
-    }
+  if (!raw) {
+    return null;
+  }
 
-    return true;
-  });
+  const probe = document.createElement("div");
+  probe.style.position = "absolute";
+  probe.style.visibility = "hidden";
+  probe.style.pointerEvents = "none";
+  probe.style.width = raw;
+  element.appendChild(probe);
+  const width = probe.getBoundingClientRect().width;
+  probe.remove();
 
-  return match;
+  return Number.isFinite(width) && width > 0 ? width : null;
 };
-
-const resolveCommentAnchor = (editor: Editor, comment: CommentThread) =>
-  comment.anchor ?? (comment.targetText ? findTextRange(editor, comment.targetText) : null);
 
 // --- Font Options ---
 const FONT_FAMILIES = [
@@ -501,7 +504,10 @@ const Divider = () => <div className="bs-editor__toolbar-divider" />;
 const Toolbar = ({
   editor,
   showVcPanel,
+  showCommentsPanel,
+  hasComments,
   onToggleVcCtrl,
+  onToggleCommentsPanel,
   isFullScreen,
   onToggleFullScreen,
 }: ToolbarProps) => {
@@ -984,6 +990,15 @@ const Toolbar = ({
         </MenuButton>
 
         <MenuButton
+          onClick={onToggleCommentsPanel}
+          isActive={showCommentsPanel}
+          title="Comment Sidebar"
+          disabled={!hasComments}
+        >
+          <MessageSquare size={16} />
+        </MenuButton>
+
+        <MenuButton
           onClick={() => {}}
           isActive={showVcPanel}
           title="Conflicts"
@@ -994,7 +1009,10 @@ const Toolbar = ({
       </div>
 
       {/* Mobile bottom toolbar (touch-friendly) */}
-      <div className="bs-editor__toolbar-mobile" aria-label="Mobile formatting toolbar">
+      <div
+        className="bs-editor__toolbar-mobile"
+        aria-label="Mobile formatting toolbar"
+      >
         <MenuButton
           onClick={() => editor.chain().focus().undo().run()}
           title="Undo"
@@ -1146,6 +1164,15 @@ const Toolbar = ({
         </MenuButton>
 
         <MenuButton
+          onClick={onToggleCommentsPanel}
+          isActive={showCommentsPanel}
+          title="Comment Sidebar"
+          disabled={!hasComments}
+        >
+          <MessageSquare size={16} />
+        </MenuButton>
+
+        <MenuButton
           onClick={onToggleFullScreen}
           title={isFullScreen ? "Exit Full Screen" : "Full Screen"}
           isActive={isFullScreen}
@@ -1221,6 +1248,9 @@ export const DemoEditor = ({
 
   // State
   const [showVcPanel, setShowVcPanel] = useState(false);
+  const [showCommentsPanel, setShowCommentsPanel] = useState(
+    comments.length > 0,
+  );
   const [sidebarWidth, setSidebarWidth] = useState(0);
   const [isResizing, setIsResizing] = useState(false);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
@@ -1267,15 +1297,17 @@ export const DemoEditor = ({
 
   useEffect(() => {
     if (!containerRef.current || typeof window === "undefined") return;
-    const styles = getComputedStyle(containerRef.current);
-    const min = Number.parseFloat(
-      styles.getPropertyValue("--bs-editor-sidebar-min"),
+    const min = readCssLengthPx(
+      containerRef.current,
+      "--bs-editor-sidebar-min",
     );
-    const max = Number.parseFloat(
-      styles.getPropertyValue("--bs-editor-sidebar-max"),
+    const max = readCssLengthPx(
+      containerRef.current,
+      "--bs-editor-sidebar-max",
     );
-    const initial = Number.parseFloat(
-      styles.getPropertyValue("--bs-editor-sidebar-default"),
+    const initial = readCssLengthPx(
+      containerRef.current,
+      "--bs-editor-sidebar-default",
     );
     sidebarLimitsRef.current = {
       min: Number.isFinite(min) ? min : 0,
@@ -1301,7 +1333,8 @@ export const DemoEditor = ({
       editor &&
       !isPreviewMode &&
       sanitizedInitialContent !== undefined &&
-      JSON.stringify(sanitizedInitialContent) !== JSON.stringify(editor.getJSON())
+      JSON.stringify(sanitizedInitialContent) !==
+        JSON.stringify(editor.getJSON())
     ) {
       editor.commands.setContent(sanitizedInitialContent);
     }
@@ -1313,6 +1346,12 @@ export const DemoEditor = ({
       editor.setEditable(!isPreviewMode);
     }
   }, [isPreviewMode, editor]);
+
+  useEffect(() => {
+    if (comments.length === 0) {
+      setShowCommentsPanel(false);
+    }
+  }, [comments.length]);
 
   useEffect(() => {
     if (!editor) {
@@ -1327,7 +1366,7 @@ export const DemoEditor = ({
     const staleCommentIds = new Set(pluginState.anchors.keys());
 
     comments.forEach((comment) => {
-      const anchorRange = resolveCommentAnchor(editor, comment);
+      const anchorRange = resolveCommentAnchor(comment);
 
       if (!anchorRange) {
         return;
@@ -1439,14 +1478,8 @@ export const DemoEditor = ({
       const placement = aboveY < 96 ? "below" : "above";
       const rawY = placement === "below" ? belowY : aboveY;
 
-      const x = Math.min(
-        Math.max(rawX, padding),
-        viewportWidth - padding,
-      );
-      const y = Math.min(
-        Math.max(rawY, padding),
-        viewportHeight - padding,
-      );
+      const x = Math.min(Math.max(rawX, padding), viewportWidth - padding);
+      const y = Math.min(Math.max(rawY, padding), viewportHeight - padding);
 
       setSelectionMenu({ visible: true, x, y, placement });
     } catch {
@@ -1526,10 +1559,73 @@ export const DemoEditor = ({
     return value || fallback;
   };
 
-  const showSidebar = showVcPanel || comments.length > 0;
+  const toggleVcPanel = useCallback(() => {
+    setShowVcPanel((current) => {
+      const next = !current;
+      if (next) {
+        setShowCommentsPanel(false);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleCommentsPanel = useCallback(() => {
+    if (comments.length === 0) {
+      return;
+    }
+
+    setShowCommentsPanel((current) => {
+      const next = !current;
+      if (next) {
+        setShowVcPanel(false);
+      }
+      return next;
+    });
+  }, [comments.length]);
+
+  useEffect(() => {
+    if (!editor) {
+      return;
+    }
+
+    const handleCommentAnchorClick = (event: MouseEvent) => {
+      const clickTarget = event.target;
+      if (!(clickTarget instanceof Element)) {
+        return;
+      }
+
+      const anchorElement = clickTarget.closest("[data-comment-id]");
+      if (!(anchorElement instanceof HTMLElement)) {
+        return;
+      }
+
+      const { commentId } = anchorElement.dataset;
+      if (!commentId) {
+        return;
+      }
+
+      editor.commands.setActiveComment(commentId);
+      setShowVcPanel(false);
+      setShowCommentsPanel(true);
+    };
+
+    editor.view.dom.addEventListener("click", handleCommentAnchorClick);
+
+    return () => {
+      editor.view.dom.removeEventListener("click", handleCommentAnchorClick);
+    };
+  }, [editor]);
+
+  const showSidebar = showVcPanel || showCommentsPanel;
   const sidebarClassName = showVcPanel
     ? "bs-editor__sidebar"
     : "bs-editor__sidebar bs-editor__sidebar--comments";
+  const sidebarStyle =
+    sidebarWidth > 0
+      ? ({
+          "--bs-editor-sidebar-width": `${sidebarWidth}px`,
+        } as React.CSSProperties)
+      : undefined;
 
   return (
     <div className={`bs-editor demo-editor ${className}`} ref={containerRef}>
@@ -1551,7 +1647,10 @@ export const DemoEditor = ({
         <Toolbar
           editor={editor}
           showVcPanel={showVcPanel}
-          onToggleVcCtrl={() => setShowVcPanel(!showVcPanel)}
+          showCommentsPanel={showCommentsPanel}
+          hasComments={comments.length > 0}
+          onToggleVcCtrl={toggleVcPanel}
+          onToggleCommentsPanel={toggleCommentsPanel}
           isFullScreen={isFullScreen}
           onToggleFullScreen={toggleFullScreen}
         />
@@ -1631,7 +1730,7 @@ export const DemoEditor = ({
                   .toggleHighlight({
                     color: resolveCssColor("--brand-coral", "#E85D26"),
                   })
-                .run()
+                  .run()
               }
               onMouseDown={(event) => event.preventDefault()}
               aria-label="Highlight"
@@ -1658,14 +1757,7 @@ export const DemoEditor = ({
         </div>
 
         {showSidebar && (
-          <div
-            className={sidebarClassName}
-            style={
-              {
-                "--bs-editor-sidebar-width": `${sidebarWidth}px`,
-              } as React.CSSProperties
-            }
-          >
+          <div className={sidebarClassName} style={sidebarStyle}>
             <div
               className={`bs-editor__resize-handle ${isResizing ? "is-resizing" : ""}`}
               onMouseDown={startResizing}
@@ -1676,14 +1768,16 @@ export const DemoEditor = ({
                   isPreviewMode ? originalContent : editor?.getHTML() || ""
                 }
                 onContentChange={(content) => {
-                  editor?.commands.setContent(sanitizeContentForEditor(content));
+                  editor?.commands.setContent(
+                    sanitizeContentForEditor(content),
+                  );
                 }}
                 onPreviewDiff={handlePreviewDiff}
                 isPreviewMode={isPreviewMode}
               />
-            ) : (
+            ) : showCommentsPanel ? (
               <CommentSidebar editor={editor} comments={comments} />
-            )}
+            ) : null}
           </div>
         )}
       </div>
