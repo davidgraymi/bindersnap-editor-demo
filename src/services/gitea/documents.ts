@@ -44,6 +44,20 @@ export interface DocumentWriteResult {
   fileSha: string | null;
 }
 
+type RawProseMirrorCandidate = {
+  type?: unknown;
+  content?: unknown;
+};
+
+function isProseMirrorDocument(value: unknown): value is ProseMirrorJSON {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+
+  const candidate = value as RawProseMirrorCandidate;
+  return candidate.type === 'doc' && Array.isArray(candidate.content);
+}
+
 function toBase64(value: string): string {
   if (typeof btoa === 'function') {
     const bytes = new TextEncoder().encode(value);
@@ -119,6 +133,15 @@ async function readRawResponseBody(raw: unknown): Promise<string> {
     return raw;
   }
 
+  if (raw instanceof ArrayBuffer) {
+    return new TextDecoder().decode(raw);
+  }
+
+  if (ArrayBuffer.isView(raw)) {
+    const view = raw as ArrayBufferView;
+    return new TextDecoder().decode(view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength));
+  }
+
   if (raw instanceof Blob) {
     return raw.text();
   }
@@ -130,6 +153,16 @@ async function readRawResponseBody(raw: unknown): Promise<string> {
     typeof (raw as { text?: unknown }).text === 'function'
   ) {
     return (raw as { text: () => Promise<string> }).text();
+  }
+
+  if (
+    typeof raw === 'object' &&
+    raw !== null &&
+    'arrayBuffer' in raw &&
+    typeof (raw as { arrayBuffer?: unknown }).arrayBuffer === 'function'
+  ) {
+    const buffer = await (raw as { arrayBuffer: () => Promise<ArrayBuffer> }).arrayBuffer();
+    return new TextDecoder().decode(buffer);
   }
 
   throw new Error('Gitea raw file response was not readable text.');
@@ -167,7 +200,14 @@ export async function fetchDocumentAtSha(params: FetchDocumentAtShaParams): Prom
 
   try {
     const response = await client.repos.repoGetRawFileOrLfs(owner, repo, filePath, { ref: sha });
-    const rawText = await readRawResponseBody(response.data);
+    const rawBody = response.data;
+
+    // Some gitea-js runtimes deserialize JSON responses for us.
+    if (isProseMirrorDocument(rawBody)) {
+        return rawBody as ProseMirrorJSON;
+    }
+
+    const rawText = await readRawResponseBody(rawBody);
     return JSON.parse(rawText) as ProseMirrorJSON;
   } catch (error) {
     if (error instanceof SyntaxError) {

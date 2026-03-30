@@ -32,4 +32,16 @@ if ! curl -fsS "${APP_BASE_URL}/" >/dev/null; then
 fi
 
 echo "Running Playwright integration tests (auto-login forced OFF)..."
-BINDERSNAP_DEV_AUTO_LOGIN=false APP_PORT="$APP_PORT" PLAYWRIGHT_BASE_URL="$APP_BASE_URL" playwright test --config=dev/tests/playwright.config.ts
+
+if command -v playwright >/dev/null 2>&1; then
+  PLAYWRIGHT_RUNNER=(playwright)
+elif command -v npx >/dev/null 2>&1; then
+  PLAYWRIGHT_RUNNER=(npx playwright)
+elif command -v bunx >/dev/null 2>&1; then
+  PLAYWRIGHT_RUNNER=(bunx playwright)
+else
+  echo "No Playwright runner found (expected one of: playwright, bunx, npx)." >&2
+  exit 1
+fi
+
+BINDERSNAP_DEV_AUTO_LOGIN=false APP_PORT="$APP_PORT" PLAYWRIGHT_BASE_URL="$APP_BASE_URL" "${PLAYWRIGHT_RUNNER[@]}" test --config=dev/tests/playwright.config.ts

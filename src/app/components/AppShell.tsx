@@ -27,6 +27,14 @@ function formatTimestamp(value: string) {
   return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
 }
 
+function maskToken(value: string) {
+  if (value.length <= 8) {
+    return "********";
+  }
+
+  return `***${value.slice(-8)}`;
+}
+
 export function AppShell({ baseUrl, token, onSignOut }: AppShellProps) {
   const client = useMemo(() => createGiteaClient(baseUrl, token), [baseUrl, token]);
 
@@ -118,7 +126,7 @@ export function AppShell({ baseUrl, token, onSignOut }: AppShellProps) {
               </div>
               <div>
                 <dt>Token</dt>
-                <dd>{token}</dd>
+                <dd>{maskToken(token)}</dd>
               </div>
             </dl>
           </section>
