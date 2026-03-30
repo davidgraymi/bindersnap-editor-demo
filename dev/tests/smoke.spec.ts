@@ -1,12 +1,15 @@
 import { test, expect, type APIRequestContext } from '@playwright/test';
+import { isTokenValid, seedDevStack } from './seed';
 
 // Integration smoke tests against the live dev stack.
 // Requires: docker compose up (dev/)
-// Requires: VITE_GITEA_TOKEN env var set
+// Optional: set VITE_GITEA_TOKEN to reuse an existing token.
 
 const TOKEN = process.env.VITE_GITEA_TOKEN ?? '';
 const GITEA_URL = process.env.VITE_GITEA_URL ?? 'http://localhost:3000';
-const AUTH_HEADERS = { Authorization: `token ${TOKEN}` };
+const GITEA_ADMIN_USER = process.env.GITEA_ADMIN_USER ?? 'alice';
+const GITEA_ADMIN_PASS = process.env.GITEA_ADMIN_PASS ?? 'bindersnap-dev';
+let AUTH_HEADERS: Record<string, string> = {};
 
 async function waitForSeededPullRequest(request: APIRequestContext): Promise<void> {
   for (let attempt = 0; attempt < 30; attempt += 1) {
@@ -53,6 +56,28 @@ async function waitForSeededPullRequest(request: APIRequestContext): Promise<voi
 
 test.describe('Gitea dev stack health', () => {
   test.beforeAll(async ({ request }) => {
+    const preferredToken = TOKEN.trim();
+    const usePreferredToken = preferredToken.length > 0 && (await isTokenValid(GITEA_URL, preferredToken));
+
+    const seedResult = await seedDevStack({
+      baseUrl: GITEA_URL,
+      adminUser: GITEA_ADMIN_USER,
+      adminPass: GITEA_ADMIN_PASS,
+      createToken: !usePreferredToken,
+      tokenNamePrefix: 'bindersnap-test',
+      log: () => {
+        // Keep Playwright output focused on test results.
+      },
+    });
+
+    const resolvedToken = usePreferredToken ? preferredToken : seedResult.token;
+    if (!resolvedToken) {
+      throw new Error(
+        'Unable to resolve a valid Gitea token. Set VITE_GITEA_TOKEN or check seed/admin credentials.'
+      );
+    }
+    AUTH_HEADERS = { Authorization: `token ${resolvedToken}` };
+
     await waitForSeededPullRequest(request);
   });
 

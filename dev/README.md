@@ -25,14 +25,15 @@ After Gitea is healthy, the seed script runs automatically and creates:
 - Three documents in different approval states (see `gitea-seed/documents/`)
 - An open PR from `bob/feature/q2-amendments` → `main` with a "Changes Requested" review
 
-**Alice's token** is printed to stdout after seeding. Set it in your shell:
+**Alice's token** is printed to stdout after seeding for manual UI login. Set it in your shell:
 
 ```bash
 export VITE_GITEA_TOKEN=<printed-token>
 export VITE_GITEA_URL=http://localhost:3000
 ```
 
-Or copy `dev/.env.example` to `dev/.env` — `docker compose` picks it up automatically.
+Integration tests no longer require manual token copy/paste; they can seed and mint their own token.
+You can still copy `dev/.env.example` to `dev/.env` for local overrides.
 
 ## Re-seeding
 
@@ -59,13 +60,13 @@ Tests live in `dev/tests/`. They run against real Gitea — no mocking. See `dev
 docker-compose.yml        — service definitions
 .env.example              — copy to .env for local overrides
 gitea-seed/
-  setup.sh                — idempotent seed script (runs via docker entrypoint)
   documents/              — ProseMirror JSON fixture documents
     draft.json            — working draft, no PR
     in-review.json        — open PR, awaiting review
     changes-requested.json— PR with changes requested
 tests/
   README.md
+  seed.ts                 — shared TypeScript seeding workflow (compose + tests)
   playwright.config.ts
   smoke.spec.ts
 ```

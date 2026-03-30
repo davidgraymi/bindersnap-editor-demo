@@ -37,21 +37,22 @@ services:
     volumes:
       - gitea-data:/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/v1/settings/api"]
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
       interval: 5s
       timeout: 3s
       retries: 12
       start_period: 20s
 
   seed:
-    image: curlimages/curl:latest
+    image: oven/bun:1
     container_name: bindersnap-seed
     depends_on:
       gitea:
-        condition: service_started
+        condition: service_healthy
+    working_dir: /workspace
     volumes:
-      - ./gitea-seed:/seed
-    entrypoint: ["/bin/sh", "/seed/setup.sh"]
+      - ./:/workspace/dev:ro
+    command: ["bun", "dev/tests/seed.ts"]
     environment:
       - GITEA_URL=http://gitea:3000
 

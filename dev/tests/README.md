@@ -10,7 +10,8 @@ The Docker dev stack must be running:
 cd dev && docker compose up
 ```
 
-And `VITE_GITEA_TOKEN` must be set (printed after first seed run).
+`VITE_GITEA_TOKEN` is optional. If omitted (or invalid), tests will seed and create
+their own token automatically using the seeded admin credentials.
 
 ## Running
 
@@ -21,7 +22,7 @@ bun run test:integration
 Or directly:
 
 ```bash
-bunx playwright test --config=dev/tests/playwright.config.ts
+playwright test --config=dev/tests/playwright.config.ts
 ```
 
 ## What is tested here vs. unit tests
@@ -35,4 +36,7 @@ bunx playwright test --config=dev/tests/playwright.config.ts
 
 ## Test data
 
-Fixture documents are seeded by `dev/gitea-seed/setup.sh`. Tests reference the seeded repo `alice/quarterly-report` and the documents committed there. If tests fail unexpectedly, try resetting: `docker compose down -v && docker compose up`.
+Fixture documents are seeded by the shared TypeScript workflow in `dev/tests/seed.ts`.
+Both `docker compose` and Playwright use the same seeding logic to keep local and CI behavior aligned.
+Tests reference the seeded repo `alice/quarterly-report` and its open PR/review state.
+If tests fail unexpectedly, reset with: `docker compose down -v && docker compose up`.
