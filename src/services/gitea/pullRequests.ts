@@ -39,7 +39,7 @@ export interface MergePullRequestParams {
   owner: string;
   repo: string;
   pullNumber: number;
-  mergeStyle: 'merge' | 'squash' | 'rebase' | 'rebase-merge' | 'fast-forward-only' | 'manually-merged';
+  mergeStyle: 'merge' | 'squash' | 'rebase';
   message?: string;
 }
 
@@ -153,27 +153,6 @@ function withApprovalState(pullRequest: PullRequest, reviews: PullReview[]): Pul
   };
 }
 
-async function listAllPullRequests(client: GiteaClient, owner: string, repo: string, state: 'open' | 'closed' | 'all'): Promise<PullRequest[]> {
-  const allPullRequests: PullRequest[] = [];
-  const limit = 100;
-
-  for (let page = 1; page < 100; page += 1) {
-    const response = await client.repos.repoListPullRequests(owner, repo, {
-      state,
-      page,
-      limit,
-    });
-
-    allPullRequests.push(...response.data);
-
-    if (response.data.length < limit) {
-      break;
-    }
-  }
-
-  return allPullRequests;
-}
-
 function pullRequestSelectionRank(pullRequest: PullRequest): number {
   const openBonus = pullRequest.state === 'open' ? 1_000_000 : 0;
   const numberRank = pullRequest.number ?? 0;
@@ -237,7 +216,12 @@ export async function getPullRequestForBranch(
   const { client, owner, repo, branch } = params;
 
   try {
-    const pullRequests = await listAllPullRequests(client, owner, repo, 'all');
+    const response = await client.repos.repoListPullRequests(owner, repo, {
+      state: 'all',
+      head: `${owner}:${branch}`,
+    });
+
+    const pullRequests = response.data;
     const pullRequest = selectPullRequestForBranch(pullRequests, branch);
 
     if (!pullRequest || !pullRequest.number) {
