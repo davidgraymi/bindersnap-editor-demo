@@ -6,6 +6,78 @@ must follow when generating or modifying any code, copy, or assets.
 
 ---
 
+## Repo Architecture — Read This First
+
+This monorepo contains **two frontend applications** and a **local dev stack**.
+Understanding which directory serves which purpose is essential before making
+any changes.
+
+```
+bindersnap-editor-demo/
+│
+├── src/                        ← Shared source root
+│   ├── index.html              ← LANDING PAGE entry (published to GitHub Pages)
+│   ├── App.tsx                 ← Landing page root component
+│   ├── frontend.tsx            ← Landing page React entry
+│   ├── assets/                 ← Shared CSS tokens, fonts, icons
+│   │
+│   ├── editor/                 ← SHARED: Tiptap editor component
+│   │   └── README.md           ← Read before editing
+│   │
+│   ├── services/               ← SHARED: Backend service clients
+│   │   ├── gitea/              ← All Gitea API interaction
+│   │   └── README.md           ← Read before editing
+│   │
+│   └── app/                    ← REAL APP entry (never published)
+│       └── README.md           ← Read before editing
+│
+├── dev/                        ← Local dev stack (Docker Compose)
+│   ├── docker-compose.yml      ← Gitea + Hocuspocus + app
+│   ├── gitea-seed/             ← Seed script + fixture documents
+│   └── tests/                  ← Integration tests (requires docker compose up)
+│
+├── scripts/                    ← Build and utility scripts
+├── docs/                       ← Brand and social media assets
+├── .claude/                    ← Claude agent definitions
+└── AGENTS.md                   ← This file
+```
+
+### The two applications
+
+| | Landing Page | Real App |
+|---|---|---|
+| **Entry point** | `src/index.html` | `src/app/index.html` (to be created) |
+| **Published** | GitHub Pages (`/`) | Never — local + private deploy only |
+| **Auth required** | No | Yes (Gitea token) |
+| **Gitea dependency** | No | Yes |
+| **Demo editor** | Read-only snapshot | Fully wired |
+
+### The shared editor
+
+`src/editor/` is imported by **both** applications. The editor is backend-agnostic
+by design — it receives a `giteaClient` prop when wired to the real app, and
+operates in read-only demo mode when that prop is absent. Never import from
+`src/services/gitea/` directly inside `src/editor/`.
+
+### The dev stack
+
+`dev/docker-compose.yml` runs Gitea + Hocuspocus locally. `docker compose up`
+seeds demo users and documents automatically. Use this to:
+- Verify Gitea service implementations against a real API
+- Run integration tests (`bun run test:integration`)
+- See how the real app looks with realistic data
+
+See `dev/README.md` for full usage.
+
+### When editor UI changes
+
+If you change anything in `src/editor/` that affects visual appearance, note it
+in your PR description. The landing page demo embed is a static snapshot and
+must be manually updated by running `bun run sync-demo`. Do not silently change
+the editor UI without flagging this in the PR.
+
+---
+
 ## What is Bindersnap?
 
 Bindersnap is a pre-launch document management SaaS targeting regulated industries
