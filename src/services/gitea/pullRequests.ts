@@ -49,7 +49,6 @@ export interface ListPullRequestsParams {
   repo: string;
   state: 'open' | 'closed' | 'all';
   page?: number;
-  limit?: number;
 }
 
 function readErrorMessage(error: unknown): string {
@@ -267,13 +266,12 @@ export async function mergePullRequest(params: MergePullRequestParams): Promise<
 }
 
 export async function listPullRequests(params: ListPullRequestsParams): Promise<PullRequestWithApprovalState[]> {
-  const { client, owner, repo, state, page, limit } = params;
+  const { client, owner, repo, state, page } = params;
 
   try {
     const response = await client.repos.repoListPullRequests(owner, repo, {
       state,
       page,
-      limit,
     });
 
     const mapped = await Promise.all(

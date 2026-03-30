@@ -1,5 +1,5 @@
 import { afterEach, expect, mock, test } from 'bun:test';
-import type { CreatePullRequestOption, CreatePullReviewOptions, MergePullRequestOption, PullRequest, PullReview } from 'gitea-js';
+import type { CreatePullRequestOption, CreatePullReviewOptions, PullRequest, PullReview } from 'gitea-js';
 
 import type { GiteaClient } from './client';
 
@@ -202,7 +202,41 @@ test('getPullRequestForBranch returns null when no branch PR exists', async () =
     branch: 'missing-branch',
   });
 
+  expect(repoListPullRequestsMock).toHaveBeenCalledWith('alice', 'quarterly-report', {
+    state: 'all',
+    head: 'alice:missing-branch',
+  });
   expect(pullRequest).toBeNull();
+});
+
+test('getPullRequestForBranch maps a closed unmerged PR to working', async () => {
+  const { getPullRequestForBranch } = await import('./pullRequests');
+
+  repoListPullRequestsMock.mockImplementation(async () => ({
+    data: [
+      {
+        number: 10,
+        title: 'Stale draft',
+        head: { ref: 'feature/stale-draft' },
+        state: 'closed',
+        merged: false,
+      },
+    ] as PullRequest[],
+  }));
+
+  const pullRequest = await getPullRequestForBranch({
+    client,
+    owner: 'alice',
+    repo: 'quarterly-report',
+    branch: 'feature/stale-draft',
+  });
+
+  expect(repoListPullRequestsMock).toHaveBeenCalledWith('alice', 'quarterly-report', {
+    state: 'all',
+    head: 'alice:feature/stale-draft',
+  });
+  expect(pullRequest).not.toBeNull();
+  expect(pullRequest?.approvalState).toBe('working');
 });
 
 test('getPullRequestForBranch maps requested changes to changes_requested', async () => {
@@ -325,13 +359,11 @@ test('listPullRequests maps merged PRs to published and approved PRs to approved
     repo: 'quarterly-report',
     state: 'all',
     page: 1,
-    limit: 10,
   });
 
   expect(repoListPullRequestsMock).toHaveBeenCalledWith('alice', 'quarterly-report', {
     state: 'all',
     page: 1,
-    limit: 10,
   });
   expect(pullRequests.map((item) => item.approvalState)).toEqual(['in_review', 'changes_requested', 'published']);
 });
