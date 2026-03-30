@@ -25,6 +25,7 @@
         "@types/dompurify": "^3.2.0",
         "diff": "^8.0.3",
         "dompurify": "^3.3.3",
+        "gitea-js": "1.23.0",
         "lucide-react": "^0.574.0",
         "react": "^19",
         "react-dom": "^19",
@@ -198,6 +199,8 @@
     "escape-string-regexp": ["escape-string-regexp@4.0.0", "", {}, "sha512-TtpcNJ3XAzx3Gq8sWRzJaVajRs0uVxA2YAkdb1jm2YkPz4G6egUFAyA3n5vtEIZefPk5Wa4UXbKuS5fKkJWdgA=="],
 
     "fast-equals": ["fast-equals@5.4.0", "", {}, "sha512-jt2DW/aNFNwke7AUd+Z+e6pz39KO5rzdbbFCg2sGafS4mk13MI7Z8O5z9cADNn5lhGODIgLwug6TZO2ctf7kcw=="],
+
+    "gitea-js": ["gitea-js@1.23.0", "", {}, "sha512-f4+UPoWgDetZeZ+Awo5iI1nVdO5bjxA8+2QCeLo3oYWUYxKyzLfXgbW1EPD635wb8hLgS0DRBu5XhtiuYKEeUA=="],
 
     "html-encoding-sniffer": ["html-encoding-sniffer@6.0.0", "", { "dependencies": { "@exodus/bytes": "^1.6.0" } }, "sha512-CV9TW3Y3f8/wT0BRFc1/KAVQ3TUHiXmaAb6VW9vtiMFf7SLoMd1PdAc4W3KFOFETBJUb90KatHqlsZMWV+R9Gg=="],
 
