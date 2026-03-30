@@ -7,6 +7,7 @@
     "dev": "bun --hot src/index.ts",
     "clean": "rm -rf dist",
     "build": "bun run clean && bun build ./src/index.html --outdir=dist --target=browser --minify --splitting --define:process.env.NODE_ENV='\"production\"' --env='BUN_PUBLIC_*'",
+    "test:integration": "playwright test --config=dev/tests/playwright.config.ts",
     "lighthouse": "bun run build && sh -c 'python3 -m http.server 4173 --directory dist >/dev/null 2>&1 & SERVER_PID=$!; sleep 1; bunx lighthouse http://localhost:4173 --output=json --output-path=./lighthouse.json --quiet --chrome-flags=\"--headless --no-sandbox --disable-gpu\" --no-enable-error-reporting; kill $SERVER_PID' && bun run summarize",
     "summarize": "bun scripts/summarize-lighthouse.ts",
     "start": "NODE_ENV=production bun src/index.ts"
@@ -44,6 +45,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/uuid": "^11.0.0",
+    "@playwright/test": "^1.54.2",
     "jsdom": "^29.0.1"
   }
 }
