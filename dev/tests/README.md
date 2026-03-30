@@ -21,6 +21,7 @@ This command now runs a deterministic cycle:
 
 During this run, `BINDERSNAP_DEV_AUTO_LOGIN=false` is forced so tests always
 exercise explicit token authentication.
+`APP_PORT` (default `5173`) is respected for both compose and Playwright base URL.
 
 For manual debugging with a stack you started yourself:
 
