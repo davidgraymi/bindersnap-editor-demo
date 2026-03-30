@@ -4,7 +4,8 @@ import { AppShell } from "./components/AppShell";
 import { TokenGate } from "./components/TokenGate";
 import { clearToken, getStoredToken } from "../services/gitea/auth";
 
-const GITEA_URL = process.env.BUN_PUBLIC_GITEA_URL ?? process.env.VITE_GITEA_URL ?? "http://localhost:3000";
+const appEnv = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
+const GITEA_URL = appEnv?.BUN_PUBLIC_GITEA_URL ?? appEnv?.VITE_GITEA_URL ?? "http://localhost:3000";
 
 export function App() {
   const [token, setToken] = useState<string | null>(() => getStoredToken());
