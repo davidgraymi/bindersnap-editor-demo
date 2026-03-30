@@ -1588,9 +1588,19 @@ export const DemoEditor = ({
       return;
     }
 
+    const containerNode = containerRef.current;
+    if (!containerNode) {
+      return;
+    }
+
     const handleCommentAnchorClick = (event: MouseEvent) => {
       const clickTarget = event.target;
       if (!(clickTarget instanceof Element)) {
+        return;
+      }
+
+      const proseMirrorRoot = clickTarget.closest(".ProseMirror");
+      if (!(proseMirrorRoot instanceof HTMLElement) || !containerNode.contains(proseMirrorRoot)) {
         return;
       }
 
@@ -1609,10 +1619,10 @@ export const DemoEditor = ({
       setShowCommentsPanel(true);
     };
 
-    editor.view.dom.addEventListener("click", handleCommentAnchorClick);
+    containerNode.addEventListener("click", handleCommentAnchorClick);
 
     return () => {
-      editor.view.dom.removeEventListener("click", handleCommentAnchorClick);
+      containerNode.removeEventListener("click", handleCommentAnchorClick);
     };
   }, [editor]);
 
