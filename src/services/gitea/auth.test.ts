@@ -84,6 +84,7 @@ test('validateToken returns normalized gitea user data', async () => {
   const user = await validateToken('https://gitea.example.com', 'good-token');
 
   expect(giteaApiMock).toHaveBeenCalledWith('https://gitea.example.com', { token: 'good-token' });
+  expect(userGetCurrentMock).toHaveBeenCalledTimes(1);
   expect(user).toEqual({
     id: 42,
     login: 'alice',
