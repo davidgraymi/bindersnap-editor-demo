@@ -163,6 +163,6 @@ test.describe('App shell', () => {
 
   test('Authenticated app route loads', async ({ page }) => {
     await page.goto('/app');
-    await expect(page.getByRole('heading', { name: 'Welcome to Bindersnap' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'alice/quarterly-report' })).toBeVisible();
   });
 });
