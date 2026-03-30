@@ -64,7 +64,7 @@ tests/
   README.md
   seed.ts                 — shared TypeScript seeding workflow (compose + tests)
   playwright.config.ts
-  smoke.spec.ts
+  smoke.pw.ts
 ```
 
 ## This is not production

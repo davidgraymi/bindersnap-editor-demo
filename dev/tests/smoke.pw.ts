@@ -9,6 +9,7 @@ const TOKEN = process.env.VITE_GITEA_TOKEN ?? '';
 const GITEA_URL = process.env.VITE_GITEA_URL ?? 'http://localhost:3000';
 const GITEA_ADMIN_USER = process.env.GITEA_ADMIN_USER ?? 'alice';
 const GITEA_ADMIN_PASS = process.env.GITEA_ADMIN_PASS ?? 'bindersnap-dev';
+let AUTH_TOKEN = '';
 let AUTH_HEADERS: Record<string, string> = {};
 
 async function waitForSeededPullRequest(request: APIRequestContext): Promise<void> {
@@ -76,6 +77,7 @@ test.describe('Gitea dev stack health', () => {
         'Unable to resolve a valid Gitea token. Set VITE_GITEA_TOKEN or check seed/admin credentials.'
       );
     }
+    AUTH_TOKEN = resolvedToken;
     AUTH_HEADERS = { Authorization: `token ${resolvedToken}` };
 
     await waitForSeededPullRequest(request);
@@ -163,6 +165,18 @@ test.describe('App shell', () => {
 
   test('Authenticated app route loads', async ({ page }) => {
     await page.goto('/app');
-    await expect(page.getByRole('heading', { name: 'alice/quarterly-report' })).toBeVisible();
+
+    const appHeading = page.getByRole('heading', { name: 'alice/quarterly-report' });
+    if (await appHeading.isVisible().catch(() => false)) {
+      return;
+    }
+
+    const tokenGateHeading = page.getByRole('heading', { name: 'Welcome to Bindersnap' });
+    await expect(tokenGateHeading).toBeVisible();
+
+    const tokenInput = page.getByLabel('Enter your Gitea personal access token');
+    await tokenInput.fill(AUTH_TOKEN);
+    await page.getByRole('button', { name: 'Open Workspace' }).click();
+    await expect(appHeading).toBeVisible({ timeout: 10_000 });
   });
 });
