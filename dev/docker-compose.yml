@@ -27,6 +27,10 @@ services:
       - GITEA__database__DB_TYPE=sqlite3
       - GITEA__database__PATH=/data/gitea.db
       - GITEA__service__DISABLE_REGISTRATION=false
+      - GITEA__cors__ENABLED=true
+      - GITEA__cors__ALLOW_DOMAIN=http://localhost:5173
+      - GITEA__cors__METHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
+      - GITEA__cors__ALLOW_CREDENTIALS=true
       - GITEA__log__LEVEL=warn
     ports:
       - "3000:3000"
