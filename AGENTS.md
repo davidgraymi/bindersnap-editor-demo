@@ -336,5 +336,30 @@ gh pr create \
   --body "Closes #<issue-number>"
 ```
 
+Prefer `--body-file` over `--body` when your text contains backticks, `$`, or
+multi-line markdown to prevent shell interpolation issues:
+
+```bash
+cat > /tmp/pr-body.md <<'EOF'
+## Summary
+- ...
+EOF
+gh pr create --base main --head codex/<short-task-name> --title "<title>" --body-file /tmp/pr-body.md
+```
+
 5. If any step fails, capture the exact command + stderr in the PR or issue comment
    before retrying so the next agent has concrete diagnostics.
+
+Known edge case: `git push -u origin <branch>` can push successfully but fail to
+write local upstream tracking (lock/permission error in `.git/refs/remotes`).
+If this happens, continue with:
+
+```bash
+gh pr create --base main --head <branch> --title "<title>" --body-file /tmp/pr-body.md
+```
+
+Then optionally repair tracking later with:
+
+```bash
+git branch --set-upstream-to=origin/<branch> <branch>
+```
