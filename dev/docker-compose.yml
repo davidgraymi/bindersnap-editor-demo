@@ -28,7 +28,7 @@ services:
       - GITEA__database__PATH=/data/gitea.db
       - GITEA__service__DISABLE_REGISTRATION=false
       - GITEA__cors__ENABLED=true
-      - GITEA__cors__ALLOW_DOMAIN=http://localhost:5173
+      - GITEA__cors__ALLOW_DOMAIN=http://localhost:${APP_PORT:-5173}
       - GITEA__cors__METHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
       - GITEA__cors__ALLOW_CREDENTIALS=true
       - GITEA__log__LEVEL=warn
@@ -68,6 +68,8 @@ services:
     build:
       context: ..
       dockerfile: dev/app/Dockerfile
+      args:
+        APP_PORT: ${APP_PORT:-5173}
     container_name: bindersnap-app
     depends_on:
       gitea:
@@ -77,6 +79,8 @@ services:
       seed:
         condition: service_completed_successfully
     environment:
+      - APP_PORT=${APP_PORT:-5173}
+      - PORT=${APP_PORT:-5173}
       - BUN_PUBLIC_GITEA_URL=http://localhost:3000
       - VITE_GITEA_URL=http://localhost:3000
       - BUN_PUBLIC_HOCUSPOCUS_URL=ws://localhost:1234
@@ -88,7 +92,7 @@ services:
       - GITEA_ADMIN_USER=${GITEA_ADMIN_USER:-alice}
       - GITEA_ADMIN_PASS=${GITEA_ADMIN_PASS:-bindersnap-dev}
     ports:
-      - "5173:3000"
+      - "${APP_PORT:-5173}:${APP_PORT:-5173}"
     volumes:
       - ..:/app
       - app-node-modules:/app/node_modules

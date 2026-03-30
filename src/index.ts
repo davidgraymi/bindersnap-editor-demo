@@ -33,8 +33,11 @@ const giteaInternalUrl =
   "http://localhost:3000";
 const giteaAdminUser = process.env.GITEA_ADMIN_USER ?? "";
 const giteaAdminPass = process.env.GITEA_ADMIN_PASS ?? "";
+const configuredPort = Number.parseInt(process.env.PORT ?? process.env.APP_PORT ?? "5173", 10);
+const appPort = Number.isFinite(configuredPort) && configuredPort > 0 ? configuredPort : 5173;
 
 const server = serve({
+  port: appPort,
   routes: {
     "/api/dev/gitea-token": {
       async POST() {
@@ -129,4 +132,4 @@ const server = serve({
   },
 });
 
-console.log(`🚀 Server running at ${server.url}`);
+console.log(`🚀 Server running at http://localhost:${appPort}/`);
