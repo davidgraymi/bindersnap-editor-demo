@@ -58,6 +58,14 @@ function isProseMirrorDocument(value: unknown): value is ProseMirrorJSON {
   return candidate.type === 'doc' && Array.isArray(candidate.content);
 }
 
+function assertProseMirrorDocument(value: unknown, filePath: string): ProseMirrorJSON {
+  if (isProseMirrorDocument(value)) {
+    return value;
+  }
+
+  throw new GiteaApiError(0, `Document at ${filePath} is not valid ProseMirror JSON.`);
+}
+
 function toBase64(value: string): string {
   if (typeof btoa === 'function') {
     const bytes = new TextEncoder().encode(value);
@@ -203,12 +211,13 @@ export async function fetchDocumentAtSha(params: FetchDocumentAtShaParams): Prom
     const rawBody = response.data;
 
     // Some gitea-js runtimes deserialize JSON responses for us.
-    if (isProseMirrorDocument(rawBody)) {
-        return rawBody as ProseMirrorJSON;
+    if (typeof rawBody === 'object' && rawBody !== null) {
+      return assertProseMirrorDocument(rawBody, filePath);
     }
 
     const rawText = await readRawResponseBody(rawBody);
-    return JSON.parse(rawText) as ProseMirrorJSON;
+    const parsed = JSON.parse(rawText) as unknown;
+    return assertProseMirrorDocument(parsed, filePath);
   } catch (error) {
     if (error instanceof SyntaxError) {
       throw new GiteaApiError(0, `Unable to parse document JSON at ${filePath}.`);
