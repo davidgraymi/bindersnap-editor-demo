@@ -299,3 +299,66 @@ When generating new pages, components, or templates:
 5. Every new section needs: a `.bs-eyebrow` label, a Lora serif headline, and
    a single clear action — never two competing CTAs
 6. Add `.bs-reveal` to any block-level element introduced below the fold
+
+---
+
+## GitHub Agent Workflow Policy (Required)
+
+This repository uses a strict MCP-first workflow for all GitHub API actions.
+Agents must follow this policy exactly.
+
+### Required default
+
+For GitHub operations, use GitHub MCP tools first:
+
+- Read issues/PRs: `issue_read`, `pull_request_read`, `list_issues`,
+  `list_pull_requests`
+- Create branches/files/PRs: `create_branch`, `create_or_update_file`,
+  `create_pull_request`
+- Update PRs/comments/reviews: `update_pull_request`, `add_issue_comment`,
+  `pull_request_review_write`
+
+### Allowed fallback
+
+`gh` CLI is fallback-only. Use it only if:
+
+- The required MCP tool is unavailable, or
+- The MCP call fails for a non-user-actionable reason
+
+When fallback is used, document:
+
+- The MCP tool name
+- The exact failure message
+- The `gh` command used as fallback
+
+### Git ownership split
+
+- Use local `git` for working tree operations (edit, stage, commit, diff)
+- Use MCP for GitHub API operations (issue, branch, PR, comments, reviews)
+
+### PR evidence is mandatory
+
+Every PR must include workflow evidence:
+
+- Issue read method used
+- Branch creation method used
+- Commit SHA
+- PR creation method used
+- Any fallback used and why
+
+Do not merge PRs that omit workflow evidence or contain unexplained fallback.
+
+## MCP Preflight Checklist (Run Before GitHub Writes)
+
+Before creating branches, updating issues, or opening PRs, verify:
+
+1. MCP identity is healthy (`get_me` succeeds)
+2. Repo read path is healthy (`list_issues` or `list_branches` succeeds)
+3. Write path is healthy (perform one safe write probe in a test branch or
+   update an existing test PR body)
+4. If any write fails, stop and fix auth before continuing feature work
+
+## Deterministic MCP Setup
+
+Use one GitHub MCP server configuration path at a time. Avoid mixed auth paths
+(for example OAuth + PAT at once) to prevent nondeterministic write failures.
