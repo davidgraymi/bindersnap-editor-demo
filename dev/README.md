@@ -29,6 +29,7 @@ The app auto-signs into `/app` in the dev stack by minting a token server-side,
 so no manual token copy/paste is required for UI testing.
 
 Integration tests no longer require manual token copy/paste; they can seed and mint their own token.
+When running `bun run test:integration`, auto-login is forced off for deterministic auth behavior.
 You can still copy `dev/.env.example` to `dev/.env` for local overrides.
 
 ## Re-seeding
@@ -42,11 +43,14 @@ docker compose up       # re-creates and re-seeds
 
 ## Integration tests
 
-With the stack running:
+Run:
 
 ```bash
 bun run test:integration
 ```
+
+This command manages the stack lifecycle for you (`down -v`, `up --build -d`, test run, `down -v`)
+and forces `BINDERSNAP_DEV_AUTO_LOGIN=false` during test execution.
 
 Tests live in `dev/tests/`. They run against real Gitea — no mocking. See `dev/tests/README.md`.
 

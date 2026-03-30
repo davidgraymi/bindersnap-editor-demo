@@ -6,7 +6,9 @@ import { clearToken, getStoredToken, storeToken, validateToken } from "../servic
 
 const appEnv = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
 const GITEA_URL = appEnv?.BUN_PUBLIC_GITEA_URL ?? appEnv?.VITE_GITEA_URL ?? "http://localhost:3000";
-const AUTO_LOGIN_ENABLED = appEnv?.BUN_PUBLIC_DEV_AUTO_LOGIN === "true" || appEnv?.VITE_DEV_AUTO_LOGIN === "true";
+const AUTO_LOGIN_FLAG = appEnv?.BUN_PUBLIC_DEV_AUTO_LOGIN ?? appEnv?.VITE_DEV_AUTO_LOGIN;
+const AUTO_LOGIN_ENABLED =
+  AUTO_LOGIN_FLAG !== undefined ? AUTO_LOGIN_FLAG === "true" || AUTO_LOGIN_FLAG === "1" : appEnv?.NODE_ENV !== "production";
 
 let pendingAutoLoginToken: Promise<string> | null = null;
 

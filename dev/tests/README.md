@@ -4,12 +4,6 @@ End-to-end integration tests that run against the **live local dev stack**. Thes
 
 ## Prerequisites
 
-The Docker dev stack must be running:
-
-```bash
-cd dev && docker compose up
-```
-
 `VITE_GITEA_TOKEN` is optional. If omitted (or invalid), tests will seed and create
 their own token automatically using the seeded admin credentials.
 
@@ -19,7 +13,16 @@ their own token automatically using the seeded admin credentials.
 bun run test:integration
 ```
 
-Or directly:
+This command now runs a deterministic cycle:
+- `docker compose down -v`
+- `docker compose up --build -d`
+- Playwright smoke tests
+- `docker compose down -v`
+
+During this run, `BINDERSNAP_DEV_AUTO_LOGIN=false` is forced so tests always
+exercise explicit token authentication.
+
+For manual debugging with a stack you started yourself:
 
 ```bash
 playwright test --config=dev/tests/playwright.config.ts

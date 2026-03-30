@@ -6,6 +6,15 @@ function parseBoolean(value: string | undefined): boolean {
   return value === "1" || value?.toLowerCase() === "true";
 }
 
+function isAutoLoginEnabled(): boolean {
+  const explicitValue = process.env.BINDERSNAP_DEV_AUTO_LOGIN;
+  if (explicitValue !== undefined) {
+    return parseBoolean(explicitValue);
+  }
+
+  return process.env.NODE_ENV !== "production";
+}
+
 function jsonResponse(status: number, body: Record<string, unknown>): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -16,7 +25,7 @@ function jsonResponse(status: number, body: Record<string, unknown>): Response {
   });
 }
 
-const devAutoLoginEnabled = parseBoolean(process.env.BINDERSNAP_DEV_AUTO_LOGIN);
+const devAutoLoginEnabled = isAutoLoginEnabled();
 const giteaInternalUrl =
   process.env.GITEA_INTERNAL_URL ??
   process.env.VITE_GITEA_URL ??
