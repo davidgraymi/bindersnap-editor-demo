@@ -621,11 +621,12 @@ export async function seedDevStack(options: SeedOptions = {}): Promise<SeedResul
 async function runCli(): Promise<void> {
   const result = await seedDevStack();
   if (result.token) {
+    const tokenSuffix = result.token.slice(-8);
     console.log('');
     console.log('==================================================');
-    console.log(`ALICE_TOKEN=${result.token}`);
     console.log(`TOKEN_NAME=${result.tokenName}`);
-    console.log(`Set: export VITE_GITEA_TOKEN=${result.token}`);
+    console.log(`ALICE_TOKEN_SUFFIX=...${tokenSuffix}`);
+    console.log('Token created. Set VITE_GITEA_TOKEN manually in your shell if needed.');
     console.log('==================================================');
   }
   console.log('Seed complete.');

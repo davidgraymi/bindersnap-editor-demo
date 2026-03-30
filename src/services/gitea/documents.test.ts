@@ -205,6 +205,53 @@ test('fetchDocumentAtSha returns parsed ProseMirror JSON', async () => {
   });
 });
 
+test('fetchDocumentAtSha accepts already-parsed JSON responses', async () => {
+  const { fetchDocumentAtSha } = await import('./documents');
+
+  repoGetRawFileOrLfsMock.mockImplementation(async () => ({
+    data: {
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'From parsed object' }] }],
+    },
+  }));
+
+  const doc = await fetchDocumentAtSha({
+    client,
+    owner: 'alice',
+    repo: 'quarterly-report',
+    filePath: 'documents/draft.json',
+    sha: 'commit-1',
+  });
+
+  expect(doc).toEqual({
+    type: 'doc',
+    content: [{ type: 'paragraph', content: [{ type: 'text', text: 'From parsed object' }] }],
+  });
+});
+
+test('fetchDocumentAtSha rejects malformed parsed objects', async () => {
+  const { fetchDocumentAtSha } = await import('./documents');
+
+  repoGetRawFileOrLfsMock.mockImplementation(async () => ({
+    data: {
+      type: 'doc',
+    },
+  }));
+
+  await expect(
+    fetchDocumentAtSha({
+      client,
+      owner: 'alice',
+      repo: 'quarterly-report',
+      filePath: 'documents/draft.json',
+      sha: 'commit-1',
+    }),
+  ).rejects.toMatchObject({
+    name: 'GiteaApiError',
+    message: 'Gitea raw file response was not readable text.',
+  });
+});
+
 test('fetchDocumentAtSha surfaces invalid JSON as GiteaApiError', async () => {
   const { fetchDocumentAtSha } = await import('./documents');
 
