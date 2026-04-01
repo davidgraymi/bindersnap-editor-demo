@@ -1,6 +1,7 @@
 import { serve } from "bun";
 import index from "./index.html";
 import appIndex from "./app/index.html";
+import { verifyStripeSignature } from "./stripe/webhook";
 
 function parseBoolean(value: string | undefined): boolean {
   return value === "1" || value?.toLowerCase() === "true";
@@ -13,44 +14,6 @@ function isAutoLoginEnabled(): boolean {
   }
 
   return process.env.NODE_ENV !== "production";
-}
-
-/**
- * Verify a Stripe webhook signature using HMAC-SHA256.
- * Stripe sends: stripe-signature: t=<timestamp>,v1=<sig>[,v1=<sig2>...]
- * We compute HMAC-SHA256(secret, "<timestamp>.<rawBody>") and compare.
- */
-async function verifyStripeSignature(rawBody: string, signature: string, secret: string): Promise<boolean> {
-  try {
-    const parts = Object.fromEntries(
-      signature.split(",").map((part) => {
-        const eq = part.indexOf("=");
-        return [part.slice(0, eq), part.slice(eq + 1)];
-      }),
-    );
-
-    const timestamp = parts["t"];
-    const expectedSigs = signature.split(",")
-      .filter((p) => p.startsWith("v1="))
-      .map((p) => p.slice(3));
-
-    if (!timestamp || expectedSigs.length === 0) return false;
-
-    const payload = `${timestamp}.${rawBody}`;
-    const key = await crypto.subtle.importKey(
-      "raw",
-      new TextEncoder().encode(secret),
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["sign"],
-    );
-    const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload));
-    const computed = Buffer.from(mac).toString("hex");
-
-    return expectedSigs.some((sig) => sig === computed);
-  } catch {
-    return false;
-  }
 }
 
 function jsonResponse(status: number, body: Record<string, unknown>): Response {
