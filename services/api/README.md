@@ -10,10 +10,13 @@ Lightweight Bun auth/BFF service for the authenticated app.
 - `GET /auth/me`
 - `GET /api/app/documents`
 - `GET /api/app/documents/:id`
+- `POST /api/app/documents/:id/versions`
 
 The browser only receives a Bindersnap session cookie. Gitea access tokens stay server-side in memory for this MVP.
 
 `GET /api/app/documents` resolves the authenticated workspace repository from the session token, reads the live `documents/` directory from Gitea, and returns a normalized catalog payload. Each document includes the current published commit metadata, the latest matching pull request state, and last activity timestamps.
+
+`POST /api/app/documents/:id/versions` accepts `multipart/form-data` with `file`, `summary`, and `source_note`, validates upload extension/size, then creates a deterministic upload branch, commits the uploaded file to that branch, and opens or updates the review pull request for the version.
 
 Errors from the catalog routes are normalized as JSON objects with both a machine-readable `error.code` and a human-readable `error.message`, plus a top-level `message` field for the current frontend.
 
@@ -33,6 +36,8 @@ Errors from the catalog routes are normalized as JSON objects with both a machin
 - `BINDERSNAP_AUTH_RATE_LIMIT_ENABLED`: Enable auth endpoint rate limiting. Default `true`.
 - `BINDERSNAP_AUTH_RATE_LIMIT_WINDOW_MS`: Rate-limit window for `/auth/login` and `/auth/signup`. Default `600000` (10 minutes).
 - `BINDERSNAP_AUTH_RATE_LIMIT_MAX`: Max auth attempts per IP per action per window. Default `20`.
+- `BINDERSNAP_UPLOAD_ALLOWED_EXTENSIONS`: Comma-separated extension allowlist for upload endpoint. Default `.json,.txt,.md,.csv,.doc,.docx,.pdf,.xls,.xlsx,.ppt,.pptx`.
+- `BINDERSNAP_UPLOAD_MAX_BYTES`: Max upload payload size in bytes. Default `26214400` (25 MB).
 
 ## Local usage
 
