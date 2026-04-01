@@ -8,36 +8,52 @@ must follow when generating or modifying any code, copy, or assets.
 
 ## Repo Architecture — Read This First
 
-This monorepo contains **two frontend applications** and a **local dev stack**.
-Understanding which directory serves which purpose is essential before making
-any changes.
+This is a monorepo containing **two frontend applications**, **shared packages**,
+**backend services**, and **infrastructure code**. Understanding which directory
+serves which purpose is essential before making any changes.
 
 ```
 bindersnap-editor-demo/
 │
-├── src/                        ← Shared source root
-│   ├── index.html              ← LANDING PAGE entry (published to GitHub Pages)
-│   ├── App.tsx                 ← Landing page root component
-│   ├── frontend.tsx            ← Landing page React entry
-│   ├── assets/                 ← Shared CSS tokens, fonts, icons
+├── apps/                       ← Deployable frontend applications
+│   ├── landing/                ← LANDING PAGE (published to GitHub Pages)
+│   │   ├── index.html          ← Landing page HTML entry
+│   │   ├── App.tsx             ← Landing page root component
+│   │   └── frontend.tsx        ← React entry point
 │   │
-│   ├── editor/                 ← SHARED: Tiptap editor component
+│   └── app/                    ← REAL APP (never published publicly)
+│       ├── index.html          ← App HTML entry
+│       ├── App.tsx             ← App root (auth + routing)
+│       ├── auth/               ← PKCE OAuth2 flow
+│       └── components/         ← App shell components
+│
+├── packages/                   ← Shared internal libraries
+│   ├── editor/                 ← Tiptap editor component (shared by both apps)
 │   │   └── README.md           ← Read before editing
-│   │
-│   ├── services/               ← SHARED: Backend service clients
-│   │   ├── gitea/              ← All Gitea API interaction
+│   ├── gitea-client/           ← All Gitea API interaction
 │   │   └── README.md           ← Read before editing
-│   │
-│   └── app/                    ← REAL APP entry (never published)
-│       └── README.md           ← Read before editing
+│   ├── ui-tokens/              ← CSS design tokens, fonts, icons
+│   └── utils/                  ← Shared utilities (sanitizer, etc.)
+│
+├── services/                   ← Deployable backend services
+│   └── hocuspocus/             ← Yjs WebSocket collaboration server
+│       ├── server.ts           ← Hocuspocus server entry
+│       └── Dockerfile
+│
+├── infra/                      ← Infrastructure as code (placeholder)
+│   ├── aws/                    ← Terraform/Pulumi for S3, CloudFront, Fargate
+│   └── railway/                ← Gitea provisioning config
 │
 ├── dev/                        ← Local dev stack (Docker Compose)
 │   ├── docker-compose.yml      ← Gitea + Hocuspocus + app
+│   ├── app/                    ← Dev-only Dockerfile for the app container
 │   ├── gitea-seed/             ← Seed script + fixture documents
 │   └── tests/                  ← Integration tests (requires docker compose up)
 │
+├── server.ts                   ← Bun dev/prod server (serves both apps)
 ├── scripts/                    ← Build and utility scripts
 ├── docs/                       ← Brand and social media assets
+├── .github/workflows/          ← CI/CD pipelines
 ├── .claude/                    ← Claude agent definitions
 └── AGENTS.md                   ← This file
 ```
@@ -46,7 +62,7 @@ bindersnap-editor-demo/
 
 | | Landing Page | Real App |
 |---|---|---|
-| **Entry point** | `src/index.html` | `src/app/index.html` (to be created) |
+| **Entry point** | `apps/landing/index.html` | `apps/app/index.html` |
 | **Published** | GitHub Pages (`/`) | Never — local + private deploy only |
 | **Auth required** | No | Yes (Gitea token) |
 | **Gitea dependency** | No | Yes |
@@ -54,10 +70,10 @@ bindersnap-editor-demo/
 
 ### The shared editor
 
-`src/editor/` is imported by **both** applications. The editor is backend-agnostic
+`packages/editor/` is imported by **both** applications. The editor is backend-agnostic
 by design — it receives a `giteaClient` prop when wired to the real app, and
 operates in read-only demo mode when that prop is absent. Never import from
-`src/services/gitea/` directly inside `src/editor/`.
+`packages/gitea-client/` directly inside `packages/editor/`.
 
 ### The dev stack
 
@@ -71,7 +87,7 @@ See `dev/README.md` for full usage.
 
 ### When editor UI changes
 
-If you change anything in `src/editor/` that affects visual appearance, note it
+If you change anything in `packages/editor/` that affects visual appearance, note it
 in your PR description. The landing page demo embed is a static snapshot and
 must be manually updated by running `bun run sync-demo`. Do not silently change
 the editor UI without flagging this in the PR.
@@ -142,7 +158,7 @@ a single principle:
 The complete token system and social media guidelines live in two files. Always
 reference these before writing any styles or generating any visual assets:
 
-- **CSS tokens:** [`src/assets/css/bindersnap-tokens.css`](src/assets/css/bindersnap-tokens.css)
+- **CSS tokens:** [`packages/ui-tokens/css/bindersnap-tokens.css`](packages/ui-tokens/css/bindersnap-tokens.css)
 - **Social media & brand cheat sheet:** [`docs/bindersnap-social-cheatsheet.html`](docs/bindersnap-social-cheatsheet.html)
 
 ### [`src/assets/css/bindersnap-tokens.css`](src/assets/css/bindersnap-tokens.css)

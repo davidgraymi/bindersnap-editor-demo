@@ -13,10 +13,10 @@ cleanup() {
 trap cleanup EXIT
 
 echo "Resetting integration stack..."
-BINDERSNAP_DEV_AUTO_LOGIN=false APP_PORT="$APP_PORT" docker compose -f "$COMPOSE_FILE" down -v --remove-orphans || true
+APP_PORT="$APP_PORT" docker compose -f "$COMPOSE_FILE" down -v --remove-orphans || true
 
 echo "Starting integration stack..."
-BINDERSNAP_DEV_AUTO_LOGIN=false APP_PORT="$APP_PORT" docker compose -f "$COMPOSE_FILE" up --build -d
+APP_PORT="$APP_PORT" docker compose -f "$COMPOSE_FILE" up --build -d
 
 echo "Waiting for app at ${APP_BASE_URL} ..."
 for _ in $(seq 1 60); do
@@ -31,7 +31,7 @@ if ! curl -fsS "${APP_BASE_URL}/" >/dev/null; then
   exit 1
 fi
 
-echo "Running Playwright integration tests (auto-login forced OFF)..."
+echo "Running Playwright integration tests..."
 
 if command -v playwright >/dev/null 2>&1; then
   PLAYWRIGHT_RUNNER=(playwright)
@@ -44,4 +44,4 @@ else
   exit 1
 fi
 
-BINDERSNAP_DEV_AUTO_LOGIN=false APP_PORT="$APP_PORT" PLAYWRIGHT_BASE_URL="$APP_BASE_URL" "${PLAYWRIGHT_RUNNER[@]}" test --config=dev/tests/playwright.config.ts
+APP_PORT="$APP_PORT" PLAYWRIGHT_BASE_URL="$APP_BASE_URL" "${PLAYWRIGHT_RUNNER[@]}" test --config=dev/tests/playwright.config.ts

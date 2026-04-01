@@ -19,8 +19,7 @@ This command now runs a deterministic cycle:
 - Playwright smoke tests
 - `docker compose down -v`
 
-During this run, `BINDERSNAP_DEV_AUTO_LOGIN=false` is forced so tests always
-exercise explicit token authentication.
+During this run, tests always exercise deterministic auth setup.
 `APP_PORT` (default `5173`) is respected for both compose and Playwright base URL.
 
 For manual debugging with a stack you started yourself:
