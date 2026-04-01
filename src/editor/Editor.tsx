@@ -118,6 +118,8 @@ interface EditorProps {
   onSubmitForReview?: () => void;
   onApprove?: () => void;
   onRequestChanges?: () => void;
+  /** Optional Gitea-backed panel to replace the in-memory VC panel. */
+  giteaHistoryPanel?: React.ReactNode;
 }
 
 const sanitizeContentForEditor = (content: Content): Content => {
@@ -1203,6 +1205,7 @@ export const DemoEditor = ({
   onSubmitForReview,
   onApprove,
   onRequestChanges,
+  giteaHistoryPanel,
 }: EditorProps) => {
   const sanitizedInitialContent = useMemo(
     () => sanitizeContentForEditor(initialContent),
@@ -1796,18 +1799,22 @@ export const DemoEditor = ({
               onMouseDown={startResizing}
             />
             {showVcPanel ? (
-              <VersionControlPanel
-                getEditorContent={() =>
-                  isPreviewMode ? originalContent : editor?.getHTML() || ""
-                }
-                onContentChange={(content) => {
-                  editor?.commands.setContent(
-                    sanitizeContentForEditor(content),
-                  );
-                }}
-                onPreviewDiff={handlePreviewDiff}
-                isPreviewMode={isPreviewMode}
-              />
+              giteaHistoryPanel ? (
+                giteaHistoryPanel
+              ) : (
+                <VersionControlPanel
+                  getEditorContent={() =>
+                    isPreviewMode ? originalContent : editor?.getHTML() || ""
+                  }
+                  onContentChange={(content) => {
+                    editor?.commands.setContent(
+                      sanitizeContentForEditor(content),
+                    );
+                  }}
+                  onPreviewDiff={handlePreviewDiff}
+                  isPreviewMode={isPreviewMode}
+                />
+              )
             ) : showCommentsPanel ? (
               <CommentSidebar editor={editor} comments={comments} />
             ) : null}
