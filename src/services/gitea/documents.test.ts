@@ -1,7 +1,23 @@
 import { afterEach, expect, mock, test } from 'bun:test';
-import type { Commit, FileResponse } from 'gitea-js';
+import type { Commit, ContentsResponse, FileResponse } from 'gitea-js';
 
 import type { GiteaClient } from './client';
+
+const validDoc = {
+  type: 'doc',
+  content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Hello' }] }],
+};
+
+// Base64-encode the valid doc JSON as Gitea would return it.
+const validDocBase64 = Buffer.from(JSON.stringify(validDoc), 'utf8').toString('base64');
+
+const repoGetContentsMock = mock(async () => ({
+  data: {
+    type: 'file',
+    content: validDocBase64,
+    sha: 'contents-file-sha',
+  } as ContentsResponse,
+}));
 
 const repoCreateFileMock = mock(async () => ({
   data: {
@@ -65,6 +81,7 @@ const client = {
     repoUpdateFile: repoUpdateFileMock,
     repoGetRawFileOrLfs: repoGetRawFileOrLfsMock,
     repoGetAllCommits: repoGetAllCommitsMock,
+    repoGetContents: repoGetContentsMock,
   },
 } as unknown as GiteaClient;
 
@@ -73,6 +90,7 @@ afterEach(() => {
   repoUpdateFileMock.mockReset();
   repoGetRawFileOrLfsMock.mockReset();
   repoGetAllCommitsMock.mockReset();
+  repoGetContentsMock.mockReset();
 
   repoCreateFileMock.mockImplementation(async () => ({
     data: {
@@ -114,6 +132,14 @@ afterEach(() => {
         },
       },
     ] as Commit[],
+  }));
+
+  repoGetContentsMock.mockImplementation(async () => ({
+    data: {
+      type: 'file',
+      content: validDocBase64,
+      sha: 'contents-file-sha',
+    } as ContentsResponse,
   }));
 });
 
@@ -341,4 +367,79 @@ test('listDocumentCommits maps API failures to GiteaApiError', async () => {
     status: 404,
     message: 'not found',
   });
+});
+
+// ─── fetchDocument ────────────────────────────────────────────────────────────
+
+test('fetchDocument returns content and sha from repoGetContents', async () => {
+  const { fetchDocument } = await import('./documents');
+
+  const result = await fetchDocument({
+    client,
+    owner: 'alice',
+    repo: 'quarterly-report',
+    filePath: 'documents/draft.json',
+    branch: 'main',
+  });
+
+  expect(repoGetContentsMock).toHaveBeenCalledWith(
+    'alice',
+    'quarterly-report',
+    'documents/draft.json',
+    { ref: 'main' },
+  );
+  expect(result.content).toEqual(validDoc);
+  expect(result.sha).toBe('contents-file-sha');
+});
+
+test('fetchDocument rejects when path is a directory', async () => {
+  const { fetchDocument } = await import('./documents');
+
+  repoGetContentsMock.mockImplementation(async () => ({
+    data: { type: 'dir', sha: 'dir-sha' } as ContentsResponse,
+  }));
+
+  await expect(
+    fetchDocument({ client, owner: 'alice', repo: 'quarterly-report', filePath: 'documents', branch: 'main' }),
+  ).rejects.toMatchObject({ name: 'GiteaApiError' });
+});
+
+test('fetchDocument rejects when content is not valid ProseMirror JSON', async () => {
+  const { fetchDocument } = await import('./documents');
+
+  const badContent = Buffer.from(JSON.stringify({ type: 'paragraph' }), 'utf8').toString('base64');
+  repoGetContentsMock.mockImplementation(async () => ({
+    data: { type: 'file', content: badContent, sha: 'sha' } as ContentsResponse,
+  }));
+
+  await expect(
+    fetchDocument({ client, owner: 'alice', repo: 'quarterly-report', filePath: 'documents/draft.json', branch: 'main' }),
+  ).rejects.toMatchObject({
+    name: 'GiteaApiError',
+    message: expect.stringContaining('documents/draft.json'),
+  });
+});
+
+test('fetchDocument rejects when content is invalid base64/JSON', async () => {
+  const { fetchDocument } = await import('./documents');
+
+  repoGetContentsMock.mockImplementation(async () => ({
+    data: { type: 'file', content: 'not-valid-base64!!!', sha: 'sha' } as ContentsResponse,
+  }));
+
+  await expect(
+    fetchDocument({ client, owner: 'alice', repo: 'quarterly-report', filePath: 'documents/draft.json', branch: 'main' }),
+  ).rejects.toMatchObject({ name: 'GiteaApiError' });
+});
+
+test('fetchDocument propagates API errors as GiteaApiError', async () => {
+  const { fetchDocument } = await import('./documents');
+
+  repoGetContentsMock.mockImplementation(async () => {
+    throw { status: 404, error: { message: 'file not found' } };
+  });
+
+  await expect(
+    fetchDocument({ client, owner: 'alice', repo: 'quarterly-report', filePath: 'documents/missing.json', branch: 'main' }),
+  ).rejects.toMatchObject({ name: 'GiteaApiError', status: 404 });
 });
