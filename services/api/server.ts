@@ -1,4 +1,4 @@
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
   if (value === undefined) {
@@ -73,9 +73,23 @@ const configuredAllowedOrigins = (
 
 const DOCUMENTS_DIRECTORY = "documents";
 const DOCUMENTS_ROUTE_PREFIX = "/api/app/documents";
+const DOCUMENTS_VERSIONS_ROUTE_SUFFIX = "/versions";
+const UPLOAD_BRANCH_PREFIX = "bindersnap/upload";
 const GITEA_REPOS_PAGE_LIMIT = 100;
 const GITEA_PULLS_PAGE_LIMIT = 100;
 const GITEA_COMMENTS_PAGE_LIMIT = 100;
+const DEFAULT_UPLOAD_ALLOWED_EXTENSIONS =
+  ".json,.txt,.md,.csv,.doc,.docx,.pdf,.xls,.xlsx,.ppt,.pptx";
+const uploadAllowedExtensions = new Set(
+  (process.env.BINDERSNAP_UPLOAD_ALLOWED_EXTENSIONS ?? DEFAULT_UPLOAD_ALLOWED_EXTENSIONS)
+    .split(",")
+    .map((extension) => extension.trim().toLowerCase())
+    .filter((extension) => extension.startsWith(".")),
+);
+const uploadMaxBytes = parsePositiveInt(
+  process.env.BINDERSNAP_UPLOAD_MAX_BYTES,
+  25 * 1024 * 1024,
+);
 
 interface SessionRecord {
   id: string;
@@ -115,6 +129,7 @@ interface GiteaContentSummary {
 interface GiteaPullSummary {
   number?: number;
   title?: string;
+  body?: string;
   state?: string;
   head?: { ref?: string };
   updated_at?: string;
@@ -135,6 +150,20 @@ interface GiteaPullReviewSummary {
 
 interface GiteaPullFileSummary {
   filename?: string;
+}
+
+interface GiteaBranchSummary {
+  name?: string;
+  commit?: {
+    id?: string;
+    sha?: string;
+  };
+}
+
+interface GiteaContentFileResponse {
+  sha?: string;
+  content?: string;
+  encoding?: string;
 }
 
 interface DocumentVersionMetadata extends CommitSummary {}
@@ -166,6 +195,15 @@ export interface CatalogPendingPullRequest {
   branch: string;
   updatedAt: string;
   htmlUrl: string | null;
+}
+
+export interface DocumentUploadResult {
+  documentId: string;
+  branchName: string;
+  commitSha: string;
+  pullRequestNumber: number;
+  pullRequestUrl: string | null;
+  approvalState: CatalogApprovalState;
 }
 
 export type CatalogApprovalState =
@@ -1065,8 +1103,10 @@ async function selectWorkspaceRepository(session: SessionRecord): Promise<Worksp
   return ordered[0] ?? repositories[0];
 }
 
-export async function loadDocumentCatalog(session: SessionRecord): Promise<CatalogPayload> {
-  const repository = await selectWorkspaceRepository(session);
+async function loadWorkspaceDocumentCatalog(
+  session: SessionRecord,
+  repository: WorkspaceRepository,
+): Promise<CatalogPayload> {
   const documentPaths = await listDocumentFiles(
     session.giteaToken,
     repository.owner,
@@ -1183,8 +1223,23 @@ export async function loadDocumentCatalog(session: SessionRecord): Promise<Catal
   };
 }
 
+async function loadWorkspaceCatalog(session: SessionRecord): Promise<{
+  repository: WorkspaceRepository;
+  catalog: CatalogPayload;
+}> {
+  const repository = await selectWorkspaceRepository(session);
+  const catalog = await loadWorkspaceDocumentCatalog(session, repository);
+
+  return { repository, catalog };
+}
+
+export async function loadDocumentCatalog(session: SessionRecord): Promise<CatalogPayload> {
+  const { catalog } = await loadWorkspaceCatalog(session);
+  return catalog;
+}
+
 export async function loadDocumentCatalogItem(session: SessionRecord, documentId: string): Promise<{ repository: string; document: DocumentCatalogItem }> {
-  const catalog = await loadDocumentCatalog(session);
+  const { catalog } = await loadWorkspaceCatalog(session);
   const document = catalog.documents.find((item) => item.id === documentId);
   if (!document) {
     throw createCatalogError(404, "document_not_found", "Document not found.");
@@ -1193,6 +1248,505 @@ export async function loadDocumentCatalogItem(session: SessionRecord, documentId
   return {
     repository: catalog.repository,
     document,
+  };
+}
+
+function sanitizeBranchSegment(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-");
+}
+
+function extractLowercaseExtension(fileName: string): string {
+  const trimmed = fileName.trim();
+  const lastDot = trimmed.lastIndexOf(".");
+  if (lastDot <= 0 || lastDot === trimmed.length - 1) {
+    return "";
+  }
+  return trimmed.slice(lastDot).toLowerCase();
+}
+
+function isAllowedUploadFile(file: File): boolean {
+  const extension = extractLowercaseExtension(file.name);
+  if (!extension) {
+    return false;
+  }
+  return uploadAllowedExtensions.has(extension);
+}
+
+function buildUploadBranchName(baseBranch: string, documentId: string): string {
+  const safeBaseBranch = sanitizeBranchSegment(baseBranch) || "main";
+  const safeDocumentId = sanitizeBranchSegment(documentId) || "document";
+  const stableIdSuffix = createHash("sha1")
+    .update(documentId)
+    .digest("hex")
+    .slice(0, 12);
+  const shortDocumentSegment = safeDocumentId.slice(0, 48);
+  return `${UPLOAD_BRANCH_PREFIX}/${safeBaseBranch}/${shortDocumentSegment}-${stableIdSuffix}`;
+}
+
+function buildUploadCommitMessage(params: {
+  document: DocumentCatalogItem;
+  branchName: string;
+  fileName: string;
+  summary: string;
+  sourceNote: string;
+}): string {
+  const lines = [
+    `Upload new version for ${params.document.displayName}`,
+    "",
+    `Document: ${params.document.id}`,
+    `Branch: ${params.branchName}`,
+    `Uploaded file: ${params.fileName}`,
+    `Summary: ${params.summary || "None provided"}`,
+    `Source note: ${params.sourceNote || "None provided"}`,
+  ];
+
+  return lines.join("\n");
+}
+
+function buildUploadPullRequestTitle(params: {
+  document: DocumentCatalogItem;
+  fileName: string;
+}): string {
+  return `Upload review: ${params.document.displayName} (${params.fileName})`;
+}
+
+function buildUploadPullRequestBody(params: {
+  document: DocumentCatalogItem;
+  repository: WorkspaceRepository;
+  branchName: string;
+  fileName: string;
+  summary: string;
+  sourceNote: string;
+}): string {
+  const lines = [
+    `Upload review for ${params.document.displayName}`,
+    "",
+    `Document ID: ${params.document.id}`,
+    `Repository: ${params.repository.fullName}`,
+    `Canonical branch: ${params.repository.defaultBranch}`,
+    `Upload branch: ${params.branchName}`,
+    `Uploaded file: ${params.fileName}`,
+    `Summary: ${params.summary || "None provided"}`,
+    `Source note: ${params.sourceNote || "None provided"}`,
+  ];
+
+  return lines.join("\n");
+}
+
+function decodeGiteaContent(encoded: string | undefined): Buffer {
+  const normalized = encoded ? encoded.replace(/\s+/g, "") : "";
+  return Buffer.from(normalized, "base64");
+}
+
+async function readGiteaFileAtRef(
+  token: string,
+  owner: string,
+  repo: string,
+  filePath: string,
+  ref: string,
+): Promise<{ sha: string; content: Buffer } | null> {
+  const response = await giteaFetch(
+    `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${filePath}?ref=${encodeURIComponent(ref)}`,
+    {
+      method: "GET",
+      headers: buildGiteaHeaders(token),
+    },
+  );
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    throw upstreamStatusToCatalogError(
+      response.status,
+      "upload_source_unavailable",
+      "Unable to load document source.",
+    );
+  }
+
+  const payload = (await response.json()) as GiteaContentFileResponse | string;
+  if (typeof payload === "string") {
+    return {
+      sha: "",
+      content: Buffer.from(payload, "utf8"),
+    };
+  }
+
+  return {
+    sha: typeof payload.sha === "string" ? payload.sha : "",
+    content: decodeGiteaContent(payload.content),
+  };
+}
+
+async function branchExists(
+  token: string,
+  owner: string,
+  repo: string,
+  branchName: string,
+): Promise<boolean> {
+  const response = await giteaFetch(
+    `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branches/${encodeURIComponent(branchName)}`,
+    {
+      method: "GET",
+      headers: buildGiteaHeaders(token),
+    },
+  );
+
+  if (response.status === 404) {
+    return false;
+  }
+
+  if (!response.ok) {
+    throw upstreamStatusToCatalogError(
+      response.status,
+      "upload_branch_unavailable",
+      "Unable to prepare the review branch.",
+    );
+  }
+
+  return true;
+}
+
+async function createUploadBranch(
+  token: string,
+  owner: string,
+  repo: string,
+  branchName: string,
+  baseBranch: string,
+): Promise<void> {
+  const response = await giteaFetch(
+    `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branches`,
+    {
+      method: "POST",
+      headers: buildGiteaHeaders(token, {
+        "Content-Type": "application/json",
+      }),
+      body: JSON.stringify({
+        new_branch_name: branchName,
+        old_ref_name: baseBranch,
+      }),
+    },
+  );
+
+  if (response.ok || response.status === 201 || response.status === 409 || response.status === 422) {
+    return;
+  }
+
+  throw upstreamStatusToCatalogError(
+    response.status,
+    "upload_branch_unavailable",
+    "Unable to prepare the review branch.",
+  );
+}
+
+async function writeUploadFile(
+  token: string,
+  owner: string,
+  repo: string,
+  filePath: string,
+  branchName: string,
+  content: Buffer,
+  message: string,
+): Promise<{ commitSha: string; fileSha: string | null }> {
+  const existingFile = await readGiteaFileAtRef(token, owner, repo, filePath, branchName);
+  const body: Record<string, string> = {
+    content: content.toString("base64"),
+    message,
+    branch: branchName,
+  };
+
+  if (existingFile?.sha) {
+    body.sha = existingFile.sha;
+  }
+
+  const response = await giteaFetch(
+    `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${filePath}`,
+    {
+      method: existingFile?.sha ? "PUT" : "POST",
+      headers: buildGiteaHeaders(token, {
+        "Content-Type": "application/json",
+      }),
+      body: JSON.stringify(body),
+    },
+  );
+
+  if (!response.ok) {
+    throw upstreamStatusToCatalogError(
+      response.status,
+      "upload_write_failed",
+      "Unable to save the uploaded file version.",
+    );
+  }
+
+  const payload = (await response.json()) as {
+    commit?: { sha?: string };
+    content?: { sha?: string };
+  };
+
+  return {
+    commitSha: payload.commit?.sha ?? "",
+    fileSha: payload.content?.sha ?? existingFile?.sha ?? null,
+  };
+}
+
+async function listOpenPullRequestsForBranch(
+  token: string,
+  owner: string,
+  repo: string,
+  branchName: string,
+): Promise<GiteaPullSummary[]> {
+  const response = await giteaFetch(
+    `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls?state=open&head=${encodeURIComponent(`${owner}:${branchName}`)}&limit=${GITEA_PULLS_PAGE_LIMIT}`,
+    {
+      method: "GET",
+      headers: buildGiteaHeaders(token),
+    },
+  );
+
+  if (!response.ok) {
+    throw upstreamStatusToCatalogError(
+      response.status,
+      "upload_pull_request_unavailable",
+      "Unable to load the upload review request.",
+    );
+  }
+
+  const payload = (await response.json()) as GiteaPullSummary[];
+  return Array.isArray(payload) ? payload : [];
+}
+
+function selectLatestUploadPullRequest(
+  pullRequests: GiteaPullSummary[],
+  branchName: string,
+): GiteaPullSummary | null {
+  const candidates = pullRequests.filter((pullRequest) => pullRequest.head?.ref === branchName);
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  candidates.sort((left, right) => {
+    const leftRank = (left.number ?? 0) + (parseTimestamp(left.updated_at) || parseTimestamp(left.created_at));
+    const rightRank = (right.number ?? 0) + (parseTimestamp(right.updated_at) || parseTimestamp(right.created_at));
+    return rightRank - leftRank;
+  });
+
+  return candidates[0] ?? null;
+}
+
+async function createOrUpdateUploadPullRequest(
+  token: string,
+  repository: WorkspaceRepository,
+  document: DocumentCatalogItem,
+  branchName: string,
+  fileName: string,
+  summary: string,
+  sourceNote: string,
+): Promise<{
+  pullRequest: GiteaPullSummary;
+  approvalState: CatalogApprovalState;
+}> {
+  const title = buildUploadPullRequestTitle({ document, fileName });
+  const body = buildUploadPullRequestBody({
+    document,
+    repository,
+    branchName,
+    fileName,
+    summary,
+    sourceNote,
+  });
+
+  const existingPullRequest = selectLatestUploadPullRequest(
+    await listOpenPullRequestsForBranch(token, repository.owner, repository.name, branchName),
+    branchName,
+  );
+
+  if (existingPullRequest?.number) {
+    const response = await giteaFetch(
+      `/api/v1/repos/${encodeURIComponent(repository.owner)}/${encodeURIComponent(repository.name)}/issues/${existingPullRequest.number}`,
+      {
+        method: "PATCH",
+        headers: buildGiteaHeaders(token, {
+          "Content-Type": "application/json",
+        }),
+        body: JSON.stringify({
+          title,
+          body,
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      throw upstreamStatusToCatalogError(
+        response.status,
+        "upload_pull_request_unavailable",
+        "Unable to update the upload review request.",
+      );
+    }
+  } else {
+    const response = await giteaFetch(
+      `/api/v1/repos/${encodeURIComponent(repository.owner)}/${encodeURIComponent(repository.name)}/pulls`,
+      {
+        method: "POST",
+        headers: buildGiteaHeaders(token, {
+          "Content-Type": "application/json",
+        }),
+        body: JSON.stringify({
+          base: repository.defaultBranch,
+          head: branchName,
+          title,
+          body,
+        }),
+      },
+    );
+
+    if (!response.ok && response.status !== 201) {
+      throw upstreamStatusToCatalogError(
+        response.status,
+        "upload_pull_request_unavailable",
+        "Unable to create the upload review request.",
+      );
+    }
+  }
+
+  const pullRequest = selectLatestUploadPullRequest(
+    await listOpenPullRequestsForBranch(token, repository.owner, repository.name, branchName),
+    branchName,
+  );
+
+  if (!pullRequest || !pullRequest.number) {
+    throw createCatalogError(502, "upload_pull_request_unavailable", "Unable to locate the upload review request.");
+  }
+
+  const reviews = await listPullRequestReviews(token, repository.owner, repository.name, pullRequest.number);
+  return {
+    pullRequest,
+    approvalState: resolvePullRequestState(pullRequest, reviews),
+  };
+}
+
+export async function uploadDocumentVersion(
+  session: SessionRecord,
+  documentId: string,
+  formData: FormData,
+): Promise<DocumentUploadResult> {
+  const fileValue = formData.get("file");
+  if (!(fileValue instanceof File)) {
+    throw createCatalogError(400, "missing_file", "A file is required.");
+  }
+  if (fileValue.size <= 0) {
+    throw createCatalogError(400, "empty_file", "Uploaded file is empty.");
+  }
+  if (!isAllowedUploadFile(fileValue)) {
+    throw createCatalogError(400, "unsupported_file_type", "Unsupported file type.");
+  }
+  if (fileValue.size > uploadMaxBytes) {
+    throw createCatalogError(413, "file_too_large", "Uploaded file exceeds size limit.");
+  }
+
+  const summaryValue = formData.get("summary");
+  const sourceNoteValue = formData.get("source_note");
+  const summary = typeof summaryValue === "string" ? summaryValue.trim() : "";
+  const sourceNote = typeof sourceNoteValue === "string" ? sourceNoteValue.trim() : "";
+
+  const { repository, catalog } = await loadWorkspaceCatalog(session);
+  const document = catalog.documents.find((item) => item.id === documentId);
+  if (!document) {
+    throw createCatalogError(404, "document_not_found", "Document not found.");
+  }
+
+  const uploadBranchName = buildUploadBranchName(repository.defaultBranch, document.id);
+  const uploadContent = Buffer.from(await fileValue.arrayBuffer());
+  const branchAlreadyExists = await branchExists(
+    session.giteaToken,
+    repository.owner,
+    repository.name,
+    uploadBranchName,
+  );
+
+  if (!branchAlreadyExists) {
+    await createUploadBranch(
+      session.giteaToken,
+      repository.owner,
+      repository.name,
+      uploadBranchName,
+      repository.defaultBranch,
+    );
+  }
+
+  const existingBranchFile = branchAlreadyExists
+    ? await readGiteaFileAtRef(
+        session.giteaToken,
+        repository.owner,
+        repository.name,
+        document.path,
+        uploadBranchName,
+      )
+    : null;
+
+  const uploadIsDuplicate =
+    branchAlreadyExists &&
+    existingBranchFile !== null &&
+    existingBranchFile.content.equals(uploadContent);
+
+  let commitSha = "";
+  if (!uploadIsDuplicate) {
+    const commitResult = await writeUploadFile(
+      session.giteaToken,
+      repository.owner,
+      repository.name,
+      document.path,
+      uploadBranchName,
+      uploadContent,
+      buildUploadCommitMessage({
+        document,
+        branchName: uploadBranchName,
+        fileName: fileValue.name || document.id,
+        summary,
+        sourceNote,
+      }),
+    );
+    commitSha = commitResult.commitSha;
+  }
+
+  const pullRequestResult = await createOrUpdateUploadPullRequest(
+    session.giteaToken,
+    repository,
+    document,
+    uploadBranchName,
+    fileValue.name || document.id,
+    summary,
+    sourceNote,
+  );
+
+  const latestCommit = await readCommitSummary(
+    session.giteaToken,
+    repository.owner,
+    repository.name,
+    document.path,
+    uploadBranchName,
+  );
+  const resolvedCommitSha = latestCommit?.sha || commitSha;
+  if (!resolvedCommitSha) {
+    throw createCatalogError(
+      502,
+      "upload_commit_unavailable",
+      "Unable to resolve the uploaded version commit SHA.",
+    );
+  }
+
+  return {
+    documentId: document.id,
+    branchName: uploadBranchName,
+    commitSha: resolvedCommitSha,
+    pullRequestNumber: pullRequestResult.pullRequest.number ?? 0,
+    pullRequestUrl: pullRequestResult.pullRequest.html_url ?? null,
+    approvalState: pullRequestResult.approvalState,
   };
 }
 
@@ -1488,6 +2042,34 @@ async function handleDocumentDetail(
   }
 }
 
+async function handleDocumentVersionUpload(
+  req: Request,
+  baseHeaders: Headers,
+  documentId: string,
+): Promise<Response> {
+  const session = getSessionFromRequest(req);
+  if (!session) {
+    return catalogErrorResponse(createCatalogError(401, "unauthorized", "Unauthorized."), baseHeaders);
+  }
+
+  let formData: FormData;
+  try {
+    formData = await req.formData();
+  } catch {
+    return catalogErrorResponse(
+      createCatalogError(400, "invalid_upload_payload", "A multipart form upload is required."),
+      baseHeaders,
+    );
+  }
+
+  try {
+    const payload = await uploadDocumentVersion(session, documentId, formData);
+    return json(200, payload, baseHeaders);
+  } catch (error) {
+    return catalogErrorResponse(error, baseHeaders);
+  }
+}
+
 async function cleanupExpiredSessions(): Promise<void> {
   const now = Date.now();
   const expiredSessions: SessionRecord[] = [];
@@ -1552,6 +2134,29 @@ export async function handleApiRequest(req: Request): Promise<Response> {
 
   if (pathname === DOCUMENTS_ROUTE_PREFIX && req.method === "GET") {
     return handleDocuments(req, baseHeaders);
+  }
+
+  if (
+    pathname.startsWith(`${DOCUMENTS_ROUTE_PREFIX}/`) &&
+    pathname.endsWith(DOCUMENTS_VERSIONS_ROUTE_SUFFIX) &&
+    req.method === "POST"
+  ) {
+    try {
+      const documentId = decodeURIComponent(
+        pathname.slice(
+          `${DOCUMENTS_ROUTE_PREFIX}/`.length,
+          pathname.length - DOCUMENTS_VERSIONS_ROUTE_SUFFIX.length,
+        ),
+      );
+      if (documentId) {
+        return handleDocumentVersionUpload(req, baseHeaders, documentId);
+      }
+    } catch {
+      return catalogErrorResponse(
+        createCatalogError(400, "invalid_document_id", "Invalid document identifier."),
+        baseHeaders,
+      );
+    }
   }
 
   if (pathname.startsWith(`${DOCUMENTS_ROUTE_PREFIX}/`) && req.method === "GET") {
