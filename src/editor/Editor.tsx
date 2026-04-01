@@ -80,7 +80,10 @@ import {
   EyeOff,
   Maximize,
   Minimize,
+  Upload,
+  Download,
 } from "lucide-react";
+import { importDocx, exportDocx } from "../services/pandoc";
 
 import { VersionControlPanel } from "./components/VersionControl/VersionControlPanel";
 import { CommentSidebar, type CommentThread } from "./sidebar/CommentSidebar";
@@ -105,6 +108,8 @@ interface ToolbarProps {
   onToggleCommentsPanel: () => void;
   isFullScreen: boolean;
   onToggleFullScreen: () => void;
+  onImportDocx: (file: File) => Promise<void>;
+  onExportDocx: () => Promise<void>;
 }
 
 interface EditorProps {
@@ -517,6 +522,8 @@ const Toolbar = ({
   onToggleCommentsPanel,
   isFullScreen,
   onToggleFullScreen,
+  onImportDocx,
+  onExportDocx,
 }: ToolbarProps) => {
   const readCssVar = (name: string) => {
     if (typeof window === "undefined") return "";
@@ -984,6 +991,33 @@ const Toolbar = ({
           title="Clear Formatting"
         >
           <Eraser size={16} />
+        </MenuButton>
+
+        <Divider />
+
+        {/* .docx import */}
+        <MenuButton
+          onClick={() => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.docx';
+            input.onchange = () => {
+              const file = input.files?.[0];
+              if (file) void onImportDocx(file);
+            };
+            input.click();
+          }}
+          title="Import .docx"
+        >
+          <Upload size={16} />
+        </MenuButton>
+
+        {/* .docx export */}
+        <MenuButton
+          onClick={() => void onExportDocx()}
+          title="Export .docx"
+        >
+          <Download size={16} />
         </MenuButton>
 
         <Divider />
@@ -1675,6 +1709,23 @@ export const DemoEditor = ({
           onToggleCommentsPanel={toggleCommentsPanel}
           isFullScreen={isFullScreen}
           onToggleFullScreen={toggleFullScreen}
+          onImportDocx={async (file) => {
+            if (!editor) return;
+            try {
+              const doc = await importDocx(file);
+              editor.commands.setContent(doc);
+            } catch (err) {
+              window.alert(`Import failed: ${err instanceof Error ? err.message : String(err)}`);
+            }
+          }}
+          onExportDocx={async () => {
+            if (!editor) return;
+            try {
+              await exportDocx(editor.getJSON());
+            } catch (err) {
+              window.alert(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
+            }
+          }}
         />
       )}
       {selectionMenu.visible &&
