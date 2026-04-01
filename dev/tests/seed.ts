@@ -34,6 +34,7 @@ type SeedResult = {
   token?: string;
   tokenName?: string;
   prNumber: number;
+  oauthClientId?: string;
 };
 
 type GiteaUser = {
@@ -61,6 +62,12 @@ type GiteaToken = {
   sha1?: string;
   token_last_eight?: string;
   name?: string;
+};
+
+type GiteaOAuthApp = {
+  id: number;
+  name: string;
+  client_id: string;
 };
 
 type RequestOptions = {
@@ -527,6 +534,34 @@ export async function isTokenValid(baseUrl: string, token: string): Promise<bool
   return response.status === 200;
 }
 
+async function ensureOAuthApp(
+  baseUrl: string,
+  auth: BasicAuth,
+  appName: string,
+  redirectUri: string,
+  log: (msg: string) => void,
+): Promise<string> {
+  const existing = await giteaJson<GiteaOAuthApp[]>(baseUrl, '/api/v1/user/applications/oauth2', { auth });
+  const found = existing.find((app) => app.name === appName);
+  if (found) {
+    log(`OAuth2 app "${appName}" already exists (client_id: ${found.client_id}).`);
+    return found.client_id;
+  }
+
+  const created = await giteaJson<GiteaOAuthApp>(baseUrl, '/api/v1/user/applications/oauth2', {
+    method: 'POST',
+    auth,
+    body: JSON.stringify({
+      name: appName,
+      redirect_uris: [redirectUri],
+      confidential_client: false,
+    }),
+    expectedStatuses: [201],
+  });
+  log(`OAuth2 app "${appName}" created (client_id: ${created.client_id}).`);
+  return created.client_id;
+}
+
 export async function seedDevStack(options: SeedOptions = {}): Promise<SeedResult> {
   const baseUrl = options.baseUrl ?? process.env.GITEA_URL ?? DEFAULT_GITEA_URL;
   const adminUser = options.adminUser ?? process.env.GITEA_ADMIN_USER ?? DEFAULT_ADMIN_USER;
@@ -606,8 +641,11 @@ export async function seedDevStack(options: SeedOptions = {}): Promise<SeedResul
   const prNumber = await ensurePullRequest(baseUrl, adminAuth, adminUser, repoName, FEATURE_BRANCH, PR_TITLE, log);
   await ensureRequestedChangesReview(baseUrl, adminAuth, bobAuth, adminUser, repoName, prNumber, bobUser, log);
 
+  const redirectUri = `http://localhost:${process.env.APP_PORT ?? '5173'}/auth/callback`;
+  const oauthClientId = await ensureOAuthApp(baseUrl, adminAuth, 'bindersnap-dev', redirectUri, log);
+
   if (!createToken) {
-    return { prNumber };
+    return { prNumber, oauthClientId };
   }
 
   const tokenInfo = await createAccessToken(baseUrl, adminAuth, tokenNamePrefix, log);
@@ -615,6 +653,7 @@ export async function seedDevStack(options: SeedOptions = {}): Promise<SeedResul
     prNumber,
     token: tokenInfo.token,
     tokenName: tokenInfo.tokenName,
+    oauthClientId,
   };
 }
 
