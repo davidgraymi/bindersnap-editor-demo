@@ -1,10 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { JSDOM } from "jsdom";
 
-import {
-  sanitizeHtml,
-  sanitizeProseMirrorJson,
-} from "./sanitizer";
+import { sanitizeHtml, sanitizeProseMirrorJson } from "./sanitizer";
 
 const { window } = new JSDOM("<!doctype html><html><body></body></html>");
 
@@ -26,7 +23,9 @@ Object.assign(globalThis, {
 
 describe("sanitizeHtml", () => {
   test("strips script tags entirely", () => {
-    const output = sanitizeHtml("<p>Safe</p><script>alert(1)</script><p>Next</p>");
+    const output = sanitizeHtml(
+      "<p>Safe</p><script>alert(1)</script><p>Next</p>",
+    );
 
     expect(output).not.toContain("<script");
     expect(output).not.toContain("alert(1)");

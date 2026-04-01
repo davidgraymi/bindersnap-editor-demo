@@ -84,7 +84,9 @@ const getCommentAnchorElement = (editor: Editor, commentId: string) => {
   );
 
   if (!element) {
-    throw new Error(`Could not find anchor element for comment "${commentId}".`);
+    throw new Error(
+      `Could not find anchor element for comment "${commentId}".`,
+    );
   }
 
   return element;
@@ -95,9 +97,9 @@ describe("CommentAnchor", () => {
     const editor = createEditor();
     const range = findTextRange(editor, "Beta");
 
-    expect(editor.commands.addCommentAnchor(range.from, range.to, "comment-1")).toBe(
-      true,
-    );
+    expect(
+      editor.commands.addCommentAnchor(range.from, range.to, "comment-1"),
+    ).toBe(true);
 
     let pluginState = getAnchorState(editor);
 
@@ -127,17 +129,13 @@ describe("CommentAnchor", () => {
 
     const activeAnchor = getCommentAnchorElement(editor, "comment-1");
 
-    expect(activeAnchor.className).toContain(
-      "bs-comment-anchor--active",
-    );
+    expect(activeAnchor.className).toContain("bs-comment-anchor--active");
 
     editor.commands.setActiveComment(null);
 
     const inactiveAnchor = getCommentAnchorElement(editor, "comment-1");
 
-    expect(inactiveAnchor.className).not.toContain(
-      "bs-comment-anchor--active",
-    );
+    expect(inactiveAnchor.className).not.toContain("bs-comment-anchor--active");
 
     editor.destroy();
   });

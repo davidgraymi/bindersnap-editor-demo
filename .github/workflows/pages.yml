@@ -34,15 +34,15 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Build
-        run: bun run build
+        run: bun run build:landing
 
       - name: Disable Jekyll
-        run: touch dist/.nojekyll
+        run: touch dist/landing/.nojekyll
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: dist/landing
 
   deploy:
     runs-on: ubuntu-latest

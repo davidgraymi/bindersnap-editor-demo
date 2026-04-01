@@ -169,11 +169,10 @@ test.describe('App shell', () => {
       return;
     }
 
-    const tokenGateHeading = page.getByRole('heading', { name: 'Welcome to Bindersnap' });
-    await expect(tokenGateHeading).toBeVisible();
-
-    const tokenInput = page.getByLabel('Enter your Gitea personal access token');
-    await expect(tokenInput).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Open Workspace' })).toBeVisible();
+    await expect(page).toHaveURL(/\/login$/);
+    await expect(page.getByRole('heading', { name: 'Step into the clean version.' })).toBeVisible();
+    await expect(page.getByLabel('Username')).toBeVisible();
+    await expect(page.getByLabel('Password')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Open workspace' })).toBeVisible();
   });
 });

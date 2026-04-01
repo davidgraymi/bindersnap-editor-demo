@@ -1,4 +1,4 @@
-@import "../assets/css/bindersnap-tokens.css";
+@import "../../packages/ui-tokens/css/bindersnap-tokens.css";
 
 html,
 body,
@@ -21,11 +21,37 @@ input {
   font: inherit;
 }
 
+.app-inline-code {
+  font-family: var(--font-mono);
+  font-size: var(--brand-text-sm);
+  color: var(--color-ink-soft);
+}
+
 .app-gate {
   min-height: 100vh;
   display: grid;
   place-items: center;
   padding: var(--brand-space-6);
+}
+
+.app-login-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: var(--brand-space-6);
+}
+
+.app-login-wrap {
+  width: min(100%, 560px);
+}
+
+.app-login-panel {
+  padding: var(--brand-space-8);
+}
+
+.app-login-panel {
+  display: grid;
+  gap: var(--brand-space-5);
 }
 
 .app-gate-panel {
@@ -56,6 +82,11 @@ input {
   gap: var(--brand-space-4);
 }
 
+.app-field {
+  display: grid;
+  gap: var(--brand-space-2);
+}
+
 .app-submit {
   width: 100%;
 }
@@ -64,6 +95,15 @@ input {
   margin: var(--brand-space-4) 0 0;
   color: var(--color-coral-dark);
   font-size: var(--brand-text-sm);
+}
+
+.app-login-hint {
+  margin: 0;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--brand-text-label);
+  letter-spacing: var(--brand-tracking-wide);
+  text-transform: uppercase;
 }
 
 .app-gate-url {
@@ -209,11 +249,17 @@ input {
     padding: var(--brand-space-4);
   }
 
+  .app-login-shell,
   .app-gate-panel,
   .app-topbar,
   .app-summary,
   .app-error,
   .app-doc-card {
+    padding: var(--brand-space-5);
+  }
+
+  .app-login-panel,
+  .app-login-panel {
     padding: var(--brand-space-5);
   }
 

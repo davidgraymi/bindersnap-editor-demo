@@ -184,7 +184,8 @@ describe("ApprovalStatusBanner", () => {
       prUrl: "/pulls/42",
     });
 
-    const link = container.querySelector<HTMLAnchorElement>(".bs-approval__link");
+    const link =
+      container.querySelector<HTMLAnchorElement>(".bs-approval__link");
 
     expect(link?.textContent).toBe("Open review trail");
     expect(link?.getAttribute("href")).toBe("/pulls/42");

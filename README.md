@@ -1,4 +1,4 @@
-# bun-react-template
+# Bindersnap Editor Demo
 
 To install dependencies:
 
@@ -6,16 +6,22 @@ To install dependencies:
 bun install
 ```
 
-To start a development server:
+To run the separate app targets during development:
 
 ```bash
-bun dev
+bun run dev:app
+bun run dev:landing
 ```
 
-To run for production:
+To build, test, or serve each app independently:
 
 ```bash
-bun start
+bun run build:app
+bun run build:landing
+bun run test:app
+bun run test:landing
+bun run serve:app
+bun run serve:landing
 ```
 
-This project was created using `bun init` in bun v1.3.8. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+Use `bun run build:all` and `bun run test:all` when you want both apps together.
