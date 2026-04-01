@@ -1,0 +1,183 @@
+# ADR 0001: External-File Workflow Contract (Upload-as-PR)
+
+Status: Accepted (MVP contract)  
+Date: 2026-04-01  
+Related: [Issue #85](https://github.com/davidgraymi/bindersnap-editor-demo/issues/85), #71, #72, #73
+
+## Why This Exists
+
+Bindersnap needs an explicit contract for teams that author files outside the app
+(Word, Excel, PDF) but still need version control and approvals inside Bindersnap.
+
+This ADR is the source-of-truth contract for that MVP workflow.
+
+## Core Model
+
+1. One document equals one Gitea repository for MVP.
+2. Each uploaded file revision creates a new reviewable version.
+3. Each version is represented by a pull request from an upload branch to `main`.
+4. Merging an approved pull request establishes the current published version.
+5. Prior versions remain immutable and downloadable from history.
+
+## Lifecycle States
+
+The workflow states are:
+
+1. `draft upload`: uploader has created the upload branch and opened PR.
+2. `in review`: PR has at least one assigned reviewer or active review comments.
+3. `changes requested`: reviewer requested changes; uploader must update the same PR.
+4. `approved/published`: required approvals exist and PR is merged to `main`.
+
+Operational note:
+- We keep both approval and merge timestamps in metadata so the audit trail can
+  distinguish "approved at" from "published at" even though the public lifecycle
+  state label is `approved/published`.
+
+## Upload Branch Naming (Deterministic + Sortable)
+
+Required format:
+
+`upload/<document-slug>/<YYYYMMDD>/<HHMMSSZ>-<uploader-slug>-<contenthash8>`
+
+Example:
+
+`upload/acme-q2-quote/20260401/143012Z-asmith-8f3c2a1b`
+
+Rules:
+
+1. `document-slug` is lowercase kebab-case and stable for the document.
+2. Timestamp is UTC and sortable (`YYYYMMDD` + `HHMMSSZ`).
+3. `uploader-slug` is a stable short user identifier.
+4. `contenthash8` is the first 8 hex characters of the uploaded file hash.
+5. Uploads that produce identical branch names must be rejected and retried with
+   a new upload event timestamp.
+
+## Canonical File Naming (No Filename Chaos)
+
+Required canonical path in repo root:
+
+`<document-slug>.<ext>`
+
+Examples:
+
+1. `acme-q2-quote.docx`
+2. `vendor-w9.pdf`
+3. `quarterly-budget.xlsx`
+
+Rules:
+
+1. Canonical filename is stable across revisions.
+2. Canonical filename cannot include version markers (`final`, `v2`, `approved`).
+3. User-uploaded original filename is stored as metadata only.
+4. Extension must match an allowed file type.
+
+## Canonical Version Pointer Strategy
+
+MVP chooses a metadata file as the canonical pointer (not tag-first, not release-first).
+
+File: `document-manifest.json`
+
+Minimum required keys:
+
+```json
+{
+  "documentId": "acme-q2-quote",
+  "canonicalFileName": "acme-q2-quote.docx",
+  "sourceFileName": "Acme Q2 Quote Final v3.docx",
+  "currentPublishedSha": "a1b2c3d4e5f6",
+  "currentPublishedVersion": 4,
+  "currentState": "approved/published",
+  "approvedAt": "2026-04-01T14:28:10Z",
+  "publishedAt": "2026-04-01T14:30:12Z"
+}
+```
+
+Rules:
+
+1. `currentPublishedSha` points to the merge commit on `main`.
+2. `currentPublishedVersion` increments by 1 on each merge to `main`.
+3. Manifest updates only in publish merges.
+4. Historical versions are resolved through commit history and merged PR refs.
+
+## Supported File Types and Size Limits (MVP)
+
+Supported file types:
+
+1. `.pdf`
+2. `.docx`
+3. `.xlsx`
+
+Size limit:
+
+1. Maximum 25 MiB per file upload.
+
+Validation behavior:
+
+1. Reject unsupported extensions with a clear user error.
+2. Reject files over 25 MiB before PR creation.
+3. Reject archive uploads (`.zip`, `.rar`, `.7z`) and folder uploads.
+
+## Role Mapping (Upload vs Approve vs Merge)
+
+| Role | Upload | Approve | Merge |
+| --- | --- | --- | --- |
+| Viewer | No | No | No |
+| Uploader | Yes | No | No |
+| Reviewer | No | Yes | No |
+| Publisher | No | Yes | Yes |
+| Owner/Admin | Yes | Yes | Yes |
+
+Policy rules:
+
+1. Upload permission does not imply approve permission.
+2. Approve permission does not imply merge permission.
+3. Merge must be blocked until required approvals are present.
+4. Same human can hold multiple roles, but gates are still evaluated separately.
+
+## Quote Workflow Examples
+
+### Example A: Sales Quote DOCX
+
+1. Upload branch: `upload/acme-q2-quote/20260401/143012Z-asmith-8f3c2a1b`
+2. PR title: `Upload v4: Acme Q2 Quote`
+3. Canonical file path: `acme-q2-quote.docx`
+4. Transition: `draft upload` -> `in review` -> `changes requested` -> `in review` -> `approved/published`
+5. On merge, manifest updates `currentPublishedVersion` to `4`.
+
+### Example B: Vendor W-9 PDF
+
+1. Upload branch: `upload/vendor-w9/20260401/152233Z-jgray-4f9d21aa`
+2. PR title: `Upload v2: Vendor W-9`
+3. Canonical file path: `vendor-w9.pdf`
+4. Merge writes `currentPublishedSha` and `publishedAt` in manifest.
+
+### Example C: Pricing XLSX
+
+1. Upload branch: `upload/quarterly-budget/20260401/160455Z-klee-91b7c020`
+2. PR title: `Upload v3: Quarterly Budget`
+3. Canonical file path: `quarterly-budget.xlsx`
+4. Review feedback happens on PR comments; no inline editing required.
+
+## Non-Goals (Explicit)
+
+1. No inline editing required for this workflow.
+2. No real-time collaborative editing for external binary files.
+3. No file conversion pipeline in MVP.
+4. No OCR, redaction, or extraction pipeline in MVP.
+5. No replacement of editor-first work in #71, #72, #73.
+6. No Git LFS dependency for MVP.
+
+## Consequences
+
+Positive:
+
+1. The approval trail is explicit and auditable.
+2. Version identity is stable and easy to reason about.
+3. Filename drift (`FINAL_v2_APPROVED(1)`) is prevented by contract.
+
+Tradeoffs:
+
+1. Binary support is intentionally narrow in MVP.
+2. Upload size ceiling is explicit and may exclude large files.
+3. Additional automation (virus scanning, resumable uploads) is deferred.
+
