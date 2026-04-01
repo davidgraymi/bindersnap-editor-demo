@@ -9,8 +9,13 @@ Lightweight Bun auth/BFF service for the authenticated app.
 - `POST /auth/logout`
 - `GET /auth/me`
 - `GET /api/app/documents`
+- `GET /api/app/documents/:id`
 
 The browser only receives a Bindersnap session cookie. Gitea access tokens stay server-side in memory for this MVP.
+
+`GET /api/app/documents` resolves the authenticated workspace repository from the session token, reads the live `documents/` directory from Gitea, and returns a normalized catalog payload. Each document includes the current published commit metadata, the latest matching pull request state, and last activity timestamps.
+
+Errors from the catalog routes are normalized as JSON objects with both a machine-readable `error.code` and a human-readable `error.message`, plus a top-level `message` field for the current frontend.
 
 ## Environment
 
