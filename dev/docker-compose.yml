@@ -56,6 +56,17 @@ services:
     environment:
       - GITEA_URL=http://gitea:3000
 
+  pandoc:
+    build:
+      context: ..
+      dockerfile: pandoc-service/Dockerfile
+    container_name: bindersnap-pandoc
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: 3001
+      CORS_ORIGIN: "http://localhost:${APP_PORT:-5173}"
+
   hocuspocus:
     build:
       context: ..
@@ -76,6 +87,8 @@ services:
         condition: service_healthy
       hocuspocus:
         condition: service_started
+      pandoc:
+        condition: service_started
       seed:
         condition: service_completed_successfully
     environment:
@@ -85,6 +98,7 @@ services:
       - VITE_GITEA_URL=http://localhost:3000
       - BUN_PUBLIC_HOCUSPOCUS_URL=ws://localhost:1234
       - VITE_HOCUSPOCUS_URL=ws://localhost:1234
+      - BUN_PUBLIC_PANDOC_SERVICE_URL=http://localhost:3001
       - BUN_PUBLIC_DEV_AUTO_LOGIN=${BINDERSNAP_DEV_AUTO_LOGIN:-true}
       - VITE_DEV_AUTO_LOGIN=${BINDERSNAP_DEV_AUTO_LOGIN:-true}
       - BINDERSNAP_DEV_AUTO_LOGIN=${BINDERSNAP_DEV_AUTO_LOGIN:-true}
