@@ -7,6 +7,8 @@ import {
   validateToken,
 } from '../../src/services/gitea/auth';
 import {
+  commitDocument,
+  fetchDocument,
   fetchDocumentAtSha,
   listDocumentCommits,
 } from '../../src/services/gitea/documents';
@@ -138,6 +140,63 @@ test.describe('Gitea service wrappers against the live dev stack', () => {
 
     expect(doc.type).toBe('doc');
     expect(Array.isArray(doc.content)).toBe(true);
+  });
+
+  test('fetchDocument returns content and file sha from main branch', async () => {
+    const client = createAuthenticatedClient(GITEA_URL);
+    const result = await fetchDocument({
+      client,
+      owner: 'alice',
+      repo: 'quarterly-report',
+      filePath: 'documents/draft.json',
+      branch: 'main',
+    });
+
+    expect(result.content.type).toBe('doc');
+    expect(Array.isArray(result.content.content)).toBe(true);
+    expect(typeof result.sha).toBe('string');
+    expect(result.sha.length).toBeGreaterThan(0);
+  });
+
+  test('fetchDocument then commitDocument round-trips via sha tracking', async () => {
+    const client = createAuthenticatedClient(GITEA_URL);
+
+    // Fetch so we have the current SHA.
+    const initial = await fetchDocument({
+      client,
+      owner: 'alice',
+      repo: 'quarterly-report',
+      filePath: 'documents/draft.json',
+      branch: 'main',
+    });
+
+    // Commit an update using the SHA to avoid 409.
+    const updated = { ...initial.content, content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Integration test update' }] }] };
+    const writeResult = await commitDocument({
+      client,
+      owner: 'alice',
+      repo: 'quarterly-report',
+      filePath: 'documents/draft.json',
+      branch: 'main',
+      message: 'test: fetchDocument round-trip',
+      sha: initial.sha,
+      content: updated,
+    });
+
+    expect(typeof writeResult.sha).toBe('string');
+    expect(writeResult.sha.length).toBeGreaterThan(0);
+
+    // Fetch again to confirm content was updated.
+    const refetched = await fetchDocument({
+      client,
+      owner: 'alice',
+      repo: 'quarterly-report',
+      filePath: 'documents/draft.json',
+      branch: 'main',
+    });
+    expect(refetched.content).toEqual(updated);
+    // SHA should now be different (new commit).
+    expect(refetched.sha).not.toBe(initial.sha);
   });
 
   test('getPullRequestForBranch returns approval state for the seeded review workflow', async () => {
