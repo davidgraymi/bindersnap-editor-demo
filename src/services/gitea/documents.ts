@@ -227,6 +227,47 @@ export async function fetchDocumentAtSha(params: FetchDocumentAtShaParams): Prom
   }
 }
 
+export interface FetchDocumentParams {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+  filePath: string;
+  branch?: string;
+}
+
+export interface FetchDocumentResult {
+  content: ProseMirrorJSON;
+  sha: string;
+}
+
+/**
+ * Fetch a document's current content and its file SHA (needed for subsequent updates).
+ */
+export async function fetchDocument(params: FetchDocumentParams): Promise<FetchDocumentResult> {
+  const { client, owner, repo, filePath, branch } = params;
+
+  try {
+    const response = await client.repos.repoGetContents(owner, repo, filePath, { ref: branch });
+    const file = response.data as { content?: string; sha?: string; type?: string };
+
+    if (file.type !== 'file' || !file.content) {
+      throw new GiteaApiError(0, `Path ${filePath} is not a file.`);
+    }
+
+    const decoded = atob(file.content.replace(/\n/g, ''));
+    const parsed = JSON.parse(decoded) as unknown;
+    return {
+      content: assertProseMirrorDocument(parsed, filePath),
+      sha: file.sha ?? '',
+    };
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      throw new GiteaApiError(0, `Unable to parse document JSON at ${filePath}.`);
+    }
+    throw toGiteaApiError(error);
+  }
+}
+
 export async function listDocumentCommits(params: ListDocumentCommitsParams): Promise<CommitSummary[]> {
   const { client, owner, repo, filePath, page, limit } = params;
 

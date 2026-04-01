@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { createGiteaClient, GiteaApiError } from "../../services/gitea/client";
-import { listDocumentCommits, type CommitSummary } from "../../services/gitea/documents";
+import { commitDocument } from "../../services/gitea/documents";
+import { DocumentEditor } from "./DocumentEditor";
 
 interface AppShellProps {
   baseUrl: string;
@@ -9,17 +10,23 @@ interface AppShellProps {
   onSignOut: () => void;
 }
 
-interface DocumentRow {
-  title: string;
-  path: string;
-  latestCommit: CommitSummary | null;
+interface RepoRow {
+  owner: string;
+  name: string;
+  description: string;
+  updatedAt: string;
+  defaultBranch: string;
 }
 
-const SEEDED_DOCUMENTS: Array<Pick<DocumentRow, "title" | "path">> = [
-  { title: "Draft", path: "documents/draft.json" },
-  { title: "In Review", path: "documents/in-review.json" },
-  { title: "Changes Requested", path: "documents/changes-requested.json" },
-];
+interface DocSelection {
+  owner: string;
+  repo: string;
+  filePath: string;
+  branch: string;
+}
+
+const DEFAULT_DOC_PATH = "document.json";
+const EMPTY_DOC = { type: "doc", content: [{ type: "paragraph" }] };
 
 function formatTimestamp(value: string) {
   if (!value) return "Unknown";
@@ -27,62 +34,111 @@ function formatTimestamp(value: string) {
   return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
 }
 
-function maskToken(value: string) {
-  if (value.length <= 8) {
-    return "********";
-  }
-
-  return `***${value.slice(-8)}`;
-}
-
 export function AppShell({ baseUrl, token, onSignOut }: AppShellProps) {
   const client = useMemo(() => createGiteaClient(baseUrl, token), [baseUrl, token]);
 
-  const [documents, setDocuments] = useState<DocumentRow[]>([]);
+  const [repos, setRepos] = useState<RepoRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [openDoc, setOpenDoc] = useState<DocSelection | null>(null);
 
-  const loadDocuments = useCallback(async () => {
+  const loadRepos = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const nextRows = await Promise.all(
-        SEEDED_DOCUMENTS.map(async (doc) => {
-          const commits = await listDocumentCommits({
-            client,
-            owner: "alice",
-            repo: "quarterly-report",
-            filePath: doc.path,
-            limit: 1,
-          });
+      const response = await client.repos.repoSearch({
+        limit: 50,
+        sort: "updated",
+        order: "desc",
+      });
 
-          return {
-            ...doc,
-            latestCommit: commits[0] ?? null,
-          };
-        }),
+      setRepos(
+        (response.data.data ?? []).map((repo) => ({
+          owner: repo.owner?.login ?? "",
+          name: repo.name ?? "",
+          description: repo.description ?? "",
+          updatedAt: repo.updated ?? "",
+          defaultBranch: repo.default_branch ?? "main",
+        }))
       );
-
-      setDocuments(nextRows);
     } catch (loadError) {
       const message =
         loadError instanceof GiteaApiError
           ? loadError.message
           : loadError instanceof Error
             ? loadError.message
-            : "Unable to load documents from Gitea.";
-
+            : "Unable to load repositories from Gitea.";
       setError(message);
-      setDocuments([]);
+      setRepos([]);
     } finally {
       setLoading(false);
     }
   }, [client]);
 
   useEffect(() => {
-    void loadDocuments();
-  }, [loadDocuments]);
+    void loadRepos();
+  }, [loadRepos]);
+
+  const handleNewDocument = useCallback(async () => {
+    const name = window.prompt("New document name (will create a new Gitea repo):");
+    if (!name?.trim()) return;
+
+    const repoName = name.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-");
+    setCreating(true);
+
+    try {
+      // Create the repo
+      await client.repos.createCurrentUserRepo({
+        name: repoName,
+        description: name.trim(),
+        auto_init: true,
+        default_branch: "main",
+      });
+
+      // Get the current user to know the owner
+      const { data: user } = await client.user.userGetCurrent();
+      const owner = user.login ?? "";
+
+      // Create the initial document file
+      await commitDocument({
+        client,
+        owner,
+        repo: repoName,
+        filePath: DEFAULT_DOC_PATH,
+        branch: "main",
+        content: EMPTY_DOC,
+        message: "Initial document",
+      });
+
+      // Open the new document
+      setOpenDoc({ owner, repo: repoName, filePath: DEFAULT_DOC_PATH, branch: "main" });
+      void loadRepos();
+    } catch (err) {
+      const msg = err instanceof GiteaApiError ? err.message : err instanceof Error ? err.message : "Failed to create document.";
+      window.alert(`Failed to create document: ${msg}`);
+    } finally {
+      setCreating(false);
+    }
+  }, [client, loadRepos]);
+
+  // Show document editor if a doc is selected
+  if (openDoc) {
+    return (
+      <DocumentEditor
+        client={client}
+        owner={openDoc.owner}
+        repo={openDoc.repo}
+        filePath={openDoc.filePath}
+        branch={openDoc.branch}
+        onBack={() => {
+          setOpenDoc(null);
+          void loadRepos();
+        }}
+      />
+    );
+  }
 
   return (
     <div className="app-shell">
@@ -98,8 +154,21 @@ export function AppShell({ baseUrl, token, onSignOut }: AppShellProps) {
         </div>
 
         <div className="app-topbar-actions">
-          <button className="bs-btn bs-btn-secondary" type="button" onClick={() => void loadDocuments()}>
-            {loading ? "Refreshing..." : "Refresh"}
+          <button
+            className="bs-btn bs-btn-secondary"
+            type="button"
+            onClick={() => void loadRepos()}
+            disabled={loading}
+          >
+            {loading ? "Loading…" : "Refresh"}
+          </button>
+          <button
+            className="bs-btn bs-btn-secondary"
+            type="button"
+            onClick={() => void handleNewDocument()}
+            disabled={creating}
+          >
+            {creating ? "Creating…" : "New Document"}
           </button>
           <button className="bs-btn bs-btn-dark" type="button" onClick={onSignOut}>
             Sign out
@@ -108,63 +177,54 @@ export function AppShell({ baseUrl, token, onSignOut }: AppShellProps) {
       </header>
 
       <main className="app-main">
-        <section className="bs-card app-summary">
-          <div className="bs-eyebrow">Seeded Repository</div>
-          <h1>alice/quarterly-report</h1>
-          <p>Documents are loaded from commit history using <code>listDocumentCommits</code>.</p>
-        </section>
-
         {error ? (
           <section className="bs-card app-error">
-            <div className="bs-eyebrow">Failure State</div>
-            <h2>Could not fetch Gitea documents.</h2>
+            <div className="bs-eyebrow">Error</div>
+            <h2>Could not fetch repositories.</h2>
             <p>{error}</p>
-            <dl>
-              <div>
-                <dt>Gitea URL</dt>
-                <dd>{baseUrl}</dd>
-              </div>
-              <div>
-                <dt>Token</dt>
-                <dd>{maskToken(token)}</dd>
-              </div>
-            </dl>
           </section>
         ) : null}
 
         <section className="app-docs">
           <div className="app-section-heading">
             <div className="bs-eyebrow">Documents</div>
-            <h2>Local dev seed documents</h2>
+            <h2>Your workspaces</h2>
           </div>
 
           <div className="app-doc-grid">
-            {loading ? <div className="bs-card app-doc-empty">Loading documents...</div> : null}
-            {!loading && documents.length === 0 ? (
-              <div className="bs-card app-doc-empty">No documents found in the seeded repository.</div>
+            {loading ? <div className="bs-card app-doc-empty">Loading documents…</div> : null}
+            {!loading && repos.length === 0 ? (
+              <div className="bs-card app-doc-empty">No documents yet. Click "New Document" to create one.</div>
             ) : null}
-            {documents.map((doc) => (
-              <article className="bs-card app-doc-card" key={doc.path}>
-                <h3>{doc.title}</h3>
-                <p className="app-doc-path">{doc.path}</p>
+            {repos.map((repo) => (
+              <article className="bs-card app-doc-card" key={`${repo.owner}/${repo.name}`}>
+                <h3>{repo.description || repo.name}</h3>
+                <p className="app-doc-path">{repo.owner}/{repo.name}</p>
                 <dl>
                   <div>
-                    <dt>Latest Commit</dt>
-                    <dd>{doc.latestCommit?.sha ? doc.latestCommit.sha.slice(0, 7) : "None"}</dd>
+                    <dt>Last updated</dt>
+                    <dd>{formatTimestamp(repo.updatedAt)}</dd>
                   </div>
                   <div>
-                    <dt>Message</dt>
-                    <dd>{doc.latestCommit?.message ?? "No commit found"}</dd>
-                  </div>
-                  <div>
-                    <dt>Author</dt>
-                    <dd>{doc.latestCommit?.author ?? "Unknown"}</dd>
-                  </div>
-                  <div>
-                    <dt>Timestamp</dt>
-                    <dd>{formatTimestamp(doc.latestCommit?.timestamp ?? "")}</dd>
+                    <dt>Branch</dt>
+                    <dd>{repo.defaultBranch}</dd>
                   </div>
                 </dl>
+                <button
+                  className="bs-btn bs-btn-primary"
+                  type="button"
+                  style={{ marginTop: "var(--brand-space-3)", width: "100%" }}
+                  onClick={() =>
+                    setOpenDoc({
+                      owner: repo.owner,
+                      repo: repo.name,
+                      filePath: DEFAULT_DOC_PATH,
+                      branch: repo.defaultBranch,
+                    })
+                  }
+                >
+                  Open
+                </button>
               </article>
             ))}
           </div>
