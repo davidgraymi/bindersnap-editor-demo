@@ -71,11 +71,11 @@ const configuredAllowedOrigins = (
   .map((origin) => origin.trim())
   .filter((origin) => origin !== "");
 
-const SEEDED_DOCUMENTS = [
-  { title: "Draft", path: "documents/draft.json" },
-  { title: "In Review", path: "documents/in-review.json" },
-  { title: "Changes Requested", path: "documents/changes-requested.json" },
-] as const;
+const DOCUMENTS_DIRECTORY = "documents";
+const DOCUMENTS_ROUTE_PREFIX = "/api/app/documents";
+const GITEA_REPOS_PAGE_LIMIT = 100;
+const GITEA_PULLS_PAGE_LIMIT = 100;
+const GITEA_COMMENTS_PAGE_LIMIT = 100;
 
 interface SessionRecord {
   id: string;
@@ -91,6 +91,105 @@ interface CommitSummary {
   message: string;
   author: string;
   timestamp: string;
+}
+
+interface GiteaUserSummary {
+  login?: string;
+  full_name?: string;
+}
+
+interface GiteaRepoSummary {
+  id?: number;
+  name?: string;
+  full_name?: string;
+  default_branch?: string;
+  owner?: GiteaUserSummary;
+}
+
+interface GiteaContentSummary {
+  name?: string;
+  path?: string;
+  type?: string;
+}
+
+interface GiteaPullSummary {
+  number?: number;
+  title?: string;
+  state?: string;
+  head?: { ref?: string };
+  updated_at?: string;
+  created_at?: string;
+  merged?: boolean;
+  merged_at?: string;
+  html_url?: string;
+}
+
+interface GiteaPullReviewSummary {
+  state?: string;
+  body?: string;
+  user?: { login?: string };
+  submitted_at?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+interface GiteaPullFileSummary {
+  filename?: string;
+}
+
+interface DocumentVersionMetadata extends CommitSummary {}
+
+export interface DocumentCatalogItem {
+  id: string;
+  title: string;
+  displayName: string;
+  path: string;
+  repository: string;
+  publishedVersion: DocumentVersionMetadata | null;
+  currentPublishedVersion: DocumentVersionMetadata | null;
+  latestPendingVersionStatus: CatalogApprovalState | null;
+  latestPendingPullRequest: CatalogPendingPullRequest | null;
+  latestCommit: CommitSummary | null;
+  lastActivityTimestamp: string;
+  lastActivityAt: string;
+}
+
+export interface CatalogPayload {
+  repository: string;
+  documents: DocumentCatalogItem[];
+}
+
+export interface CatalogPendingPullRequest {
+  number: number;
+  title: string;
+  state: CatalogApprovalState;
+  branch: string;
+  updatedAt: string;
+  htmlUrl: string | null;
+}
+
+export type CatalogApprovalState =
+  | "none"
+  | "working"
+  | "in_review"
+  | "changes_requested"
+  | "approved"
+  | "published";
+
+interface GiteaApiErrorBody {
+  error: {
+    code: string;
+    message: string;
+  };
+  message: string;
+}
+
+interface WorkspaceRepository {
+  id: number;
+  owner: string;
+  name: string;
+  fullName: string;
+  defaultBranch: string;
 }
 
 const sessions = new Map<string, SessionRecord>();
@@ -372,6 +471,731 @@ async function giteaFetch(path: string, init?: RequestInit): Promise<Response> {
   return fetch(new URL(path, giteaUrl), init);
 }
 
+function buildGiteaHeaders(token: string, extra?: HeadersInit): Headers {
+  const headers = new Headers(extra);
+  headers.set("Authorization", buildTokenAuthHeader(token));
+  headers.set("Accept", "application/json");
+  return headers;
+}
+
+class CatalogError extends Error {
+  constructor(
+    public status: number,
+    public code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = "CatalogError";
+  }
+}
+
+function createCatalogError(status: number, code: string, message: string): CatalogError {
+  return new CatalogError(status, code, message);
+}
+
+function normalizeCatalogError(error: unknown): CatalogError {
+  if (error instanceof CatalogError) {
+    return error;
+  }
+
+  if (error instanceof Error) {
+    return createCatalogError(
+      502,
+      "upstream_error",
+      error.message || "Unable to load workspace documents.",
+    );
+  }
+
+  return createCatalogError(502, "upstream_error", "Unable to load workspace documents.");
+}
+
+function catalogErrorResponse(error: unknown, baseHeaders: Headers): Response {
+  const normalized = normalizeCatalogError(error);
+  return json(
+    normalized.status,
+    {
+      error: {
+        code: normalized.code,
+        message: normalized.message,
+      },
+      message: normalized.message,
+    },
+    baseHeaders,
+  );
+}
+
+function upstreamStatusToCatalogError(
+  status: number,
+  fallbackCode: string,
+  fallbackMessage: string,
+): CatalogError {
+  if (status === 401) {
+    return createCatalogError(401, "unauthorized", "Unauthorized.");
+  }
+
+  if (status === 403) {
+    return createCatalogError(403, "forbidden", "Forbidden.");
+  }
+
+  if (status === 404) {
+    return createCatalogError(404, fallbackCode, fallbackMessage);
+  }
+
+  return createCatalogError(502, "upstream_error", fallbackMessage);
+}
+
+async function giteaJson<T>(
+  token: string,
+  path: string,
+  init?: RequestInit,
+  fallbackMessage = "Unable to load workspace documents.",
+): Promise<T> {
+  const response = await giteaFetch(path, {
+    ...init,
+    headers: buildGiteaHeaders(token, init?.headers),
+  });
+
+  if (!response.ok) {
+    throw upstreamStatusToCatalogError(response.status, "upstream_error", fallbackMessage);
+  }
+
+  return (await response.json()) as T;
+}
+
+async function giteaJsonMaybe<T>(
+  token: string,
+  path: string,
+  init?: RequestInit,
+  fallbackMessage = "Unable to load workspace documents.",
+): Promise<T | null> {
+  const response = await giteaFetch(path, {
+    ...init,
+    headers: buildGiteaHeaders(token, init?.headers),
+  });
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    throw upstreamStatusToCatalogError(response.status, "upstream_error", fallbackMessage);
+  }
+
+  if (response.status === 204) {
+    return null;
+  }
+
+  return (await response.json()) as T;
+}
+
+function isGiteaRepoSummary(value: unknown): value is GiteaRepoSummary {
+  return typeof value === "object" && value !== null;
+}
+
+function sanitizeBranchName(name: string): string {
+  return name.trim();
+}
+
+function stableDocumentId(path: string): string {
+  return path;
+}
+
+function humanizeDocumentTitleFromPath(path: string): string {
+  const fileName = path.split("/").pop() ?? path;
+  const withoutExtension = fileName.replace(/\.[^.]+$/, "");
+  return withoutExtension
+    .replace(/[-_]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/(^|[\s-])\w/g, (match) => match.toUpperCase()) || fileName;
+}
+
+function isDocumentJsonLike(value: unknown): value is { type?: unknown; content?: unknown } {
+  return typeof value === "object" && value !== null;
+}
+
+function readDocumentDisplayName(rawContent: string, fallbackPath: string): string {
+  try {
+    const parsed = JSON.parse(rawContent) as unknown;
+    if (!isDocumentJsonLike(parsed)) {
+      return humanizeDocumentTitleFromPath(fallbackPath);
+    }
+
+    const content = parsed.content;
+    if (!Array.isArray(content)) {
+      return humanizeDocumentTitleFromPath(fallbackPath);
+    }
+
+    for (const node of content) {
+      if (typeof node !== "object" || node === null) {
+        continue;
+      }
+
+      const candidate = node as {
+        type?: unknown;
+        content?: unknown;
+        attrs?: { level?: unknown };
+      };
+
+      if (
+        candidate.type === "heading" &&
+        candidate.attrs?.level === 1 &&
+        Array.isArray(candidate.content)
+      ) {
+        const headingText = candidate.content
+          .map((part) => {
+            if (typeof part !== "object" || part === null) {
+              return "";
+            }
+            return typeof (part as { text?: unknown }).text === "string"
+              ? (part as { text: string }).text
+              : "";
+          })
+          .join("")
+          .trim();
+
+        if (headingText) {
+          return headingText;
+        }
+      }
+    }
+  } catch {
+    return humanizeDocumentTitleFromPath(fallbackPath);
+  }
+
+  return humanizeDocumentTitleFromPath(fallbackPath);
+}
+
+function readDocumentTitle(rawContent: string, fallbackPath: string): string {
+  return readDocumentDisplayName(rawContent, fallbackPath);
+}
+
+function parseTimestamp(value: string | undefined): number {
+  if (!value) {
+    return 0;
+  }
+
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function maxTimestamp(...values: Array<string | undefined>): string {
+  let winner = "";
+  let winnerValue = 0;
+
+  for (const value of values) {
+    const parsed = parseTimestamp(value);
+    if (parsed > winnerValue) {
+      winner = value ?? "";
+      winnerValue = parsed;
+    }
+  }
+
+  return winner;
+}
+
+function toCatalogApprovalStateFromReview(review: GiteaPullReviewSummary): CatalogApprovalState | null {
+  const state = review.state?.toUpperCase();
+
+  if (state === "REQUEST_CHANGES" || state === "CHANGES_REQUESTED") {
+    return "changes_requested";
+  }
+
+  if (state === "APPROVED") {
+    return "approved";
+  }
+
+  return null;
+}
+
+function isMergedPullRequest(pullRequest: GiteaPullSummary): boolean {
+  return pullRequest.merged === true || Boolean(pullRequest.merged_at);
+}
+
+function resolvePullRequestState(
+  pullRequest: GiteaPullSummary,
+  reviews: GiteaPullReviewSummary[],
+): CatalogApprovalState {
+  if (isMergedPullRequest(pullRequest)) {
+    return "published";
+  }
+
+  const reviewStates = reviews.map(toCatalogApprovalStateFromReview);
+  if (reviewStates.includes("changes_requested")) {
+    return "changes_requested";
+  }
+
+  if (reviewStates.includes("approved")) {
+    return "approved";
+  }
+
+  return pullRequest.state === "open" ? "in_review" : "working";
+}
+
+function pullRequestRank(pullRequest: GiteaPullSummary): number {
+  const updatedAt = parseTimestamp(pullRequest.updated_at);
+  const createdAt = parseTimestamp(pullRequest.created_at);
+  return Math.max(updatedAt, createdAt, pullRequest.number ?? 0);
+}
+
+function selectLatestPullRequestForPath(
+  pullRequests: Array<{ pullRequest: GiteaPullSummary; reviews: GiteaPullReviewSummary[]; files: string[] }>,
+  filePath: string,
+): { pullRequest: GiteaPullSummary; reviews: GiteaPullReviewSummary[]; state: CatalogApprovalState } | null {
+  const candidates = pullRequests.filter(({ files }) => files.includes(filePath));
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  candidates.sort((left, right) => pullRequestRank(right.pullRequest) - pullRequestRank(left.pullRequest));
+  const latest = candidates[0];
+  if (!latest) {
+    return null;
+  }
+
+  return {
+    pullRequest: latest.pullRequest,
+    reviews: latest.reviews,
+    state: resolvePullRequestState(latest.pullRequest, latest.reviews),
+  };
+}
+
+function extractPullRequestActivityTimestamp(
+  pullRequest: GiteaPullSummary,
+  reviews: GiteaPullReviewSummary[],
+): string {
+  const reviewTimes = reviews.map((review) => review.submitted_at ?? review.updated_at ?? review.created_at);
+  return maxTimestamp(pullRequest.updated_at, pullRequest.created_at, ...reviewTimes);
+}
+
+async function readGiteaContentList(
+  token: string,
+  owner: string,
+  repo: string,
+  path: string,
+  ref: string,
+): Promise<GiteaContentSummary[] | null> {
+  const response = await giteaFetch(
+    `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${path}?ref=${encodeURIComponent(ref)}`,
+    {
+      method: "GET",
+      headers: buildGiteaHeaders(token),
+    },
+  );
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    throw upstreamStatusToCatalogError(
+      response.status,
+      "workspace_unavailable",
+      "Unable to load workspace documents.",
+    );
+  }
+
+  const payload = (await response.json()) as unknown;
+  if (Array.isArray(payload)) {
+    return payload as GiteaContentSummary[];
+  }
+
+  if (isGiteaRepoSummary(payload)) {
+    return [payload as GiteaContentSummary];
+  }
+
+  return [];
+}
+
+async function readDocumentFile(
+  token: string,
+  owner: string,
+  repo: string,
+  path: string,
+  ref: string,
+): Promise<string> {
+  const response = await giteaFetch(
+    `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${path}?ref=${encodeURIComponent(ref)}`,
+    {
+      method: "GET",
+      headers: buildGiteaHeaders(token),
+    },
+  );
+
+  if (!response.ok) {
+    throw upstreamStatusToCatalogError(response.status, "document_not_found", "Document not found.");
+  }
+
+  const payload = (await response.json()) as { content?: string; encoding?: string } | string;
+  if (typeof payload === "string") {
+    return payload;
+  }
+
+  const encoded = typeof payload.content === "string" ? payload.content : "";
+  return Buffer.from(encoded.replace(/\s/g, ""), "base64").toString("utf8");
+}
+
+async function listAccessibleRepositories(token: string): Promise<WorkspaceRepository[]> {
+  const repositories: WorkspaceRepository[] = [];
+
+  for (let page = 1; page < 100; page += 1) {
+    const payload = await giteaJson<GiteaRepoSummary[]>(
+      token,
+      `/api/v1/user/repos?limit=${GITEA_REPOS_PAGE_LIMIT}&page=${page}`,
+      undefined,
+      "Unable to load workspace repositories.",
+    );
+
+    if (!Array.isArray(payload) || payload.length === 0) {
+      break;
+    }
+
+    for (const candidate of payload) {
+      const owner = candidate.owner?.login?.trim();
+      const name = candidate.name?.trim();
+      const fullName = candidate.full_name?.trim();
+      const defaultBranch = sanitizeBranchName(candidate.default_branch ?? "main") || "main";
+      if (!owner || !name || !fullName) {
+        continue;
+      }
+
+      repositories.push({
+        id: typeof candidate.id === "number" ? candidate.id : repositories.length + 1,
+        owner,
+        name,
+        fullName,
+        defaultBranch,
+      });
+    }
+
+    if (payload.length < GITEA_REPOS_PAGE_LIMIT) {
+      break;
+    }
+  }
+
+  return repositories;
+}
+
+async function listRepoPullRequests(
+  token: string,
+  owner: string,
+  repo: string,
+): Promise<GiteaPullSummary[]> {
+  const pulls: GiteaPullSummary[] = [];
+
+  for (let page = 1; page < 100; page += 1) {
+    const payload = await giteaJson<GiteaPullSummary[]>(
+      token,
+      `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls?state=open&limit=${GITEA_PULLS_PAGE_LIMIT}&page=${page}`,
+      undefined,
+      "Unable to load workspace pull requests.",
+    );
+
+    if (!Array.isArray(payload) || payload.length === 0) {
+      break;
+    }
+
+    pulls.push(...payload);
+    if (payload.length < GITEA_PULLS_PAGE_LIMIT) {
+      break;
+    }
+  }
+
+  return pulls;
+}
+
+async function listPullRequestFiles(
+  token: string,
+  owner: string,
+  repo: string,
+  pullNumber: number,
+): Promise<string[]> {
+  const filenames: string[] = [];
+
+  for (let page = 1; page < 100; page += 1) {
+    const payload = await giteaJson<GiteaPullFileSummary[]>(
+      token,
+      `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${pullNumber}/files?limit=${GITEA_PULLS_PAGE_LIMIT}&page=${page}`,
+      undefined,
+      "Unable to load pull request files.",
+    );
+
+    if (!Array.isArray(payload) || payload.length === 0) {
+      break;
+    }
+
+    for (const file of payload) {
+      if (typeof file.filename === "string" && file.filename.trim() !== "") {
+        filenames.push(file.filename.trim());
+      }
+    }
+
+    if (payload.length < GITEA_PULLS_PAGE_LIMIT) {
+      break;
+    }
+  }
+
+  return filenames;
+}
+
+async function listPullRequestReviews(
+  token: string,
+  owner: string,
+  repo: string,
+  pullNumber: number,
+): Promise<GiteaPullReviewSummary[]> {
+  const reviews: GiteaPullReviewSummary[] = [];
+
+  for (let page = 1; page < 100; page += 1) {
+    const payload = await giteaJson<GiteaPullReviewSummary[]>(
+      token,
+      `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${pullNumber}/reviews?limit=${GITEA_COMMENTS_PAGE_LIMIT}&page=${page}`,
+      undefined,
+      "Unable to load pull request reviews.",
+    );
+
+    if (!Array.isArray(payload) || payload.length === 0) {
+      break;
+    }
+
+    reviews.push(...payload);
+    if (payload.length < GITEA_COMMENTS_PAGE_LIMIT) {
+      break;
+    }
+  }
+
+  return reviews;
+}
+
+async function listDocumentFiles(
+  token: string,
+  owner: string,
+  repo: string,
+  ref: string,
+  currentPath = DOCUMENTS_DIRECTORY,
+): Promise<string[]> {
+  const entries = await readGiteaContentList(token, owner, repo, currentPath, ref);
+  if (entries === null) {
+    return [];
+  }
+
+  const files: string[] = [];
+  for (const entry of entries) {
+    const entryPath = entry.path?.trim();
+    const entryType = entry.type?.trim();
+    if (!entryPath) {
+      continue;
+    }
+
+    if (entryType === "dir") {
+      const nested = await listDocumentFiles(token, owner, repo, ref, entryPath);
+      files.push(...nested);
+      continue;
+    }
+
+    if (entryType === "file" || !entryType) {
+      files.push(entryPath);
+    }
+  }
+
+  return files;
+}
+
+async function readCommitSummary(
+  token: string,
+  owner: string,
+  repo: string,
+  filePath: string,
+  ref: string,
+): Promise<CommitSummary | null> {
+  const payload = await giteaJson<GiteaPullSummary[]>(
+    token,
+    `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits?path=${encodeURIComponent(filePath)}&sha=${encodeURIComponent(ref)}&limit=1`,
+    undefined,
+    "Unable to load document history.",
+  ).catch((error) => {
+    if (error instanceof CatalogError && error.status === 404) {
+      return [] as GiteaPullSummary[];
+    }
+    throw error;
+  });
+
+  if (!Array.isArray(payload) || payload.length === 0) {
+    return null;
+  }
+
+  const commit = payload[0] as unknown as {
+    sha?: string;
+    commit?: { message?: string; author?: { name?: string; date?: string } };
+    author?: { full_name?: string; login?: string };
+    created?: string;
+  };
+
+  return {
+    sha: commit.sha ?? "",
+    message: commit.commit?.message ?? "",
+    author: commit.commit?.author?.name ?? commit.author?.full_name ?? commit.author?.login ?? "Unknown",
+    timestamp: commit.commit?.author?.date ?? commit.created ?? "",
+  };
+}
+
+async function selectWorkspaceRepository(session: SessionRecord): Promise<WorkspaceRepository> {
+  const repositories = await listAccessibleRepositories(session.giteaToken);
+  if (repositories.length === 0) {
+    throw createCatalogError(404, "workspace_not_found", "No accessible repositories were found for this session.");
+  }
+
+  const owned = repositories.filter((repository) => repository.owner === session.username);
+  const ordered = [...owned, ...repositories.filter((repository) => repository.owner !== session.username)];
+
+  for (const repository of ordered) {
+    const documents = await readGiteaContentList(
+      session.giteaToken,
+      repository.owner,
+      repository.name,
+      DOCUMENTS_DIRECTORY,
+      repository.defaultBranch,
+    );
+
+    if (documents !== null) {
+      return repository;
+    }
+  }
+
+  return ordered[0] ?? repositories[0];
+}
+
+export async function loadDocumentCatalog(session: SessionRecord): Promise<CatalogPayload> {
+  const repository = await selectWorkspaceRepository(session);
+  const documentPaths = await listDocumentFiles(
+    session.giteaToken,
+    repository.owner,
+    repository.name,
+    repository.defaultBranch,
+  );
+
+  if (documentPaths.length === 0) {
+    return {
+      repository: repository.fullName,
+      documents: [],
+    };
+  }
+
+  const pullRequests = await listRepoPullRequests(session.giteaToken, repository.owner, repository.name);
+  const pullRequestDetails = await Promise.all(
+    pullRequests.map(async (pullRequest) => {
+      const number = pullRequest.number;
+      if (!number) {
+        return null;
+      }
+
+      const [reviews, files] = await Promise.all([
+        listPullRequestReviews(session.giteaToken, repository.owner, repository.name, number),
+        listPullRequestFiles(session.giteaToken, repository.owner, repository.name, number),
+      ]);
+
+      return {
+        pullRequest,
+        reviews,
+        files,
+      };
+    }),
+  );
+
+  const normalizedPullRequests = pullRequestDetails.filter(
+    (item): item is { pullRequest: GiteaPullSummary; reviews: GiteaPullReviewSummary[]; files: string[] } =>
+      item !== null,
+  );
+
+  const documents = await Promise.all(
+    documentPaths.map(async (filePath) => {
+      const [commit, rawContent] = await Promise.all([
+        readCommitSummary(
+          session.giteaToken,
+          repository.owner,
+          repository.name,
+          filePath,
+          repository.defaultBranch,
+        ),
+        readDocumentFile(
+          session.giteaToken,
+          repository.owner,
+          repository.name,
+          filePath,
+          repository.defaultBranch,
+        ),
+      ]);
+
+      const matchedPullRequest = selectLatestPullRequestForPath(normalizedPullRequests, filePath);
+      const latestPendingPullRequest = matchedPullRequest
+        ? {
+            number: matchedPullRequest.pullRequest.number ?? 0,
+            title: matchedPullRequest.pullRequest.title ?? "",
+            state: matchedPullRequest.state,
+            branch: matchedPullRequest.pullRequest.head?.ref ?? "",
+            updatedAt: extractPullRequestActivityTimestamp(
+              matchedPullRequest.pullRequest,
+              matchedPullRequest.reviews,
+            ),
+            htmlUrl: matchedPullRequest.pullRequest.html_url ?? null,
+          }
+        : null;
+
+      const publishedVersion = commit
+        ? {
+            ...commit,
+          }
+        : null;
+
+      const latestPendingVersionStatus = latestPendingPullRequest?.state ?? null;
+      const lastActivityTimestamp = maxTimestamp(
+        commit?.timestamp,
+        latestPendingPullRequest?.updatedAt,
+      );
+      const displayName = readDocumentTitle(rawContent, filePath);
+
+      return {
+        id: stableDocumentId(filePath),
+        title: displayName,
+        displayName,
+        path: filePath,
+        repository: repository.fullName,
+        publishedVersion,
+        currentPublishedVersion: publishedVersion,
+        latestPendingVersionStatus,
+        latestPendingPullRequest,
+        latestCommit: commit,
+        lastActivityTimestamp,
+        lastActivityAt: lastActivityTimestamp,
+      } satisfies DocumentCatalogItem;
+    }),
+  );
+
+  documents.sort((left, right) => {
+    const rightValue = parseTimestamp(right.lastActivityTimestamp || right.lastActivityAt);
+    const leftValue = parseTimestamp(left.lastActivityTimestamp || left.lastActivityAt);
+    return rightValue - leftValue;
+  });
+
+  return {
+    repository: repository.fullName,
+    documents,
+  };
+}
+
+export async function loadDocumentCatalogItem(session: SessionRecord, documentId: string): Promise<{ repository: string; document: DocumentCatalogItem }> {
+  const catalog = await loadDocumentCatalog(session);
+  const document = catalog.documents.find((item) => item.id === documentId);
+  if (!document) {
+    throw createCatalogError(404, "document_not_found", "Document not found.");
+  }
+
+  return {
+    repository: catalog.repository,
+    document,
+  };
+}
+
 async function verifyUserCredentials(username: string, password: string): Promise<string | null> {
   const response = await giteaFetch("/api/v1/user", {
     method: "GET",
@@ -538,40 +1362,6 @@ async function createLoginSession(username: string, password: string, req: Reque
   );
 }
 
-async function listLatestCommit(token: string, filePath: string): Promise<CommitSummary | null> {
-  const response = await giteaFetch(
-    `/api/v1/repos/alice/quarterly-report/commits?path=${encodeURIComponent(filePath)}&limit=1`,
-    {
-      method: "GET",
-      headers: {
-        Authorization: buildTokenAuthHeader(token),
-        Accept: "application/json",
-      },
-    },
-  );
-
-  if (!response.ok) {
-    return null;
-  }
-
-  const commits = (await response.json()) as Array<{
-    sha?: string;
-    commit?: { message?: string; author?: { name?: string; date?: string } };
-    author?: { full_name?: string; login?: string };
-    created?: string;
-  }>;
-
-  const commit = commits[0];
-  if (!commit) return null;
-
-  return {
-    sha: commit.sha ?? "",
-    message: commit.commit?.message ?? "",
-    author: commit.commit?.author?.name ?? commit.author?.full_name ?? commit.author?.login ?? "Unknown",
-    timestamp: commit.commit?.author?.date ?? commit.created ?? "",
-  };
-}
-
 async function handleSignup(req: Request, baseHeaders: Headers): Promise<Response> {
   const rateLimit = consumeAuthRateLimit(req, "signup");
   if (rateLimit.limited) {
@@ -669,24 +1459,33 @@ async function handleAuthMe(req: Request, baseHeaders: Headers): Promise<Respons
 async function handleDocuments(req: Request, baseHeaders: Headers): Promise<Response> {
   const session = getSessionFromRequest(req);
   if (!session) {
-    return json(401, { error: "Unauthorized." }, baseHeaders);
+    return catalogErrorResponse(createCatalogError(401, "unauthorized", "Unauthorized."), baseHeaders);
   }
 
-  const documents = await Promise.all(
-    SEEDED_DOCUMENTS.map(async (document) => ({
-      ...document,
-      latestCommit: await listLatestCommit(session.giteaToken, document.path),
-    })),
-  );
+  try {
+    const payload = await loadDocumentCatalog(session);
+    return json(200, payload, baseHeaders);
+  } catch (error) {
+    return catalogErrorResponse(error, baseHeaders);
+  }
+}
 
-  return json(
-    200,
-    {
-      repository: "alice/quarterly-report",
-      documents,
-    },
-    baseHeaders,
-  );
+async function handleDocumentDetail(
+  req: Request,
+  baseHeaders: Headers,
+  documentId: string,
+): Promise<Response> {
+  const session = getSessionFromRequest(req);
+  if (!session) {
+    return catalogErrorResponse(createCatalogError(401, "unauthorized", "Unauthorized."), baseHeaders);
+  }
+
+  try {
+    const payload = await loadDocumentCatalogItem(session, documentId);
+    return json(200, payload, baseHeaders);
+  } catch (error) {
+    return catalogErrorResponse(error, baseHeaders);
+  }
 }
 
 async function cleanupExpiredSessions(): Promise<void> {
@@ -715,51 +1514,69 @@ setInterval(() => {
   void cleanupExpiredSessions();
 }, 60_000);
 
-const server = Bun.serve({
-  port: apiPort,
-  idleTimeout: 30,
-  async fetch(req) {
-    const { pathname } = new URL(req.url);
-    const baseHeaders = corsHeaders(req);
-    const transportError = enforceTransportSecurity(req, baseHeaders);
-    if (transportError) {
-      return transportError;
+export async function handleApiRequest(req: Request): Promise<Response> {
+  const { pathname } = new URL(req.url);
+  const baseHeaders = corsHeaders(req);
+  const transportError = enforceTransportSecurity(req, baseHeaders);
+  if (transportError) {
+    return transportError;
+  }
+
+  const originError = enforceStateChangingOrigin(req, baseHeaders);
+  if (originError) {
+    return originError;
+  }
+
+  if (req.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: baseHeaders,
+    });
+  }
+
+  if (pathname === "/auth/signup" && req.method === "POST") {
+    return handleSignup(req, baseHeaders);
+  }
+
+  if (pathname === "/auth/login" && req.method === "POST") {
+    return handleLogin(req, baseHeaders);
+  }
+
+  if (pathname === "/auth/logout" && req.method === "POST") {
+    return handleLogout(req, baseHeaders);
+  }
+
+  if (pathname === "/auth/me" && req.method === "GET") {
+    return handleAuthMe(req, baseHeaders);
+  }
+
+  if (pathname === DOCUMENTS_ROUTE_PREFIX && req.method === "GET") {
+    return handleDocuments(req, baseHeaders);
+  }
+
+  if (pathname.startsWith(`${DOCUMENTS_ROUTE_PREFIX}/`) && req.method === "GET") {
+    try {
+      const documentId = decodeURIComponent(pathname.slice(`${DOCUMENTS_ROUTE_PREFIX}/`.length));
+      if (documentId) {
+        return handleDocumentDetail(req, baseHeaders, documentId);
+      }
+    } catch {
+      return catalogErrorResponse(
+        createCatalogError(400, "invalid_document_id", "Invalid document identifier."),
+        baseHeaders,
+      );
     }
+  }
 
-    const originError = enforceStateChangingOrigin(req, baseHeaders);
-    if (originError) {
-      return originError;
-    }
+  return json(404, { error: "Not found." }, baseHeaders);
+}
 
-    if (req.method === "OPTIONS") {
-      return new Response(null, {
-        status: 204,
-        headers: baseHeaders,
-      });
-    }
+if (import.meta.main) {
+  const server = Bun.serve({
+    port: apiPort,
+    idleTimeout: 30,
+    fetch: handleApiRequest,
+  });
 
-    if (pathname === "/auth/signup" && req.method === "POST") {
-      return handleSignup(req, baseHeaders);
-    }
-
-    if (pathname === "/auth/login" && req.method === "POST") {
-      return handleLogin(req, baseHeaders);
-    }
-
-    if (pathname === "/auth/logout" && req.method === "POST") {
-      return handleLogout(req, baseHeaders);
-    }
-
-    if (pathname === "/auth/me" && req.method === "GET") {
-      return handleAuthMe(req, baseHeaders);
-    }
-
-    if (pathname === "/api/app/documents" && req.method === "GET") {
-      return handleDocuments(req, baseHeaders);
-    }
-
-    return json(404, { error: "Not found." }, baseHeaders);
-  },
-});
-
-console.log(`Bindersnap API listening on http://localhost:${server.port}`);
+  console.log(`Bindersnap API listening on http://localhost:${server.port}`);
+}
