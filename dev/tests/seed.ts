@@ -34,6 +34,12 @@ type SeedResult = {
   token?: string;
   tokenName?: string;
   prNumber: number;
+  oauthClientId?: string;
+};
+
+type GiteaOAuthApp = {
+  client_id: string;
+  name: string;
 };
 
 type GiteaUser = {
@@ -473,6 +479,45 @@ async function ensureRequestedChangesReview(
   log(`Submitted requested-changes review for #${pullNumber}`);
 }
 
+async function ensureOAuthApp(
+  baseUrl: string,
+  adminAuth: BasicAuth,
+  appName: string,
+  redirectUri: string,
+  log: (message: string) => void
+): Promise<string> {
+  // List existing OAuth2 apps to avoid duplicates
+  const existing = await giteaJson<GiteaOAuthApp[]>(
+    baseUrl,
+    '/api/v1/user/applications/oauth2',
+    { auth: adminAuth, expectedStatuses: [200] }
+  );
+
+  const found = existing.find((app) => app.name === appName);
+  if (found) {
+    log(`OAuth2 app already exists: ${appName} (client_id: ${found.client_id})`);
+    return found.client_id;
+  }
+
+  const created = await giteaJson<GiteaOAuthApp>(
+    baseUrl,
+    '/api/v1/user/applications/oauth2',
+    {
+      method: 'POST',
+      auth: adminAuth,
+      body: JSON.stringify({
+        name: appName,
+        redirect_uris: [redirectUri],
+        confidential_client: false,
+      }),
+      expectedStatuses: [201],
+    }
+  );
+
+  log(`Created OAuth2 app: ${appName} (client_id: ${created.client_id})`);
+  return created.client_id;
+}
+
 async function createAccessToken(
   baseUrl: string,
   adminAuth: BasicAuth,
@@ -606,13 +651,17 @@ export async function seedDevStack(options: SeedOptions = {}): Promise<SeedResul
   const prNumber = await ensurePullRequest(baseUrl, adminAuth, adminUser, repoName, FEATURE_BRANCH, PR_TITLE, log);
   await ensureRequestedChangesReview(baseUrl, adminAuth, bobAuth, adminUser, repoName, prNumber, bobUser, log);
 
+  const oauthRedirectUri = process.env.GITEA_OAUTH_REDIRECT_URI ?? 'http://localhost:5173/auth/callback';
+  const oauthClientId = await ensureOAuthApp(baseUrl, adminAuth, 'bindersnap-dev', oauthRedirectUri, log);
+
   if (!createToken) {
-    return { prNumber };
+    return { prNumber, oauthClientId };
   }
 
   const tokenInfo = await createAccessToken(baseUrl, adminAuth, tokenNamePrefix, log);
   return {
     prNumber,
+    oauthClientId,
     token: tokenInfo.token,
     tokenName: tokenInfo.tokenName,
   };
@@ -620,15 +669,20 @@ export async function seedDevStack(options: SeedOptions = {}): Promise<SeedResul
 
 async function runCli(): Promise<void> {
   const result = await seedDevStack();
+  console.log('');
+  console.log('==================================================');
+  if (result.oauthClientId) {
+    console.log(`OAUTH_CLIENT_ID=${result.oauthClientId}`);
+    console.log('Add to dev/.env:');
+    console.log(`  BUN_PUBLIC_GITEA_OAUTH_CLIENT_ID=${result.oauthClientId}`);
+  }
   if (result.token) {
     const tokenSuffix = result.token.slice(-8);
-    console.log('');
-    console.log('==================================================');
     console.log(`TOKEN_NAME=${result.tokenName}`);
     console.log(`ALICE_TOKEN_SUFFIX=...${tokenSuffix}`);
     console.log('Token created. Set VITE_GITEA_TOKEN manually in your shell if needed.');
-    console.log('==================================================');
   }
+  console.log('==================================================');
   console.log('Seed complete.');
 }
 
