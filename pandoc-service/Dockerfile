@@ -1,15 +1,14 @@
-# Stage 1: pull the pandoc binary
-FROM pandoc/core:latest AS pandoc
+# Alpine-based Bun runtime with pandoc from Alpine packages.
+# pandoc/core ships musl binaries which can't load in glibc images,
+# so we install pandoc directly from Alpine apk to match the libc.
+FROM oven/bun:1-alpine
 
-# Stage 2: Bun runtime + pandoc binary
-FROM oven/bun:1
-
-# Copy pandoc binary from the pandoc image
-COPY --from=pandoc /usr/bin/pandoc /usr/bin/pandoc
+# hadolint ignore=DL3018
+RUN apk add --no-cache pandoc
 
 WORKDIR /app
-COPY package.json ./
-COPY server.ts transform.ts ./
+COPY pandoc-service/package.json ./
+COPY pandoc-service/server.ts pandoc-service/transform.ts ./
 
 EXPOSE 3001
 ENV PORT=3001
