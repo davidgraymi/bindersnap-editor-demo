@@ -1,7 +1,7 @@
 import { type FormEvent, useState } from "react";
 
-import { GiteaApiError } from "../../services/gitea/client";
-import { storeToken, validateToken } from "../../services/gitea/auth";
+import { GiteaApiError } from "../../../packages/gitea-client/client";
+import { storeToken, validateToken } from "../../../packages/gitea-client/auth";
 
 interface TokenGateProps {
   baseUrl: string;

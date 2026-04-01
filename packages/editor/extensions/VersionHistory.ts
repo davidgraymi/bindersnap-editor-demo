@@ -1,5 +1,5 @@
 import { Extension, Mark, mergeAttributes } from "@tiptap/core";
-import { sanitizeHtml } from "../../services/sanitizer";
+import { sanitizeHtml } from "../../utils/sanitizer";
 
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {

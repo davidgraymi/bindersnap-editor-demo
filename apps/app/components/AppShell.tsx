@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { createGiteaClient, GiteaApiError } from "../../services/gitea/client";
-import { listDocumentCommits, type CommitSummary } from "../../services/gitea/documents";
+import { createGiteaClient, GiteaApiError } from "../../../packages/gitea-client/client";
+import { listDocumentCommits, type CommitSummary } from "../../../packages/gitea-client/documents";
 
 interface AppShellProps {
   baseUrl: string;

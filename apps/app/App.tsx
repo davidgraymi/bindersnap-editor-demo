@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { AppShell } from "./components/AppShell";
 import { TokenGate } from "./components/TokenGate";
 import { buildAuthUrl, generateCodeChallenge, generateCodeVerifier, VERIFIER_STORAGE_KEY } from "./auth/pkce";
-import { clearToken, getStoredToken, storeToken, validateToken } from "../services/gitea/auth";
+import { clearToken, getStoredToken, storeToken, validateToken } from "../../packages/gitea-client/auth";
 
 const appEnv = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
 const GITEA_URL = appEnv?.BUN_PUBLIC_GITEA_URL ?? appEnv?.VITE_GITEA_URL ?? "http://localhost:3000";

@@ -4,7 +4,7 @@ WORKDIR /app
 
 RUN npm install --no-package-lock --no-save @hocuspocus/server tsx yjs ws
 
-COPY dev/hocuspocus/server.ts /app/server.ts
+COPY services/hocuspocus/server.ts /app/server.ts
 
 EXPOSE 1234
 

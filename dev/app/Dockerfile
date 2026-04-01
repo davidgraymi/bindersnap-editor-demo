@@ -12,4 +12,4 @@ RUN bun install --frozen-lockfile
 
 EXPOSE ${APP_PORT}
 
-CMD ["bun", "--hot", "src/index.ts"]
+CMD ["bun", "--hot", "server.ts"]

@@ -1,6 +1,6 @@
 import { serve } from "bun";
-import index from "./index.html";
-import appIndex from "./app/index.html";
+import index from "./apps/landing/index.html";
+import appIndex from "./apps/app/index.html";
 
 function parseBoolean(value: string | undefined): boolean {
   return value === "1" || value?.toLowerCase() === "true";

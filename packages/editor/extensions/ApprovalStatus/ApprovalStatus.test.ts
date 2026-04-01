@@ -6,7 +6,7 @@ import { JSDOM } from "jsdom";
 
 import { ApprovalStatusBanner } from "./ApprovalStatusBanner";
 import type { ApprovalStatusBannerProps } from "./ApprovalStatusBanner";
-import type { ApprovalState } from "../../../services/gitea/pullRequests";
+import type { ApprovalState } from "../../../gitea-client/pullRequests";
 
 const { window } = new JSDOM("<!doctype html><html><body></body></html>");
 

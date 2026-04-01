@@ -4,12 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "bun run clean && bun build ./src/index.html --outdir=dist --target=browser --minify --splitting --define:process.env.NODE_ENV='\"production\"' --env='BUN_PUBLIC_*'",
+    "build": "bun run clean && bun build ./apps/landing/index.html --outdir=dist --target=browser --minify --splitting --define:process.env.NODE_ENV='\"production\"' --env='BUN_PUBLIC_*'",
     "clean": "rm -rf dist",
-    "dev": "bun --hot src/index.ts",
+    "dev": "bun --hot server.ts",
     "down": "docker compose -f dev/docker-compose.yml down -v",
     "lighthouse": "bun run build && sh -c 'python3 -m http.server 4173 --directory dist >/dev/null 2>&1 & SERVER_PID=$!; sleep 1; bunx lighthouse http://localhost:4173 --output=json --output-path=./lighthouse.json --quiet --chrome-flags=\"--headless --no-sandbox --disable-gpu\" --no-enable-error-reporting; kill $SERVER_PID' && bun run summarize",
-    "start": "NODE_ENV=production bun src/index.ts",
+    "start": "NODE_ENV=production bun server.ts",
     "summarize": "bun scripts/summarize-lighthouse.ts",
     "test:integration": "bash scripts/test-integration.sh",
     "up": "docker compose -f dev/docker-compose.yml up --build"
