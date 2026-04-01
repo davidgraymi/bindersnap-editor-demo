@@ -1,8 +1,14 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
+import { createHash } from "crypto";
 
 import { handleApiRequest, loadDocumentCatalog, uploadDocumentVersion } from "./server.ts";
 
 const originalFetch = globalThis.fetch;
+const UPLOAD_BRANCH_NAME = `bindersnap/upload/main/documents-draft-json-${createHash("sha1")
+  .update("documents/draft.json")
+  .digest("hex")
+  .slice(0, 12)}`;
+const ENCODED_UPLOAD_BRANCH_NAME = encodeURIComponent(UPLOAD_BRANCH_NAME);
 
 type MockResponseBody = Record<string, unknown> | Array<unknown> | string;
 
@@ -280,7 +286,7 @@ function createMockFetchForUploadLifecycle() {
         });
       }
 
-      if (ref === "bindersnap/upload/main/documents-draft-json" && state.branchExists) {
+      if (ref === UPLOAD_BRANCH_NAME && state.branchExists) {
         return jsonResponse({
           sha: state.branchFileSha,
           content: Buffer.from(state.branchContent, "utf8").toString("base64"),
@@ -304,7 +310,7 @@ function createMockFetchForUploadLifecycle() {
         ]);
       }
 
-      if (path === "documents/draft.json" && sha === "bindersnap/upload/main/documents-draft-json" && state.branchExists) {
+      if (path === "documents/draft.json" && sha === UPLOAD_BRANCH_NAME && state.branchExists) {
         return jsonResponse([
           {
             sha: state.branchCommitSha,
@@ -318,10 +324,10 @@ function createMockFetchForUploadLifecycle() {
     }
 
     if (
-      url.pathname === "/api/v1/repos/alice/quarterly-report/branches/bindersnap%2Fupload%2Fmain%2Fdocuments-draft-json" &&
+      url.pathname === `/api/v1/repos/alice/quarterly-report/branches/${ENCODED_UPLOAD_BRANCH_NAME}` &&
       method === "GET"
     ) {
-      return state.branchExists ? jsonResponse({ name: "bindersnap/upload/main/documents-draft-json" }) : new Response("", { status: 404 });
+      return state.branchExists ? jsonResponse({ name: UPLOAD_BRANCH_NAME }) : new Response("", { status: 404 });
     }
 
     if (url.pathname === "/api/v1/repos/alice/quarterly-report/branches" && method === "POST") {
@@ -360,7 +366,7 @@ function createMockFetchForUploadLifecycle() {
       url.searchParams.get("state") === "open"
     ) {
       const head = url.searchParams.get("head");
-      if (head === "alice:bindersnap/upload/main/documents-draft-json" && state.pullRequest) {
+      if (head === `alice:${UPLOAD_BRANCH_NAME}` && state.pullRequest) {
         return jsonResponse([
           {
             number: state.pullRequest.number,
@@ -384,7 +390,7 @@ function createMockFetchForUploadLifecycle() {
         number: 12,
         title: "Upload review: Q2 Compliance Report (updated-draft.json)",
         body: "Upload review for Q2 Compliance Report",
-        head: { ref: "bindersnap/upload/main/documents-draft-json" },
+        head: { ref: UPLOAD_BRANCH_NAME },
         state: "open",
         updated_at: "2026-04-01T15:00:00Z",
         created_at: "2026-04-01T15:00:00Z",
@@ -398,7 +404,7 @@ function createMockFetchForUploadLifecycle() {
       state.pullRequest = {
         ...(state.pullRequest ?? {
           number: 12,
-          head: { ref: "bindersnap/upload/main/documents-draft-json" },
+          head: { ref: UPLOAD_BRANCH_NAME },
           state: "open",
           updated_at: "2026-04-01T15:00:00Z",
           created_at: "2026-04-01T15:00:00Z",
@@ -562,7 +568,7 @@ test("uploadDocumentVersion creates a deterministic branch and reuses it for dup
   );
 
   expect(firstResult.documentId).toBe("documents/draft.json");
-  expect(firstResult.branchName).toBe("bindersnap/upload/main/documents-draft-json");
+  expect(firstResult.branchName).toBe(UPLOAD_BRANCH_NAME);
   expect(firstResult.commitSha).toBe("branch-commit-sha-1");
   expect(firstResult.pullRequestNumber).toBe(12);
   expect(firstResult.pullRequestUrl).toBe("https://gitea.example/alice/quarterly-report/pulls/12");

@@ -1,4 +1,4 @@
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
   if (value === undefined) {
@@ -1280,7 +1280,12 @@ function isAllowedUploadFile(file: File): boolean {
 function buildUploadBranchName(baseBranch: string, documentId: string): string {
   const safeBaseBranch = sanitizeBranchSegment(baseBranch) || "main";
   const safeDocumentId = sanitizeBranchSegment(documentId) || "document";
-  return `${UPLOAD_BRANCH_PREFIX}/${safeBaseBranch}/${safeDocumentId}`;
+  const stableIdSuffix = createHash("sha1")
+    .update(documentId)
+    .digest("hex")
+    .slice(0, 12);
+  const shortDocumentSegment = safeDocumentId.slice(0, 48);
+  return `${UPLOAD_BRANCH_PREFIX}/${safeBaseBranch}/${shortDocumentSegment}-${stableIdSuffix}`;
 }
 
 function buildUploadCommitMessage(params: {
@@ -1726,11 +1731,19 @@ export async function uploadDocumentVersion(
     document.path,
     uploadBranchName,
   );
+  const resolvedCommitSha = latestCommit?.sha || commitSha;
+  if (!resolvedCommitSha) {
+    throw createCatalogError(
+      502,
+      "upload_commit_unavailable",
+      "Unable to resolve the uploaded version commit SHA.",
+    );
+  }
 
   return {
     documentId: document.id,
     branchName: uploadBranchName,
-    commitSha: latestCommit?.sha || commitSha || existingBranchFile?.sha || "",
+    commitSha: resolvedCommitSha,
     pullRequestNumber: pullRequestResult.pullRequest.number ?? 0,
     pullRequestUrl: pullRequestResult.pullRequest.html_url ?? null,
     approvalState: pullRequestResult.approvalState,
