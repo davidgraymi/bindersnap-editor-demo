@@ -1,40 +1,36 @@
-# `src/app/` — Real Bindersnap Product
+# `apps/app/` — Product SPA
 
-This is the **authenticated Bindersnap application** — the real product, not the marketing demo.
+This is the authenticated Bindersnap product app.
 
-## What lives here
+## Runtime model
 
-- `index.html` — app entry point (separate from landing page)
-- `App.tsx` — root React component with auth gate and routing
-- `pages/` — page-level components (DocumentList, DocumentEditor, etc.)
-- `components/` — app-shell UI (nav, sidebar, auth modal)
+- Browser UI authenticates with `username` + `password` against `services/api`.
+- API sets an `HttpOnly` session cookie.
+- Browser never stores or receives upstream Gitea access tokens.
+- App data calls go through API routes (for example `/api/app/documents`).
 
-## What does NOT live here
+## Entry points
 
-- Editor logic → `src/editor/`
-- Gitea service clients → `src/services/gitea/`
-- Landing page → `src/` root
+- `index.html`: HTML entry for the product app.
+- `App.tsx`: Route/auth gate (`/app`, `/login`, `/auth/callback` shell handling).
+- `components/AppShell.tsx`: Authenticated app shell and workspace data fetch.
 
-## How it runs
+## Local dev
 
-This app requires a live Gitea backend. In development, use the Docker dev stack:
+Run app + API together:
 
 ```bash
-cd dev && docker compose up
+bun run dev:api
+bun run dev:app
 ```
 
-This starts Gitea, Hocuspocus, and serves the app at `http://localhost:5173/app`.
-Gitea is pre-seeded with demo users and documents — see `dev/README.md`.
+Or run the full stack through Docker:
 
-## Auth model
+```bash
+bun run up
+```
 
-Users log in with a Gitea personal access token. No separate Bindersnap auth database exists. The token is stored in `sessionStorage` (cleared on tab close) and passed to both the Gitea service layer and the Hocuspocus provider. See `src/services/gitea/auth.ts`.
+## Deployment note
 
-In the Docker dev stack, `/app` auto-sign-in defaults to on.
-Set `BINDERSNAP_DEV_AUTO_LOGIN=false` to disable it.
-The Bun server mints a dev token using seeded admin credentials and the UI stores it in `sessionStorage`.
-If auto-login is disabled or fails, the manual token gate is shown.
-
-## Never published
-
-This app is intentionally excluded from the GitHub Pages build. It is only served via the Docker dev stack locally, or a private deployment. There is no sign-in page exposed on the public landing site.
+`apps/app` is a private product app target. Keep it separate from the public
+landing deployment target (`apps/landing`).

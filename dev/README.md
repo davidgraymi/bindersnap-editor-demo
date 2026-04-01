@@ -8,7 +8,7 @@ Everything needed to run the **full Bindersnap target architecture locally** for
 |---|---|---|
 | Gitea | `http://localhost:3000` | Git backend, auth source, document storage |
 | Hocuspocus | `ws://localhost:1234` | Real-time collaboration WebSocket server |
-| Bindersnap app | `http://localhost:${APP_PORT:-5173}` | The real app (`src/app/`) with hot reload |
+| Bindersnap app | `http://localhost:${APP_PORT:-5173}` | The real app (`apps/app/`) with hot reload |
 
 ## Quick start
 
@@ -26,11 +26,12 @@ After Gitea is healthy, the seed script runs automatically and creates:
 - Three documents in different approval states (see `gitea-seed/documents/`)
 - An open PR from `bob/feature/q2-amendments` → `main` with a "Changes Requested" review
 
-The app auto-signs into `/app` in the dev stack by minting a token server-side,
-so no manual token copy/paste is required for UI testing.
+The app and API are both included in the stack. The app uses cookie-backed auth
+against the API (`/auth/login`, `/auth/signup`, `/auth/me`), and the API keeps
+upstream Gitea tokens server-side.
 
-Integration tests no longer require manual token copy/paste; they can seed and mint their own token.
-When running `bun run test:integration`, auto-login is forced off for deterministic auth behavior.
+Integration tests no longer require manual token copy/paste; they seed data and
+mint their own test token for direct Gitea API assertions.
 You can still copy `dev/.env.example` to `dev/.env` for local overrides.
 
 ## Re-seeding
@@ -50,8 +51,8 @@ Run:
 bun run test:integration
 ```
 
-This command manages the stack lifecycle for you (`down -v`, `up --build -d`, test run, `down -v`)
-and forces `BINDERSNAP_DEV_AUTO_LOGIN=false` during test execution.
+This command manages the stack lifecycle for you (`down -v`, `up --build -d`,
+test run, `down -v`).
 
 Tests live in `dev/tests/`. They run against real Gitea — no mocking. See `dev/tests/README.md`.
 

@@ -97,6 +97,33 @@ input {
   font-size: var(--brand-text-sm);
 }
 
+.app-login-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--brand-space-3);
+  color: var(--color-muted);
+  font-size: var(--brand-text-sm);
+}
+
+.app-login-switch-button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--color-coral);
+  font-family: var(--font-mono);
+  font-size: var(--brand-text-label);
+  letter-spacing: var(--brand-tracking-wide);
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color var(--transition-base);
+}
+
+.app-login-switch-button:hover,
+.app-login-switch-button:focus-visible {
+  color: var(--color-coral-dark);
+}
+
 .app-login-hint {
   margin: 0;
   color: var(--color-muted);
@@ -259,11 +286,16 @@ input {
   }
 
   .app-login-panel,
-  .app-login-panel {
+  .app-gate-panel {
     padding: var(--brand-space-5);
   }
 
   .app-doc-grid {
     grid-template-columns: 1fr;
+  }
+
+  .app-login-switch {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

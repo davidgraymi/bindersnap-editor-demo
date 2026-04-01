@@ -64,6 +64,35 @@ services:
     ports:
       - "1234:1234"
 
+  api:
+    image: oven/bun:1
+    container_name: bindersnap-api
+    depends_on:
+      gitea:
+        condition: service_healthy
+      seed:
+        condition: service_completed_successfully
+    working_dir: /app
+    command: ["bun", "--hot", "services/api/server.ts"]
+    environment:
+      - API_PORT=${API_PORT:-8787}
+      - PORT=${API_PORT:-8787}
+      - GITEA_INTERNAL_URL=${GITEA_INTERNAL_URL:-http://gitea:3000}
+      - GITEA_ADMIN_USER=${GITEA_ADMIN_USER:-alice}
+      - GITEA_ADMIN_PASS=${GITEA_ADMIN_PASS:-bindersnap-dev}
+      - BINDERSNAP_APP_ORIGIN=http://localhost:${APP_PORT:-5173}
+      - BINDERSNAP_USER_EMAIL_DOMAIN=${BINDERSNAP_USER_EMAIL_DOMAIN:-users.bindersnap.local}
+      - BINDERSNAP_GITEA_TOKEN_SCOPES=${BINDERSNAP_GITEA_TOKEN_SCOPES:-read:repository}
+      - BINDERSNAP_REQUIRE_HTTPS=${BINDERSNAP_REQUIRE_HTTPS:-false}
+      - BINDERSNAP_AUTH_RATE_LIMIT_ENABLED=${BINDERSNAP_AUTH_RATE_LIMIT_ENABLED:-true}
+      - BINDERSNAP_AUTH_RATE_LIMIT_WINDOW_MS=${BINDERSNAP_AUTH_RATE_LIMIT_WINDOW_MS:-600000}
+      - BINDERSNAP_AUTH_RATE_LIMIT_MAX=${BINDERSNAP_AUTH_RATE_LIMIT_MAX:-20}
+    ports:
+      - "${API_PORT:-8787}:${API_PORT:-8787}"
+    volumes:
+      - ..:/app
+      - app-node-modules:/app/node_modules
+
   app:
     build:
       context: ..
@@ -72,6 +101,8 @@ services:
         APP_PORT: ${APP_PORT:-5173}
     container_name: bindersnap-app
     depends_on:
+      api:
+        condition: service_started
       gitea:
         condition: service_healthy
       hocuspocus:
@@ -81,13 +112,13 @@ services:
     environment:
       - APP_PORT=${APP_PORT:-5173}
       - PORT=${APP_PORT:-5173}
+      - BUN_PUBLIC_API_BASE_URL=http://localhost:${API_PORT:-8787}
+      - BUN_PUBLIC_API_URL=http://localhost:${API_PORT:-8787}
+      - VITE_API_URL=http://localhost:${API_PORT:-8787}
       - BUN_PUBLIC_GITEA_URL=http://localhost:3000
       - VITE_GITEA_URL=http://localhost:3000
       - BUN_PUBLIC_HOCUSPOCUS_URL=ws://localhost:1234
       - VITE_HOCUSPOCUS_URL=ws://localhost:1234
-      - BUN_PUBLIC_DEV_AUTO_LOGIN=${BINDERSNAP_DEV_AUTO_LOGIN:-true}
-      - VITE_DEV_AUTO_LOGIN=${BINDERSNAP_DEV_AUTO_LOGIN:-true}
-      - BINDERSNAP_DEV_AUTO_LOGIN=${BINDERSNAP_DEV_AUTO_LOGIN:-true}
       - GITEA_INTERNAL_URL=${GITEA_INTERNAL_URL:-http://gitea:3000}
       - GITEA_ADMIN_USER=${GITEA_ADMIN_USER:-alice}
       - GITEA_ADMIN_PASS=${GITEA_ADMIN_PASS:-bindersnap-dev}

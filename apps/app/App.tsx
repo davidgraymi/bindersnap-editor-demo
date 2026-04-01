@@ -1,223 +1,42 @@
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 import "./app.css";
 
 import { AppShell } from "./components/AppShell";
-import {
-  buildAuthUrl,
-  generateCodeChallenge,
-  generateCodeVerifier,
-  VERIFIER_STORAGE_KEY,
-} from "./auth/pkce";
-import {
-  clearToken,
-  getStoredToken,
-  storeToken,
-  validateToken,
-} from "../../packages/gitea-client/auth";
 
 const appEnv = (
   import.meta as ImportMeta & { env?: Record<string, string | undefined> }
 ).env;
-const GITEA_URL =
-  appEnv?.BUN_PUBLIC_GITEA_URL ??
-  appEnv?.VITE_GITEA_URL ??
-  "http://localhost:3000";
-const OAUTH_CLIENT_ID = appEnv?.BUN_PUBLIC_GITEA_OAUTH_CLIENT_ID ?? "";
-const OAUTH_REDIRECT_URI =
-  appEnv?.BUN_PUBLIC_GITEA_OAUTH_REDIRECT_URI ??
-  `${window.location.origin}/auth/callback`;
-const LOGIN_TOKEN_NAME =
-  appEnv?.BUN_PUBLIC_GITEA_LOGIN_TOKEN_NAME?.trim() || "bindersnap-session";
-const LOGIN_TOKEN_SCOPES = (
-  appEnv?.BUN_PUBLIC_GITEA_LOGIN_TOKEN_SCOPES ?? "all"
-)
-  .split(",")
-  .map((scope) => scope.trim())
-  .filter((scope) => scope !== "");
-const LOGIN_TOKEN_SCOPE_SET =
-  LOGIN_TOKEN_SCOPES.length > 0 ? LOGIN_TOKEN_SCOPES : ["all"];
+const isLocalHost =
+  window.location.hostname === "localhost" ||
+  window.location.hostname === "127.0.0.1";
+const devDefaultApiBaseUrl = `${window.location.protocol}//${window.location.hostname}:${
+  appEnv?.BUN_PUBLIC_API_PORT ?? appEnv?.API_PORT ?? "8787"
+}`;
+const API_BASE_URL = (
+  appEnv?.BUN_PUBLIC_API_BASE_URL ??
+  appEnv?.BUN_PUBLIC_API_URL ??
+  appEnv?.VITE_API_URL ??
+  (isLocalHost ? devDefaultApiBaseUrl : "")
+).replace(/\/$/, "");
 
-function buildBasicAuthHeader(identity: string, password: string): string {
-  return `Basic ${btoa(`${identity}:${password}`)}`;
-}
-
-function credentialCandidates(identifier: string): string[] {
-  const normalized = identifier.trim();
-  const fallbackUsername = normalized.includes("@")
-    ? normalized.slice(0, normalized.indexOf("@"))
-    : normalized;
-
-  return [
-    ...new Set(
-      [normalized, fallbackUsername].filter((value) => value.trim() !== ""),
-    ),
-  ];
-}
-
-async function requestPasswordLogin(
-  username: string,
-  password: string,
-): Promise<string> {
-  let loginName = "";
-  let authHeader = "";
-
-  for (const candidate of credentialCandidates(username)) {
-    const nextAuthHeader = buildBasicAuthHeader(candidate, password);
-
-    let profileResponse: Response;
-    try {
-      profileResponse = await fetch(new URL("/api/v1/user", GITEA_URL), {
-        method: "GET",
-        headers: {
-          Authorization: nextAuthHeader,
-          Accept: "application/json",
-        },
-      });
-    } catch {
-      throw new Error("Unable to reach the sign-in service right now.");
-    }
-
-    if (!profileResponse.ok) {
-      continue;
-    }
-
-    const profile = (await profileResponse.json().catch(() => null)) as {
-      login?: unknown;
-    } | null;
-    if (typeof profile?.login === "string" && profile.login.trim() !== "") {
-      loginName = profile.login.trim();
-      authHeader = nextAuthHeader;
-      break;
-    }
-  }
-
-  if (!loginName || !authHeader) {
-    throw new Error("Invalid username or password.");
-  }
-
-  try {
-    await fetch(
-      new URL(
-        `/api/v1/users/${encodeURIComponent(loginName)}/tokens/${encodeURIComponent(LOGIN_TOKEN_NAME)}`,
-        GITEA_URL,
-      ),
-      {
-        method: "DELETE",
-        headers: {
-          Authorization: authHeader,
-          Accept: "application/json",
-        },
-      },
-    );
-  } catch {
-    // Ignore cleanup failures and still attempt token creation.
-  }
-
-  const createToken = async (name: string) =>
-    fetch(
-      new URL(
-        `/api/v1/users/${encodeURIComponent(loginName)}/tokens`,
-        GITEA_URL,
-      ),
-      {
-        method: "POST",
-        headers: {
-          Authorization: authHeader,
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify({
-          name,
-          scopes: LOGIN_TOKEN_SCOPE_SET,
-        }),
-      },
-    );
-
-  let tokenResponse: Response;
-  try {
-    tokenResponse = await createToken(LOGIN_TOKEN_NAME);
-    if (tokenResponse.status === 409) {
-      tokenResponse = await createToken(`${LOGIN_TOKEN_NAME}-${Date.now()}`);
-    }
-  } catch {
-    throw new Error("Unable to create an access token right now.");
-  }
-
-  if (!tokenResponse.ok) {
-    throw new Error("Unable to create an access token right now.");
-  }
-
-  const tokenPayload = (await tokenResponse.json().catch(() => null)) as {
-    sha1?: unknown;
-  } | null;
-  if (
-    typeof tokenPayload?.sha1 !== "string" ||
-    tokenPayload.sha1.trim() === ""
-  ) {
-    throw new Error("Sign-in completed without an access token.");
-  }
-
-  return tokenPayload.sha1.trim();
-}
-
-/** Initiate PKCE login: generate verifier, store it, redirect to Gitea. */
-async function startPkceLogin(): Promise<void> {
-  const verifier = generateCodeVerifier();
-  const challenge = await generateCodeChallenge(verifier);
-  sessionStorage.setItem(VERIFIER_STORAGE_KEY, verifier);
-  window.location.href = buildAuthUrl({
-    giteaUrl: GITEA_URL,
-    clientId: OAUTH_CLIENT_ID,
-    redirectUri: OAUTH_REDIRECT_URI,
-    challenge,
-  });
-}
-
-/** Handle the OAuth2 callback: exchange code for token, return it. */
-async function handleOAuthCallback(): Promise<string> {
-  const params = new URLSearchParams(window.location.search);
-  const code = params.get("code");
-  if (!code) throw new Error("No authorization code in callback URL.");
-
-  const verifier = sessionStorage.getItem(VERIFIER_STORAGE_KEY);
-  if (!verifier)
-    throw new Error(
-      "PKCE verifier missing from session — login flow may have been interrupted.",
-    );
-  sessionStorage.removeItem(VERIFIER_STORAGE_KEY);
-
-  const tokenUrl = new URL("/login/oauth/access_token", GITEA_URL);
-  const response = await fetch(tokenUrl.toString(), {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({
-      client_id: OAUTH_CLIENT_ID,
-      code,
-      code_verifier: verifier,
-      grant_type: "authorization_code",
-      redirect_uri: OAUTH_REDIRECT_URI,
-    }),
-  });
-
-  if (!response.ok)
-    throw new Error(`Token exchange failed (${response.status}).`);
-  const data = (await response.json()) as {
-    access_token?: string;
-    error?: string;
-  };
-  if (data.error) throw new Error(data.error);
-  if (!data.access_token) throw new Error("No access token was returned.");
-
-  return data.access_token;
-}
-
-type AuthView = "callback" | "login" | "app";
 type AppRoute = "app" | "login" | "callback";
+type AuthView = "loading" | "callback" | "login" | "app";
+type AuthMode = "signin" | "signup";
+
+interface SessionUser {
+  username: string;
+  fullName?: string;
+}
+
+interface LoginPageProps {
+  callbackError: string | null;
+  onLogin: (username: string, password: string) => Promise<void>;
+  onSignup: (username: string, password: string) => Promise<void>;
+}
 
 function getRoute(pathname: string): AppRoute {
-  const normalizedPath =
-    pathname !== "/" ? pathname.replace(/\/+$/, "") : pathname;
+  const normalizedPath = pathname !== "/" ? pathname.replace(/\/+$/, "") : pathname;
 
   if (normalizedPath === "/auth/callback") {
     return "callback";
@@ -230,42 +49,131 @@ function getRoute(pathname: string): AppRoute {
   return "app";
 }
 
-function getView(route: AppRoute, token: string | null): AuthView {
-  if (route === "callback") {
-    return "callback";
-  }
-
-  if (token) {
-    return "app";
-  }
-
-  return "login";
-}
-
 function navigateTo(path: "/app" | "/login", replace = false): void {
   const method = replace ? "replaceState" : "pushState";
   window.history[method]({}, "", path);
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
-interface LoginPageProps {
-  callbackError: string | null;
-  canUseOAuth: boolean;
-  onLogin: (username: string, password: string) => Promise<void>;
-  onStartOAuth: () => Promise<void>;
+function resolveApiUrl(path: string): string {
+  return API_BASE_URL ? `${API_BASE_URL}${path}` : path;
 }
 
-function LoginPage({
-  callbackError,
-  canUseOAuth,
-  onLogin,
-  onStartOAuth,
-}: LoginPageProps) {
+function readErrorMessage(payload: unknown, fallback: string): string {
+  if (typeof payload === "object" && payload !== null) {
+    if (typeof (payload as { error?: unknown }).error === "string") {
+      return (payload as { error: string }).error;
+    }
+
+    if (typeof (payload as { message?: unknown }).message === "string") {
+      return (payload as { message: string }).message;
+    }
+  }
+
+  return fallback;
+}
+
+async function sendAuthRequest(
+  path: "/auth/login" | "/auth/signup",
+  username: string,
+  password: string,
+): Promise<void> {
+  const response = await fetch(resolveApiUrl(path), {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({ username, password }),
+  });
+
+  const payload = (await response.json().catch(() => null)) as unknown;
+  if (!response.ok) {
+    throw new Error(readErrorMessage(payload, "Unable to complete authentication right now."));
+  }
+}
+
+function parseSessionUser(payload: unknown): SessionUser | null {
+  if (typeof payload !== "object" || payload === null) {
+    return null;
+  }
+
+  const root = payload as {
+    username?: unknown;
+    login?: unknown;
+    fullName?: unknown;
+    full_name?: unknown;
+    user?: {
+      username?: unknown;
+      login?: unknown;
+      fullName?: unknown;
+      full_name?: unknown;
+    };
+  };
+
+  const candidate = root.user ?? root;
+  const username =
+    typeof candidate.username === "string"
+      ? candidate.username
+      : typeof candidate.login === "string"
+        ? candidate.login
+        : "";
+
+  if (username.trim() === "") {
+    return null;
+  }
+
+  const fullName =
+    typeof candidate.fullName === "string"
+      ? candidate.fullName
+      : typeof candidate.full_name === "string"
+        ? candidate.full_name
+        : undefined;
+
+  return {
+    username: username.trim(),
+    fullName: fullName?.trim() || undefined,
+  };
+}
+
+async function fetchSessionUser(): Promise<SessionUser | null> {
+  const response = await fetch(resolveApiUrl("/auth/me"), {
+    method: "GET",
+    credentials: "include",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (response.status === 401 || response.status === 404) {
+    return null;
+  }
+
+  const payload = (await response.json().catch(() => null)) as unknown;
+  if (!response.ok) {
+    throw new Error(readErrorMessage(payload, "Unable to check your session right now."));
+  }
+
+  return parseSessionUser(payload);
+}
+
+async function logoutSession(): Promise<void> {
+  await fetch(resolveApiUrl("/auth/logout"), {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      Accept: "application/json",
+    },
+  }).catch(() => undefined);
+}
+
+function LoginPage({ callbackError, onLogin, onSignup }: LoginPageProps) {
+  const [mode, setMode] = useState<AuthMode>("signin");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(callbackError);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isStartingOAuth, setIsStartingOAuth] = useState(false);
 
   useEffect(() => {
     setError(callbackError);
@@ -284,31 +192,19 @@ function LoginPage({
     setError(null);
 
     try {
-      await onLogin(nextUsername, password);
+      if (mode === "signin") {
+        await onLogin(nextUsername, password);
+      } else {
+        await onSignup(nextUsername, password);
+      }
     } catch (submitError) {
       if (submitError instanceof Error && submitError.message.trim() !== "") {
         setError(submitError.message);
       } else {
-        setError("Unable to sign in right now.");
+        setError(`Unable to ${mode === "signin" ? "sign in" : "create your account"} right now.`);
       }
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  const handleOAuth = async () => {
-    setIsStartingOAuth(true);
-    setError(null);
-
-    try {
-      await onStartOAuth();
-    } catch (oauthError) {
-      if (oauthError instanceof Error && oauthError.message.trim() !== "") {
-        setError(oauthError.message);
-      } else {
-        setError("Unable to start single sign-on.");
-      }
-      setIsStartingOAuth(false);
     }
   };
 
@@ -317,14 +213,11 @@ function LoginPage({
       <div className="app-login-wrap">
         <div className="app-login-panel bs-card">
           <div className="bs-eyebrow">Secure Access</div>
-          <h1>Step into the clean version.</h1>
+          <h1>{mode === "signin" ? "Step into the clean version." : "Create your Bindersnap workspace."}</h1>
           <p className="app-gate-copy">
-            Sign in to review the live workspace, not another copy of
-            <code className="app-inline-code">
-              {" "}
-              contract_FINAL_v2_JanEdits_APPROVED(1).docx
-            </code>
-            .
+            {mode === "signin"
+              ? "Sign in to pick up the live workspace without reopening another approval chain by hand."
+              : "Choose a username and password once. We will use that account to open your workspace the same way every time."}
           </p>
 
           <form className="app-form" onSubmit={handleSubmit}>
@@ -349,33 +242,36 @@ function LoginPage({
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 placeholder="Enter your password"
-                autoComplete="current-password"
+                autoComplete={mode === "signin" ? "current-password" : "new-password"}
               />
             </label>
 
-            <button
-              className="bs-btn bs-btn-primary app-submit"
-              type="submit"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? "Signing in..." : "Open workspace"}
+            <button className="bs-btn bs-btn-primary app-submit" type="submit" disabled={isSubmitting}>
+              {isSubmitting
+                ? mode === "signin"
+                  ? "Signing in..."
+                  : "Creating account..."
+                : mode === "signin"
+                  ? "Open workspace"
+                  : "Create account"}
             </button>
           </form>
 
-          {error ? <p className="app-inline-error">{error}</p> : null}
-
-          {canUseOAuth ? (
+          <div className="app-login-switch">
+            <span>{mode === "signin" ? "Need an account?" : "Already have an account?"}</span>
             <button
-              className="bs-btn bs-btn-secondary app-submit"
+              className="app-login-switch-button"
               type="button"
-              onClick={() => void handleOAuth()}
-              disabled={isStartingOAuth}
+              onClick={() => {
+                setMode(mode === "signin" ? "signup" : "signin");
+                setError(callbackError);
+              }}
             >
-              {isStartingOAuth
-                ? "Redirecting..."
-                : "Use single sign-on instead"}
+              {mode === "signin" ? "Create one" : "Sign in instead"}
             </button>
-          ) : null}
+          </div>
+
+          {error ? <p className="app-inline-error">{error}</p> : null}
         </div>
       </div>
     </section>
@@ -383,14 +279,29 @@ function LoginPage({
 }
 
 export function App() {
-  const [route, setRoute] = useState<AppRoute>(() =>
-    getRoute(window.location.pathname),
-  );
-  const [token, setToken] = useState<string | null>(() =>
-    route === "callback" ? null : getStoredToken(),
-  );
+  const [route, setRoute] = useState<AppRoute>(() => getRoute(window.location.pathname));
+  const [user, setUser] = useState<SessionUser | null>(null);
+  const [isCheckingSession, setIsCheckingSession] = useState(() => route !== "callback");
   const [callbackError, setCallbackError] = useState<string | null>(null);
-  const view = getView(route, token);
+
+  const refreshSession = useCallback(async () => {
+    setIsCheckingSession(true);
+
+    try {
+      const nextUser = await fetchSessionUser();
+      setUser(nextUser);
+      setCallbackError(null);
+      return nextUser;
+    } catch (sessionError) {
+      setUser(null);
+      setCallbackError(
+        sessionError instanceof Error ? sessionError.message : "Unable to check your session right now.",
+      );
+      return null;
+    } finally {
+      setIsCheckingSession(false);
+    }
+  }, []);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -405,45 +316,51 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (token && route !== "app") {
-      navigateTo("/app", true);
+    if (route === "callback") {
+      setIsCheckingSession(false);
+      return;
     }
-  }, [route, token]);
+
+    void refreshSession();
+  }, [refreshSession, route]);
 
   useEffect(() => {
-    if (!token && route === "app" && view === "login") {
+    if (route === "callback" || isCheckingSession) {
+      return;
+    }
+
+    if (user && route !== "app") {
+      navigateTo("/app", true);
+      return;
+    }
+
+    if (!user && route === "app") {
       navigateTo("/login", true);
     }
-  }, [route, token, view]);
+  }, [isCheckingSession, route, user]);
 
-  // PKCE callback handling
   useEffect(() => {
-    if (view !== "callback") return;
-    let cancelled = false;
+    if (route !== "callback") {
+      return;
+    }
 
-    void (async () => {
-      try {
-        const nextToken = await handleOAuthCallback();
-        await validateToken(GITEA_URL, nextToken);
-        storeToken(nextToken);
-        if (!cancelled) {
-          setToken(nextToken);
-          navigateTo("/app", true);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setCallbackError(
-            err instanceof Error ? err.message : "Authentication failed.",
-          );
-          navigateTo("/login", true);
-        }
-      }
-    })();
+    setCallbackError(
+      "Single sign-on callback is not enabled in this build. Sign in with your username and password.",
+    );
+    navigateTo("/login", true);
+  }, [route]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [view]);
+  const view: AuthView = useMemo(() => {
+    if (route === "callback") {
+      return "callback";
+    }
+
+    if (isCheckingSession) {
+      return "loading";
+    }
+
+    return user ? "app" : "login";
+  }, [isCheckingSession, route, user]);
 
   if (view === "callback") {
     return (
@@ -451,9 +368,19 @@ export function App() {
         <div className="app-gate-panel bs-card">
           <div className="bs-eyebrow">Authentication</div>
           <h1>Completing sign-in...</h1>
-          <p className="app-gate-copy">
-            Exchanging authorization code for access token.
-          </p>
+          <p className="app-gate-copy">Handing the sign-in response back to the workspace session service.</p>
+        </div>
+      </section>
+    );
+  }
+
+  if (view === "loading") {
+    return (
+      <section className="app-gate">
+        <div className="app-gate-panel bs-card">
+          <div className="bs-eyebrow">Workspace</div>
+          <h1>Checking your session...</h1>
+          <p className="app-gate-copy">Making sure your workspace is ready before we open the app.</p>
         </div>
       </section>
     );
@@ -463,29 +390,34 @@ export function App() {
     return (
       <LoginPage
         callbackError={callbackError}
-        canUseOAuth={Boolean(OAUTH_CLIENT_ID)}
         onLogin={async (username, password) => {
-          const nextToken = await requestPasswordLogin(username, password);
-          await validateToken(GITEA_URL, nextToken);
-          storeToken(nextToken);
-          setCallbackError(null);
-          setToken(nextToken);
+          await sendAuthRequest("/auth/login", username, password);
+          const nextUser = await refreshSession();
+          if (!nextUser) {
+            throw new Error("Sign-in completed, but the session could not be verified.");
+          }
           navigateTo("/app", true);
         }}
-        onStartOAuth={startPkceLogin}
+        onSignup={async (username, password) => {
+          await sendAuthRequest("/auth/signup", username, password);
+          const nextUser = await refreshSession();
+          if (!nextUser) {
+            throw new Error("Account created, but the session could not be verified.");
+          }
+          navigateTo("/app", true);
+        }}
       />
     );
   }
 
-  // view === "app"
   return (
     <div className="app-root">
       <AppShell
-        baseUrl={GITEA_URL}
-        token={token!}
-        onSignOut={() => {
-          clearToken();
-          setToken(null);
+        user={user}
+        onSignOut={async () => {
+          await logoutSession();
+          setUser(null);
+          setCallbackError(null);
           navigateTo("/login", true);
         }}
       />

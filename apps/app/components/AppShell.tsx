@@ -1,12 +1,29 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-import { createGiteaClient, GiteaApiError } from "../../../packages/gitea-client/client";
-import { listDocumentCommits, type CommitSummary } from "../../../packages/gitea-client/documents";
+import type { CommitSummary } from "../../../packages/gitea-client/documents";
+
+const appEnv = (
+  import.meta as ImportMeta & { env?: Record<string, string | undefined> }
+).env;
+const isLocalHost =
+  window.location.hostname === "localhost" ||
+  window.location.hostname === "127.0.0.1";
+const devDefaultApiBaseUrl = `${window.location.protocol}//${window.location.hostname}:${
+  appEnv?.BUN_PUBLIC_API_PORT ?? appEnv?.API_PORT ?? "8787"
+}`;
+const API_BASE_URL = (
+  appEnv?.BUN_PUBLIC_API_BASE_URL ??
+  appEnv?.BUN_PUBLIC_API_URL ??
+  appEnv?.VITE_API_URL ??
+  (isLocalHost ? devDefaultApiBaseUrl : "")
+).replace(/\/$/, "");
 
 interface AppShellProps {
-  baseUrl: string;
-  token: string;
-  onSignOut: () => void;
+  user: {
+    username: string;
+    fullName?: string;
+  } | null;
+  onSignOut: () => void | Promise<void>;
 }
 
 interface DocumentRow {
@@ -15,11 +32,10 @@ interface DocumentRow {
   latestCommit: CommitSummary | null;
 }
 
-const SEEDED_DOCUMENTS: Array<Pick<DocumentRow, "title" | "path">> = [
-  { title: "Draft", path: "documents/draft.json" },
-  { title: "In Review", path: "documents/in-review.json" },
-  { title: "Changes Requested", path: "documents/changes-requested.json" },
-];
+interface DocumentsPayload {
+  repository: string;
+  documents: DocumentRow[];
+}
 
 function formatTimestamp(value: string) {
   if (!value) return "Unknown";
@@ -27,18 +43,93 @@ function formatTimestamp(value: string) {
   return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
 }
 
-function maskToken(value: string) {
-  if (value.length <= 8) {
-    return "********";
-  }
-
-  return `***${value.slice(-8)}`;
+function resolveApiUrl(path: string): string {
+  return API_BASE_URL ? `${API_BASE_URL}${path}` : path;
 }
 
-export function AppShell({ baseUrl, token, onSignOut }: AppShellProps) {
-  const client = useMemo(() => createGiteaClient(baseUrl, token), [baseUrl, token]);
+function readErrorMessage(payload: unknown, fallback: string): string {
+  if (typeof payload === "object" && payload !== null) {
+    if (typeof (payload as { error?: unknown }).error === "string") {
+      return (payload as { error: string }).error;
+    }
 
+    if (typeof (payload as { message?: unknown }).message === "string") {
+      return (payload as { message: string }).message;
+    }
+  }
+
+  return fallback;
+}
+
+function parseDocuments(payload: unknown): DocumentsPayload {
+  const rows =
+    Array.isArray(payload)
+      ? payload
+      : typeof payload === "object" &&
+          payload !== null &&
+          Array.isArray((payload as { documents?: unknown }).documents)
+        ? ((payload as { documents: unknown[] }).documents as unknown[])
+        : [];
+  const repository =
+    typeof payload === "object" && payload !== null && typeof (payload as { repository?: unknown }).repository === "string"
+      ? (payload as { repository: string }).repository
+      : "your workspace";
+
+  const documents = rows.flatMap((row) => {
+    if (typeof row !== "object" || row === null) {
+      return [];
+    }
+
+    const candidate = row as {
+      title?: unknown;
+      path?: unknown;
+      latestCommit?: unknown;
+      latest_commit?: unknown;
+    };
+
+    if (typeof candidate.title !== "string" || typeof candidate.path !== "string") {
+      return [];
+    }
+
+    const latestCommit =
+      typeof candidate.latestCommit === "object" && candidate.latestCommit !== null
+        ? (candidate.latestCommit as CommitSummary)
+        : typeof candidate.latest_commit === "object" && candidate.latest_commit !== null
+          ? (candidate.latest_commit as CommitSummary)
+        : null;
+
+    return [
+      {
+        title: candidate.title,
+        path: candidate.path,
+        latestCommit,
+      },
+    ];
+  });
+
+  return { repository, documents };
+}
+
+async function fetchDocuments(): Promise<DocumentsPayload> {
+  const response = await fetch(resolveApiUrl("/api/app/documents"), {
+    method: "GET",
+    credentials: "include",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  const payload = (await response.json().catch(() => null)) as unknown;
+  if (!response.ok) {
+    throw new Error(readErrorMessage(payload, "Unable to load workspace documents."));
+  }
+
+  return parseDocuments(payload);
+}
+
+export function AppShell({ user, onSignOut }: AppShellProps) {
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
+  const [repository, setRepository] = useState("your workspace");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,38 +138,22 @@ export function AppShell({ baseUrl, token, onSignOut }: AppShellProps) {
     setError(null);
 
     try {
-      const nextRows = await Promise.all(
-        SEEDED_DOCUMENTS.map(async (doc) => {
-          const commits = await listDocumentCommits({
-            client,
-            owner: "alice",
-            repo: "quarterly-report",
-            filePath: doc.path,
-            limit: 1,
-          });
-
-          return {
-            ...doc,
-            latestCommit: commits[0] ?? null,
-          };
-        }),
-      );
-
-      setDocuments(nextRows);
+      const payload = await fetchDocuments();
+      setDocuments(payload.documents);
+      setRepository(payload.repository);
     } catch (loadError) {
       const message =
-        loadError instanceof GiteaApiError
+        loadError instanceof Error
           ? loadError.message
-          : loadError instanceof Error
-            ? loadError.message
-            : "Unable to load documents from Gitea.";
+          : "Unable to load workspace documents.";
 
       setError(message);
       setDocuments([]);
+      setRepository("your workspace");
     } finally {
       setLoading(false);
     }
-  }, [client]);
+  }, []);
 
   useEffect(() => {
     void loadDocuments();
@@ -94,14 +169,17 @@ export function AppShell({ baseUrl, token, onSignOut }: AppShellProps) {
               <rect x="6" y="4" width="9" height="13" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
             </svg>
           </div>
-          <div className="app-logo-text">Bindersnap</div>
+          <div>
+            <div className="app-logo-text">Bindersnap</div>
+            <div className="app-doc-path">Signed in as {user?.fullName ?? user?.username ?? "Unknown"}</div>
+          </div>
         </div>
 
         <div className="app-topbar-actions">
           <button className="bs-btn bs-btn-secondary" type="button" onClick={() => void loadDocuments()}>
             {loading ? "Refreshing..." : "Refresh"}
           </button>
-          <button className="bs-btn bs-btn-dark" type="button" onClick={onSignOut}>
+          <button className="bs-btn bs-btn-dark" type="button" onClick={() => void onSignOut()}>
             Sign out
           </button>
         </div>
@@ -109,26 +187,19 @@ export function AppShell({ baseUrl, token, onSignOut }: AppShellProps) {
 
       <main className="app-main">
         <section className="bs-card app-summary">
-          <div className="bs-eyebrow">Seeded Repository</div>
-          <h1>alice/quarterly-report</h1>
-          <p>Documents are loaded from commit history using <code>listDocumentCommits</code>.</p>
+          <div className="bs-eyebrow">Workspace</div>
+          <h1>{repository}</h1>
+          <p>
+            Signed in as {user?.fullName ?? user?.username ?? "your account"}. Documents load through the
+            Bindersnap session API, not from a browser-held upstream token.
+          </p>
         </section>
 
         {error ? (
           <section className="bs-card app-error">
             <div className="bs-eyebrow">Failure State</div>
-            <h2>Could not fetch Gitea documents.</h2>
+            <h2>Could not fetch workspace documents.</h2>
             <p>{error}</p>
-            <dl>
-              <div>
-                <dt>Gitea URL</dt>
-                <dd>{baseUrl}</dd>
-              </div>
-              <div>
-                <dt>Token</dt>
-                <dd>{maskToken(token)}</dd>
-              </div>
-            </dl>
           </section>
         ) : null}
 
@@ -141,7 +212,7 @@ export function AppShell({ baseUrl, token, onSignOut }: AppShellProps) {
           <div className="app-doc-grid">
             {loading ? <div className="bs-card app-doc-empty">Loading documents...</div> : null}
             {!loading && documents.length === 0 ? (
-              <div className="bs-card app-doc-empty">No documents found in the seeded repository.</div>
+              <div className="bs-card app-doc-empty">No documents were returned for this workspace.</div>
             ) : null}
             {documents.map((doc) => (
               <article className="bs-card app-doc-card" key={doc.path}>
