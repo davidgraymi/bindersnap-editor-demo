@@ -29,9 +29,8 @@ The workflow states are:
 4. `approved/published`: required approvals exist and PR is merged to `main`.
 
 Operational note:
-- We keep both approval and merge timestamps in metadata so the audit trail can
-  distinguish "approved at" from "published at" even though the public lifecycle
-  state label is `approved/published`.
+- Approval and merge timestamps come from Gitea PR review events + merge commit
+  history. No app-managed metadata file is required.
 
 ## Upload Branch Naming (Deterministic + Sortable)
 
@@ -68,36 +67,54 @@ Rules:
 
 1. Canonical filename is stable across revisions.
 2. Canonical filename cannot include version markers (`final`, `v2`, `approved`).
-3. User-uploaded original filename is stored as metadata only.
+3. User-uploaded original filename is stored in commit trailers.
 4. Extension must match an allowed file type.
 
 ## Canonical Version Pointer Strategy
 
-MVP chooses a metadata file as the canonical pointer (not tag-first, not release-first).
+MVP uses pure git pointers:
 
-File: `document-manifest.json`
+1. Current published version pointer: `main` HEAD commit.
+2. Immutable published version pointers: annotated tags on merge commits.
 
-Minimum required keys:
+Tag format:
 
-```json
-{
-  "documentId": "acme-q2-quote",
-  "canonicalFileName": "acme-q2-quote.docx",
-  "sourceFileName": "Acme Q2 Quote Final v3.docx",
-  "currentPublishedSha": "a1b2c3d4e5f6",
-  "currentPublishedVersion": 4,
-  "currentState": "approved/published",
-  "approvedAt": "2026-04-01T14:28:10Z",
-  "publishedAt": "2026-04-01T14:30:12Z"
-}
-```
+`doc/v<NNNN>` (zero-padded, monotonic per repository)
+
+Example:
+
+`doc/v0004`
 
 Rules:
 
-1. `currentPublishedSha` points to the merge commit on `main`.
-2. `currentPublishedVersion` increments by 1 on each merge to `main`.
-3. Manifest updates only in publish merges.
-4. Historical versions are resolved through commit history and merged PR refs.
+1. Every publish merge to `main` must create exactly one new annotated tag.
+2. `doc/v<NNNN>` increments by 1 for each published merge.
+3. The tag points to the merge commit on `main`.
+4. Historical versions are resolved through tags + commit history + merged PR refs.
+5. No app-level moving pointer file is maintained.
+
+## Git Audit Metadata (Commit Trailers)
+
+To keep the backend pure git while preserving provenance, merge commits for
+published versions must include these trailers:
+
+1. `Bindersnap-Document-Id: <document-slug>`
+2. `Bindersnap-Canonical-File: <document-slug>.<ext>`
+3. `Bindersnap-Source-Filename: <original-user-filename>`
+4. `Bindersnap-Upload-Branch: <upload-branch-name>`
+5. `Bindersnap-Uploaded-By: <uploader-slug>`
+6. `Bindersnap-File-Hash-SHA256: <full-hex-hash>`
+
+Example commit footer:
+
+```text
+Bindersnap-Document-Id: acme-q2-quote
+Bindersnap-Canonical-File: acme-q2-quote.docx
+Bindersnap-Source-Filename: Acme Q2 Quote Final v3.docx
+Bindersnap-Upload-Branch: upload/acme-q2-quote/20260401/143012Z-asmith-8f3c2a1b
+Bindersnap-Uploaded-By: asmith
+Bindersnap-File-Hash-SHA256: 8f3c2a1b8c0f8b2ed12e2e36fbfd18f6073e5c11a5823c80f7b6f8249ad2f0e3
+```
 
 ## Supported File Types and Size Limits (MVP)
 
@@ -142,14 +159,16 @@ Policy rules:
 2. PR title: `Upload v4: Acme Q2 Quote`
 3. Canonical file path: `acme-q2-quote.docx`
 4. Transition: `draft upload` -> `in review` -> `changes requested` -> `in review` -> `approved/published`
-5. On merge, manifest updates `currentPublishedVersion` to `4`.
+5. On merge to `main`, publish tag `doc/v0004` is created on the merge commit.
+6. Merge commit includes required Bindersnap trailers.
 
 ### Example B: Vendor W-9 PDF
 
 1. Upload branch: `upload/vendor-w9/20260401/152233Z-jgray-4f9d21aa`
 2. PR title: `Upload v2: Vendor W-9`
 3. Canonical file path: `vendor-w9.pdf`
-4. Merge writes `currentPublishedSha` and `publishedAt` in manifest.
+4. Merge creates tag `doc/v0002` on `main`.
+5. Publish timestamp comes from merge commit time and PR merge event time in Gitea.
 
 ### Example C: Pricing XLSX
 
@@ -157,6 +176,7 @@ Policy rules:
 2. PR title: `Upload v3: Quarterly Budget`
 3. Canonical file path: `quarterly-budget.xlsx`
 4. Review feedback happens on PR comments; no inline editing required.
+5. Approved publish is represented by merged PR + new tag (for example `doc/v0003`).
 
 ## Non-Goals (Explicit)
 
@@ -166,6 +186,7 @@ Policy rules:
 4. No OCR, redaction, or extraction pipeline in MVP.
 5. No replacement of editor-first work in #71, #72, #73.
 6. No Git LFS dependency for MVP.
+7. No app-managed manifest file for version pointers.
 
 ## Consequences
 
@@ -174,10 +195,11 @@ Positive:
 1. The approval trail is explicit and auditable.
 2. Version identity is stable and easy to reason about.
 3. Filename drift (`FINAL_v2_APPROVED(1)`) is prevented by contract.
+4. Backend stays close to pure git primitives.
 
 Tradeoffs:
 
 1. Binary support is intentionally narrow in MVP.
 2. Upload size ceiling is explicit and may exclude large files.
 3. Additional automation (virus scanning, resumable uploads) is deferred.
-
+4. Querying current metadata requires reading git tags/commits/PR data, not one JSON file.
