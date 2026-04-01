@@ -96,6 +96,8 @@ const server = serve({
 
     "/app": appIndex,
     "/app/*": appIndex,
+    "/auth/callback": appIndex,
+    "/login": appIndex,
 
     // Serve index.html for all unmatched routes.
     "/*": index,
