@@ -15,6 +15,44 @@ function isAutoLoginEnabled(): boolean {
   return process.env.NODE_ENV !== "production";
 }
 
+/**
+ * Verify a Stripe webhook signature using HMAC-SHA256.
+ * Stripe sends: stripe-signature: t=<timestamp>,v1=<sig>[,v1=<sig2>...]
+ * We compute HMAC-SHA256(secret, "<timestamp>.<rawBody>") and compare.
+ */
+async function verifyStripeSignature(rawBody: string, signature: string, secret: string): Promise<boolean> {
+  try {
+    const parts = Object.fromEntries(
+      signature.split(",").map((part) => {
+        const eq = part.indexOf("=");
+        return [part.slice(0, eq), part.slice(eq + 1)];
+      }),
+    );
+
+    const timestamp = parts["t"];
+    const expectedSigs = signature.split(",")
+      .filter((p) => p.startsWith("v1="))
+      .map((p) => p.slice(3));
+
+    if (!timestamp || expectedSigs.length === 0) return false;
+
+    const payload = `${timestamp}.${rawBody}`;
+    const key = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(secret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"],
+    );
+    const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload));
+    const computed = Buffer.from(mac).toString("hex");
+
+    return expectedSigs.some((sig) => sig === computed);
+  } catch {
+    return false;
+  }
+}
+
 function jsonResponse(status: number, body: Record<string, unknown>): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -26,6 +64,7 @@ function jsonResponse(status: number, body: Record<string, unknown>): Response {
 }
 
 const devAutoLoginEnabled = isAutoLoginEnabled();
+const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET ?? "";
 const giteaInternalUrl =
   process.env.GITEA_INTERNAL_URL ??
   process.env.VITE_GITEA_URL ??
@@ -91,6 +130,49 @@ const server = serve({
         }
 
         return jsonResponse(200, { token: payload.sha1 });
+      },
+    },
+
+    "/stripe/webhook": {
+      async POST(req) {
+        if (!stripeWebhookSecret) {
+          console.warn("[stripe] STRIPE_WEBHOOK_SECRET is not set — webhook signature verification skipped.");
+        }
+
+        const rawBody = await req.text();
+
+        // Verify Stripe signature when secret is configured.
+        if (stripeWebhookSecret) {
+          const signature = req.headers.get("stripe-signature") ?? "";
+          const isValid = await verifyStripeSignature(rawBody, signature, stripeWebhookSecret);
+          if (!isValid) {
+            console.warn("[stripe] Invalid webhook signature.");
+            return new Response("Forbidden", { status: 403 });
+          }
+        }
+
+        let event: { type?: string; data?: { object?: Record<string, unknown> } };
+        try {
+          event = JSON.parse(rawBody) as typeof event;
+        } catch {
+          return new Response("Bad Request", { status: 400 });
+        }
+
+        if (event.type === "checkout.session.completed") {
+          const session = event.data?.object ?? {};
+          console.log("[stripe] checkout.session.completed:", JSON.stringify({
+            id: session.id,
+            customer: session.customer,
+            customer_email: session.customer_email,
+            amount_total: session.amount_total,
+            currency: session.currency,
+            payment_status: session.payment_status,
+          }));
+        } else {
+          console.log(`[stripe] Received unhandled event type: ${event.type ?? "unknown"}`);
+        }
+
+        return new Response("OK", { status: 200 });
       },
     },
 
