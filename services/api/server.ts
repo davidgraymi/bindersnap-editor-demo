@@ -74,6 +74,8 @@ const configuredAllowedOrigins = (
 const DOCUMENTS_DIRECTORY = "documents";
 const DOCUMENTS_ROUTE_PREFIX = "/api/app/documents";
 const DOCUMENTS_VERSIONS_ROUTE_SUFFIX = "/versions";
+const DOCUMENTS_VERSIONS_REVIEW_ROUTE_SUFFIX = "/review";
+const DOCUMENTS_VERSIONS_PUBLISH_ROUTE_SUFFIX = "/publish";
 const UPLOAD_BRANCH_PREFIX = "bindersnap/upload";
 const GITEA_REPOS_PAGE_LIMIT = 100;
 const GITEA_PULLS_PAGE_LIMIT = 100;
@@ -204,6 +206,47 @@ export interface DocumentUploadResult {
   pullRequestNumber: number;
   pullRequestUrl: string | null;
   approvalState: CatalogApprovalState;
+}
+
+export interface DocumentVersionReviewResult {
+  documentId: string;
+  branchName: string;
+  commit: CommitSummary | null;
+  pullRequestNumber: number;
+  pullRequestUrl: string | null;
+  approvalState: CatalogApprovalState;
+  review: {
+    state: string;
+    body: string;
+    reviewer: string | null;
+    createdAt: string;
+  };
+  pullRequest: {
+    number: number;
+    title: string;
+    branch: string;
+    state: string;
+    htmlUrl: string | null;
+    updatedAt: string;
+  };
+}
+
+export interface DocumentVersionPublishResult {
+  documentId: string;
+  branchName: string;
+  commit: CommitSummary | null;
+  publishedVersion: CommitSummary | null;
+  pullRequestNumber: number;
+  pullRequestUrl: string | null;
+  approvalState: CatalogApprovalState;
+  pullRequest: {
+    number: number;
+    title: string;
+    branch: string;
+    state: string;
+    htmlUrl: string | null;
+    updatedAt: string;
+  };
 }
 
 export type CatalogApprovalState =
@@ -1630,6 +1673,326 @@ async function createOrUpdateUploadPullRequest(
   };
 }
 
+async function readPullRequest(
+  token: string,
+  owner: string,
+  repo: string,
+  pullNumber: number,
+): Promise<GiteaPullSummary | null> {
+  const response = await giteaFetch(
+    `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${pullNumber}`,
+    {
+      method: "GET",
+      headers: buildGiteaHeaders(token),
+    },
+  );
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    throw upstreamStatusToCatalogError(
+      response.status,
+      "version_pull_request_unavailable",
+      "Unable to load the version review request.",
+    );
+  }
+
+  return (await response.json()) as GiteaPullSummary;
+}
+
+async function submitPullRequestReview(
+  token: string,
+  owner: string,
+  repo: string,
+  pullNumber: number,
+  event: "APPROVE" | "REQUEST_CHANGES" | "COMMENT",
+  body: string,
+): Promise<GiteaPullReviewSummary> {
+  const response = await giteaFetch(
+    `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${pullNumber}/reviews`,
+    {
+      method: "POST",
+      headers: buildGiteaHeaders(token, {
+        "Content-Type": "application/json",
+      }),
+      body: JSON.stringify({
+        event,
+        ...(body ? { body } : {}),
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    throw upstreamStatusToCatalogError(
+      response.status,
+      "version_review_failed",
+      "Unable to submit the pull request review.",
+    );
+  }
+
+  return (await response.json()) as GiteaPullReviewSummary;
+}
+
+async function mergePullRequest(
+  token: string,
+  owner: string,
+  repo: string,
+  pullNumber: number,
+  message: string,
+): Promise<{ merged?: boolean; sha?: string; merged_commit_id?: string }> {
+  const response = await giteaFetch(
+    `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${pullNumber}/merge`,
+    {
+      method: "POST",
+      headers: buildGiteaHeaders(token, {
+        "Content-Type": "application/json",
+      }),
+      body: JSON.stringify({
+        Do: "merge",
+        ...(message ? { MergeMessageField: message } : {}),
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    throw upstreamStatusToCatalogError(
+      response.status,
+      "version_publish_failed",
+      "Unable to publish the reviewed version.",
+    );
+  }
+
+  return (await response.json().catch(() => ({}))) as { merged?: boolean; sha?: string; merged_commit_id?: string };
+}
+
+interface VersionActionContext {
+  repository: WorkspaceRepository;
+  document: DocumentCatalogItem;
+  pullRequest: GiteaPullSummary;
+  pullRequestReviews: GiteaPullReviewSummary[];
+  pullRequestFiles: string[];
+}
+
+async function loadVersionActionContext(
+  session: SessionRecord,
+  documentId: string,
+  pullNumber: number,
+): Promise<VersionActionContext> {
+  const { repository, catalog } = await loadWorkspaceCatalog(session);
+  const document = catalog.documents.find((item) => item.id === documentId);
+  if (!document) {
+    throw createCatalogError(404, "document_not_found", "Document not found.");
+  }
+
+  const pullRequest = await readPullRequest(
+    session.giteaToken,
+    repository.owner,
+    repository.name,
+    pullNumber,
+  );
+  if (!pullRequest || !pullRequest.number) {
+    throw createCatalogError(404, "version_not_found", "Document version not found.");
+  }
+
+  const [pullRequestFiles, pullRequestReviews] = await Promise.all([
+    listPullRequestFiles(session.giteaToken, repository.owner, repository.name, pullNumber),
+    listPullRequestReviews(session.giteaToken, repository.owner, repository.name, pullNumber),
+  ]);
+
+  if (!pullRequestFiles.includes(document.path)) {
+    throw createCatalogError(404, "version_not_found", "Document version not found.");
+  }
+
+  return {
+    repository,
+    document,
+    pullRequest,
+    pullRequestFiles,
+    pullRequestReviews,
+  };
+}
+
+function buildVersionPullRequestMetadata(pullRequest: GiteaPullSummary): {
+  number: number;
+  title: string;
+  branch: string;
+  state: string;
+  htmlUrl: string | null;
+  updatedAt: string;
+} {
+  return {
+    number: pullRequest.number ?? 0,
+    title: pullRequest.title ?? "",
+    branch: pullRequest.head?.ref ?? "",
+    state: pullRequest.state ?? "open",
+    htmlUrl: pullRequest.html_url ?? null,
+    updatedAt: pullRequest.updated_at ?? pullRequest.created_at ?? "",
+  };
+}
+
+function buildVersionCommitMessage(document: DocumentCatalogItem, action: string): string {
+  return `${action} for ${document.displayName}`;
+}
+
+function ensurePublishPermission(session: SessionRecord, repository: WorkspaceRepository): void {
+  if (session.username === repository.owner) {
+    return;
+  }
+
+  throw createCatalogError(
+    403,
+    "publish_forbidden",
+    "You do not have permission to publish this version.",
+  );
+}
+
+function normalizeReviewBody(body: unknown, comment: unknown): string {
+  if (typeof body === "string" && body.trim() !== "") {
+    return body.trim();
+  }
+
+  if (typeof comment === "string" && comment.trim() !== "") {
+    return comment.trim();
+  }
+
+  return "";
+}
+
+export async function reviewDocumentVersion(
+  session: SessionRecord,
+  documentId: string,
+  pullNumber: number,
+  event: "APPROVE" | "REQUEST_CHANGES" | "COMMENT",
+  body: string,
+): Promise<DocumentVersionReviewResult> {
+  const context = await loadVersionActionContext(session, documentId, pullNumber);
+
+  if (context.pullRequest.state !== "open") {
+    throw createCatalogError(409, "version_not_reviewable", "This version is not open for review.");
+  }
+
+  const review = await submitPullRequestReview(
+    session.giteaToken,
+    context.repository.owner,
+    context.repository.name,
+    pullNumber,
+    event,
+    body,
+  );
+
+  const [updatedPullRequest, updatedReviews, commit] = await Promise.all([
+    readPullRequest(session.giteaToken, context.repository.owner, context.repository.name, pullNumber),
+    listPullRequestReviews(session.giteaToken, context.repository.owner, context.repository.name, pullNumber),
+    readCommitSummary(
+      session.giteaToken,
+      context.repository.owner,
+      context.repository.name,
+      context.document.path,
+      context.pullRequest.head?.ref ?? context.repository.defaultBranch,
+    ),
+  ]);
+
+  if (!updatedPullRequest || !updatedPullRequest.number) {
+    throw createCatalogError(502, "version_pull_request_unavailable", "Unable to load the version review request.");
+  }
+
+  return {
+    documentId: context.document.id,
+    branchName: updatedPullRequest.head?.ref ?? "",
+    commit,
+    pullRequestNumber: updatedPullRequest.number,
+    pullRequestUrl: updatedPullRequest.html_url ?? null,
+    approvalState: resolvePullRequestState(updatedPullRequest, updatedReviews),
+    review: {
+      state: review.state ?? event,
+      body: review.body ?? body,
+      reviewer: review.user?.login ?? session.username,
+      createdAt: review.submitted_at ?? review.created_at ?? "",
+    },
+    pullRequest: buildVersionPullRequestMetadata(updatedPullRequest),
+  };
+}
+
+export async function publishDocumentVersion(
+  session: SessionRecord,
+  documentId: string,
+  pullNumber: number,
+): Promise<DocumentVersionPublishResult> {
+  const context = await loadVersionActionContext(session, documentId, pullNumber);
+  ensurePublishPermission(session, context.repository);
+
+  const currentApprovalState = resolvePullRequestState(
+    context.pullRequest,
+    context.pullRequestReviews,
+  );
+
+  if (currentApprovalState === "published") {
+    const currentPublishedVersion = await readCommitSummary(
+      session.giteaToken,
+      context.repository.owner,
+      context.repository.name,
+      context.document.path,
+      context.repository.defaultBranch,
+    );
+
+    return {
+      documentId: context.document.id,
+      branchName: context.pullRequest.head?.ref ?? "",
+      commit: currentPublishedVersion,
+      publishedVersion: currentPublishedVersion,
+      pullRequestNumber: context.pullRequest.number ?? pullNumber,
+      pullRequestUrl: context.pullRequest.html_url ?? null,
+      approvalState: "published",
+      pullRequest: buildVersionPullRequestMetadata(context.pullRequest),
+    };
+  }
+
+  if (context.pullRequest.state !== "open") {
+    throw createCatalogError(409, "version_not_publishable", "This version is not open for publishing.");
+  }
+
+  if (currentApprovalState !== "approved") {
+    throw createCatalogError(409, "approval_required", "This version must be approved before publishing.");
+  }
+
+  await mergePullRequest(
+    session.giteaToken,
+    context.repository.owner,
+    context.repository.name,
+    pullNumber,
+    buildVersionCommitMessage(context.document, "Publish"),
+  );
+
+  const [publishedPullRequest, publishedReviews, publishedVersion] = await Promise.all([
+    readPullRequest(session.giteaToken, context.repository.owner, context.repository.name, pullNumber),
+    listPullRequestReviews(session.giteaToken, context.repository.owner, context.repository.name, pullNumber),
+    readCommitSummary(
+      session.giteaToken,
+      context.repository.owner,
+      context.repository.name,
+      context.document.path,
+      context.repository.defaultBranch,
+    ),
+  ]);
+
+  if (!publishedPullRequest || !publishedPullRequest.number) {
+    throw createCatalogError(502, "version_pull_request_unavailable", "Unable to load the published version.");
+  }
+
+  return {
+    documentId: context.document.id,
+    branchName: publishedPullRequest.head?.ref ?? "",
+    commit: publishedVersion,
+    publishedVersion,
+    pullRequestNumber: publishedPullRequest.number,
+    pullRequestUrl: publishedPullRequest.html_url ?? null,
+    approvalState: resolvePullRequestState(publishedPullRequest, publishedReviews),
+    pullRequest: buildVersionPullRequestMetadata(publishedPullRequest),
+  };
+}
+
 export async function uploadDocumentVersion(
   session: SessionRecord,
   documentId: string,
@@ -2070,6 +2433,100 @@ async function handleDocumentVersionUpload(
   }
 }
 
+interface VersionReviewRequestBody {
+  event?: unknown;
+  body?: unknown;
+  comment?: unknown;
+}
+
+function parseDocumentVersionRoute(
+  pathname: string,
+  suffix: string,
+): { documentId: string; pullNumber: number } | null {
+  if (!pathname.startsWith(`${DOCUMENTS_ROUTE_PREFIX}/`) || !pathname.endsWith(suffix)) {
+    return null;
+  }
+
+  const innerPath = pathname.slice(
+    `${DOCUMENTS_ROUTE_PREFIX}/`.length,
+    pathname.length - suffix.length,
+  );
+  const separator = innerPath.lastIndexOf("/versions/");
+  if (separator <= 0) {
+    return null;
+  }
+
+  try {
+    const documentId = decodeURIComponent(innerPath.slice(0, separator));
+    const pullNumberValue = Number.parseInt(innerPath.slice(separator + "/versions/".length), 10);
+    if (!documentId || !Number.isFinite(pullNumberValue) || pullNumberValue <= 0) {
+      return null;
+    }
+
+    return {
+      documentId,
+      pullNumber: pullNumberValue,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function handleDocumentVersionReview(
+  req: Request,
+  baseHeaders: Headers,
+  documentId: string,
+  pullNumber: number,
+): Promise<Response> {
+  const session = getSessionFromRequest(req);
+  if (!session) {
+    return catalogErrorResponse(createCatalogError(401, "unauthorized", "Unauthorized."), baseHeaders);
+  }
+
+  const payload = (await readJson<VersionReviewRequestBody>(req)) ?? {};
+  const eventRaw = typeof payload.event === "string" ? payload.event.trim().toUpperCase() : "";
+  if (!["APPROVE", "REQUEST_CHANGES", "COMMENT"].includes(eventRaw)) {
+    return catalogErrorResponse(
+      createCatalogError(400, "invalid_review_event", "A valid review event is required."),
+      baseHeaders,
+    );
+  }
+
+  const body = normalizeReviewBody(payload.body, payload.comment);
+
+  try {
+    const review = await reviewDocumentVersion(
+      session,
+      documentId,
+      pullNumber,
+      eventRaw as "APPROVE" | "REQUEST_CHANGES" | "COMMENT",
+      body,
+    );
+    return json(200, review, baseHeaders);
+  } catch (error) {
+    return catalogErrorResponse(error, baseHeaders);
+  }
+}
+
+async function handleDocumentVersionPublish(
+  req: Request,
+  baseHeaders: Headers,
+  documentId: string,
+  pullNumber: number,
+): Promise<Response> {
+  const session = getSessionFromRequest(req);
+  if (!session) {
+    return catalogErrorResponse(createCatalogError(401, "unauthorized", "Unauthorized."), baseHeaders);
+  }
+
+  try {
+    const payload = await publishDocumentVersion(session, documentId, pullNumber);
+    return json(200, payload, baseHeaders);
+  } catch (error) {
+    return catalogErrorResponse(error, baseHeaders);
+  }
+}
+
 async function cleanupExpiredSessions(): Promise<void> {
   const now = Date.now();
   const expiredSessions: SessionRecord[] = [];
@@ -2136,26 +2593,34 @@ export async function handleApiRequest(req: Request): Promise<Response> {
     return handleDocuments(req, baseHeaders);
   }
 
-  if (
-    pathname.startsWith(`${DOCUMENTS_ROUTE_PREFIX}/`) &&
-    pathname.endsWith(DOCUMENTS_VERSIONS_ROUTE_SUFFIX) &&
-    req.method === "POST"
-  ) {
-    try {
-      const documentId = decodeURIComponent(
-        pathname.slice(
-          `${DOCUMENTS_ROUTE_PREFIX}/`.length,
-          pathname.length - DOCUMENTS_VERSIONS_ROUTE_SUFFIX.length,
-        ),
-      );
-      if (documentId) {
-        return handleDocumentVersionUpload(req, baseHeaders, documentId);
+  if (pathname.startsWith(`${DOCUMENTS_ROUTE_PREFIX}/`) && req.method === "POST") {
+    if (pathname.endsWith(DOCUMENTS_VERSIONS_ROUTE_SUFFIX)) {
+      try {
+        const documentId = decodeURIComponent(
+          pathname.slice(
+            `${DOCUMENTS_ROUTE_PREFIX}/`.length,
+            pathname.length - DOCUMENTS_VERSIONS_ROUTE_SUFFIX.length,
+          ),
+        );
+        if (documentId) {
+          return handleDocumentVersionUpload(req, baseHeaders, documentId);
+        }
+      } catch {
+        return catalogErrorResponse(
+          createCatalogError(400, "invalid_document_id", "Invalid document identifier."),
+          baseHeaders,
+        );
       }
-    } catch {
-      return catalogErrorResponse(
-        createCatalogError(400, "invalid_document_id", "Invalid document identifier."),
-        baseHeaders,
-      );
+    }
+
+    const reviewRoute = parseDocumentVersionRoute(pathname, DOCUMENTS_VERSIONS_REVIEW_ROUTE_SUFFIX);
+    if (reviewRoute) {
+      return handleDocumentVersionReview(req, baseHeaders, reviewRoute.documentId, reviewRoute.pullNumber);
+    }
+
+    const publishRoute = parseDocumentVersionRoute(pathname, DOCUMENTS_VERSIONS_PUBLISH_ROUTE_SUFFIX);
+    if (publishRoute) {
+      return handleDocumentVersionPublish(req, baseHeaders, publishRoute.documentId, publishRoute.pullNumber);
     }
   }
 

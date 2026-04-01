@@ -11,12 +11,18 @@ Lightweight Bun auth/BFF service for the authenticated app.
 - `GET /api/app/documents`
 - `GET /api/app/documents/:id`
 - `POST /api/app/documents/:id/versions`
+- `POST /api/app/documents/:id/versions/:prNumber/review`
+- `POST /api/app/documents/:id/versions/:prNumber/publish`
 
 The browser only receives a Bindersnap session cookie. Gitea access tokens stay server-side in memory for this MVP.
 
 `GET /api/app/documents` resolves the authenticated workspace repository from the session token, reads the live `documents/` directory from Gitea, and returns a normalized catalog payload. Each document includes the current published commit metadata, the latest matching pull request state, and last activity timestamps.
 
 `POST /api/app/documents/:id/versions` accepts `multipart/form-data` with `file`, `summary`, and `source_note`, validates upload extension/size, then creates a deterministic upload branch, commits the uploaded file to that branch, and opens or updates the review pull request for the version.
+
+`POST /api/app/documents/:id/versions/:prNumber/review` accepts JSON with `event` values `APPROVE`, `REQUEST_CHANGES`, or `COMMENT`, plus optional `body`/`comment` text. It submits the review through Gitea and returns the updated approval state with PR and commit metadata.
+
+`POST /api/app/documents/:id/versions/:prNumber/publish` merges an approved version and returns the published commit metadata. For now, publish access is restricted to the repository owner session so the permission check is explicit and deterministic.
 
 Errors from the catalog routes are normalized as JSON objects with both a machine-readable `error.code` and a human-readable `error.message`, plus a top-level `message` field for the current frontend.
 

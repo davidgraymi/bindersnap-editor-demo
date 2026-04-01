@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { createHash } from "crypto";
 
-import { handleApiRequest, loadDocumentCatalog, uploadDocumentVersion } from "./server.ts";
+import {
+  handleApiRequest,
+  loadDocumentCatalog,
+  publishDocumentVersion,
+  reviewDocumentVersion,
+  uploadDocumentVersion,
+} from "./server.ts";
 
 const originalFetch = globalThis.fetch;
 const UPLOAD_BRANCH_NAME = `bindersnap/upload/main/documents-draft-json-${createHash("sha1")
@@ -43,6 +49,17 @@ function createUploadSession() {
     createdAt: Date.now(),
     expiresAt: Date.now() + 60_000,
   } as Parameters<typeof uploadDocumentVersion>[0];
+}
+
+function createReviewerSession(username = "alice") {
+  return {
+    id: `${username}-session`,
+    username,
+    giteaToken: "token-123",
+    giteaTokenName: `${username}-bindersnap-session`,
+    createdAt: Date.now(),
+    expiresAt: Date.now() + 60_000,
+  } as Parameters<typeof reviewDocumentVersion>[0];
 }
 
 function createUploadFormData(content: string, fileName = "updated-draft.json") {
@@ -235,16 +252,30 @@ function createMockFetchForUploadLifecycle() {
     branchContent: canonicalContent,
     branchFileSha: "canonical-file-sha",
     branchCommitSha: "canonical-commit-sha",
+    publishedContent: canonicalContent,
+    publishedFileSha: "canonical-file-sha",
+    publishedCommitSha: "canonical-commit-sha",
+    publishedCommitMessage: "seed: draft document",
     branchCommitCount: 0,
+    mergeCount: 0,
+    reviews: [] as Array<{
+      id: number;
+      state: string;
+      body: string;
+      user: { login: string };
+      submitted_at: string;
+    }>,
     pullRequest: null as null | {
       number: number;
       title: string;
       body: string;
       head: { ref: string };
-      state: "open";
+      state: string;
       updated_at: string;
       created_at: string;
       html_url: string;
+      merged?: boolean;
+      merged_at?: string;
     },
     branchCreateCount: 0,
     fileWriteCount: 0,
@@ -281,8 +312,8 @@ function createMockFetchForUploadLifecycle() {
       const ref = url.searchParams.get("ref");
       if (ref === "main") {
         return jsonResponse({
-          sha: "canonical-file-sha",
-          content: Buffer.from(canonicalContent, "utf8").toString("base64"),
+          sha: state.publishedFileSha,
+          content: Buffer.from(state.publishedContent, "utf8").toString("base64"),
         });
       }
 
@@ -301,10 +332,10 @@ function createMockFetchForUploadLifecycle() {
       if (path === "documents/draft.json" && sha === "main") {
         return jsonResponse([
           {
-            sha: "canonical-commit-sha",
+            sha: state.publishedCommitSha,
             commit: {
-              message: "seed: draft document",
-              author: { name: "Alice Author", date: "2026-03-30T12:00:00Z" },
+              message: state.publishedCommitMessage,
+              author: { name: "Alice Author", date: "2026-04-01T16:00:00Z" },
             },
           },
         ]);
@@ -336,6 +367,10 @@ function createMockFetchForUploadLifecycle() {
       state.branchContent = canonicalContent;
       state.branchFileSha = "canonical-file-sha";
       state.branchCommitSha = "canonical-commit-sha";
+      state.publishedContent = canonicalContent;
+      state.publishedFileSha = "canonical-file-sha";
+      state.publishedCommitSha = "canonical-commit-sha";
+      state.publishedCommitMessage = "seed: draft document";
       return new Response("", { status: 201 });
     }
 
@@ -384,6 +419,29 @@ function createMockFetchForUploadLifecycle() {
       return jsonResponse([]);
     }
 
+    if (url.pathname === "/api/v1/repos/alice/quarterly-report/pulls/12" && method === "GET") {
+      if (!state.pullRequest) {
+        return new Response("", { status: 404 });
+      }
+
+      return jsonResponse({
+        number: state.pullRequest.number,
+        title: state.pullRequest.title,
+        body: state.pullRequest.body,
+        state: state.pullRequest.state,
+        head: state.pullRequest.head,
+        updated_at: state.pullRequest.updated_at,
+        created_at: state.pullRequest.created_at,
+        html_url: state.pullRequest.html_url,
+        merged: state.pullRequest.merged ?? false,
+        merged_at: state.pullRequest.merged_at,
+      });
+    }
+
+    if (url.pathname === "/api/v1/repos/alice/quarterly-report/pulls/12/files" && method === "GET") {
+      return jsonResponse([{ filename: "documents/draft.json" }]);
+    }
+
     if (url.pathname === "/api/v1/repos/alice/quarterly-report/pulls" && method === "POST") {
       state.pullCreateCount += 1;
       state.pullRequest = {
@@ -417,7 +475,70 @@ function createMockFetchForUploadLifecycle() {
     }
 
     if (url.pathname === "/api/v1/repos/alice/quarterly-report/pulls/12/reviews" && method === "GET") {
-      return jsonResponse([]);
+      return jsonResponse(state.reviews);
+    }
+
+    if (url.pathname === "/api/v1/repos/alice/quarterly-report/pulls/12/reviews" && method === "POST") {
+      const body = typeof init?.body === "string" ? init.body : "";
+      const parsed = body ? (JSON.parse(body) as { event?: string; body?: string }) : {};
+      const createdAt = `2026-04-01T15:0${state.reviews.length + 1}:00Z`;
+      const reviewState =
+        parsed.event === "APPROVE"
+          ? "APPROVED"
+          : parsed.event === "REQUEST_CHANGES"
+            ? "REQUEST_CHANGES"
+            : "COMMENT";
+      const review = {
+        id: state.reviews.length + 1,
+        state: reviewState,
+        body: parsed.body ?? "",
+        user: { login: "alice" },
+        submitted_at: createdAt,
+      };
+      state.reviews = [...state.reviews, review];
+      state.pullRequest = {
+        ...(state.pullRequest ?? {
+          number: 12,
+          title: "Upload review: Q2 Compliance Report (updated-draft.json)",
+          body: "Upload review for Q2 Compliance Report",
+          head: { ref: UPLOAD_BRANCH_NAME },
+          state: "open",
+          updated_at: createdAt,
+          created_at: "2026-04-01T15:00:00Z",
+          html_url: "https://gitea.example/alice/quarterly-report/pulls/12",
+        }),
+        updated_at: createdAt,
+      };
+      return jsonResponse(review);
+    }
+
+    if (url.pathname === "/api/v1/repos/alice/quarterly-report/pulls/12/merge" && method === "POST") {
+      state.mergeCount += 1;
+      state.publishedContent = state.branchContent;
+      state.publishedFileSha = state.branchFileSha;
+      state.publishedCommitSha = `published-commit-sha-${state.mergeCount}`;
+      state.publishedCommitMessage = "Publish for Q2 Compliance Report";
+      state.pullRequest = {
+        ...(state.pullRequest ?? {
+          number: 12,
+          title: "Upload review: Q2 Compliance Report (updated-draft.json)",
+          body: "Upload review for Q2 Compliance Report",
+          head: { ref: UPLOAD_BRANCH_NAME },
+          state: "open",
+          updated_at: "2026-04-01T15:00:00Z",
+          created_at: "2026-04-01T15:00:00Z",
+          html_url: "https://gitea.example/alice/quarterly-report/pulls/12",
+        }),
+        state: "closed",
+        merged: true,
+        merged_at: "2026-04-01T16:00:00Z",
+        updated_at: "2026-04-01T16:00:00Z",
+      };
+      return jsonResponse({
+        merged: true,
+        sha: state.publishedCommitSha,
+        merged_commit_id: state.publishedCommitSha,
+      });
     }
 
     throw new Error(`Unexpected request ${method} ${url.pathname}${url.search}`);
@@ -510,6 +631,50 @@ test("handleApiRequest normalizes unauthorized upload access", async () => {
   expect(payload.message).toBe("Unauthorized.");
 });
 
+test("handleApiRequest normalizes unauthorized version review access", async () => {
+  const response = await handleApiRequest(
+    new Request("http://localhost/api/app/documents/documents%2Fdraft.json/versions/12/review", {
+      method: "POST",
+      headers: {
+        Origin: "http://localhost:5173",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ event: "APPROVE" }),
+    }),
+  );
+
+  expect(response.status).toBe(401);
+  const payload = (await response.json()) as {
+    error?: { code?: string; message?: string };
+    message?: string;
+  };
+
+  expect(payload.error?.code).toBe("unauthorized");
+  expect(payload.error?.message).toBe("Unauthorized.");
+  expect(payload.message).toBe("Unauthorized.");
+});
+
+test("handleApiRequest normalizes unauthorized version publish access", async () => {
+  const response = await handleApiRequest(
+    new Request("http://localhost/api/app/documents/documents%2Fdraft.json/versions/12/publish", {
+      method: "POST",
+      headers: {
+        Origin: "http://localhost:5173",
+      },
+    }),
+  );
+
+  expect(response.status).toBe(401);
+  const payload = (await response.json()) as {
+    error?: { code?: string; message?: string };
+    message?: string;
+  };
+
+  expect(payload.error?.code).toBe("unauthorized");
+  expect(payload.error?.message).toBe("Unauthorized.");
+  expect(payload.message).toBe("Unauthorized.");
+});
+
 test("uploadDocumentVersion rejects missing multipart file input", async () => {
   await expect(uploadDocumentVersion(createUploadSession(), "documents/draft.json", new FormData())).rejects.toMatchObject({
     status: 400,
@@ -582,4 +747,168 @@ test("uploadDocumentVersion creates a deterministic branch and reuses it for dup
   expect(state.fileWriteCount).toBe(1);
   expect(state.pullCreateCount).toBe(1);
   expect(state.pullPatchCount).toBe(1);
+});
+
+test("reviewDocumentVersion approves an uploaded version and returns audit metadata", async () => {
+  const { fetchImpl, state } = createMockFetchForUploadLifecycle();
+  globalThis.fetch = fetchImpl;
+
+  const uploaded = await uploadDocumentVersion(
+    createUploadSession(),
+    "documents/draft.json",
+    createUploadFormData(
+      JSON.stringify({
+        type: "doc",
+        content: [
+          {
+            type: "heading",
+            attrs: { level: 1 },
+            content: [{ type: "text", text: "Q2 Compliance Report v2" }],
+          },
+        ],
+      }),
+    ),
+  );
+
+  const reviewed = await reviewDocumentVersion(
+    createReviewerSession(),
+    "documents/draft.json",
+    uploaded.pullRequestNumber,
+    "APPROVE",
+    "Looks good to me.",
+  );
+
+  expect(reviewed.documentId).toBe("documents/draft.json");
+  expect(reviewed.branchName).toBe(UPLOAD_BRANCH_NAME);
+  expect(reviewed.pullRequestNumber).toBe(uploaded.pullRequestNumber);
+  expect(reviewed.approvalState).toBe("approved");
+  expect(reviewed.review.state).toBe("APPROVED");
+  expect(reviewed.review.body).toBe("Looks good to me.");
+  expect(reviewed.review.reviewer).toBe("alice");
+  expect(reviewed.pullRequest.state).toBe("open");
+  expect(reviewed.commit?.sha).toBe("branch-commit-sha-1");
+  expect(state.reviews).toHaveLength(1);
+});
+
+test("reviewDocumentVersion accepts comment payloads and preserves in-review state", async () => {
+  const { fetchImpl, state } = createMockFetchForUploadLifecycle();
+  globalThis.fetch = fetchImpl;
+
+  const uploaded = await uploadDocumentVersion(
+    createUploadSession(),
+    "documents/draft.json",
+    createUploadFormData(
+      JSON.stringify({
+        type: "doc",
+        content: [
+          {
+            type: "heading",
+            attrs: { level: 1 },
+            content: [{ type: "text", text: "Q2 Compliance Report v2" }],
+          },
+        ],
+      }),
+    ),
+  );
+
+  const reviewed = await reviewDocumentVersion(
+    createReviewerSession(),
+    "documents/draft.json",
+    uploaded.pullRequestNumber,
+    "COMMENT",
+    "Please tighten section 4.2.",
+  );
+
+  expect(reviewed.approvalState).toBe("in_review");
+  expect(reviewed.review.state).toBe("COMMENT");
+  expect(reviewed.review.body).toBe("Please tighten section 4.2.");
+  expect(reviewed.pullRequest.state).toBe("open");
+  expect(state.reviews).toHaveLength(1);
+});
+
+test("publishDocumentVersion rejects non-owner sessions", async () => {
+  const { fetchImpl } = createMockFetchForUploadLifecycle();
+  globalThis.fetch = fetchImpl;
+
+  const uploaded = await uploadDocumentVersion(
+    createUploadSession(),
+    "documents/draft.json",
+    createUploadFormData(
+      JSON.stringify({
+        type: "doc",
+        content: [
+          {
+            type: "heading",
+            attrs: { level: 1 },
+            content: [{ type: "text", text: "Q2 Compliance Report v2" }],
+          },
+        ],
+      }),
+    ),
+  );
+
+  await reviewDocumentVersion(
+    createReviewerSession(),
+    "documents/draft.json",
+    uploaded.pullRequestNumber,
+    "APPROVE",
+    "Looks good to me.",
+  );
+
+  await expect(
+    publishDocumentVersion(
+      createReviewerSession("bob"),
+      "documents/draft.json",
+      uploaded.pullRequestNumber,
+    ),
+  ).rejects.toMatchObject({
+    status: 403,
+    code: "publish_forbidden",
+  });
+});
+
+test("publishDocumentVersion merges an approved version and returns published metadata", async () => {
+  const { fetchImpl, state } = createMockFetchForUploadLifecycle();
+  globalThis.fetch = fetchImpl;
+
+  const uploaded = await uploadDocumentVersion(
+    createUploadSession(),
+    "documents/draft.json",
+    createUploadFormData(
+      JSON.stringify({
+        type: "doc",
+        content: [
+          {
+            type: "heading",
+            attrs: { level: 1 },
+            content: [{ type: "text", text: "Q2 Compliance Report v2" }],
+          },
+        ],
+      }),
+    ),
+  );
+
+  await reviewDocumentVersion(
+    createReviewerSession(),
+    "documents/draft.json",
+    uploaded.pullRequestNumber,
+    "APPROVE",
+    "Looks good to me.",
+  );
+
+  const published = await publishDocumentVersion(
+    createReviewerSession(),
+    "documents/draft.json",
+    uploaded.pullRequestNumber,
+  );
+
+  expect(published.documentId).toBe("documents/draft.json");
+  expect(published.branchName).toBe(UPLOAD_BRANCH_NAME);
+  expect(published.pullRequestNumber).toBe(uploaded.pullRequestNumber);
+  expect(published.approvalState).toBe("published");
+  expect(published.publishedVersion?.sha).toBe("published-commit-sha-1");
+  expect(published.commit?.sha).toBe("published-commit-sha-1");
+  expect(published.pullRequest.state).toBe("closed");
+  expect(state.mergeCount).toBe(1);
+  expect(state.publishedCommitSha).toBe("published-commit-sha-1");
 });
