@@ -75,6 +75,24 @@ function createUploadFormData(content: string, fileName = "updated-draft.json") 
   return formData;
 }
 
+async function loginAndGetSessionCookie(username = "alice", password = "bindersnap-dev"): Promise<string> {
+  const response = await handleApiRequest(
+    new Request("http://localhost/auth/login", {
+      method: "POST",
+      headers: {
+        Origin: "http://localhost:5173",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ username, password }),
+    }),
+  );
+
+  expect(response.status).toBe(200);
+  const cookie = response.headers.get("set-cookie") ?? "";
+  expect(cookie).toContain("bindersnap_session=");
+  return cookie.split(";")[0] ?? cookie;
+}
+
 function createMockFetchForCatalog(): typeof fetch {
   return async (input, init) => {
     const url = new URL(typeof input === "string" || input instanceof URL ? input.toString() : input.url);
@@ -286,6 +304,27 @@ function createMockFetchForUploadLifecycle() {
   const fetchImpl: typeof fetch = async (input, init) => {
     const url = new URL(typeof input === "string" || input instanceof URL ? input.toString() : input.url);
     const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
+    const authorization = init?.headers
+      ? new Headers(init.headers).get("authorization")
+      : input instanceof Request
+        ? input.headers.get("authorization")
+        : null;
+
+    if (url.pathname === "/api/v1/user" && method === "GET") {
+      if (authorization?.startsWith("Basic ")) {
+        const decoded = Buffer.from(authorization.slice("Basic ".length), "base64").toString("utf8");
+        const username = decoded.split(":")[0] || "alice";
+        return jsonResponse({ login: username });
+      }
+
+      if (authorization?.startsWith("token ")) {
+        return jsonResponse({ login: "alice" });
+      }
+    }
+
+    if (url.pathname.startsWith("/api/v1/users/") && url.pathname.endsWith("/tokens") && method === "POST") {
+      return jsonResponse({ sha1: "session-token" }, { status: 201 });
+    }
 
     if (url.pathname === "/api/v1/user/repos" && method === "GET") {
       return jsonResponse([
@@ -440,6 +479,28 @@ function createMockFetchForUploadLifecycle() {
 
     if (url.pathname === "/api/v1/repos/alice/quarterly-report/pulls/12/files" && method === "GET") {
       return jsonResponse([{ filename: "documents/draft.json" }]);
+    }
+
+    if (
+      url.pathname.startsWith("/api/v1/repos/alice/quarterly-report/collaborators/") &&
+      url.pathname.endsWith("/permission") &&
+      method === "GET"
+    ) {
+      const username = decodeURIComponent(
+        url.pathname
+          .replace("/api/v1/repos/alice/quarterly-report/collaborators/", "")
+          .replace("/permission", ""),
+      );
+
+      if (username === "bob") {
+        return jsonResponse({ permission: "write" });
+      }
+
+      if (username === "alice") {
+        return jsonResponse({ permission: "admin" });
+      }
+
+      return jsonResponse({ permission: "read" });
     }
 
     if (url.pathname === "/api/v1/repos/alice/quarterly-report/pulls" && method === "POST") {
@@ -675,6 +736,72 @@ test("handleApiRequest normalizes unauthorized version publish access", async ()
   expect(payload.message).toBe("Unauthorized.");
 });
 
+test("handleApiRequest rejects invalid review events with a normalized error", async () => {
+  const { fetchImpl } = createMockFetchForUploadLifecycle();
+  globalThis.fetch = fetchImpl;
+
+  const sessionCookie = await loginAndGetSessionCookie();
+  const response = await handleApiRequest(
+    new Request("http://localhost/api/app/documents/documents%2Fdraft.json/versions/12/review", {
+      method: "POST",
+      headers: {
+        Origin: "http://localhost:5173",
+        Cookie: sessionCookie,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ event: "NOPE" }),
+    }),
+  );
+
+  expect(response.status).toBe(400);
+  const payload = (await response.json()) as {
+    error?: { code?: string; message?: string };
+    message?: string;
+  };
+  expect(payload.error?.code).toBe("invalid_review_event");
+  expect(payload.message).toBe("A valid review event is required.");
+});
+
+test("handleApiRequest enforces approval before publish", async () => {
+  const { fetchImpl } = createMockFetchForUploadLifecycle();
+  globalThis.fetch = fetchImpl;
+
+  await uploadDocumentVersion(
+    createUploadSession(),
+    "documents/draft.json",
+    createUploadFormData(
+      JSON.stringify({
+        type: "doc",
+        content: [
+          {
+            type: "heading",
+            attrs: { level: 1 },
+            content: [{ type: "text", text: "Q2 Compliance Report v2" }],
+          },
+        ],
+      }),
+    ),
+  );
+
+  const sessionCookie = await loginAndGetSessionCookie();
+  const response = await handleApiRequest(
+    new Request("http://localhost/api/app/documents/documents%2Fdraft.json/versions/12/publish", {
+      method: "POST",
+      headers: {
+        Origin: "http://localhost:5173",
+        Cookie: sessionCookie,
+      },
+    }),
+  );
+
+  expect(response.status).toBe(409);
+  const payload = (await response.json()) as {
+    error?: { code?: string; message?: string };
+    message?: string;
+  };
+  expect(payload.error?.code).toBe("approval_required");
+});
+
 test("uploadDocumentVersion rejects missing multipart file input", async () => {
   await expect(uploadDocumentVersion(createUploadSession(), "documents/draft.json", new FormData())).rejects.toMatchObject({
     status: 400,
@@ -826,7 +953,7 @@ test("reviewDocumentVersion accepts comment payloads and preserves in-review sta
   expect(state.reviews).toHaveLength(1);
 });
 
-test("publishDocumentVersion rejects non-owner sessions", async () => {
+test("publishDocumentVersion rejects users without publish permission", async () => {
   const { fetchImpl } = createMockFetchForUploadLifecycle();
   globalThis.fetch = fetchImpl;
 
@@ -857,7 +984,7 @@ test("publishDocumentVersion rejects non-owner sessions", async () => {
 
   await expect(
     publishDocumentVersion(
-      createReviewerSession("bob"),
+      createReviewerSession("eve"),
       "documents/draft.json",
       uploaded.pullRequestNumber,
     ),
@@ -865,6 +992,45 @@ test("publishDocumentVersion rejects non-owner sessions", async () => {
     status: 403,
     code: "publish_forbidden",
   });
+});
+
+test("publishDocumentVersion allows write collaborators to publish approved versions", async () => {
+  const { fetchImpl, state } = createMockFetchForUploadLifecycle();
+  globalThis.fetch = fetchImpl;
+
+  const uploaded = await uploadDocumentVersion(
+    createUploadSession(),
+    "documents/draft.json",
+    createUploadFormData(
+      JSON.stringify({
+        type: "doc",
+        content: [
+          {
+            type: "heading",
+            attrs: { level: 1 },
+            content: [{ type: "text", text: "Q2 Compliance Report v2" }],
+          },
+        ],
+      }),
+    ),
+  );
+
+  await reviewDocumentVersion(
+    createReviewerSession(),
+    "documents/draft.json",
+    uploaded.pullRequestNumber,
+    "APPROVE",
+    "Looks good to me.",
+  );
+
+  const published = await publishDocumentVersion(
+    createReviewerSession("bob"),
+    "documents/draft.json",
+    uploaded.pullRequestNumber,
+  );
+
+  expect(published.approvalState).toBe("published");
+  expect(state.mergeCount).toBe(1);
 });
 
 test("publishDocumentVersion merges an approved version and returns published metadata", async () => {

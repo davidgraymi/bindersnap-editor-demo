@@ -22,7 +22,7 @@ The browser only receives a Bindersnap session cookie. Gitea access tokens stay 
 
 `POST /api/app/documents/:id/versions/:prNumber/review` accepts JSON with `event` values `APPROVE`, `REQUEST_CHANGES`, or `COMMENT`, plus optional `body`/`comment` text. It submits the review through Gitea and returns the updated approval state with PR and commit metadata.
 
-`POST /api/app/documents/:id/versions/:prNumber/publish` merges an approved version and returns the published commit metadata. For now, publish access is restricted to the repository owner session so the permission check is explicit and deterministic.
+`POST /api/app/documents/:id/versions/:prNumber/publish` merges an approved version and returns the published commit metadata. Publish access is allowed for repository owners and collaborators with `write` or `admin` permission.
 
 Errors from the catalog routes are normalized as JSON objects with both a machine-readable `error.code` and a human-readable `error.message`, plus a top-level `message` field for the current frontend.
 

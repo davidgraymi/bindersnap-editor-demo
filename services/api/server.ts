@@ -168,6 +168,10 @@ interface GiteaContentFileResponse {
   encoding?: string;
 }
 
+interface GiteaCollaboratorPermission {
+  permission?: string;
+}
+
 interface DocumentVersionMetadata extends CommitSummary {}
 
 export interface DocumentCatalogItem {
@@ -1836,8 +1840,43 @@ function buildVersionCommitMessage(document: DocumentCatalogItem, action: string
   return `${action} for ${document.displayName}`;
 }
 
-function ensurePublishPermission(session: SessionRecord, repository: WorkspaceRepository): void {
-  if (session.username === repository.owner) {
+async function hasPublishPermission(
+  token: string,
+  repository: WorkspaceRepository,
+  username: string,
+): Promise<boolean> {
+  if (username === repository.owner) {
+    return true;
+  }
+
+  const response = await giteaFetch(
+    `/api/v1/repos/${encodeURIComponent(repository.owner)}/${encodeURIComponent(repository.name)}/collaborators/${encodeURIComponent(username)}/permission`,
+    {
+      method: "GET",
+      headers: buildGiteaHeaders(token),
+    },
+  );
+
+  if (response.status === 404) {
+    return false;
+  }
+
+  if (!response.ok) {
+    throw upstreamStatusToCatalogError(
+      response.status,
+      "publish_permission_unavailable",
+      "Unable to verify publish permissions.",
+    );
+  }
+
+  const payload = (await response.json().catch(() => ({}))) as GiteaCollaboratorPermission;
+  const permission = typeof payload.permission === "string" ? payload.permission.trim().toLowerCase() : "";
+  return permission === "admin" || permission === "write";
+}
+
+async function ensurePublishPermission(session: SessionRecord, repository: WorkspaceRepository): Promise<void> {
+  const permitted = await hasPublishPermission(session.giteaToken, repository, session.username);
+  if (permitted) {
     return;
   }
 
@@ -1921,7 +1960,7 @@ export async function publishDocumentVersion(
   pullNumber: number,
 ): Promise<DocumentVersionPublishResult> {
   const context = await loadVersionActionContext(session, documentId, pullNumber);
-  ensurePublishPermission(session, context.repository);
+  await ensurePublishPermission(session, context.repository);
 
   const currentApprovalState = resolvePullRequestState(
     context.pullRequest,
