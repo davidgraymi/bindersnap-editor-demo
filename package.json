@@ -18,6 +18,7 @@
     "dev:api": "bun --hot services/api/server.ts",
     "dev:landing": "APP_TARGET=landing bun --hot server.ts",
     "down": "docker compose -f dev/docker-compose.yml down -v",
+    "format": "bunx prettier --write \"**/*.{js,ts,jsx,tsx}\" --ignore-path .gitignore",
     "lighthouse": "bun run build:landing && sh -c 'python3 -m http.server 4173 --directory dist/landing >/dev/null 2>&1 & SERVER_PID=$!; sleep 1; bunx lighthouse http://localhost:4173 --output=json --output-path=./lighthouse.json --quiet --chrome-flags=\"--headless --no-sandbox --disable-gpu\" --no-enable-error-reporting; kill $SERVER_PID' && bun run summarize",
     "serve": "bun run serve:app",
     "serve:app": "NODE_ENV=production bun server.ts",
@@ -61,12 +62,13 @@
     "uuid": "^13.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.54.2",
     "@types/bun": "latest",
     "@types/diff": "^8.0.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/uuid": "^11.0.0",
-    "@playwright/test": "^1.54.2",
-    "jsdom": "^29.0.1"
+    "jsdom": "^29.0.1",
+    "prettier": "^3.8.1"
   }
 }
