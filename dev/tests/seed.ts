@@ -755,25 +755,30 @@ export async function seedDevStack(
   );
   return {
     prNumber,
+    oauthClientId,
     token: tokenInfo.token,
     tokenName: tokenInfo.tokenName,
-    oauthClientId,
   };
 }
 
 async function runCli(): Promise<void> {
   const result = await seedDevStack();
+  console.log("");
+  console.log("==================================================");
+  if (result.oauthClientId) {
+    console.log(`OAUTH_CLIENT_ID=${result.oauthClientId}`);
+    console.log("Add to dev/.env:");
+    console.log(`  BUN_PUBLIC_GITEA_OAUTH_CLIENT_ID=${result.oauthClientId}`);
+  }
   if (result.token) {
     const tokenSuffix = result.token.slice(-8);
-    console.log("");
-    console.log("==================================================");
     console.log(`TOKEN_NAME=${result.tokenName}`);
     console.log(`ALICE_TOKEN_SUFFIX=...${tokenSuffix}`);
     console.log(
       "Token created. Set VITE_GITEA_TOKEN manually in your shell if needed.",
     );
-    console.log("==================================================");
   }
+  console.log("==================================================");
   console.log("Seed complete.");
 }
 

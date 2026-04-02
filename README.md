@@ -80,6 +80,9 @@ This is the complete environment variable reference used by repo code, scripts, 
 | `VITE_GITEA_TOKEN` | none | smoke/integration tests | Optional pre-existing token for direct Gitea API assertions. |
 | `BUN_PUBLIC_HOCUSPOCUS_URL` | `ws://localhost:1234` | compose | Frontend websocket URL wiring for collaboration features. |
 | `VITE_HOCUSPOCUS_URL` | `ws://localhost:1234` | compose/tests | Vite-style websocket URL alias for collaboration features. |
+| `BUN_PUBLIC_GITEA_OAUTH_CLIENT_ID` | none | `apps/app/` auth flow | Public OAuth2 client ID for PKCE login — printed by seed script on first `bun run up`. |
+| `BUN_PUBLIC_GITEA_OAUTH_REDIRECT_URI` | `http://localhost:5173/auth/callback` | `apps/app/` auth flow | Redirect URI registered with the Gitea OAuth2 app. |
+| `BUN_PUBLIC_PANDOC_SERVICE_URL` | `http://localhost:3001` | `apps/app/` import/export | Base URL for the Pandoc conversion service. |
 
 ## Local Stack
 
@@ -89,4 +92,4 @@ Use the dockerized stack when you want seeded Gitea + API + app together:
 bun run up
 ```
 
-See [`dev/README.md`](/Users/davidgray/git/bindersnap-editor-demo/dev/README.md) for full workflow details.
+See [`dev/README.md`](dev/README.md) for full workflow details.
