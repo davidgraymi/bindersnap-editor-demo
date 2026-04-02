@@ -363,6 +363,15 @@ export function App() {
     return user ? "app" : "login";
   }, [isCheckingSession, route, user]);
 
+  const giteaBaseUrl = appEnv?.VITE_GITEA_BASE_URL ?? "http://localhost:3000";
+  const giteaClient = useMemo(() => {
+    try {
+      return createAuthenticatedClient(giteaBaseUrl);
+    } catch {
+      return null;
+    }
+  }, [giteaBaseUrl]);
+
   if (view === "callback") {
     return (
       <section className="app-gate">
@@ -410,15 +419,6 @@ export function App() {
       />
     );
   }
-
-  const giteaBaseUrl = appEnv?.VITE_GITEA_BASE_URL ?? "http://localhost:3000";
-  const giteaClient = useMemo(() => {
-    try {
-      return createAuthenticatedClient(giteaBaseUrl);
-    } catch {
-      return null;
-    }
-  }, [giteaBaseUrl]);
 
   if (!giteaClient) {
     return (
