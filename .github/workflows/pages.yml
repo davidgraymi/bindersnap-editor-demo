@@ -2,15 +2,8 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - 'apps/landing/**'
-      - 'packages/editor/**'
-      - 'packages/ui-tokens/**'
-      - 'packages/utils/**'
-      - 'bun.lock'
-      - 'package.json'
+    tags:
+      - "*"
   workflow_dispatch:
 
 permissions:
