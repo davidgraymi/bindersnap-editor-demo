@@ -73,12 +73,24 @@ const repoListPullReviewsMock = mock(
   }),
 );
 
-const repoCreatePullReviewMock = mock(
+// Creates a pending review and returns an ID
+const repoCreatePullReviewMock = mock(async () => ({
+  data: {
+    id: 7,
+    state: "PENDING",
+    body: "",
+    user: { login: "alice" },
+  } as PullReview,
+}));
+
+// Submits the pending review with the actual event
+const repoSubmitPullReviewMock = mock(
   async (
     _owner: string,
     _repo: string,
     _index: number,
-    body: CreatePullReviewOptions,
+    _id: number,
+    body: import("gitea-js").SubmitPullReviewOptions,
   ) => ({
     data: {
       id: 7,
@@ -99,6 +111,7 @@ const client = {
     repoListPullRequests: repoListPullRequestsMock,
     repoListPullReviews: repoListPullReviewsMock,
     repoCreatePullReview: repoCreatePullReviewMock,
+    repoSubmitPullReview: repoSubmitPullReviewMock,
     repoMergePullRequest: repoMergePullRequestMock,
   },
 } as unknown as GiteaClient;
@@ -108,6 +121,7 @@ afterEach(() => {
   repoListPullRequestsMock.mockReset();
   repoListPullReviewsMock.mockReset();
   repoCreatePullReviewMock.mockReset();
+  repoSubmitPullReviewMock.mockReset();
   repoMergePullRequestMock.mockReset();
 
   repoCreatePullRequestMock.mockImplementation(
@@ -175,12 +189,22 @@ afterEach(() => {
     }),
   );
 
-  repoCreatePullReviewMock.mockImplementation(
+  repoCreatePullReviewMock.mockImplementation(async () => ({
+    data: {
+      id: 7,
+      state: "PENDING",
+      body: "",
+      user: { login: "alice" },
+    } as PullReview,
+  }));
+
+  repoSubmitPullReviewMock.mockImplementation(
     async (
       _owner: string,
       _repo: string,
       _index: number,
-      body: CreatePullReviewOptions,
+      _id: number,
+      body: import("gitea-js").SubmitPullReviewOptions,
     ) => ({
       data: {
         id: 7,
@@ -462,7 +486,7 @@ test("listPullRequests maps merged PRs to published and approved PRs to approved
   ]);
 });
 
-test("submitReview forwards the review event and body", async () => {
+test("submitReview creates a pending review then submits with the event and body", async () => {
   const { submitReview } = await import("./pullRequests");
 
   const review = await submitReview({
@@ -474,17 +498,46 @@ test("submitReview forwards the review event and body", async () => {
     body: "Please update section 4.2.",
   });
 
+  // Step 1: create pending review with no event/body
   expect(repoCreatePullReviewMock).toHaveBeenCalledTimes(1);
   expect(repoCreatePullReviewMock).toHaveBeenCalledWith(
     "alice",
     "quarterly-report",
     2,
-    {
-      event: "REQUEST_CHANGES",
-      body: "Please update section 4.2.",
-    },
+    {},
   );
+
+  // Step 2: submit with the actual event and body
+  expect(repoSubmitPullReviewMock).toHaveBeenCalledTimes(1);
+  expect(repoSubmitPullReviewMock).toHaveBeenCalledWith(
+    "alice",
+    "quarterly-report",
+    2,
+    7,
+    { event: "REQUEST_CHANGES", body: "Please update section 4.2." },
+  );
+
   expect(review.state).toBe("REQUEST_CHANGES");
+});
+
+test("submitReview uses a single space as body when none is provided (APPROVE without comment)", async () => {
+  const { submitReview } = await import("./pullRequests");
+
+  await submitReview({
+    client,
+    owner: "alice",
+    repo: "quarterly-report",
+    pullNumber: 2,
+    event: "APPROVE",
+  });
+
+  expect(repoSubmitPullReviewMock).toHaveBeenCalledWith(
+    "alice",
+    "quarterly-report",
+    2,
+    7,
+    { event: "APPROVE", body: " " },
+  );
 });
 
 test("mergePullRequest forwards the merge style", async () => {

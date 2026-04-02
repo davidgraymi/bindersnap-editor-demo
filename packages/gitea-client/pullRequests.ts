@@ -4,6 +4,7 @@ import type {
   MergePullRequestOption,
   PullRequest,
   PullReview,
+  SubmitPullReviewOptions,
 } from "gitea-js";
 
 import { GiteaApiError, type GiteaClient } from "./client";
@@ -304,18 +305,35 @@ export async function submitReview(
   const { client, owner, repo, pullNumber, event, body } = params;
 
   try {
-    const requestBody: CreatePullReviewOptions = {
-      event,
-      body: body ?? "",
-    };
-
-    const response = await client.repos.repoCreatePullReview(
+    // Step 1: create a pending review (no event/body required at this stage)
+    const createBody: CreatePullReviewOptions = {};
+    const createResponse = await client.repos.repoCreatePullReview(
       owner,
       repo,
       pullNumber,
-      requestBody,
+      createBody,
     );
-    return response.data;
+    const reviewId = createResponse.data.id;
+    if (!reviewId) {
+      throw new GiteaApiError(0, "Gitea did not return a review ID.");
+    }
+
+    // Step 2: submit the pending review with the actual event
+    // Gitea requires a non-empty body for APPROVE/REQUEST_CHANGES events.
+    // A single space satisfies the length check without rendering as a comment.
+    const submitBody: SubmitPullReviewOptions = {
+      event,
+      body: body && body.trim() !== "" ? body : " ",
+    };
+    const submitResponse = await client.repos.repoSubmitPullReview(
+      owner,
+      repo,
+      pullNumber,
+      reviewId,
+      submitBody,
+    );
+
+    return submitResponse.data;
   } catch (error) {
     throw toGiteaApiError(error);
   }
