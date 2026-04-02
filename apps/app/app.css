@@ -336,7 +336,8 @@ input {
 .vault-doc-grid {
   display: grid;
   gap: var(--brand-space-4);
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  --vault-card-min-width: 320px;
+  grid-template-columns: repeat(auto-fill, minmax(var(--vault-card-min-width), 1fr));
 }
 
 .vault-doc-card {
@@ -346,7 +347,7 @@ input {
 }
 
 .vault-doc-card:hover {
-  transform: translateY(-4px);
+  transform: translateY(calc(-1 * var(--brand-space-1)));
 }
 
 .vault-doc-card-title {
