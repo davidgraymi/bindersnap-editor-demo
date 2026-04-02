@@ -60,13 +60,13 @@ bindersnap-editor-demo/
 
 ### The two applications
 
-| | Landing Page | Real App |
-|---|---|---|
-| **Entry point** | `apps/landing/index.html` | `apps/app/index.html` |
-| **Published** | GitHub Pages (`/`) | Never — local + private deploy only |
-| **Auth required** | No | Yes (Gitea token) |
-| **Gitea dependency** | No | Yes |
-| **Demo editor** | Read-only snapshot | Fully wired |
+|                      | Landing Page              | Real App                            |
+| -------------------- | ------------------------- | ----------------------------------- |
+| **Entry point**      | `apps/landing/index.html` | `apps/app/index.html`               |
+| **Published**        | GitHub Pages (`/`)        | Never — local + private deploy only |
+| **Auth required**    | No                        | Yes (Gitea token)                   |
+| **Gitea dependency** | No                        | Yes                                 |
+| **Demo editor**      | Read-only snapshot        | Fully wired                         |
 
 ### The shared editor
 
@@ -79,6 +79,7 @@ operates in read-only demo mode when that prop is absent. Never import from
 
 `dev/docker-compose.yml` runs Gitea + Hocuspocus locally. `docker compose up`
 seeds demo users and documents automatically. Use this to:
+
 - Verify Gitea service implementations against a real API
 - Run integration tests (`bun run test:integration`)
 - See how the real app looks with realistic data
@@ -91,6 +92,87 @@ If you change anything in `packages/editor/` that affects visual appearance, not
 in your PR description. The landing page demo embed is a static snapshot and
 must be manually updated by running `bun run sync-demo`. Do not silently change
 the editor UI without flagging this in the PR.
+
+---
+
+## Architecture Decisions — Read Before Writing Any Code
+
+These are settled, non-negotiable decisions. Do not reopen them. Do not work
+around them. If a task seems to require violating one of these, stop and create
+a `human-needed` issue instead.
+
+### The app is a pure SPA. There is no BFF.
+
+The real app (`apps/app/`) is a static single-page application. It communicates
+directly with the Gitea API using the user's PKCE OAuth2 bearer token. There is
+no backend-for-frontend, no session server, no API proxy, and no middleware
+layer between the browser and Gitea.
+
+**If you find yourself:**
+
+- Writing an Express, Bun, or Hono HTTP server for the app
+- Adding a `services/api/` directory
+- Storing Gitea tokens in server-side sessions or cookies
+- Proxying Gitea API calls through any server
+
+**Stop. You are building the wrong thing.**
+
+The only permitted backend services in this repo are:
+
+- `services/hocuspocus/` — Yjs WebSocket server for real-time collaboration (editor path only)
+- A future Pandoc conversion service (backlogged, not MVP — see issue #73)
+- A future Stripe webhook handler (see issue #75)
+
+### Authentication is PKCE OAuth2. The browser holds the token.
+
+Auth flow: browser → Gitea OAuth2 authorize → PKCE code exchange → bearer token
+stored in memory or `sessionStorage`. The token is attached to every Gitea API
+request as `Authorization: Bearer <token>`. No cookies. No server-side sessions.
+
+The `apps/app/auth/` directory owns this flow. `packages/gitea-client/` consumes
+the token. Nothing else touches auth.
+
+The security model is deliberate: PKCE without a client secret is the correct
+pattern for a public SPA client. The token-in-browser threat model is equivalent
+to cookie/session token risk and is acceptable given short token lifetimes and
+tight Gitea scopes.
+
+### All data lives in Gitea. No secondary database.
+
+Documents, versions, approvals, comments, and audit trail are all stored as
+first-class Gitea primitives: repos, branches, commits, pull requests, reviews,
+tags, and issue comments. There is no app-managed database, no metadata JSON
+file, and no shadow state outside of Gitea.
+
+The consequence: reading app state means calling the Gitea API. This is
+intentional. Do not introduce a local cache, a Postgres instance, or any
+persistence layer that duplicates Gitea state.
+
+### File uploads go direct: FileReader → base64 → Gitea contents API.
+
+The upload flow for the file vault is entirely browser-side:
+
+1. User selects file
+2. SPA reads it via `FileReader` as base64
+3. SPA calls `POST /api/v1/repos/{owner}/{repo}/contents/{path}` with the
+   base64 content directly
+4. SPA creates the PR
+
+There is no multipart upload endpoint. There is no server that receives the file
+first. File type and size validation happen client-side before any API call.
+
+See `docs/adr/0001-external-file-workflow.md` for the full upload/review/publish
+contract. **That ADR is law for the file vault workflow.**
+
+### The MVP is a document repository, not an editor.
+
+The file vault workflow (issues #101–#105) does not use the inline editor. Users
+upload files authored externally (Word, Excel, PDF). Bindersnap provides version
+control and approvals on top of those files via Gitea PR primitives.
+
+The inline editor (`packages/editor/`, issues #71–#72) is a parallel workflow
+for documents authored inside Bindersnap. These two workflows are independent.
+Do not conflate them.
 
 ---
 
