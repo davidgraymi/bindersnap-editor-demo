@@ -8,12 +8,13 @@ This is the authenticated Bindersnap product app.
 - API sets an `HttpOnly` session cookie.
 - Browser never stores or receives upstream Gitea access tokens.
 - App data calls go through API routes (for example `/api/app/documents`).
+- The file-vault shell uses `/api/app/documents` and `/api/app/documents/:id` to keep the list and detail views in sync.
 
 ## Entry points
 
 - `index.html`: HTML entry for the product app.
 - `App.tsx`: Route/auth gate (`/app`, `/login`, `/auth/callback` shell handling).
-- `components/AppShell.tsx`: Authenticated app shell and workspace data fetch.
+- `components/AppShell.tsx`: Authenticated vault shell with document list and detail state.
 
 ## Local dev
 
