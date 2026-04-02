@@ -2,10 +2,7 @@ import { GiteaApiError, type GiteaClient } from './client';
 import { createPullRequest } from './pullRequests';
 import type { PullRequestWithApprovalState } from './pullRequests';
 
-const ALLOWED_EXTENSIONS = ['pdf', 'docx', 'xlsx'] as const;
 const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024; // 25 MiB
-
-export type AllowedExtension = (typeof ALLOWED_EXTENSIONS)[number];
 
 export interface UploadValidationResult {
   valid: boolean;
@@ -58,13 +55,6 @@ export interface UploadResult {
 }
 
 export function validateUploadFile(file: File): UploadValidationResult {
-  const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
-  if (!(ALLOWED_EXTENSIONS as readonly string[]).includes(ext)) {
-    return {
-      valid: false,
-      reason: `Unsupported file type ".${ext}". Only PDF, DOCX, and XLSX files are allowed.`,
-    };
-  }
   if (file.size > MAX_FILE_SIZE_BYTES) {
     const sizeMiB = (file.size / (1024 * 1024)).toFixed(1);
     return {

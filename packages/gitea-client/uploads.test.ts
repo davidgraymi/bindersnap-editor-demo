@@ -7,58 +7,41 @@ import { buildUploadBranchName, buildUploadCommitMessage, validateUploadFile } f
 
 test('validateUploadFile accepts pdf', () => {
   const file = new File(['content'], 'test.pdf', { type: 'application/pdf' });
-  const result = validateUploadFile(file);
-  expect(result.valid).toBe(true);
-  expect(result.reason).toBeUndefined();
+  expect(validateUploadFile(file).valid).toBe(true);
 });
 
 test('validateUploadFile accepts docx', () => {
   const file = new File(['content'], 'test.docx', {
     type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   });
-  const result = validateUploadFile(file);
-  expect(result.valid).toBe(true);
-  expect(result.reason).toBeUndefined();
+  expect(validateUploadFile(file).valid).toBe(true);
 });
 
 test('validateUploadFile accepts xlsx', () => {
   const file = new File(['content'], 'test.xlsx', {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   });
-  const result = validateUploadFile(file);
-  expect(result.valid).toBe(true);
-  expect(result.reason).toBeUndefined();
+  expect(validateUploadFile(file).valid).toBe(true);
 });
 
-test('validateUploadFile accepts uppercase extensions', () => {
-  const file = new File(['content'], 'test.PDF', { type: 'application/pdf' });
-  const result = validateUploadFile(file);
-  expect(result.valid).toBe(true);
-  expect(result.reason).toBeUndefined();
+test('validateUploadFile accepts any extension — txt', () => {
+  const file = new File(['content'], 'notes.txt', { type: 'text/plain' });
+  expect(validateUploadFile(file).valid).toBe(true);
 });
 
-test('validateUploadFile rejects unsupported extension', () => {
-  const file = new File(['content'], 'test.txt', { type: 'text/plain' });
-  const result = validateUploadFile(file);
-  expect(result.valid).toBe(false);
-  expect(result.reason).toContain('Unsupported file type');
-  expect(result.reason).toContain('.txt');
+test('validateUploadFile accepts any extension — zip', () => {
+  const file = new File(['content'], 'archive.zip', { type: 'application/zip' });
+  expect(validateUploadFile(file).valid).toBe(true);
 });
 
-test('validateUploadFile rejects zip', () => {
-  const file = new File(['content'], 'test.zip', { type: 'application/zip' });
-  const result = validateUploadFile(file);
-  expect(result.valid).toBe(false);
-  expect(result.reason).toContain('Unsupported file type');
-  expect(result.reason).toContain('.zip');
+test('validateUploadFile accepts files without extensions', () => {
+  const file = new File(['content'], 'Makefile', { type: 'application/octet-stream' });
+  expect(validateUploadFile(file).valid).toBe(true);
 });
 
 test('validateUploadFile rejects files over 25 MiB', () => {
-  // Create a large file using Uint8Array
-  const size = 26 * 1024 * 1024; // 26 MiB
-  const largeContent = new Uint8Array(size);
+  const largeContent = new Uint8Array(26 * 1024 * 1024);
   const file = new File([largeContent], 'large.pdf', { type: 'application/pdf' });
-
   const result = validateUploadFile(file);
   expect(result.valid).toBe(false);
   expect(result.reason).toContain('File is too large');
@@ -66,21 +49,9 @@ test('validateUploadFile rejects files over 25 MiB', () => {
 });
 
 test('validateUploadFile accepts files exactly at 25 MiB limit', () => {
-  // Create a file exactly at the limit
-  const size = 25 * 1024 * 1024; // 25 MiB
-  const largeContent = new Uint8Array(size);
+  const largeContent = new Uint8Array(25 * 1024 * 1024);
   const file = new File([largeContent], 'at-limit.pdf', { type: 'application/pdf' });
-
-  const result = validateUploadFile(file);
-  expect(result.valid).toBe(true);
-  expect(result.reason).toBeUndefined();
-});
-
-test('validateUploadFile handles files without extensions', () => {
-  const file = new File(['content'], 'noextension', { type: 'application/octet-stream' });
-  const result = validateUploadFile(file);
-  expect(result.valid).toBe(false);
-  expect(result.reason).toContain('Unsupported file type');
+  expect(validateUploadFile(file).valid).toBe(true);
 });
 
 // ────────────────────────────────────────────────────────────────
