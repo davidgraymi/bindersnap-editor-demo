@@ -1,4 +1,4 @@
-import type { CreateTagOption, Repository, Tag } from "gitea-js";
+import type { BranchProtection, CreateTagOption, Repository, Tag } from "gitea-js";
 
 import { GiteaApiError, type GiteaClient } from "./client";
 
@@ -157,6 +157,47 @@ export async function getLatestDocTag(
 
     tags.sort((a, b) => b.version - a.version);
     return tags[0];
+  } catch (error) {
+    throw toGiteaApiError(error);
+  }
+}
+
+export interface RepoBranchProtection {
+  requiredApprovals: number;
+  enableApprovalsWhitelist: boolean;
+  approvalsWhitelistUsernames: string[];
+  enableMergeWhitelist: boolean;
+  mergeWhitelistUsernames: string[];
+  blockOnRejectedReviews: boolean;
+}
+
+function normalizeBranchProtection(
+  raw: BranchProtection,
+): RepoBranchProtection {
+  return {
+    requiredApprovals: raw.required_approvals ?? 0,
+    enableApprovalsWhitelist: raw.enable_approvals_whitelist ?? false,
+    approvalsWhitelistUsernames: raw.approvals_whitelist_username ?? [],
+    enableMergeWhitelist: raw.enable_merge_whitelist ?? false,
+    mergeWhitelistUsernames: raw.merge_whitelist_usernames ?? [],
+    blockOnRejectedReviews: raw.block_on_rejected_reviews ?? false,
+  };
+}
+
+export async function getRepoBranchProtection(
+  client: GiteaClient,
+  owner: string,
+  repo: string,
+  branchName: string,
+): Promise<RepoBranchProtection | null> {
+  try {
+    const response = await client.repos.repoListBranchProtection(owner, repo);
+    const rules = response.data;
+
+    const exact = rules.find((r) => r.rule_name === branchName);
+    const rule = exact ?? rules[0] ?? null;
+
+    return rule ? normalizeBranchProtection(rule) : null;
   } catch (error) {
     throw toGiteaApiError(error);
   }

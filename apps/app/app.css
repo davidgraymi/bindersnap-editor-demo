@@ -629,6 +629,13 @@ input {
   font-size: var(--brand-text-sm);
 }
 
+.vault-pr-notice {
+  margin: var(--brand-space-3) 0 0;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-sm);
+  font-style: italic;
+}
+
 @media (max-width: 640px) {
   .vault-doc-grid {
     grid-template-columns: 1fr;

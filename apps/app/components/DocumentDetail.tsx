@@ -2,7 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 
 import type { GiteaClient } from "../../../packages/gitea-client/client";
 import type { PullRequestWithApprovalState } from "../../../packages/gitea-client/pullRequests";
-import type { DocTag } from "../../../packages/gitea-client/repos";
+import type {
+  DocTag,
+  RepoBranchProtection,
+} from "../../../packages/gitea-client/repos";
 import type { UploadResult } from "../../../packages/gitea-client/uploads";
 import { GiteaApiError } from "../../../packages/gitea-client/client";
 import {
@@ -12,6 +15,7 @@ import {
 } from "../../../packages/gitea-client/pullRequests";
 import {
   createDocTag,
+  getRepoBranchProtection,
   listDocTags,
 } from "../../../packages/gitea-client/repos";
 import { UploadModal } from "./UploadModal";
@@ -103,6 +107,47 @@ function readPermissionError(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback;
 }
 
+function canUserReview(
+  currentUser: string,
+  prAuthor: string | undefined,
+  protection: RepoBranchProtection | null,
+): { allowed: boolean; reason: string | null } {
+  if (currentUser === prAuthor) {
+    return {
+      allowed: false,
+      reason: "You cannot review your own pull request.",
+    };
+  }
+  if (
+    protection?.enableApprovalsWhitelist &&
+    protection.approvalsWhitelistUsernames.length > 0 &&
+    !protection.approvalsWhitelistUsernames.includes(currentUser)
+  ) {
+    return {
+      allowed: false,
+      reason: "Your account is not authorized to approve this document.",
+    };
+  }
+  return { allowed: true, reason: null };
+}
+
+function canUserMerge(
+  currentUser: string,
+  protection: RepoBranchProtection | null,
+): { allowed: boolean; reason: string | null } {
+  if (
+    protection?.enableMergeWhitelist &&
+    protection.mergeWhitelistUsernames.length > 0 &&
+    !protection.mergeWhitelistUsernames.includes(currentUser)
+  ) {
+    return {
+      allowed: false,
+      reason: "Your account is not authorized to publish this document.",
+    };
+  }
+  return { allowed: true, reason: null };
+}
+
 const DEFAULT_PR_ACTION_STATE: PRActionState = {
   status: "idle",
   error: null,
@@ -119,6 +164,8 @@ export function DocumentDetail({
 }: DocumentDetailProps) {
   const [tags, setTags] = useState<DocTag[]>([]);
   const [openPRs, setOpenPRs] = useState<PullRequestWithApprovalState[]>([]);
+  const [branchProtection, setBranchProtection] =
+    useState<RepoBranchProtection | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -135,7 +182,7 @@ export function DocumentDetail({
     setError(null);
 
     try {
-      const [docTags, pullRequests] = await Promise.all([
+      const [docTags, pullRequests, protection] = await Promise.all([
         listDocTags(giteaClient, owner, repo),
         listPullRequests({
           client: giteaClient,
@@ -143,10 +190,14 @@ export function DocumentDetail({
           repo,
           state: "open",
         }),
+        getRepoBranchProtection(giteaClient, owner, repo, "main").catch(
+          () => null,
+        ),
       ]);
 
       setTags(docTags);
       setOpenPRs(pullRequests);
+      setBranchProtection(protection);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Unable to load document details.";
@@ -192,7 +243,7 @@ export function DocumentDetail({
         repo,
         pullNumber,
         event: "APPROVE",
-        body: "",
+        body: "Approved",
       });
       updatePRActionState(pullNumber, { status: "idle" });
       await loadDocumentData();
@@ -384,7 +435,13 @@ export function DocumentDetail({
               const prNum = pr.number ?? 0;
               const actionState = getPRActionState(prNum);
               const isSubmitting = actionState.status === "submitting";
-              const canMerge = pr.approvalState === "approved";
+              const reviewPerms = canUserReview(
+                uploaderSlug,
+                pr.user?.login,
+                branchProtection,
+              );
+              const mergePerms = canUserMerge(uploaderSlug, branchProtection);
+              const mergeReady = pr.approvalState === "approved";
 
               return (
                 <div className="vault-pr-item" key={pr.number}>
@@ -403,73 +460,79 @@ export function DocumentDetail({
                   </div>
                   {pr.body ? <p className="vault-pr-body">{pr.body}</p> : null}
 
-                  <div className="vault-pr-actions">
-                    <button
-                      className="bs-btn bs-btn-secondary"
-                      type="button"
-                      disabled={isSubmitting}
-                      onClick={() => void handleApprove(prNum)}
-                    >
-                      {isSubmitting ? "Submitting…" : "Approve"}
-                    </button>
-
-                    {actionState.showChangesForm ? (
-                      <div className="vault-pr-comment-form">
-                        <textarea
-                          className="vault-pr-comment-input"
-                          placeholder="Describe what needs to change…"
-                          value={actionState.changesComment}
-                          rows={3}
-                          disabled={isSubmitting}
-                          onChange={(e) =>
-                            updatePRActionState(prNum, {
-                              changesComment: e.target.value,
-                              error: null,
-                            })
-                          }
-                        />
-                        <div className="vault-pr-comment-actions">
-                          <button
-                            className="bs-btn bs-btn-primary"
-                            type="button"
-                            disabled={isSubmitting}
-                            onClick={() => void handleRequestChanges(prNum)}
-                          >
-                            {isSubmitting ? "Submitting…" : "Submit Request"}
-                          </button>
-                          <button
-                            className="bs-btn bs-btn-secondary"
-                            type="button"
-                            disabled={isSubmitting}
-                            onClick={() =>
-                              updatePRActionState(prNum, {
-                                showChangesForm: false,
-                                changesComment: "",
-                                error: null,
-                              })
-                            }
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
+                  {reviewPerms.allowed ? (
+                    <div className="vault-pr-actions">
                       <button
                         className="bs-btn bs-btn-secondary"
                         type="button"
                         disabled={isSubmitting}
-                        onClick={() =>
-                          updatePRActionState(prNum, {
-                            showChangesForm: true,
-                            error: null,
-                          })
-                        }
+                        onClick={() => void handleApprove(prNum)}
                       >
-                        Request Changes
+                        {isSubmitting ? "Submitting…" : "Approve"}
                       </button>
-                    )}
 
-                    {canMerge ? (
+                      {actionState.showChangesForm ? (
+                        <div className="vault-pr-comment-form">
+                          <textarea
+                            className="vault-pr-comment-input"
+                            placeholder="Describe what needs to change…"
+                            value={actionState.changesComment}
+                            rows={3}
+                            disabled={isSubmitting}
+                            onChange={(e) =>
+                              updatePRActionState(prNum, {
+                                changesComment: e.target.value,
+                                error: null,
+                              })
+                            }
+                          />
+                          <div className="vault-pr-comment-actions">
+                            <button
+                              className="bs-btn bs-btn-primary"
+                              type="button"
+                              disabled={isSubmitting}
+                              onClick={() => void handleRequestChanges(prNum)}
+                            >
+                              {isSubmitting ? "Submitting…" : "Submit Request"}
+                            </button>
+                            <button
+                              className="bs-btn bs-btn-secondary"
+                              type="button"
+                              disabled={isSubmitting}
+                              onClick={() =>
+                                updatePRActionState(prNum, {
+                                  showChangesForm: false,
+                                  changesComment: "",
+                                  error: null,
+                                })
+                              }
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          className="bs-btn bs-btn-secondary"
+                          type="button"
+                          disabled={isSubmitting}
+                          onClick={() =>
+                            updatePRActionState(prNum, {
+                              showChangesForm: true,
+                              error: null,
+                            })
+                          }
+                        >
+                          Request Changes
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="vault-pr-notice">{reviewPerms.reason}</p>
+                  )}
+
+                  {mergePerms.allowed && mergeReady ? (
+                    <div className="vault-pr-actions">
                       <button
                         className="bs-btn bs-btn-primary vault-pr-publish-btn"
                         type="button"
@@ -478,8 +541,10 @@ export function DocumentDetail({
                       >
                         {isSubmitting ? "Publishing…" : "Publish"}
                       </button>
-                    ) : null}
-                  </div>
+                    </div>
+                  ) : mergeReady && !mergePerms.allowed ? (
+                    <p className="vault-pr-notice">{mergePerms.reason}</p>
+                  ) : null}
 
                   {actionState.error ? (
                     <p className="vault-pr-error" role="alert">

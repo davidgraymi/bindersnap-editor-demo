@@ -1,7 +1,21 @@
 import { afterEach, expect, mock, test } from "bun:test";
-import type { CreateTagOption, Repository, Tag } from "gitea-js";
+import type { BranchProtection, CreateTagOption, Repository, Tag } from "gitea-js";
 
 import { GiteaApiError, type GiteaClient } from "./client";
+
+const repoListBranchProtectionMock = mock(async () => ({
+  data: [
+    {
+      rule_name: "main",
+      required_approvals: 1,
+      enable_approvals_whitelist: false,
+      approvals_whitelist_username: [],
+      enable_merge_whitelist: false,
+      merge_whitelist_usernames: [],
+      block_on_rejected_reviews: true,
+    } as BranchProtection,
+  ],
+}));
 
 const repoCreateTagMock = mock(
   async (_owner: string, _repo: string, body: CreateTagOption) => ({
@@ -76,6 +90,7 @@ const client = {
     repoSearch: repoSearchMock,
     repoListTags: repoListTagsMock,
     repoCreateTag: repoCreateTagMock,
+    repoListBranchProtection: repoListBranchProtectionMock,
   },
 } as unknown as GiteaClient;
 
@@ -83,6 +98,21 @@ afterEach(() => {
   repoSearchMock.mockReset();
   repoListTagsMock.mockReset();
   repoCreateTagMock.mockReset();
+  repoListBranchProtectionMock.mockReset();
+
+  repoListBranchProtectionMock.mockImplementation(async () => ({
+    data: [
+      {
+        rule_name: "main",
+        required_approvals: 1,
+        enable_approvals_whitelist: false,
+        approvals_whitelist_username: [],
+        enable_merge_whitelist: false,
+        merge_whitelist_usernames: [],
+        block_on_rejected_reviews: true,
+      } as BranchProtection,
+    ],
+  }));
 
   repoCreateTagMock.mockImplementation(
     async (_owner: string, _repo: string, body: CreateTagOption) => ({
@@ -463,5 +493,84 @@ test("createDocTag throws GiteaApiError when tag name does not match doc/v* patt
       version: 3,
       target: "main",
     }),
+  ).rejects.toThrow(GiteaApiError);
+});
+
+test("getRepoBranchProtection returns normalised protection for matching branch", async () => {
+  const { getRepoBranchProtection } = await import("./repos");
+
+  const protection = await getRepoBranchProtection(
+    client,
+    "alice",
+    "quarterly-report",
+    "main",
+  );
+
+  expect(repoListBranchProtectionMock).toHaveBeenCalledWith(
+    "alice",
+    "quarterly-report",
+  );
+  expect(protection).not.toBeNull();
+  expect(protection?.requiredApprovals).toBe(1);
+  expect(protection?.enableApprovalsWhitelist).toBe(false);
+  expect(protection?.blockOnRejectedReviews).toBe(true);
+});
+
+test("getRepoBranchProtection returns null when no rules exist", async () => {
+  const { getRepoBranchProtection } = await import("./repos");
+
+  repoListBranchProtectionMock.mockImplementation(async () => ({
+    data: [] as BranchProtection[],
+  }));
+
+  const protection = await getRepoBranchProtection(
+    client,
+    "alice",
+    "quarterly-report",
+    "main",
+  );
+
+  expect(protection).toBeNull();
+});
+
+test("getRepoBranchProtection falls back to first rule when branch name has no exact match", async () => {
+  const { getRepoBranchProtection } = await import("./repos");
+
+  repoListBranchProtectionMock.mockImplementation(async () => ({
+    data: [
+      {
+        rule_name: "release/*",
+        required_approvals: 2,
+        enable_approvals_whitelist: true,
+        approvals_whitelist_username: ["alice", "bob"],
+        enable_merge_whitelist: true,
+        merge_whitelist_usernames: ["alice"],
+        block_on_rejected_reviews: false,
+      } as BranchProtection,
+    ],
+  }));
+
+  const protection = await getRepoBranchProtection(
+    client,
+    "alice",
+    "quarterly-report",
+    "main",
+  );
+
+  expect(protection).not.toBeNull();
+  expect(protection?.requiredApprovals).toBe(2);
+  expect(protection?.approvalsWhitelistUsernames).toEqual(["alice", "bob"]);
+  expect(protection?.mergeWhitelistUsernames).toEqual(["alice"]);
+});
+
+test("getRepoBranchProtection throws GiteaApiError on network failure", async () => {
+  const { getRepoBranchProtection } = await import("./repos");
+
+  repoListBranchProtectionMock.mockImplementation(async () => {
+    throw new Error("Network error");
+  });
+
+  await expect(
+    getRepoBranchProtection(client, "alice", "quarterly-report", "main"),
   ).rejects.toThrow(GiteaApiError);
 });
