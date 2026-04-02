@@ -4,10 +4,10 @@ Everything needed to run the **full Bindersnap target architecture locally** for
 
 ## What this spins up
 
-| Service | URL | Purpose |
-|---|---|---|
-| Gitea | `http://localhost:3000` | Git backend, auth source, document storage |
-| Hocuspocus | `ws://localhost:1234` | Real-time collaboration WebSocket server |
+| Service        | URL                                  | Purpose                                    |
+| -------------- | ------------------------------------ | ------------------------------------------ |
+| Gitea          | `http://localhost:3000`              | Git backend, auth source, document storage |
+| Hocuspocus     | `ws://localhost:1234`                | Real-time collaboration WebSocket server   |
 | Bindersnap app | `http://localhost:${APP_PORT:-5173}` | The real app (`apps/app/`) with hot reload |
 
 ## Quick start
@@ -21,6 +21,7 @@ First run takes ~60s for Gitea to initialize. On subsequent runs it's instant.
 The app port defaults to `5173` and can be overridden with `APP_PORT`.
 
 After Gitea is healthy, the seed script runs automatically and creates:
+
 - Two users: `alice` (admin) and `bob` (collaborator)
 - A demo repository: `alice/quarterly-report`
 - Three documents in different approval states (see `gitea-seed/documents/`)

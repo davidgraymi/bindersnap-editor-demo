@@ -25,7 +25,6 @@
 
 @import "../../ui-tokens/css/bindersnap-tokens.css";
 
-
 /* ═════════════════════════════════════════════════════════════
    1. TOKEN BINDINGS
    All tokens are scoped to .bs-editor so the component never
@@ -34,92 +33,105 @@
 
 .bs-editor {
   /* ── Surfaces ── */
-  --e-bg:         var(--bs-page-bg);
-  --e-surface:    var(--bs-surface-1);
-  --e-surface-2:  var(--bs-surface-2);
-  --e-surface-3:  var(--bs-surface-3);
+  --e-bg: var(--bs-page-bg);
+  --e-surface: var(--bs-surface-1);
+  --e-surface-2: var(--bs-surface-2);
+  --e-surface-3: var(--bs-surface-3);
 
   /* ── Text ── */
-  --e-text:       var(--bs-text-primary);
-  --e-text-2:     var(--bs-text-secondary);
-  --e-text-3:     var(--bs-text-muted);
-  --e-text-4:     var(--bs-text-faint);
+  --e-text: var(--bs-text-primary);
+  --e-text-2: var(--bs-text-secondary);
+  --e-text-3: var(--bs-text-muted);
+  --e-text-4: var(--bs-text-faint);
 
   /* ── Borders ── */
-  --e-rule:       var(--bs-rule);
-  --e-rule-2:     var(--bs-rule-warm);
+  --e-rule: var(--bs-rule);
+  --e-rule-2: var(--bs-rule-warm);
 
   /* ── Brand ── */
-  --e-coral:      var(--brand-coral);
-  --e-coral-dk:   var(--brand-coral-dark);
-  --e-coral-dim:  var(--bs-coral-dim);
+  --e-coral: var(--brand-coral);
+  --e-coral-dk: var(--brand-coral-dark);
+  --e-coral-dim: var(--bs-coral-dim);
   --e-coral-glow: var(--bs-coral-glow);
-  --e-green:      var(--brand-green);
-  --e-green-dim:  var(--bs-green-dim);
-  --e-blue:       hsl(212 92% 58%);
-  --e-blue-dim:   color-mix(in srgb, var(--e-blue) 14%, var(--e-surface-1));
+  --e-green: var(--brand-green);
+  --e-green-dim: var(--bs-green-dim);
+  --e-blue: hsl(212 92% 58%);
+  --e-blue-dim: color-mix(in srgb, var(--e-blue) 14%, var(--e-surface-1));
 
   /* ── Semantic extension colours ── */
   /* Merge conflicts */
-  --e-conflict-ours:    color-mix(in srgb, var(--brand-green) 14%, var(--e-surface-1));
-  --e-conflict-theirs:  var(--e-blue-dim);
-  --e-conflict-base:    color-mix(in srgb, var(--bs-text-faint) 18%, var(--e-surface-1));
+  --e-conflict-ours: color-mix(
+    in srgb,
+    var(--brand-green) 14%,
+    var(--e-surface-1)
+  );
+  --e-conflict-theirs: var(--e-blue-dim);
+  --e-conflict-base: color-mix(
+    in srgb,
+    var(--bs-text-faint) 18%,
+    var(--e-surface-1)
+  );
   --e-conflict-bar-our: var(--brand-green);
-  --e-conflict-bar-th:  var(--e-blue);
-  --e-conflict-bar-base:var(--bs-text-faint);
+  --e-conflict-bar-th: var(--e-blue);
+  --e-conflict-bar-base: var(--bs-text-faint);
 
   /* Tracked changes */
-  --e-insert:     color-mix(in srgb, var(--brand-green) 16%, var(--e-surface-1));
+  --e-insert: color-mix(in srgb, var(--brand-green) 16%, var(--e-surface-1));
   --e-insert-txt: var(--brand-green);
-  --e-delete:     color-mix(in srgb, var(--brand-coral) 12%, var(--e-surface-1));
+  --e-delete: color-mix(in srgb, var(--brand-coral) 12%, var(--e-surface-1));
   --e-delete-txt: var(--brand-coral);
 
   /* Approval states */
-  --e-approved:   color-mix(in srgb, var(--brand-green) 12%, var(--e-surface-1));
+  --e-approved: color-mix(in srgb, var(--brand-green) 12%, var(--e-surface-1));
   --e-approved-b: var(--brand-green);
-  --e-pending:    color-mix(in srgb, var(--brand-coral) 12%, var(--e-surface-1));
-  --e-pending-b:  var(--brand-coral);
-  --e-rejected:   color-mix(in srgb, var(--bs-text-primary) 8%, var(--e-surface-1));
+  --e-pending: color-mix(in srgb, var(--brand-coral) 12%, var(--e-surface-1));
+  --e-pending-b: var(--brand-coral);
+  --e-rejected: color-mix(
+    in srgb,
+    var(--bs-text-primary) 8%,
+    var(--e-surface-1)
+  );
   --e-rejected-b: var(--bs-text-primary);
 
   /* Comments */
-  --e-comment:    color-mix(in srgb, var(--brand-coral) 12%, var(--e-surface-1));
-  --e-comment-b:  var(--brand-coral);
+  --e-comment: color-mix(in srgb, var(--brand-coral) 12%, var(--e-surface-1));
+  --e-comment-b: var(--brand-coral);
 
   /* ── Typography ── */
   --e-font-serif: var(--brand-font-serif);
-  --e-font-sans:  var(--brand-font-sans);
-  --e-font-mono:  var(--brand-font-mono);
+  --e-font-sans: var(--brand-font-sans);
+  --e-font-mono: var(--brand-font-mono);
 
   /* ── Shadows ── */
-  --e-shadow-sm:  var(--bs-shadow-sm);
-  --e-shadow-md:  var(--bs-shadow-md);
+  --e-shadow-sm: var(--bs-shadow-sm);
+  --e-shadow-md: var(--bs-shadow-md);
 
   /* ── Transitions ── */
   --e-t-fast: var(--brand-transition-fast);
   --e-t-base: var(--brand-transition-base);
 
   /* ── Layout ── */
-  --e-content-width: var(--brand-max-width-text);  /* comfortable prose line length */
-  --e-gutter:        var(--brand-space-12);
+  --e-content-width: var(
+    --brand-max-width-text
+  ); /* comfortable prose line length */
+  --e-gutter: var(--brand-space-12);
 
   /* ── Derivative sizes ── */
-  --e-border-1:      calc(var(--brand-space-1) / 4);
-  --e-border-2:      calc(var(--brand-space-1) / 2);
-  --e-border-3:      calc(var(--brand-space-1) * 0.75);
-  --e-space-0-5:     calc(var(--brand-space-1) / 2);
-  --e-space-0-75:    calc(var(--brand-space-1) * 0.75);
+  --e-border-1: calc(var(--brand-space-1) / 4);
+  --e-border-2: calc(var(--brand-space-1) / 2);
+  --e-border-3: calc(var(--brand-space-1) * 0.75);
+  --e-space-0-5: calc(var(--brand-space-1) / 2);
+  --e-space-0-75: calc(var(--brand-space-1) * 0.75);
 
   /* ── Editor layout values ── */
   --bs-editor-sidebar-default: calc(var(--brand-space-16) * 4);
-  --bs-editor-sidebar-min:     calc(var(--brand-space-16) * 3);
-  --bs-editor-sidebar-max:     calc(var(--brand-space-16) * 10);
+  --bs-editor-sidebar-min: calc(var(--brand-space-16) * 3);
+  --bs-editor-sidebar-max: calc(var(--brand-space-16) * 10);
 
   /* ── Code block colors (fixed dark surface) ── */
-  --e-code-bg:   color-mix(in srgb, black 85%, var(--bs-text-primary));
+  --e-code-bg: color-mix(in srgb, black 85%, var(--bs-text-primary));
   --e-code-text: var(--brand-on-dark-primary);
 }
-
 
 /* ═════════════════════════════════════════════════════════════
    3. EDITOR SHELL & LAYOUT
@@ -133,14 +145,19 @@
   border: var(--e-border-1) solid var(--e-rule);
   border-radius: var(--brand-radius-lg);
   overflow: hidden;
-  transition: border-color var(--e-t-base), box-shadow var(--e-t-base), background var(--e-t-base);
+  transition:
+    border-color var(--e-t-base),
+    box-shadow var(--e-t-base),
+    background var(--e-t-base);
   font-family: var(--e-font-sans);
   color: var(--e-text);
 }
 
 .bs-editor:focus-within {
   border-color: var(--e-coral);
-  box-shadow: 0 0 0 var(--e-border-3) var(--e-coral-glow), var(--e-shadow-md);
+  box-shadow:
+    0 0 0 var(--e-border-3) var(--e-coral-glow),
+    var(--e-shadow-md);
 }
 
 /* Scroll container */
@@ -211,7 +228,6 @@
   box-shadow: none;
 }
 
-
 /* ═════════════════════════════════════════════════════════════
    4. TOOLBAR
    ═════════════════════════════════════════════════════════════ */
@@ -224,7 +240,9 @@
   background: var(--e-surface);
   border-bottom: var(--e-border-1) solid var(--e-rule);
   flex-wrap: wrap;
-  transition: background var(--e-t-base), border-color var(--e-t-base);
+  transition:
+    background var(--e-t-base),
+    border-color var(--e-t-base);
 }
 
 .bs-editor__toolbar--stacked {
@@ -256,7 +274,9 @@
   scrollbar-width: none;
 }
 
-.bs-editor__toolbar-mobile::-webkit-scrollbar { display: none; }
+.bs-editor__toolbar-mobile::-webkit-scrollbar {
+  display: none;
+}
 
 .bs-editor__toolbar-spacer {
   margin-left: auto;
@@ -293,7 +313,7 @@
   cursor: pointer;
   transition:
     background var(--e-t-fast),
-    color      var(--e-t-fast);
+    color var(--e-t-fast);
   flex-shrink: 0;
 }
 
@@ -356,7 +376,9 @@
   height: var(--brand-space-8);
   appearance: none;
   outline: none;
-  transition: border-color var(--e-t-fast), color var(--e-t-fast);
+  transition:
+    border-color var(--e-t-fast),
+    color var(--e-t-fast);
 }
 
 .bs-editor__heading-select:hover {
@@ -390,7 +412,10 @@
   font-family: var(--e-font-sans);
   font-size: var(--brand-text-sm);
   cursor: pointer;
-  transition: border-color var(--e-t-fast), color var(--e-t-fast), background var(--e-t-fast);
+  transition:
+    border-color var(--e-t-fast),
+    color var(--e-t-fast),
+    background var(--e-t-fast);
 }
 
 .bs-editor__dropdown-trigger:hover {
@@ -446,7 +471,9 @@
   background: transparent;
   border: none;
   cursor: pointer;
-  transition: background var(--e-t-fast), color var(--e-t-fast);
+  transition:
+    background var(--e-t-fast),
+    color var(--e-t-fast);
 }
 
 .bs-editor__dropdown-item:hover {
@@ -487,7 +514,8 @@
   gap: var(--brand-space-4);
   padding: var(--brand-space-2) var(--brand-space-4);
   background: color-mix(in srgb, var(--brand-coral) 10%, var(--e-surface-2));
-  border-bottom: var(--e-border-1) solid color-mix(in srgb, var(--brand-coral) 20%, var(--e-surface-2));
+  border-bottom: var(--e-border-1) solid
+    color-mix(in srgb, var(--brand-coral) 20%, var(--e-surface-2));
   color: var(--e-text-2);
   font-family: var(--e-font-sans);
   font-size: var(--brand-text-sm);
@@ -506,13 +534,17 @@
   gap: var(--brand-space-1);
   padding: var(--brand-space-1) var(--brand-space-3);
   border-radius: var(--brand-radius-sm);
-  border: var(--e-border-1) solid color-mix(in srgb, var(--brand-coral) 25%, var(--e-surface-2));
+  border: var(--e-border-1) solid
+    color-mix(in srgb, var(--brand-coral) 25%, var(--e-surface-2));
   background: var(--e-surface);
   color: var(--brand-coral);
   font-family: var(--e-font-sans);
   font-size: var(--brand-text-sm);
   cursor: pointer;
-  transition: border-color var(--e-t-fast), color var(--e-t-fast), background var(--e-t-fast);
+  transition:
+    border-color var(--e-t-fast),
+    color var(--e-t-fast),
+    background var(--e-t-fast);
 }
 
 .bs-editor__preview-btn:hover {
@@ -549,7 +581,10 @@
   padding: var(--brand-space-1);
   border-radius: var(--brand-radius-full);
   cursor: pointer;
-  transition: background var(--e-t-fast), color var(--e-t-fast), transform var(--e-t-fast);
+  transition:
+    background var(--e-t-fast),
+    color var(--e-t-fast),
+    transform var(--e-t-fast);
   width: var(--brand-space-8);
   height: var(--brand-space-8);
   display: inline-flex;
@@ -613,7 +648,6 @@
   background: var(--e-coral-dim);
 }
 
-
 /* ═════════════════════════════════════════════════════════════
    5. PROSE TYPOGRAPHY
    All rules scoped to .ProseMirror to avoid leaking.
@@ -643,11 +677,27 @@
   margin-top: 0;
 }
 
-.bs-editor .ProseMirror h1 { font-size: var(--brand-text-h2);  font-weight: 700; letter-spacing: var(--brand-tracking-tight); }
-.bs-editor .ProseMirror h2 { font-size: var(--brand-text-h3);  }
-.bs-editor .ProseMirror h3 { font-size: var(--brand-text-body-lg); }
-.bs-editor .ProseMirror h4 { font-size: var(--brand-text-body); font-weight: 600; font-family: var(--e-font-sans); }
-.bs-editor .ProseMirror h5 { font-size: var(--brand-text-sm);   font-weight: 600; font-family: var(--e-font-sans); }
+.bs-editor .ProseMirror h1 {
+  font-size: var(--brand-text-h2);
+  font-weight: 700;
+  letter-spacing: var(--brand-tracking-tight);
+}
+.bs-editor .ProseMirror h2 {
+  font-size: var(--brand-text-h3);
+}
+.bs-editor .ProseMirror h3 {
+  font-size: var(--brand-text-body-lg);
+}
+.bs-editor .ProseMirror h4 {
+  font-size: var(--brand-text-body);
+  font-weight: 600;
+  font-family: var(--e-font-sans);
+}
+.bs-editor .ProseMirror h5 {
+  font-size: var(--brand-text-sm);
+  font-weight: 600;
+  font-family: var(--e-font-sans);
+}
 .bs-editor .ProseMirror h6 {
   font-size: var(--brand-text-xs);
   font-weight: 600;
@@ -664,7 +714,7 @@
 }
 
 .bs-editor .ProseMirror h1::after {
-  content: '';
+  content: "";
   position: absolute;
   left: 0;
   bottom: 0;
@@ -683,7 +733,9 @@
   color: var(--e-text-2);
 }
 
-.bs-editor .ProseMirror p:last-child { margin-bottom: 0; }
+.bs-editor .ProseMirror p:last-child {
+  margin-bottom: 0;
+}
 
 /* ── Lists ── */
 
@@ -710,7 +762,7 @@
 }
 
 .bs-editor .ProseMirror ul > li::before {
-  content: '';
+  content: "";
   position: absolute;
   left: -1.1em;
   top: 0.7em;
@@ -791,17 +843,25 @@
   appearance: none;
   background: var(--e-surface);
   cursor: pointer;
-  transition: background var(--e-t-fast), border-color var(--e-t-fast);
+  transition:
+    background var(--e-t-fast),
+    border-color var(--e-t-fast);
   position: relative;
 }
 
-.bs-editor .ProseMirror ul[data-type="taskList"] input[type="checkbox"]:checked {
+.bs-editor
+  .ProseMirror
+  ul[data-type="taskList"]
+  input[type="checkbox"]:checked {
   background: var(--e-coral);
   border-color: var(--e-coral);
 }
 
-.bs-editor .ProseMirror ul[data-type="taskList"] input[type="checkbox"]:checked::after {
-  content: '';
+.bs-editor
+  .ProseMirror
+  ul[data-type="taskList"]
+  input[type="checkbox"]:checked::after {
+  content: "";
   position: absolute;
   left: var(--e-space-0-75);
   top: var(--e-border-1);
@@ -848,8 +908,9 @@
 }
 
 /* ── Hard break ── */
-.bs-editor .ProseMirror br { display: block; }
-
+.bs-editor .ProseMirror br {
+  display: block;
+}
 
 /* ═════════════════════════════════════════════════════════════
    6. INLINE MARKS
@@ -910,9 +971,14 @@
 }
 
 /* Subscript / superscript */
-.bs-editor .ProseMirror sub  { vertical-align: sub;   font-size: 0.8em; }
-.bs-editor .ProseMirror sup  { vertical-align: super; font-size: 0.8em; }
-
+.bs-editor .ProseMirror sub {
+  vertical-align: sub;
+  font-size: 0.8em;
+}
+.bs-editor .ProseMirror sup {
+  vertical-align: super;
+  font-size: 0.8em;
+}
 
 /* ═════════════════════════════════════════════════════════════
    7. BLOCK ELEMENTS
@@ -921,7 +987,7 @@
 /* ── Code block ── */
 
 .bs-editor .ProseMirror pre {
-  background: var(--e-code-bg);         /* always ink — code blocks are dark */
+  background: var(--e-code-bg); /* always ink — code blocks are dark */
   border-radius: var(--brand-radius-lg);
   padding: var(--brand-space-5) var(--brand-space-6);
   margin: 1.5em 0;
@@ -933,7 +999,7 @@
   font-family: var(--e-font-mono);
   font-size: var(--brand-text-xs);
   line-height: 1.7;
-  color: var(--e-code-text);              /* always light cream on dark code bg */
+  color: var(--e-code-text); /* always light cream on dark code bg */
   background: transparent;
   border: none;
   padding: 0;
@@ -995,7 +1061,9 @@
   border-right: none;
 }
 
-.bs-editor .ProseMirror tr:last-child td { border-bottom: none; }
+.bs-editor .ProseMirror tr:last-child td {
+  border-bottom: none;
+}
 
 .bs-editor .ProseMirror thead th {
   background: var(--e-surface-2);
@@ -1030,7 +1098,9 @@
   transition: opacity var(--e-t-fast);
 }
 
-.bs-editor .ProseMirror table:hover .column-resize-handle { opacity: 0.4; }
+.bs-editor .ProseMirror table:hover .column-resize-handle {
+  opacity: 0.4;
+}
 
 /* ── Image ── */
 
@@ -1047,7 +1117,6 @@
   outline-offset: var(--e-border-2);
 }
 
-
 /* ═════════════════════════════════════════════════════════════
    8. PLACEHOLDER
    ═════════════════════════════════════════════════════════════ */
@@ -1061,7 +1130,6 @@
   height: 0;
   font-style: italic;
 }
-
 
 /* ═════════════════════════════════════════════════════════════
    9. SELECTION & FOCUS
@@ -1089,7 +1157,7 @@
 }
 
 .bs-editor .ProseMirror .ProseMirror-gapcursor::after {
-  content: '';
+  content: "";
   display: block;
   position: absolute;
   top: calc(var(--brand-space-1) * -0.5);
@@ -1099,11 +1167,14 @@
 }
 
 @keyframes ProseMirror-cursor-blink {
-  to { visibility: hidden; }
+  to {
+    visibility: hidden;
+  }
 }
 
-.bs-editor .ProseMirror:focus .ProseMirror-gapcursor { display: block; }
-
+.bs-editor .ProseMirror:focus .ProseMirror-gapcursor {
+  display: block;
+}
 
 /* ═════════════════════════════════════════════════════════════
    10. BINDERSNAP EXTENSIONS
@@ -1144,21 +1215,24 @@
 .bs-editor .bs-conflict__zone--ours {
   background: var(--e-conflict-ours);
   border-left: var(--e-border-3) solid var(--e-conflict-bar-our);
-  padding: var(--brand-space-3) var(--brand-space-4) var(--brand-space-3) var(--brand-space-5);
+  padding: var(--brand-space-3) var(--brand-space-4) var(--brand-space-3)
+    var(--brand-space-5);
 }
 
 /* Their changes zone */
 .bs-editor .bs-conflict__zone--theirs {
   background: var(--e-conflict-theirs);
   border-left: var(--e-border-3) solid var(--e-conflict-bar-th);
-  padding: var(--brand-space-3) var(--brand-space-4) var(--brand-space-3) var(--brand-space-5);
+  padding: var(--brand-space-3) var(--brand-space-4) var(--brand-space-3)
+    var(--brand-space-5);
 }
 
 /* Common ancestor (base) zone — shown when 3-way merge */
 .bs-editor .bs-conflict__zone--base {
   background: var(--e-conflict-base);
   border-left: var(--e-border-3) solid var(--e-conflict-bar-base);
-  padding: var(--brand-space-3) var(--brand-space-4) var(--brand-space-3) var(--brand-space-5);
+  padding: var(--brand-space-3) var(--brand-space-4) var(--brand-space-3)
+    var(--brand-space-5);
 }
 
 /* Zone label */
@@ -1181,12 +1255,18 @@
   letter-spacing: var(--brand-tracking-wide);
 }
 
-.bs-editor .bs-conflict__zone--ours   .bs-conflict__label { color: var(--e-conflict-bar-our); }
-.bs-editor .bs-conflict__zone--theirs .bs-conflict__label { color: var(--e-conflict-bar-th);  }
-.bs-editor .bs-conflict__zone--base   .bs-conflict__label { color: var(--e-conflict-bar-base);}
+.bs-editor .bs-conflict__zone--ours .bs-conflict__label {
+  color: var(--e-conflict-bar-our);
+}
+.bs-editor .bs-conflict__zone--theirs .bs-conflict__label {
+  color: var(--e-conflict-bar-th);
+}
+.bs-editor .bs-conflict__zone--base .bs-conflict__label {
+  color: var(--e-conflict-bar-base);
+}
 
 .bs-editor .bs-conflict__label::before {
-  content: '';
+  content: "";
   display: inline-block;
   width: var(--brand-space-2);
   height: var(--brand-space-2);
@@ -1197,7 +1277,9 @@
 }
 
 /* Content inside zones — remove bottom margin on last child */
-.bs-editor .bs-conflict__zone > *:last-child { margin-bottom: 0; }
+.bs-editor .bs-conflict__zone > *:last-child {
+  margin-bottom: 0;
+}
 
 .bs-editor .bs-conflict__content,
 .bs-editor .bs-conflict__preview {
@@ -1259,7 +1341,10 @@
   background: var(--e-surface);
   color: var(--e-text-3);
   cursor: pointer;
-  transition: background var(--e-t-fast), border-color var(--e-t-fast), color var(--e-t-fast);
+  transition:
+    background var(--e-t-fast),
+    border-color var(--e-t-fast),
+    color var(--e-t-fast);
 }
 
 .bs-editor .bs-conflict__resolve-btn:hover {
@@ -1293,7 +1378,6 @@
 .bs-editor .bs-conflict--resolved .bs-conflict__zone--theirs {
   background: color-mix(in srgb, var(--brand-green) 8%, var(--e-surface-1));
 }
-
 
 /* ──────────────────────────────────────
    10b. TRACKED CHANGES
@@ -1334,8 +1418,8 @@
 /* Author tooltip on hover */
 .bs-editor .bs-insert[data-author]::after,
 .bs-editor .bs-delete[data-author]::after {
-  content: attr(data-author) ' · ' attr(data-date);
-  display: none;   /* surfaced via JS tooltip in the component */
+  content: attr(data-author) " · " attr(data-date);
+  display: none; /* surfaced via JS tooltip in the component */
 }
 
 /* Change bar in the margin — enabled via a class on .ProseMirror */
@@ -1367,17 +1451,28 @@
   font-family: var(--e-font-mono);
   font-weight: 500;
   opacity: 0.7;
-  transition: opacity var(--e-t-fast), background var(--e-t-fast);
+  transition:
+    opacity var(--e-t-fast),
+    background var(--e-t-fast);
 }
 
-.bs-editor .bs-change-actions button:hover { opacity: 1; }
+.bs-editor .bs-change-actions button:hover {
+  opacity: 1;
+}
 
-.bs-editor .bs-change-actions .bs-accept { color: var(--e-green); }
-.bs-editor .bs-change-actions .bs-accept:hover { background: var(--e-green-dim); }
+.bs-editor .bs-change-actions .bs-accept {
+  color: var(--e-green);
+}
+.bs-editor .bs-change-actions .bs-accept:hover {
+  background: var(--e-green-dim);
+}
 
-.bs-editor .bs-change-actions .bs-reject { color: var(--e-delete-txt); }
-.bs-editor .bs-change-actions .bs-reject:hover { background: var(--e-delete); }
-
+.bs-editor .bs-change-actions .bs-reject {
+  color: var(--e-delete-txt);
+}
+.bs-editor .bs-change-actions .bs-reject:hover {
+  background: var(--e-delete);
+}
 
 /* ──────────────────────────────────────
    10c. APPROVAL STATUS BANNER
@@ -1388,8 +1483,16 @@
 .bs-editor .bs-approval {
   --bs-approval-accent: var(--color-muted);
   --bs-approval-copy: var(--color-ink-soft);
-  --bs-approval-surface: color-mix(in srgb, var(--color-muted) 8%, var(--color-paper));
-  --bs-approval-badge-bg: color-mix(in srgb, var(--color-muted) 10%, var(--color-paper));
+  --bs-approval-surface: color-mix(
+    in srgb,
+    var(--color-muted) 8%,
+    var(--color-paper)
+  );
+  --bs-approval-badge-bg: color-mix(
+    in srgb,
+    var(--color-muted) 10%,
+    var(--color-paper)
+  );
   --bs-approval-badge-text: var(--color-muted);
   --bs-approval-link: var(--color-ink-soft);
 
@@ -1398,7 +1501,8 @@
   flex-direction: column;
   gap: var(--brand-space-3);
   padding: var(--brand-space-4) var(--brand-space-5);
-  border: var(--e-border-1) solid color-mix(in srgb, var(--bs-approval-accent) 22%, var(--color-rule));
+  border: var(--e-border-1) solid
+    color-mix(in srgb, var(--bs-approval-accent) 22%, var(--color-rule));
   border-radius: var(--brand-radius-lg);
   background: var(--bs-approval-surface);
   box-shadow: var(--e-shadow-sm);
@@ -1406,7 +1510,7 @@
 }
 
 .bs-editor .bs-approval::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: 0;
@@ -1418,8 +1522,16 @@
 .bs-editor .bs-approval--approved {
   --bs-approval-accent: var(--color-green);
   --bs-approval-copy: var(--color-ink-soft);
-  --bs-approval-surface: color-mix(in srgb, var(--color-green) 10%, var(--color-paper));
-  --bs-approval-badge-bg: color-mix(in srgb, var(--color-green) 12%, var(--color-paper));
+  --bs-approval-surface: color-mix(
+    in srgb,
+    var(--color-green) 10%,
+    var(--color-paper)
+  );
+  --bs-approval-badge-bg: color-mix(
+    in srgb,
+    var(--color-green) 12%,
+    var(--color-paper)
+  );
   --bs-approval-badge-text: var(--color-green);
   --bs-approval-link: var(--color-ink-soft);
 }
@@ -1427,8 +1539,16 @@
 .bs-editor .bs-approval--pending {
   --bs-approval-accent: var(--color-coral);
   --bs-approval-copy: var(--color-ink-soft);
-  --bs-approval-surface: color-mix(in srgb, var(--color-coral) 10%, var(--color-paper));
-  --bs-approval-badge-bg: color-mix(in srgb, var(--color-coral) 10%, var(--color-paper));
+  --bs-approval-surface: color-mix(
+    in srgb,
+    var(--color-coral) 10%,
+    var(--color-paper)
+  );
+  --bs-approval-badge-bg: color-mix(
+    in srgb,
+    var(--color-coral) 10%,
+    var(--color-paper)
+  );
   --bs-approval-badge-text: var(--color-coral);
   --bs-approval-link: var(--color-ink-soft);
 }
@@ -1436,8 +1556,16 @@
 .bs-editor .bs-approval--rejected {
   --bs-approval-accent: var(--color-coral-dark);
   --bs-approval-copy: var(--color-ink-soft);
-  --bs-approval-surface: color-mix(in srgb, var(--color-coral-dark) 10%, var(--color-paper));
-  --bs-approval-badge-bg: color-mix(in srgb, var(--color-coral-dark) 10%, var(--color-paper));
+  --bs-approval-surface: color-mix(
+    in srgb,
+    var(--color-coral-dark) 10%,
+    var(--color-paper)
+  );
+  --bs-approval-badge-bg: color-mix(
+    in srgb,
+    var(--color-coral-dark) 10%,
+    var(--color-paper)
+  );
   --bs-approval-badge-text: var(--color-coral-dark);
   --bs-approval-link: var(--color-ink-soft);
 }
@@ -1448,7 +1576,8 @@
   width: fit-content;
   gap: var(--brand-space-2);
   padding: var(--brand-space-1) var(--brand-space-3);
-  border: var(--e-border-1) solid color-mix(in srgb, var(--bs-approval-badge-text) 24%, var(--color-rule));
+  border: var(--e-border-1) solid
+    color-mix(in srgb, var(--bs-approval-badge-text) 24%, var(--color-rule));
   border-radius: var(--brand-radius-full);
   background: var(--bs-approval-badge-bg);
   color: var(--bs-approval-badge-text);
@@ -1503,7 +1632,9 @@
   text-decoration: underline;
   text-decoration-color: var(--e-rule);
   text-underline-offset: 0.2em;
-  transition: color var(--e-t-fast), text-decoration-color var(--e-t-fast);
+  transition:
+    color var(--e-t-fast),
+    text-decoration-color var(--e-t-fast);
 }
 
 .bs-editor .bs-approval__link:hover {
@@ -1514,8 +1645,16 @@
 .bs-editor .bs-approval--working {
   --bs-approval-accent: var(--color-muted);
   --bs-approval-copy: var(--color-muted);
-  --bs-approval-surface: color-mix(in srgb, var(--color-muted) 8%, var(--color-paper));
-  --bs-approval-badge-bg: color-mix(in srgb, var(--color-muted) 10%, var(--color-paper));
+  --bs-approval-surface: color-mix(
+    in srgb,
+    var(--color-muted) 8%,
+    var(--color-paper)
+  );
+  --bs-approval-badge-bg: color-mix(
+    in srgb,
+    var(--color-muted) 10%,
+    var(--color-paper)
+  );
   --bs-approval-badge-text: var(--color-muted);
   --bs-approval-link: var(--color-muted);
 }
@@ -1523,8 +1662,16 @@
 .bs-editor .bs-approval--in-review {
   --bs-approval-accent: var(--color-coral);
   --bs-approval-copy: var(--color-ink-soft);
-  --bs-approval-surface: color-mix(in srgb, var(--color-coral) 10%, var(--color-paper));
-  --bs-approval-badge-bg: color-mix(in srgb, var(--color-coral) 10%, var(--color-paper));
+  --bs-approval-surface: color-mix(
+    in srgb,
+    var(--color-coral) 10%,
+    var(--color-paper)
+  );
+  --bs-approval-badge-bg: color-mix(
+    in srgb,
+    var(--color-coral) 10%,
+    var(--color-paper)
+  );
   --bs-approval-badge-text: var(--color-coral);
   --bs-approval-link: var(--color-ink-soft);
 }
@@ -1532,8 +1679,16 @@
 .bs-editor .bs-approval--changes-requested {
   --bs-approval-accent: var(--color-coral-dark);
   --bs-approval-copy: var(--color-ink-soft);
-  --bs-approval-surface: color-mix(in srgb, var(--color-coral-dark) 10%, var(--color-paper));
-  --bs-approval-badge-bg: color-mix(in srgb, var(--color-coral-dark) 10%, var(--color-paper));
+  --bs-approval-surface: color-mix(
+    in srgb,
+    var(--color-coral-dark) 10%,
+    var(--color-paper)
+  );
+  --bs-approval-badge-bg: color-mix(
+    in srgb,
+    var(--color-coral-dark) 10%,
+    var(--color-paper)
+  );
   --bs-approval-badge-text: var(--color-coral-dark);
   --bs-approval-link: var(--color-ink-soft);
 }
@@ -1541,8 +1696,16 @@
 .bs-editor .bs-approval--published {
   --bs-approval-accent: var(--color-ink);
   --bs-approval-copy: var(--color-ink-soft);
-  --bs-approval-surface: color-mix(in srgb, var(--color-ink) 4%, var(--color-paper));
-  --bs-approval-badge-bg: color-mix(in srgb, var(--color-green) 12%, var(--color-paper));
+  --bs-approval-surface: color-mix(
+    in srgb,
+    var(--color-ink) 4%,
+    var(--color-paper)
+  );
+  --bs-approval-badge-bg: color-mix(
+    in srgb,
+    var(--color-green) 12%,
+    var(--color-paper)
+  );
   --bs-approval-badge-text: var(--color-green);
   --bs-approval-link: var(--color-ink);
 }
@@ -1559,7 +1722,6 @@
     transform: scale(0.7);
   }
 }
-
 
 /* ──────────────────────────────────────
    10d. COMMENT ANCHORS
@@ -1740,7 +1902,6 @@
   flex-wrap: wrap;
 }
 
-
 /* ──────────────────────────────────────
    10e. VERSION DIFF VIEW
    Side-by-side or unified diff rendering
@@ -1760,7 +1921,8 @@
   background: var(--e-insert);
   border-left: var(--e-border-3) solid var(--e-conflict-bar-our);
   margin: 0 calc(var(--brand-space-12) * -1);
-  padding: var(--e-space-0-5) var(--brand-space-12) var(--e-space-0-5) calc(var(--brand-space-12) - var(--brand-space-1));
+  padding: var(--e-space-0-5) var(--brand-space-12) var(--e-space-0-5)
+    calc(var(--brand-space-12) - var(--brand-space-1));
 }
 
 .bs-editor .bs-diff-removed {
@@ -1768,7 +1930,8 @@
   background: var(--e-delete);
   border-left: var(--e-border-3) solid var(--e-conflict-bar-th);
   margin: 0 calc(var(--brand-space-12) * -1);
-  padding: var(--e-space-0-5) var(--brand-space-12) var(--e-space-0-5) calc(var(--brand-space-12) - var(--brand-space-1));
+  padding: var(--e-space-0-5) var(--brand-space-12) var(--e-space-0-5)
+    calc(var(--brand-space-12) - var(--brand-space-1));
   text-decoration: line-through;
   color: var(--e-delete-txt);
 }
@@ -1781,8 +1944,20 @@
 }
 
 /* Gutter character (+/-/space) */
-.bs-editor .bs-diff-added::before   { content: '+'; color: var(--e-conflict-bar-our); margin-left: calc(var(--brand-space-4) * -1); margin-right: var(--brand-space-3); font-weight: 700; }
-.bs-editor .bs-diff-removed::before { content: '-'; color: var(--e-delete-txt); margin-left: calc(var(--brand-space-4) * -1); margin-right: var(--brand-space-3); font-weight: 700; }
+.bs-editor .bs-diff-added::before {
+  content: "+";
+  color: var(--e-conflict-bar-our);
+  margin-left: calc(var(--brand-space-4) * -1);
+  margin-right: var(--brand-space-3);
+  font-weight: 700;
+}
+.bs-editor .bs-diff-removed::before {
+  content: "-";
+  color: var(--e-delete-txt);
+  margin-left: calc(var(--brand-space-4) * -1);
+  margin-right: var(--brand-space-3);
+  font-weight: 700;
+}
 
 /* Diff hunk header */
 .bs-editor .bs-diff-hunk {
@@ -1795,7 +1970,6 @@
   margin: var(--brand-space-2) calc(var(--brand-space-12) * -1);
   letter-spacing: var(--brand-tracking-wide);
 }
-
 
 /* ═════════════════════════════════════════════════════════════
    11. STATUS BAR
@@ -1813,7 +1987,9 @@
   font-size: var(--brand-text-label);
   color: var(--e-text-4);
   letter-spacing: var(--brand-tracking-wide);
-  transition: background var(--e-t-base), border-color var(--e-t-base);
+  transition:
+    background var(--e-t-base),
+    border-color var(--e-t-base);
   flex-shrink: 0;
 }
 
@@ -1837,11 +2013,19 @@
   flex-shrink: 0;
 }
 
-.bs-editor__status-dot--saved    { background: var(--e-green); }
-.bs-editor__status-dot--saving   { background: var(--e-pending-b); animation: approval-pulse 1.5s infinite; }
-.bs-editor__status-dot--error    { background: var(--e-rejected-b); }
-.bs-editor__status-dot--readonly { background: var(--e-text-4); }
-
+.bs-editor__status-dot--saved {
+  background: var(--e-green);
+}
+.bs-editor__status-dot--saving {
+  background: var(--e-pending-b);
+  animation: approval-pulse 1.5s infinite;
+}
+.bs-editor__status-dot--error {
+  background: var(--e-rejected-b);
+}
+.bs-editor__status-dot--readonly {
+  background: var(--e-text-4);
+}
 
 /* ═════════════════════════════════════════════════════════════
    12. VERSION CONTROL PANEL
@@ -1939,7 +2123,10 @@
   color: var(--e-text-3);
   cursor: pointer;
   padding: 0;
-  transition: background var(--e-t-fast), color var(--e-t-fast), border-color var(--e-t-fast);
+  transition:
+    background var(--e-t-fast),
+    color var(--e-t-fast),
+    border-color var(--e-t-fast);
 }
 
 .icon-btn:hover {
@@ -1967,13 +2154,17 @@
 .confirm-btn {
   padding: 0 var(--brand-space-3);
   background: var(--e-green-dim);
-  border: var(--e-border-1) solid color-mix(in srgb, var(--brand-green) 40%, var(--e-surface-1));
+  border: var(--e-border-1) solid
+    color-mix(in srgb, var(--brand-green) 40%, var(--e-surface-1));
   border-radius: var(--brand-radius-sm);
   color: var(--brand-green);
   font-size: var(--brand-text-sm);
   font-weight: var(--brand-weight-medium);
   cursor: pointer;
-  transition: background var(--e-t-fast), color var(--e-t-fast), border-color var(--e-t-fast);
+  transition:
+    background var(--e-t-fast),
+    color var(--e-t-fast),
+    border-color var(--e-t-fast);
 }
 
 .confirm-btn:hover {
@@ -1991,7 +2182,10 @@
   color: var(--e-text-2);
   cursor: pointer;
   text-align: left;
-  transition: background var(--e-t-fast), border-color var(--e-t-fast), color var(--e-t-fast);
+  transition:
+    background var(--e-t-fast),
+    border-color var(--e-t-fast),
+    color var(--e-t-fast);
 }
 
 .merge-toggle-btn:hover {
@@ -2015,7 +2209,10 @@
   cursor: pointer;
   font-size: var(--brand-text-sm);
   color: var(--e-text-2);
-  transition: border-color var(--e-t-fast), color var(--e-t-fast), background var(--e-t-fast);
+  transition:
+    border-color var(--e-t-fast),
+    color var(--e-t-fast),
+    background var(--e-t-fast);
 }
 
 .merge-option-btn:hover {
@@ -2042,7 +2239,10 @@
   background: var(--e-surface);
   margin-bottom: var(--brand-space-2);
   font-size: var(--brand-text-sm);
-  transition: border-color var(--e-t-fast), box-shadow var(--e-t-fast), background var(--e-t-fast);
+  transition:
+    border-color var(--e-t-fast),
+    box-shadow var(--e-t-fast),
+    background var(--e-t-fast);
 }
 
 .commit-item.clickable {
@@ -2262,7 +2462,10 @@
   border: var(--e-border-1) solid var(--e-rule);
   border-radius: var(--brand-radius-sm);
   cursor: pointer;
-  transition: background var(--e-t-fast), color var(--e-t-fast), border-color var(--e-t-fast);
+  transition:
+    background var(--e-t-fast),
+    color var(--e-t-fast),
+    border-color var(--e-t-fast);
 }
 
 .cancel-btn:hover {
@@ -2283,7 +2486,11 @@
   }
 
   .bs-editor .ProseMirror {
-    padding: var(--brand-space-6) var(--brand-space-5) calc(var(--brand-space-20) + var(--bs-editor-mobile-toolbar-h) + env(safe-area-inset-bottom, 0px));
+    padding: var(--brand-space-6) var(--brand-space-5)
+      calc(
+        var(--brand-space-20) + var(--bs-editor-mobile-toolbar-h) +
+          env(safe-area-inset-bottom, 0px)
+      );
     font-size: var(--brand-text-sm);
   }
 
@@ -2309,9 +2516,13 @@
     left: var(--e-border-1);
     right: var(--e-border-1);
     bottom: var(--e-border-1);
-    height: calc(var(--bs-editor-mobile-toolbar-h) + env(safe-area-inset-bottom, 0px));
+    height: calc(
+      var(--bs-editor-mobile-toolbar-h) + env(safe-area-inset-bottom, 0px)
+    );
     z-index: var(--brand-z-overlay);
-    padding-bottom: calc(var(--brand-space-2) + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(
+      var(--brand-space-2) + env(safe-area-inset-bottom, 0px)
+    );
     overflow-x: auto;
     overflow-y: visible;
     -webkit-overflow-scrolling: touch;
@@ -2376,7 +2587,11 @@
 
 @media (max-width: 30rem) {
   .bs-editor .ProseMirror {
-    padding: var(--brand-space-4) var(--brand-space-4) calc(var(--brand-space-16) + var(--bs-editor-mobile-toolbar-h) + env(safe-area-inset-bottom, 0px));
+    padding: var(--brand-space-4) var(--brand-space-4)
+      calc(
+        var(--brand-space-16) + var(--bs-editor-mobile-toolbar-h) +
+          env(safe-area-inset-bottom, 0px)
+      );
   }
 
   /* Hide less important toolbar groups on small screens */
@@ -2384,7 +2599,6 @@
     display: none;
   }
 }
-
 
 /* ═════════════════════════════════════════════════════════════
    13. PRINT STYLES
@@ -2413,13 +2627,35 @@
     break-inside: avoid;
   }
 
-  .bs-editor .bs-conflict__zone--ours::before   { content: '<<<<<<< OURS'; display: block; font-family: var(--e-font-mono); font-size: var(--brand-text-label); color: var(--e-text-3); margin-bottom: var(--brand-space-1); }
-  .bs-editor .bs-conflict__zone--theirs::before { content: '>>>>>>> THEIRS'; display: block; font-family: var(--e-font-mono); font-size: var(--brand-text-label); color: var(--e-text-3); margin-bottom: var(--brand-space-1); }
+  .bs-editor .bs-conflict__zone--ours::before {
+    content: "<<<<<<< OURS";
+    display: block;
+    font-family: var(--e-font-mono);
+    font-size: var(--brand-text-label);
+    color: var(--e-text-3);
+    margin-bottom: var(--brand-space-1);
+  }
+  .bs-editor .bs-conflict__zone--theirs::before {
+    content: ">>>>>>> THEIRS";
+    display: block;
+    font-family: var(--e-font-mono);
+    font-size: var(--brand-text-label);
+    color: var(--e-text-3);
+    margin-bottom: var(--brand-space-1);
+  }
 
   /* Print tracked changes clearly */
-  .bs-editor .bs-insert { background: none; text-decoration: underline; }
-  .bs-editor .bs-delete { background: none; }
+  .bs-editor .bs-insert {
+    background: none;
+    text-decoration: underline;
+  }
+  .bs-editor .bs-delete {
+    background: none;
+  }
 
   /* Hide comment highlights on print */
-  .bs-editor .bs-comment-anchor { background: none; border-bottom: none; }
+  .bs-editor .bs-comment-anchor {
+    background: none;
+    border-bottom: none;
+  }
 }

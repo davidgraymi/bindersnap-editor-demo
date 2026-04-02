@@ -44,7 +44,7 @@ const readSidebarState = (editor: Editor | null): CommentSidebarState => {
   const anchorTextById = new Map<string, string>();
   const anchoredCommentIds = new Set<string>();
 
-  for (const [commentId, anchor] of (pluginState?.anchors ?? [])) {
+  for (const [commentId, anchor] of pluginState?.anchors ?? []) {
     anchoredCommentIds.add(commentId);
     anchorTextById.set(
       commentId,
@@ -59,10 +59,7 @@ const readSidebarState = (editor: Editor | null): CommentSidebarState => {
   };
 };
 
-export const CommentSidebar = ({
-  comments,
-  editor,
-}: CommentSidebarProps) => {
+export const CommentSidebar = ({ comments, editor }: CommentSidebarProps) => {
   const [sidebarState, setSidebarState] = useState<CommentSidebarState>(() =>
     readSidebarState(editor),
   );
@@ -90,10 +87,12 @@ export const CommentSidebar = ({
       <div className="bs-comment-sidebar__header">
         <div>
           <p className="bs-comment-sidebar__eyebrow">Comment Threads</p>
-          <h3 className="bs-comment-sidebar__title">Review without reply-all.</h3>
+          <h3 className="bs-comment-sidebar__title">
+            Review without reply-all.
+          </h3>
           <p className="bs-comment-sidebar__copy">
-            Comments live beside the document while anchors stay attached to
-            the exact text under review.
+            Comments live beside the document while anchors stay attached to the
+            exact text under review.
           </p>
         </div>
         <span className="bs-comment-sidebar__count">{comments.length}</span>

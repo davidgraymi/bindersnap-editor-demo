@@ -1,6 +1,6 @@
-import type { Repository, Tag } from 'gitea-js';
+import type { Repository, Tag } from "gitea-js";
 
-import { GiteaApiError, type GiteaClient } from './client';
+import { GiteaApiError, type GiteaClient } from "./client";
 
 export interface WorkspaceRepo {
   id: number;
@@ -23,40 +23,49 @@ function readErrorMessage(error: unknown): string {
     return error.message;
   }
 
-  if (typeof error === 'string' && error.trim() !== '') {
+  if (typeof error === "string" && error.trim() !== "") {
     return error;
   }
 
-  if (typeof error === 'object' && error !== null) {
+  if (typeof error === "object" && error !== null) {
     const responseLike = error as {
       error?: unknown;
       message?: unknown;
       statusText?: unknown;
     };
 
-    if (typeof responseLike.message === 'string' && responseLike.message.trim() !== '') {
+    if (
+      typeof responseLike.message === "string" &&
+      responseLike.message.trim() !== ""
+    ) {
       return responseLike.message;
     }
 
-    if (typeof responseLike.error === 'string' && responseLike.error.trim() !== '') {
+    if (
+      typeof responseLike.error === "string" &&
+      responseLike.error.trim() !== ""
+    ) {
       return responseLike.error;
     }
 
     if (
-      typeof responseLike.error === 'object' &&
+      typeof responseLike.error === "object" &&
       responseLike.error !== null &&
-      'message' in responseLike.error &&
-      typeof (responseLike.error as { message?: unknown }).message === 'string'
+      "message" in responseLike.error &&
+      typeof (responseLike.error as { message?: unknown }).message === "string"
     ) {
       return (responseLike.error as { message: string }).message;
     }
 
-    if (typeof responseLike.statusText === 'string' && responseLike.statusText.trim() !== '') {
+    if (
+      typeof responseLike.statusText === "string" &&
+      responseLike.statusText.trim() !== ""
+    ) {
       return responseLike.statusText;
     }
   }
 
-  return 'Gitea request failed.';
+  return "Gitea request failed.";
 }
 
 function toGiteaApiError(error: unknown): GiteaApiError {
@@ -65,22 +74,25 @@ function toGiteaApiError(error: unknown): GiteaApiError {
   }
 
   const status =
-    typeof error === 'object' && error !== null && 'status' in error
+    typeof error === "object" && error !== null && "status" in error
       ? Number((error as { status?: unknown }).status)
       : 0;
 
-  return new GiteaApiError(Number.isFinite(status) ? status : 0, readErrorMessage(error));
+  return new GiteaApiError(
+    Number.isFinite(status) ? status : 0,
+    readErrorMessage(error),
+  );
 }
 
 function normalizeWorkspaceRepo(repo: Repository): WorkspaceRepo {
   return {
     id: repo.id ?? 0,
-    name: repo.name ?? '',
-    full_name: repo.full_name ?? '',
-    description: repo.description ?? '',
-    updated_at: repo.updated_at ?? '',
+    name: repo.name ?? "",
+    full_name: repo.full_name ?? "",
+    description: repo.description ?? "",
+    updated_at: repo.updated_at ?? "",
     owner: {
-      login: repo.owner?.login ?? '',
+      login: repo.owner?.login ?? "",
     },
   };
 }
@@ -96,7 +108,7 @@ function parseDocTagVersion(tagName: string): number | null {
 }
 
 function normalizeDocTag(tag: Tag): DocTag | null {
-  const name = tag.name ?? '';
+  const name = tag.name ?? "";
   const version = parseDocTagVersion(name);
 
   if (version === null) {
@@ -106,12 +118,14 @@ function normalizeDocTag(tag: Tag): DocTag | null {
   return {
     name,
     version,
-    sha: tag.commit?.sha ?? '',
-    created: tag.commit?.created ?? '',
+    sha: tag.commit?.sha ?? "",
+    created: tag.commit?.created ?? "",
   };
 }
 
-export async function listWorkspaceRepos(client: GiteaClient): Promise<WorkspaceRepo[]> {
+export async function listWorkspaceRepos(
+  client: GiteaClient,
+): Promise<WorkspaceRepo[]> {
   try {
     const response = await client.repos.repoSearch({
       limit: 100,
@@ -126,7 +140,7 @@ export async function listWorkspaceRepos(client: GiteaClient): Promise<Workspace
 export async function getLatestDocTag(
   client: GiteaClient,
   owner: string,
-  repo: string
+  repo: string,
 ): Promise<DocTag | null> {
   try {
     const response = await client.repos.repoListTags(owner, repo, {
@@ -151,7 +165,7 @@ export async function getLatestDocTag(
 export async function listDocTags(
   client: GiteaClient,
   owner: string,
-  repo: string
+  repo: string,
 ): Promise<DocTag[]> {
   try {
     const response = await client.repos.repoListTags(owner, repo, {

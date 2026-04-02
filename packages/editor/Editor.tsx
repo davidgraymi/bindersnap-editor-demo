@@ -1612,7 +1612,10 @@ export const DemoEditor = ({
       }
 
       const proseMirrorRoot = clickTarget.closest(".ProseMirror");
-      if (!(proseMirrorRoot instanceof HTMLElement) || !containerNode.contains(proseMirrorRoot)) {
+      if (
+        !(proseMirrorRoot instanceof HTMLElement) ||
+        !containerNode.contains(proseMirrorRoot)
+      ) {
         return;
       }
 
@@ -1772,7 +1775,7 @@ export const DemoEditor = ({
             </button>
           </div>,
           document.body,
-      )}
+        )}
       <div className="bs-editor__main">
         <div className="bs-editor__content">
           {approvalState && (

@@ -10,8 +10,16 @@ body,
 body {
   margin: 0;
   background:
-    radial-gradient(circle at top left, rgba(232, 93, 38, 0.1), transparent 30%),
-    radial-gradient(circle at bottom right, rgba(22, 163, 74, 0.07), transparent 28%),
+    radial-gradient(
+      circle at top left,
+      rgba(232, 93, 38, 0.1),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at bottom right,
+      rgba(22, 163, 74, 0.07),
+      transparent 28%
+    ),
     var(--color-paper);
   color: var(--color-ink);
 }
@@ -337,7 +345,10 @@ input {
   display: grid;
   gap: var(--brand-space-4);
   --vault-card-min-width: 320px;
-  grid-template-columns: repeat(auto-fill, minmax(var(--vault-card-min-width), 1fr));
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(var(--vault-card-min-width), 1fr)
+  );
 }
 
 .vault-doc-card {

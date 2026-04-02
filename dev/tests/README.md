@@ -14,6 +14,7 @@ bun run test:integration
 ```
 
 This command now runs a deterministic cycle:
+
 - `docker compose down -v`
 - `docker compose up --build -d`
 - Playwright smoke tests
@@ -30,12 +31,12 @@ playwright test --config=dev/tests/playwright.config.ts
 
 ## What is tested here vs. unit tests
 
-| Unit tests (`src/**/*.test.ts`) | Integration tests (`dev/tests/`) |
-|---|---|
-| Run without Docker | Require `docker compose up` |
-| Mock `gitea-js` responses | Real Gitea API calls |
-| Fast, run in CI on every push | Slower, run locally before merge |
-| Test business logic in isolation | Test the full stack end-to-end |
+| Unit tests (`src/**/*.test.ts`)  | Integration tests (`dev/tests/`) |
+| -------------------------------- | -------------------------------- |
+| Run without Docker               | Require `docker compose up`      |
+| Mock `gitea-js` responses        | Real Gitea API calls             |
+| Fast, run in CI on every push    | Slower, run locally before merge |
+| Test business logic in isolation | Test the full stack end-to-end   |
 
 ## Test data
 

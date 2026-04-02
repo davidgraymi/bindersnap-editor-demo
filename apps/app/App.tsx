@@ -1,9 +1,19 @@
-import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import "./app.css";
 
 import { AppShell } from "./components/AppShell";
-import { clearToken, createAuthenticatedClient, storeToken } from "../../packages/gitea-client/auth";
+import {
+  clearToken,
+  createAuthenticatedClient,
+  storeToken,
+} from "../../packages/gitea-client/auth";
 
 const appEnv = (
   import.meta as ImportMeta & { env?: Record<string, string | undefined> }
@@ -37,7 +47,8 @@ interface LoginPageProps {
 }
 
 function getRoute(pathname: string): AppRoute {
-  const normalizedPath = pathname !== "/" ? pathname.replace(/\/+$/, "") : pathname;
+  const normalizedPath =
+    pathname !== "/" ? pathname.replace(/\/+$/, "") : pathname;
 
   if (normalizedPath === "/auth/callback") {
     return "callback";
@@ -91,7 +102,9 @@ async function sendAuthRequest(
 
   const payload = (await response.json().catch(() => null)) as unknown;
   if (!response.ok) {
-    throw new Error(readErrorMessage(payload, "Unable to complete authentication right now."));
+    throw new Error(
+      readErrorMessage(payload, "Unable to complete authentication right now."),
+    );
   }
 }
 
@@ -153,13 +166,19 @@ async function fetchSessionUser(): Promise<SessionUser | null> {
 
   const payload = (await response.json().catch(() => null)) as unknown;
   if (!response.ok) {
-    throw new Error(readErrorMessage(payload, "Unable to check your session right now."));
+    throw new Error(
+      readErrorMessage(payload, "Unable to check your session right now."),
+    );
   }
 
   return parseSessionUser(payload);
 }
 
-async function createGiteaSessionToken(baseUrl: string, username: string, password: string): Promise<void> {
+async function createGiteaSessionToken(
+  baseUrl: string,
+  username: string,
+  password: string,
+): Promise<void> {
   const tokenName = `bindersnap-session-${Date.now()}`;
   const tokenScopesRaw =
     appEnv?.BUN_PUBLIC_GITEA_TOKEN_SCOPES ??
@@ -170,27 +189,36 @@ async function createGiteaSessionToken(baseUrl: string, username: string, passwo
     .map((scope) => scope.trim())
     .filter((scope) => scope.length > 0);
   const credentials = btoa(`${username}:${password}`);
-  const response = await fetch(`${baseUrl}/api/v1/users/${encodeURIComponent(username)}/tokens`, {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${credentials}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
+  const response = await fetch(
+    `${baseUrl}/api/v1/users/${encodeURIComponent(username)}/tokens`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${credentials}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        name: tokenName,
+        scopes: tokenScopes.length > 0 ? tokenScopes : ["read:repository"],
+      }),
     },
-    body: JSON.stringify({
-      name: tokenName,
-      scopes: tokenScopes.length > 0 ? tokenScopes : ["read:repository"],
-    }),
-  });
+  );
 
   const payload = (await response.json().catch(() => null)) as unknown;
   if (!response.ok) {
-    throw new Error(readErrorMessage(payload, "Unable to connect to the document vault. Check that your Gitea account is active."));
+    throw new Error(
+      readErrorMessage(
+        payload,
+        "Unable to connect to the document vault. Check that your Gitea account is active.",
+      ),
+    );
   }
 
-  const token = typeof (payload as { sha1?: unknown }).sha1 === "string"
-    ? (payload as { sha1: string }).sha1
-    : null;
+  const token =
+    typeof (payload as { sha1?: unknown }).sha1 === "string"
+      ? (payload as { sha1: string }).sha1
+      : null;
   if (!token) {
     throw new Error("Gitea did not return a usable token.");
   }
@@ -241,7 +269,9 @@ function LoginPage({ callbackError, onLogin, onSignup }: LoginPageProps) {
       if (submitError instanceof Error && submitError.message.trim() !== "") {
         setError(submitError.message);
       } else {
-        setError(`Unable to ${mode === "signin" ? "sign in" : "create your account"} right now.`);
+        setError(
+          `Unable to ${mode === "signin" ? "sign in" : "create your account"} right now.`,
+        );
       }
     } finally {
       setIsSubmitting(false);
@@ -253,7 +283,11 @@ function LoginPage({ callbackError, onLogin, onSignup }: LoginPageProps) {
       <div className="app-login-wrap">
         <div className="app-login-panel bs-card">
           <div className="bs-eyebrow">Secure Access</div>
-          <h1>{mode === "signin" ? "Step into the clean version." : "Create your Bindersnap workspace."}</h1>
+          <h1>
+            {mode === "signin"
+              ? "Step into the clean version."
+              : "Create your Bindersnap workspace."}
+          </h1>
           <p className="app-gate-copy">
             {mode === "signin"
               ? "Sign in to pick up the live workspace without reopening another approval chain by hand."
@@ -282,11 +316,17 @@ function LoginPage({ callbackError, onLogin, onSignup }: LoginPageProps) {
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 placeholder="Enter your password"
-                autoComplete={mode === "signin" ? "current-password" : "new-password"}
+                autoComplete={
+                  mode === "signin" ? "current-password" : "new-password"
+                }
               />
             </label>
 
-            <button className="bs-btn bs-btn-primary app-submit" type="submit" disabled={isSubmitting}>
+            <button
+              className="bs-btn bs-btn-primary app-submit"
+              type="submit"
+              disabled={isSubmitting}
+            >
               {isSubmitting
                 ? mode === "signin"
                   ? "Signing in..."
@@ -298,7 +338,11 @@ function LoginPage({ callbackError, onLogin, onSignup }: LoginPageProps) {
           </form>
 
           <div className="app-login-switch">
-            <span>{mode === "signin" ? "Need an account?" : "Already have an account?"}</span>
+            <span>
+              {mode === "signin"
+                ? "Need an account?"
+                : "Already have an account?"}
+            </span>
             <button
               className="app-login-switch-button"
               type="button"
@@ -319,9 +363,13 @@ function LoginPage({ callbackError, onLogin, onSignup }: LoginPageProps) {
 }
 
 export function App() {
-  const [route, setRoute] = useState<AppRoute>(() => getRoute(window.location.pathname));
+  const [route, setRoute] = useState<AppRoute>(() =>
+    getRoute(window.location.pathname),
+  );
   const [user, setUser] = useState<SessionUser | null>(null);
-  const [isCheckingSession, setIsCheckingSession] = useState(() => route !== "callback");
+  const [isCheckingSession, setIsCheckingSession] = useState(
+    () => route !== "callback",
+  );
   const [callbackError, setCallbackError] = useState<string | null>(null);
 
   const refreshSession = useCallback(async () => {
@@ -335,7 +383,9 @@ export function App() {
     } catch (sessionError) {
       setUser(null);
       setCallbackError(
-        sessionError instanceof Error ? sessionError.message : "Unable to check your session right now.",
+        sessionError instanceof Error
+          ? sessionError.message
+          : "Unable to check your session right now.",
       );
       return null;
     } finally {
@@ -416,7 +466,9 @@ export function App() {
         <div className="app-gate-panel bs-card">
           <div className="bs-eyebrow">Authentication</div>
           <h1>Completing sign-in...</h1>
-          <p className="app-gate-copy">Handing the sign-in response back to the workspace session service.</p>
+          <p className="app-gate-copy">
+            Handing the sign-in response back to the workspace session service.
+          </p>
         </div>
       </section>
     );
@@ -428,7 +480,9 @@ export function App() {
         <div className="app-gate-panel bs-card">
           <div className="bs-eyebrow">Workspace</div>
           <h1>Checking your session...</h1>
-          <p className="app-gate-copy">Making sure your workspace is ready before we open the app.</p>
+          <p className="app-gate-copy">
+            Making sure your workspace is ready before we open the app.
+          </p>
         </div>
       </section>
     );
@@ -444,7 +498,9 @@ export function App() {
           await createGiteaSessionToken(giteaBaseUrl, username, password);
           const nextUser = await refreshSession();
           if (!nextUser) {
-            throw new Error("Sign-in completed, but the session could not be verified.");
+            throw new Error(
+              "Sign-in completed, but the session could not be verified.",
+            );
           }
           navigateTo("/app", true);
         }}
@@ -454,7 +510,9 @@ export function App() {
           await createGiteaSessionToken(giteaBaseUrl, username, password);
           const nextUser = await refreshSession();
           if (!nextUser) {
-            throw new Error("Account created, but the session could not be verified.");
+            throw new Error(
+              "Account created, but the session could not be verified.",
+            );
           }
           navigateTo("/app", true);
         }}
@@ -469,7 +527,8 @@ export function App() {
           <div className="bs-eyebrow">Workspace</div>
           <h1>Unable to open the document vault</h1>
           <p className="app-gate-copy">
-            Workspace token bootstrap failed. Retry, or sign out and sign in again to mint a fresh session token.
+            Workspace token bootstrap failed. Retry, or sign out and sign in
+            again to mint a fresh session token.
           </p>
           <button
             className="bs-btn bs-btn-primary"

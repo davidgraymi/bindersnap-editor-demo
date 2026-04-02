@@ -1,5 +1,4 @@
-
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4 } from "uuid";
 
 export interface Commit {
   id: string;
@@ -22,7 +21,7 @@ export interface RepoState {
   HEAD: string | null; // commitId
 }
 
-const STORAGE_KEY = 'bindersnap_demo_git_repo';
+const STORAGE_KEY = "bindersnap_demo_git_repo";
 
 export class GitService {
   private state: RepoState;
@@ -35,19 +34,19 @@ export class GitService {
   public subscribe(listener: () => void): () => void {
     this.listeners.push(listener);
     return () => {
-      this.listeners = this.listeners.filter(l => l !== listener);
+      this.listeners = this.listeners.filter((l) => l !== listener);
     };
   }
 
   private notify() {
-    this.listeners.forEach(l => l());
+    this.listeners.forEach((l) => l());
   }
 
   private getInitialState(): RepoState {
     return {
       commits: {},
-      branches: { main: '' },
-      currentBranch: 'main',
+      branches: { main: "" },
+      currentBranch: "main",
       HEAD: null,
     };
   }
@@ -70,22 +69,26 @@ export class GitService {
     const initialCommit: Commit = {
       id: commitId,
       parentId: null,
-      message: 'Initial commit',
+      message: "Initial commit",
       timestamp: Date.now(),
-      author: 'System',
+      author: "System",
       content: initialContent,
     };
 
     this.state.commits[commitId] = initialCommit;
-    this.state.branches['main'] = commitId;
+    this.state.branches["main"] = commitId;
     this.state.HEAD = commitId;
     this.saveState();
     this.notify();
   }
 
-  public commit(message: string, content: string, author: string = 'User'): Commit {
+  public commit(
+    message: string,
+    content: string,
+    author: string = "User",
+  ): Commit {
     if (!this.state.HEAD) {
-      throw new Error('Repository not initialized');
+      throw new Error("Repository not initialized");
     }
 
     const commitId = uuidv4();
@@ -100,7 +103,7 @@ export class GitService {
 
     this.state.commits[commitId] = newCommit;
     this.state.HEAD = commitId;
-    
+
     // Update current branch tip
     if (this.state.currentBranch) {
       this.state.branches[this.state.currentBranch] = commitId;
@@ -116,7 +119,7 @@ export class GitService {
       throw new Error(`Branch '${name}' already exists`);
     }
     if (!this.state.HEAD) {
-        throw new Error('HEAD is null, cannot branch');
+      throw new Error("HEAD is null, cannot branch");
     }
     this.state.branches[name] = this.state.HEAD;
     this.saveState();
@@ -132,7 +135,7 @@ export class GitService {
     const commitId = this.state.branches[branchName];
     const commit = this.state.commits[commitId];
     if (!commit) {
-        throw new Error(`Commit '${commitId}' not found`);
+      throw new Error(`Commit '${commitId}' not found`);
     }
 
     this.state.HEAD = commitId;
@@ -168,7 +171,10 @@ export class GitService {
     return this.state.commits[id];
   }
 
-  public findCommonAncestor(commitAId: string, commitBId: string): Commit | null {
+  public findCommonAncestor(
+    commitAId: string,
+    commitBId: string,
+  ): Commit | null {
     const visitedA = new Set<string>();
     let currentA: string | null = commitAId;
 
@@ -190,63 +196,66 @@ export class GitService {
     return null;
   }
 
-  public merge(sourceBranch: string, author: string = 'User'): { 
-    success: boolean; 
-    conflict?: boolean; 
+  public merge(
+    sourceBranch: string,
+    author: string = "User",
+  ): {
+    success: boolean;
+    conflict?: boolean;
     mergedContent?: string;
     theirContent?: string;
     baseContent?: string;
   } {
     const sourceCommitId = this.state.branches[sourceBranch];
     if (!sourceCommitId) throw new Error(`Branch '${sourceBranch}' not found`);
-    
+
     const sourceCommit = this.state.commits[sourceCommitId];
     if (!sourceCommit) throw new Error(`Commit '${sourceCommitId}' not found`);
 
     const headId = this.state.HEAD;
-    if (!headId) throw new Error('HEAD is null');
+    if (!headId) throw new Error("HEAD is null");
 
     const headCommit = this.state.commits[headId];
-    if (!headCommit) throw new Error('HEAD commit not found');
+    if (!headCommit) throw new Error("HEAD commit not found");
 
     if (sourceCommitId === headId) {
-       return { success: true, mergedContent: headCommit.content }; // Already up to date
+      return { success: true, mergedContent: headCommit.content }; // Already up to date
     }
 
     const ancestor = this.findCommonAncestor(headId, sourceCommitId);
-    
+
     // Simple 3-way merge logic check
     // If HEAD is unchanged from ancestor, fast-forward/clean merge to source.
     // If Source is unchanged from ancestor, do nothing.
     // If BOTH changed, CONFLICT (for this simple demo).
-    
+
     const headContent = headCommit.content;
     const sourceContent = sourceCommit.content;
-    const baseContent = ancestor ? ancestor.content : '';
+    const baseContent = ancestor ? ancestor.content : "";
 
     if (headContent === baseContent) {
-        // Fast-forward-ish: User hasn't changed anything since ancestor, so take incoming
-        // Note: In real git this changes the commit graph, here we just return content to be committed as a merge commit
-        return { success: true, mergedContent: sourceContent };
+      // Fast-forward-ish: User hasn't changed anything since ancestor, so take incoming
+      // Note: In real git this changes the commit graph, here we just return content to be committed as a merge commit
+      return { success: true, mergedContent: sourceContent };
     }
 
     if (sourceContent === baseContent) {
-        // Incoming hasn't changed, keep ours
-        return { success: true, mergedContent: headContent };
+      // Incoming hasn't changed, keep ours
+      return { success: true, mergedContent: headContent };
     }
 
     if (headContent === sourceContent) {
-        // Identical changes
-        return { success: true, mergedContent: headContent };
+      // Identical changes
+      return { success: true, mergedContent: headContent };
     }
 
     // Both changed and different -> Conflict
-    return { 
-        success: false, 
-        conflict: true, 
-        theirContent: sourceContent,
-        baseContent: baseContent,
-        mergedContent: undefined // UI needs to resolve
+    return {
+      success: false,
+      conflict: true,
+      theirContent: sourceContent,
+      baseContent: baseContent,
+      mergedContent: undefined, // UI needs to resolve
     };
   }
 }

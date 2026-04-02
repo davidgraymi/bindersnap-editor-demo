@@ -25,9 +25,9 @@ sidebar/                    — sidebar panel components
 
 ## Demo vs. real usage
 
-| Context | How editor is used |
-|---|---|
+| Context      | How editor is used                                             |
+| ------------ | -------------------------------------------------------------- |
 | Landing page | `<BindersnapEditor readOnly initialContent={DEMO_SNAPSHOT} />` |
-| Real app | `<BindersnapEditor documentId={id} giteaClient={client} />` |
+| Real app     | `<BindersnapEditor documentId={id} giteaClient={client} />`    |
 
 The `giteaClient` prop being absent puts the editor into demo mode — no saves, no PRs, no collaboration. This is intentional and must be preserved.

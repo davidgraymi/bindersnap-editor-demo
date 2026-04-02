@@ -37,7 +37,7 @@ Re-run reviewer after fixes. Maximum 2 review cycles.
 PASS path:
 
 - `gh pr create --base main --head <branch> --title "<issue title> (#<number>)" \
- --body "Closes #<number>\n\n## What changed\n<implementer summary>\n\n## Tests\n<tester summary>\n\n## Review\n<reviewer notes>"`
+--body "Closes #<number>\n\n## What changed\n<implementer summary>\n\n## Tests\n<tester summary>\n\n## Review\n<reviewer notes>"`
 - `gh issue edit <number> --remove-label "in-progress" --add-label "pr-open"`
 
 FAIL path (after max cycles exceeded):

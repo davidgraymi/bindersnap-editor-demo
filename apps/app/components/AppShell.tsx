@@ -13,7 +13,7 @@ interface AppShellProps {
   onSignOut: () => void | Promise<void>;
 }
 
-type AppView = 'workspace' | 'document';
+type AppView = "workspace" | "document";
 
 interface DocumentSelection {
   owner: string;
@@ -21,16 +21,17 @@ interface DocumentSelection {
 }
 
 export function AppShell({ user, giteaClient, onSignOut }: AppShellProps) {
-  const [view, setView] = useState<AppView>('workspace');
-  const [selectedDocument, setSelectedDocument] = useState<DocumentSelection | null>(null);
+  const [view, setView] = useState<AppView>("workspace");
+  const [selectedDocument, setSelectedDocument] =
+    useState<DocumentSelection | null>(null);
 
   const handleSelectDocument = (owner: string, repo: string) => {
     setSelectedDocument({ owner, repo });
-    setView('document');
+    setView("document");
   };
 
   const handleBackToWorkspace = () => {
-    setView('workspace');
+    setView("workspace");
     setSelectedDocument(null);
   };
 
@@ -40,32 +41,57 @@ export function AppShell({ user, giteaClient, onSignOut }: AppShellProps) {
         <div className="app-logo-wrap">
           <div className="app-logo-mark" aria-hidden="true">
             <svg viewBox="0 0 18 18" fill="none">
-              <rect x="2" y="1" width="9" height="13" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
-              <rect x="6" y="4" width="9" height="13" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
+              <rect
+                x="2"
+                y="1"
+                width="9"
+                height="13"
+                rx="1.5"
+                stroke="currentColor"
+                strokeWidth="1.4"
+              />
+              <rect
+                x="6"
+                y="4"
+                width="9"
+                height="13"
+                rx="1.5"
+                stroke="currentColor"
+                strokeWidth="1.4"
+              />
             </svg>
           </div>
           <div>
             <div className="app-logo-text">Bindersnap</div>
-            <div className="app-doc-path">Signed in as {user?.fullName ?? user?.username ?? "Unknown"}</div>
+            <div className="app-doc-path">
+              Signed in as {user?.fullName ?? user?.username ?? "Unknown"}
+            </div>
           </div>
         </div>
 
         <div className="app-topbar-actions">
-          <button className="bs-btn bs-btn-dark" type="button" onClick={() => void onSignOut()}>
+          <button
+            className="bs-btn bs-btn-dark"
+            type="button"
+            onClick={() => void onSignOut()}
+          >
             Sign out
           </button>
         </div>
       </header>
 
       <main className="app-main">
-        {view === 'workspace' ? (
-          <FileVaultWorkspace giteaClient={giteaClient} onSelectDocument={handleSelectDocument} />
+        {view === "workspace" ? (
+          <FileVaultWorkspace
+            giteaClient={giteaClient}
+            onSelectDocument={handleSelectDocument}
+          />
         ) : selectedDocument ? (
           <DocumentDetail
             giteaClient={giteaClient}
             owner={selectedDocument.owner}
             repo={selectedDocument.repo}
-            uploaderSlug={user?.username ?? 'unknown'}
+            uploaderSlug={user?.username ?? "unknown"}
             onBack={handleBackToWorkspace}
           />
         ) : null}

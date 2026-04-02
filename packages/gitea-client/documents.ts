@@ -1,6 +1,6 @@
-import type { JSONContent } from '@tiptap/core';
+import type { JSONContent } from "@tiptap/core";
 
-import { GiteaApiError, type GiteaClient } from './client';
+import { GiteaApiError, type GiteaClient } from "./client";
 
 export type ProseMirrorJSON = JSONContent;
 
@@ -50,26 +50,32 @@ type RawProseMirrorCandidate = {
 };
 
 function isProseMirrorDocument(value: unknown): value is ProseMirrorJSON {
-  if (typeof value !== 'object' || value === null) {
+  if (typeof value !== "object" || value === null) {
     return false;
   }
 
   const candidate = value as RawProseMirrorCandidate;
-  return candidate.type === 'doc' && Array.isArray(candidate.content);
+  return candidate.type === "doc" && Array.isArray(candidate.content);
 }
 
-function assertProseMirrorDocument(value: unknown, filePath: string): ProseMirrorJSON {
+function assertProseMirrorDocument(
+  value: unknown,
+  filePath: string,
+): ProseMirrorJSON {
   if (isProseMirrorDocument(value)) {
     return value;
   }
 
-  throw new GiteaApiError(0, `Document at ${filePath} is not valid ProseMirror JSON.`);
+  throw new GiteaApiError(
+    0,
+    `Document at ${filePath} is not valid ProseMirror JSON.`,
+  );
 }
 
 function toBase64(value: string): string {
-  if (typeof btoa === 'function') {
+  if (typeof btoa === "function") {
     const bytes = new TextEncoder().encode(value);
-    let binary = '';
+    let binary = "";
 
     for (const byte of bytes) {
       binary += String.fromCharCode(byte);
@@ -78,7 +84,7 @@ function toBase64(value: string): string {
     return btoa(binary);
   }
 
-  return Buffer.from(value, 'utf8').toString('base64');
+  return Buffer.from(value, "utf8").toString("base64");
 }
 
 function toGiteaApiError(error: unknown): GiteaApiError {
@@ -87,7 +93,7 @@ function toGiteaApiError(error: unknown): GiteaApiError {
   }
 
   const status =
-    typeof error === 'object' && error !== null && 'status' in error
+    typeof error === "object" && error !== null && "status" in error
       ? Number((error as { status?: unknown }).status)
       : 0;
 
@@ -100,44 +106,53 @@ function readErrorMessage(error: unknown): string {
     return error.message;
   }
 
-  if (typeof error === 'string' && error.trim() !== '') {
+  if (typeof error === "string" && error.trim() !== "") {
     return error;
   }
 
-  if (typeof error === 'object' && error !== null) {
+  if (typeof error === "object" && error !== null) {
     const responseLike = error as {
       error?: unknown;
       message?: unknown;
       statusText?: unknown;
     };
 
-    if (typeof responseLike.message === 'string' && responseLike.message.trim() !== '') {
+    if (
+      typeof responseLike.message === "string" &&
+      responseLike.message.trim() !== ""
+    ) {
       return responseLike.message;
     }
 
-    if (typeof responseLike.error === 'string' && responseLike.error.trim() !== '') {
+    if (
+      typeof responseLike.error === "string" &&
+      responseLike.error.trim() !== ""
+    ) {
       return responseLike.error;
     }
 
     if (
-      typeof responseLike.error === 'object' &&
+      typeof responseLike.error === "object" &&
       responseLike.error !== null &&
-      'message' in responseLike.error &&
-      typeof (responseLike.error as { message?: unknown }).message === 'string'
+      "message" in responseLike.error &&
+      typeof (responseLike.error as { message?: unknown }).message === "string"
     ) {
       return (responseLike.error as { message: string }).message;
     }
 
-    if (typeof responseLike.statusText === 'string' && responseLike.statusText.trim() !== '') {
+    if (
+      typeof responseLike.statusText === "string" &&
+      responseLike.statusText.trim() !== ""
+    ) {
       return responseLike.statusText;
     }
   }
 
-  return 'Gitea request failed.';
+  return "Gitea request failed.";
 }
 
 async function readRawResponseBody(raw: unknown): Promise<string> {
-  if (typeof raw === 'string') {
+  if (typeof raw === "string") {
     return raw;
   }
 
@@ -147,7 +162,9 @@ async function readRawResponseBody(raw: unknown): Promise<string> {
 
   if (ArrayBuffer.isView(raw)) {
     const view = raw as ArrayBufferView;
-    return new TextDecoder().decode(view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength));
+    return new TextDecoder().decode(
+      view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength),
+    );
   }
 
   if (raw instanceof Blob) {
@@ -155,29 +172,34 @@ async function readRawResponseBody(raw: unknown): Promise<string> {
   }
 
   if (
-    typeof raw === 'object' &&
+    typeof raw === "object" &&
     raw !== null &&
-    'text' in raw &&
-    typeof (raw as { text?: unknown }).text === 'function'
+    "text" in raw &&
+    typeof (raw as { text?: unknown }).text === "function"
   ) {
     return (raw as { text: () => Promise<string> }).text();
   }
 
   if (
-    typeof raw === 'object' &&
+    typeof raw === "object" &&
     raw !== null &&
-    'arrayBuffer' in raw &&
-    typeof (raw as { arrayBuffer?: unknown }).arrayBuffer === 'function'
+    "arrayBuffer" in raw &&
+    typeof (raw as { arrayBuffer?: unknown }).arrayBuffer === "function"
   ) {
-    const buffer = await (raw as { arrayBuffer: () => Promise<ArrayBuffer> }).arrayBuffer();
+    const buffer = await (
+      raw as { arrayBuffer: () => Promise<ArrayBuffer> }
+    ).arrayBuffer();
     return new TextDecoder().decode(buffer);
   }
 
-  throw new Error('Gitea raw file response was not readable text.');
+  throw new Error("Gitea raw file response was not readable text.");
 }
 
-export async function commitDocument(params: CommitDocumentParams): Promise<DocumentWriteResult> {
-  const { client, owner, repo, filePath, branch, content, message, sha } = params;
+export async function commitDocument(
+  params: CommitDocumentParams,
+): Promise<DocumentWriteResult> {
+  const { client, owner, repo, filePath, branch, content, message, sha } =
+    params;
   const encodedContent = toBase64(JSON.stringify(content));
 
   try {
@@ -195,7 +217,7 @@ export async function commitDocument(params: CommitDocumentParams): Promise<Docu
         });
 
     return {
-      sha: response.data.commit?.sha ?? '',
+      sha: response.data.commit?.sha ?? "",
       fileSha: response.data.content?.sha ?? null,
     };
   } catch (error) {
@@ -203,15 +225,22 @@ export async function commitDocument(params: CommitDocumentParams): Promise<Docu
   }
 }
 
-export async function fetchDocumentAtSha(params: FetchDocumentAtShaParams): Promise<ProseMirrorJSON> {
+export async function fetchDocumentAtSha(
+  params: FetchDocumentAtShaParams,
+): Promise<ProseMirrorJSON> {
   const { client, owner, repo, filePath, sha } = params;
 
   try {
-    const response = await client.repos.repoGetRawFileOrLfs(owner, repo, filePath, { ref: sha });
+    const response = await client.repos.repoGetRawFileOrLfs(
+      owner,
+      repo,
+      filePath,
+      { ref: sha },
+    );
     const rawBody = response.data;
 
     // Some gitea-js runtimes deserialize JSON responses for us.
-    if (typeof rawBody === 'object' && rawBody !== null) {
+    if (typeof rawBody === "object" && rawBody !== null) {
       return assertProseMirrorDocument(rawBody, filePath);
     }
 
@@ -220,14 +249,19 @@ export async function fetchDocumentAtSha(params: FetchDocumentAtShaParams): Prom
     return assertProseMirrorDocument(parsed, filePath);
   } catch (error) {
     if (error instanceof SyntaxError) {
-      throw new GiteaApiError(0, `Unable to parse document JSON at ${filePath}.`);
+      throw new GiteaApiError(
+        0,
+        `Unable to parse document JSON at ${filePath}.`,
+      );
     }
 
     throw toGiteaApiError(error);
   }
 }
 
-export async function listDocumentCommits(params: ListDocumentCommitsParams): Promise<CommitSummary[]> {
+export async function listDocumentCommits(
+  params: ListDocumentCommitsParams,
+): Promise<CommitSummary[]> {
   const { client, owner, repo, filePath, page, limit } = params;
 
   try {
@@ -238,10 +272,14 @@ export async function listDocumentCommits(params: ListDocumentCommitsParams): Pr
     });
 
     return response.data.map((commit) => ({
-      sha: commit.sha ?? '',
-      message: commit.commit?.message ?? '',
-      author: commit.commit?.author?.name ?? commit.author?.full_name ?? commit.author?.login ?? 'Unknown',
-      timestamp: commit.commit?.author?.date ?? commit.created ?? '',
+      sha: commit.sha ?? "",
+      message: commit.commit?.message ?? "",
+      author:
+        commit.commit?.author?.name ??
+        commit.author?.full_name ??
+        commit.author?.login ??
+        "Unknown",
+      timestamp: commit.commit?.author?.date ?? commit.created ?? "",
     }));
   } catch (error) {
     throw toGiteaApiError(error);
