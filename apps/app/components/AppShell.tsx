@@ -347,6 +347,7 @@ export function AppShell({ user, onSignOut }: AppShellProps) {
   const [error, setError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const selectedDocumentIdRef = useRef<string | null>(null);
+  const detailRequestIdRef = useRef(0);
 
   const selectedDocument = useMemo(() => {
     if (detailDocument && detailDocument.id === selectedDocumentId) {
@@ -357,14 +358,22 @@ export function AppShell({ user, onSignOut }: AppShellProps) {
   }, [detailDocument, documents, selectedDocumentId]);
 
   const loadDocumentDetail = useCallback(async (documentId: string) => {
+    const requestId = detailRequestIdRef.current + 1;
+    detailRequestIdRef.current = requestId;
     setDetailLoading(true);
     setDetailError(null);
 
     try {
       const payload = await fetchDocumentDetail(documentId);
+      if (detailRequestIdRef.current !== requestId || selectedDocumentIdRef.current !== documentId) {
+        return;
+      }
       setDetailDocument(payload.document);
       setRepository(payload.repository);
     } catch (loadError) {
+      if (detailRequestIdRef.current !== requestId || selectedDocumentIdRef.current !== documentId) {
+        return;
+      }
       const message =
         loadError instanceof Error
           ? loadError.message
@@ -372,7 +381,9 @@ export function AppShell({ user, onSignOut }: AppShellProps) {
       setDetailError(message);
       setDetailDocument(null);
     } finally {
-      setDetailLoading(false);
+      if (detailRequestIdRef.current === requestId) {
+        setDetailLoading(false);
+      }
     }
   }, []);
 
@@ -391,11 +402,14 @@ export function AppShell({ user, onSignOut }: AppShellProps) {
           ? selectedDocumentIdRef.current
           : payload.documents[0]?.id ?? null;
 
+      selectedDocumentIdRef.current = nextSelectedDocumentId;
       setSelectedDocumentId(nextSelectedDocumentId);
 
       if (nextSelectedDocumentId) {
         void loadDocumentDetail(nextSelectedDocumentId);
       } else {
+        detailRequestIdRef.current += 1;
+        setDetailLoading(false);
         setDetailDocument(null);
       }
     } catch (loadError) {
@@ -407,6 +421,8 @@ export function AppShell({ user, onSignOut }: AppShellProps) {
       setError(message);
       setDocuments([]);
       setRepository("your workspace");
+      detailRequestIdRef.current += 1;
+      setDetailLoading(false);
       setSelectedDocumentId(null);
       setDetailDocument(null);
     } finally {
@@ -525,6 +541,7 @@ export function AppShell({ user, onSignOut }: AppShellProps) {
                     className={`bs-card app-vault-item ${isSelected ? "is-selected" : ""}`}
                     type="button"
                     onClick={() => {
+                      selectedDocumentIdRef.current = document.id;
                       setSelectedDocumentId(document.id);
                       void loadDocumentDetail(document.id);
                     }}

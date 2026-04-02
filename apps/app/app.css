@@ -322,7 +322,7 @@ input {
 .app-vault-hero-head h1 {
   margin: 0;
   font-family: var(--font-serif);
-  font-size: clamp(2rem, 3vw, 3rem);
+  font-size: var(--brand-text-h1);
   line-height: var(--brand-leading-tight);
 }
 
@@ -362,8 +362,8 @@ input {
 
 .app-vault-stat strong {
   font-family: var(--font-serif);
-  font-size: 1.5rem;
-  line-height: 1.2;
+  font-size: var(--brand-text-h3);
+  line-height: var(--brand-leading-snug);
 }
 
 .app-vault-stat-label {
@@ -429,6 +429,8 @@ input {
 
 .app-vault-item {
   appearance: none;
+  position: relative;
+  overflow: hidden;
   width: 100%;
   text-align: left;
   border: 1px solid var(--bs-rule);
@@ -443,11 +445,29 @@ input {
   gap: var(--brand-space-4);
 }
 
+.app-vault-item::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: var(--brand-space-1);
+  background: var(--color-coral);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform var(--transition-base);
+}
+
 .app-vault-item:hover,
 .app-vault-item:focus-visible {
-  transform: translateY(-2px);
+  transform: translateY(calc(-1 * var(--brand-space-1)));
   box-shadow: var(--shadow-lg);
-  border-color: var(--bs-coral-dim);
+  border-color: transparent;
+}
+
+.app-vault-item:hover::before,
+.app-vault-item:focus-visible::before {
+  transform: scaleX(1);
 }
 
 .app-vault-item.is-selected {
@@ -465,7 +485,7 @@ input {
 .app-vault-item-head h3 {
   margin: 0;
   font-family: var(--font-serif);
-  font-size: 1.35rem;
+  font-size: var(--brand-text-h3);
   line-height: var(--brand-leading-tight);
 }
 
@@ -486,7 +506,7 @@ input {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.35rem 0.7rem;
+  padding: var(--brand-space-1) var(--brand-space-2);
   border-radius: var(--brand-radius-full);
   font-family: var(--font-mono);
   font-size: var(--brand-text-label);
