@@ -3,6 +3,7 @@ import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react
 import "./app.css";
 
 import { AppShell } from "./components/AppShell";
+import { clearToken, createAuthenticatedClient, storeToken } from "../../packages/gitea-client/auth";
 
 const appEnv = (
   import.meta as ImportMeta & { env?: Record<string, string | undefined> }
@@ -156,6 +157,45 @@ async function fetchSessionUser(): Promise<SessionUser | null> {
   }
 
   return parseSessionUser(payload);
+}
+
+async function createGiteaSessionToken(baseUrl: string, username: string, password: string): Promise<void> {
+  const tokenName = `bindersnap-session-${Date.now()}`;
+  const tokenScopesRaw =
+    appEnv?.BUN_PUBLIC_GITEA_TOKEN_SCOPES ??
+    appEnv?.VITE_GITEA_TOKEN_SCOPES ??
+    "read:repository";
+  const tokenScopes = tokenScopesRaw
+    .split(",")
+    .map((scope) => scope.trim())
+    .filter((scope) => scope.length > 0);
+  const credentials = btoa(`${username}:${password}`);
+  const response = await fetch(`${baseUrl}/api/v1/users/${encodeURIComponent(username)}/tokens`, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${credentials}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({
+      name: tokenName,
+      scopes: tokenScopes.length > 0 ? tokenScopes : ["read:repository"],
+    }),
+  });
+
+  const payload = (await response.json().catch(() => null)) as unknown;
+  if (!response.ok) {
+    throw new Error(readErrorMessage(payload, "Unable to connect to the document vault. Check that your Gitea account is active."));
+  }
+
+  const token = typeof (payload as { sha1?: unknown }).sha1 === "string"
+    ? (payload as { sha1: string }).sha1
+    : null;
+  if (!token) {
+    throw new Error("Gitea did not return a usable token.");
+  }
+
+  storeToken(token);
 }
 
 async function logoutSession(): Promise<void> {
@@ -362,6 +402,14 @@ export function App() {
     return user ? "app" : "login";
   }, [isCheckingSession, route, user]);
 
+  const giteaBaseUrl = appEnv?.VITE_GITEA_BASE_URL ?? "http://localhost:3000";
+  let giteaClient = null;
+  try {
+    giteaClient = createAuthenticatedClient(giteaBaseUrl);
+  } catch {
+    giteaClient = null;
+  }
+
   if (view === "callback") {
     return (
       <section className="app-gate">
@@ -391,7 +439,9 @@ export function App() {
       <LoginPage
         callbackError={callbackError}
         onLogin={async (username, password) => {
+          clearToken();
           await sendAuthRequest("/auth/login", username, password);
+          await createGiteaSessionToken(giteaBaseUrl, username, password);
           const nextUser = await refreshSession();
           if (!nextUser) {
             throw new Error("Sign-in completed, but the session could not be verified.");
@@ -399,7 +449,9 @@ export function App() {
           navigateTo("/app", true);
         }}
         onSignup={async (username, password) => {
+          clearToken();
           await sendAuthRequest("/auth/signup", username, password);
+          await createGiteaSessionToken(giteaBaseUrl, username, password);
           const nextUser = await refreshSession();
           if (!nextUser) {
             throw new Error("Account created, but the session could not be verified.");
@@ -410,12 +462,49 @@ export function App() {
     );
   }
 
+  if (!giteaClient) {
+    return (
+      <section className="app-gate">
+        <div className="app-gate-panel bs-card">
+          <div className="bs-eyebrow">Workspace</div>
+          <h1>Unable to open the document vault</h1>
+          <p className="app-gate-copy">
+            Workspace token bootstrap failed. Retry, or sign out and sign in again to mint a fresh session token.
+          </p>
+          <button
+            className="bs-btn bs-btn-primary"
+            type="button"
+            onClick={() => {
+              window.location.reload();
+            }}
+          >
+            Retry
+          </button>
+          <button
+            className="bs-btn bs-btn-secondary"
+            type="button"
+            onClick={async () => {
+              await logoutSession();
+              setUser(null);
+              setCallbackError(null);
+              navigateTo("/login", true);
+            }}
+          >
+            Sign out
+          </button>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <div className="app-root">
       <AppShell
         user={user}
+        giteaClient={giteaClient}
         onSignOut={async () => {
           await logoutSession();
+          clearToken();
           setUser(null);
           setCallbackError(null);
           navigateTo("/login", true);

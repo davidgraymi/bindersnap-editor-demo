@@ -299,3 +299,280 @@ input {
     flex-direction: column;
   }
 }
+
+/* ═════════════════════════════════════════════════════════════
+   FILE VAULT — Workspace & Document Views
+   ═════════════════════════════════════════════════════════════ */
+
+.vault-workspace {
+  display: grid;
+  gap: var(--brand-space-5);
+}
+
+.vault-section {
+  display: grid;
+  gap: var(--brand-space-3);
+}
+
+.vault-section h1 {
+  margin: 0;
+  font-family: var(--brand-font-serif);
+  font-size: var(--brand-text-h1);
+  line-height: var(--brand-leading-tight);
+}
+
+.vault-section h2 {
+  margin: 0;
+  font-family: var(--brand-font-serif);
+  font-size: var(--brand-text-h2);
+  line-height: var(--brand-leading-tight);
+}
+
+.vault-section p {
+  margin: 0;
+  color: var(--bs-text-muted);
+}
+
+.vault-doc-grid {
+  display: grid;
+  gap: var(--brand-space-4);
+  --vault-card-min-width: 320px;
+  grid-template-columns: repeat(auto-fill, minmax(var(--vault-card-min-width), 1fr));
+}
+
+.vault-doc-card {
+  padding: var(--brand-space-6);
+  cursor: pointer;
+  transition: var(--brand-mode-transition);
+}
+
+.vault-doc-card:hover {
+  transform: translateY(calc(-1 * var(--brand-space-1)));
+}
+
+.vault-doc-card-title {
+  margin: 0;
+  font-family: var(--brand-font-serif);
+  font-size: var(--brand-text-h3);
+  line-height: var(--brand-leading-tight);
+}
+
+.vault-doc-description {
+  margin: var(--brand-space-2) 0 0;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-sm);
+}
+
+.vault-doc-metadata {
+  margin-top: var(--brand-space-4);
+  display: grid;
+  gap: var(--brand-space-3);
+}
+
+.vault-doc-loading,
+.vault-doc-error {
+  margin: var(--brand-space-3) 0 0;
+  font-size: var(--brand-text-sm);
+  color: var(--bs-text-muted);
+}
+
+.vault-doc-error {
+  color: var(--brand-coral-dark);
+}
+
+.vault-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--brand-space-2);
+  align-items: center;
+}
+
+.vault-version-badge {
+  display: inline-block;
+  padding: var(--brand-space-1) var(--brand-space-3);
+  background: var(--bs-coral-dim);
+  color: var(--brand-coral-dark);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-xs);
+  font-weight: var(--brand-weight-medium);
+  border-radius: var(--brand-radius-sm);
+  text-transform: uppercase;
+  letter-spacing: var(--brand-tracking-wide);
+}
+
+.vault-no-version {
+  background: var(--bs-surface-2);
+  color: var(--bs-text-muted);
+}
+
+.vault-pending-badge {
+  display: inline-block;
+  padding: var(--brand-space-1) var(--brand-space-3);
+  background: var(--bs-surface-2);
+  color: var(--bs-text-secondary);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-xs);
+  font-weight: var(--brand-weight-medium);
+  border-radius: var(--brand-radius-sm);
+  letter-spacing: var(--brand-tracking-wide);
+}
+
+.vault-status-badge {
+  display: inline-block;
+  padding: var(--brand-space-1) var(--brand-space-3);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-xs);
+  font-weight: var(--brand-weight-medium);
+  border-radius: var(--brand-radius-sm);
+  text-transform: uppercase;
+  letter-spacing: var(--brand-tracking-wide);
+}
+
+.vault-status-approved {
+  background: var(--brand-green-dim);
+  color: var(--brand-green);
+}
+
+.vault-status-changes {
+  background: var(--bs-coral-dim);
+  color: var(--brand-coral-dark);
+}
+
+.vault-status-review {
+  background: var(--bs-surface-2);
+  color: var(--bs-text-secondary);
+}
+
+.vault-status-published {
+  background: var(--brand-green-dim);
+  color: var(--brand-green);
+}
+
+.vault-status-working {
+  background: var(--bs-surface-2);
+  color: var(--bs-text-muted);
+}
+
+.vault-timestamp {
+  margin: 0;
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-xs);
+  color: var(--bs-text-faint);
+  text-transform: uppercase;
+  letter-spacing: var(--brand-tracking-wide);
+}
+
+.vault-empty-state,
+.vault-error-state {
+  padding: var(--brand-space-8);
+  text-align: center;
+}
+
+.vault-empty-state h2,
+.vault-error-state h2 {
+  margin: var(--brand-space-3) 0 0;
+  font-family: var(--brand-font-serif);
+  font-size: var(--brand-text-h2);
+}
+
+.vault-empty-state p,
+.vault-error-state p {
+  margin: var(--brand-space-3) 0 0;
+  color: var(--bs-text-muted);
+}
+
+.vault-error-state button {
+  margin-top: var(--brand-space-4);
+}
+
+/* ── Document Detail ────────────────────────────────────────── */
+
+.vault-detail {
+  display: grid;
+  gap: var(--brand-space-5);
+}
+
+.vault-repo-path {
+  margin: var(--brand-space-2) 0 0;
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-sm);
+  color: var(--bs-text-muted);
+}
+
+.vault-pr-list,
+.vault-version-list {
+  margin-top: var(--brand-space-4);
+  display: grid;
+  gap: var(--brand-space-4);
+}
+
+.vault-pr-item,
+.vault-version-item {
+  padding: var(--brand-space-4);
+  background: var(--bs-surface-2);
+  border-radius: var(--brand-radius-lg);
+}
+
+.vault-pr-title {
+  margin: 0;
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-body);
+  font-weight: var(--brand-weight-medium);
+  color: var(--bs-text-primary);
+}
+
+.vault-pr-meta {
+  margin-top: var(--brand-space-2);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--brand-space-2);
+  align-items: center;
+}
+
+.vault-pr-branch {
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-xs);
+  color: var(--bs-text-muted);
+}
+
+.vault-pr-body {
+  margin: var(--brand-space-3) 0 0;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-sm);
+}
+
+.vault-version-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--brand-space-3);
+}
+
+.vault-version-date {
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-xs);
+  color: var(--bs-text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--brand-tracking-wide);
+}
+
+.vault-version-sha {
+  margin: var(--brand-space-2) 0 0;
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-xs);
+  color: var(--bs-text-muted);
+}
+
+.vault-version-sha code {
+  color: var(--bs-text-secondary);
+}
+
+.vault-version-download {
+  margin-top: var(--brand-space-3);
+}
+
+@media (max-width: 640px) {
+  .vault-doc-grid {
+    grid-template-columns: 1fr;
+  }
+}
