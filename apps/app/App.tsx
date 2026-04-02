@@ -3,6 +3,7 @@ import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react
 import "./app.css";
 
 import { AppShell } from "./components/AppShell";
+import { clearToken, createAuthenticatedClient, storeToken } from "../../packages/gitea-client/auth";
 
 const appEnv = (
   import.meta as ImportMeta & { env?: Record<string, string | undefined> }
@@ -410,12 +411,62 @@ export function App() {
     );
   }
 
+  const giteaBaseUrl = appEnv?.VITE_GITEA_BASE_URL ?? "http://localhost:3000";
+  const giteaClient = useMemo(() => {
+    try {
+      return createAuthenticatedClient(giteaBaseUrl);
+    } catch {
+      return null;
+    }
+  }, [giteaBaseUrl]);
+
+  if (!giteaClient) {
+    return (
+      <section className="app-gate">
+        <div className="app-gate-panel bs-card">
+          <div className="bs-eyebrow">Gitea Token Required</div>
+          <h1>Connect to Gitea</h1>
+          <p className="app-gate-copy">
+            The file vault requires a Gitea personal access token. Generate one in your Gitea settings and paste it here.
+          </p>
+          <button
+            className="bs-btn bs-btn-primary"
+            type="button"
+            onClick={() => {
+              const token = window.prompt("Enter your Gitea personal access token:");
+              if (token && token.trim() !== "") {
+                storeToken(token.trim());
+                window.location.reload();
+              }
+            }}
+          >
+            Enter Token
+          </button>
+          <button
+            className="bs-btn bs-btn-secondary"
+            type="button"
+            onClick={async () => {
+              await logoutSession();
+              setUser(null);
+              setCallbackError(null);
+              navigateTo("/login", true);
+            }}
+          >
+            Sign out
+          </button>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <div className="app-root">
       <AppShell
         user={user}
+        giteaClient={giteaClient}
         onSignOut={async () => {
           await logoutSession();
+          clearToken();
           setUser(null);
           setCallbackError(null);
           navigateTo("/login", true);
