@@ -4,8 +4,13 @@ import type { GiteaClient } from "../../../packages/gitea-client/client";
 import type { PullRequestWithApprovalState } from "../../../packages/gitea-client/pullRequests";
 import type { DocTag } from "../../../packages/gitea-client/repos";
 import type { UploadResult } from "../../../packages/gitea-client/uploads";
-import { listPullRequests } from "../../../packages/gitea-client/pullRequests";
-import { listDocTags } from "../../../packages/gitea-client/repos";
+import { GiteaApiError } from "../../../packages/gitea-client/client";
+import {
+  listPullRequests,
+  mergePullRequest,
+  submitReview,
+} from "../../../packages/gitea-client/pullRequests";
+import { createDocTag, listDocTags } from "../../../packages/gitea-client/repos";
 import { UploadModal } from "./UploadModal";
 
 interface DocumentDetailProps {
@@ -14,6 +19,13 @@ interface DocumentDetailProps {
   repo: string;
   uploaderSlug: string;
   onBack: () => void;
+}
+
+interface PRActionState {
+  status: "idle" | "submitting" | "done" | "error";
+  error: string | null;
+  changesComment: string;
+  showChangesForm: boolean;
 }
 
 function getApprovalStateBadgeClass(state: string): string {
@@ -81,6 +93,20 @@ function buildRawFileUrl(
   return `${giteaBaseUrl}/${owner}/${repo}/raw/${ref}/${canonicalFile}`;
 }
 
+function readPermissionError(err: unknown, fallback: string): string {
+  if (err instanceof GiteaApiError && err.status === 403) {
+    return "You don't have permission to perform this action.";
+  }
+  return err instanceof Error ? err.message : fallback;
+}
+
+const DEFAULT_PR_ACTION_STATE: PRActionState = {
+  status: "idle",
+  error: null,
+  changesComment: "",
+  showChangesForm: false,
+};
+
 export function DocumentDetail({
   giteaClient,
   owner,
@@ -93,6 +119,9 @@ export function DocumentDetail({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [prActionStates, setPrActionStates] = useState<
+    Record<number, PRActionState>
+  >({});
 
   const giteaBaseUrl =
     (import.meta as ImportMeta & { env?: Record<string, string | undefined> })
@@ -134,7 +163,100 @@ export function DocumentDetail({
   const canonicalFileName = `${repo}.pdf`;
   const nextVersion = (latestTag?.version ?? 0) + 1;
 
-  const handleUploadSuccess = (result: UploadResult) => {
+  function getPRActionState(pullNumber: number): PRActionState {
+    return prActionStates[pullNumber] ?? DEFAULT_PR_ACTION_STATE;
+  }
+
+  function updatePRActionState(
+    pullNumber: number,
+    update: Partial<PRActionState>,
+  ) {
+    setPrActionStates((prev) => ({
+      ...prev,
+      [pullNumber]: { ...(prev[pullNumber] ?? DEFAULT_PR_ACTION_STATE), ...update },
+    }));
+  }
+
+  async function handleApprove(pullNumber: number) {
+    updatePRActionState(pullNumber, { status: "submitting", error: null });
+    try {
+      await submitReview({
+        client: giteaClient,
+        owner,
+        repo,
+        pullNumber,
+        event: "APPROVE",
+      });
+      updatePRActionState(pullNumber, { status: "idle" });
+      await loadDocumentData();
+    } catch (err) {
+      updatePRActionState(pullNumber, {
+        status: "error",
+        error: readPermissionError(err, "Failed to submit approval."),
+      });
+    }
+  }
+
+  async function handleRequestChanges(pullNumber: number) {
+    const comment = getPRActionState(pullNumber).changesComment.trim();
+    if (!comment) {
+      updatePRActionState(pullNumber, {
+        error: "Enter a comment describing the required changes.",
+      });
+      return;
+    }
+    updatePRActionState(pullNumber, { status: "submitting", error: null });
+    try {
+      await submitReview({
+        client: giteaClient,
+        owner,
+        repo,
+        pullNumber,
+        event: "REQUEST_CHANGES",
+        body: comment,
+      });
+      updatePRActionState(pullNumber, {
+        status: "idle",
+        showChangesForm: false,
+        changesComment: "",
+      });
+      await loadDocumentData();
+    } catch (err) {
+      updatePRActionState(pullNumber, {
+        status: "error",
+        error: readPermissionError(err, "Failed to request changes."),
+      });
+    }
+  }
+
+  async function handleMerge(pullNumber: number) {
+    updatePRActionState(pullNumber, { status: "submitting", error: null });
+    try {
+      await mergePullRequest({
+        client: giteaClient,
+        owner,
+        repo,
+        pullNumber,
+        mergeStyle: "merge",
+      });
+      await createDocTag({
+        client: giteaClient,
+        owner,
+        repo,
+        version: nextVersion,
+        target: "main",
+      });
+      updatePRActionState(pullNumber, { status: "idle" });
+      await loadDocumentData();
+    } catch (err) {
+      updatePRActionState(pullNumber, {
+        status: "error",
+        error: readPermissionError(err, "Failed to publish document."),
+      });
+    }
+  }
+
+  const handleUploadSuccess = (_result: UploadResult) => {
     setShowUploadModal(false);
     void loadDocumentData();
   };
@@ -251,24 +373,115 @@ export function DocumentDetail({
             {openPRs.length} Open Pull Request{openPRs.length === 1 ? "" : "s"}
           </h2>
           <div className="vault-pr-list">
-            {openPRs.map((pr) => (
-              <div className="vault-pr-item" key={pr.number}>
-                <h3 className="vault-pr-title">
-                  #{pr.number}: {pr.title}
-                </h3>
-                <div className="vault-pr-meta">
-                  <span
-                    className={getApprovalStateBadgeClass(pr.approvalState)}
-                  >
-                    {getApprovalStateLabel(pr.approvalState)}
-                  </span>
-                  {pr.head?.ref ? (
-                    <span className="vault-pr-branch">{pr.head.ref}</span>
+            {openPRs.map((pr) => {
+              const prNum = pr.number ?? 0;
+              const actionState = getPRActionState(prNum);
+              const isSubmitting = actionState.status === "submitting";
+              const canMerge = pr.approvalState === "approved";
+
+              return (
+                <div className="vault-pr-item" key={pr.number}>
+                  <h3 className="vault-pr-title">
+                    #{pr.number}: {pr.title}
+                  </h3>
+                  <div className="vault-pr-meta">
+                    <span
+                      className={getApprovalStateBadgeClass(pr.approvalState)}
+                    >
+                      {getApprovalStateLabel(pr.approvalState)}
+                    </span>
+                    {pr.head?.ref ? (
+                      <span className="vault-pr-branch">{pr.head.ref}</span>
+                    ) : null}
+                  </div>
+                  {pr.body ? <p className="vault-pr-body">{pr.body}</p> : null}
+
+                  <div className="vault-pr-actions">
+                    <button
+                      className="bs-btn bs-btn-secondary"
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={() => void handleApprove(prNum)}
+                    >
+                      {isSubmitting ? "Submitting…" : "Approve"}
+                    </button>
+
+                    {actionState.showChangesForm ? (
+                      <div className="vault-pr-comment-form">
+                        <textarea
+                          className="vault-pr-comment-input"
+                          placeholder="Describe what needs to change…"
+                          value={actionState.changesComment}
+                          rows={3}
+                          disabled={isSubmitting}
+                          onChange={(e) =>
+                            updatePRActionState(prNum, {
+                              changesComment: e.target.value,
+                              error: null,
+                            })
+                          }
+                        />
+                        <div className="vault-pr-comment-actions">
+                          <button
+                            className="bs-btn bs-btn-primary"
+                            type="button"
+                            disabled={isSubmitting}
+                            onClick={() => void handleRequestChanges(prNum)}
+                          >
+                            {isSubmitting ? "Submitting…" : "Submit Request"}
+                          </button>
+                          <button
+                            className="bs-btn bs-btn-secondary"
+                            type="button"
+                            disabled={isSubmitting}
+                            onClick={() =>
+                              updatePRActionState(prNum, {
+                                showChangesForm: false,
+                                changesComment: "",
+                                error: null,
+                              })
+                            }
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        className="bs-btn bs-btn-secondary"
+                        type="button"
+                        disabled={isSubmitting}
+                        onClick={() =>
+                          updatePRActionState(prNum, {
+                            showChangesForm: true,
+                            error: null,
+                          })
+                        }
+                      >
+                        Request Changes
+                      </button>
+                    )}
+
+                    {canMerge ? (
+                      <button
+                        className="bs-btn bs-btn-primary vault-pr-publish-btn"
+                        type="button"
+                        disabled={isSubmitting}
+                        onClick={() => void handleMerge(prNum)}
+                      >
+                        {isSubmitting ? "Publishing…" : "Publish"}
+                      </button>
+                    ) : null}
+                  </div>
+
+                  {actionState.error ? (
+                    <p className="vault-pr-error" role="alert">
+                      {actionState.error}
+                    </p>
                   ) : null}
                 </div>
-                {pr.body ? <p className="vault-pr-body">{pr.body}</p> : null}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       ) : (

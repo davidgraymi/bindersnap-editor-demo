@@ -1,4 +1,4 @@
-import type { Repository, Tag } from "gitea-js";
+import type { CreateTagOption, Repository, Tag } from "gitea-js";
 
 import { GiteaApiError, type GiteaClient } from "./client";
 
@@ -157,6 +157,36 @@ export async function getLatestDocTag(
 
     tags.sort((a, b) => b.version - a.version);
     return tags[0];
+  } catch (error) {
+    throw toGiteaApiError(error);
+  }
+}
+
+export interface CreateDocTagParams {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+  version: number;
+  target: string;
+}
+
+export async function createDocTag(params: CreateDocTagParams): Promise<DocTag> {
+  const { client, owner, repo, version, target } = params;
+  const versionStr = version.toString().padStart(4, "0");
+  const tagName = `doc/v${versionStr}`;
+
+  try {
+    const body: CreateTagOption = {
+      tag_name: tagName,
+      target,
+      message: `Published version ${versionStr}`,
+    };
+    const response = await client.repos.repoCreateTag(owner, repo, body);
+    const tag = normalizeDocTag(response.data);
+    if (!tag) {
+      throw new GiteaApiError(0, `Failed to parse created tag: ${tagName}`);
+    }
+    return tag;
   } catch (error) {
     throw toGiteaApiError(error);
   }

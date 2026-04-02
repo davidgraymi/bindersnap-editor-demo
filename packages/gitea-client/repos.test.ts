@@ -1,7 +1,19 @@
 import { afterEach, expect, mock, test } from "bun:test";
-import type { Repository, Tag } from "gitea-js";
+import type { CreateTagOption, Repository, Tag } from "gitea-js";
 
 import { GiteaApiError, type GiteaClient } from "./client";
+
+const repoCreateTagMock = mock(
+  async (_owner: string, _repo: string, body: CreateTagOption) => ({
+    data: {
+      name: body.tag_name,
+      commit: {
+        sha: "newsha123",
+        created: "2026-04-02T10:00:00Z",
+      },
+    } as Tag,
+  }),
+);
 
 const repoSearchMock = mock(async () => ({
   data: {
@@ -63,12 +75,26 @@ const client = {
   repos: {
     repoSearch: repoSearchMock,
     repoListTags: repoListTagsMock,
+    repoCreateTag: repoCreateTagMock,
   },
 } as unknown as GiteaClient;
 
 afterEach(() => {
   repoSearchMock.mockReset();
   repoListTagsMock.mockReset();
+  repoCreateTagMock.mockReset();
+
+  repoCreateTagMock.mockImplementation(
+    async (_owner: string, _repo: string, body: CreateTagOption) => ({
+      data: {
+        name: body.tag_name,
+        commit: {
+          sha: "newsha123",
+          created: "2026-04-02T10:00:00Z",
+        },
+      } as Tag,
+    }),
+  );
 
   repoSearchMock.mockImplementation(async () => ({
     data: {
@@ -359,4 +385,91 @@ test("getLatestDocTag handles tags with missing commit data gracefully", async (
   expect(tag?.version).toBe(2);
   expect(tag?.sha).toBe("");
   expect(tag?.created).toBe("");
+});
+
+test("createDocTag calls repoCreateTag with zero-padded version name", async () => {
+  const { createDocTag } = await import("./repos");
+
+  const tag = await createDocTag({
+    client,
+    owner: "alice",
+    repo: "quarterly-report",
+    version: 4,
+    target: "main",
+  });
+
+  expect(repoCreateTagMock).toHaveBeenCalledTimes(1);
+  expect(repoCreateTagMock).toHaveBeenCalledWith(
+    "alice",
+    "quarterly-report",
+    {
+      tag_name: "doc/v0004",
+      target: "main",
+      message: "Published version 0004",
+    },
+  );
+  expect(tag.name).toBe("doc/v0004");
+  expect(tag.version).toBe(4);
+  expect(tag.sha).toBe("newsha123");
+});
+
+test("createDocTag zero-pads version numbers with fewer than 4 digits", async () => {
+  const { createDocTag } = await import("./repos");
+
+  await createDocTag({
+    client,
+    owner: "alice",
+    repo: "quarterly-report",
+    version: 1,
+    target: "abc123",
+  });
+
+  expect(repoCreateTagMock).toHaveBeenCalledWith(
+    "alice",
+    "quarterly-report",
+    {
+      tag_name: "doc/v0001",
+      target: "abc123",
+      message: "Published version 0001",
+    },
+  );
+});
+
+test("createDocTag throws GiteaApiError on network failure", async () => {
+  const { createDocTag } = await import("./repos");
+
+  repoCreateTagMock.mockImplementation(async () => {
+    throw new Error("Network error");
+  });
+
+  await expect(
+    createDocTag({
+      client,
+      owner: "alice",
+      repo: "quarterly-report",
+      version: 2,
+      target: "main",
+    }),
+  ).rejects.toThrow(GiteaApiError);
+});
+
+test("createDocTag throws GiteaApiError when tag name does not match doc/v* pattern", async () => {
+  const { createDocTag } = await import("./repos");
+
+  repoCreateTagMock.mockImplementation(async () => ({
+    data: {
+      name: "invalid-tag",
+      commit: { sha: "abc", created: "2026-04-02T10:00:00Z" },
+    } as Tag,
+  }));
+
+  await expect(
+    createDocTag({
+      client,
+      owner: "alice",
+      repo: "quarterly-report",
+      version: 3,
+      target: "main",
+    }),
+  ).rejects.toThrow(GiteaApiError);
 });
