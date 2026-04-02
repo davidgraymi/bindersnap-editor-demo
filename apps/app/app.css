@@ -642,6 +642,11 @@ input {
   color: var(--color-coral-dark);
 }
 
+.app-vault-upload-note {
+  margin: 0;
+  color: var(--color-muted);
+}
+
 .app-vault-upload-progress-wrap {
   display: grid;
   gap: var(--brand-space-2);

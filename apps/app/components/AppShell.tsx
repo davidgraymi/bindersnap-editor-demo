@@ -20,6 +20,8 @@ const API_BASE_URL = (
 
 const DEFAULT_UPLOAD_ALLOWED_EXTENSIONS = [".json", ".txt", ".md", ".csv", ".doc", ".docx", ".pdf", ".xls", ".xlsx", ".ppt", ".pptx"];
 const uploadAllowedExtensions = (
+  appEnv?.BUN_PUBLIC_BINDERSNAP_UPLOAD_ALLOWED_EXTENSIONS ??
+  appEnv?.VITE_BINDERSNAP_UPLOAD_ALLOWED_EXTENSIONS ??
   appEnv?.BUN_PUBLIC_UPLOAD_ALLOWED_EXTENSIONS ??
   appEnv?.VITE_UPLOAD_ALLOWED_EXTENSIONS ??
   DEFAULT_UPLOAD_ALLOWED_EXTENSIONS.join(",")
@@ -28,7 +30,9 @@ const uploadAllowedExtensions = (
   .map((value) => value.trim().toLowerCase())
   .filter((value) => value.startsWith("."));
 const uploadMaxBytesValue = Number.parseInt(
-  appEnv?.BUN_PUBLIC_UPLOAD_MAX_BYTES ??
+  appEnv?.BUN_PUBLIC_BINDERSNAP_UPLOAD_MAX_BYTES ??
+    appEnv?.VITE_BINDERSNAP_UPLOAD_MAX_BYTES ??
+    appEnv?.BUN_PUBLIC_UPLOAD_MAX_BYTES ??
     appEnv?.VITE_UPLOAD_MAX_BYTES ??
     "26214400",
   10,
@@ -581,6 +585,7 @@ export function AppShell({ user, onSignOut }: AppShellProps) {
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [uploadPhase, setUploadPhase] = useState<UploadPhase>("idle");
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadRefreshNotice, setUploadRefreshNotice] = useState<string | null>(null);
   const [uploadResult, setUploadResult] = useState<DocumentUploadResult | null>(null);
   const [uploadInputKey, setUploadInputKey] = useState(0);
   const selectedDocumentIdRef = useRef<string | null>(null);
@@ -683,6 +688,7 @@ export function AppShell({ user, onSignOut }: AppShellProps) {
     setUploadProgress(null);
     setUploadPhase("idle");
     setUploadError(null);
+    setUploadRefreshNotice(null);
     setUploadResult(null);
     setUploadInputKey((current) => current + 1);
   }, [selectedDocumentId]);
@@ -708,6 +714,7 @@ export function AppShell({ user, onSignOut }: AppShellProps) {
 
   const handleUploadFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     setUploadError(null);
+    setUploadRefreshNotice(null);
     setUploadResult(null);
     setUploadPhase("idle");
     setUploadProgress(null);
@@ -743,6 +750,7 @@ export function AppShell({ user, onSignOut }: AppShellProps) {
       uploadRequestIdRef.current = requestId;
       setUploadPhase("validating");
       setUploadError(null);
+      setUploadRefreshNotice(null);
       setUploadResult(null);
       setUploadProgress(0);
       setUploadPhase("uploading");
@@ -789,7 +797,22 @@ export function AppShell({ user, onSignOut }: AppShellProps) {
         setUploadSummary("");
         setUploadSourceNote("");
         setUploadInputKey((current) => current + 1);
-        await loadDocuments();
+
+        try {
+          await loadDocuments();
+        } catch (refreshError) {
+          if (uploadRequestIdRef.current !== requestId) {
+            return;
+          }
+
+          const refreshMessage =
+            refreshError instanceof Error
+              ? refreshError.message
+              : "Unable to refresh the vault right now.";
+          setUploadRefreshNotice(
+            `Upload succeeded and PR #${result.pullRequestNumber} was created, but refresh failed: ${refreshMessage}`,
+          );
+        }
       } catch (uploadSubmissionError) {
         if (uploadRequestIdRef.current !== requestId) {
           return;
@@ -1088,6 +1111,7 @@ export function AppShell({ user, onSignOut }: AppShellProps) {
                           {uploadProgressLabel}
                         </span>
                         {selectedUploadError ? <p className="app-vault-upload-error">{selectedUploadError}</p> : null}
+                        {uploadRefreshNotice ? <p className="app-vault-upload-note">{uploadRefreshNotice}</p> : null}
                         {uploadPhase === "uploading" ? (
                           <div className="app-vault-upload-progress-wrap">
                             <progress
