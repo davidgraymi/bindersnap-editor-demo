@@ -120,9 +120,7 @@ Bindersnap-File-Hash-SHA256: 8f3c2a1b8c0f8b2ed12e2e36fbfd18f6073e5c11a5823c80f7b
 
 Supported file types:
 
-1. `.pdf`
-2. `.docx`
-3. `.xlsx`
+Any file extension is permitted. The SPA stores the file as opaque base64 bytes in Gitea and never parses or executes the content, so the extension carries no security significance.
 
 Size limit:
 
@@ -130,9 +128,7 @@ Size limit:
 
 Validation behavior:
 
-1. Reject unsupported extensions with a clear user error.
-2. Reject files over 25 MiB before PR creation.
-3. Reject archive uploads (`.zip`, `.rar`, `.7z`) and folder uploads.
+1. Reject files over 25 MiB before any API call.
 
 ## Role Mapping (Upload vs Approve vs Merge)
 

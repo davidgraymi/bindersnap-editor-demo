@@ -65,6 +65,7 @@ export function AppShell({ user, giteaClient, onSignOut }: AppShellProps) {
             giteaClient={giteaClient}
             owner={selectedDocument.owner}
             repo={selectedDocument.repo}
+            uploaderSlug={user?.username ?? 'unknown'}
             onBack={handleBackToWorkspace}
           />
         ) : null}

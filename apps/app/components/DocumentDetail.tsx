@@ -3,13 +3,16 @@ import { useCallback, useEffect, useState } from 'react';
 import type { GiteaClient } from '../../../packages/gitea-client/client';
 import type { PullRequestWithApprovalState } from '../../../packages/gitea-client/pullRequests';
 import type { DocTag } from '../../../packages/gitea-client/repos';
+import type { UploadResult } from '../../../packages/gitea-client/uploads';
 import { listPullRequests } from '../../../packages/gitea-client/pullRequests';
 import { listDocTags } from '../../../packages/gitea-client/repos';
+import { UploadModal } from './UploadModal';
 
 interface DocumentDetailProps {
   giteaClient: GiteaClient;
   owner: string;
   repo: string;
+  uploaderSlug: string;
   onBack: () => void;
 }
 
@@ -78,11 +81,12 @@ function buildRawFileUrl(
   return `${giteaBaseUrl}/${owner}/${repo}/raw/${ref}/${canonicalFile}`;
 }
 
-export function DocumentDetail({ giteaClient, owner, repo, onBack }: DocumentDetailProps) {
+export function DocumentDetail({ giteaClient, owner, repo, uploaderSlug, onBack }: DocumentDetailProps) {
   const [tags, setTags] = useState<DocTag[]>([]);
   const [openPRs, setOpenPRs] = useState<PullRequestWithApprovalState[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showUploadModal, setShowUploadModal] = useState(false);
 
   const giteaBaseUrl =
     (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env
@@ -121,6 +125,12 @@ export function DocumentDetail({ giteaClient, owner, repo, onBack }: DocumentDet
 
   const latestTag = tags.length > 0 ? tags[0] : null;
   const canonicalFileName = `${repo}.pdf`;
+  const nextVersion = (latestTag?.version ?? 0) + 1;
+
+  const handleUploadSuccess = (result: UploadResult) => {
+    setShowUploadModal(false);
+    void loadDocumentData();
+  };
 
   if (isLoading) {
     return (
@@ -180,7 +190,7 @@ export function DocumentDetail({ giteaClient, owner, repo, onBack }: DocumentDet
               Published on {formatTimestamp(latestTag.created)} (tag: <code>{latestTag.name}</code>)
             </p>
             <a
-              className="bs-btn bs-btn-primary"
+              className="bs-btn bs-btn-secondary"
               href={buildRawFileUrl(giteaBaseUrl, owner, repo, 'main', canonicalFileName)}
               download
               target="_blank"
@@ -192,6 +202,9 @@ export function DocumentDetail({ giteaClient, owner, repo, onBack }: DocumentDet
         ) : (
           <p>No published version exists yet. Publish your first version to begin tracking releases.</p>
         )}
+        <button className="bs-btn bs-btn-primary" type="button" onClick={() => setShowUploadModal(true)}>
+          Upload New Version
+        </button>
       </section>
 
       {openPRs.length > 0 ? (
@@ -253,6 +266,19 @@ export function DocumentDetail({ giteaClient, owner, repo, onBack }: DocumentDet
           <p>No published versions yet.</p>
         )}
       </section>
+
+      {showUploadModal && (
+        <UploadModal
+          giteaClient={giteaClient}
+          owner={owner}
+          repo={repo}
+          docSlug={repo}
+          uploaderSlug={uploaderSlug}
+          nextVersion={nextVersion}
+          onClose={() => setShowUploadModal(false)}
+          onSuccess={handleUploadSuccess}
+        />
+      )}
     </div>
   );
 }
