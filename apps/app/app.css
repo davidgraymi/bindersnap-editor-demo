@@ -576,3 +576,107 @@ input {
     grid-template-columns: 1fr;
   }
 }
+
+/* Upload Modal */
+.upload-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: grid;
+  place-items: center;
+  z-index: 100;
+  padding: var(--brand-space-6);
+}
+
+.upload-modal {
+  background: var(--color-paper);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--brand-radius-2xl);
+  box-shadow: var(--shadow-xl);
+  padding: var(--brand-space-8);
+  width: min(100%, 540px);
+  display: grid;
+  gap: var(--brand-space-5);
+}
+
+.upload-modal h2 {
+  margin: 0;
+  font-family: var(--font-serif);
+  line-height: var(--brand-leading-tight);
+}
+
+.upload-modal-actions {
+  display: flex;
+  gap: var(--brand-space-3);
+  flex-wrap: wrap;
+}
+
+.upload-file-input-label {
+  display: grid;
+  gap: var(--brand-space-2);
+}
+
+.upload-file-input {
+  padding: var(--brand-space-3);
+  border: 1px dashed var(--color-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-1);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: var(--brand-text-sm);
+  color: var(--color-ink-soft);
+  width: 100%;
+}
+
+.upload-validation-error {
+  color: var(--color-coral-dark);
+  font-size: var(--brand-text-sm);
+  margin: 0;
+}
+
+.upload-step-list {
+  display: grid;
+  gap: var(--brand-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.upload-step {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-3);
+  font-size: var(--brand-text-sm);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--brand-text-label);
+  letter-spacing: var(--brand-tracking-wide);
+}
+
+.upload-step-active {
+  color: var(--color-ink);
+}
+
+.upload-step-done {
+  color: var(--color-green);
+}
+
+.upload-success-pr {
+  display: grid;
+  gap: var(--brand-space-3);
+}
+
+.upload-pr-number {
+  font-family: var(--font-mono);
+  font-size: var(--brand-text-sm);
+  color: var(--color-muted);
+}
+
+.upload-error-message {
+  color: var(--color-coral-dark);
+  font-size: var(--brand-text-sm);
+  padding: var(--brand-space-3);
+  background: var(--color-coral-dim);
+  border-radius: var(--brand-radius-md);
+  margin: 0;
+}
