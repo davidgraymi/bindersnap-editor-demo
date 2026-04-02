@@ -9,6 +9,7 @@ This is the authenticated Bindersnap product app.
 - Browser never stores or receives upstream Gitea access tokens.
 - App data calls go through API routes (for example `/api/app/documents`).
 - The file-vault shell uses `/api/app/documents` and `/api/app/documents/:id` to keep the list and detail views in sync.
+- Document detail also includes a multipart upload form that posts to `/api/app/documents/:id/versions` and refreshes the vault after the upload PR is created.
 
 ## Entry points
 

@@ -600,6 +600,131 @@ input {
   word-break: break-word;
 }
 
+.app-vault-upload-copy {
+  margin: 0;
+  color: var(--color-muted);
+}
+
+.app-vault-upload-form {
+  display: grid;
+  gap: var(--brand-space-4);
+}
+
+.app-vault-upload-field {
+  display: grid;
+  gap: var(--brand-space-2);
+}
+
+.app-vault-upload-hint {
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--brand-text-label);
+  letter-spacing: var(--brand-tracking-wide);
+  text-transform: uppercase;
+}
+
+.app-vault-upload-input,
+.app-vault-upload-textarea {
+  width: 100%;
+}
+
+.app-vault-upload-textarea {
+  resize: vertical;
+}
+
+.app-vault-upload-status {
+  display: grid;
+  gap: var(--brand-space-3);
+}
+
+.app-vault-upload-error {
+  margin: 0;
+  color: var(--color-coral-dark);
+}
+
+.app-vault-upload-progress-wrap {
+  display: grid;
+  gap: var(--brand-space-2);
+}
+
+.app-vault-upload-progress {
+  width: 100%;
+  height: var(--brand-space-2);
+  appearance: none;
+  border: 0;
+  border-radius: var(--brand-radius-full);
+  overflow: hidden;
+}
+
+.app-vault-upload-progress::-webkit-progress-bar {
+  background: var(--bs-surface-1);
+}
+
+.app-vault-upload-progress::-webkit-progress-value {
+  background: var(--color-coral);
+}
+
+.app-vault-upload-progress::-moz-progress-bar {
+  background: var(--color-coral);
+}
+
+.app-vault-upload-progress-label {
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--brand-text-label);
+  letter-spacing: var(--brand-tracking-wide);
+  text-transform: uppercase;
+}
+
+.app-vault-upload-result {
+  display: grid;
+  gap: var(--brand-space-3);
+  padding: var(--brand-space-4);
+  border-radius: var(--brand-radius-xl);
+  border: 1px solid var(--bs-rule);
+  background: var(--bs-surface-1);
+}
+
+.app-vault-upload-result-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--brand-space-3);
+  align-items: center;
+}
+
+.app-vault-upload-result-head a {
+  color: var(--color-coral);
+  font-family: var(--font-mono);
+  font-size: var(--brand-text-label);
+  letter-spacing: var(--brand-tracking-wide);
+  text-transform: uppercase;
+  text-decoration: none;
+}
+
+.app-vault-upload-result-head a:hover,
+.app-vault-upload-result-head a:focus-visible {
+  color: var(--color-coral-dark);
+}
+
+.app-vault-upload-result dl {
+  margin: 0;
+  display: grid;
+  gap: var(--brand-space-3);
+}
+
+.app-vault-upload-result dt {
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--brand-text-label);
+  letter-spacing: var(--brand-tracking-wide);
+  text-transform: uppercase;
+}
+
+.app-vault-upload-result dd {
+  margin: 0;
+  word-break: break-word;
+}
+
 .app-vault-block-empty {
   margin: 0;
   color: var(--color-muted);
