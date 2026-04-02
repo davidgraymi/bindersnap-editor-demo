@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 
 import type { CommitSummary } from "../../../packages/gitea-client/documents";
 
@@ -18,7 +18,33 @@ const API_BASE_URL = (
   (isLocalHost ? devDefaultApiBaseUrl : "")
 ).replace(/\/$/, "");
 
+const DEFAULT_UPLOAD_ALLOWED_EXTENSIONS = [".json", ".txt", ".md", ".csv", ".doc", ".docx", ".pdf", ".xls", ".xlsx", ".ppt", ".pptx"];
+const uploadAllowedExtensions = (
+  appEnv?.BUN_PUBLIC_BINDERSNAP_UPLOAD_ALLOWED_EXTENSIONS ??
+  appEnv?.VITE_BINDERSNAP_UPLOAD_ALLOWED_EXTENSIONS ??
+  appEnv?.BUN_PUBLIC_UPLOAD_ALLOWED_EXTENSIONS ??
+  appEnv?.VITE_UPLOAD_ALLOWED_EXTENSIONS ??
+  DEFAULT_UPLOAD_ALLOWED_EXTENSIONS.join(",")
+)
+  .split(",")
+  .map((value) => value.trim().toLowerCase())
+  .filter((value) => value.startsWith("."));
+const uploadMaxBytesValue = Number.parseInt(
+  appEnv?.BUN_PUBLIC_BINDERSNAP_UPLOAD_MAX_BYTES ??
+    appEnv?.VITE_BINDERSNAP_UPLOAD_MAX_BYTES ??
+    appEnv?.BUN_PUBLIC_UPLOAD_MAX_BYTES ??
+    appEnv?.VITE_UPLOAD_MAX_BYTES ??
+    "26214400",
+  10,
+);
+const uploadMaxBytes =
+  Number.isFinite(uploadMaxBytesValue) && uploadMaxBytesValue > 0
+    ? uploadMaxBytesValue
+    : 26_214_400;
+const uploadAccept = uploadAllowedExtensions.join(",");
+
 type ApprovalState = "none" | "working" | "in_review" | "changes_requested" | "approved" | "published";
+type UploadPhase = "idle" | "validating" | "uploading" | "success" | "error";
 
 interface AppShellProps {
   user: {
@@ -60,6 +86,20 @@ interface DocumentsPayload {
 interface DocumentDetailPayload {
   repository: string;
   document: DocumentVaultItem;
+}
+
+interface DocumentUploadResult {
+  documentId: string;
+  branchName: string;
+  commitSha: string;
+  pullRequestNumber: number;
+  pullRequestUrl: string | null;
+  approvalState: ApprovalState;
+}
+
+interface UploadRequestError {
+  code?: string;
+  message: string;
 }
 
 function formatTimestamp(value: string) {
@@ -255,6 +295,199 @@ function parseDocumentDetail(payload: unknown): DocumentDetailPayload {
   return { repository, document };
 }
 
+function formatBytes(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) {
+    return "0 B";
+  }
+
+  const units = ["B", "KB", "MB", "GB"];
+  let size = value;
+  let unitIndex = 0;
+
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+
+  const rounded = unitIndex === 0 ? Math.round(size) : Math.round(size * 10) / 10;
+  return `${rounded} ${units[unitIndex]}`;
+}
+
+function readUploadResult(value: unknown): DocumentUploadResult | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const documentId = typeof value.documentId === "string" ? value.documentId.trim() : "";
+  const branchName = typeof value.branchName === "string" ? value.branchName.trim() : "";
+  const commitSha = typeof value.commitSha === "string" ? value.commitSha.trim() : "";
+  const pullRequestNumber =
+    typeof value.pullRequestNumber === "number" && Number.isFinite(value.pullRequestNumber)
+      ? value.pullRequestNumber
+      : 0;
+  const pullRequestUrl =
+    typeof value.pullRequestUrl === "string" && value.pullRequestUrl.trim() !== ""
+      ? value.pullRequestUrl.trim()
+      : null;
+  const approvalState = readApprovalState(value.approvalState);
+
+  if (!documentId || !branchName || !commitSha || !approvalState || !pullRequestNumber) {
+    return null;
+  }
+
+  return {
+    documentId,
+    branchName,
+    commitSha,
+    pullRequestNumber,
+    pullRequestUrl,
+    approvalState,
+  };
+}
+
+function readUploadError(payload: unknown): UploadRequestError | null {
+  if (!isRecord(payload)) {
+    return null;
+  }
+
+  const errorValue = payload.error;
+  const messageFromRoot = typeof payload.message === "string" ? payload.message.trim() : "";
+
+  if (typeof errorValue === "string" && errorValue.trim() !== "") {
+    return { message: errorValue.trim() };
+  }
+
+  if (isRecord(errorValue)) {
+    const code = typeof errorValue.code === "string" ? errorValue.code.trim() : undefined;
+    const message =
+      typeof errorValue.message === "string" && errorValue.message.trim() !== ""
+        ? errorValue.message.trim()
+        : messageFromRoot || "Upload failed.";
+
+    return { code, message };
+  }
+
+  if (messageFromRoot) {
+    return {
+      message: messageFromRoot,
+    };
+  }
+
+  return null;
+}
+
+function formatUploadError(payload: unknown, fallback: string): string {
+  const details = readUploadError(payload);
+  if (!details) {
+    return fallback;
+  }
+
+  switch (details.code) {
+    case "missing_file":
+      return "Choose a file before uploading.";
+    case "empty_file":
+      return "The selected file is empty.";
+    case "unsupported_file_type":
+      return `Unsupported file type. Allowed: ${uploadAllowedExtensions.join(", ")}.`;
+    case "file_too_large":
+      return `That file exceeds the ${formatBytes(uploadMaxBytes)} limit.`;
+    case "document_not_found":
+      return "This document could not be found. Refresh the vault and try again.";
+    case "invalid_upload_payload":
+      return "Upload the file through the picker, not as text.";
+    case "unauthorized":
+      return "Your session expired. Sign in again.";
+    case "upload_branch_unavailable":
+    case "upload_pull_request_unavailable":
+    case "upload_write_failed":
+    case "upload_commit_unavailable":
+      return "The upload could not be saved on the server. Try again in a moment.";
+    default:
+      return details.message || fallback;
+  }
+}
+
+function validateUploadFile(file: File | null): UploadRequestError | null {
+  if (!file) {
+    return {
+      code: "missing_file",
+      message: "Choose a file before uploading.",
+    };
+  }
+
+  if (file.size <= 0) {
+    return {
+      code: "empty_file",
+      message: "The selected file is empty.",
+    };
+  }
+
+  const extension = file.name.includes(".")
+    ? file.name.slice(file.name.lastIndexOf(".")).toLowerCase()
+    : "";
+  if (!extension || !uploadAllowedExtensions.includes(extension)) {
+    return {
+      code: "unsupported_file_type",
+      message: `Unsupported file type. Allowed: ${uploadAllowedExtensions.join(", ")}.`,
+    };
+  }
+
+  if (file.size > uploadMaxBytes) {
+    return {
+      code: "file_too_large",
+      message: `That file exceeds the ${formatBytes(uploadMaxBytes)} limit.`,
+    };
+  }
+
+  return null;
+}
+
+function sendUploadRequest(
+  documentId: string,
+  formData: FormData,
+  onProgress: (progress: number | null) => void,
+): Promise<{ status: number; payload: unknown }> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", resolveApiUrl(`/api/app/documents/${encodeURIComponent(documentId)}/versions`));
+    xhr.withCredentials = true;
+    xhr.responseType = "text";
+    xhr.setRequestHeader("Accept", "application/json");
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && event.total > 0) {
+        onProgress(Math.round((event.loaded / event.total) * 100));
+      } else {
+        onProgress(null);
+      }
+    };
+
+    xhr.onload = () => {
+      let payload: unknown = null;
+      try {
+        payload = xhr.responseText ? (JSON.parse(xhr.responseText) as unknown) : null;
+      } catch {
+        payload = null;
+      }
+
+      resolve({
+        status: xhr.status,
+        payload,
+      });
+    };
+
+    xhr.onerror = () => {
+      reject(new Error("Unable to upload the file right now."));
+    };
+
+    xhr.onabort = () => {
+      reject(new Error("The upload was canceled."));
+    };
+
+    xhr.send(formData);
+  });
+}
+
 function formatCommitSummary(commit: CommitSummary | null | undefined): string {
   if (!commit) {
     return "No published version";
@@ -346,8 +579,18 @@ export function AppShell({ user, onSignOut }: AppShellProps) {
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadSummary, setUploadSummary] = useState("");
+  const [uploadSourceNote, setUploadSourceNote] = useState("");
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadPhase, setUploadPhase] = useState<UploadPhase>("idle");
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadRefreshNotice, setUploadRefreshNotice] = useState<string | null>(null);
+  const [uploadResult, setUploadResult] = useState<DocumentUploadResult | null>(null);
+  const [uploadInputKey, setUploadInputKey] = useState(0);
   const selectedDocumentIdRef = useRef<string | null>(null);
   const detailRequestIdRef = useRef(0);
+  const uploadRequestIdRef = useRef(0);
 
   const selectedDocument = useMemo(() => {
     if (detailDocument && detailDocument.id === selectedDocumentId) {
@@ -438,11 +681,154 @@ export function AppShell({ user, onSignOut }: AppShellProps) {
     selectedDocumentIdRef.current = selectedDocumentId;
   }, [selectedDocumentId]);
 
+  useEffect(() => {
+    setUploadFile(null);
+    setUploadSummary("");
+    setUploadSourceNote("");
+    setUploadProgress(null);
+    setUploadPhase("idle");
+    setUploadError(null);
+    setUploadRefreshNotice(null);
+    setUploadResult(null);
+    setUploadInputKey((current) => current + 1);
+  }, [selectedDocumentId]);
+
   const totalPendingCount = documents.reduce(
     (count, document) => count + (document.latestPendingPullRequest ? 1 : 0),
     0,
   );
   const latestWorkspaceActivity = documents[0]?.lastActivityTimestamp || documents[0]?.lastActivityAt || "";
+  const selectedUploadResult =
+    uploadResult && selectedDocument && uploadResult.documentId === selectedDocument.id ? uploadResult : null;
+  const selectedUploadError = uploadError;
+  const uploadProgressLabel =
+    uploadPhase === "uploading" && uploadProgress !== null
+      ? `${uploadProgress}%`
+      : uploadPhase === "uploading"
+        ? "Uploading..."
+        : uploadPhase === "success"
+          ? "Upload complete"
+          : uploadPhase === "validating"
+            ? "Validating..."
+            : "Ready to upload";
+
+  const handleUploadFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setUploadError(null);
+    setUploadRefreshNotice(null);
+    setUploadResult(null);
+    setUploadPhase("idle");
+    setUploadProgress(null);
+
+    const file = event.target.files?.[0] ?? null;
+    if (!file) {
+      setUploadFile(null);
+      return;
+    }
+
+    setUploadFile(file);
+  };
+
+  const handleUploadSubmit = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+
+      if (!selectedDocument) {
+        setUploadError("Select a document before uploading a new version.");
+        setUploadPhase("error");
+        return;
+      }
+
+      const validation = validateUploadFile(uploadFile);
+      if (validation) {
+        setUploadError(validation.message);
+        setUploadPhase("error");
+        setUploadProgress(null);
+        return;
+      }
+
+      const requestId = uploadRequestIdRef.current + 1;
+      uploadRequestIdRef.current = requestId;
+      setUploadPhase("validating");
+      setUploadError(null);
+      setUploadRefreshNotice(null);
+      setUploadResult(null);
+      setUploadProgress(0);
+      setUploadPhase("uploading");
+
+      const formData = new FormData();
+      formData.set("file", uploadFile);
+
+      const summary = uploadSummary.trim();
+      if (summary) {
+        formData.set("summary", summary);
+      }
+
+      const sourceNote = uploadSourceNote.trim();
+      if (sourceNote) {
+        formData.set("source_note", sourceNote);
+      }
+
+      try {
+        const response = await sendUploadRequest(selectedDocument.id, formData, (progress) => {
+          if (uploadRequestIdRef.current !== requestId) {
+            return;
+          }
+
+          setUploadProgress(progress);
+        });
+
+        if (uploadRequestIdRef.current !== requestId || selectedDocumentIdRef.current !== selectedDocument.id) {
+          return;
+        }
+
+        if (response.status < 200 || response.status >= 300) {
+          throw new Error(formatUploadError(response.payload, "Unable to upload the file right now."));
+        }
+
+        const result = readUploadResult(response.payload);
+        if (!result) {
+          throw new Error("The upload completed, but the server did not return version metadata.");
+        }
+
+        setUploadResult(result);
+        setUploadPhase("success");
+        setUploadProgress(100);
+        setUploadFile(null);
+        setUploadSummary("");
+        setUploadSourceNote("");
+        setUploadInputKey((current) => current + 1);
+
+        try {
+          await loadDocuments();
+        } catch (refreshError) {
+          if (uploadRequestIdRef.current !== requestId) {
+            return;
+          }
+
+          const refreshMessage =
+            refreshError instanceof Error
+              ? refreshError.message
+              : "Unable to refresh the vault right now.";
+          setUploadRefreshNotice(
+            `Upload succeeded and PR #${result.pullRequestNumber} was created, but refresh failed: ${refreshMessage}`,
+          );
+        }
+      } catch (uploadSubmissionError) {
+        if (uploadRequestIdRef.current !== requestId) {
+          return;
+        }
+
+        const message =
+          uploadSubmissionError instanceof Error
+            ? uploadSubmissionError.message
+            : "Unable to upload the file right now.";
+        setUploadError(message);
+        setUploadPhase("error");
+        setUploadProgress(null);
+      }
+    },
+    [loadDocuments, selectedDocument, uploadFile, uploadSourceNote, uploadSummary],
+  );
 
   return (
     <div className="app-shell app-vault-shell">
@@ -663,6 +1049,122 @@ export function AppShell({ user, onSignOut }: AppShellProps) {
                     ) : (
                       <p className="app-vault-block-empty">No pending review versions are open for this document.</p>
                     )}
+                  </article>
+
+                  <article className="app-vault-detail-block app-upload-panel">
+                    <div className="bs-eyebrow">Upload Revision</div>
+                    <h3>Submit a new file version for review</h3>
+                    <p className="app-vault-upload-copy">
+                      Choose a replacement file, add optional notes, and Bindersnap will create the review branch and pull
+                      request for you.
+                    </p>
+
+                    <form className="app-vault-upload-form" onSubmit={handleUploadSubmit}>
+                      <label className="app-vault-upload-field">
+                        <span className="bs-label">File</span>
+                        <input
+                          key={`${selectedDocument.id}-${uploadInputKey}`}
+                          className="bs-input app-vault-upload-input"
+                          type="file"
+                          accept={uploadAccept}
+                          onChange={handleUploadFileChange}
+                        />
+                        <span className="app-vault-upload-hint">
+                          Allowed: {uploadAllowedExtensions.join(", ")} up to {formatBytes(uploadMaxBytes)}.
+                        </span>
+                      </label>
+
+                      <label className="app-vault-upload-field">
+                        <span className="bs-label">Summary</span>
+                        <input
+                          className="bs-input"
+                          type="text"
+                          value={uploadSummary}
+                          onChange={(event) => {
+                            setUploadSummary(event.target.value);
+                            setUploadError(null);
+                            setUploadResult(null);
+                            setUploadPhase("idle");
+                          }}
+                          placeholder="Short note about this revision"
+                        />
+                      </label>
+
+                      <label className="app-vault-upload-field">
+                        <span className="bs-label">Source note</span>
+                        <textarea
+                          className="bs-input app-vault-upload-textarea"
+                          value={uploadSourceNote}
+                          onChange={(event) => {
+                            setUploadSourceNote(event.target.value);
+                            setUploadError(null);
+                            setUploadResult(null);
+                            setUploadPhase("idle");
+                          }}
+                          placeholder="Where did this file come from?"
+                          rows={4}
+                        />
+                      </label>
+
+                      <div className="app-vault-upload-status" aria-live="polite">
+                        <span className={`app-status-badge app-status-badge--${uploadPhase === "error" ? "alert" : uploadPhase === "success" ? "good" : "pending"}`}>
+                          {uploadProgressLabel}
+                        </span>
+                        {selectedUploadError ? <p className="app-vault-upload-error">{selectedUploadError}</p> : null}
+                        {uploadRefreshNotice ? <p className="app-vault-upload-note">{uploadRefreshNotice}</p> : null}
+                        {uploadPhase === "uploading" ? (
+                          <div className="app-vault-upload-progress-wrap">
+                            <progress
+                              className="app-vault-upload-progress"
+                              max={100}
+                              value={uploadProgress === null ? undefined : uploadProgress}
+                            />
+                            <span className="app-vault-upload-progress-label">
+                              {uploadProgress !== null ? `${uploadProgress}%` : "Uploading..."}
+                            </span>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <button
+                        className="bs-btn bs-btn-primary"
+                        type="submit"
+                        disabled={!selectedDocument || uploadPhase === "uploading" || uploadPhase === "validating"}
+                      >
+                        {uploadPhase === "uploading" ? "Uploading..." : "Submit for review"}
+                      </button>
+                    </form>
+
+                    {selectedUploadResult ? (
+                      <div className="app-vault-upload-result">
+                        <div className="app-vault-upload-result-head">
+                          <span className="app-status-badge app-status-badge--good">Upload complete</span>
+                          {selectedUploadResult.pullRequestUrl ? (
+                            <a href={selectedUploadResult.pullRequestUrl} target="_blank" rel="noreferrer">
+                              Open pull request
+                            </a>
+                          ) : null}
+                        </div>
+                        <dl>
+                          <div>
+                            <dt>Pull request</dt>
+                            <dd>#{selectedUploadResult.pullRequestNumber}</dd>
+                          </div>
+                          <div>
+                            <dt>Status</dt>
+                            <dd>{formatPendingState(selectedUploadResult.approvalState)}</dd>
+                          </div>
+                          <div>
+                            <dt>Branch</dt>
+                            <dd>{selectedUploadResult.branchName}</dd>
+                          </div>
+                          <div>
+                            <dt>Commit</dt>
+                            <dd>{selectedUploadResult.commitSha}</dd>
+                          </div>
+                        </dl>
+                      </div>
+                    ) : null}
                   </article>
 
                   <article className="app-vault-detail-block">
