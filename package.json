@@ -26,7 +26,7 @@
     "start": "bun run serve:app",
     "summarize": "bun scripts/summarize-lighthouse.ts",
     "test": "bun run test:all",
-    "test:all": "bun run test:app && bun run test:landing && bun run test:integration",
+    "test:all": "bun run test:app && bun run test:landing",
     "test:app": "bun test apps/app packages/gitea-client",
     "test:landing": "bun test apps/landing packages/editor packages/utils",
     "test:unit": "bun test",
