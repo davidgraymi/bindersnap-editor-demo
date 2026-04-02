@@ -1,10 +1,16 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from "react";
 
-import type { GiteaClient } from '../../../packages/gitea-client/client';
-import type { PullRequestWithApprovalState } from '../../../packages/gitea-client/pullRequests';
-import type { DocTag, WorkspaceRepo } from '../../../packages/gitea-client/repos';
-import { listPullRequests } from '../../../packages/gitea-client/pullRequests';
-import { getLatestDocTag, listWorkspaceRepos } from '../../../packages/gitea-client/repos';
+import type { GiteaClient } from "../../../packages/gitea-client/client";
+import type { PullRequestWithApprovalState } from "../../../packages/gitea-client/pullRequests";
+import type {
+  DocTag,
+  WorkspaceRepo,
+} from "../../../packages/gitea-client/repos";
+import { listPullRequests } from "../../../packages/gitea-client/pullRequests";
+import {
+  getLatestDocTag,
+  listWorkspaceRepos,
+} from "../../../packages/gitea-client/repos";
 
 interface FileVaultWorkspaceProps {
   giteaClient: GiteaClient;
@@ -20,11 +26,11 @@ interface DocumentData {
 }
 
 function formatRelativeTime(timestamp: string): string {
-  if (!timestamp) return 'Unknown';
+  if (!timestamp) return "Unknown";
 
   try {
     const date = new Date(timestamp);
-    if (Number.isNaN(date.getTime())) return 'Unknown';
+    if (Number.isNaN(date.getTime())) return "Unknown";
 
     const now = Date.now();
     const diff = now - date.getTime();
@@ -33,55 +39,60 @@ function formatRelativeTime(timestamp: string): string {
     const hours = Math.floor(minutes / 60);
     const days = Math.floor(hours / 24);
 
-    if (days > 0) return `${days} day${days === 1 ? '' : 's'} ago`;
-    if (hours > 0) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
-    if (minutes > 0) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
-    return 'Just now';
+    if (days > 0) return `${days} day${days === 1 ? "" : "s"} ago`;
+    if (hours > 0) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+    if (minutes > 0) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+    return "Just now";
   } catch {
-    return 'Unknown';
+    return "Unknown";
   }
 }
 
 function formatDocumentName(repoName: string): string {
   return repoName
-    .split('-')
+    .split("-")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
+    .join(" ");
 }
 
 function getApprovalStateBadgeClass(state: string): string {
   switch (state) {
-    case 'approved':
-      return 'vault-status-badge vault-status-approved';
-    case 'changes_requested':
-      return 'vault-status-badge vault-status-changes';
-    case 'in_review':
-      return 'vault-status-badge vault-status-review';
-    case 'published':
-      return 'vault-status-badge vault-status-published';
+    case "approved":
+      return "vault-status-badge vault-status-approved";
+    case "changes_requested":
+      return "vault-status-badge vault-status-changes";
+    case "in_review":
+      return "vault-status-badge vault-status-review";
+    case "published":
+      return "vault-status-badge vault-status-published";
     default:
-      return 'vault-status-badge vault-status-working';
+      return "vault-status-badge vault-status-working";
   }
 }
 
 function getApprovalStateLabel(state: string): string {
   switch (state) {
-    case 'approved':
-      return 'Approved';
-    case 'changes_requested':
-      return 'Changes Requested';
-    case 'in_review':
-      return 'In Review';
-    case 'published':
-      return 'Published';
+    case "approved":
+      return "Approved";
+    case "changes_requested":
+      return "Changes Requested";
+    case "in_review":
+      return "In Review";
+    case "published":
+      return "Published";
     default:
-      return 'Working';
+      return "Working";
   }
 }
 
-export function FileVaultWorkspace({ giteaClient, onSelectDocument }: FileVaultWorkspaceProps) {
+export function FileVaultWorkspace({
+  giteaClient,
+  onSelectDocument,
+}: FileVaultWorkspaceProps) {
   const [repos, setRepos] = useState<WorkspaceRepo[]>([]);
-  const [documentData, setDocumentData] = useState<Map<number, DocumentData>>(new Map());
+  const [documentData, setDocumentData] = useState<Map<number, DocumentData>>(
+    new Map(),
+  );
   const [isLoadingRepos, setIsLoadingRepos] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -105,7 +116,10 @@ export function FileVaultWorkspace({ giteaClient, onSelectDocument }: FileVaultW
       }
       setDocumentData(initialData);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unable to load workspace repositories.';
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Unable to load workspace repositories.";
       setError(message);
       setRepos([]);
       setDocumentData(new Map());
@@ -123,13 +137,13 @@ export function FileVaultWorkspace({ giteaClient, onSelectDocument }: FileVaultW
             client: giteaClient,
             owner: repo.owner.login,
             repo: repo.name,
-            state: 'open',
+            state: "open",
           }),
         ]);
 
         const uploadPRs = pullRequests.filter((pr) => {
-          const headRef = pr.head?.ref ?? '';
-          return headRef.startsWith('upload/');
+          const headRef = pr.head?.ref ?? "";
+          return headRef.startsWith("upload/");
         });
 
         setDocumentData((prev) => {
@@ -147,7 +161,10 @@ export function FileVaultWorkspace({ giteaClient, onSelectDocument }: FileVaultW
           return next;
         });
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Unable to load document details.';
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Unable to load document details.";
         setDocumentData((prev) => {
           const next = new Map(prev);
           const existing = next.get(repo.id);
@@ -162,7 +179,7 @@ export function FileVaultWorkspace({ giteaClient, onSelectDocument }: FileVaultW
         });
       }
     },
-    [giteaClient]
+    [giteaClient],
   );
 
   useEffect(() => {
@@ -194,7 +211,11 @@ export function FileVaultWorkspace({ giteaClient, onSelectDocument }: FileVaultW
           <div className="bs-eyebrow">Error</div>
           <h2>Unable to load workspace</h2>
           <p>{error}</p>
-          <button className="bs-btn bs-btn-primary" type="button" onClick={() => void loadRepos()}>
+          <button
+            className="bs-btn bs-btn-primary"
+            type="button"
+            onClick={() => void loadRepos()}
+          >
             Retry
           </button>
         </div>
@@ -208,7 +229,10 @@ export function FileVaultWorkspace({ giteaClient, onSelectDocument }: FileVaultW
         <div className="bs-card vault-empty-state">
           <div className="bs-eyebrow">Empty Workspace</div>
           <h2>No documents found</h2>
-          <p>Your workspace is empty. Create a repository in Gitea to get started.</p>
+          <p>
+            Your workspace is empty. Create a repository in Gitea to get
+            started.
+          </p>
         </div>
       </div>
     );
@@ -220,8 +244,8 @@ export function FileVaultWorkspace({ giteaClient, onSelectDocument }: FileVaultW
         <div className="bs-eyebrow">File Vault</div>
         <h1>Your Documents</h1>
         <p>
-          All documents are stored as Gitea repositories. Each card shows the current published version and any pending
-          reviews.
+          All documents are stored as Gitea repositories. Each card shows the
+          current published version and any pending reviews.
         </p>
       </section>
 
@@ -242,8 +266,12 @@ export function FileVaultWorkspace({ giteaClient, onSelectDocument }: FileVaultW
               key={repo.id}
               onClick={() => onSelectDocument(repo.owner.login, repo.name)}
             >
-              <h3 className="vault-doc-card-title">{formatDocumentName(repo.name)}</h3>
-              {repo.description ? <p className="vault-doc-description">{repo.description}</p> : null}
+              <h3 className="vault-doc-card-title">
+                {formatDocumentName(repo.name)}
+              </h3>
+              {repo.description ? (
+                <p className="vault-doc-description">{repo.description}</p>
+              ) : null}
 
               {dataLoading ? (
                 <p className="vault-doc-loading">Loading details...</p>
@@ -253,23 +281,35 @@ export function FileVaultWorkspace({ giteaClient, onSelectDocument }: FileVaultW
                 <div className="vault-doc-metadata">
                   <div className="vault-badges">
                     {latestTag ? (
-                      <span className="vault-version-badge">v{latestTag.version}</span>
+                      <span className="vault-version-badge">
+                        v{latestTag.version}
+                      </span>
                     ) : (
-                      <span className="vault-version-badge vault-no-version">No version</span>
+                      <span className="vault-version-badge vault-no-version">
+                        No version
+                      </span>
                     )}
 
                     {pendingPRs.length > 0 ? (
-                      <span className="vault-pending-badge">{pendingPRs.length} pending</span>
+                      <span className="vault-pending-badge">
+                        {pendingPRs.length} pending
+                      </span>
                     ) : null}
 
                     {mostRecentApprovalState ? (
-                      <span className={getApprovalStateBadgeClass(mostRecentApprovalState)}>
+                      <span
+                        className={getApprovalStateBadgeClass(
+                          mostRecentApprovalState,
+                        )}
+                      >
                         {getApprovalStateLabel(mostRecentApprovalState)}
                       </span>
                     ) : null}
                   </div>
 
-                  <p className="vault-timestamp">Updated {formatRelativeTime(repo.updated_at)}</p>
+                  <p className="vault-timestamp">
+                    Updated {formatRelativeTime(repo.updated_at)}
+                  </p>
                 </div>
               )}
             </article>

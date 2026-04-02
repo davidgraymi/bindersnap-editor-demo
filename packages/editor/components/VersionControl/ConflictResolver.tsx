@@ -1,6 +1,5 @@
-
-import React, { useState } from 'react';
-import { DiffViewer } from './DiffViewer';
+import React, { useState } from "react";
+import { DiffViewer } from "./DiffViewer";
 
 interface ConflictResolverProps {
   baseBranch: string;
@@ -17,16 +16,18 @@ export const ConflictResolver: React.FC<ConflictResolverProps> = ({
   ourContent,
   theirContent,
   onResolve,
-  onCancel
+  onCancel,
 }) => {
-  const [resolution, setResolution] = useState<'ours' | 'theirs' | 'manual'>('manual');
+  const [resolution, setResolution] = useState<"ours" | "theirs" | "manual">(
+    "manual",
+  );
   const [manualContent, setManualContent] = useState(ourContent);
 
   const handleApply = () => {
     let content = manualContent;
-    if (resolution === 'ours') content = ourContent;
-    if (resolution === 'theirs') content = theirContent;
-    
+    if (resolution === "ours") content = ourContent;
+    if (resolution === "theirs") content = theirContent;
+
     onResolve(content);
   };
 
@@ -35,52 +36,57 @@ export const ConflictResolver: React.FC<ConflictResolverProps> = ({
       <div className="conflict-modal">
         <div className="conflict-header">
           <h3>Merge Conflict</h3>
-          <p>Merging <strong>{mergeBranch}</strong> into <strong>{baseBranch}</strong></p>
+          <p>
+            Merging <strong>{mergeBranch}</strong> into{" "}
+            <strong>{baseBranch}</strong>
+          </p>
         </div>
 
         <div className="conflict-body">
           <div className="conflict-options">
             <label>
-              <input 
-                type="radio" 
-                checked={resolution === 'ours'} 
-                onChange={() => setResolution('ours')}
+              <input
+                type="radio"
+                checked={resolution === "ours"}
+                onChange={() => setResolution("ours")}
               />
               Keep Current ({baseBranch})
             </label>
             <label>
-              <input 
-                type="radio" 
-                checked={resolution === 'theirs'} 
-                onChange={() => setResolution('theirs')}
+              <input
+                type="radio"
+                checked={resolution === "theirs"}
+                onChange={() => setResolution("theirs")}
               />
               Accept Incoming ({mergeBranch})
             </label>
             <label>
-              <input 
-                type="radio" 
-                checked={resolution === 'manual'} 
-                onChange={() => setResolution('manual')}
+              <input
+                type="radio"
+                checked={resolution === "manual"}
+                onChange={() => setResolution("manual")}
               />
               Manual Merge
             </label>
           </div>
 
           <div className="conflict-preview">
-            {resolution === 'manual' ? (
+            {resolution === "manual" ? (
               <div className="manual-merge-area">
-                <p className="help-text">Edit the content below to resolve the conflict:</p>
-                <textarea 
+                <p className="help-text">
+                  Edit the content below to resolve the conflict:
+                </p>
+                <textarea
                   className="manual-editor"
-                  value={manualContent} 
+                  value={manualContent}
                   onChange={(e) => setManualContent(e.target.value)}
                 />
               </div>
             ) : (
               <div className="diff-preview-area">
-                <DiffViewer 
-                   base={resolution === 'ours' ? theirContent : ourContent} 
-                   head={resolution === 'ours' ? ourContent : theirContent} 
+                <DiffViewer
+                  base={resolution === "ours" ? theirContent : ourContent}
+                  head={resolution === "ours" ? ourContent : theirContent}
                 />
               </div>
             )}
@@ -88,8 +94,12 @@ export const ConflictResolver: React.FC<ConflictResolverProps> = ({
         </div>
 
         <div className="conflict-footer">
-          <button className="cancel-btn" onClick={onCancel}>Cancel Merge</button>
-          <button className="resolve-btn" onClick={handleApply}>Resolve & Commit</button>
+          <button className="cancel-btn" onClick={onCancel}>
+            Cancel Merge
+          </button>
+          <button className="resolve-btn" onClick={handleApply}>
+            Resolve & Commit
+          </button>
         </div>
       </div>
     </div>

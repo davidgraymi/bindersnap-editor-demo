@@ -26,7 +26,8 @@ const apiPortValue = Number.parseInt(
   process.env.API_PORT ?? process.env.PORT ?? "8787",
   10,
 );
-const apiPort = Number.isFinite(apiPortValue) && apiPortValue > 0 ? apiPortValue : 8787;
+const apiPort =
+  Number.isFinite(apiPortValue) && apiPortValue > 0 ? apiPortValue : 8787;
 const giteaUrl =
   process.env.GITEA_INTERNAL_URL ??
   process.env.BUN_PUBLIC_GITEA_URL ??
@@ -34,10 +35,13 @@ const giteaUrl =
   "http://localhost:3000";
 const adminUsername = process.env.GITEA_ADMIN_USER ?? "";
 const adminPassword = process.env.GITEA_ADMIN_PASS ?? "";
-const emailDomain = process.env.BINDERSNAP_USER_EMAIL_DOMAIN ?? "users.bindersnap.local";
+const emailDomain =
+  process.env.BINDERSNAP_USER_EMAIL_DOMAIN ?? "users.bindersnap.local";
 const sessionCookieName =
   process.env.BINDERSNAP_SESSION_COOKIE_NAME ?? "bindersnap_session";
-const tokenScopes = (process.env.BINDERSNAP_GITEA_TOKEN_SCOPES ?? "read:repository")
+const tokenScopes = (
+  process.env.BINDERSNAP_GITEA_TOKEN_SCOPES ?? "read:repository"
+)
   .split(",")
   .map((scope) => scope.trim())
   .filter((scope) => scope !== "");
@@ -122,7 +126,11 @@ function normalizeOrigin(origin: string | null | undefined): string | null {
   }
 }
 
-function json(status: number, body: Record<string, unknown>, headers?: HeadersInit): Response {
+function json(
+  status: number,
+  body: Record<string, unknown>,
+  headers?: HeadersInit,
+): Response {
   const responseHeaders = new Headers({
     "Content-Type": "application/json",
     "Cache-Control": "no-store",
@@ -211,7 +219,10 @@ function isAllowedOrigin(origin: string | null): boolean {
   }
 
   // Local dev fallback: allow loopback browser origins unless explicitly locked down.
-  if (!process.env.BINDERSNAP_ALLOWED_ORIGINS && !process.env.BINDERSNAP_APP_ORIGIN) {
+  if (
+    !process.env.BINDERSNAP_ALLOWED_ORIGINS &&
+    !process.env.BINDERSNAP_APP_ORIGIN
+  ) {
     return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
   }
 
@@ -246,7 +257,10 @@ function isLocalRequest(req: Request): boolean {
   return hostname === "localhost" || hostname === "127.0.0.1";
 }
 
-function enforceTransportSecurity(req: Request, baseHeaders: Headers): Response | null {
+function enforceTransportSecurity(
+  req: Request,
+  baseHeaders: Headers,
+): Response | null {
   if (!enforceHttps || isLocalRequest(req)) {
     return null;
   }
@@ -258,8 +272,15 @@ function enforceTransportSecurity(req: Request, baseHeaders: Headers): Response 
   return json(400, { error: "HTTPS is required." }, baseHeaders);
 }
 
-function enforceStateChangingOrigin(req: Request, baseHeaders: Headers): Response | null {
-  if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") {
+function enforceStateChangingOrigin(
+  req: Request,
+  baseHeaders: Headers,
+): Response | null {
+  if (
+    req.method === "GET" ||
+    req.method === "HEAD" ||
+    req.method === "OPTIONS"
+  ) {
     return null;
   }
 
@@ -271,8 +292,17 @@ function enforceStateChangingOrigin(req: Request, baseHeaders: Headers): Respons
   return null;
 }
 
-function serializeCookie(req: Request, value: string, expiresAt?: number): string {
-  const parts = [`${sessionCookieName}=${value}`, "Path=/", "HttpOnly", "SameSite=Lax"];
+function serializeCookie(
+  req: Request,
+  value: string,
+  expiresAt?: number,
+): string {
+  const parts = [
+    `${sessionCookieName}=${value}`,
+    "Path=/",
+    "HttpOnly",
+    "SameSite=Lax",
+  ];
 
   if (!isLocalRequest(req)) {
     parts.push("Secure");
@@ -344,7 +374,10 @@ function consumeAuthRateLimit(
   authAttempts.set(key, existing);
 
   if (existing.count > authRateLimitMax) {
-    const retryAfterSeconds = Math.max(1, Math.ceil((existing.resetAt - now) / 1000));
+    const retryAfterSeconds = Math.max(
+      1,
+      Math.ceil((existing.resetAt - now) / 1000),
+    );
     return { limited: true, retryAfterSeconds };
   }
 
@@ -372,7 +405,10 @@ async function giteaFetch(path: string, init?: RequestInit): Promise<Response> {
   return fetch(new URL(path, giteaUrl), init);
 }
 
-async function verifyUserCredentials(username: string, password: string): Promise<string | null> {
+async function verifyUserCredentials(
+  username: string,
+  password: string,
+): Promise<string | null> {
   const response = await giteaFetch("/api/v1/user", {
     method: "GET",
     headers: {
@@ -386,29 +422,40 @@ async function verifyUserCredentials(username: string, password: string): Promis
   }
 
   const payload = (await response.json()) as { login?: unknown };
-  return typeof payload.login === "string" && payload.login.trim() !== "" ? payload.login.trim() : null;
+  return typeof payload.login === "string" && payload.login.trim() !== ""
+    ? payload.login.trim()
+    : null;
 }
 
-async function createUserToken(username: string, password: string, tokenName: string): Promise<string | null> {
-  const response = await giteaFetch(`/api/v1/users/${encodeURIComponent(username)}/tokens`, {
-    method: "POST",
-    headers: {
-      Authorization: buildBasicAuthHeader(username, password),
-      "Content-Type": "application/json",
-      Accept: "application/json",
+async function createUserToken(
+  username: string,
+  password: string,
+  tokenName: string,
+): Promise<string | null> {
+  const response = await giteaFetch(
+    `/api/v1/users/${encodeURIComponent(username)}/tokens`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: buildBasicAuthHeader(username, password),
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        name: tokenName,
+        scopes: tokenScopes.length > 0 ? tokenScopes : ["read:repository"],
+      }),
     },
-    body: JSON.stringify({
-      name: tokenName,
-      scopes: tokenScopes.length > 0 ? tokenScopes : ["read:repository"],
-    }),
-  });
+  );
 
   if (!response.ok) {
     return null;
   }
 
   const payload = (await response.json()) as { sha1?: unknown };
-  return typeof payload.sha1 === "string" && payload.sha1.trim() !== "" ? payload.sha1.trim() : null;
+  return typeof payload.sha1 === "string" && payload.sha1.trim() !== ""
+    ? payload.sha1.trim()
+    : null;
 }
 
 async function revokeUserToken(session: SessionRecord): Promise<void> {
@@ -441,7 +488,10 @@ async function revokeUserToken(session: SessionRecord): Promise<void> {
   }).catch(() => undefined);
 }
 
-async function createGiteaUser(username: string, password: string): Promise<"created" | "exists" | "error"> {
+async function createGiteaUser(
+  username: string,
+  password: string,
+): Promise<"created" | "exists" | "error"> {
   if (!adminUsername || !adminPassword) {
     return "error";
   }
@@ -479,7 +529,11 @@ async function createGiteaUser(username: string, password: string): Promise<"cre
   return "error";
 }
 
-function createSession(username: string, giteaToken: string, giteaTokenName: string): SessionRecord {
+function createSession(
+  username: string,
+  giteaToken: string,
+  giteaTokenName: string,
+): SessionRecord {
   const now = Date.now();
   const session: SessionRecord = {
     id: randomUUID(),
@@ -500,22 +554,35 @@ async function revokeAndDeleteSession(session: SessionRecord): Promise<void> {
 }
 
 async function revokeOtherUserSessions(username: string): Promise<void> {
-  const staleSessions = [...sessions.values()].filter((session) => session.username === username);
+  const staleSessions = [...sessions.values()].filter(
+    (session) => session.username === username,
+  );
   if (staleSessions.length === 0) {
     return;
   }
 
-  await Promise.allSettled(staleSessions.map((session) => revokeAndDeleteSession(session)));
+  await Promise.allSettled(
+    staleSessions.map((session) => revokeAndDeleteSession(session)),
+  );
 }
 
-async function createLoginSession(username: string, password: string, req: Request, baseHeaders: Headers): Promise<Response> {
-  const loginName = await verifyUserCredentials(username, password).catch(() => null);
+async function createLoginSession(
+  username: string,
+  password: string,
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const loginName = await verifyUserCredentials(username, password).catch(
+    () => null,
+  );
   if (!loginName) {
     return json(401, { error: "Invalid username or password." }, baseHeaders);
   }
 
   const tokenName = `bindersnap-session-${randomUUID()}`;
-  const token = await createUserToken(loginName, password, tokenName).catch(() => null);
+  const token = await createUserToken(loginName, password, tokenName).catch(
+    () => null,
+  );
   if (!token) {
     return json(502, { error: "Unable to sign in." }, baseHeaders);
   }
@@ -538,7 +605,10 @@ async function createLoginSession(username: string, password: string, req: Reque
   );
 }
 
-async function listLatestCommit(token: string, filePath: string): Promise<CommitSummary | null> {
+async function listLatestCommit(
+  token: string,
+  filePath: string,
+): Promise<CommitSummary | null> {
   const response = await giteaFetch(
     `/api/v1/repos/alice/quarterly-report/commits?path=${encodeURIComponent(filePath)}&limit=1`,
     {
@@ -567,12 +637,19 @@ async function listLatestCommit(token: string, filePath: string): Promise<Commit
   return {
     sha: commit.sha ?? "",
     message: commit.commit?.message ?? "",
-    author: commit.commit?.author?.name ?? commit.author?.full_name ?? commit.author?.login ?? "Unknown",
+    author:
+      commit.commit?.author?.name ??
+      commit.author?.full_name ??
+      commit.author?.login ??
+      "Unknown",
     timestamp: commit.commit?.author?.date ?? commit.created ?? "",
   };
 }
 
-async function handleSignup(req: Request, baseHeaders: Headers): Promise<Response> {
+async function handleSignup(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
   const rateLimit = consumeAuthRateLimit(req, "signup");
   if (rateLimit.limited) {
     return json(
@@ -584,12 +661,20 @@ async function handleSignup(req: Request, baseHeaders: Headers): Promise<Respons
     );
   }
 
-  const payload = await readJson<{ username?: unknown; password?: unknown }>(req);
-  const username = typeof payload?.username === "string" ? payload.username.trim() : "";
-  const password = typeof payload?.password === "string" ? payload.password : "";
+  const payload = await readJson<{ username?: unknown; password?: unknown }>(
+    req,
+  );
+  const username =
+    typeof payload?.username === "string" ? payload.username.trim() : "";
+  const password =
+    typeof payload?.password === "string" ? payload.password : "";
 
   if (!username || !password) {
-    return json(400, { error: "Username and password are required." }, baseHeaders);
+    return json(
+      400,
+      { error: "Username and password are required." },
+      baseHeaders,
+    );
   }
 
   const created = await createGiteaUser(username, password);
@@ -601,14 +686,22 @@ async function handleSignup(req: Request, baseHeaders: Headers): Promise<Respons
     return json(502, { error: "Unable to create account." }, baseHeaders);
   }
 
-  const response = await createLoginSession(username, password, req, baseHeaders);
+  const response = await createLoginSession(
+    username,
+    password,
+    req,
+    baseHeaders,
+  );
   if (response.ok) {
     resetAuthRateLimit(req, "signup");
   }
   return response;
 }
 
-async function handleLogin(req: Request, baseHeaders: Headers): Promise<Response> {
+async function handleLogin(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
   const rateLimit = consumeAuthRateLimit(req, "login");
   if (rateLimit.limited) {
     return json(
@@ -620,22 +713,38 @@ async function handleLogin(req: Request, baseHeaders: Headers): Promise<Response
     );
   }
 
-  const payload = await readJson<{ username?: unknown; password?: unknown }>(req);
-  const username = typeof payload?.username === "string" ? payload.username.trim() : "";
-  const password = typeof payload?.password === "string" ? payload.password : "";
+  const payload = await readJson<{ username?: unknown; password?: unknown }>(
+    req,
+  );
+  const username =
+    typeof payload?.username === "string" ? payload.username.trim() : "";
+  const password =
+    typeof payload?.password === "string" ? payload.password : "";
 
   if (!username || !password) {
-    return json(400, { error: "Username and password are required." }, baseHeaders);
+    return json(
+      400,
+      { error: "Username and password are required." },
+      baseHeaders,
+    );
   }
 
-  const response = await createLoginSession(username, password, req, baseHeaders);
+  const response = await createLoginSession(
+    username,
+    password,
+    req,
+    baseHeaders,
+  );
   if (response.ok) {
     resetAuthRateLimit(req, "login");
   }
   return response;
 }
 
-async function handleLogout(req: Request, baseHeaders: Headers): Promise<Response> {
+async function handleLogout(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
   const session = getSessionFromRequest(req);
   if (session) {
     sessions.delete(session.id);
@@ -649,7 +758,10 @@ async function handleLogout(req: Request, baseHeaders: Headers): Promise<Respons
   return json(200, { ok: true }, headers);
 }
 
-async function handleAuthMe(req: Request, baseHeaders: Headers): Promise<Response> {
+async function handleAuthMe(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
   const session = getSessionFromRequest(req);
   if (!session) {
     return json(401, { error: "Unauthorized." }, baseHeaders);
@@ -666,7 +778,10 @@ async function handleAuthMe(req: Request, baseHeaders: Headers): Promise<Respons
   );
 }
 
-async function handleDocuments(req: Request, baseHeaders: Headers): Promise<Response> {
+async function handleDocuments(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
   const session = getSessionFromRequest(req);
   if (!session) {
     return json(401, { error: "Unauthorized." }, baseHeaders);
@@ -701,7 +816,9 @@ async function cleanupExpiredSessions(): Promise<void> {
   }
 
   if (expiredSessions.length > 0) {
-    await Promise.allSettled(expiredSessions.map((session) => revokeUserToken(session)));
+    await Promise.allSettled(
+      expiredSessions.map((session) => revokeUserToken(session)),
+    );
   }
 
   for (const [key, entry] of authAttempts.entries()) {

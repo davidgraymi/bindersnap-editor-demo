@@ -1,13 +1,13 @@
-import { afterEach, expect, mock, test } from 'bun:test';
-import type { User } from 'gitea-js';
+import { afterEach, expect, mock, test } from "bun:test";
+import type { User } from "gitea-js";
 
 const userGetCurrentMock = mock(async () => ({
   data: {
     id: 42,
-    login: 'alice',
-    full_name: 'Alice Admin',
-    email: 'alice@example.com',
-    avatar_url: 'https://example.com/alice.png',
+    login: "alice",
+    full_name: "Alice Admin",
+    email: "alice@example.com",
+    avatar_url: "https://example.com/alice.png",
   } as User,
 }));
 
@@ -17,7 +17,7 @@ const giteaApiMock = mock(() => ({
   },
 }));
 
-mock.module('gitea-js', () => ({
+mock.module("gitea-js", () => ({
   giteaApi: giteaApiMock,
 }));
 
@@ -46,7 +46,7 @@ const createMemoryStorage = (): Storage => {
   } as Storage;
 };
 
-Object.defineProperty(globalThis, 'sessionStorage', {
+Object.defineProperty(globalThis, "sessionStorage", {
   configurable: true,
   writable: true,
   value: createMemoryStorage(),
@@ -57,10 +57,10 @@ afterEach(() => {
   userGetCurrentMock.mockImplementation(async () => ({
     data: {
       id: 42,
-      login: 'alice',
-      full_name: 'Alice Admin',
-      email: 'alice@example.com',
-      avatar_url: 'https://example.com/alice.png',
+      login: "alice",
+      full_name: "Alice Admin",
+      email: "alice@example.com",
+      avatar_url: "https://example.com/alice.png",
     } as User,
   }));
 
@@ -68,63 +68,72 @@ afterEach(() => {
   globalThis.sessionStorage.clear();
 });
 
-test('stores, retrieves, and clears the token in sessionStorage', async () => {
-  const { storeToken, getStoredToken, clearToken } = await import('./auth');
+test("stores, retrieves, and clears the token in sessionStorage", async () => {
+  const { storeToken, getStoredToken, clearToken } = await import("./auth");
 
-  storeToken('secret');
-  expect(getStoredToken()).toBe('secret');
+  storeToken("secret");
+  expect(getStoredToken()).toBe("secret");
 
   clearToken();
   expect(getStoredToken()).toBeNull();
 });
 
-test('validateToken returns normalized gitea user data', async () => {
-  const { validateToken } = await import('./auth');
+test("validateToken returns normalized gitea user data", async () => {
+  const { validateToken } = await import("./auth");
 
-  const user = await validateToken('https://gitea.example.com', 'good-token');
+  const user = await validateToken("https://gitea.example.com", "good-token");
 
-  expect(giteaApiMock).toHaveBeenCalledWith('https://gitea.example.com', { token: 'good-token' });
+  expect(giteaApiMock).toHaveBeenCalledWith("https://gitea.example.com", {
+    token: "good-token",
+  });
   expect(userGetCurrentMock).toHaveBeenCalledTimes(1);
   expect(user).toEqual({
     id: 42,
-    login: 'alice',
-    full_name: 'Alice Admin',
-    email: 'alice@example.com',
-    avatar_url: 'https://example.com/alice.png',
+    login: "alice",
+    full_name: "Alice Admin",
+    email: "alice@example.com",
+    avatar_url: "https://example.com/alice.png",
   });
 });
 
-test('validateToken maps response-like failures to GiteaApiError', async () => {
-  const { validateToken } = await import('./auth');
+test("validateToken maps response-like failures to GiteaApiError", async () => {
+  const { validateToken } = await import("./auth");
 
   userGetCurrentMock.mockImplementation(async () => {
     throw {
       status: 401,
       error: {
-        message: 'invalid token',
+        message: "invalid token",
       },
     };
   });
 
-  await expect(validateToken('https://gitea.example.com', 'bad-token')).rejects.toMatchObject({
-    name: 'GiteaApiError',
+  await expect(
+    validateToken("https://gitea.example.com", "bad-token"),
+  ).rejects.toMatchObject({
+    name: "GiteaApiError",
     status: 401,
-    message: 'invalid token',
+    message: "invalid token",
   });
 });
 
-test('createAuthenticatedClient uses stored token', async () => {
-  const { createAuthenticatedClient, storeToken } = await import('./auth');
+test("createAuthenticatedClient uses stored token", async () => {
+  const { createAuthenticatedClient, storeToken } = await import("./auth");
 
-  storeToken('stored-token');
-  const client = createAuthenticatedClient('https://gitea.example.com');
+  storeToken("stored-token");
+  const client = createAuthenticatedClient("https://gitea.example.com");
 
-  expect(giteaApiMock).toHaveBeenCalledWith('https://gitea.example.com', { token: 'stored-token' });
+  expect(giteaApiMock).toHaveBeenCalledWith("https://gitea.example.com", {
+    token: "stored-token",
+  });
   expect(client.user).toBeDefined();
 });
 
-test('createAuthenticatedClient throws when token is missing', async () => {
-  const { createAuthenticatedClient, UnauthenticatedError } = await import('./auth');
+test("createAuthenticatedClient throws when token is missing", async () => {
+  const { createAuthenticatedClient, UnauthenticatedError } =
+    await import("./auth");
 
-  expect(() => createAuthenticatedClient('https://gitea.example.com')).toThrow(UnauthenticatedError);
+  expect(() => createAuthenticatedClient("https://gitea.example.com")).toThrow(
+    UnauthenticatedError,
+  );
 });

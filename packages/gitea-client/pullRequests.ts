@@ -1,8 +1,19 @@
-import type { CreatePullRequestOption, CreatePullReviewOptions, MergePullRequestOption, PullRequest, PullReview } from 'gitea-js';
+import type {
+  CreatePullRequestOption,
+  CreatePullReviewOptions,
+  MergePullRequestOption,
+  PullRequest,
+  PullReview,
+} from "gitea-js";
 
-import { GiteaApiError, type GiteaClient } from './client';
+import { GiteaApiError, type GiteaClient } from "./client";
 
-export type ApprovalState = 'working' | 'in_review' | 'changes_requested' | 'approved' | 'published';
+export type ApprovalState =
+  | "working"
+  | "in_review"
+  | "changes_requested"
+  | "approved"
+  | "published";
 
 export interface PullRequestWithApprovalState extends PullRequest {
   approvalState: ApprovalState;
@@ -30,7 +41,7 @@ export interface SubmitReviewParams {
   owner: string;
   repo: string;
   pullNumber: number;
-  event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT';
+  event: "APPROVE" | "REQUEST_CHANGES" | "COMMENT";
   body?: string;
 }
 
@@ -39,7 +50,7 @@ export interface MergePullRequestParams {
   owner: string;
   repo: string;
   pullNumber: number;
-  mergeStyle: 'merge' | 'squash' | 'rebase';
+  mergeStyle: "merge" | "squash" | "rebase";
   message?: string;
 }
 
@@ -47,7 +58,7 @@ export interface ListPullRequestsParams {
   client: GiteaClient;
   owner: string;
   repo: string;
-  state: 'open' | 'closed' | 'all';
+  state: "open" | "closed" | "all";
   page?: number;
 }
 
@@ -56,40 +67,49 @@ function readErrorMessage(error: unknown): string {
     return error.message;
   }
 
-  if (typeof error === 'string' && error.trim() !== '') {
+  if (typeof error === "string" && error.trim() !== "") {
     return error;
   }
 
-  if (typeof error === 'object' && error !== null) {
+  if (typeof error === "object" && error !== null) {
     const responseLike = error as {
       error?: unknown;
       message?: unknown;
       statusText?: unknown;
     };
 
-    if (typeof responseLike.message === 'string' && responseLike.message.trim() !== '') {
+    if (
+      typeof responseLike.message === "string" &&
+      responseLike.message.trim() !== ""
+    ) {
       return responseLike.message;
     }
 
-    if (typeof responseLike.error === 'string' && responseLike.error.trim() !== '') {
+    if (
+      typeof responseLike.error === "string" &&
+      responseLike.error.trim() !== ""
+    ) {
       return responseLike.error;
     }
 
     if (
-      typeof responseLike.error === 'object' &&
+      typeof responseLike.error === "object" &&
       responseLike.error !== null &&
-      'message' in responseLike.error &&
-      typeof (responseLike.error as { message?: unknown }).message === 'string'
+      "message" in responseLike.error &&
+      typeof (responseLike.error as { message?: unknown }).message === "string"
     ) {
       return (responseLike.error as { message: string }).message;
     }
 
-    if (typeof responseLike.statusText === 'string' && responseLike.statusText.trim() !== '') {
+    if (
+      typeof responseLike.statusText === "string" &&
+      responseLike.statusText.trim() !== ""
+    ) {
       return responseLike.statusText;
     }
   }
 
-  return 'Gitea request failed.';
+  return "Gitea request failed.";
 }
 
 function toGiteaApiError(error: unknown): GiteaApiError {
@@ -98,22 +118,25 @@ function toGiteaApiError(error: unknown): GiteaApiError {
   }
 
   const status =
-    typeof error === 'object' && error !== null && 'status' in error
+    typeof error === "object" && error !== null && "status" in error
       ? Number((error as { status?: unknown }).status)
       : 0;
 
-  return new GiteaApiError(Number.isFinite(status) ? status : 0, readErrorMessage(error));
+  return new GiteaApiError(
+    Number.isFinite(status) ? status : 0,
+    readErrorMessage(error),
+  );
 }
 
 function toApprovalStateFromReview(review: PullReview): ApprovalState | null {
   const state = review.state?.toUpperCase();
 
-  if (state === 'REQUEST_CHANGES' || state === 'CHANGES_REQUESTED') {
-    return 'changes_requested';
+  if (state === "REQUEST_CHANGES" || state === "CHANGES_REQUESTED") {
+    return "changes_requested";
   }
 
-  if (state === 'APPROVED') {
-    return 'approved';
+  if (state === "APPROVED") {
+    return "approved";
   }
 
   return null;
@@ -125,27 +148,37 @@ function isMergedPullRequest(pullRequest: PullRequest): boolean {
     merged_at?: unknown;
   };
 
-  return candidate.merged === true || (typeof candidate.merged_at === 'string' && candidate.merged_at.trim() !== '');
+  return (
+    candidate.merged === true ||
+    (typeof candidate.merged_at === "string" &&
+      candidate.merged_at.trim() !== "")
+  );
 }
 
-function resolveApprovalState(pullRequest: PullRequest, reviews: PullReview[]): ApprovalState {
+function resolveApprovalState(
+  pullRequest: PullRequest,
+  reviews: PullReview[],
+): ApprovalState {
   if (isMergedPullRequest(pullRequest)) {
-    return 'published';
+    return "published";
   }
 
   const reviewStates = reviews.map(toApprovalStateFromReview);
-  if (reviewStates.includes('changes_requested')) {
-    return 'changes_requested';
+  if (reviewStates.includes("changes_requested")) {
+    return "changes_requested";
   }
 
-  if (reviewStates.includes('approved')) {
-    return 'approved';
+  if (reviewStates.includes("approved")) {
+    return "approved";
   }
 
-  return pullRequest.state === 'open' ? 'in_review' : 'working';
+  return pullRequest.state === "open" ? "in_review" : "working";
 }
 
-function withApprovalState(pullRequest: PullRequest, reviews: PullReview[]): PullRequestWithApprovalState {
+function withApprovalState(
+  pullRequest: PullRequest,
+  reviews: PullReview[],
+): PullRequestWithApprovalState {
   return {
     ...pullRequest,
     approvalState: resolveApprovalState(pullRequest, reviews),
@@ -153,30 +186,48 @@ function withApprovalState(pullRequest: PullRequest, reviews: PullReview[]): Pul
 }
 
 function pullRequestSelectionRank(pullRequest: PullRequest): number {
-  const openBonus = pullRequest.state === 'open' ? 1_000_000 : 0;
+  const openBonus = pullRequest.state === "open" ? 1_000_000 : 0;
   const numberRank = pullRequest.number ?? 0;
   return openBonus + numberRank;
 }
 
-function selectPullRequestForBranch(pullRequests: PullRequest[], branch: string): PullRequest | null {
-  const candidates = pullRequests.filter((candidate) => candidate.head?.ref === branch);
+function selectPullRequestForBranch(
+  pullRequests: PullRequest[],
+  branch: string,
+): PullRequest | null {
+  const candidates = pullRequests.filter(
+    (candidate) => candidate.head?.ref === branch,
+  );
   if (candidates.length === 0) {
     return null;
   }
 
-  candidates.sort((left, right) => pullRequestSelectionRank(right) - pullRequestSelectionRank(left));
+  candidates.sort(
+    (left, right) =>
+      pullRequestSelectionRank(right) - pullRequestSelectionRank(left),
+  );
   return candidates[0] ?? null;
 }
 
-async function listPullReviews(client: GiteaClient, owner: string, repo: string, pullNumber: number): Promise<PullReview[]> {
+async function listPullReviews(
+  client: GiteaClient,
+  owner: string,
+  repo: string,
+  pullNumber: number,
+): Promise<PullReview[]> {
   const allReviews: PullReview[] = [];
   const limit = 100;
 
   for (let page = 1; page < 100; page += 1) {
-    const response = await client.repos.repoListPullReviews(owner, repo, pullNumber, {
-      limit,
-      page,
-    });
+    const response = await client.repos.repoListPullReviews(
+      owner,
+      repo,
+      pullNumber,
+      {
+        limit,
+        page,
+      },
+    );
 
     allReviews.push(...response.data);
 
@@ -188,7 +239,9 @@ async function listPullReviews(client: GiteaClient, owner: string, repo: string,
   return allReviews;
 }
 
-export async function createPullRequest(params: CreatePullRequestParams): Promise<PullRequestWithApprovalState> {
+export async function createPullRequest(
+  params: CreatePullRequestParams,
+): Promise<PullRequestWithApprovalState> {
   const { client, owner, repo, title, head, base, body } = params;
 
   try {
@@ -196,12 +249,18 @@ export async function createPullRequest(params: CreatePullRequestParams): Promis
       title,
       head,
       base,
-      body: body ?? '',
+      body: body ?? "",
     };
 
-    const response = await client.repos.repoCreatePullRequest(owner, repo, requestBody);
+    const response = await client.repos.repoCreatePullRequest(
+      owner,
+      repo,
+      requestBody,
+    );
     const pullRequest = response.data;
-    const reviews = pullRequest.number ? await listPullReviews(client, owner, repo, pullRequest.number) : [];
+    const reviews = pullRequest.number
+      ? await listPullReviews(client, owner, repo, pullRequest.number)
+      : [];
 
     return withApprovalState(pullRequest, reviews);
   } catch (error) {
@@ -210,13 +269,13 @@ export async function createPullRequest(params: CreatePullRequestParams): Promis
 }
 
 export async function getPullRequestForBranch(
-  params: GetPullRequestForBranchParams
+  params: GetPullRequestForBranchParams,
 ): Promise<PullRequestWithApprovalState | null> {
   const { client, owner, repo, branch } = params;
 
   try {
     const response = await client.repos.repoListPullRequests(owner, repo, {
-      state: 'all',
+      state: "all",
       head: `${owner}:${branch}`,
     });
 
@@ -227,14 +286,21 @@ export async function getPullRequestForBranch(
       return null;
     }
 
-    const reviews = await listPullReviews(client, owner, repo, pullRequest.number);
+    const reviews = await listPullReviews(
+      client,
+      owner,
+      repo,
+      pullRequest.number,
+    );
     return withApprovalState(pullRequest, reviews);
   } catch (error) {
     throw toGiteaApiError(error);
   }
 }
 
-export async function submitReview(params: SubmitReviewParams): Promise<PullReview> {
+export async function submitReview(
+  params: SubmitReviewParams,
+): Promise<PullReview> {
   const { client, owner, repo, pullNumber, event, body } = params;
 
   try {
@@ -243,14 +309,21 @@ export async function submitReview(params: SubmitReviewParams): Promise<PullRevi
       ...(body ? { body } : {}),
     };
 
-    const response = await client.repos.repoCreatePullReview(owner, repo, pullNumber, requestBody);
+    const response = await client.repos.repoCreatePullReview(
+      owner,
+      repo,
+      pullNumber,
+      requestBody,
+    );
     return response.data;
   } catch (error) {
     throw toGiteaApiError(error);
   }
 }
 
-export async function mergePullRequest(params: MergePullRequestParams): Promise<void> {
+export async function mergePullRequest(
+  params: MergePullRequestParams,
+): Promise<void> {
   const { client, owner, repo, pullNumber, mergeStyle, message } = params;
 
   try {
@@ -259,13 +332,20 @@ export async function mergePullRequest(params: MergePullRequestParams): Promise<
       ...(message ? { MergeMessageField: message } : {}),
     };
 
-    await client.repos.repoMergePullRequest(owner, repo, pullNumber, requestBody);
+    await client.repos.repoMergePullRequest(
+      owner,
+      repo,
+      pullNumber,
+      requestBody,
+    );
   } catch (error) {
     throw toGiteaApiError(error);
   }
 }
 
-export async function listPullRequests(params: ListPullRequestsParams): Promise<PullRequestWithApprovalState[]> {
+export async function listPullRequests(
+  params: ListPullRequestsParams,
+): Promise<PullRequestWithApprovalState[]> {
   const { client, owner, repo, state, page } = params;
 
   try {
@@ -276,9 +356,11 @@ export async function listPullRequests(params: ListPullRequestsParams): Promise<
 
     const mapped = await Promise.all(
       response.data.map(async (pullRequest) => {
-        const reviews = pullRequest.number ? await listPullReviews(client, owner, repo, pullRequest.number) : [];
+        const reviews = pullRequest.number
+          ? await listPullReviews(client, owner, repo, pullRequest.number)
+          : [];
         return withApprovalState(pullRequest, reviews);
-      })
+      }),
     );
 
     return mapped;

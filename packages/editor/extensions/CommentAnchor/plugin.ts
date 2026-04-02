@@ -37,10 +37,7 @@ export const commentAnchorPluginKey = new PluginKey<CommentAnchorState>(
   "commentAnchorState",
 );
 
-const createDecoration = (
-  anchor: CommentAnchorRecord,
-  isActive: boolean,
-) =>
+const createDecoration = (anchor: CommentAnchorRecord, isActive: boolean) =>
   Decoration.inline(
     anchor.from,
     anchor.to,
@@ -61,7 +58,11 @@ const getDecorationsForComment = (
   decorations: DecorationSet,
   commentId: string,
 ) =>
-  decorations.find(undefined, undefined, (spec) => spec.commentId === commentId);
+  decorations.find(
+    undefined,
+    undefined,
+    (spec) => spec.commentId === commentId,
+  );
 
 const syncAnchorDecoration = (
   decorations: DecorationSet,
@@ -69,7 +70,10 @@ const syncAnchorDecoration = (
   anchor: CommentAnchorRecord,
   isActive: boolean,
 ) => {
-  const staleDecorations = getDecorationsForComment(decorations, anchor.commentId);
+  const staleDecorations = getDecorationsForComment(
+    decorations,
+    anchor.commentId,
+  );
 
   return decorations
     .remove(staleDecorations)

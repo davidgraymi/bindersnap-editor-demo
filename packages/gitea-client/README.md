@@ -5,6 +5,7 @@ Shared service modules used across both the landing page and the real app.
 ## Contents
 
 ### `gitea/`
+
 All Gitea API interaction. Built on `gitea-js`.
 
 ```
@@ -17,6 +18,7 @@ pullRequests.ts  — PR lifecycle + ApprovalState mapping (Issue #11)
 These modules are **stateless** — they accept a `GiteaClient` as a parameter and return typed results. No React context, no global singletons.
 
 ### `sanitizer.ts`
+
 HTML sanitization using DOMPurify. Used by both the landing page and the real app when rendering user-generated content.
 
 ## Usage pattern

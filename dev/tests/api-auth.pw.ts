@@ -12,7 +12,9 @@ const API_BASE_URL =
   process.env.PLAYWRIGHT_API_BASE_URL ??
   `http://localhost:${process.env.API_PORT ?? "8787"}`;
 
-function extractSessionCookie(setCookieHeader: string | undefined): string | null {
+function extractSessionCookie(
+  setCookieHeader: string | undefined,
+): string | null {
   if (!setCookieHeader) {
     return null;
   }
@@ -21,9 +23,11 @@ function extractSessionCookie(setCookieHeader: string | undefined): string | nul
   return match ? match[0] : null;
 }
 
-async function loginWithCredentials(
-  request: APIRequestContext,
-): Promise<{ responseStatus: number; sessionCookie: string | null; responseHeaders: Record<string, string> }> {
+async function loginWithCredentials(request: APIRequestContext): Promise<{
+  responseStatus: number;
+  sessionCookie: string | null;
+  responseHeaders: Record<string, string>;
+}> {
   const response = await request.post(`${API_BASE_URL}/auth/login`, {
     headers: {
       Origin: APP_ORIGIN,
@@ -82,7 +86,9 @@ test.describe("API credential auth flow", () => {
     });
 
     expect(meResponse.status()).toBe(200);
-    expect(meResponse.headers()["access-control-allow-origin"]).toBe(APP_ORIGIN);
+    expect(meResponse.headers()["access-control-allow-origin"]).toBe(
+      APP_ORIGIN,
+    );
     const payload = (await meResponse.json()) as {
       user?: { username?: string };
     };

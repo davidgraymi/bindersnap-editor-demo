@@ -14,7 +14,9 @@ const win = window as typeof window & {
 const root = win.__bindersnapAppRoot ?? createRoot(elem);
 win.__bindersnapAppRoot = root;
 
-const appEnv = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
+const appEnv = (
+  import.meta as ImportMeta & { env?: Record<string, string | undefined> }
+).env;
 
 const render = async () => {
   const { App } = await import("./App");

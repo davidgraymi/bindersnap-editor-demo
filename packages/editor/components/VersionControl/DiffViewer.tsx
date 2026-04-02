@@ -1,6 +1,5 @@
-
-import React, { useMemo } from 'react';
-import * as Diff from 'diff';
+import React, { useMemo } from "react";
+import * as Diff from "diff";
 
 interface DiffViewerProps {
   base: string;
@@ -10,7 +9,7 @@ interface DiffViewerProps {
 export const DiffViewer: React.FC<DiffViewerProps> = ({ base, head }) => {
   const diff = useMemo(() => {
     // We diff words to make it more readable for text
-    return Diff.diffWords(base || '', head || '');
+    return Diff.diffWords(base || "", head || "");
   }, [base, head]);
 
   return (
@@ -24,10 +23,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({ base, head }) => {
               ? "diff-token diff-token--removed"
               : "diff-token";
           return (
-            <span 
-              key={index} 
-              className={tokenClass}
-            >
+            <span key={index} className={tokenClass}>
               {part.value}
             </span>
           );

@@ -1,1 +1,33 @@
-{"type":"doc","content":[{"type":"heading","attrs":{"level":1},"content":[{"type":"text","text":"Data Processing Addendum"}]},{"type":"paragraph","content":[{"type":"text","text":"Review returned with changes requested. Section 4.2 requires revision to align with updated GDPR guidance."}]},{"type":"heading","attrs":{"level":2},"content":[{"type":"text","text":"Section 4.2 — Data Retention"}]},{"type":"paragraph","content":[{"type":"text","text":"Personal data shall be retained for no longer than 36 months from the date of collection, unless required by applicable law."}]}]}
+{
+  "type": "doc",
+  "content": [
+    {
+      "type": "heading",
+      "attrs": { "level": 1 },
+      "content": [{ "type": "text", "text": "Data Processing Addendum" }]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "text",
+          "text": "Review returned with changes requested. Section 4.2 requires revision to align with updated GDPR guidance."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 2 },
+      "content": [{ "type": "text", "text": "Section 4.2 — Data Retention" }]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "text",
+          "text": "Personal data shall be retained for no longer than 36 months from the date of collection, unless required by applicable law."
+        }
+      ]
+    }
+  ]
+}

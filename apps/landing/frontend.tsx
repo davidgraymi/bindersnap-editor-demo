@@ -22,11 +22,15 @@ win.__bindersnapRoot = root;
 const render = async () => {
   const { App } = await import("./App");
   const isProd = process.env.NODE_ENV === "production";
-  root.render(isProd ? <App /> : (
-    <StrictMode>
+  root.render(
+    isProd ? (
       <App />
-    </StrictMode>
-  ));
+    ) : (
+      <StrictMode>
+        <App />
+      </StrictMode>
+    ),
+  );
 };
 
 if (import.meta.hot) {

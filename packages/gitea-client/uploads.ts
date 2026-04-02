@@ -1,6 +1,6 @@
-import { GiteaApiError, type GiteaClient } from './client';
-import { createPullRequest } from './pullRequests';
-import type { PullRequestWithApprovalState } from './pullRequests';
+import { GiteaApiError, type GiteaClient } from "./client";
+import { createPullRequest } from "./pullRequests";
+import type { PullRequestWithApprovalState } from "./pullRequests";
 
 const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024; // 25 MiB
 
@@ -67,40 +67,49 @@ export function validateUploadFile(file: File): UploadValidationResult {
 
 export async function computeFileHash(file: File): Promise<string> {
   const buffer = await file.arrayBuffer();
-  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 export function buildUploadBranchName(
   docSlug: string,
   uploaderSlug: string,
   contentHash8: string,
-  now: Date = new Date()
+  now: Date = new Date(),
 ): string {
   const year = now.getUTCFullYear();
-  const month = String(now.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(now.getUTCDate()).padStart(2, '0');
-  const hours = String(now.getUTCHours()).padStart(2, '0');
-  const minutes = String(now.getUTCMinutes()).padStart(2, '0');
-  const seconds = String(now.getUTCSeconds()).padStart(2, '0');
+  const month = String(now.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(now.getUTCDate()).padStart(2, "0");
+  const hours = String(now.getUTCHours()).padStart(2, "0");
+  const minutes = String(now.getUTCMinutes()).padStart(2, "0");
+  const seconds = String(now.getUTCSeconds()).padStart(2, "0");
   const date = `${year}${month}${day}`;
   const time = `${hours}${minutes}${seconds}Z`;
   return `upload/${docSlug}/${date}/${time}-${uploaderSlug}-${contentHash8}`;
 }
 
-export function buildUploadCommitMessage(params: UploadCommitMessageParams): string {
-  const { docSlug, canonicalFile, sourceFilename, uploadBranch, uploaderSlug, fileHashSha256 } = params;
+export function buildUploadCommitMessage(
+  params: UploadCommitMessageParams,
+): string {
+  const {
+    docSlug,
+    canonicalFile,
+    sourceFilename,
+    uploadBranch,
+    uploaderSlug,
+    fileHashSha256,
+  } = params;
   return [
     `Upload: ${sourceFilename}`,
-    '',
+    "",
     `Bindersnap-Document-Id: ${docSlug}`,
     `Bindersnap-Canonical-File: ${canonicalFile}`,
     `Bindersnap-Source-Filename: ${sourceFilename}`,
     `Bindersnap-Upload-Branch: ${uploadBranch}`,
     `Bindersnap-Uploaded-By: ${uploaderSlug}`,
     `Bindersnap-File-Hash-SHA256: ${fileHashSha256}`,
-  ].join('\n');
+  ].join("\n");
 }
 
 function toGiteaApiError(error: unknown): GiteaApiError {
@@ -108,20 +117,22 @@ function toGiteaApiError(error: unknown): GiteaApiError {
     return error;
   }
   const status =
-    typeof error === 'object' && error !== null && 'status' in error
+    typeof error === "object" && error !== null && "status" in error
       ? Number((error as { status?: unknown }).status)
       : 0;
   const message =
     error instanceof Error
       ? error.message
-      : typeof error === 'string'
+      : typeof error === "string"
         ? error
-        : 'Gitea request failed.';
+        : "Gitea request failed.";
   return new GiteaApiError(Number.isFinite(status) ? status : 0, message);
 }
 
-export async function createUploadBranch(params: CreateUploadBranchParams): Promise<void> {
-  const { client, owner, repo, branchName, from = 'main' } = params;
+export async function createUploadBranch(
+  params: CreateUploadBranchParams,
+): Promise<void> {
+  const { client, owner, repo, branchName, from = "main" } = params;
   try {
     await client.repos.repoCreateBranch(owner, repo, {
       new_branch_name: branchName,
@@ -132,15 +143,18 @@ export async function createUploadBranch(params: CreateUploadBranchParams): Prom
   }
 }
 
-export async function commitBinaryFile(params: CommitBinaryFileParams): Promise<{ sha: string }> {
-  const { client, owner, repo, branch, filePath, base64Content, message } = params;
+export async function commitBinaryFile(
+  params: CommitBinaryFileParams,
+): Promise<{ sha: string }> {
+  const { client, owner, repo, branch, filePath, base64Content, message } =
+    params;
   try {
     const response = await client.repos.repoCreateFile(owner, repo, filePath, {
       content: base64Content,
       message,
       branch,
     });
-    return { sha: response.data.commit?.sha ?? '' };
+    return { sha: response.data.commit?.sha ?? "" };
   } catch (error) {
     throw toGiteaApiError(error);
   }
@@ -151,23 +165,34 @@ async function readFileAsBase64(file: File): Promise<string> {
     const reader = new FileReader();
     reader.onload = () => {
       const result = reader.result as string;
-      const base64 = result.split(',')[1] ?? '';
+      const base64 = result.split(",")[1] ?? "";
       resolve(base64);
     };
     reader.onerror = () => {
-      reject(new Error('Failed to read file as base64.'));
+      reject(new Error("Failed to read file as base64."));
     };
     reader.readAsDataURL(file);
   });
 }
 
-export async function uploadFile(params: UploadFileParams): Promise<UploadResult> {
-  const { client, owner, repo, file, docSlug, uploaderSlug, nextVersion, baseBranch = 'main' } = params;
+export async function uploadFile(
+  params: UploadFileParams,
+): Promise<UploadResult> {
+  const {
+    client,
+    owner,
+    repo,
+    file,
+    docSlug,
+    uploaderSlug,
+    nextVersion,
+    baseBranch = "main",
+  } = params;
 
   // Client-side validation
   const validation = validateUploadFile(file);
   if (!validation.valid) {
-    throw new GiteaApiError(0, validation.reason ?? 'Invalid file.');
+    throw new GiteaApiError(0, validation.reason ?? "Invalid file.");
   }
 
   // Compute hash
@@ -179,7 +204,7 @@ export async function uploadFile(params: UploadFileParams): Promise<UploadResult
 
   // Build names
   const branchName = buildUploadBranchName(docSlug, uploaderSlug, contentHash8);
-  const ext = file.name.split('.').pop()!.toLowerCase();
+  const ext = file.name.split(".").pop()!.toLowerCase();
   const canonicalFile = `${docSlug}.${ext}`;
 
   // Build commit message with ADR 0001 trailers
@@ -193,7 +218,13 @@ export async function uploadFile(params: UploadFileParams): Promise<UploadResult
   });
 
   // Create branch
-  await createUploadBranch({ client, owner, repo, branchName, from: baseBranch });
+  await createUploadBranch({
+    client,
+    owner,
+    repo,
+    branchName,
+    from: baseBranch,
+  });
 
   // Commit file
   const { sha: commitSha } = await commitBinaryFile({
@@ -208,9 +239,9 @@ export async function uploadFile(params: UploadFileParams): Promise<UploadResult
 
   // Build PR title/body
   const docTitle = docSlug
-    .split('-')
+    .split("-")
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
+    .join(" ");
   const prTitle = `Upload v${nextVersion}: ${docTitle}`;
   const prBody = [
     `Automated upload from Bindersnap file vault.`,
@@ -219,7 +250,7 @@ export async function uploadFile(params: UploadFileParams): Promise<UploadResult
     `Document: ${docSlug}`,
     `Uploaded by: ${uploaderSlug}`,
     `File hash (SHA-256): ${fullHash}`,
-  ].join('\n');
+  ].join("\n");
 
   // Open PR
   const pr = await createPullRequest({

@@ -42,12 +42,12 @@ This is a **Bun monorepo** containing two SPAs, shared packages, and backend ser
 
 ### Two Applications
 
-| | `apps/landing/` | `apps/app/` |
-|--|--|--|
-| Published | GitHub Pages | Never public |
-| Auth | None | PKCE OAuth2 |
-| Gitea | No | Yes |
-| Editor | Read-only demo | Fully wired |
+|           | `apps/landing/` | `apps/app/`  |
+| --------- | --------------- | ------------ |
+| Published | GitHub Pages    | Never public |
+| Auth      | None            | PKCE OAuth2  |
+| Gitea     | No              | Yes          |
+| Editor    | Read-only demo  | Fully wired  |
 
 ### Packages (shared by both apps)
 
@@ -88,6 +88,7 @@ These are settled. Do not reopen them. If a task seems to require violating one,
 All visual values come from `packages/ui-tokens/css/bindersnap-tokens.css`. **Never hardcode hex values or pixel sizes.** Use `--color-*`, `--font-*`, `--space-*`, `--radius-*`, `--shadow-*` variables.
 
 Key rules from `AGENTS.md`:
+
 - Background is always `var(--color-paper)` (`#FAFAF7`), never `#fff`
 - Coral (`--color-coral`) is used for exactly **one** primary action per section
 - Typography: Lora (headlines only), Geist (body/UI), Geist Mono (eyebrows/labels/code)

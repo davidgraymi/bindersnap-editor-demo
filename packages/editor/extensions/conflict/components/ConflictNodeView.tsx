@@ -67,12 +67,12 @@ export const ConflictNodeView = (props: ReactNodeViewProps) => {
         const getContent = () => {
           switch (branch) {
             case "theirs":
-              return (conflictNode.attrs.theirContent ?? []).map((nodeJson: any) =>
-                state.schema.nodeFromJSON(nodeJson),
+              return (conflictNode.attrs.theirContent ?? []).map(
+                (nodeJson: any) => state.schema.nodeFromJSON(nodeJson),
               );
             case "ours":
-              return (conflictNode.attrs.ourContent ?? []).map((nodeJson: any) =>
-                state.schema.nodeFromJSON(nodeJson),
+              return (conflictNode.attrs.ourContent ?? []).map(
+                (nodeJson: any) => state.schema.nodeFromJSON(nodeJson),
               );
             case "manual":
               return conflictNode.content;
@@ -150,7 +150,9 @@ export const ConflictNodeView = (props: ReactNodeViewProps) => {
       <div className="bs-conflict__divider">
         <span>======= incoming</span>
         {resolved && branchLabel ? (
-          <span className="bs-conflict__resolved-note">Resolved — {branchLabel}</span>
+          <span className="bs-conflict__resolved-note">
+            Resolved — {branchLabel}
+          </span>
         ) : null}
       </div>
 

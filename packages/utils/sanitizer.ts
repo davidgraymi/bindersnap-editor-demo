@@ -82,7 +82,11 @@ const ALLOWED_MARK_TYPES = new Set([
   "formatChange",
 ]);
 
-const EMBEDDED_FRAGMENT_ATTRS = new Set(["ourContent", "theirContent", "baseContent"]);
+const EMBEDDED_FRAGMENT_ATTRS = new Set([
+  "ourContent",
+  "theirContent",
+  "baseContent",
+]);
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -98,7 +102,11 @@ function isSafeUrl(value: string): boolean {
     return false;
   }
 
-  if (trimmed.startsWith("#") || trimmed.startsWith("/") || trimmed.startsWith("?")) {
+  if (
+    trimmed.startsWith("#") ||
+    trimmed.startsWith("/") ||
+    trimmed.startsWith("?")
+  ) {
     return true;
   }
 
@@ -147,7 +155,9 @@ function sanitizeMarks(marks: unknown): JSONContent["marks"] | undefined {
       sanitizedMark.attrs = { ...mark.attrs };
     }
 
-    sanitizedMarks.push(sanitizedMark as NonNullable<JSONContent["marks"]>[number]);
+    sanitizedMarks.push(
+      sanitizedMark as NonNullable<JSONContent["marks"]>[number],
+    );
   }
 
   return sanitizedMarks.length > 0 ? sanitizedMarks : undefined;
@@ -211,7 +221,9 @@ function sanitizeNodeOrFragment(value: unknown): JSONContent[] {
   }
 
   if (Array.isArray(value.content)) {
-    const content = value.content.flatMap((item) => sanitizeNodeOrFragment(item));
+    const content = value.content.flatMap((item) =>
+      sanitizeNodeOrFragment(item),
+    );
     sanitizedNode.content = content;
   } else if (nodeType === "doc") {
     sanitizedNode.content = [];
@@ -231,12 +243,19 @@ export function sanitizeHtml(html: string): string {
   DOMPurify.addHook("uponSanitizeAttribute", (_node, data) => {
     const attrName = data.attrName.toLowerCase();
 
-    if (attrName.startsWith("on") || attrName.startsWith("data-") || attrName === "style") {
+    if (
+      attrName.startsWith("on") ||
+      attrName.startsWith("data-") ||
+      attrName === "style"
+    ) {
       data.keepAttr = false;
       return;
     }
 
-    if ((attrName === "href" || attrName === "src") && typeof data.attrValue === "string") {
+    if (
+      (attrName === "href" || attrName === "src") &&
+      typeof data.attrValue === "string"
+    ) {
       if (!isSafeUrl(data.attrValue)) {
         data.keepAttr = false;
       }

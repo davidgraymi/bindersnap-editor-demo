@@ -13,7 +13,6 @@
  *
  */
 
-
 /* ═════════════════════════════════════════════════════════════
    LIGHT MODE  (default — :root)
    ═════════════════════════════════════════════════════════════
@@ -34,193 +33,178 @@
          (e.g. the chaos strip is always dark ink).
    ───────────────────────────────────────────────────────────── */
 :root {
-
   /* ── SEMANTIC SURFACES ─────────────────────────────────────
      Four levels of warm surface, from page base → elevated card.
      In light mode: warm paper steps.
      In dark mode:  warm ink steps.
   ───────────────────────────────────────────────────────────── */
-  --bs-page-bg:    #FAFAF7;    /* Body background — warm white */
-  --bs-surface-1:  #FFFFFF;    /* Cards, inputs, floating elements */
-  --bs-surface-2:  #F5F0E8;    /* Alt section bg, tag/pill fill, warm cards */
-  --bs-surface-3:  #EDE8DF;    /* Dividers, deepest surface fill */
-  --bs-nav-bg:     rgba(250, 250, 247, 0.88);   /* Nav backdrop */
-
+  --bs-page-bg: #fafaf7; /* Body background — warm white */
+  --bs-surface-1: #ffffff; /* Cards, inputs, floating elements */
+  --bs-surface-2: #f5f0e8; /* Alt section bg, tag/pill fill, warm cards */
+  --bs-surface-3: #ede8df; /* Dividers, deepest surface fill */
+  --bs-nav-bg: rgba(250, 250, 247, 0.88); /* Nav backdrop */
 
   /* ── SEMANTIC TEXT ─────────────────────────────────────────
      Four levels of text weight, from strong → disabled.
      In light mode: warm ink steps.
      In dark mode:  warm cream steps.
   ───────────────────────────────────────────────────────────── */
-  --bs-text-primary:   #1C1917;   /* Headings, strong UI labels */
-  --bs-text-secondary: #44403C;   /* Body copy, card titles */
-  --bs-text-muted:     #78716C;   /* Secondary descriptions, meta */
-  --bs-text-faint:     #A8A29E;   /* Placeholders, hints, captions */
-
+  --bs-text-primary: #1c1917; /* Headings, strong UI labels */
+  --bs-text-secondary: #44403c; /* Body copy, card titles */
+  --bs-text-muted: #78716c; /* Secondary descriptions, meta */
+  --bs-text-faint: #a8a29e; /* Placeholders, hints, captions */
 
   /* ── SEMANTIC BORDERS ──────────────────────────────────────
      Alpha-based so they adapt automatically across surfaces.
   ───────────────────────────────────────────────────────────── */
-  --bs-rule:      rgba(28, 25, 23, 0.10);   /* Standard borders */
-  --bs-rule-warm: rgba(28, 25, 23, 0.06);   /* Subtle inner dividers */
-
+  --bs-rule: rgba(28, 25, 23, 0.1); /* Standard borders */
+  --bs-rule-warm: rgba(28, 25, 23, 0.06); /* Subtle inner dividers */
 
   /* ── SEMANTIC SHADOWS ──────────────────────────────────────
      Light-mode shadows are warm ink at low opacity.
      Dark-mode shadows are pure black at higher opacity.
   ───────────────────────────────────────────────────────────── */
   --bs-shadow-sm:
-    0 1px 3px  rgba(28, 25, 23, 0.08),
-    0 1px 2px  rgba(28, 25, 23, 0.04);
+    0 1px 3px rgba(28, 25, 23, 0.08), 0 1px 2px rgba(28, 25, 23, 0.04);
 
   --bs-shadow-md:
-    0 4px 16px rgba(28, 25, 23, 0.10),
-    0 2px 4px  rgba(28, 25, 23, 0.06);
+    0 4px 16px rgba(28, 25, 23, 0.1), 0 2px 4px rgba(28, 25, 23, 0.06);
 
   --bs-shadow-lg:
-    0 20px 60px rgba(28, 25, 23, 0.15),
-    0 4px  12px rgba(28, 25, 23, 0.08);
+    0 20px 60px rgba(28, 25, 23, 0.15), 0 4px 12px rgba(28, 25, 23, 0.08);
 
-  --bs-shadow-xl:
-    0 40px 100px rgba(28, 25, 23, 0.18);
-
+  --bs-shadow-xl: 0 40px 100px rgba(28, 25, 23, 0.18);
 
   /* ── SEMANTIC CORAL TINTS ──────────────────────────────────
      These must be stronger in dark mode to punch through.
      Defined here at light-mode strength.
   ───────────────────────────────────────────────────────────── */
-  --bs-coral-dim:  rgba(232, 93, 38, 0.10);   /* Icon bg, badge bg */
-  --bs-coral-glow: rgba(232, 93, 38, 0.06);   /* Hero/section ambient wash */
+  --bs-coral-dim: rgba(232, 93, 38, 0.1); /* Icon bg, badge bg */
+  --bs-coral-glow: rgba(232, 93, 38, 0.06); /* Hero/section ambient wash */
 
   /* ── SEMANTIC GREEN TINTS ──────────────────────────────────*/
-  --bs-green-dim:  rgba(22, 163, 74, 0.10);   /* Compliance icon bg */
-
+  --bs-green-dim: rgba(22, 163, 74, 0.1); /* Compliance icon bg */
 
   /* ── MODE TRANSITION ───────────────────────────────────────
      Apply to body so the entire page animates on toggle.
   ───────────────────────────────────────────────────────────── */
   --bs-mode-transition:
-    background 0.25s ease,
-    color      0.25s ease,
-    border-color 0.25s ease,
+    background 0.25s ease, color 0.25s ease, border-color 0.25s ease,
     box-shadow 0.25s ease;
-
 
   /* ══════════════════════════════════════════════════════════
      FIXED BRAND TOKENS  (never change between modes)
      ══════════════════════════════════════════════════════════ */
 
   /* ── Brand colors ── */
-  --brand-coral:        #E85D26;   /* CTA, accent, emphasis — ONE per section */
-  --brand-coral-dark:   #C94D1A;   /* Hover on coral elements */
-  --brand-coral-mid:    #F5D5C4;   /* Decorative only — never for UI states */
-  --brand-green:        #16A34A;   /* Success, compliance, "after" states */
-  --brand-green-dim:    rgba(22, 163, 74, 0.10);
+  --brand-coral: #e85d26; /* CTA, accent, emphasis — ONE per section */
+  --brand-coral-dark: #c94d1a; /* Hover on coral elements */
+  --brand-coral-mid: #f5d5c4; /* Decorative only — never for UI states */
+  --brand-green: #16a34a; /* Success, compliance, "after" states */
+  --brand-green-dim: rgba(22, 163, 74, 0.1);
 
   /* Fixed dark-section palette — used on intentionally ink-bg sections
      (chaos strip, footer) which stay dark regardless of theme */
-  --brand-on-dark-primary:   #F5F0E8;
-  --brand-on-dark-secondary: rgba(245, 240, 232, 0.60);
-  --brand-on-dark-faint:     rgba(245, 240, 232, 0.30);
-  --brand-on-dark-rule:      rgba(255, 255, 255, 0.08);
+  --brand-on-dark-primary: #f5f0e8;
+  --brand-on-dark-secondary: rgba(245, 240, 232, 0.6);
+  --brand-on-dark-faint: rgba(245, 240, 232, 0.3);
+  --brand-on-dark-rule: rgba(255, 255, 255, 0.08);
 
   /* ── Fonts ── */
-  --brand-font-serif: 'Lora', Georgia, 'Times New Roman', serif;
-  --brand-font-sans:  'Geist', system-ui, -apple-system, sans-serif;
-  --brand-font-mono:  'Geist Mono', 'Fira Code', Consolas, monospace;
+  --brand-font-serif: "Lora", Georgia, "Times New Roman", serif;
+  --brand-font-sans: "Geist", system-ui, -apple-system, sans-serif;
+  --brand-font-mono: "Geist Mono", "Fira Code", Consolas, monospace;
 
   /* ── Font weights ── */
-  --brand-weight-light:    300;
-  --brand-weight-regular:  400;
-  --brand-weight-medium:   500;
+  --brand-weight-light: 300;
+  --brand-weight-regular: 400;
+  --brand-weight-medium: 500;
   --brand-weight-semibold: 600;
-  --brand-weight-bold:     700;
+  --brand-weight-bold: 700;
 
   /* ── Type scale ──
      Rule: --font-serif for all H1-H3 + display.
            --font-sans  for all body + UI.
            --font-mono  for labels, code, metadata.
   ───────────────────────────────────────────────────────────── */
-  --brand-text-display: clamp(3rem, 6.5vw, 5.5rem);      /* Hero only */
-  --brand-text-h1:      3rem;
-  --brand-text-h2:      clamp(1.875rem, 3.5vw, 2.625rem);
-  --brand-text-h3:      1.5rem;
-  --brand-text-body-lg: 1.125rem;   /* Hero subtext — font-sans light */
-  --brand-text-body:    1rem;
-  --brand-text-sm:      0.875rem;
-  --brand-text-xs:      0.75rem;
-  --brand-text-label:   0.6875rem;  /* Section tags — font-mono medium */
+  --brand-text-display: clamp(3rem, 6.5vw, 5.5rem); /* Hero only */
+  --brand-text-h1: 3rem;
+  --brand-text-h2: clamp(1.875rem, 3.5vw, 2.625rem);
+  --brand-text-h3: 1.5rem;
+  --brand-text-body-lg: 1.125rem; /* Hero subtext — font-sans light */
+  --brand-text-body: 1rem;
+  --brand-text-sm: 0.875rem;
+  --brand-text-xs: 0.75rem;
+  --brand-text-label: 0.6875rem; /* Section tags — font-mono medium */
 
   /* ── Line heights ── */
-  --brand-leading-tight:   1.08;
-  --brand-leading-snug:    1.2;
-  --brand-leading-normal:  1.5;
+  --brand-leading-tight: 1.08;
+  --brand-leading-snug: 1.2;
+  --brand-leading-normal: 1.5;
   --brand-leading-relaxed: 1.7;
 
   /* ── Letter spacing ── */
-  --brand-tracking-tight:   -0.025em;
-  --brand-tracking-snug:    -0.015em;
-  --brand-tracking-normal:   0em;
-  --brand-tracking-wide:     0.08em;
-  --brand-tracking-wider:    0.12em;
-  --brand-tracking-widest:   0.15em;
+  --brand-tracking-tight: -0.025em;
+  --brand-tracking-snug: -0.015em;
+  --brand-tracking-normal: 0em;
+  --brand-tracking-wide: 0.08em;
+  --brand-tracking-wider: 0.12em;
+  --brand-tracking-widest: 0.15em;
 
   /* ── Spacing (base-8) ── */
-  --brand-space-1:    4px;
-  --brand-space-2:    8px;
-  --brand-space-3:    12px;
-  --brand-space-4:    16px;
-  --brand-space-5:    20px;
-  --brand-space-6:    24px;
-  --brand-space-8:    32px;
-  --brand-space-10:   40px;
-  --brand-space-12:   48px;
-  --brand-space-16:   64px;
-  --brand-space-20:   80px;
-  --brand-space-24:   96px;
-  --brand-space-30:   120px;
+  --brand-space-1: 4px;
+  --brand-space-2: 8px;
+  --brand-space-3: 12px;
+  --brand-space-4: 16px;
+  --brand-space-5: 20px;
+  --brand-space-6: 24px;
+  --brand-space-8: 32px;
+  --brand-space-10: 40px;
+  --brand-space-12: 48px;
+  --brand-space-16: 64px;
+  --brand-space-20: 80px;
+  --brand-space-24: 96px;
+  --brand-space-30: 120px;
 
   /* ── Border radius ── */
-  --brand-radius-xs:   2px;     /* Code blocks, badges, table rows */
-  --brand-radius-sm:   4px;     /* Tags, pills, mini chips */
-  --brand-radius-md:   8px;     /* Nav, icon containers, small cards */
-  --brand-radius-lg:   12px;    /* Inputs, standard cards */
-  --brand-radius-xl:   16px;    /* Large cards, feature panels */
-  --brand-radius-2xl:  24px;    /* CTA box, modals, hero containers */
-  --brand-radius-full: 9999px;  /* Pills, avatar badges */
+  --brand-radius-xs: 2px; /* Code blocks, badges, table rows */
+  --brand-radius-sm: 4px; /* Tags, pills, mini chips */
+  --brand-radius-md: 8px; /* Nav, icon containers, small cards */
+  --brand-radius-lg: 12px; /* Inputs, standard cards */
+  --brand-radius-xl: 16px; /* Large cards, feature panels */
+  --brand-radius-2xl: 24px; /* CTA box, modals, hero containers */
+  --brand-radius-full: 9999px; /* Pills, avatar badges */
 
   /* ── Fixed shadows (coral) ── */
   --brand-shadow-coral:
-    0 4px 16px rgba(232, 93, 38, 0.20),
-    0 2px 4px  rgba(232, 93, 38, 0.10);
+    0 4px 16px rgba(232, 93, 38, 0.2), 0 2px 4px rgba(232, 93, 38, 0.1);
 
   /* ── Transitions ── */
-  --brand-transition-fast:   0.15s ease;
-  --brand-transition-base:   0.2s ease;
-  --brand-transition-slow:   0.3s ease;
+  --brand-transition-fast: 0.15s ease;
+  --brand-transition-base: 0.2s ease;
+  --brand-transition-slow: 0.3s ease;
   --brand-transition-reveal: 0.7s ease;
 
   /* ── Z-index scale ── */
-  --brand-z-base:    0;
-  --brand-z-raised:  10;
+  --brand-z-base: 0;
+  --brand-z-raised: 10;
   --brand-z-overlay: 50;
-  --brand-z-nav:     100;
-  --brand-z-modal:   200;
-  --brand-z-toast:   300;
+  --brand-z-nav: 100;
+  --brand-z-modal: 200;
+  --brand-z-toast: 300;
   --brand-z-texture: 9999;
 
   /* ── Layout ── */
-  --brand-max-width:         1200px;
-  --brand-max-width-text:    680px;
-  --brand-max-width-narrow:  560px;
-  --brand-max-width-form:    500px;
-  --brand-nav-height:        64px;
-  --brand-page-padding-x:    40px;
+  --brand-max-width: 1200px;
+  --brand-max-width-text: 680px;
+  --brand-max-width-narrow: 560px;
+  --brand-max-width-form: 500px;
+  --brand-nav-height: 64px;
+  --brand-page-padding-x: 40px;
   --brand-page-padding-x-sm: 20px;
-  --brand-section-padding-y:     120px;
-  --brand-section-padding-y-sm:  72px;
+  --brand-section-padding-y: 120px;
+  --brand-section-padding-y-sm: 72px;
 }
-
 
 /* ═════════════════════════════════════════════════════════════
    DARK MODE OVERRIDES  [data-theme="dark"]
@@ -240,52 +224,46 @@
      --bs-text-faint     on --bs-page-bg:   3.1:1  ✓ AA (large text only)
    ───────────────────────────────────────────────────────────── */
 [data-theme="dark"] {
-
   /* Surfaces: stepped warm-ink hierarchy */
-  --bs-page-bg:    #1C1917;    /* Warm ink base */
-  --bs-surface-1:  #292524;    /* Cards, inputs — one step up */
-  --bs-surface-2:  #33302E;    /* Alt section bg — two steps up */
-  --bs-surface-3:  #44403C;    /* Tags, pill fills — three steps up */
-  --bs-nav-bg:     rgba(28, 25, 23, 0.92);
+  --bs-page-bg: #1c1917; /* Warm ink base */
+  --bs-surface-1: #292524; /* Cards, inputs — one step up */
+  --bs-surface-2: #33302e; /* Alt section bg — two steps up */
+  --bs-surface-3: #44403c; /* Tags, pill fills — three steps up */
+  --bs-nav-bg: rgba(28, 25, 23, 0.92);
 
   /* Text: cream hierarchy mirrors light-mode ink at equivalent contrast */
-  --bs-text-primary:   #F5F0E8;   /* Warm cream — replaces #1C1917 */
-  --bs-text-secondary: #E7E4DF;   /* Light cream — replaces #44403C */
-  --bs-text-muted:     #A8A29E;   /* Bumped from #78716C — WCAG AA at 5.1:1 */
-  --bs-text-faint:     #78716C;   /* Floor — hints/placeholders only */
+  --bs-text-primary: #f5f0e8; /* Warm cream — replaces #1C1917 */
+  --bs-text-secondary: #e7e4df; /* Light cream — replaces #44403C */
+  --bs-text-muted: #a8a29e; /* Bumped from #78716C — WCAG AA at 5.1:1 */
+  --bs-text-faint: #78716c; /* Floor — hints/placeholders only */
 
   /* Borders: white-alpha instead of black-alpha */
-  --bs-rule:      rgba(255, 255, 255, 0.09);
+  --bs-rule: rgba(255, 255, 255, 0.09);
   --bs-rule-warm: rgba(255, 255, 255, 0.05);
 
   /* Shadows: higher opacity — depth from contrast not warm tone */
-  --bs-shadow-sm:
-    0 1px 3px  rgba(0, 0, 0, 0.30),
-    0 1px 2px  rgba(0, 0, 0, 0.18);
+  --bs-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.18);
 
-  --bs-shadow-md:
-    0 4px 16px rgba(0, 0, 0, 0.40),
-    0 2px 4px  rgba(0, 0, 0, 0.22);
+  --bs-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.22);
 
   --bs-shadow-lg:
-    0 20px 60px rgba(0, 0, 0, 0.50),
-    0 4px  12px rgba(0, 0, 0, 0.28);
+    0 20px 60px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.28);
 
-  --bs-shadow-xl:
-    0 40px 100px rgba(0, 0, 0, 0.60);
+  --bs-shadow-xl: 0 40px 100px rgba(0, 0, 0, 0.6);
 
   /* Tints: stronger in dark mode — same hue, higher alpha */
-  --bs-coral-dim:  rgba(232, 93, 38, 0.18);
-  --bs-coral-glow: rgba(232, 93, 38, 0.10);
-  --bs-green-dim:  rgba(22, 163, 74, 0.18);
+  --bs-coral-dim: rgba(232, 93, 38, 0.18);
+  --bs-coral-glow: rgba(232, 93, 38, 0.1);
+  --bs-green-dim: rgba(22, 163, 74, 0.18);
 }
-
 
 /* ═════════════════════════════════════════════════════════════
    BASE RESETS & GLOBALS
    ═════════════════════════════════════════════════════════════ */
 
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -308,7 +286,7 @@ body {
 
 /* Paper grain texture overlay */
 body::after {
-  content: '';
+  content: "";
   position: fixed;
   inset: 0;
   z-index: var(--brand-z-texture);
@@ -317,7 +295,6 @@ body::after {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)'/%3E%3C/svg%3E");
   background-size: 200px;
 }
-
 
 /* ═════════════════════════════════════════════════════════════
    DARK MODE TOGGLE COMPONENT
@@ -356,10 +333,10 @@ body::after {
   align-items: center;
   justify-content: center;
   transition:
-    background      var(--brand-transition-base),
-    border-color    var(--brand-transition-base),
-    color           var(--brand-transition-base),
-    transform       var(--brand-transition-fast);
+    background var(--brand-transition-base),
+    border-color var(--brand-transition-base),
+    color var(--brand-transition-base),
+    transform var(--brand-transition-fast);
   flex-shrink: 0;
 }
 .bs-theme-toggle:hover {
@@ -368,14 +345,24 @@ body::after {
   color: var(--brand-coral);
   transform: scale(1.06);
 }
-.bs-theme-toggle svg { width: 16px; height: 16px; }
+.bs-theme-toggle svg {
+  width: 16px;
+  height: 16px;
+}
 
 /* Icon visibility controlled by theme attribute */
-.bs-icon-sun  { display: none; }
-.bs-icon-moon { display: block; }
-[data-theme="dark"] .bs-icon-moon { display: none; }
-[data-theme="dark"] .bs-icon-sun  { display: block; }
-
+.bs-icon-sun {
+  display: none;
+}
+.bs-icon-moon {
+  display: block;
+}
+[data-theme="dark"] .bs-icon-moon {
+  display: none;
+}
+[data-theme="dark"] .bs-icon-sun {
+  display: block;
+}
 
 /* ═════════════════════════════════════════════════════════════
    TYPOGRAPHY UTILITY CLASSES
@@ -457,7 +444,6 @@ body::after {
   font-style: italic;
 }
 
-
 /* ═════════════════════════════════════════════════════════════
    COMPONENT CLASSES
    ═════════════════════════════════════════════════════════════ */
@@ -478,13 +464,17 @@ body::after {
   cursor: pointer;
   text-decoration: none;
   transition:
-    background  var(--brand-transition-base),
-    transform   var(--brand-transition-fast),
-    box-shadow  var(--brand-transition-base);
+    background var(--brand-transition-base),
+    transform var(--brand-transition-fast),
+    box-shadow var(--brand-transition-base);
   white-space: nowrap;
 }
-.bs-btn:hover  { transform: translateY(-1px); }
-.bs-btn:active { transform: translateY(0); }
+.bs-btn:hover {
+  transform: translateY(-1px);
+}
+.bs-btn:active {
+  transform: translateY(0);
+}
 
 .bs-btn-primary {
   background: var(--brand-coral);
@@ -508,30 +498,33 @@ body::after {
 
 /* Dark button: always ink bg — intentionally fixed, not theme-reactive */
 .bs-btn-dark {
-  background: #1C1917;
-  color: #F5F0E8;
+  background: #1c1917;
+  color: #f5f0e8;
 }
-.bs-btn-dark:hover { background: #292524; }
-
+.bs-btn-dark:hover {
+  background: #292524;
+}
 
 /* ── Cards ── */
 .bs-card {
-  background: var(--bs-surface-1);    /* ← was hardcoded #ffffff */
+  background: var(--bs-surface-1); /* ← was hardcoded #ffffff */
   border: 1px solid var(--bs-rule);
   border-radius: var(--brand-radius-xl);
   padding: 36px 32px;
   position: relative;
   overflow: hidden;
   transition:
-    transform      var(--brand-transition-slow),
-    box-shadow     var(--brand-transition-slow),
-    border-color   var(--brand-transition-slow),
-    background     var(--brand-transition-slow);
+    transform var(--brand-transition-slow),
+    box-shadow var(--brand-transition-slow),
+    border-color var(--brand-transition-slow),
+    background var(--brand-transition-slow);
 }
 .bs-card::before {
-  content: '';
+  content: "";
   position: absolute;
-  top: 0; left: 0; right: 0;
+  top: 0;
+  left: 0;
+  right: 0;
   height: 3px;
   background: var(--brand-coral);
   transform: scaleX(0);
@@ -543,8 +536,9 @@ body::after {
   box-shadow: var(--bs-shadow-lg);
   border-color: transparent;
 }
-.bs-card:hover::before { transform: scaleX(1); }
-
+.bs-card:hover::before {
+  transform: scaleX(1);
+}
 
 /* ── Form input ── */
 .bs-input {
@@ -553,40 +547,45 @@ body::after {
   font-size: 15px;
   font-weight: var(--brand-weight-regular);
   color: var(--bs-text-primary);
-  background: var(--bs-surface-1);    /* ← was hardcoded #ffffff */
+  background: var(--bs-surface-1); /* ← was hardcoded #ffffff */
   border: 1.5px solid var(--bs-rule);
   border-radius: var(--brand-radius-lg);
   padding: 15px 18px;
   outline: none;
   transition:
     border-color var(--brand-transition-base),
-    box-shadow   var(--brand-transition-base),
-    background   var(--brand-transition-base),
-    color        var(--brand-transition-base);
+    box-shadow var(--brand-transition-base),
+    background var(--brand-transition-base),
+    color var(--brand-transition-base);
 }
-.bs-input::placeholder { color: var(--bs-text-faint); }
+.bs-input::placeholder {
+  color: var(--bs-text-faint);
+}
 .bs-input:focus {
   border-color: var(--brand-coral);
   box-shadow: 0 0 0 4px var(--bs-coral-dim);
 }
 
-
 /* ── Email capture row (input + button in one container) ── */
 .bs-email-row {
   display: flex;
-  background: var(--bs-surface-1);    /* ← was hardcoded #ffffff */
+  background: var(--bs-surface-1); /* ← was hardcoded #ffffff */
   border: 1.5px solid var(--bs-rule);
   border-radius: var(--brand-radius-lg);
   overflow: hidden;
-  box-shadow: var(--bs-shadow-md), 0 0 0 4px var(--bs-coral-glow);
+  box-shadow:
+    var(--bs-shadow-md),
+    0 0 0 4px var(--bs-coral-glow);
   transition:
     border-color var(--brand-transition-base),
-    box-shadow   var(--brand-transition-base),
-    background   var(--brand-transition-base);
+    box-shadow var(--brand-transition-base),
+    background var(--brand-transition-base);
 }
 .bs-email-row:focus-within {
   border-color: var(--brand-coral);
-  box-shadow: var(--bs-shadow-md), 0 0 0 4px var(--bs-coral-dim);
+  box-shadow:
+    var(--bs-shadow-md),
+    0 0 0 4px var(--bs-coral-dim);
 }
 .bs-email-row input {
   flex: 1;
@@ -598,7 +597,9 @@ body::after {
   color: var(--bs-text-primary);
   background: transparent;
 }
-.bs-email-row input::placeholder { color: var(--bs-text-faint); }
+.bs-email-row input::placeholder {
+  color: var(--bs-text-faint);
+}
 .bs-email-row button {
   background: var(--brand-coral);
   color: white;
@@ -612,8 +613,9 @@ body::after {
   border-radius: 9px;
   transition: background var(--brand-transition-base);
 }
-.bs-email-row button:hover { background: var(--brand-coral-dark); }
-
+.bs-email-row button:hover {
+  background: var(--brand-coral-dark);
+}
 
 /* ── Section eyebrow (mono label with flanking lines) ── */
 .bs-eyebrow {
@@ -629,14 +631,13 @@ body::after {
 }
 .bs-eyebrow::before,
 .bs-eyebrow::after {
-  content: '';
+  content: "";
   width: 24px;
   height: 1px;
   background: var(--brand-coral);
   opacity: 0.4;
   flex-shrink: 0;
 }
-
 
 /* ── Nav badge (live dot + waitlist count) ── */
 .bs-nav-badge {
@@ -646,7 +647,7 @@ body::after {
   font-family: var(--brand-font-mono);
   font-size: 11px;
   color: var(--bs-text-muted);
-  background: var(--bs-surface-2);    /* ← was --color-paper-warm (didn't adapt) */
+  background: var(--bs-surface-2); /* ← was --color-paper-warm (didn't adapt) */
   border: 1px solid var(--bs-rule);
   border-radius: var(--brand-radius-full);
   padding: 5px 12px;
@@ -660,20 +661,20 @@ body::after {
   animation: bs-breathe 2.5s ease-in-out infinite;
 }
 
-
 /* ── Comparison table row ── */
 .bs-compare-item {
   display: flex;
   align-items: flex-start;
   gap: var(--brand-space-3);
   padding: 14px 28px;
-  border-bottom: 1px solid var(--bs-rule-warm);   /* ← was hardcoded rgba */
+  border-bottom: 1px solid var(--bs-rule-warm); /* ← was hardcoded rgba */
   font-size: 14px;
   color: var(--bs-text-secondary);
   line-height: 1.5;
 }
-.bs-compare-item:last-child { border-bottom: none; }
-
+.bs-compare-item:last-child {
+  border-bottom: none;
+}
 
 /* ── Pill / tag chip ── */
 .bs-pill {
@@ -684,7 +685,7 @@ body::after {
   font-size: 13px;
   font-weight: var(--brand-weight-regular);
   color: var(--bs-text-muted);
-  background: var(--bs-surface-1);    /* ← was hardcoded #ffffff */
+  background: var(--bs-surface-1); /* ← was hardcoded #ffffff */
   border: 1px solid var(--bs-rule);
   border-radius: var(--brand-radius-full);
   padding: 8px 16px 8px 10px;
@@ -695,7 +696,7 @@ body::after {
 .bs-file-chip {
   font-family: var(--brand-font-mono);
   font-size: 11px;
-  background: var(--bs-surface-2);    /* ← was --color-paper-warm */
+  background: var(--bs-surface-2); /* ← was --color-paper-warm */
   border: 1px solid var(--bs-rule);
   border-radius: var(--brand-radius-sm);
   padding: 3px 8px;
@@ -703,7 +704,6 @@ body::after {
   white-space: nowrap;
   transition: var(--bs-mode-transition);
 }
-
 
 /* ═════════════════════════════════════════════════════════════
    LAYOUT UTILITIES
@@ -730,10 +730,9 @@ body::after {
 
 /* Section that is intentionally always dark (chaos strip, etc.) */
 .bs-section-dark {
-  background: #1C1917;
+  background: #1c1917;
   color: var(--brand-on-dark-primary);
 }
-
 
 /* ═════════════════════════════════════════════════════════════
    SCROLL REVEAL
@@ -755,35 +754,61 @@ body::after {
   opacity: 0;
   transform: translateY(24px);
   transition:
-    opacity   var(--brand-transition-reveal),
+    opacity var(--brand-transition-reveal),
     transform var(--brand-transition-reveal);
 }
-.bs-reveal.bs-in { opacity: 1; transform: none; }
-.bs-reveal-d1 { transition-delay: 0.1s; }
-.bs-reveal-d2 { transition-delay: 0.2s; }
-.bs-reveal-d3 { transition-delay: 0.3s; }
-.bs-reveal-d4 { transition-delay: 0.4s; }
-
+.bs-reveal.bs-in {
+  opacity: 1;
+  transform: none;
+}
+.bs-reveal-d1 {
+  transition-delay: 0.1s;
+}
+.bs-reveal-d2 {
+  transition-delay: 0.2s;
+}
+.bs-reveal-d3 {
+  transition-delay: 0.3s;
+}
+.bs-reveal-d4 {
+  transition-delay: 0.4s;
+}
 
 /* ═════════════════════════════════════════════════════════════
    KEYFRAMES
    ═════════════════════════════════════════════════════════════ */
 
 @keyframes bs-breathe {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50%       { opacity: 0.5; transform: scale(0.75); }
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.75);
+  }
 }
 
 @keyframes bs-fade-up {
-  from { opacity: 0; transform: translateY(20px); }
-  to   { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 @keyframes bs-fade-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
-
 
 /* ═════════════════════════════════════════════════════════════
    RESPONSIVE
@@ -791,8 +816,8 @@ body::after {
 
 @media (max-width: 768px) {
   :root {
-    --brand-page-padding-x:       var(--brand-page-padding-x-sm);
-    --brand-section-padding-y:    72px;
+    --brand-page-padding-x: var(--brand-page-padding-x-sm);
+    --brand-section-padding-y: 72px;
     --brand-section-padding-y-sm: 48px;
   }
 
@@ -808,7 +833,6 @@ body::after {
   }
 }
 
-
 /* ═════════════════════════════════════════════════════════════
    LEGACY ALIAS MAP  (backwards compatibility)
 
@@ -819,18 +843,18 @@ body::after {
 
 :root {
   /* Surfaces */
-  --color-paper:        var(--bs-page-bg);
-  --color-paper-warm:   var(--bs-surface-2);
-  --color-paper-mid:    var(--bs-surface-3);
+  --color-paper: var(--bs-page-bg);
+  --color-paper-warm: var(--bs-surface-2);
+  --color-paper-mid: var(--bs-surface-3);
 
   /* Text */
-  --color-ink:          var(--bs-text-primary);
-  --color-ink-soft:     var(--bs-text-secondary);
-  --color-muted:        var(--bs-text-muted);
-  --color-muted-light:  var(--bs-text-faint);
+  --color-ink: var(--bs-text-primary);
+  --color-ink-soft: var(--bs-text-secondary);
+  --color-muted: var(--bs-text-muted);
+  --color-muted-light: var(--bs-text-faint);
 
   /* Borders */
-  --color-rule:         var(--bs-rule);
+  --color-rule: var(--bs-rule);
 
   /* Shadows */
   --shadow-sm: var(--bs-shadow-sm);
@@ -839,16 +863,16 @@ body::after {
   --shadow-xl: var(--bs-shadow-xl);
 
   /* Brand (unchanged) */
-  --color-coral:        var(--brand-coral);
-  --color-coral-dark:   var(--brand-coral-dark);
-  --color-coral-dim:    var(--bs-coral-dim);
-  --color-coral-glow:   var(--bs-coral-glow);
-  --color-green:        var(--brand-green);
-  --color-green-dim:    var(--bs-green-dim);
-  --color-ink-mid:      #292524;
+  --color-coral: var(--brand-coral);
+  --color-coral-dark: var(--brand-coral-dark);
+  --color-coral-dim: var(--bs-coral-dim);
+  --color-coral-glow: var(--bs-coral-glow);
+  --color-green: var(--brand-green);
+  --color-green-dim: var(--bs-green-dim);
+  --color-ink-mid: #292524;
 
   /* Fonts */
   --font-serif: var(--brand-font-serif);
-  --font-sans:  var(--brand-font-sans);
-  --font-mono:  var(--brand-font-mono);
+  --font-sans: var(--brand-font-sans);
+  --font-mono: var(--brand-font-mono);
 }

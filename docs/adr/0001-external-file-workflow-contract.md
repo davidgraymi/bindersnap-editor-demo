@@ -29,6 +29,7 @@ The workflow states are:
 4. `approved/published`: required approvals exist and PR is merged to `main`.
 
 Operational note:
+
 - Approval and merge timestamps come from Gitea PR review events + merge commit
   history. No app-managed metadata file is required.
 
@@ -132,13 +133,13 @@ Validation behavior:
 
 ## Role Mapping (Upload vs Approve vs Merge)
 
-| Role | Upload | Approve | Merge |
-| --- | --- | --- | --- |
-| Viewer | No | No | No |
-| Uploader | Yes | No | No |
-| Reviewer | No | Yes | No |
-| Publisher | No | Yes | Yes |
-| Owner/Admin | Yes | Yes | Yes |
+| Role        | Upload | Approve | Merge |
+| ----------- | ------ | ------- | ----- |
+| Viewer      | No     | No      | No    |
+| Uploader    | Yes    | No      | No    |
+| Reviewer    | No     | Yes     | No    |
+| Publisher   | No     | Yes     | Yes   |
+| Owner/Admin | Yes    | Yes     | Yes   |
 
 Policy rules:
 

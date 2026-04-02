@@ -62,7 +62,11 @@ export function TokenGate({ baseUrl, onAuthenticated }: TokenGateProps) {
             aria-label="Enter your Gitea personal access token"
           />
 
-          <button className="bs-btn bs-btn-primary app-submit" type="submit" disabled={isSubmitting}>
+          <button
+            className="bs-btn bs-btn-primary app-submit"
+            type="submit"
+            disabled={isSubmitting}
+          >
             {isSubmitting ? "Validating..." : "Open Workspace"}
           </button>
         </form>
