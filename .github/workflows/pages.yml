@@ -4,6 +4,13 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'apps/landing/**'
+      - 'packages/editor/**'
+      - 'packages/ui-tokens/**'
+      - 'packages/utils/**'
+      - 'bun.lock'
+      - 'package.json'
   workflow_dispatch:
 
 permissions:
@@ -34,15 +41,15 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Build
-        run: bun run build
+        run: bun run build:landing
 
       - name: Disable Jekyll
-        run: touch dist/.nojekyll
+        run: touch dist/landing/.nojekyll
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: dist/landing
 
   deploy:
     runs-on: ubuntu-latest

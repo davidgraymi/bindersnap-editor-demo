@@ -23,7 +23,10 @@
 
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@editor/*": ["./packages/editor/*"],
+      "@gitea/*": ["./packages/gitea-client/*"],
+      "@ui/*": ["./packages/ui-tokens/*"],
+      "@utils/*": ["./packages/utils/*"]
     },
 
     // Some stricter flags (disabled by default)

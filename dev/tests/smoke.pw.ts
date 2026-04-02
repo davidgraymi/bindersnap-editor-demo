@@ -156,24 +156,44 @@ test.describe('Gitea dev stack health', () => {
 });
 
 test.describe('App shell', () => {
-  test('Landing page loads', async ({ page }) => {
-    await page.goto('/');
-    await expect(page).toHaveTitle(/Bindersnap/);
+  test('Landing route loads', async ({ page }) => {
+    await page.goto('/landing');
+    await expect(page).toHaveTitle(/Finally Kill the Email Approval Chain/);
+    await expect(page.getByRole('link', { name: 'Join the Waitlist' })).toBeVisible();
   });
 
   test('Authenticated app route loads', async ({ page }) => {
     await page.goto('/app');
 
     const appHeading = page.getByRole('heading', { name: 'alice/quarterly-report' });
+    const loginHeading = page.getByRole('heading', { name: 'Step into the clean version.' });
+
+    await expect
+      .poll(
+        async () => {
+          if (await appHeading.isVisible().catch(() => false)) {
+            return 'app';
+          }
+
+          if (await loginHeading.isVisible().catch(() => false)) {
+            return 'login';
+          }
+
+          return 'pending';
+        },
+        { timeout: 10_000 }
+      )
+      .not.toBe('pending');
+
     if (await appHeading.isVisible().catch(() => false)) {
       return;
     }
 
-    const tokenGateHeading = page.getByRole('heading', { name: 'Welcome to Bindersnap' });
-    await expect(tokenGateHeading).toBeVisible();
-
-    const tokenInput = page.getByLabel('Enter your Gitea personal access token');
-    await expect(tokenInput).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Open Workspace' })).toBeVisible();
+    await expect(page).toHaveURL(/\/login$/);
+    await expect(loginHeading).toBeVisible();
+    await expect(page.getByLabel('Username')).toBeVisible();
+    await expect(page.getByLabel('Password')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Open workspace' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Create one' })).toBeVisible();
   });
 });
