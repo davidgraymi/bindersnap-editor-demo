@@ -135,7 +135,7 @@ function toApprovalStateFromReview(review: PullReview): ApprovalState | null {
     return "changes_requested";
   }
 
-  if (state === "APPROVED") {
+  if (state === "APPROVED" || state === "APPROVE") {
     return "approved";
   }
 

@@ -400,6 +400,42 @@ test("getPullRequestForBranch evaluates review state across paginated review res
   expect(repoListPullReviewsMock).toHaveBeenCalledTimes(2);
 });
 
+test("toApprovalStateFromReview recognises Gitea APPROVE state (no trailing D)", async () => {
+  const { getPullRequestForBranch } = await import("./pullRequests");
+
+  repoListPullRequestsMock.mockImplementation(async () => ({
+    data: [
+      {
+        number: 5,
+        title: "Gitea-style approval",
+        head: { ref: "feature/gitea-approve" },
+        state: "open",
+        merged: false,
+      },
+    ] as import("gitea-js").PullRequest[],
+  }));
+
+  repoListPullReviewsMock.mockImplementation(async () => ({
+    data: [
+      {
+        id: 55,
+        state: "APPROVE",
+        body: "Approved",
+        user: { login: "carol" },
+      } as import("gitea-js").PullReview,
+    ],
+  }));
+
+  const pr = await getPullRequestForBranch({
+    client,
+    owner: "alice",
+    repo: "quarterly-report",
+    branch: "feature/gitea-approve",
+  });
+
+  expect(pr?.approvalState).toBe("approved");
+});
+
 test("listPullRequests maps merged PRs to published and approved PRs to approved", async () => {
   const { listPullRequests } = await import("./pullRequests");
 
