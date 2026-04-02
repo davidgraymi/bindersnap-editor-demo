@@ -164,7 +164,7 @@ async function createGiteaSessionToken(baseUrl: string, username: string, passwo
   const tokenScopesRaw =
     appEnv?.BUN_PUBLIC_GITEA_TOKEN_SCOPES ??
     appEnv?.VITE_GITEA_TOKEN_SCOPES ??
-    "read:repository";
+    "write:repository,write:issue";
   const tokenScopes = tokenScopesRaw
     .split(",")
     .map((scope) => scope.trim())
