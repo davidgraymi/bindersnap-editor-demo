@@ -10,6 +10,8 @@ This is the authenticated Bindersnap product app.
 - App data calls go through API routes (for example `/api/app/documents`).
 - The file-vault shell uses `/api/app/documents` and `/api/app/documents/:id` to keep the list and detail views in sync.
 - Document detail also includes a multipart upload form that posts to `/api/app/documents/:id/versions` and refreshes the vault after the upload PR is created.
+- The approver queue uses `/api/app/documents/:id/versions/:prNumber/review` and `/api/app/documents/:id/versions/:prNumber/publish` for inline review and publish actions.
+- Where the app has a configured Gitea web URL, the queue and audit timeline expose direct source/review links for published and candidate versions.
 
 ## Entry points
 

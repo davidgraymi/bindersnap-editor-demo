@@ -17,6 +17,9 @@ const API_BASE_URL = (
   appEnv?.VITE_API_URL ??
   (isLocalHost ? devDefaultApiBaseUrl : "")
 ).replace(/\/$/, "");
+const GITEA_WEB_BASE_URL = (
+  appEnv?.BUN_PUBLIC_GITEA_URL ?? appEnv?.VITE_GITEA_URL ?? ""
+).replace(/\/$/, "");
 
 const DEFAULT_UPLOAD_ALLOWED_EXTENSIONS = [".json", ".txt", ".md", ".csv", ".doc", ".docx", ".pdf", ".xls", ".xlsx", ".ppt", ".pptx"];
 const uploadAllowedExtensions = (
@@ -45,6 +48,10 @@ const uploadAccept = uploadAllowedExtensions.join(",");
 
 type ApprovalState = "none" | "working" | "in_review" | "changes_requested" | "approved" | "published";
 type UploadPhase = "idle" | "validating" | "uploading" | "success" | "error";
+type QueueStatusFilter = "all" | ApprovalState;
+type QueueSortOrder = "newest" | "oldest";
+type QueueActionKind = "approve" | "request_changes" | "comment" | "publish";
+type TimelineEventKind = "upload" | "review" | "publish";
 
 interface AppShellProps {
   user: {
@@ -97,6 +104,71 @@ interface DocumentUploadResult {
   approvalState: ApprovalState;
 }
 
+interface VersionReviewResult {
+  documentId: string;
+  branchName: string;
+  commit: CommitSummary | null;
+  pullRequestNumber: number;
+  pullRequestUrl: string | null;
+  approvalState: ApprovalState;
+  review: {
+    state: string;
+    body: string;
+    reviewer: string | null;
+    createdAt: string;
+  };
+  pullRequest: {
+    number: number;
+    title: string;
+    branch: string;
+    state: string;
+    htmlUrl: string | null;
+    updatedAt: string;
+  };
+}
+
+interface VersionPublishResult {
+  documentId: string;
+  branchName: string;
+  commit: CommitSummary | null;
+  publishedVersion: CommitSummary | null;
+  pullRequestNumber: number;
+  pullRequestUrl: string | null;
+  approvalState: ApprovalState;
+  pullRequest: {
+    number: number;
+    title: string;
+    branch: string;
+    state: string;
+    htmlUrl: string | null;
+    updatedAt: string;
+  };
+}
+
+interface QueueAuditEntry {
+  id: string;
+  documentId: string;
+  documentTitle: string;
+  kind: TimelineEventKind;
+  label: string;
+  detail: string;
+  timestamp: string;
+  tone: "good" | "alert" | "pending" | "idle";
+  pullRequestNumber: number | null;
+  sourceLink: string | null;
+  reviewLink: string | null;
+}
+
+interface QueueActionState {
+  documentId: string;
+  action: QueueActionKind;
+}
+
+interface ReviewActionError {
+  code?: string;
+  message: string;
+}
+
 interface UploadRequestError {
   code?: string;
   message: string;
@@ -106,6 +178,15 @@ function formatTimestamp(value: string) {
   if (!value) return "Unknown";
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+}
+
+function parseTimestamp(value: string): number {
+  if (!value) {
+    return 0;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
 }
 
 function resolveApiUrl(path: string): string {
@@ -488,6 +569,264 @@ function sendUploadRequest(
   });
 }
 
+function parseRepositoryFullName(fullName: string): { owner: string; name: string } | null {
+  const [owner, ...rest] = fullName.split("/");
+  const name = rest.join("/");
+  if (!owner || !name) {
+    return null;
+  }
+
+  return { owner, name };
+}
+
+function encodeUrlPath(path: string): string {
+  return path
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+}
+
+function buildGiteaUrl(repository: string, suffix: string): string | null {
+  if (!GITEA_WEB_BASE_URL) {
+    return null;
+  }
+
+  const parsedRepository = parseRepositoryFullName(repository);
+  if (!parsedRepository) {
+    return null;
+  }
+
+  return `${GITEA_WEB_BASE_URL}/${encodeURIComponent(parsedRepository.owner)}/${encodeURIComponent(
+    parsedRepository.name,
+  )}${suffix}`;
+}
+
+function buildGiteaSourceUrl(repository: string, refType: "branch" | "commit", ref: string, filePath: string): string | null {
+  if (!ref) {
+    return null;
+  }
+
+  return buildGiteaUrl(
+    repository,
+    `/src/${refType === "branch" ? "branch" : "commit"}/${encodeURIComponent(ref)}/${encodeUrlPath(filePath)}`,
+  );
+}
+
+function buildGiteaPullRequestUrl(repository: string, pullRequestNumber: number): string | null {
+  if (!pullRequestNumber) {
+    return null;
+  }
+
+  return buildGiteaUrl(repository, `/pulls/${pullRequestNumber}`);
+}
+
+function readVersionReviewResult(value: unknown): VersionReviewResult | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const documentId = typeof value.documentId === "string" ? value.documentId.trim() : "";
+  const branchName = typeof value.branchName === "string" ? value.branchName.trim() : "";
+  const pullRequestNumber =
+    typeof value.pullRequestNumber === "number" && Number.isFinite(value.pullRequestNumber)
+      ? value.pullRequestNumber
+      : 0;
+  const pullRequestUrl =
+    typeof value.pullRequestUrl === "string" && value.pullRequestUrl.trim() !== ""
+      ? value.pullRequestUrl.trim()
+      : null;
+  const approvalState = readApprovalState(value.approvalState);
+  const review = isRecord(value.review)
+    ? {
+        state: typeof value.review.state === "string" ? value.review.state.trim() : "",
+        body: typeof value.review.body === "string" ? value.review.body.trim() : "",
+        reviewer:
+          typeof value.review.reviewer === "string" && value.review.reviewer.trim() !== ""
+            ? value.review.reviewer.trim()
+            : null,
+        createdAt: typeof value.review.createdAt === "string" ? value.review.createdAt.trim() : "",
+      }
+    : null;
+  const pullRequest = isRecord(value.pullRequest)
+    ? {
+        number:
+          typeof value.pullRequest.number === "number" && Number.isFinite(value.pullRequest.number)
+            ? value.pullRequest.number
+            : 0,
+        title: typeof value.pullRequest.title === "string" ? value.pullRequest.title.trim() : "",
+        branch: typeof value.pullRequest.branch === "string" ? value.pullRequest.branch.trim() : "",
+        state: typeof value.pullRequest.state === "string" ? value.pullRequest.state.trim() : "",
+        htmlUrl:
+          typeof value.pullRequest.htmlUrl === "string" && value.pullRequest.htmlUrl.trim() !== ""
+            ? value.pullRequest.htmlUrl.trim()
+            : null,
+        updatedAt:
+          typeof value.pullRequest.updatedAt === "string" ? value.pullRequest.updatedAt.trim() : "",
+      }
+    : null;
+
+  if (!documentId || !branchName || !pullRequestNumber || !approvalState || !review || !pullRequest) {
+    return null;
+  }
+
+  return {
+    documentId,
+    branchName,
+    commit: readCommitSummary(value.commit),
+    pullRequestNumber,
+    pullRequestUrl,
+    approvalState,
+    review,
+    pullRequest,
+  };
+}
+
+function readVersionPublishResult(value: unknown): VersionPublishResult | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const documentId = typeof value.documentId === "string" ? value.documentId.trim() : "";
+  const branchName = typeof value.branchName === "string" ? value.branchName.trim() : "";
+  const pullRequestNumber =
+    typeof value.pullRequestNumber === "number" && Number.isFinite(value.pullRequestNumber)
+      ? value.pullRequestNumber
+      : 0;
+  const pullRequestUrl =
+    typeof value.pullRequestUrl === "string" && value.pullRequestUrl.trim() !== ""
+      ? value.pullRequestUrl.trim()
+      : null;
+  const approvalState = readApprovalState(value.approvalState);
+  const pullRequest = isRecord(value.pullRequest)
+    ? {
+        number:
+          typeof value.pullRequest.number === "number" && Number.isFinite(value.pullRequest.number)
+            ? value.pullRequest.number
+            : 0,
+        title: typeof value.pullRequest.title === "string" ? value.pullRequest.title.trim() : "",
+        branch: typeof value.pullRequest.branch === "string" ? value.pullRequest.branch.trim() : "",
+        state: typeof value.pullRequest.state === "string" ? value.pullRequest.state.trim() : "",
+        htmlUrl:
+          typeof value.pullRequest.htmlUrl === "string" && value.pullRequest.htmlUrl.trim() !== ""
+            ? value.pullRequest.htmlUrl.trim()
+            : null,
+        updatedAt:
+          typeof value.pullRequest.updatedAt === "string" ? value.pullRequest.updatedAt.trim() : "",
+      }
+    : null;
+
+  if (!documentId || !branchName || !pullRequestNumber || !approvalState || !pullRequest) {
+    return null;
+  }
+
+  return {
+    documentId,
+    branchName,
+    commit: readCommitSummary(value.commit),
+    publishedVersion: readCommitSummary(value.publishedVersion),
+    pullRequestNumber,
+    pullRequestUrl,
+    approvalState,
+    pullRequest,
+  };
+}
+
+function readReviewActionError(payload: unknown): ReviewActionError | null {
+  if (!isRecord(payload)) {
+    return null;
+  }
+
+  const errorValue = payload.error;
+  const messageFromRoot = typeof payload.message === "string" ? payload.message.trim() : "";
+
+  if (typeof errorValue === "string" && errorValue.trim() !== "") {
+    return { message: errorValue.trim() };
+  }
+
+  if (isRecord(errorValue)) {
+    const code = typeof errorValue.code === "string" ? errorValue.code.trim() : undefined;
+    const message =
+      typeof errorValue.message === "string" && errorValue.message.trim() !== ""
+        ? errorValue.message.trim()
+        : messageFromRoot || "Action failed.";
+
+    return { code, message };
+  }
+
+  if (messageFromRoot) {
+    return { message: messageFromRoot };
+  }
+
+  return null;
+}
+
+function formatReviewActionError(payload: unknown, fallback: string): string {
+  const details = readReviewActionError(payload);
+  if (!details) {
+    return fallback;
+  }
+
+  switch (details.code) {
+    case "unauthorized":
+      return "Your session expired. Sign in again.";
+    case "publish_forbidden":
+      return "You do not have permission to publish this version.";
+    case "approval_required":
+      return "This version must be approved before publishing.";
+    case "version_not_publishable":
+      return "This version is no longer open for publishing.";
+    case "version_not_reviewable":
+      return "This version is no longer open for review.";
+    case "invalid_review_event":
+      return "Choose a valid review action and try again.";
+    default:
+      return details.message || fallback;
+  }
+}
+
+function sendVersionActionRequest(
+  path: string,
+  payload?: Record<string, unknown>,
+): Promise<{ status: number; payload: unknown }> {
+  return fetch(resolveApiUrl(path), {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      Accept: "application/json",
+      ...(payload ? { "Content-Type": "application/json" } : {}),
+    },
+    body: payload ? JSON.stringify(payload) : undefined,
+  }).then(async (response) => ({
+    status: response.status,
+    payload: (await response.json().catch(() => null)) as unknown,
+  }));
+}
+
+function sendVersionReviewRequest(
+  documentId: string,
+  pullRequestNumber: number,
+  event: "APPROVE" | "REQUEST_CHANGES" | "COMMENT",
+  body: string,
+): Promise<{ status: number; payload: unknown }> {
+  return sendVersionActionRequest(
+    `/api/app/documents/${encodeURIComponent(documentId)}/versions/${pullRequestNumber}/review`,
+    {
+      event,
+      body,
+      comment: body,
+    },
+  );
+}
+
+function sendVersionPublishRequest(
+  documentId: string,
+  pullRequestNumber: number,
+): Promise<{ status: number; payload: unknown }> {
+  return sendVersionActionRequest(
+    `/api/app/documents/${encodeURIComponent(documentId)}/versions/${pullRequestNumber}/publish`,
+  );
+}
+
 function formatCommitSummary(commit: CommitSummary | null | undefined): string {
   if (!commit) {
     return "No published version";
@@ -534,6 +873,156 @@ function approvalTone(state: ApprovalState | null | undefined): string {
 
 function pendingCountProxy(document: DocumentVaultItem | null): number {
   return document?.latestPendingPullRequest ? 1 : 0;
+}
+
+function formatQueueActionLabel(action: QueueActionKind): string {
+  switch (action) {
+    case "approve":
+      return "Approve";
+    case "request_changes":
+      return "Request changes";
+    case "comment":
+      return "Comment";
+    case "publish":
+      return "Publish";
+    default:
+      return action;
+  }
+}
+
+function buildDocumentSourceLinks(document: DocumentVaultItem): Array<{ label: string; href: string; variant: "primary" | "secondary" }> {
+  const links: Array<{ label: string; href: string; variant: "primary" | "secondary" }> = [];
+  const publishedSnapshot = document.currentPublishedVersion ?? document.publishedVersion ?? document.latestCommit;
+
+  if (publishedSnapshot?.sha) {
+    const publishedSourceUrl = buildGiteaSourceUrl(document.repository, "commit", publishedSnapshot.sha, document.path);
+    if (publishedSourceUrl) {
+      links.push({
+        label: "Published source",
+        href: publishedSourceUrl,
+        variant: "primary",
+      });
+    }
+  }
+
+  if (document.latestPendingPullRequest?.branch) {
+    const candidateSourceUrl = buildGiteaSourceUrl(
+      document.repository,
+      "branch",
+      document.latestPendingPullRequest.branch,
+      document.path,
+    );
+    if (candidateSourceUrl) {
+      links.push({
+        label: "Review candidate",
+        href: candidateSourceUrl,
+        variant: "secondary",
+      });
+    }
+  }
+
+  if (document.latestPendingPullRequest?.htmlUrl) {
+    links.push({
+      label: "Open review request",
+      href: document.latestPendingPullRequest.htmlUrl,
+      variant: "secondary",
+    });
+  }
+
+  return links;
+}
+
+function buildDocumentAuditEntries(
+  document: DocumentVaultItem,
+  uploadResult: DocumentUploadResult | null,
+  sessionAuditEntries: QueueAuditEntry[],
+): QueueAuditEntry[] {
+  const entries: QueueAuditEntry[] = [];
+  const publishedSnapshot = document.currentPublishedVersion ?? document.publishedVersion ?? document.latestCommit;
+  if (publishedSnapshot) {
+    const sourceLink = publishedSnapshot.sha
+      ? buildGiteaSourceUrl(document.repository, "commit", publishedSnapshot.sha, document.path)
+      : null;
+    entries.push({
+      id: `${document.id}-published-${publishedSnapshot.sha || publishedSnapshot.timestamp || "current"}`,
+      documentId: document.id,
+      documentTitle: document.title,
+      kind: "publish",
+      label: "Published version",
+      detail: formatCommitSummary(publishedSnapshot),
+      timestamp: publishedSnapshot.timestamp || document.lastActivityTimestamp || document.lastActivityAt,
+      tone: "good",
+      pullRequestNumber: document.latestPendingPullRequest?.number ?? null,
+      sourceLink,
+      reviewLink: document.latestPendingPullRequest?.htmlUrl ?? null,
+    });
+  }
+
+  if (document.latestPendingPullRequest) {
+    const state = document.latestPendingVersionStatus ?? document.latestPendingPullRequest.state ?? "in_review";
+    const tone =
+      state === "published" || state === "approved"
+        ? "good"
+        : state === "changes_requested"
+          ? "alert"
+          : "pending";
+    const reviewLink =
+      document.latestPendingPullRequest.htmlUrl ?? buildGiteaPullRequestUrl(document.repository, document.latestPendingPullRequest.number);
+    const sourceLink = document.latestPendingPullRequest.branch
+      ? buildGiteaSourceUrl(document.repository, "branch", document.latestPendingPullRequest.branch, document.path)
+      : null;
+
+    entries.push({
+      id: `${document.id}-review-${document.latestPendingPullRequest.number}`,
+      documentId: document.id,
+      documentTitle: document.title,
+      kind: "review",
+      label:
+        state === "published"
+          ? "Published review decision"
+          : state === "approved"
+            ? "Review approved"
+            : state === "changes_requested"
+              ? "Changes requested"
+              : "Review in progress",
+      detail: `${formatPendingState(state)} on #${document.latestPendingPullRequest.number}`,
+      timestamp: document.latestPendingPullRequest.updatedAt || document.lastActivityTimestamp || document.lastActivityAt,
+      tone,
+      pullRequestNumber: document.latestPendingPullRequest.number,
+      sourceLink,
+      reviewLink,
+    });
+  }
+
+  if (uploadResult && uploadResult.documentId === document.id) {
+    entries.push({
+      id: `${document.id}-upload-${uploadResult.pullRequestNumber}`,
+      documentId: document.id,
+      documentTitle: document.title,
+      kind: "upload",
+      label: "Upload submitted",
+      detail: `Created review PR #${uploadResult.pullRequestNumber} on ${uploadResult.branchName}`,
+      timestamp: document.latestPendingPullRequest?.updatedAt || document.lastActivityTimestamp || document.lastActivityAt,
+      tone: "pending",
+      pullRequestNumber: uploadResult.pullRequestNumber,
+      sourceLink: buildGiteaSourceUrl(document.repository, "branch", uploadResult.branchName, document.path),
+      reviewLink: uploadResult.pullRequestUrl ?? buildGiteaPullRequestUrl(document.repository, uploadResult.pullRequestNumber),
+    });
+  }
+
+  for (const entry of sessionAuditEntries) {
+    if (entry.documentId === document.id) {
+      entries.push(entry);
+    }
+  }
+
+  entries.sort((left, right) => {
+    const leftValue = parseTimestamp(left.timestamp);
+    const rightValue = parseTimestamp(right.timestamp);
+    return rightValue - leftValue;
+  });
+
+  return entries;
 }
 
 async function fetchDocuments(): Promise<DocumentsPayload> {
@@ -588,6 +1077,13 @@ export function AppShell({ user, onSignOut }: AppShellProps) {
   const [uploadRefreshNotice, setUploadRefreshNotice] = useState<string | null>(null);
   const [uploadResult, setUploadResult] = useState<DocumentUploadResult | null>(null);
   const [uploadInputKey, setUploadInputKey] = useState(0);
+  const [queueStatusFilter, setQueueStatusFilter] = useState<QueueStatusFilter>("all");
+  const [queueSortOrder, setQueueSortOrder] = useState<QueueSortOrder>("newest");
+  const [queueCommentDrafts, setQueueCommentDrafts] = useState<Record<string, string>>({});
+  const [sessionAuditEntries, setSessionAuditEntries] = useState<QueueAuditEntry[]>([]);
+  const [queueActionState, setQueueActionState] = useState<QueueActionState | null>(null);
+  const [queueActionError, setQueueActionError] = useState<string | null>(null);
+  const [queueActionNotice, setQueueActionNotice] = useState<string | null>(null);
   const selectedDocumentIdRef = useRef<string | null>(null);
   const detailRequestIdRef = useRef(0);
   const uploadRequestIdRef = useRef(0);
@@ -711,6 +1207,37 @@ export function AppShell({ user, onSignOut }: AppShellProps) {
           : uploadPhase === "validating"
             ? "Validating..."
             : "Ready to upload";
+  const queueItems = useMemo(() => {
+    const pendingDocuments = documents.filter((document) => document.latestPendingPullRequest);
+
+    const filteredDocuments = pendingDocuments.filter((document) => {
+      if (queueStatusFilter === "all") {
+        return true;
+      }
+
+      return (document.latestPendingVersionStatus ?? document.latestPendingPullRequest?.state ?? null) === queueStatusFilter;
+    });
+
+    filteredDocuments.sort((left, right) => {
+      const leftTimestamp = parseTimestamp(
+        left.latestPendingPullRequest?.updatedAt ?? left.lastActivityTimestamp ?? left.lastActivityAt,
+      );
+      const rightTimestamp = parseTimestamp(
+        right.latestPendingPullRequest?.updatedAt ?? right.lastActivityTimestamp ?? right.lastActivityAt,
+      );
+      return queueSortOrder === "newest" ? rightTimestamp - leftTimestamp : leftTimestamp - rightTimestamp;
+    });
+
+    return filteredDocuments;
+  }, [documents, queueSortOrder, queueStatusFilter]);
+  const selectedDocumentLinks = selectedDocument ? buildDocumentSourceLinks(selectedDocument) : [];
+  const selectedDocumentAuditEntries = selectedDocument
+    ? buildDocumentAuditEntries(selectedDocument, uploadResult, sessionAuditEntries)
+    : [];
+
+  const activeQueueActionTarget = queueActionState;
+  const selectedQueueActionTarget =
+    queueActionState && selectedDocument?.id === queueActionState.documentId ? queueActionState : null;
 
   const handleUploadFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     setUploadError(null);
@@ -727,6 +1254,172 @@ export function AppShell({ user, onSignOut }: AppShellProps) {
 
     setUploadFile(file);
   };
+
+  const handleQueueCommentChange = useCallback((documentId: string, value: string) => {
+    setQueueCommentDrafts((current) => ({
+      ...current,
+      [documentId]: value,
+    }));
+  }, []);
+
+  const handleQueueReviewAction = useCallback(
+    async (document: DocumentVaultItem, event: "APPROVE" | "REQUEST_CHANGES" | "COMMENT") => {
+      const pendingPullRequest = document.latestPendingPullRequest;
+      if (!pendingPullRequest) {
+        setQueueActionError("This document no longer has a pending version.");
+        return;
+      }
+
+      const commentText = (queueCommentDrafts[document.id] ?? "").trim();
+      if (event === "COMMENT" && !commentText) {
+        setQueueActionError("Add a comment before sending it.");
+        return;
+      }
+
+      const actionKind: QueueActionKind =
+        event === "APPROVE" ? "approve" : event === "REQUEST_CHANGES" ? "request_changes" : "comment";
+      setQueueActionState({
+        documentId: document.id,
+        action: actionKind,
+      });
+      setQueueActionError(null);
+      setQueueActionNotice(null);
+
+      try {
+        const response = await sendVersionReviewRequest(document.id, pendingPullRequest.number, event, commentText);
+        if (response.status < 200 || response.status >= 300) {
+          throw new Error(formatReviewActionError(response.payload, "Unable to submit the review right now."));
+        }
+
+        const result = readVersionReviewResult(response.payload);
+        if (!result) {
+          throw new Error("The review completed, but the server did not return review metadata.");
+        }
+
+        const reviewTimestamp = result.review.createdAt || result.pullRequest.updatedAt || pendingPullRequest.updatedAt;
+        setSessionAuditEntries((current) => [
+          {
+            id: `${result.documentId}-review-${result.pullRequestNumber}-${result.review.createdAt || reviewTimestamp || result.review.state}`,
+            documentId: result.documentId,
+            documentTitle: document.title,
+            kind: "review",
+            label:
+              event === "COMMENT"
+                ? "Comment added"
+                : result.approvalState === "approved"
+                  ? "Review approved"
+                  : "Review updated",
+            detail:
+              event === "COMMENT"
+                ? result.review.body || commentText
+                : formatPendingState(result.approvalState),
+            timestamp: reviewTimestamp,
+            tone:
+              result.approvalState === "changes_requested"
+                ? "alert"
+                : result.approvalState === "approved"
+                  ? "good"
+                  : "pending",
+            pullRequestNumber: result.pullRequestNumber,
+            sourceLink: buildGiteaSourceUrl(document.repository, "branch", result.branchName, document.path),
+            reviewLink: result.pullRequestUrl ?? buildGiteaPullRequestUrl(document.repository, result.pullRequestNumber),
+          },
+          ...current,
+        ]);
+
+        setQueueCommentDrafts((current) => ({
+          ...current,
+          [document.id]: "",
+        }));
+        setQueueActionNotice(
+          `Updated #${result.pullRequestNumber}: ${formatPendingState(result.approvalState).toLowerCase()}.`,
+        );
+        await loadDocuments();
+      } catch (actionError) {
+        const message =
+          actionError instanceof Error
+            ? actionError.message
+            : "Unable to submit the review right now.";
+        setQueueActionError(message);
+      } finally {
+        setQueueActionState(null);
+      }
+    },
+    [loadDocuments, queueCommentDrafts],
+  );
+
+  const handleQueuePublishAction = useCallback(
+    async (document: DocumentVaultItem) => {
+      const pendingPullRequest = document.latestPendingPullRequest;
+      if (!pendingPullRequest) {
+        setQueueActionError("This document no longer has a pending version.");
+        return;
+      }
+
+      if (document.latestPendingVersionStatus !== "approved") {
+        setQueueActionError("Approve the version before publishing it.");
+        return;
+      }
+
+      const confirmed = window.confirm(
+        `Publish #${pendingPullRequest.number} for ${document.title}? This will merge the review branch into the published version.`,
+      );
+      if (!confirmed) {
+        return;
+      }
+
+      setQueueActionState({
+        documentId: document.id,
+        action: "publish",
+      });
+      setQueueActionError(null);
+      setQueueActionNotice(null);
+
+      try {
+        const response = await sendVersionPublishRequest(document.id, pendingPullRequest.number);
+        if (response.status < 200 || response.status >= 300) {
+          throw new Error(formatReviewActionError(response.payload, "Unable to publish the version right now."));
+        }
+
+        const result = readVersionPublishResult(response.payload);
+        if (!result) {
+          throw new Error("The publish completed, but the server did not return version metadata.");
+        }
+
+        const publishedSnapshot = result.publishedVersion ?? result.commit;
+        const publishTimestamp =
+          publishedSnapshot?.timestamp || result.pullRequest.updatedAt || pendingPullRequest.updatedAt;
+        setSessionAuditEntries((current) => [
+          {
+            id: `${result.documentId}-publish-${result.pullRequestNumber}-${publishedSnapshot?.sha || publishTimestamp}`,
+            documentId: result.documentId,
+            documentTitle: document.title,
+            kind: "publish",
+            label: "Published version",
+            detail: formatCommitSummary(publishedSnapshot) || `Merged #${result.pullRequestNumber}`,
+            timestamp: publishTimestamp,
+            tone: "good",
+            pullRequestNumber: result.pullRequestNumber,
+            sourceLink: buildGiteaSourceUrl(document.repository, "commit", publishedSnapshot?.sha || "", document.path),
+            reviewLink: result.pullRequestUrl ?? buildGiteaPullRequestUrl(document.repository, result.pullRequestNumber),
+          },
+          ...current,
+        ]);
+
+        setQueueActionNotice(`Published #${result.pullRequestNumber} and refreshed the vault.`);
+        await loadDocuments();
+      } catch (actionError) {
+        const message =
+          actionError instanceof Error
+            ? actionError.message
+            : "Unable to publish the version right now.";
+        setQueueActionError(message);
+      } finally {
+        setQueueActionState(null);
+      }
+    },
+    [loadDocuments],
+  );
 
   const handleUploadSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
@@ -910,12 +1603,190 @@ export function AppShell({ user, onSignOut }: AppShellProps) {
               </div>
             </div>
 
+            <section className="app-vault-queue-panel">
+              <div className="app-section-heading app-vault-queue-heading">
+                <div>
+                  <div className="bs-eyebrow">Approver Queue</div>
+                  <h2>Pending versions across accessible documents</h2>
+                </div>
+                <div className="app-vault-list-meta">
+                  <span className="app-vault-list-count">{queueItems.length} queued</span>
+                  <span className="app-vault-list-count">Updated live</span>
+                </div>
+              </div>
+
+              <div className="app-vault-queue-controls">
+                <label className="app-vault-queue-control">
+                  <span className="bs-label">Status</span>
+                  <select
+                    className="bs-input"
+                    value={queueStatusFilter}
+                    onChange={(event) => setQueueStatusFilter(event.target.value as QueueStatusFilter)}
+                  >
+                    <option value="all">All pending</option>
+                    <option value="working">Working</option>
+                    <option value="in_review">In review</option>
+                    <option value="changes_requested">Changes requested</option>
+                    <option value="approved">Approved</option>
+                    <option value="published">Published</option>
+                  </select>
+                </label>
+
+                <label className="app-vault-queue-control">
+                  <span className="bs-label">Sort by recency</span>
+                  <select
+                    className="bs-input"
+                    value={queueSortOrder}
+                    onChange={(event) => setQueueSortOrder(event.target.value as QueueSortOrder)}
+                  >
+                    <option value="newest">Newest first</option>
+                    <option value="oldest">Oldest first</option>
+                  </select>
+                </label>
+              </div>
+
+              {queueActionNotice ? <p className="app-vault-queue-note">{queueActionNotice}</p> : null}
+              {queueActionError ? <p className="app-vault-queue-error">{queueActionError}</p> : null}
+
+              {!loading && queueItems.length === 0 ? (
+                <div className="bs-card app-vault-queue-empty">
+                  No queued versions match the current filters.
+                </div>
+              ) : null}
+
+              <div className="app-vault-queue-list">
+                {loading ? <div className="bs-card app-doc-empty">Loading queue...</div> : null}
+                {queueItems.map((document) => {
+                  const pendingPullRequest = document.latestPendingPullRequest;
+                  const sourceLinks = buildDocumentSourceLinks(document);
+                  const commentDraft = queueCommentDrafts[document.id] ?? "";
+                  const isSelected = document.id === selectedDocumentId;
+                  const isBusy = activeQueueActionTarget?.documentId === document.id;
+                  const busyActionLabel = isBusy
+                    ? formatQueueActionLabel(activeQueueActionTarget.action)
+                    : "";
+                  const isPublishable = document.latestPendingVersionStatus === "approved";
+                  return (
+                    <article key={document.id} className={`bs-card app-vault-queue-item ${isSelected ? "is-selected" : ""}`}>
+                      <div className="app-vault-item-head">
+                        <div>
+                          <h3>{document.title}</h3>
+                          <p className="app-doc-path">{document.path}</p>
+                        </div>
+                        <span className={`app-status-badge app-status-badge--${approvalTone(document.latestPendingVersionStatus)}`}>
+                          {formatPendingState(document.latestPendingVersionStatus)}
+                        </span>
+                      </div>
+
+                      <dl className="app-vault-item-grid">
+                        <div>
+                          <dt>Review request</dt>
+                          <dd>
+                            {pendingPullRequest
+                              ? `#${pendingPullRequest.number} ${pendingPullRequest.title || "Review request"}`
+                              : "No pending request"}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Branch</dt>
+                          <dd>{pendingPullRequest?.branch || "Unknown"}</dd>
+                        </div>
+                        <div>
+                          <dt>Updated</dt>
+                          <dd>{formatTimestamp(pendingPullRequest?.updatedAt || document.lastActivityTimestamp || document.lastActivityAt)}</dd>
+                        </div>
+                      </dl>
+
+                      <div className="app-vault-link-row">
+                        {sourceLinks.length > 0 ? (
+                          sourceLinks.map((link) => (
+                            <a
+                              key={`${document.id}-${link.label}`}
+                              className={link.variant === "primary" ? "app-detail-link" : "app-vault-mini-link"}
+                              href={link.href}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              {link.label}
+                            </a>
+                          ))
+                        ) : (
+                          <span className="app-vault-block-empty">Direct source links are unavailable for this item.</span>
+                        )}
+                      </div>
+
+                      <label className="app-vault-queue-field">
+                        <span className="bs-label">Comment</span>
+                        <textarea
+                          className="bs-input app-vault-queue-textarea"
+                          rows={3}
+                          value={commentDraft}
+                          onChange={(event) => handleQueueCommentChange(document.id, event.target.value)}
+                          placeholder="Add a note for reviewers"
+                        />
+                      </label>
+
+                      <div className="app-vault-queue-actions">
+                        <button
+                          className="bs-btn bs-btn-secondary"
+                          type="button"
+                          disabled={!pendingPullRequest || Boolean(activeQueueActionTarget)}
+                          onClick={() => void handleQueueReviewAction(document, "APPROVE")}
+                        >
+                          {isBusy && busyActionLabel === "Approve" ? "Approving..." : "Approve"}
+                        </button>
+                        <button
+                          className="bs-btn bs-btn-secondary"
+                          type="button"
+                          disabled={!pendingPullRequest || Boolean(activeQueueActionTarget)}
+                          onClick={() => void handleQueueReviewAction(document, "REQUEST_CHANGES")}
+                        >
+                          {isBusy && busyActionLabel === "Request changes" ? "Sending..." : "Request changes"}
+                        </button>
+                        <button
+                          className="bs-btn bs-btn-dark"
+                          type="button"
+                          disabled={!pendingPullRequest || Boolean(activeQueueActionTarget) || !commentDraft.trim()}
+                          onClick={() => void handleQueueReviewAction(document, "COMMENT")}
+                        >
+                          {isBusy && busyActionLabel === "Comment" ? "Commenting..." : "Comment"}
+                        </button>
+                        <button
+                          className="bs-btn bs-btn-primary"
+                          type="button"
+                          disabled={!pendingPullRequest || Boolean(activeQueueActionTarget) || !isPublishable}
+                          title={
+                            !isPublishable
+                              ? "Approve the version before publishing it."
+                              : "Publish the approved version"
+                          }
+                          onClick={() => void handleQueuePublishAction(document)}
+                        >
+                          {isBusy && busyActionLabel === "Publish" ? "Publishing..." : "Publish"}
+                        </button>
+                      </div>
+
+                      <button
+                        className="app-vault-queue-open"
+                        type="button"
+                        onClick={() => {
+                          selectedDocumentIdRef.current = document.id;
+                          setSelectedDocumentId(document.id);
+                          void loadDocumentDetail(document.id);
+                        }}
+                      >
+                        Inspect in detail
+                      </button>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+
             <div className="app-vault-list">
               {loading ? <div className="bs-card app-doc-empty">Loading documents...</div> : null}
               {!loading && documents.length === 0 ? (
-                <div className="bs-card app-doc-empty">
-                  No documents were returned for this workspace.
-                </div>
+                <div className="bs-card app-doc-empty">No documents were returned for this workspace.</div>
               ) : null}
 
               {documents.map((document) => {
@@ -946,11 +1817,15 @@ export function AppShell({ user, onSignOut }: AppShellProps) {
                     <dl className="app-vault-item-grid">
                       <div>
                         <dt>Published</dt>
-                        <dd>{formatCommitSummary(document.currentPublishedVersion ?? document.publishedVersion ?? document.latestCommit)}</dd>
+                        <dd>
+                          {formatCommitSummary(
+                            document.currentPublishedVersion ?? document.publishedVersion ?? document.latestCommit,
+                          )}
+                        </dd>
                       </div>
                       <div>
                         <dt>Pending proxy</dt>
-                        <dd>{pendingCount > 0 ? `1 pending version` : "No pending versions"}</dd>
+                        <dd>{pendingCount > 0 ? "1 pending version" : "No pending versions"}</dd>
                       </div>
                       <div>
                         <dt>Latest activity</dt>
@@ -964,6 +1839,8 @@ export function AppShell({ user, onSignOut }: AppShellProps) {
           </section>
 
           <section className="bs-card app-vault-detail-panel">
+            {queueActionNotice ? <p className="app-vault-detail-note">{queueActionNotice}</p> : null}
+            {queueActionError ? <p className="app-vault-detail-error-note">{queueActionError}</p> : null}
             {detailError ? (
               <div className="app-vault-detail-error">
                 <div className="bs-eyebrow">Detail State</div>
@@ -1001,7 +1878,11 @@ export function AppShell({ user, onSignOut }: AppShellProps) {
                 <div className="app-vault-detail-stack">
                   <article className="app-vault-detail-block">
                     <div className="bs-eyebrow">Current Published Version</div>
-                    <h3>{formatCommitSummary(selectedDocument.currentPublishedVersion ?? selectedDocument.publishedVersion ?? selectedDocument.latestCommit)}</h3>
+                    <h3>
+                      {formatCommitSummary(
+                        selectedDocument.currentPublishedVersion ?? selectedDocument.publishedVersion ?? selectedDocument.latestCommit,
+                      )}
+                    </h3>
                     <dl>
                       <div>
                         <dt>Author</dt>
@@ -1019,7 +1900,8 @@ export function AppShell({ user, onSignOut }: AppShellProps) {
                     {selectedDocument.latestPendingPullRequest ? (
                       <>
                         <h3>
-                          #{selectedDocument.latestPendingPullRequest.number} {selectedDocument.latestPendingPullRequest.title || "Review request"}
+                          #{selectedDocument.latestPendingPullRequest.number}{" "}
+                          {selectedDocument.latestPendingPullRequest.title || "Review request"}
                         </h3>
                         <dl>
                           <div>
@@ -1035,6 +1917,23 @@ export function AppShell({ user, onSignOut }: AppShellProps) {
                             <dd>{formatTimestamp(selectedDocument.latestPendingPullRequest.updatedAt)}</dd>
                           </div>
                         </dl>
+                        <div className="app-vault-link-row">
+                          {selectedDocumentLinks.length > 0 ? (
+                            selectedDocumentLinks.map((link) => (
+                              <a
+                                key={`${selectedDocument.id}-${link.label}`}
+                                className={link.variant === "primary" ? "app-detail-link" : "app-vault-mini-link"}
+                                href={link.href}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                {link.label}
+                              </a>
+                            ))
+                          ) : (
+                            <span className="app-vault-block-empty">No direct file links are available for this version.</span>
+                          )}
+                        </div>
                         {selectedDocument.latestPendingPullRequest.htmlUrl ? (
                           <a
                             className="app-detail-link"
@@ -1107,7 +2006,9 @@ export function AppShell({ user, onSignOut }: AppShellProps) {
                       </label>
 
                       <div className="app-vault-upload-status" aria-live="polite">
-                        <span className={`app-status-badge app-status-badge--${uploadPhase === "error" ? "alert" : uploadPhase === "success" ? "good" : "pending"}`}>
+                        <span
+                          className={`app-status-badge app-status-badge--${uploadPhase === "error" ? "alert" : uploadPhase === "success" ? "good" : "pending"}`}
+                        >
                           {uploadProgressLabel}
                         </span>
                         {selectedUploadError ? <p className="app-vault-upload-error">{selectedUploadError}</p> : null}
@@ -1168,29 +2069,44 @@ export function AppShell({ user, onSignOut }: AppShellProps) {
                   </article>
 
                   <article className="app-vault-detail-block">
-                    <div className="bs-eyebrow">Version Timeline</div>
-                    <ol className="app-vault-timeline">
-                      <li>
-                        <strong>Published record</strong>
-                        <span>{formatCommitSummary(selectedDocument.currentPublishedVersion ?? selectedDocument.publishedVersion ?? selectedDocument.latestCommit)}</span>
-                      </li>
-                      <li>
-                        <strong>Pending review</strong>
-                        <span>
-                          {selectedDocument.latestPendingPullRequest
-                            ? `#${selectedDocument.latestPendingPullRequest.number} ${formatPendingState(selectedDocument.latestPendingPullRequest.state)}`
-                            : "None open right now"}
-                        </span>
-                      </li>
-                      <li>
-                        <strong>Latest activity</strong>
-                        <span>{formatTimestamp(selectedDocument.lastActivityTimestamp || selectedDocument.lastActivityAt)}</span>
-                      </li>
-                    </ol>
+                    <div className="bs-eyebrow">Audit Timeline</div>
+                    <h3>Upload, review, and publish events</h3>
+                    {selectedDocumentAuditEntries.length > 0 ? (
+                      <ol className="app-vault-audit">
+                        {selectedDocumentAuditEntries.map((entry) => (
+                          <li key={entry.id} className="app-vault-audit-item">
+                            <div className="app-vault-audit-item-head">
+                              <span className={`app-status-badge app-status-badge--${entry.tone}`}>{entry.label}</span>
+                              <span className="app-vault-hero-meta">{formatTimestamp(entry.timestamp)}</span>
+                            </div>
+                            <p>{entry.detail}</p>
+                            <div className="app-vault-link-row">
+                              {entry.sourceLink ? (
+                                <a className="app-detail-link" href={entry.sourceLink} target="_blank" rel="noreferrer">
+                                  Source
+                                </a>
+                              ) : null}
+                              {entry.reviewLink ? (
+                                <a className="app-vault-mini-link" href={entry.reviewLink} target="_blank" rel="noreferrer">
+                                  Review
+                                </a>
+                              ) : null}
+                            </div>
+                          </li>
+                        ))}
+                      </ol>
+                    ) : (
+                      <p className="app-vault-block-empty">No timeline events are available yet.</p>
+                    )}
                   </article>
                 </div>
 
                 {detailLoading ? <div className="app-vault-detail-loading">Refreshing detail...</div> : null}
+                {selectedQueueActionTarget ? (
+                  <div className="app-vault-detail-loading">
+                    Processing {formatQueueActionLabel(selectedQueueActionTarget.action).toLowerCase()}...
+                  </div>
+                ) : null}
               </>
             )}
           </section>
