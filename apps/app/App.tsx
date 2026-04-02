@@ -159,6 +159,33 @@ async function fetchSessionUser(): Promise<SessionUser | null> {
   return parseSessionUser(payload);
 }
 
+async function createGiteaSessionToken(baseUrl: string, username: string, password: string): Promise<void> {
+  const tokenName = `bindersnap-session-${Date.now()}`;
+  const credentials = btoa(`${encodeURIComponent(username)}:${encodeURIComponent(password)}`);
+  const response = await fetch(`${baseUrl}/api/v1/users/${encodeURIComponent(username)}/tokens`, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${credentials}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ name: tokenName }),
+  });
+
+  const payload = (await response.json().catch(() => null)) as unknown;
+  if (!response.ok) {
+    throw new Error(readErrorMessage(payload, "Unable to connect to the document vault. Check that your Gitea account is active."));
+  }
+
+  const token = typeof (payload as { sha1?: unknown }).sha1 === "string"
+    ? (payload as { sha1: string }).sha1
+    : null;
+  if (!token) {
+    throw new Error("Gitea did not return a usable token.");
+  }
+
+  storeToken(token);
+}
+
 async function logoutSession(): Promise<void> {
   await fetch(resolveApiUrl("/auth/logout"), {
     method: "POST",
