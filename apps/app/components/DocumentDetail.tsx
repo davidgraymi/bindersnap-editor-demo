@@ -10,7 +10,10 @@ import {
   mergePullRequest,
   submitReview,
 } from "../../../packages/gitea-client/pullRequests";
-import { createDocTag, listDocTags } from "../../../packages/gitea-client/repos";
+import {
+  createDocTag,
+  listDocTags,
+} from "../../../packages/gitea-client/repos";
 import { UploadModal } from "./UploadModal";
 
 interface DocumentDetailProps {
@@ -173,7 +176,10 @@ export function DocumentDetail({
   ) {
     setPrActionStates((prev) => ({
       ...prev,
-      [pullNumber]: { ...(prev[pullNumber] ?? DEFAULT_PR_ACTION_STATE), ...update },
+      [pullNumber]: {
+        ...(prev[pullNumber] ?? DEFAULT_PR_ACTION_STATE),
+        ...update,
+      },
     }));
   }
 
@@ -186,6 +192,7 @@ export function DocumentDetail({
         repo,
         pullNumber,
         event: "APPROVE",
+        body: "",
       });
       updatePRActionState(pullNumber, { status: "idle" });
       await loadDocumentData();

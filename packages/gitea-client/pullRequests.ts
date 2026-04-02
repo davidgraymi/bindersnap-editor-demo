@@ -306,7 +306,7 @@ export async function submitReview(
   try {
     const requestBody: CreatePullReviewOptions = {
       event,
-      ...(body ? { body } : {}),
+      body: body ?? "",
     };
 
     const response = await client.repos.repoCreatePullReview(

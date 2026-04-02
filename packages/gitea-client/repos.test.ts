@@ -399,15 +399,11 @@ test("createDocTag calls repoCreateTag with zero-padded version name", async () 
   });
 
   expect(repoCreateTagMock).toHaveBeenCalledTimes(1);
-  expect(repoCreateTagMock).toHaveBeenCalledWith(
-    "alice",
-    "quarterly-report",
-    {
-      tag_name: "doc/v0004",
-      target: "main",
-      message: "Published version 0004",
-    },
-  );
+  expect(repoCreateTagMock).toHaveBeenCalledWith("alice", "quarterly-report", {
+    tag_name: "doc/v0004",
+    target: "main",
+    message: "Published version 0004",
+  });
   expect(tag.name).toBe("doc/v0004");
   expect(tag.version).toBe(4);
   expect(tag.sha).toBe("newsha123");
@@ -424,15 +420,11 @@ test("createDocTag zero-pads version numbers with fewer than 4 digits", async ()
     target: "abc123",
   });
 
-  expect(repoCreateTagMock).toHaveBeenCalledWith(
-    "alice",
-    "quarterly-report",
-    {
-      tag_name: "doc/v0001",
-      target: "abc123",
-      message: "Published version 0001",
-    },
-  );
+  expect(repoCreateTagMock).toHaveBeenCalledWith("alice", "quarterly-report", {
+    tag_name: "doc/v0001",
+    target: "abc123",
+    message: "Published version 0001",
+  });
 });
 
 test("createDocTag throws GiteaApiError on network failure", async () => {

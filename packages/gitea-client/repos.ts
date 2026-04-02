@@ -170,7 +170,9 @@ export interface CreateDocTagParams {
   target: string;
 }
 
-export async function createDocTag(params: CreateDocTagParams): Promise<DocTag> {
+export async function createDocTag(
+  params: CreateDocTagParams,
+): Promise<DocTag> {
   const { client, owner, repo, version, target } = params;
   const versionStr = version.toString().padStart(4, "0");
   const tagName = `doc/v${versionStr}`;
