@@ -1,6 +1,9 @@
-import type { Repository, Tag } from "gitea-js";
+import type { components } from "./spec/gitea";
 
-import { GiteaApiError, type GiteaClient } from "./client";
+import { unwrap, type GiteaClient } from "./client";
+
+type Repository = components["schemas"]["Repository"];
+type Tag = components["schemas"]["Tag"];
 
 export interface WorkspaceRepo {
   id: number;
@@ -16,72 +19,6 @@ export interface DocTag {
   version: number;
   sha: string;
   created: string;
-}
-
-function readErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  if (typeof error === "string" && error.trim() !== "") {
-    return error;
-  }
-
-  if (typeof error === "object" && error !== null) {
-    const responseLike = error as {
-      error?: unknown;
-      message?: unknown;
-      statusText?: unknown;
-    };
-
-    if (
-      typeof responseLike.message === "string" &&
-      responseLike.message.trim() !== ""
-    ) {
-      return responseLike.message;
-    }
-
-    if (
-      typeof responseLike.error === "string" &&
-      responseLike.error.trim() !== ""
-    ) {
-      return responseLike.error;
-    }
-
-    if (
-      typeof responseLike.error === "object" &&
-      responseLike.error !== null &&
-      "message" in responseLike.error &&
-      typeof (responseLike.error as { message?: unknown }).message === "string"
-    ) {
-      return (responseLike.error as { message: string }).message;
-    }
-
-    if (
-      typeof responseLike.statusText === "string" &&
-      responseLike.statusText.trim() !== ""
-    ) {
-      return responseLike.statusText;
-    }
-  }
-
-  return "Gitea request failed.";
-}
-
-function toGiteaApiError(error: unknown): GiteaApiError {
-  if (error instanceof GiteaApiError) {
-    return error;
-  }
-
-  const status =
-    typeof error === "object" && error !== null && "status" in error
-      ? Number((error as { status?: unknown }).status)
-      : 0;
-
-  return new GiteaApiError(
-    Number.isFinite(status) ? status : 0,
-    readErrorMessage(error),
-  );
 }
 
 function normalizeWorkspaceRepo(repo: Repository): WorkspaceRepo {
@@ -103,7 +40,7 @@ function parseDocTagVersion(tagName: string): number | null {
     return null;
   }
 
-  const version = Number.parseInt(match[1], 10);
+  const version = Number.parseInt(match[1] ?? "", 10);
   return Number.isFinite(version) && version > 0 ? version : null;
 }
 
@@ -126,15 +63,13 @@ function normalizeDocTag(tag: Tag): DocTag | null {
 export async function listWorkspaceRepos(
   client: GiteaClient,
 ): Promise<WorkspaceRepo[]> {
-  try {
-    const response = await client.repos.repoSearch({
-      limit: 100,
-    });
+  const result = await unwrap(
+    client.GET("/repos/search", {
+      params: { query: { limit: 100 } },
+    }),
+  );
 
-    return response.data.data?.map(normalizeWorkspaceRepo) ?? [];
-  } catch (error) {
-    throw toGiteaApiError(error);
-  }
+  return result.data?.map(normalizeWorkspaceRepo) ?? [];
 }
 
 export async function getLatestDocTag(
@@ -142,24 +77,25 @@ export async function getLatestDocTag(
   owner: string,
   repo: string,
 ): Promise<DocTag | null> {
-  try {
-    const response = await client.repos.repoListTags(owner, repo, {
-      limit: 100,
-    });
+  const tags = await unwrap(
+    client.GET("/repos/{owner}/{repo}/tags", {
+      params: {
+        path: { owner, repo },
+        query: { limit: 100 },
+      },
+    }),
+  );
 
-    const tags = response.data
-      .map(normalizeDocTag)
-      .filter((tag): tag is DocTag => tag !== null);
+  const docTags = tags
+    .map(normalizeDocTag)
+    .filter((tag): tag is DocTag => tag !== null);
 
-    if (tags.length === 0) {
-      return null;
-    }
-
-    tags.sort((a, b) => b.version - a.version);
-    return tags[0];
-  } catch (error) {
-    throw toGiteaApiError(error);
+  if (docTags.length === 0) {
+    return null;
   }
+
+  docTags.sort((a, b) => b.version - a.version);
+  return docTags[0] ?? null;
 }
 
 export async function listDocTags(
@@ -167,18 +103,19 @@ export async function listDocTags(
   owner: string,
   repo: string,
 ): Promise<DocTag[]> {
-  try {
-    const response = await client.repos.repoListTags(owner, repo, {
-      limit: 100,
-    });
+  const tags = await unwrap(
+    client.GET("/repos/{owner}/{repo}/tags", {
+      params: {
+        path: { owner, repo },
+        query: { limit: 100 },
+      },
+    }),
+  );
 
-    const tags = response.data
-      .map(normalizeDocTag)
-      .filter((tag): tag is DocTag => tag !== null);
+  const docTags = tags
+    .map(normalizeDocTag)
+    .filter((tag): tag is DocTag => tag !== null);
 
-    tags.sort((a, b) => b.version - a.version);
-    return tags;
-  } catch (error) {
-    throw toGiteaApiError(error);
-  }
+  docTags.sort((a, b) => b.version - a.version);
+  return docTags;
 }

@@ -87,7 +87,7 @@ function encodeAuth(auth: BasicAuth): string {
 }
 
 function fixtureUrl(name: string): URL {
-  return new URL(`../gitea-seed/documents/${name}`, import.meta.url);
+  return new URL(`documents/${name}`, import.meta.url);
 }
 
 async function fixtureText(name: string): Promise<string> {
@@ -767,7 +767,7 @@ async function runCli(): Promise<void> {
   console.log("==================================================");
   if (result.oauthClientId) {
     console.log(`OAUTH_CLIENT_ID=${result.oauthClientId}`);
-    console.log("Add to dev/.env:");
+    console.log("Add to .env:");
     console.log(`  BUN_PUBLIC_GITEA_OAUTH_CLIENT_ID=${result.oauthClientId}`);
   }
   if (result.token) {

@@ -1,6 +1,13 @@
-import type { User } from "gitea-js";
+import type { components } from "./spec/gitea";
 
-import { createGiteaClient, GiteaApiError, type GiteaClient } from "./client";
+import {
+  createGiteaClient,
+  GiteaApiError,
+  unwrap,
+  type GiteaClient,
+} from "./client";
+
+type User = components["schemas"]["User"];
 
 const TOKEN_STORAGE_KEY = "bindersnap_gitea_token";
 
@@ -37,83 +44,13 @@ function normalizeGiteaUser(user: User): GiteaUser {
   };
 }
 
-function readErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  if (typeof error === "string" && error.trim() !== "") {
-    return error;
-  }
-
-  if (typeof error === "object" && error !== null) {
-    const maybeResponse = error as {
-      error?: unknown;
-      message?: unknown;
-      statusText?: unknown;
-    };
-
-    if (
-      typeof maybeResponse.error === "string" &&
-      maybeResponse.error.trim() !== ""
-    ) {
-      return maybeResponse.error;
-    }
-
-    if (
-      typeof maybeResponse.message === "string" &&
-      maybeResponse.message.trim() !== ""
-    ) {
-      return maybeResponse.message;
-    }
-
-    if (
-      typeof maybeResponse.error === "object" &&
-      maybeResponse.error !== null &&
-      "message" in maybeResponse.error &&
-      typeof (maybeResponse.error as { message?: unknown }).message === "string"
-    ) {
-      return (maybeResponse.error as { message: string }).message;
-    }
-
-    if (
-      typeof maybeResponse.statusText === "string" &&
-      maybeResponse.statusText.trim() !== ""
-    ) {
-      return maybeResponse.statusText;
-    }
-  }
-
-  return "Gitea request failed.";
-}
-
-function toGiteaApiError(error: unknown): GiteaApiError {
-  if (error instanceof GiteaApiError) {
-    return error;
-  }
-
-  if (typeof error === "object" && error !== null && "status" in error) {
-    const status = Number((error as { status?: unknown }).status);
-    return new GiteaApiError(
-      Number.isFinite(status) ? status : 0,
-      readErrorMessage(error),
-    );
-  }
-
-  return new GiteaApiError(0, readErrorMessage(error));
-}
-
 export async function validateToken(
   baseUrl: string,
   token: string,
 ): Promise<GiteaUser> {
-  try {
-    const client = createGiteaClient(baseUrl, token);
-    const { data } = await client.user.userGetCurrent();
-    return normalizeGiteaUser(data);
-  } catch (error) {
-    throw toGiteaApiError(error);
-  }
+  const client = createGiteaClient(baseUrl, token);
+  const user = await unwrap(client.GET("/user"));
+  return normalizeGiteaUser(user);
 }
 
 export function storeToken(token: string): void {

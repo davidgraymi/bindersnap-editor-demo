@@ -5,15 +5,15 @@ import {
   getStoredToken,
   storeToken,
   validateToken,
-} from "../../packages/gitea-client/auth";
+} from "../packages/gitea-client/auth";
 import {
   fetchDocumentAtSha,
   listDocumentCommits,
-} from "../../packages/gitea-client/documents";
+} from "../packages/gitea-client/documents";
 import {
   type ApprovalState,
   getPullRequestForBranch,
-} from "../../packages/gitea-client/pullRequests";
+} from "../packages/gitea-client/pullRequests";
 import { seedDevStack } from "./seed";
 
 const GITEA_URL = process.env.VITE_GITEA_URL ?? "http://localhost:3000";
@@ -116,9 +116,9 @@ test.describe("Gitea service wrappers against the live dev stack", () => {
 
   test("createAuthenticatedClient reads the token from sessionStorage", async () => {
     const client = createAuthenticatedClient(GITEA_URL);
-    const { data: user } = await client.user.userGetCurrent();
+    const { data: user } = await client.GET("/user");
 
-    expect(user.login).toBe("alice");
+    expect(user?.login).toBe("alice");
   });
 
   test("listDocumentCommits and fetchDocumentAtSha read the seeded draft document", async () => {

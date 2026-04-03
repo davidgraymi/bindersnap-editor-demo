@@ -2,7 +2,7 @@ import { test, expect, type APIRequestContext } from "@playwright/test";
 import { isTokenValid, seedDevStack } from "./seed";
 
 // Integration smoke tests against the live dev stack.
-// Requires: docker compose up (dev/)
+// Requires: docker compose up
 // Optional: set VITE_GITEA_TOKEN to reuse an existing token.
 
 const TOKEN = process.env.VITE_GITEA_TOKEN ?? "";

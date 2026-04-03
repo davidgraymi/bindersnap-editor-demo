@@ -1,12 +1,9 @@
-import type {
-  CreatePullRequestOption,
-  CreatePullReviewOptions,
-  MergePullRequestOption,
-  PullRequest,
-  PullReview,
-} from "gitea-js";
+import type { components } from "./spec/gitea";
 
-import { GiteaApiError, type GiteaClient } from "./client";
+import { unwrap, type GiteaClient } from "./client";
+
+type PullRequest = components["schemas"]["PullRequest"];
+type PullReview = components["schemas"]["PullReview"];
 
 export type ApprovalState =
   | "working"
@@ -60,72 +57,6 @@ export interface ListPullRequestsParams {
   repo: string;
   state: "open" | "closed" | "all";
   page?: number;
-}
-
-function readErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  if (typeof error === "string" && error.trim() !== "") {
-    return error;
-  }
-
-  if (typeof error === "object" && error !== null) {
-    const responseLike = error as {
-      error?: unknown;
-      message?: unknown;
-      statusText?: unknown;
-    };
-
-    if (
-      typeof responseLike.message === "string" &&
-      responseLike.message.trim() !== ""
-    ) {
-      return responseLike.message;
-    }
-
-    if (
-      typeof responseLike.error === "string" &&
-      responseLike.error.trim() !== ""
-    ) {
-      return responseLike.error;
-    }
-
-    if (
-      typeof responseLike.error === "object" &&
-      responseLike.error !== null &&
-      "message" in responseLike.error &&
-      typeof (responseLike.error as { message?: unknown }).message === "string"
-    ) {
-      return (responseLike.error as { message: string }).message;
-    }
-
-    if (
-      typeof responseLike.statusText === "string" &&
-      responseLike.statusText.trim() !== ""
-    ) {
-      return responseLike.statusText;
-    }
-  }
-
-  return "Gitea request failed.";
-}
-
-function toGiteaApiError(error: unknown): GiteaApiError {
-  if (error instanceof GiteaApiError) {
-    return error;
-  }
-
-  const status =
-    typeof error === "object" && error !== null && "status" in error
-      ? Number((error as { status?: unknown }).status)
-      : 0;
-
-  return new GiteaApiError(
-    Number.isFinite(status) ? status : 0,
-    readErrorMessage(error),
-  );
 }
 
 function toApprovalStateFromReview(review: PullReview): ApprovalState | null {
@@ -219,19 +150,18 @@ async function listPullReviews(
   const limit = 100;
 
   for (let page = 1; page < 100; page += 1) {
-    const response = await client.repos.repoListPullReviews(
-      owner,
-      repo,
-      pullNumber,
-      {
-        limit,
-        page,
-      },
+    const reviews = await unwrap(
+      client.GET("/repos/{owner}/{repo}/pulls/{index}/reviews", {
+        params: {
+          path: { owner, repo, index: pullNumber },
+          query: { limit, page },
+        },
+      }),
     );
 
-    allReviews.push(...response.data);
+    allReviews.push(...reviews);
 
-    if (response.data.length < limit) {
+    if (reviews.length < limit) {
       break;
     }
   }
@@ -244,28 +174,18 @@ export async function createPullRequest(
 ): Promise<PullRequestWithApprovalState> {
   const { client, owner, repo, title, head, base, body } = params;
 
-  try {
-    const requestBody: CreatePullRequestOption = {
-      title,
-      head,
-      base,
-      body: body ?? "",
-    };
+  const pullRequest = await unwrap(
+    client.POST("/repos/{owner}/{repo}/pulls", {
+      params: { path: { owner, repo } },
+      body: { title, head, base, body: body ?? "" },
+    }),
+  );
 
-    const response = await client.repos.repoCreatePullRequest(
-      owner,
-      repo,
-      requestBody,
-    );
-    const pullRequest = response.data;
-    const reviews = pullRequest.number
-      ? await listPullReviews(client, owner, repo, pullRequest.number)
-      : [];
+  const reviews = pullRequest.number
+    ? await listPullReviews(client, owner, repo, pullRequest.number)
+    : [];
 
-    return withApprovalState(pullRequest, reviews);
-  } catch (error) {
-    throw toGiteaApiError(error);
-  }
+  return withApprovalState(pullRequest, reviews);
 }
 
 export async function getPullRequestForBranch(
@@ -273,29 +193,28 @@ export async function getPullRequestForBranch(
 ): Promise<PullRequestWithApprovalState | null> {
   const { client, owner, repo, branch } = params;
 
-  try {
-    const response = await client.repos.repoListPullRequests(owner, repo, {
-      state: "all",
-      head: `${owner}:${branch}`,
-    });
+  const pullRequests = await unwrap(
+    client.GET("/repos/{owner}/{repo}/pulls", {
+      params: {
+        path: { owner, repo },
+        query: { state: "all", head: `${owner}:${branch}` },
+      },
+    }),
+  );
 
-    const pullRequests = response.data;
-    const pullRequest = selectPullRequestForBranch(pullRequests, branch);
+  const pullRequest = selectPullRequestForBranch(pullRequests, branch);
 
-    if (!pullRequest || !pullRequest.number) {
-      return null;
-    }
-
-    const reviews = await listPullReviews(
-      client,
-      owner,
-      repo,
-      pullRequest.number,
-    );
-    return withApprovalState(pullRequest, reviews);
-  } catch (error) {
-    throw toGiteaApiError(error);
+  if (!pullRequest || !pullRequest.number) {
+    return null;
   }
+
+  const reviews = await listPullReviews(
+    client,
+    owner,
+    repo,
+    pullRequest.number,
+  );
+  return withApprovalState(pullRequest, reviews);
 }
 
 export async function submitReview(
@@ -303,22 +222,12 @@ export async function submitReview(
 ): Promise<PullReview> {
   const { client, owner, repo, pullNumber, event, body } = params;
 
-  try {
-    const requestBody: CreatePullReviewOptions = {
-      event,
-      ...(body ? { body } : {}),
-    };
-
-    const response = await client.repos.repoCreatePullReview(
-      owner,
-      repo,
-      pullNumber,
-      requestBody,
-    );
-    return response.data;
-  } catch (error) {
-    throw toGiteaApiError(error);
-  }
+  return unwrap(
+    client.POST("/repos/{owner}/{repo}/pulls/{index}/reviews", {
+      params: { path: { owner, repo, index: pullNumber } },
+      body: { event, ...(body ? { body } : {}) },
+    }),
+  );
 }
 
 export async function mergePullRequest(
@@ -326,21 +235,15 @@ export async function mergePullRequest(
 ): Promise<void> {
   const { client, owner, repo, pullNumber, mergeStyle, message } = params;
 
-  try {
-    const requestBody: MergePullRequestOption = {
-      Do: mergeStyle,
-      ...(message ? { MergeMessageField: message } : {}),
-    };
-
-    await client.repos.repoMergePullRequest(
-      owner,
-      repo,
-      pullNumber,
-      requestBody,
-    );
-  } catch (error) {
-    throw toGiteaApiError(error);
-  }
+  await unwrap(
+    client.POST("/repos/{owner}/{repo}/pulls/{index}/merge", {
+      params: { path: { owner, repo, index: pullNumber } },
+      body: {
+        Do: mergeStyle,
+        ...(message ? { MergeMessageField: message } : {}),
+      },
+    }),
+  );
 }
 
 export async function listPullRequests(
@@ -348,23 +251,23 @@ export async function listPullRequests(
 ): Promise<PullRequestWithApprovalState[]> {
   const { client, owner, repo, state, page } = params;
 
-  try {
-    const response = await client.repos.repoListPullRequests(owner, repo, {
-      state,
-      page,
-    });
+  const pullRequests = await unwrap(
+    client.GET("/repos/{owner}/{repo}/pulls", {
+      params: {
+        path: { owner, repo },
+        query: { state, page },
+      },
+    }),
+  );
 
-    const mapped = await Promise.all(
-      response.data.map(async (pullRequest) => {
-        const reviews = pullRequest.number
-          ? await listPullReviews(client, owner, repo, pullRequest.number)
-          : [];
-        return withApprovalState(pullRequest, reviews);
-      }),
-    );
+  const mapped = await Promise.all(
+    pullRequests.map(async (pullRequest) => {
+      const reviews = pullRequest.number
+        ? await listPullReviews(client, owner, repo, pullRequest.number)
+        : [];
+      return withApprovalState(pullRequest, reviews);
+    }),
+  );
 
-    return mapped;
-  } catch (error) {
-    throw toGiteaApiError(error);
-  }
+  return mapped;
 }
