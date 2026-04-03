@@ -42,7 +42,7 @@ export interface SubmitReviewParams {
   owner: string;
   repo: string;
   pullNumber: number;
-  event: "APPROVE" | "REQUEST_CHANGES" | "COMMENT";
+  event: "APPROVE" | "REQUEST_CHANGES" | "COMMENT" | "approve";
   body?: string;
 }
 
@@ -305,14 +305,22 @@ export async function submitReview(
   const { client, owner, repo, pullNumber, event, body } = params;
 
   try {
-    // Step 1: create a pending review (no event/body required at this stage)
-    const createBody: CreatePullReviewOptions = {};
+    // const createBody: CreatePullReviewOptions = {
+    //   event,
+    //   body: body && body.trim() !== "" ? body : "APPROVED",
+    // };
     const createResponse = await client.repos.repoCreatePullReview(
       owner,
       repo,
       pullNumber,
-      createBody,
+      {},
     );
+
+    console.log(
+      "[repoCreatePullReview response]",
+      JSON.stringify(createResponse, null, 2),
+    );
+
     const reviewId = createResponse.data.id;
     if (!reviewId) {
       throw new GiteaApiError(0, "Gitea did not return a review ID.");
@@ -322,8 +330,9 @@ export async function submitReview(
     // Gitea requires a non-empty body for APPROVE/REQUEST_CHANGES events.
     // A single space satisfies the length check without rendering as a comment.
     const submitBody: SubmitPullReviewOptions = {
-      event,
-      body: body && body.trim() !== "" ? body : " ",
+      event: event.toLowerCase() as any,
+      // Use a more substantial fallback if body is missing
+      body: body && body.trim() !== "" ? body : "Review submitted via API",
     };
     const submitResponse = await client.repos.repoSubmitPullReview(
       owner,
@@ -332,10 +341,23 @@ export async function submitReview(
       reviewId,
       submitBody,
     );
+    console.log(
+      "[repoSubmitPullReview response]",
+      JSON.stringify(submitResponse),
+    );
 
     return submitResponse.data;
   } catch (error) {
-    throw toGiteaApiError(error);
+    console.error("--- RAW GITEA ERROR START ---");
+    if (error.response) {
+      // This is the gold mine: The actual message from the Gitea Server
+      console.error("Status:", error.response.status);
+      console.error("Data:", JSON.stringify(error.response.data, null, 2));
+    } else {
+      console.error("No response received. Message:", error.message);
+    }
+    console.error("--- RAW GITEA ERROR END ---");
+    throw error;
   }
 }
 

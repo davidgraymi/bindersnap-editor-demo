@@ -13,12 +13,16 @@ import {
 import {
   type ApprovalState,
   getPullRequestForBranch,
+  submitReview,
 } from "../../packages/gitea-client/pullRequests";
+import { createGiteaClient } from "../../packages/gitea-client/client";
 import { seedDevStack } from "./seed";
 
 const GITEA_URL = process.env.VITE_GITEA_URL ?? "http://localhost:3000";
 const GITEA_ADMIN_USER = process.env.GITEA_ADMIN_USER ?? "alice";
 const GITEA_ADMIN_PASS = process.env.GITEA_ADMIN_PASS ?? "bindersnap-dev";
+const GITEA_BOB_USER = process.env.GITEA_BOB_USER ?? "bob";
+const GITEA_BOB_PASS = process.env.GITEA_BOB_PASS ?? "bindersnap-dev";
 const TOKEN = process.env.VITE_GITEA_TOKEN ?? "";
 
 function createMemoryStorage(): Storage {
@@ -159,5 +163,56 @@ test.describe("Gitea service wrappers against the live dev stack", () => {
     const approvalState: ApprovalState = pullRequest!.approvalState;
     expect(approvalState).toBe("changes_requested");
     expect(pullRequest?.number).toBeGreaterThan(0);
+  });
+
+  test("submitReview submits an APPROVE review and returns state APPROVE", async () => {
+    // Bob is the collaborator; alice cannot approve her own PR.
+    // Mint a short-lived token for bob via basic auth.
+    const tokenName = `bindersnap-test-bob-${Date.now()}`;
+    const tokenResponse = await fetch(
+      `${GITEA_URL}/api/v1/users/${GITEA_BOB_USER}/tokens`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Basic ${btoa(`${GITEA_BOB_USER}:${GITEA_BOB_PASS}`)}`,
+        },
+        body: JSON.stringify({ name: tokenName, scopes: ["all"] }),
+      },
+    );
+    expect(tokenResponse.ok).toBe(true);
+    const { sha1: bobToken } = (await tokenResponse.json()) as {
+      sha1: string;
+    };
+    expect(bobToken).toBeTruthy();
+
+    const bobClient = createGiteaClient(GITEA_URL, bobToken);
+
+    const pullRequest = await getPullRequestForBranch({
+      client: createAuthenticatedClient(GITEA_URL),
+      owner: "alice",
+      repo: "vendor-contracts",
+      branch: "feature/acme-renewal",
+    });
+
+    console.log(
+      "[getPullRequestForBranch response]",
+      JSON.stringify(pullRequest, null, 2),
+    );
+
+    expect(pullRequest).not.toBeNull();
+    expect(pullRequest?.number).toBeGreaterThan(0);
+
+    const review = await submitReview({
+      client: bobClient,
+      owner: "alice",
+      repo: "vendor-contracts",
+      pullNumber: pullRequest!.number!,
+      event: "approve",
+    });
+
+    console.log("[submitReview response]", JSON.stringify(review, null, 2));
+
+    expect(review.state?.toUpperCase()).toMatch(/^APPROVE/);
   });
 });

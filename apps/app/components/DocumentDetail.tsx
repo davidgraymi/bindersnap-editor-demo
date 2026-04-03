@@ -243,7 +243,7 @@ export function DocumentDetail({
         repo,
         pullNumber,
         event: "APPROVE",
-        body: " ",
+        body: "APPROVED",
       });
       updatePRActionState(pullNumber, { status: "idle" });
       await loadDocumentData();
