@@ -19,6 +19,7 @@
     "dev:landing": "APP_TARGET=landing bun --hot server.ts",
     "down": "docker compose down -v --remove-orphans",
     "format": "bunx prettier --write \"**/*.{js,ts,jsx,tsx,html,css,json,yaml,md}\" --ignore-path .gitignore",
+    "generate:api": "bun run scripts/generate-gitea-api.ts",
     "lighthouse": "bun run build:landing && sh -c 'python3 -m http.server 4173 --directory dist/landing >/dev/null 2>&1 & SERVER_PID=$!; sleep 1; bunx lighthouse http://localhost:4173 --output=json --output-path=./lighthouse.json --quiet --chrome-flags=\"--headless --no-sandbox --disable-gpu\" --no-enable-error-reporting; kill $SERVER_PID' && bun run summarize",
     "serve": "bun run serve:app",
     "serve:app": "NODE_ENV=production bun server.ts",
@@ -31,8 +32,7 @@
     "test:app": "bun test apps/app packages/gitea-client",
     "test:landing": "bun test apps/landing packages/editor packages/utils",
     "test:unit": "bun test",
-    "test:integration": "bunx playwright test --config=tests/playwright.config.ts",
-    "generate:api": "bun run scripts/generate-gitea-api.ts",
+    "test:integration": "bunx playwright test --config=playwright.config.ts",
     "up": "docker compose up --build"
   },
   "dependencies": {

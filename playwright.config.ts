@@ -5,7 +5,7 @@ const baseURL =
   process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${APP_PORT}`;
 
 export default defineConfig({
-  testDir: "./",
+  testDir: "./tests/",
   testMatch: "**/*.pw.ts",
   timeout: 60_000,
   retries: process.env.CI ? 2 : 1,
@@ -13,8 +13,8 @@ export default defineConfig({
   // globalSetup starts the Docker Compose stack before any test runs.
   // globalTeardown shuts it down afterwards.
   // Set SKIP_STACK=1 to bypass both (use an already-running `bun run up` stack).
-  globalSetup: "./global-setup.ts",
-  globalTeardown: "./global-teardown.ts",
+  globalSetup: "tests/global-setup.ts",
+  globalTeardown: "tests/global-teardown.ts",
 
   use: {
     baseURL,
@@ -26,14 +26,14 @@ export default defineConfig({
 
   // Write all artefacts under the repo-root test-results/ directory so they
   // are easy to find and already gitignored.
-  outputDir: "../test-results/playwright",
+  outputDir: "./test-results/playwright",
 
   reporter: [
     ["list"],
     [
       "html",
       {
-        outputFolder: "../test-results/playwright-report",
+        outputFolder: "./test-results/playwright-report",
         open: "never",
       },
     ],
