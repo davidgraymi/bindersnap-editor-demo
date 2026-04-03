@@ -31,7 +31,7 @@
     "test:app": "bun test apps/app packages/gitea-client",
     "test:landing": "bun test apps/landing packages/editor packages/utils",
     "test:unit": "bun test",
-    "test:integration": "bash scripts/test-integration.sh",
+    "test:integration": "bunx playwright test --config=tests/playwright.config.ts",
     "generate:api": "bun run scripts/generate-gitea-api.ts",
     "up": "docker compose up --build"
   },
