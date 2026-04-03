@@ -1,2 +1,21 @@
 [serve.static]
 env = "BUN_PUBLIC_*"
+
+# ─── Unit test configuration ─────────────────────────────────────────────────
+# Applied whenever `bun test` is invoked, including the scoped commands
+# `bun run test:app` and `bun run test:landing`.
+#
+# Integration/E2E tests run through Playwright (`bun run test:integration`)
+# and are intentionally not covered here.
+
+[test]
+# Per-test timeout in milliseconds. Keeps slow tests from blocking the suite.
+timeout = 10000
+
+# Bail after this many test failures so you get fast feedback on broken builds.
+bail = 0
+
+# Collect coverage data when running `bun test --coverage`.
+# Not enabled by default to keep the plain `bun test` invocation fast.
+# Use `bun test --coverage` locally or in CI to generate the report.
+smol = false

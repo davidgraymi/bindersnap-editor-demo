@@ -1,147 +1,116 @@
-import { test, expect, type APIRequestContext } from "@playwright/test";
-import { isTokenValid, seedDevStack } from "./seed";
+/**
+ * Smoke tests — basic stack health and app-shell route availability.
+ *
+ * These tests verify that the Docker Compose stack is up and seeded correctly,
+ * and that the two app routes (landing, app shell) respond as expected.
+ *
+ * Requires: docker compose up (or `bun run test:integration`).
+ */
 
-// Integration smoke tests against the live dev stack.
-// Requires: docker compose up
-// Optional: set VITE_GITEA_TOKEN to reuse an existing token.
+import { test, expect } from "@playwright/test";
 
-const TOKEN = process.env.VITE_GITEA_TOKEN ?? "";
-const GITEA_URL = process.env.VITE_GITEA_URL ?? "http://localhost:3000";
-const GITEA_ADMIN_USER = process.env.GITEA_ADMIN_USER ?? "alice";
-const GITEA_ADMIN_PASS = process.env.GITEA_ADMIN_PASS ?? "bindersnap-dev";
-let AUTH_HEADERS: Record<string, string> = {};
+import {
+  getPullRequestForBranch,
+} from "../packages/gitea-client/pullRequests";
 
-async function waitForSeededPullRequest(
-  request: APIRequestContext,
-): Promise<void> {
-  for (let attempt = 0; attempt < 30; attempt += 1) {
-    const pullsRes = await request.get(
-      `${GITEA_URL}/api/v1/repos/alice/quarterly-report/pulls?state=open`,
-      {
-        headers: AUTH_HEADERS,
-      },
-    );
+import {
+  APP_BASE_URL,
+  GITEA_ADMIN_USER,
+  GITEA_ADMIN_PASS,
+  GITEA_URL,
+  installMemorySessionStorage,
+  makeClient,
+  OWNER,
+  pollUntil,
+  REPO,
+  resolveAndStoreToken,
+  SEEDED_BRANCH,
+} from "./helpers";
 
-    if (pullsRes.status() === 200) {
-      const pulls = (await pullsRes.json()) as Array<{
-        number: number;
-        head?: { ref?: string };
-      }>;
-      const pr = pulls.find(
-        (item) => item.head?.ref === "feature/q2-amendments",
-      );
+import { seedDevStack } from "./seed";
 
-      if (pr) {
-        const reviewsRes = await request.get(
-          `${GITEA_URL}/api/v1/repos/alice/quarterly-report/pulls/${pr.number}/reviews`,
-          { headers: AUTH_HEADERS },
-        );
+// ---------------------------------------------------------------------------
+// Suite setup — seed the stack and wait for the fixture PR to stabilise.
+// ---------------------------------------------------------------------------
 
-        if (reviewsRes.status() === 200) {
-          const reviews = (await reviewsRes.json()) as Array<{
-            user?: { login?: string };
-            state?: string;
-            body?: string;
-          }>;
+let authHeaders: Record<string, string> = {};
 
-          const hasRequestedChanges = reviews.some(
-            (item) =>
-              item.user?.login === "bob" &&
-              item.body ===
-                "Section 4.2 needs to reference the updated GDPR guidance from the January memo." &&
-              (item.state === "REQUEST_CHANGES" ||
-                item.state === "CHANGES_REQUESTED"),
-          );
+test.beforeAll(async () => {
+  installMemorySessionStorage();
 
-          if (hasRequestedChanges) {
-            return;
-          }
-        }
-      }
-    }
+  const token = await resolveAndStoreToken("bindersnap-smoke");
+  authHeaders = { Authorization: `token ${token}` };
 
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-  }
+  // Block until the seeded PR carries the expected "changes_requested" state
+  // so that fixture-dependent assertions do not race against Gitea indexing.
+  await pollUntil(async () => {
+    const pr = await getPullRequestForBranch({
+      client: makeClient(),
+      owner: OWNER,
+      repo: REPO,
+      branch: SEEDED_BRANCH,
+    });
+    return pr?.approvalState === "changes_requested";
+  }, "seeded pull request to reach changes_requested state");
+});
 
-  throw new Error("Timed out waiting for seeded PR and review state");
-}
+// ---------------------------------------------------------------------------
+// Gitea dev stack health
+// ---------------------------------------------------------------------------
 
 test.describe("Gitea dev stack health", () => {
-  test.beforeAll(async ({ request }) => {
-    const preferredToken = TOKEN.trim();
-    const usePreferredToken =
-      preferredToken.length > 0 &&
-      (await isTokenValid(GITEA_URL, preferredToken));
-
-    const seedResult = await seedDevStack({
-      baseUrl: GITEA_URL,
-      adminUser: GITEA_ADMIN_USER,
-      adminPass: GITEA_ADMIN_PASS,
-      createToken: !usePreferredToken,
-      tokenNamePrefix: "bindersnap-test",
-      log: () => {
-        // Keep Playwright output focused on test results.
-      },
-    });
-
-    const resolvedToken = usePreferredToken ? preferredToken : seedResult.token;
-    if (!resolvedToken) {
-      throw new Error(
-        "Unable to resolve a valid Gitea token. Set VITE_GITEA_TOKEN or check seed/admin credentials.",
-      );
-    }
-    AUTH_HEADERS = { Authorization: `token ${resolvedToken}` };
-
-    await waitForSeededPullRequest(request);
-  });
-
-  test("Gitea API is reachable", async ({ request }) => {
+  test("Gitea API settings endpoint is reachable", async ({ request }) => {
     const res = await request.get(`${GITEA_URL}/api/v1/settings/api`);
     expect(res.status()).toBe(200);
   });
 
-  test("Alice token is valid", async ({ request }) => {
+  test("alice token authenticates successfully against /api/v1/user", async ({
+    request,
+  }) => {
     const res = await request.get(`${GITEA_URL}/api/v1/user`, {
-      headers: AUTH_HEADERS,
+      headers: authHeaders,
     });
     expect(res.status()).toBe(200);
-    const user = await res.json();
+    const user = (await res.json()) as { login?: string };
     expect(user.login).toBe("alice");
   });
 
-  test("Bob has collaborator access", async ({ request }) => {
+  test("bob has write collaborator access on the seeded repository", async ({
+    request,
+  }) => {
     const res = await request.get(
       `${GITEA_URL}/api/v1/repos/alice/quarterly-report/collaborators/bob/permission`,
-      {
-        headers: AUTH_HEADERS,
-      },
+      { headers: authHeaders },
     );
     expect(res.status()).toBe(200);
-    const permission = await res.json();
-    expect(permission.permission).toBe("write");
+    const payload = (await res.json()) as { permission?: string };
+    expect(payload.permission).toBe("write");
   });
 
-  test("Seeded repo exists with documents", async ({ request }) => {
+  test("seeded repository contains the three expected document files", async ({
+    request,
+  }) => {
     const res = await request.get(
       `${GITEA_URL}/api/v1/repos/alice/quarterly-report/contents/documents`,
-      { headers: AUTH_HEADERS },
+      { headers: authHeaders },
     );
     expect(res.status()).toBe(200);
-    const files = await res.json();
-    const names = files.map((f: { name: string }) => f.name);
+    const files = (await res.json()) as Array<{ name: string }>;
+    const names = files.map((f) => f.name);
     expect(names).toContain("draft.json");
     expect(names).toContain("in-review.json");
     expect(names).toContain("changes-requested.json");
   });
 
-  test("Feature PR and review are seeded", async ({ request }) => {
+  test("seeded PR from feature/q2-amendments has bob's changes_requested review", async ({
+    request,
+  }) => {
     const pullsRes = await request.get(
       `${GITEA_URL}/api/v1/repos/alice/quarterly-report/pulls?state=open`,
-      {
-        headers: AUTH_HEADERS,
-      },
+      { headers: authHeaders },
     );
     expect(pullsRes.status()).toBe(200);
+
     const pulls = (await pullsRes.json()) as Array<{
       number: number;
       title: string;
@@ -149,16 +118,17 @@ test.describe("Gitea dev stack health", () => {
       base?: { ref?: string };
     }>;
 
-    const pr = pulls.find((item) => item.head?.ref === "feature/q2-amendments");
+    const pr = pulls.find((p) => p.head?.ref === "feature/q2-amendments");
     expect(pr).toBeTruthy();
-    expect(pr?.title).toBe("Q2 amendments — GDPR section update");
-    expect(pr?.base?.ref).toBe("main");
+    expect(pr!.title).toBe("Q2 amendments — GDPR section update");
+    expect(pr!.base?.ref).toBe("main");
 
     const reviewsRes = await request.get(
       `${GITEA_URL}/api/v1/repos/alice/quarterly-report/pulls/${pr!.number}/reviews`,
-      { headers: AUTH_HEADERS },
+      { headers: authHeaders },
     );
     expect(reviewsRes.status()).toBe(200);
+
     const reviews = (await reviewsRes.json()) as Array<{
       user?: { login?: string };
       state?: string;
@@ -166,19 +136,36 @@ test.describe("Gitea dev stack health", () => {
     }>;
 
     const review = reviews.find(
-      (item) =>
-        item.user?.login === "bob" &&
-        item.body ===
+      (r) =>
+        r.user?.login === "bob" &&
+        r.body ===
           "Section 4.2 needs to reference the updated GDPR guidance from the January memo." &&
-        (item.state === "REQUEST_CHANGES" ||
-          item.state === "CHANGES_REQUESTED"),
+        (r.state === "REQUEST_CHANGES" || r.state === "CHANGES_REQUESTED"),
     );
     expect(review).toBeTruthy();
   });
+
+  test("seedDevStack is idempotent — re-running does not throw or duplicate data", async () => {
+    await expect(
+      seedDevStack({
+        baseUrl: GITEA_URL,
+        adminUser: GITEA_ADMIN_USER,
+        adminPass: GITEA_ADMIN_PASS,
+        createToken: false,
+        log: () => undefined,
+      }),
+    ).resolves.not.toThrow();
+  });
 });
 
-test.describe("App shell", () => {
-  test("Landing route loads", async ({ page }) => {
+// ---------------------------------------------------------------------------
+// App shell routes
+// ---------------------------------------------------------------------------
+
+test.describe("app shell routes", () => {
+  test("landing route serves a page titled 'Finally Kill the Email Approval Chain'", async ({
+    page,
+  }) => {
     await page.goto("/landing");
     await expect(page).toHaveTitle(/Finally Kill the Email Approval Chain/);
     await expect(
@@ -186,7 +173,9 @@ test.describe("App shell", () => {
     ).toBeVisible();
   });
 
-  test("Authenticated app route loads", async ({ page }) => {
+  test("/app route either shows the workspace heading or redirects to the login page", async ({
+    page,
+  }) => {
     await page.goto("/app");
 
     const appHeading = page.getByRole("heading", {
@@ -196,17 +185,16 @@ test.describe("App shell", () => {
       name: "Step into the clean version.",
     });
 
+    // Wait until one of the two states is resolved.
     await expect
       .poll(
         async () => {
           if (await appHeading.isVisible().catch(() => false)) {
             return "app";
           }
-
           if (await loginHeading.isVisible().catch(() => false)) {
             return "login";
           }
-
           return "pending";
         },
         { timeout: 10_000 },
@@ -214,9 +202,11 @@ test.describe("App shell", () => {
       .not.toBe("pending");
 
     if (await appHeading.isVisible().catch(() => false)) {
+      // Already authenticated — nothing more to check.
       return;
     }
 
+    // Unauthenticated path: verify the login form is present.
     await expect(page).toHaveURL(/\/login$/);
     await expect(loginHeading).toBeVisible();
     await expect(page.getByLabel("Username")).toBeVisible();
