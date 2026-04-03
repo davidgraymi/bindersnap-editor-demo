@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-COMPOSE_FILE="$ROOT_DIR/dev/docker-compose.yml"
+COMPOSE_FILE="$ROOT_DIR/docker-compose.yml"
 APP_PORT="${APP_PORT:-5173}"
 APP_BASE_URL="http://localhost:${APP_PORT}"
 
@@ -44,4 +44,4 @@ else
   exit 1
 fi
 
-APP_PORT="$APP_PORT" PLAYWRIGHT_BASE_URL="$APP_BASE_URL" "${PLAYWRIGHT_RUNNER[@]}" test --config=dev/tests/playwright.config.ts
+APP_PORT="$APP_PORT" PLAYWRIGHT_BASE_URL="$APP_BASE_URL" "${PLAYWRIGHT_RUNNER[@]}" test --config=tests/playwright.config.ts

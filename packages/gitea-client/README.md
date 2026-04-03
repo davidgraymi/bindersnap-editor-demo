@@ -27,4 +27,4 @@ The real app (`src/app/`) creates an authenticated client once on login and pass
 
 ## Testing
 
-Unit tests live alongside each module as `*.test.ts`. Tests use mocked `openapi-fetch` responses — they do **not** require a live Gitea instance. For real integration tests against a live Gitea, see `dev/tests/`.
+Unit tests live alongside each module as `*.test.ts`. Tests use mocked `openapi-fetch` responses — they do **not** require a live Gitea instance. For real integration tests against a live Gitea, see `tests/`.

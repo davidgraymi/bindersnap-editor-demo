@@ -5,15 +5,15 @@ import {
   getStoredToken,
   storeToken,
   validateToken,
-} from "../../packages/gitea-client/auth";
+} from "../packages/gitea-client/auth";
 import {
   fetchDocumentAtSha,
   listDocumentCommits,
-} from "../../packages/gitea-client/documents";
+} from "../packages/gitea-client/documents";
 import {
   type ApprovalState,
   getPullRequestForBranch,
-} from "../../packages/gitea-client/pullRequests";
+} from "../packages/gitea-client/pullRequests";
 import { seedDevStack } from "./seed";
 
 const GITEA_URL = process.env.VITE_GITEA_URL ?? "http://localhost:3000";

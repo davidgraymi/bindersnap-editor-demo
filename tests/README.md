@@ -1,4 +1,4 @@
-# `dev/` — Local Development Stack
+# `tests/` — Integration Test Stack
 
 Everything needed to run the **full Bindersnap target architecture locally** for development and integration testing.
 
@@ -13,7 +13,6 @@ Everything needed to run the **full Bindersnap target architecture locally** for
 ## Quick start
 
 ```bash
-cd dev
 docker compose up
 ```
 
@@ -33,7 +32,7 @@ upstream Gitea tokens server-side.
 
 Integration tests no longer require manual token copy/paste; they seed data and
 mint their own test token for direct Gitea API assertions.
-You can still copy `dev/.env.example` to `dev/.env` for local overrides.
+You can still copy `tests/.env.example` to `tests/.env` for local overrides.
 
 ## Re-seeding
 
@@ -55,7 +54,7 @@ bun run test:integration
 This command manages the stack lifecycle for you (`down -v`, `up --build -d`,
 test run, `down -v`).
 
-Tests live in `dev/tests/`. They run against real Gitea — no mocking. See `dev/tests/README.md`.
+Tests live in `tests/`. They run against real Gitea — no mocking. See `tests/README.md`.
 
 ## Structure
 
@@ -76,4 +75,4 @@ tests/
 
 ## This is not production
 
-`dev/` is a developer tool. It is never deployed. The Docker Compose config uses insecure defaults (fixed passwords, no TLS) that are intentional for local speed. Do not use this config as a basis for any production deployment.
+`tests/` is a developer tool. It is never deployed. The Docker Compose config uses insecure defaults (fixed passwords, no TLS) that are intentional for local speed. Do not use this config as a basis for any production deployment.

@@ -1,7 +1,10 @@
 # Bindersnap local development stack
 # Run: docker compose up
-# Copy dev/.env.example to dev/.env before starting the stack.
-# See dev/README.md for full usage.
+# Copy tests/.env.example to .env before starting the stack.
+# See tests/README.md for full usage.
+# This is a developer tool. It is never deployed. The Docker Compose config
+# uses insecure defaults (fixed passwords, no TLS) that are intentional for
+# local speed. Do not use this config as a basis for any production deployment.
 
 services:
   gitea-init:
@@ -51,14 +54,14 @@ services:
         condition: service_healthy
     working_dir: /workspace
     volumes:
-      - ./:/workspace/dev:ro
-    command: ["bun", "dev/tests/seed.ts"]
+      - ./:/workspace:ro
+    command: ["bun", "tests/seed.ts"]
     environment:
       - GITEA_URL=http://gitea:3000
 
   hocuspocus:
     build:
-      context: ..
+      context: .
       dockerfile: services/hocuspocus/Dockerfile
     container_name: bindersnap-hocuspocus
     ports:
@@ -90,13 +93,13 @@ services:
     ports:
       - "${API_PORT:-8787}:${API_PORT:-8787}"
     volumes:
-      - ..:/app
+      - .:/app
       - app-node-modules:/app/node_modules
 
   app:
     build:
-      context: ..
-      dockerfile: dev/app/Dockerfile
+      context: .
+      dockerfile: Dockerfile
       args:
         APP_PORT: ${APP_PORT:-5173}
     container_name: bindersnap-app
@@ -125,7 +128,7 @@ services:
     ports:
       - "${APP_PORT:-5173}:${APP_PORT:-5173}"
     volumes:
-      - ..:/app
+      - .:/app
       - app-node-modules:/app/node_modules
 
 volumes:
