@@ -79,16 +79,26 @@ tests/
   playwright.config.ts      — Playwright configuration
   global-setup.ts           — starts the Docker Compose stack before tests
   global-teardown.ts        — tears down the stack after tests
-  seed.ts                   — shared TypeScript seeding workflow
-  smoke.pw.ts               — basic stack health + app shell smoke tests
-  api-auth.pw.ts            — API credential auth flow tests
-  pkce-oauth.pw.ts          — PKCE OAuth2 app registration tests
-  gitea-services.pw.ts      — gitea-client service wrapper integration tests
+  seed.ts                   — shared TypeScript seeding workflow (do not edit lightly)
+  helpers.ts                — shared constants, createMemoryStorage, makeClient,
+                              pollUntil, resolveAndStoreToken — imported by all *.pw.ts
+  smoke.pw.ts               — stack health checks + app shell route smoke tests
+  pkce-oauth.pw.ts          — PKCE OAuth2 app registration and SPA route tests
+  gitea-services.pw.ts      — gitea-client integration tests (auth, documents,
+                              pull requests, repos, uploads)
   documents/
     draft.json              — ProseMirror JSON fixture: working draft
     in-review.json          — ProseMirror JSON fixture: open PR, awaiting review
     changes-requested.json  — ProseMirror JSON fixture: PR with changes requested
 ```
+
+### Why there is no api-auth.pw.ts
+
+The project architecture is a pure SPA — `apps/app/` communicates directly with
+Gitea via a bearer token held in `sessionStorage`. There is no BFF, no proxy, and
+no session-cookie endpoint. A credential-auth API test file would test a surface
+that does not exist in this architecture and was removed to avoid misleading
+contributors. See `AGENTS.md` architecture decision #1.
 
 ## This is not production
 

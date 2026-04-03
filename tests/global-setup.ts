@@ -15,9 +15,11 @@
 
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const ROOT = resolve(import.meta.dir, "..");
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const ROOT = resolve(__dirname, "..");
 const COMPOSE_FILE = resolve(ROOT, "docker-compose.yml");
 const APP_PORT = process.env.APP_PORT ?? "5173";
 const APP_BASE_URL = `http://localhost:${APP_PORT}`;
