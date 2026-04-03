@@ -5,7 +5,9 @@ import type { GiteaClient } from "./client";
 
 type PullRequest = components["schemas"]["PullRequest"];
 // Use partial types for test fixtures — generated types require many fields
-type TestPullReview = Partial<components["schemas"]["PullReview"]>;
+type TestPullReview = Partial<Omit<components["schemas"]["PullReview"], "user">> & {
+  user?: Partial<components["schemas"]["User"]>;
+};
 
 /**
  * Build a mock GiteaClient (openapi-fetch style) where GET and POST
@@ -99,7 +101,7 @@ const defaultReviews: Record<number, TestPullReview[]> = {
   3: [
     {
       id: 100,
-      state: "APPROVED",
+      state: "APPROVE",
       body: "Looks good to me.",
       user: { login: "alice" },
     },

@@ -4,7 +4,7 @@ import type { components } from "./spec/gitea";
 import type { GiteaClient } from "./client";
 
 // Use partial types for test fixtures — generated types require many fields
-type Repository = Partial<components["schemas"]["Repository"]> & {
+type Repository = Partial<Omit<components["schemas"]["Repository"], "owner">> & {
   owner?: Partial<components["schemas"]["User"]>;
 };
 type Tag = Partial<components["schemas"]["Tag"]>;
