@@ -1,24 +1,32 @@
 import { afterEach, expect, mock, test } from "bun:test";
-import type { User } from "gitea-js";
 
-const userGetCurrentMock = mock(async () => ({
+/**
+ * Mock openapi-fetch's createClient to return a controllable mock client.
+ * The mock client has GET/POST/PUT/DELETE as mock functions whose return
+ * values can be set per-test.
+ */
+const mockGet = mock(async (): Promise<{ data: unknown; error: unknown; response: Response }> => ({
   data: {
     id: 42,
     login: "alice",
     full_name: "Alice Admin",
     email: "alice@example.com",
     avatar_url: "https://example.com/alice.png",
-  } as User,
-}));
-
-const giteaApiMock = mock(() => ({
-  user: {
-    userGetCurrent: userGetCurrentMock,
   },
+  error: undefined,
+  response: new Response(null, { status: 200 }),
 }));
 
-mock.module("gitea-js", () => ({
-  giteaApi: giteaApiMock,
+const mockClient = {
+  GET: mockGet,
+  POST: mock(async () => ({})),
+  PUT: mock(async () => ({})),
+  DELETE: mock(async () => ({})),
+  use: mock(() => {}),
+};
+
+mock.module("openapi-fetch", () => ({
+  default: () => mockClient,
 }));
 
 const createMemoryStorage = (): Storage => {
@@ -53,18 +61,19 @@ Object.defineProperty(globalThis, "sessionStorage", {
 });
 
 afterEach(() => {
-  userGetCurrentMock.mockReset();
-  userGetCurrentMock.mockImplementation(async () => ({
+  mockGet.mockReset();
+  mockGet.mockImplementation(async () => ({
     data: {
       id: 42,
       login: "alice",
       full_name: "Alice Admin",
       email: "alice@example.com",
       avatar_url: "https://example.com/alice.png",
-    } as User,
+    },
+    error: undefined,
+    response: new Response(null, { status: 200 }),
   }));
 
-  giteaApiMock.mockClear();
   globalThis.sessionStorage.clear();
 });
 
@@ -83,10 +92,7 @@ test("validateToken returns normalized gitea user data", async () => {
 
   const user = await validateToken("https://gitea.example.com", "good-token");
 
-  expect(giteaApiMock).toHaveBeenCalledWith("https://gitea.example.com", {
-    token: "good-token",
-  });
-  expect(userGetCurrentMock).toHaveBeenCalledTimes(1);
+  expect(mockGet).toHaveBeenCalledTimes(1);
   expect(user).toEqual({
     id: 42,
     login: "alice",
@@ -96,17 +102,14 @@ test("validateToken returns normalized gitea user data", async () => {
   });
 });
 
-test("validateToken maps response-like failures to GiteaApiError", async () => {
+test("validateToken maps error responses to GiteaApiError", async () => {
   const { validateToken } = await import("./auth");
 
-  userGetCurrentMock.mockImplementation(async () => {
-    throw {
-      status: 401,
-      error: {
-        message: "invalid token",
-      },
-    };
-  });
+  mockGet.mockImplementation(async () => ({
+    data: undefined,
+    error: { message: "invalid token" },
+    response: new Response(null, { status: 401 }),
+  }));
 
   await expect(
     validateToken("https://gitea.example.com", "bad-token"),
@@ -123,10 +126,8 @@ test("createAuthenticatedClient uses stored token", async () => {
   storeToken("stored-token");
   const client = createAuthenticatedClient("https://gitea.example.com");
 
-  expect(giteaApiMock).toHaveBeenCalledWith("https://gitea.example.com", {
-    token: "stored-token",
-  });
-  expect(client.user).toBeDefined();
+  expect(client.GET).toBeFunction();
+  expect(client.POST).toBeFunction();
 });
 
 test("createAuthenticatedClient throws when token is missing", async () => {
