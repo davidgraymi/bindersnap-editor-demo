@@ -172,16 +172,13 @@ export async function fetchDocumentAtSha(
 ): Promise<ProseMirrorJSON> {
   const { client, owner, repo, filePath, sha } = params;
 
-  const response = await client.GET(
-    "/repos/{owner}/{repo}/raw/{filepath}",
-    {
-      params: {
-        path: { owner, repo, filepath: filePath },
-        query: { ref: sha },
-      },
-      parseAs: "text",
+  const response = await client.GET("/repos/{owner}/{repo}/raw/{filepath}", {
+    params: {
+      path: { owner, repo, filepath: filePath },
+      query: { ref: sha },
     },
-  );
+    parseAs: "text",
+  });
 
   if (response.error !== undefined || response.data === undefined) {
     throw new GiteaApiError(
@@ -221,7 +218,14 @@ export async function listDocumentCommits(
     client.GET("/repos/{owner}/{repo}/commits", {
       params: {
         path: { owner, repo },
-        query: { path: filePath, page, limit, stat: false, verification: false, files: false },
+        query: {
+          path: filePath,
+          page,
+          limit,
+          stat: false,
+          verification: false,
+          files: false,
+        },
       },
     }),
   );

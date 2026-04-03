@@ -1,4 +1,4 @@
-import type { components } from "./generated/gitea";
+import type { components } from "./spec/gitea";
 
 import { unwrap, type GiteaClient } from "./client";
 

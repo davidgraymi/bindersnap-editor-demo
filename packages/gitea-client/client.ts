@@ -1,6 +1,6 @@
 import createClient from "openapi-fetch";
 
-import type { paths } from "./generated/gitea";
+import type { paths } from "./spec/gitea";
 
 export type GiteaClient = ReturnType<typeof createGiteaClient>;
 

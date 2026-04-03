@@ -1,10 +1,12 @@
 import { expect, test } from "bun:test";
 import { mock } from "bun:test";
-import type { components } from "./generated/gitea";
+import type { components } from "./spec/gitea";
 import type { GiteaClient } from "./client";
 
 // Use partial types for test fixtures — generated types require many fields
-type Repository = Partial<components["schemas"]["Repository"]> & { owner?: Partial<components["schemas"]["User"]> };
+type Repository = Partial<components["schemas"]["Repository"]> & {
+  owner?: Partial<components["schemas"]["User"]>;
+};
 type Tag = Partial<components["schemas"]["Tag"]>;
 
 function createMockClient(handlers: {
@@ -14,21 +16,49 @@ function createMockClient(handlers: {
     const handler = handlers.GET?.[path];
     if (handler) {
       const data = await handler(init);
-      return { data, error: undefined, response: new Response(null, { status: 200 }) };
+      return {
+        data,
+        error: undefined,
+        response: new Response(null, { status: 200 }),
+      };
     }
-    return { data: undefined, error: { message: "not found" }, response: new Response(null, { status: 404 }) };
+    return {
+      data: undefined,
+      error: { message: "not found" },
+      response: new Response(null, { status: 404 }),
+    };
   });
 
   return {
-    client: { GET: mockGet, POST: mock(), PUT: mock(), DELETE: mock(), use: mock() } as unknown as GiteaClient,
+    client: {
+      GET: mockGet,
+      POST: mock(),
+      PUT: mock(),
+      DELETE: mock(),
+      use: mock(),
+    } as unknown as GiteaClient,
     mockGet,
   };
 }
 
 test("listWorkspaceRepos normalizes repository data", async () => {
   const repos: Repository[] = [
-    { id: 1, name: "quarterly-report", full_name: "alice/quarterly-report", description: "Q2 report", updated_at: "2026-03-30T12:00:00Z", owner: { login: "alice" } },
-    { id: 2, name: "vendor-docs", full_name: "alice/vendor-docs", description: "", updated_at: "2026-03-29T12:00:00Z", owner: { login: "alice" } },
+    {
+      id: 1,
+      name: "quarterly-report",
+      full_name: "alice/quarterly-report",
+      description: "Q2 report",
+      updated_at: "2026-03-30T12:00:00Z",
+      owner: { login: "alice" },
+    },
+    {
+      id: 2,
+      name: "vendor-docs",
+      full_name: "alice/vendor-docs",
+      description: "",
+      updated_at: "2026-03-29T12:00:00Z",
+      owner: { login: "alice" },
+    },
   ];
 
   const { client } = createMockClient({
@@ -59,10 +89,22 @@ test("listWorkspaceRepos handles empty response", async () => {
 
 test("getLatestDocTag returns the highest version tag", async () => {
   const tags: Tag[] = [
-    { name: "doc/v0001", commit: { sha: "aaa", created: "2026-03-01T00:00:00Z" } },
-    { name: "doc/v0003", commit: { sha: "ccc", created: "2026-03-20T00:00:00Z" } },
-    { name: "doc/v0002", commit: { sha: "bbb", created: "2026-03-10T00:00:00Z" } },
-    { name: "unrelated-tag", commit: { sha: "ddd", created: "2026-03-15T00:00:00Z" } },
+    {
+      name: "doc/v0001",
+      commit: { sha: "aaa", created: "2026-03-01T00:00:00Z" },
+    },
+    {
+      name: "doc/v0003",
+      commit: { sha: "ccc", created: "2026-03-20T00:00:00Z" },
+    },
+    {
+      name: "doc/v0002",
+      commit: { sha: "bbb", created: "2026-03-10T00:00:00Z" },
+    },
+    {
+      name: "unrelated-tag",
+      commit: { sha: "ddd", created: "2026-03-15T00:00:00Z" },
+    },
   ];
 
   const { client } = createMockClient({
@@ -91,9 +133,18 @@ test("getLatestDocTag returns null when no doc tags exist", async () => {
 
 test("listDocTags returns sorted doc tags", async () => {
   const tags: Tag[] = [
-    { name: "doc/v0002", commit: { sha: "bbb", created: "2026-03-10T00:00:00Z" } },
-    { name: "doc/v0001", commit: { sha: "aaa", created: "2026-03-01T00:00:00Z" } },
-    { name: "doc/v0003", commit: { sha: "ccc", created: "2026-03-20T00:00:00Z" } },
+    {
+      name: "doc/v0002",
+      commit: { sha: "bbb", created: "2026-03-10T00:00:00Z" },
+    },
+    {
+      name: "doc/v0001",
+      commit: { sha: "aaa", created: "2026-03-01T00:00:00Z" },
+    },
+    {
+      name: "doc/v0003",
+      commit: { sha: "ccc", created: "2026-03-20T00:00:00Z" },
+    },
   ];
 
   const { client } = createMockClient({

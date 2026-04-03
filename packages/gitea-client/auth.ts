@@ -1,6 +1,11 @@
-import type { components } from "./generated/gitea";
+import type { components } from "./spec/gitea";
 
-import { createGiteaClient, GiteaApiError, unwrap, type GiteaClient } from "./client";
+import {
+  createGiteaClient,
+  GiteaApiError,
+  unwrap,
+  type GiteaClient,
+} from "./client";
 
 type User = components["schemas"]["User"];
 

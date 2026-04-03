@@ -1,5 +1,5 @@
 import { afterEach, expect, mock, test } from "bun:test";
-import type { components } from "./generated/gitea";
+import type { components } from "./spec/gitea";
 
 import type { GiteaClient } from "./client";
 
@@ -19,22 +19,46 @@ function createMockClient(handlers: {
     const handler = handlers.GET?.[path];
     if (handler) {
       const data = await handler(init);
-      return { data, error: undefined, response: new Response(null, { status: 200 }) };
+      return {
+        data,
+        error: undefined,
+        response: new Response(null, { status: 200 }),
+      };
     }
-    return { data: undefined, error: { message: "not found" }, response: new Response(null, { status: 404 }) };
+    return {
+      data: undefined,
+      error: { message: "not found" },
+      response: new Response(null, { status: 404 }),
+    };
   });
 
-  const mockPost = mock(async (path: string, init?: { params?: unknown; body?: unknown }) => {
-    const handler = handlers.POST?.[path];
-    if (handler) {
-      const data = await handler(init);
-      return { data, error: undefined, response: new Response(null, { status: 200 }) };
-    }
-    return { data: undefined, error: { message: "not found" }, response: new Response(null, { status: 404 }) };
-  });
+  const mockPost = mock(
+    async (path: string, init?: { params?: unknown; body?: unknown }) => {
+      const handler = handlers.POST?.[path];
+      if (handler) {
+        const data = await handler(init);
+        return {
+          data,
+          error: undefined,
+          response: new Response(null, { status: 200 }),
+        };
+      }
+      return {
+        data: undefined,
+        error: { message: "not found" },
+        response: new Response(null, { status: 404 }),
+      };
+    },
+  );
 
   return {
-    client: { GET: mockGet, POST: mockPost, PUT: mock(), DELETE: mock(), use: mock() } as unknown as GiteaClient,
+    client: {
+      GET: mockGet,
+      POST: mockPost,
+      PUT: mock(),
+      DELETE: mock(),
+      use: mock(),
+    } as unknown as GiteaClient,
     mockGet,
     mockPost,
   };
@@ -42,14 +66,44 @@ function createMockClient(handlers: {
 
 // Default test data
 const defaultPullRequests: PullRequest[] = [
-  { number: 1, title: "Working draft", head: { ref: "draft", label: "draft" }, state: "open" },
-  { number: 2, title: "Requested changes", head: { ref: "feature/q2-amendments", label: "feature/q2-amendments" }, state: "open" },
-  { number: 3, title: "Already merged", head: { ref: "release", label: "release" }, state: "closed", merged: true },
+  {
+    number: 1,
+    title: "Working draft",
+    head: { ref: "draft", label: "draft" },
+    state: "open",
+  },
+  {
+    number: 2,
+    title: "Requested changes",
+    head: { ref: "feature/q2-amendments", label: "feature/q2-amendments" },
+    state: "open",
+  },
+  {
+    number: 3,
+    title: "Already merged",
+    head: { ref: "release", label: "release" },
+    state: "closed",
+    merged: true,
+  },
 ];
 
 const defaultReviews: Record<number, TestPullReview[]> = {
-  2: [{ id: 99, state: "REQUEST_CHANGES", body: "Please update section 4.2.", user: { login: "bob" } }],
-  3: [{ id: 100, state: "APPROVED", body: "Looks good to me.", user: { login: "alice" } }],
+  2: [
+    {
+      id: 99,
+      state: "REQUEST_CHANGES",
+      body: "Please update section 4.2.",
+      user: { login: "bob" },
+    },
+  ],
+  3: [
+    {
+      id: 100,
+      state: "APPROVED",
+      body: "Looks good to me.",
+      user: { login: "alice" },
+    },
+  ],
 };
 
 function buildDefaultHandlers(
@@ -58,26 +112,34 @@ function buildDefaultHandlers(
 ) {
   return {
     GET: {
-      "/repos/{owner}/{repo}/pulls": (init: { params?: { query?: { head?: string } } }) => {
+      "/repos/{owner}/{repo}/pulls": (init: {
+        params?: { query?: { head?: string } };
+      }) => {
         if (init?.params?.query?.head) {
           // Filter logic not needed — real module filters by head.ref client-side
         }
         return pullRequests;
       },
-      "/repos/{owner}/{repo}/pulls/{index}/reviews": (init: { params?: { path?: { index?: number }; query?: { page?: number } } }) => {
+      "/repos/{owner}/{repo}/pulls/{index}/reviews": (init: {
+        params?: { path?: { index?: number }; query?: { page?: number } };
+      }) => {
         const index = init?.params?.path?.index ?? 0;
         return reviews[index] ?? [];
       },
     } as Record<string, (...args: any[]) => unknown>,
     POST: {
-      "/repos/{owner}/{repo}/pulls": (init: { body?: { title?: string; head?: string; base?: string } }) => ({
+      "/repos/{owner}/{repo}/pulls": (init: {
+        body?: { title?: string; head?: string; base?: string };
+      }) => ({
         number: 42,
         title: init?.body?.title,
         head: { ref: init?.body?.head },
         base: { ref: init?.body?.base },
         state: "open",
       }),
-      "/repos/{owner}/{repo}/pulls/{index}/reviews": (init: { body?: { event?: string; body?: string } }) => ({
+      "/repos/{owner}/{repo}/pulls/{index}/reviews": (init: {
+        body?: { event?: string; body?: string };
+      }) => ({
         id: 7,
         state: init?.body?.event,
         body: init?.body?.body ?? "",
@@ -122,7 +184,14 @@ test("getPullRequestForBranch returns null when no branch PR exists", async () =
 
 test("getPullRequestForBranch maps a closed unmerged PR to working", async () => {
   const handlers = buildDefaultHandlers(
-    [{ number: 10, title: "Stale draft", head: { ref: "feature/stale-draft", label: "" }, state: "closed" }],
+    [
+      {
+        number: 10,
+        title: "Stale draft",
+        head: { ref: "feature/stale-draft", label: "" },
+        state: "closed",
+      },
+    ],
     {},
   );
   const { client } = createMockClient(handlers);
@@ -158,10 +227,29 @@ test("getPullRequestForBranch maps requested changes to changes_requested", asyn
 test("getPullRequestForBranch prefers the newest open pull request for reused branches", async () => {
   const handlers = buildDefaultHandlers(
     [
-      { number: 7, title: "Old closed PR", head: { ref: "feature/reused-branch", label: "" }, state: "closed" },
-      { number: 11, title: "Current open PR", head: { ref: "feature/reused-branch", label: "" }, state: "open" },
+      {
+        number: 7,
+        title: "Old closed PR",
+        head: { ref: "feature/reused-branch", label: "" },
+        state: "closed",
+      },
+      {
+        number: 11,
+        title: "Current open PR",
+        head: { ref: "feature/reused-branch", label: "" },
+        state: "open",
+      },
     ],
-    { 11: [{ id: 121, state: "REQUEST_CHANGES", body: "Needs updates.", user: { login: "bob" } }] },
+    {
+      11: [
+        {
+          id: 121,
+          state: "REQUEST_CHANGES",
+          body: "Needs updates.",
+          user: { login: "bob" },
+        },
+      ],
+    },
   );
   const { client } = createMockClient(handlers);
   const { getPullRequestForBranch } = await import("./pullRequests");

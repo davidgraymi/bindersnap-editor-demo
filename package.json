@@ -32,7 +32,7 @@
     "test:landing": "bun test apps/landing packages/editor packages/utils",
     "test:unit": "bun test",
     "test:integration": "bash scripts/test-integration.sh",
-    "generate:api": "bash scripts/generate-gitea-api.sh",
+    "generate:api": "bun run scripts/generate-gitea-api.ts",
     "up": "docker compose -f dev/docker-compose.yml up --build"
   },
   "dependencies": {
