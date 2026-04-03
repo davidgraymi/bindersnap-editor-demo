@@ -27,7 +27,7 @@ export class GiteaApiError extends Error {
 /**
  * Extract a GiteaApiError from any openapi-fetch error response.
  * Replaces the five-way readErrorMessage() functions that were duplicated
- * across every module when using gitea-js.
+ * across every module when using the previous client library.
  */
 export function toGiteaApiError(
   status: number,

@@ -8271,7 +8271,7 @@ export interface components {
          * @description ReviewStateType review state type
          * @enum {string}
          */
-        ReviewStateType: "APPROVE" | "REQUEST_CHANGES" | "COMMENT";
+        ReviewStateType: "APPROVE" | "APPROVED" | "REQUEST_CHANGES" | "CHANGES_REQUESTED" | "COMMENT";
         /** @description SearchResults results of a successful search */
         SearchResults: {
             /** @description Data contains the repository search results */

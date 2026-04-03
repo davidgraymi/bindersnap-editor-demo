@@ -101,7 +101,7 @@ const defaultReviews: Record<number, TestPullReview[]> = {
   3: [
     {
       id: 100,
-      state: "APPROVE",
+      state: "APPROVED",
       body: "Looks good to me.",
       user: { login: "alice" },
     },

@@ -116,9 +116,9 @@ test.describe("Gitea service wrappers against the live dev stack", () => {
 
   test("createAuthenticatedClient reads the token from sessionStorage", async () => {
     const client = createAuthenticatedClient(GITEA_URL);
-    const { data: user } = await client.user.userGetCurrent();
+    const { data: user } = await client.GET("/user");
 
-    expect(user.login).toBe("alice");
+    expect(user?.login).toBe("alice");
   });
 
   test("listDocumentCommits and fetchDocumentAtSha read the seeded draft document", async () => {

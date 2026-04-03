@@ -34,7 +34,7 @@ playwright test --config=dev/tests/playwright.config.ts
 | Unit tests (`src/**/*.test.ts`)  | Integration tests (`dev/tests/`) |
 | -------------------------------- | -------------------------------- |
 | Run without Docker               | Require `docker compose up`      |
-| Mock `gitea-js` responses        | Real Gitea API calls             |
+| Mock `openapi-fetch` responses   | Real Gitea API calls             |
 | Fast, run in CI on every push    | Slower, run locally before merge |
 | Test business logic in isolation | Test the full stack end-to-end   |
 

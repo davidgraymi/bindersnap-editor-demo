@@ -56,7 +56,6 @@
     "@types/dompurify": "^3.2.0",
     "diff": "^8.0.3",
     "dompurify": "^3.3.3",
-    "gitea-js": "1.23.0",
     "lucide-react": "^0.574.0",
     "react": "^19",
     "react-dom": "^19",
