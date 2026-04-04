@@ -1,6 +1,6 @@
 import type { components } from "./spec/gitea";
 
-import { unwrap, type GiteaClient } from "./client";
+import { toGiteaApiError, unwrap, type GiteaClient } from "./client";
 
 type PullRequest = components["schemas"]["PullRequest"];
 type PullReview = components["schemas"]["PullReview"];
@@ -38,7 +38,7 @@ export interface SubmitReviewParams {
   owner: string;
   repo: string;
   pullNumber: number;
-  event: "APPROVE" | "REQUEST_CHANGES" | "COMMENT";
+  event: "APPROVE" | "APPROVED" | "REQUEST_CHANGES" | "COMMENT";
   body?: string;
 }
 
@@ -222,10 +222,29 @@ export async function submitReview(
 ): Promise<PullReview> {
   const { client, owner, repo, pullNumber, event, body } = params;
 
-  return unwrap(
+  // Step 1: Create a pending review.
+  // Gitea's POST /reviews always creates a PENDING review — the event field
+  // on this endpoint is ignored for submission purposes.
+  const pendingReview = await unwrap(
     client.POST("/repos/{owner}/{repo}/pulls/{index}/reviews", {
       params: { path: { owner, repo, index: pullNumber } },
-      body: { event, ...(body ? { body } : {}) },
+      body: { ...(body ? { body } : {}) },
+    }),
+  );
+
+  const reviewId = pendingReview.id;
+  if (!reviewId) {
+    throw toGiteaApiError(0, "Review was created without an id.");
+  }
+
+  // Step 2: Submit the pending review with the desired event.
+  // POST /reviews/{id} is Gitea's "SubmitPullReview" endpoint and is the
+  // only way to transition a review from PENDING to APPROVED/REQUEST_CHANGES.
+  return unwrap(
+    client.POST("/repos/{owner}/{repo}/pulls/{index}/reviews/{id}", {
+      params: { path: { owner, repo, index: pullNumber, id: reviewId } },
+      // Gitea explicitly requires "APPROVED" on submission, though "APPROVE" is also in the spec enum
+      body: { event: event === "APPROVE" ? "APPROVED" : event, ...(body ? { body } : {}) },
     }),
   );
 }
@@ -235,15 +254,22 @@ export async function mergePullRequest(
 ): Promise<void> {
   const { client, owner, repo, pullNumber, mergeStyle, message } = params;
 
-  await unwrap(
-    client.POST("/repos/{owner}/{repo}/pulls/{index}/merge", {
+  const { response, error } = await client.POST(
+    "/repos/{owner}/{repo}/pulls/{index}/merge",
+    {
       params: { path: { owner, repo, index: pullNumber } },
       body: {
         Do: mergeStyle,
         ...(message ? { MergeMessageField: message } : {}),
       },
-    }),
+    },
   );
+
+  // Gitea returns 200 on a successful merge (not 204 as one might expect).
+  // Treat any 2xx as success; throw only on actual error status codes.
+  if (response.status < 200 || response.status >= 300) {
+    throw toGiteaApiError(response.status, error);
+  }
 }
 
 export async function listPullRequests(

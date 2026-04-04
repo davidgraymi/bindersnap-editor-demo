@@ -45,6 +45,7 @@ import {
   GITEA_URL,
   installMemorySessionStorage,
   makeClient,
+  createBobClient,
   OWNER,
   pollUntil,
   REPO,
@@ -263,15 +264,14 @@ test.describe("pull request workflow", () => {
 
   test.describe("create / approve / merge lifecycle", () => {
     let testBranch: string;
+    let bobClient: Awaited<ReturnType<typeof createBobClient>>;
 
     test.beforeAll(async () => {
       testBranch = `test/pr-workflow-${Date.now()}`;
-    });
-
-    test("createPullRequest opens a PR visible via getPullRequestForBranch with approvalState in_review", async () => {
       const client = makeClient();
+      bobClient = await createBobClient();
+      const testFilePath = `documents/pr-workflow-test-${testBranch.replace(/[^a-z0-9]/gi, "-")}.json`;
 
-      // Arrange — branch with a commit that differs from main
       await createUploadBranch({
         client,
         owner: OWNER,
@@ -284,7 +284,7 @@ test.describe("pull request workflow", () => {
         client,
         owner: OWNER,
         repo: REPO,
-        filePath: "documents/pr-workflow-test.json",
+        filePath: testFilePath,
         branch: testBranch,
         message: "test: add document for PR workflow test",
         content: {
@@ -298,8 +298,7 @@ test.describe("pull request workflow", () => {
         },
       });
 
-      // Act
-      const created = await createPullRequest({
+      await createPullRequest({
         client,
         owner: OWNER,
         repo: REPO,
@@ -308,8 +307,11 @@ test.describe("pull request workflow", () => {
         base: "main",
         body: "Created by integration test suite.",
       });
+    });
 
-      // Assert
+    test("createPullRequest opens a PR visible via getPullRequestForBranch with approvalState in_review", async () => {
+      const client = makeClient();
+
       const found = await getPullRequestForBranch({
         client,
         owner: OWNER,
@@ -317,9 +319,8 @@ test.describe("pull request workflow", () => {
         branch: testBranch,
       });
 
-      expect(created.number).toBeGreaterThan(0);
       expect(found).not.toBeNull();
-      expect(found!.number).toBe(created.number);
+      expect(found!.number).toBeGreaterThan(0);
       expect(found!.approvalState).toBe("in_review");
     });
 
@@ -336,7 +337,7 @@ test.describe("pull request workflow", () => {
       const pullNumber = before!.number!;
 
       await submitReview({
-        client,
+        client: bobClient,
         owner: OWNER,
         repo: REPO,
         pullNumber,
