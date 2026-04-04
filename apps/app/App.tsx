@@ -126,7 +126,9 @@ export function App() {
 
   const giteaBaseUrl =
     appEnv?.BUN_PUBLIC_GITEA_BASE_URL ??
+    appEnv?.BUN_PUBLIC_GITEA_URL ??
     appEnv?.VITE_GITEA_BASE_URL ??
+    appEnv?.VITE_GITEA_URL ??
     "http://localhost:3000";
   const oauthClientId = appEnv?.BUN_PUBLIC_GITEA_OAUTH_CLIENT_ID ?? "";
 

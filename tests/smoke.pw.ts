@@ -206,16 +206,14 @@ test.describe("app shell routes", () => {
       return;
     }
 
-    // Unauthenticated path: verify the login form is present.
+    // Unauthenticated path: verify the PKCE login page is present.
     await expect(page).toHaveURL(/\/login$/);
     await expect(loginHeading).toBeVisible();
-    await expect(page.getByLabel("Username")).toBeVisible();
-    await expect(page.getByLabel("Password")).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Open workspace" }),
+      page.getByRole("button", { name: "Sign in" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Create one" }),
+      page.getByRole("link", { name: "Register on Gitea" }),
     ).toBeVisible();
   });
 });
