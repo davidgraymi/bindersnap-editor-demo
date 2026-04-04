@@ -1,4 +1,4 @@
-// Generated from Gitea 1.25.5 at 2026-04-03T19:49:21Z
+// Generated from Gitea 1.25.5 at 2026-04-04T15:10:18Z
 // Source: http://localhost:3000/swagger.v1.json
 // Note: Types have been extended via extensions.json
 // Do not edit manually — re-run: bun run generate:api
@@ -8271,7 +8271,7 @@ export interface components {
          * @description ReviewStateType review state type
          * @enum {string}
          */
-        ReviewStateType: "APPROVE" | "APPROVED" | "REQUEST_CHANGES" | "CHANGES_REQUESTED" | "COMMENT";
+        ReviewStateType: "APPROVE" | "APPROVED" | "REQUEST_CHANGES" | "CHANGES_REQUESTED" | "COMMENT" | "PENDING";
         /** @description SearchResults results of a successful search */
         SearchResults: {
             /** @description Data contains the repository search results */

@@ -143,6 +143,14 @@ function buildDefaultHandlers(
         body?: { event?: string; body?: string };
       }) => ({
         id: 7,
+        state: init?.body?.event || "PENDING",
+        body: init?.body?.body ?? "",
+        user: { login: "alice" },
+      }),
+      "/repos/{owner}/{repo}/pulls/{index}/reviews/{id}": (init: {
+        body?: { event?: string; body?: string };
+      }) => ({
+        id: 7,
         state: init?.body?.event,
         body: init?.body?.body ?? "",
         user: { login: "alice" },

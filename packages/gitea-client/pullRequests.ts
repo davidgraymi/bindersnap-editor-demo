@@ -38,7 +38,7 @@ export interface SubmitReviewParams {
   owner: string;
   repo: string;
   pullNumber: number;
-  event: "APPROVE" | "APPROVED" | "REQUEST_CHANGES" | "COMMENT";
+  event: "APPROVE" | "REQUEST_CHANGES" | "COMMENT";
   body?: string;
 }
 
@@ -223,12 +223,13 @@ export async function submitReview(
   const { client, owner, repo, pullNumber, event, body } = params;
 
   // Step 1: Create a pending review.
-  // Gitea's POST /reviews always creates a PENDING review — the event field
-  // on this endpoint is ignored for submission purposes.
+  // In Gitea 1.21+, POST /pulls/{index}/reviews always creates a PENDING
+  // review; the event field is silently ignored by the create endpoint. A
+  // non-empty body must be supplied or Gitea rejects the request entirely.
   const pendingReview = await unwrap(
     client.POST("/repos/{owner}/{repo}/pulls/{index}/reviews", {
       params: { path: { owner, repo, index: pullNumber } },
-      body: { ...(body ? { body } : {}) },
+      body: { body: body ?? "" },
     }),
   );
 
@@ -237,14 +238,24 @@ export async function submitReview(
     throw toGiteaApiError(0, "Review was created without an id.");
   }
 
-  // Step 2: Submit the pending review with the desired event.
-  // POST /reviews/{id} is Gitea's "SubmitPullReview" endpoint and is the
-  // only way to transition a review from PENDING to APPROVED/REQUEST_CHANGES.
+  // Step 2: Submit the pending review via Gitea's SubmitPullReview endpoint.
+  //
+  // Gitea's Go constants define the accepted event values as:
+  //   "APPROVED"         → ReviewStateApproved  (approve the PR)
+  //   "REQUEST_CHANGES"  → ReviewStateRequestChanges
+  //   "COMMENT"          → ReviewStateComment
+  //
+  // Sending "APPROVE" (without the trailing D) hits the default switch branch,
+  // leaves the type as ReviewTypePending, and Gitea returns "review stay pending".
+  // Normalise "APPROVE" → "APPROVED" so callers using either spelling succeed.
+  const submitEvent = event === "APPROVE" ? "APPROVED" : event;
   return unwrap(
     client.POST("/repos/{owner}/{repo}/pulls/{index}/reviews/{id}", {
       params: { path: { owner, repo, index: pullNumber, id: reviewId } },
-      // Gitea explicitly requires "APPROVED" on submission, though "APPROVE" is also in the spec enum
-      body: { event: event === "APPROVE" ? "APPROVED" : event, ...(body ? { body } : {}) },
+      body: {
+        event: submitEvent,
+        ...(body ? { body } : {}),
+      },
     }),
   );
 }
@@ -254,21 +265,43 @@ export async function mergePullRequest(
 ): Promise<void> {
   const { client, owner, repo, pullNumber, mergeStyle, message } = params;
 
-  const { response, error } = await client.POST(
-    "/repos/{owner}/{repo}/pulls/{index}/merge",
-    {
-      params: { path: { owner, repo, index: pullNumber } },
-      body: {
-        Do: mergeStyle,
-        ...(message ? { MergeMessageField: message } : {}),
-      },
-    },
-  );
+  // Gitea computes PR mergeability asynchronously. If a recent state change
+  // (e.g. an approval) triggered a re-check, the merge endpoint returns
+  // "Please try again later" (405) until the check completes. Poll until the
+  // merge succeeds or a non-transient error is returned.
+  const MAX_ATTEMPTS = 15;
+  const RETRY_DELAY_MS = 2000;
 
-  // Gitea returns 200 on a successful merge (not 204 as one might expect).
-  // Treat any 2xx as success; throw only on actual error status codes.
-  if (response.status < 200 || response.status >= 300) {
-    throw toGiteaApiError(response.status, error);
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    const { response, error } = await client.POST(
+      "/repos/{owner}/{repo}/pulls/{index}/merge",
+      {
+        params: { path: { owner, repo, index: pullNumber } },
+        body: {
+          Do: mergeStyle,
+          ...(message ? { MergeMessageField: message } : {}),
+        },
+      },
+    );
+
+    // Gitea returns 200 on a successful merge (not 204 as one might expect).
+    if (response.status >= 200 && response.status < 300) {
+      return;
+    }
+
+    // Gitea returns 405 with "Please try again later" while its internal
+    // mergeability check is still running. This is transient — wait and retry.
+    const apiError = toGiteaApiError(response.status, error);
+    if (
+      response.status === 405 &&
+      apiError.message.toLowerCase().includes("please try again later") &&
+      attempt < MAX_ATTEMPTS
+    ) {
+      await new Promise<void>((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+      continue;
+    }
+
+    throw apiError;
   }
 }
 
