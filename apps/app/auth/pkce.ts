@@ -4,6 +4,7 @@
  */
 
 export const VERIFIER_STORAGE_KEY = "bindersnap_pkce_verifier";
+export const STATE_STORAGE_KEY = "bindersnap_pkce_state";
 
 function base64urlEncode(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
@@ -34,6 +35,8 @@ export interface BuildAuthUrlParams {
   clientId: string;
   redirectUri: string;
   challenge: string;
+  /** Random opaque value bound to this session; validated on callback to prevent CSRF. */
+  state: string;
 }
 
 /** Build the Gitea OAuth2 authorization URL with PKCE params. */
@@ -42,6 +45,7 @@ export function buildAuthUrl({
   clientId,
   redirectUri,
   challenge,
+  state,
 }: BuildAuthUrlParams): string {
   const url = new URL("/login/oauth/authorize", giteaUrl);
   url.searchParams.set("client_id", clientId);
@@ -49,5 +53,59 @@ export function buildAuthUrl({
   url.searchParams.set("response_type", "code");
   url.searchParams.set("code_challenge", challenge);
   url.searchParams.set("code_challenge_method", "S256");
+  url.searchParams.set("state", state);
   return url.toString();
+}
+
+export interface ExchangeCodeParams {
+  giteaUrl: string;
+  code: string;
+  verifier: string;
+  redirectUri: string;
+  clientId: string;
+}
+
+/**
+ * Exchange an authorization code for an access token via the Gitea token endpoint.
+ * Sends a form-encoded POST — no client secret required for public clients.
+ */
+export async function exchangeCodeForToken({
+  giteaUrl,
+  code,
+  verifier,
+  redirectUri,
+  clientId,
+}: ExchangeCodeParams): Promise<string> {
+  const body = new URLSearchParams({
+    grant_type: "authorization_code",
+    code,
+    redirect_uri: redirectUri,
+    client_id: clientId,
+    code_verifier: verifier,
+  });
+
+  const response = await fetch(`${giteaUrl}/login/oauth/access_token`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Accept: "application/json",
+    },
+    body: body.toString(),
+  });
+
+  const payload = (await response.json().catch(() => null)) as unknown;
+  const accessToken =
+    typeof (payload as { access_token?: unknown }).access_token === "string"
+      ? (payload as { access_token: string }).access_token
+      : null;
+
+  if (!accessToken) {
+    const errorMsg =
+      typeof (payload as { error?: unknown }).error === "string"
+        ? (payload as { error: string }).error
+        : "Token exchange failed.";
+    throw new Error(errorMsg);
+  }
+
+  return accessToken;
 }
