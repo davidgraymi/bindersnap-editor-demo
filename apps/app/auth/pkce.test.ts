@@ -1,8 +1,10 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import {
   buildAuthUrl,
+  exchangeCodeForToken,
   generateCodeChallenge,
   generateCodeVerifier,
+  STATE_STORAGE_KEY,
   VERIFIER_STORAGE_KEY,
 } from "./pkce";
 
@@ -10,6 +12,17 @@ describe("VERIFIER_STORAGE_KEY", () => {
   test("is a non-empty string", () => {
     expect(typeof VERIFIER_STORAGE_KEY).toBe("string");
     expect(VERIFIER_STORAGE_KEY.length).toBeGreaterThan(0);
+  });
+});
+
+describe("STATE_STORAGE_KEY", () => {
+  test("is a non-empty string", () => {
+    expect(typeof STATE_STORAGE_KEY).toBe("string");
+    expect(STATE_STORAGE_KEY.length).toBeGreaterThan(0);
+  });
+
+  test("is distinct from VERIFIER_STORAGE_KEY", () => {
+    expect(STATE_STORAGE_KEY).not.toBe(VERIFIER_STORAGE_KEY);
   });
 });
 
@@ -76,6 +89,7 @@ describe("buildAuthUrl", () => {
     clientId: "my-client-id",
     redirectUri: "http://localhost:5173/auth/callback",
     challenge: "test-challenge-value",
+    state: "test-state-value",
   };
 
   test("returns a string URL", () => {
@@ -90,7 +104,7 @@ describe("buildAuthUrl", () => {
     expect(url.origin).toBe("http://localhost:3000");
   });
 
-  test("includes all required OAuth2 params", () => {
+  test("includes all required OAuth2 params including state", () => {
     const url = new URL(buildAuthUrl(baseParams));
     expect(url.searchParams.get("client_id")).toBe("my-client-id");
     expect(url.searchParams.get("redirect_uri")).toBe(
@@ -99,6 +113,7 @@ describe("buildAuthUrl", () => {
     expect(url.searchParams.get("response_type")).toBe("code");
     expect(url.searchParams.get("code_challenge")).toBe("test-challenge-value");
     expect(url.searchParams.get("code_challenge_method")).toBe("S256");
+    expect(url.searchParams.get("state")).toBe("test-state-value");
   });
 
   test("encodes special characters in redirect_uri", () => {
@@ -118,5 +133,158 @@ describe("buildAuthUrl", () => {
       buildAuthUrl({ ...baseParams, giteaUrl: "https://git.example.com" }),
     );
     expect(url.origin).toBe("https://git.example.com");
+  });
+});
+
+describe("exchangeCodeForToken", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const baseParams = {
+    giteaUrl: "http://localhost:3000",
+    code: "auth_code_abc123",
+    verifier: "test-verifier-value",
+    redirectUri: "http://localhost:5173/auth/callback",
+    clientId: "test-client-id",
+  };
+
+  test("returns access_token on success", async () => {
+    globalThis.fetch = mock(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            access_token: "gta_test_token_123",
+            token_type: "bearer",
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      ),
+    );
+
+    const token = await exchangeCodeForToken(baseParams);
+    expect(token).toBe("gta_test_token_123");
+  });
+
+  test("posts to the correct Gitea token endpoint", async () => {
+    let capturedUrl = "";
+    let capturedMethod = "";
+
+    globalThis.fetch = mock((input: RequestInfo | URL) => {
+      capturedUrl = input.toString();
+      capturedMethod = "POST";
+      return Promise.resolve(
+        new Response(JSON.stringify({ access_token: "tok" }), { status: 200 }),
+      );
+    });
+
+    await exchangeCodeForToken(baseParams);
+    expect(capturedUrl).toBe("http://localhost:3000/login/oauth/access_token");
+    expect(capturedMethod).toBe("POST");
+  });
+
+  test("throws with server error message on failure", async () => {
+    globalThis.fetch = mock(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ error: "invalid_grant" }), {
+          status: 400,
+        }),
+      ),
+    );
+
+    await expect(exchangeCodeForToken(baseParams)).rejects.toThrow(
+      "invalid_grant",
+    );
+  });
+
+  test("throws generic message when response has no access_token and no error field", async () => {
+    globalThis.fetch = mock(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ token_type: "bearer" }), { status: 200 }),
+      ),
+    );
+
+    await expect(exchangeCodeForToken(baseParams)).rejects.toThrow(
+      "Token exchange failed.",
+    );
+  });
+
+  test("throws when response body is not parseable JSON", async () => {
+    globalThis.fetch = mock(() =>
+      Promise.resolve(new Response("not json", { status: 200 })),
+    );
+
+    await expect(exchangeCodeForToken(baseParams)).rejects.toThrow();
+  });
+
+  test("sends correct Content-Type header", async () => {
+    let capturedHeaders: Headers | null = null;
+
+    globalThis.fetch = mock((_url: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.headers instanceof Headers) {
+        capturedHeaders = init.headers;
+      } else if (init?.headers) {
+        capturedHeaders = new Headers(init.headers as HeadersInit);
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ access_token: "tok" }), { status: 200 }),
+      );
+    });
+
+    await exchangeCodeForToken(baseParams);
+    expect(capturedHeaders?.get("Content-Type")).toBe(
+      "application/x-www-form-urlencoded",
+    );
+    expect(capturedHeaders?.get("Accept")).toBe("application/json");
+  });
+
+  test("sends all required body parameters", async () => {
+    let capturedBody = "";
+
+    globalThis.fetch = mock((_url: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.body && typeof init.body === "string") {
+        capturedBody = init.body;
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ access_token: "tok" }), { status: 200 }),
+      );
+    });
+
+    await exchangeCodeForToken(baseParams);
+
+    const parsedBody = new URLSearchParams(capturedBody);
+    expect(parsedBody.get("grant_type")).toBe("authorization_code");
+    expect(parsedBody.get("code")).toBe("auth_code_abc123");
+    expect(parsedBody.get("redirect_uri")).toBe(
+      "http://localhost:5173/auth/callback",
+    );
+    expect(parsedBody.get("client_id")).toBe("test-client-id");
+    expect(parsedBody.get("code_verifier")).toBe("test-verifier-value");
+  });
+
+  test("uses POST method", async () => {
+    let capturedMethod = "";
+
+    globalThis.fetch = mock((_url: RequestInfo | URL, init?: RequestInit) => {
+      capturedMethod = init?.method ?? "";
+      return Promise.resolve(
+        new Response(JSON.stringify({ access_token: "tok" }), { status: 200 }),
+      );
+    });
+
+    await exchangeCodeForToken(baseParams);
+    expect(capturedMethod).toBe("POST");
+  });
+
+  test("handles network failure", async () => {
+    globalThis.fetch = mock(() =>
+      Promise.reject(new Error("Network request failed")),
+    );
+
+    await expect(exchangeCodeForToken(baseParams)).rejects.toThrow(
+      "Network request failed",
+    );
   });
 });
