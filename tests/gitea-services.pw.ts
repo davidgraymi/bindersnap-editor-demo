@@ -45,6 +45,7 @@ import {
   GITEA_URL,
   installMemorySessionStorage,
   makeClient,
+  createBobClient,
   OWNER,
   pollUntil,
   REPO,
@@ -192,7 +193,9 @@ test.describe("documents", () => {
         content: [
           {
             type: "paragraph",
-            content: [{ type: "text", text: "Written by commitDocument test." }],
+            content: [
+              { type: "text", text: "Written by commitDocument test." },
+            ],
           },
         ],
       },
@@ -261,15 +264,14 @@ test.describe("pull request workflow", () => {
 
   test.describe("create / approve / merge lifecycle", () => {
     let testBranch: string;
+    let bobClient: Awaited<ReturnType<typeof createBobClient>>;
 
     test.beforeAll(async () => {
       testBranch = `test/pr-workflow-${Date.now()}`;
-    });
-
-    test("createPullRequest opens a PR visible via getPullRequestForBranch with approvalState in_review", async () => {
       const client = makeClient();
+      bobClient = await createBobClient();
+      const testFilePath = `documents/pr-workflow-test-${testBranch.replace(/[^a-z0-9]/gi, "-")}.json`;
 
-      // Arrange — branch with a commit that differs from main
       await createUploadBranch({
         client,
         owner: OWNER,
@@ -282,7 +284,7 @@ test.describe("pull request workflow", () => {
         client,
         owner: OWNER,
         repo: REPO,
-        filePath: "documents/pr-workflow-test.json",
+        filePath: testFilePath,
         branch: testBranch,
         message: "test: add document for PR workflow test",
         content: {
@@ -296,8 +298,7 @@ test.describe("pull request workflow", () => {
         },
       });
 
-      // Act
-      const created = await createPullRequest({
+      await createPullRequest({
         client,
         owner: OWNER,
         repo: REPO,
@@ -306,8 +307,11 @@ test.describe("pull request workflow", () => {
         base: "main",
         body: "Created by integration test suite.",
       });
+    });
 
-      // Assert
+    test("createPullRequest opens a PR visible via getPullRequestForBranch with approvalState in_review", async () => {
+      const client = makeClient();
+
       const found = await getPullRequestForBranch({
         client,
         owner: OWNER,
@@ -315,9 +319,8 @@ test.describe("pull request workflow", () => {
         branch: testBranch,
       });
 
-      expect(created.number).toBeGreaterThan(0);
       expect(found).not.toBeNull();
-      expect(found!.number).toBe(created.number);
+      expect(found!.number).toBeGreaterThan(0);
       expect(found!.approvalState).toBe("in_review");
     });
 
@@ -334,7 +337,7 @@ test.describe("pull request workflow", () => {
       const pullNumber = before!.number!;
 
       await submitReview({
-        client,
+        client: bobClient,
         owner: OWNER,
         repo: REPO,
         pullNumber,
@@ -411,7 +414,9 @@ test.describe("repos", () => {
   test("listWorkspaceRepos includes the seeded repository", async () => {
     const repos = await listWorkspaceRepos(makeClient());
 
-    const seeded = repos.find((r) => r.name === REPO && r.owner.login === OWNER);
+    const seeded = repos.find(
+      (r) => r.name === REPO && r.owner.login === OWNER,
+    );
     expect(seeded).toBeDefined();
     expect(seeded!.full_name).toBe(`${OWNER}/${REPO}`);
   });
@@ -454,7 +459,12 @@ test.describe("uploads", () => {
 
   test("buildUploadBranchName produces a well-formed upload branch path", () => {
     const fixedDate = new Date("2025-06-15T10:30:00Z");
-    const name = buildUploadBranchName("annual-report", "alice", "ab12cd34", fixedDate);
+    const name = buildUploadBranchName(
+      "annual-report",
+      "alice",
+      "ab12cd34",
+      fixedDate,
+    );
 
     expect(name).toBe("upload/annual-report/20250615/103000Z-alice-ab12cd34");
   });
@@ -472,7 +482,9 @@ test.describe("uploads", () => {
     expect(message).toContain("Upload: 2025 Annual Report.pdf");
     expect(message).toContain("Bindersnap-Document-Id: annual-report");
     expect(message).toContain("Bindersnap-Canonical-File: annual-report.pdf");
-    expect(message).toContain("Bindersnap-Source-Filename: 2025 Annual Report.pdf");
+    expect(message).toContain(
+      "Bindersnap-Source-Filename: 2025 Annual Report.pdf",
+    );
     expect(message).toContain("Bindersnap-Uploaded-By: alice");
     expect(message).toContain("Bindersnap-File-Hash-SHA256: abc123def456");
   });

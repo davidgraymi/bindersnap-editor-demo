@@ -11,6 +11,7 @@ type Tag = Partial<components["schemas"]["Tag"]>;
 
 function createMockClient(handlers: {
   GET?: Record<string, (...args: any[]) => unknown>;
+  POST?: Record<string, (...args: any[]) => unknown>;
 }) {
   const mockGet = mock(async (path: string, init?: unknown) => {
     const handler = handlers.GET?.[path];
@@ -29,15 +30,33 @@ function createMockClient(handlers: {
     };
   });
 
+  const mockPost = mock(async (path: string, init?: { params?: unknown; body?: unknown }) => {
+    const handler = handlers.POST?.[path];
+    if (handler) {
+      const data = await handler(init);
+      return {
+        data,
+        error: undefined,
+        response: new Response(null, { status: 200 }),
+      };
+    }
+    return {
+      data: undefined,
+      error: { message: "not found" },
+      response: new Response(null, { status: 404 }),
+    };
+  });
+
   return {
     client: {
       GET: mockGet,
-      POST: mock(),
+      POST: mockPost,
       PUT: mock(),
       DELETE: mock(),
       use: mock(),
     } as unknown as GiteaClient,
     mockGet,
+    mockPost,
   };
 }
 
@@ -175,4 +194,153 @@ test("parseDocTagVersion rejects invalid tag names", async () => {
   const result = await listDocTags(client, "alice", "quarterly-report");
 
   expect(result).toHaveLength(0);
+});
+
+test("createDocTag creates a tag with zero-padded version name", async () => {
+  const { client, mockPost } = createMockClient({
+    POST: {
+      "/repos/{owner}/{repo}/tags": (init: { body?: { tag_name?: string; target?: string; message?: string } }) => ({
+        name: init?.body?.tag_name,
+        commit: { sha: "newsha123", created: "2026-04-02T10:00:00Z" },
+      }),
+    },
+  });
+
+  const { createDocTag } = await import("./repos");
+  const tag = await createDocTag({ client, owner: "alice", repo: "quarterly-report", version: 4, target: "main" });
+
+  expect(mockPost).toHaveBeenCalled();
+  expect(tag.name).toBe("doc/v0004");
+  expect(tag.version).toBe(4);
+  expect(tag.sha).toBe("newsha123");
+});
+
+test("createDocTag zero-pads version numbers with fewer than 4 digits", async () => {
+  const { client, mockPost } = createMockClient({
+    POST: {
+      "/repos/{owner}/{repo}/tags": (init: { body?: { tag_name?: string } }) => ({
+        name: init?.body?.tag_name,
+        commit: { sha: "abc", created: "2026-04-02T10:00:00Z" },
+      }),
+    },
+  });
+
+  const { createDocTag } = await import("./repos");
+  await createDocTag({ client, owner: "alice", repo: "quarterly-report", version: 1, target: "abc123" });
+
+  const calls = mockPost.mock.calls as Array<[string, { body?: { tag_name?: string } }]>;
+  expect(calls[0]?.[1]?.body?.tag_name).toBe("doc/v0001");
+});
+
+test("createDocTag throws GiteaApiError on network failure", async () => {
+  const mockPost = mock(async () => ({
+    data: undefined,
+    error: { message: "Network error" },
+    response: new Response(null, { status: 500 }),
+  }));
+  const client = { GET: mock(), POST: mockPost, PUT: mock(), DELETE: mock(), use: mock() } as unknown as GiteaClient;
+
+  const { createDocTag } = await import("./repos");
+  const { GiteaApiError } = await import("./client");
+
+  await expect(
+    createDocTag({ client, owner: "alice", repo: "quarterly-report", version: 2, target: "main" }),
+  ).rejects.toThrow(GiteaApiError);
+});
+
+test("createDocTag throws GiteaApiError when tag name does not match doc/v* pattern", async () => {
+  const { client } = createMockClient({
+    POST: {
+      "/repos/{owner}/{repo}/tags": () => ({
+        name: "invalid-tag",
+        commit: { sha: "abc", created: "2026-04-02T10:00:00Z" },
+      }),
+    },
+  });
+
+  const { createDocTag } = await import("./repos");
+  const { GiteaApiError } = await import("./client");
+
+  await expect(
+    createDocTag({ client, owner: "alice", repo: "quarterly-report", version: 3, target: "main" }),
+  ).rejects.toThrow(GiteaApiError);
+});
+
+test("getRepoBranchProtection returns normalised protection for matching branch", async () => {
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/branch_protections": () => [
+        {
+          rule_name: "main",
+          required_approvals: 1,
+          enable_approvals_whitelist: false,
+          approvals_whitelist_username: [],
+          enable_merge_whitelist: false,
+          merge_whitelist_usernames: [],
+          block_on_rejected_reviews: true,
+        },
+      ],
+    },
+  });
+
+  const { getRepoBranchProtection } = await import("./repos");
+  const protection = await getRepoBranchProtection(client, "alice", "quarterly-report", "main");
+
+  expect(protection).not.toBeNull();
+  expect(protection?.requiredApprovals).toBe(1);
+  expect(protection?.enableApprovalsWhitelist).toBe(false);
+  expect(protection?.blockOnRejectedReviews).toBe(true);
+});
+
+test("getRepoBranchProtection returns null when no rules exist", async () => {
+  const { client } = createMockClient({
+    GET: { "/repos/{owner}/{repo}/branch_protections": () => [] },
+  });
+
+  const { getRepoBranchProtection } = await import("./repos");
+  const protection = await getRepoBranchProtection(client, "alice", "quarterly-report", "main");
+
+  expect(protection).toBeNull();
+});
+
+test("getRepoBranchProtection falls back to first rule when branch name has no exact match", async () => {
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/branch_protections": () => [
+        {
+          rule_name: "release/*",
+          required_approvals: 2,
+          enable_approvals_whitelist: true,
+          approvals_whitelist_username: ["alice", "bob"],
+          enable_merge_whitelist: true,
+          merge_whitelist_usernames: ["alice"],
+          block_on_rejected_reviews: false,
+        },
+      ],
+    },
+  });
+
+  const { getRepoBranchProtection } = await import("./repos");
+  const protection = await getRepoBranchProtection(client, "alice", "quarterly-report", "main");
+
+  expect(protection).not.toBeNull();
+  expect(protection?.requiredApprovals).toBe(2);
+  expect(protection?.approvalsWhitelistUsernames).toEqual(["alice", "bob"]);
+  expect(protection?.mergeWhitelistUsernames).toEqual(["alice"]);
+});
+
+test("getRepoBranchProtection throws GiteaApiError on network failure", async () => {
+  const mockGet = mock(async () => ({
+    data: undefined,
+    error: { message: "Network error" },
+    response: new Response(null, { status: 500 }),
+  }));
+  const client = { GET: mockGet, POST: mock(), PUT: mock(), DELETE: mock(), use: mock() } as unknown as GiteaClient;
+
+  const { getRepoBranchProtection } = await import("./repos");
+  const { GiteaApiError } = await import("./client");
+
+  await expect(
+    getRepoBranchProtection(client, "alice", "quarterly-report", "main"),
+  ).rejects.toThrow(GiteaApiError);
 });

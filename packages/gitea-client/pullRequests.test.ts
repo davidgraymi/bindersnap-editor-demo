@@ -143,6 +143,14 @@ function buildDefaultHandlers(
         body?: { event?: string; body?: string };
       }) => ({
         id: 7,
+        state: init?.body?.event || "PENDING",
+        body: init?.body?.body ?? "",
+        user: { login: "alice" },
+      }),
+      "/repos/{owner}/{repo}/pulls/{index}/reviews/{id}": (init: {
+        body?: { event?: string; body?: string };
+      }) => ({
+        id: 7,
         state: init?.body?.event,
         body: init?.body?.body ?? "",
         user: { login: "alice" },
@@ -266,6 +274,62 @@ test("getPullRequestForBranch prefers the newest open pull request for reused br
   expect(pullRequest).not.toBeNull();
   expect(pullRequest?.number).toBe(11);
   expect(pullRequest?.approvalState).toBe("changes_requested");
+});
+
+test("getPullRequestForBranch evaluates review state across paginated review results", async () => {
+  const page1Reviews = Array.from({ length: 100 }, (_, i) => ({
+    id: i + 1,
+    state: "COMMENT",
+    body: "Looks fine",
+    user: { login: "alice" },
+  }));
+  const page2Reviews = [
+    { id: 222, state: "REQUEST_CHANGES", body: "Found one more issue.", user: { login: "bob" } },
+  ];
+
+  const handlers = buildDefaultHandlers(
+    [{ number: 23, title: "Long review history PR", head: { ref: "feature/paginated-reviews", label: "" }, state: "open" }],
+    {},
+  );
+
+  // Override the reviews handler to return paginated results
+  handlers.GET["/repos/{owner}/{repo}/pulls/{index}/reviews"] = (init: {
+    params?: { path?: { index?: number }; query?: { page?: number } };
+  }) => {
+    const page = init?.params?.query?.page ?? 1;
+    return page === 1 ? page1Reviews : page2Reviews;
+  };
+
+  const { client } = createMockClient(handlers);
+  const { getPullRequestForBranch } = await import("./pullRequests");
+
+  const pullRequest = await getPullRequestForBranch({
+    client,
+    owner: "alice",
+    repo: "quarterly-report",
+    branch: "feature/paginated-reviews",
+  });
+
+  expect(pullRequest).not.toBeNull();
+  expect(pullRequest?.approvalState).toBe("changes_requested");
+});
+
+test("toApprovalStateFromReview recognises Gitea APPROVE state (no trailing D)", async () => {
+  const handlers = buildDefaultHandlers(
+    [{ number: 5, title: "Gitea-style approval", head: { ref: "feature/gitea-approve", label: "" }, state: "open" }],
+    { 5: [{ id: 55, state: "APPROVE", body: "Approved", user: { login: "carol" } }] },
+  );
+  const { client } = createMockClient(handlers);
+  const { getPullRequestForBranch } = await import("./pullRequests");
+
+  const pr = await getPullRequestForBranch({
+    client,
+    owner: "alice",
+    repo: "quarterly-report",
+    branch: "feature/gitea-approve",
+  });
+
+  expect(pr?.approvalState).toBe("approved");
 });
 
 test("listPullRequests maps merged PRs to published and approved PRs to approved", async () => {

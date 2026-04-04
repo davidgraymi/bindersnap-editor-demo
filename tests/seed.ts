@@ -13,6 +13,11 @@ const PR_TITLE = "Q2 amendments — GDPR section update";
 const REVIEW_BODY =
   "Section 4.2 needs to reference the updated GDPR guidance from the January memo.";
 
+const SECOND_REPO_NAME = "vendor-contracts";
+const SECOND_FEATURE_BRANCH = "feature/acme-renewal";
+const SECOND_FEATURE_DOC_PATH = "documents/draft.json";
+const SECOND_PR_TITLE = "Acme Corp contract renewal — 2025 terms";
+
 type BasicAuth = {
   username: string;
   password: string;
@@ -34,6 +39,7 @@ type SeedResult = {
   token?: string;
   tokenName?: string;
   prNumber: number;
+  secondPrNumber: number;
   oauthClientId?: string;
 };
 
@@ -734,6 +740,63 @@ export async function seedDevStack(
     log,
   );
 
+  // Second repo: vendor-contracts (alice owns, bob collaborates, open PR)
+  await ensureRepo(baseUrl, adminAuth, SECOND_REPO_NAME, log);
+  await ensureFile(
+    baseUrl,
+    adminAuth,
+    adminUser,
+    SECOND_REPO_NAME,
+    SECOND_FEATURE_DOC_PATH,
+    draft,
+    "seed: add draft vendor contract",
+    undefined,
+    log,
+  );
+  await ensureCollaborator(
+    baseUrl,
+    adminAuth,
+    adminUser,
+    SECOND_REPO_NAME,
+    bobUser,
+    log,
+  );
+  await ensureBranch(
+    baseUrl,
+    adminAuth,
+    adminUser,
+    SECOND_REPO_NAME,
+    SECOND_FEATURE_BRANCH,
+    "main",
+    log,
+  );
+  const secondFeatureDoc = draft
+    .replace("Q2 Compliance Report", "Vendor Contract — Acme Corp")
+    .replace(
+      "This document is currently a working draft. No review has been submitted.",
+      "This contract has been submitted for renewal under the 2025 terms. Awaiting sign-off from the legal team.",
+    );
+  await ensureFile(
+    baseUrl,
+    adminAuth,
+    adminUser,
+    SECOND_REPO_NAME,
+    SECOND_FEATURE_DOC_PATH,
+    secondFeatureDoc,
+    `seed: update ${SECOND_FEATURE_DOC_PATH} for acme renewal`,
+    SECOND_FEATURE_BRANCH,
+    log,
+  );
+  const secondPrNumber = await ensurePullRequest(
+    baseUrl,
+    adminAuth,
+    adminUser,
+    SECOND_REPO_NAME,
+    SECOND_FEATURE_BRANCH,
+    SECOND_PR_TITLE,
+    log,
+  );
+
   const redirectUri = `http://localhost:${process.env.APP_PORT ?? "5173"}/auth/callback`;
   const oauthClientId = await ensureOAuthApp(
     baseUrl,
@@ -744,7 +807,7 @@ export async function seedDevStack(
   );
 
   if (!createToken) {
-    return { prNumber, oauthClientId };
+    return { prNumber, secondPrNumber, oauthClientId };
   }
 
   const tokenInfo = await createAccessToken(
@@ -755,6 +818,7 @@ export async function seedDevStack(
   );
   return {
     prNumber,
+    secondPrNumber,
     oauthClientId,
     token: tokenInfo.token,
     tokenName: tokenInfo.tokenName,

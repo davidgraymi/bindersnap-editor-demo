@@ -2,7 +2,7 @@
   "components": {
     "schemas": {
       "ReviewStateType": {
-        "enum": ["APPROVE", "APPROVED", "REQUEST_CHANGES", "CHANGES_REQUESTED", "COMMENT"]
+        "enum": ["APPROVE", "APPROVED", "REQUEST_CHANGES", "CHANGES_REQUESTED", "COMMENT", "PENDING"]
       }
     }
   }

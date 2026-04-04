@@ -6,6 +6,7 @@
  * utilities that multiple *.pw.ts files need.
  */
 
+import { createGiteaClient } from "../packages/gitea-client/client";
 import {
   createAuthenticatedClient,
   storeToken,
@@ -25,6 +26,12 @@ export const GITEA_ADMIN_USER =
 
 export const GITEA_ADMIN_PASS =
   process.env.GITEA_ADMIN_PASS ?? "bindersnap-dev";
+
+export const GITEA_BOB_USER =
+  process.env.GITEA_BOB_USER ?? "bob";
+
+export const GITEA_BOB_PASS =
+  process.env.GITEA_BOB_PASS ?? "bindersnap-dev";
 
 /** Raw token string from the environment — may be empty. */
 export const ENV_TOKEN = process.env.VITE_GITEA_TOKEN ?? "";
@@ -156,6 +163,44 @@ export async function resolveAndStoreToken(
  */
 export function makeClient() {
   return createAuthenticatedClient(GITEA_URL);
+}
+
+/**
+ * Create a Gitea client authenticated as bob by requesting a fresh API token
+ * for bob using his password credentials. Used in tests that require a second
+ * distinct user (e.g., approving alice's own PR — Gitea disallows self-review).
+ */
+export async function createBobClient() {
+  const tokenName = `bindersnap-test-bob-${Date.now()}`;
+  const credentials = Buffer.from(
+    `${GITEA_BOB_USER}:${GITEA_BOB_PASS}`,
+  ).toString("base64");
+
+  const response = await fetch(
+    new URL(`/api/v1/users/${encodeURIComponent(GITEA_BOB_USER)}/tokens`, GITEA_URL),
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${credentials}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ name: tokenName, scopes: ["all"] }),
+    },
+  );
+
+  if (response.status !== 201) {
+    const body = await response.text();
+    throw new Error(
+      `Failed to create bob token (${response.status}): ${body}`,
+    );
+  }
+
+  const json = (await response.json()) as { sha1?: string };
+  if (!json.sha1) {
+    throw new Error("Bob token creation succeeded but no sha1 was returned.");
+  }
+
+  return createGiteaClient(GITEA_URL, json.sha1);
 }
 
 // ---------------------------------------------------------------------------

@@ -582,6 +582,60 @@ input {
   margin-top: var(--brand-space-3);
 }
 
+.vault-pr-actions {
+  margin-top: var(--brand-space-4);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--brand-space-3);
+  align-items: flex-start;
+}
+
+.vault-pr-publish-btn {
+  margin-left: auto;
+}
+
+.vault-pr-comment-form {
+  width: 100%;
+  display: grid;
+  gap: var(--brand-space-3);
+}
+
+.vault-pr-comment-input {
+  width: 100%;
+  padding: var(--brand-space-3);
+  background: var(--bs-page-bg);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--brand-radius-md);
+  color: var(--bs-text-primary);
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-sm);
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.vault-pr-comment-input:focus {
+  outline: 2px solid var(--color-coral);
+  outline-offset: 1px;
+}
+
+.vault-pr-comment-actions {
+  display: flex;
+  gap: var(--brand-space-3);
+}
+
+.vault-pr-error {
+  margin: var(--brand-space-3) 0 0;
+  color: var(--brand-coral-dark);
+  font-size: var(--brand-text-sm);
+}
+
+.vault-pr-notice {
+  margin: var(--brand-space-3) 0 0;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-sm);
+  font-style: italic;
+}
+
 @media (max-width: 640px) {
   .vault-doc-grid {
     grid-template-columns: 1fr;
