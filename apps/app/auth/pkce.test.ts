@@ -218,4 +218,73 @@ describe("exchangeCodeForToken", () => {
 
     await expect(exchangeCodeForToken(baseParams)).rejects.toThrow();
   });
+
+  test("sends correct Content-Type header", async () => {
+    let capturedHeaders: Headers | null = null;
+
+    globalThis.fetch = mock((_url: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.headers instanceof Headers) {
+        capturedHeaders = init.headers;
+      } else if (init?.headers) {
+        capturedHeaders = new Headers(init.headers as HeadersInit);
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ access_token: "tok" }), { status: 200 }),
+      );
+    });
+
+    await exchangeCodeForToken(baseParams);
+    expect(capturedHeaders?.get("Content-Type")).toBe(
+      "application/x-www-form-urlencoded",
+    );
+    expect(capturedHeaders?.get("Accept")).toBe("application/json");
+  });
+
+  test("sends all required body parameters", async () => {
+    let capturedBody = "";
+
+    globalThis.fetch = mock((_url: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.body && typeof init.body === "string") {
+        capturedBody = init.body;
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ access_token: "tok" }), { status: 200 }),
+      );
+    });
+
+    await exchangeCodeForToken(baseParams);
+
+    const parsedBody = new URLSearchParams(capturedBody);
+    expect(parsedBody.get("grant_type")).toBe("authorization_code");
+    expect(parsedBody.get("code")).toBe("auth_code_abc123");
+    expect(parsedBody.get("redirect_uri")).toBe(
+      "http://localhost:5173/auth/callback",
+    );
+    expect(parsedBody.get("client_id")).toBe("test-client-id");
+    expect(parsedBody.get("code_verifier")).toBe("test-verifier-value");
+  });
+
+  test("uses POST method", async () => {
+    let capturedMethod = "";
+
+    globalThis.fetch = mock((_url: RequestInfo | URL, init?: RequestInit) => {
+      capturedMethod = init?.method ?? "";
+      return Promise.resolve(
+        new Response(JSON.stringify({ access_token: "tok" }), { status: 200 }),
+      );
+    });
+
+    await exchangeCodeForToken(baseParams);
+    expect(capturedMethod).toBe("POST");
+  });
+
+  test("handles network failure", async () => {
+    globalThis.fetch = mock(() =>
+      Promise.reject(new Error("Network request failed")),
+    );
+
+    await expect(exchangeCodeForToken(baseParams)).rejects.toThrow(
+      "Network request failed",
+    );
+  });
 });
