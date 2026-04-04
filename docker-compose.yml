@@ -125,6 +125,7 @@ services:
       - GITEA_INTERNAL_URL=${GITEA_INTERNAL_URL:-http://gitea:3000}
       - GITEA_ADMIN_USER=${GITEA_ADMIN_USER:-alice}
       - GITEA_ADMIN_PASS=${GITEA_ADMIN_PASS:-bindersnap-dev}
+      - BUN_PUBLIC_GITEA_OAUTH_CLIENT_ID=${BUN_PUBLIC_GITEA_OAUTH_CLIENT_ID:-}
     ports:
       - "${APP_PORT:-5173}:${APP_PORT:-5173}"
     volumes:
