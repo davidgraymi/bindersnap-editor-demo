@@ -1,3 +1,5 @@
+# Minimal bindersnap image server. Do not use in production.
+
 FROM oven/bun:1
 
 WORKDIR /app

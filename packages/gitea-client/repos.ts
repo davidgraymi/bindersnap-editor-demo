@@ -1,6 +1,9 @@
-import type { BranchProtection, CreateTagOption, Repository, Tag } from "gitea-js";
+import type { components } from "./spec/gitea";
 
-import { GiteaApiError, type GiteaClient } from "./client";
+import { GiteaApiError, unwrap, type GiteaClient } from "./client";
+
+type Repository = components["schemas"]["Repository"];
+type Tag = components["schemas"]["Tag"];
 
 export interface WorkspaceRepo {
   id: number;
@@ -16,72 +19,6 @@ export interface DocTag {
   version: number;
   sha: string;
   created: string;
-}
-
-function readErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  if (typeof error === "string" && error.trim() !== "") {
-    return error;
-  }
-
-  if (typeof error === "object" && error !== null) {
-    const responseLike = error as {
-      error?: unknown;
-      message?: unknown;
-      statusText?: unknown;
-    };
-
-    if (
-      typeof responseLike.message === "string" &&
-      responseLike.message.trim() !== ""
-    ) {
-      return responseLike.message;
-    }
-
-    if (
-      typeof responseLike.error === "string" &&
-      responseLike.error.trim() !== ""
-    ) {
-      return responseLike.error;
-    }
-
-    if (
-      typeof responseLike.error === "object" &&
-      responseLike.error !== null &&
-      "message" in responseLike.error &&
-      typeof (responseLike.error as { message?: unknown }).message === "string"
-    ) {
-      return (responseLike.error as { message: string }).message;
-    }
-
-    if (
-      typeof responseLike.statusText === "string" &&
-      responseLike.statusText.trim() !== ""
-    ) {
-      return responseLike.statusText;
-    }
-  }
-
-  return "Gitea request failed.";
-}
-
-function toGiteaApiError(error: unknown): GiteaApiError {
-  if (error instanceof GiteaApiError) {
-    return error;
-  }
-
-  const status =
-    typeof error === "object" && error !== null && "status" in error
-      ? Number((error as { status?: unknown }).status)
-      : 0;
-
-  return new GiteaApiError(
-    Number.isFinite(status) ? status : 0,
-    readErrorMessage(error),
-  );
 }
 
 function normalizeWorkspaceRepo(repo: Repository): WorkspaceRepo {
@@ -103,7 +40,7 @@ function parseDocTagVersion(tagName: string): number | null {
     return null;
   }
 
-  const version = Number.parseInt(match[1], 10);
+  const version = Number.parseInt(match[1] ?? "", 10);
   return Number.isFinite(version) && version > 0 ? version : null;
 }
 
@@ -126,15 +63,13 @@ function normalizeDocTag(tag: Tag): DocTag | null {
 export async function listWorkspaceRepos(
   client: GiteaClient,
 ): Promise<WorkspaceRepo[]> {
-  try {
-    const response = await client.repos.repoSearch({
-      limit: 100,
-    });
+  const result = await unwrap(
+    client.GET("/repos/search", {
+      params: { query: { limit: 100 } },
+    }),
+  );
 
-    return response.data.data?.map(normalizeWorkspaceRepo) ?? [];
-  } catch (error) {
-    throw toGiteaApiError(error);
-  }
+  return result.data?.map(normalizeWorkspaceRepo) ?? [];
 }
 
 export async function getLatestDocTag(
@@ -142,24 +77,47 @@ export async function getLatestDocTag(
   owner: string,
   repo: string,
 ): Promise<DocTag | null> {
-  try {
-    const response = await client.repos.repoListTags(owner, repo, {
-      limit: 100,
-    });
+  const tags = await unwrap(
+    client.GET("/repos/{owner}/{repo}/tags", {
+      params: {
+        path: { owner, repo },
+        query: { limit: 100 },
+      },
+    }),
+  );
 
-    const tags = response.data
-      .map(normalizeDocTag)
-      .filter((tag): tag is DocTag => tag !== null);
+  const docTags = tags
+    .map(normalizeDocTag)
+    .filter((tag): tag is DocTag => tag !== null);
 
-    if (tags.length === 0) {
-      return null;
-    }
-
-    tags.sort((a, b) => b.version - a.version);
-    return tags[0];
-  } catch (error) {
-    throw toGiteaApiError(error);
+  if (docTags.length === 0) {
+    return null;
   }
+
+  docTags.sort((a, b) => b.version - a.version);
+  return docTags[0] ?? null;
+}
+
+export async function listDocTags(
+  client: GiteaClient,
+  owner: string,
+  repo: string,
+): Promise<DocTag[]> {
+  const tags = await unwrap(
+    client.GET("/repos/{owner}/{repo}/tags", {
+      params: {
+        path: { owner, repo },
+        query: { limit: 100 },
+      },
+    }),
+  );
+
+  const docTags = tags
+    .map(normalizeDocTag)
+    .filter((tag): tag is DocTag => tag !== null);
+
+  docTags.sort((a, b) => b.version - a.version);
+  return docTags;
 }
 
 export interface RepoBranchProtection {
@@ -172,7 +130,7 @@ export interface RepoBranchProtection {
 }
 
 function normalizeBranchProtection(
-  raw: BranchProtection,
+  raw: components["schemas"]["BranchProtection"],
 ): RepoBranchProtection {
   return {
     requiredApprovals: raw.required_approvals ?? 0,
@@ -190,17 +148,16 @@ export async function getRepoBranchProtection(
   repo: string,
   branchName: string,
 ): Promise<RepoBranchProtection | null> {
-  try {
-    const response = await client.repos.repoListBranchProtection(owner, repo);
-    const rules = response.data;
+  const rules = await unwrap(
+    client.GET("/repos/{owner}/{repo}/branch_protections", {
+      params: { path: { owner, repo } },
+    }),
+  );
 
-    const exact = rules.find((r) => r.rule_name === branchName);
-    const rule = exact ?? rules[0] ?? null;
+  const exact = rules.find((r) => r.rule_name === branchName);
+  const rule = exact ?? rules[0] ?? null;
 
-    return rule ? normalizeBranchProtection(rule) : null;
-  } catch (error) {
-    throw toGiteaApiError(error);
-  }
+  return rule ? normalizeBranchProtection(rule) : null;
 }
 
 export interface CreateDocTagParams {
@@ -218,40 +175,20 @@ export async function createDocTag(
   const versionStr = version.toString().padStart(4, "0");
   const tagName = `doc/v${versionStr}`;
 
-  try {
-    const body: CreateTagOption = {
-      tag_name: tagName,
-      target,
-      message: `Published version ${versionStr}`,
-    };
-    const response = await client.repos.repoCreateTag(owner, repo, body);
-    const tag = normalizeDocTag(response.data);
-    if (!tag) {
-      throw new GiteaApiError(0, `Failed to parse created tag: ${tagName}`);
-    }
-    return tag;
-  } catch (error) {
-    throw toGiteaApiError(error);
+  const tag = await unwrap(
+    client.POST("/repos/{owner}/{repo}/tags", {
+      params: { path: { owner, repo } },
+      body: {
+        tag_name: tagName,
+        target,
+        message: `Published version ${versionStr}`,
+      },
+    }),
+  );
+
+  const docTag = normalizeDocTag(tag);
+  if (!docTag) {
+    throw new GiteaApiError(0, `Failed to parse created tag: ${tagName}`);
   }
-}
-
-export async function listDocTags(
-  client: GiteaClient,
-  owner: string,
-  repo: string,
-): Promise<DocTag[]> {
-  try {
-    const response = await client.repos.repoListTags(owner, repo, {
-      limit: 100,
-    });
-
-    const tags = response.data
-      .map(normalizeDocTag)
-      .filter((tag): tag is DocTag => tag !== null);
-
-    tags.sort((a, b) => b.version - a.version);
-    return tags;
-  } catch (error) {
-    throw toGiteaApiError(error);
-  }
+  return docTag;
 }

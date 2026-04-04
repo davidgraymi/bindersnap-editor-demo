@@ -37,15 +37,15 @@ preserved. Only the backing primitives change.
 
 Use the following AWS-native stack for the Bindersnap MVP backend:
 
-| Layer | Service | Purpose |
-|---|---|---|
-| Identity | Cognito User Pool | User accounts, email/password auth, Google OAuth |
-| Credentials | Cognito Identity Pool + STS | Exchange JWT for scoped IAM credentials |
-| Auth | Lambda + `jose` | Validate Cognito JWT on every mutating request |
-| Document storage | S3 (versioning enabled) | Immutable file storage; every PUT creates a new S3 VersionId |
-| Metadata + workflow | DynamoDB | Collections, documents, memberships, versions, reviews, votes |
-| API | Lambda Function URLs (or API Gateway HTTP API) | Thin permission-checked router; no business logic |
-| File transfer | S3 pre-signed URLs | SPA uploads/downloads directly to S3; Lambda never proxies bytes |
+| Layer               | Service                                        | Purpose                                                          |
+| ------------------- | ---------------------------------------------- | ---------------------------------------------------------------- |
+| Identity            | Cognito User Pool                              | User accounts, email/password auth, Google OAuth                 |
+| Credentials         | Cognito Identity Pool + STS                    | Exchange JWT for scoped IAM credentials                          |
+| Auth                | Lambda + `jose`                                | Validate Cognito JWT on every mutating request                   |
+| Document storage    | S3 (versioning enabled)                        | Immutable file storage; every PUT creates a new S3 VersionId     |
+| Metadata + workflow | DynamoDB                                       | Collections, documents, memberships, versions, reviews, votes    |
+| API                 | Lambda Function URLs (or API Gateway HTTP API) | Thin permission-checked router; no business logic                |
+| File transfer       | S3 pre-signed URLs                             | SPA uploads/downloads directly to S3; Lambda never proxies bytes |
 
 ---
 
@@ -75,16 +75,18 @@ Google OAuth flow (redirect acceptable per product decision):
 Lambda JWT verification (runs on every mutating request):
 
 ```typescript
-import { createRemoteJWKSet, jwtVerify } from 'jose'
+import { createRemoteJWKSet, jwtVerify } from "jose";
 
 const JWKS = createRemoteJWKSet(
-  new URL(`https://cognito-idp.${REGION}.amazonaws.com/${POOL_ID}/.well-known/jwks.json`)
-)
+  new URL(
+    `https://cognito-idp.${REGION}.amazonaws.com/${POOL_ID}/.well-known/jwks.json`,
+  ),
+);
 
 async function verifyToken(authHeader: string): Promise<string> {
-  const token = authHeader.replace('Bearer ', '')
-  const { payload } = await jwtVerify(token, JWKS)
-  return payload.sub as string  // Cognito user ID; stable primary key for all user references
+  const token = authHeader.replace("Bearer ", "");
+  const { payload } = await jwtVerify(token, JWKS);
+  return payload.sub as string; // Cognito user ID; stable primary key for all user references
 }
 ```
 
@@ -110,13 +112,15 @@ through pre-signed URLs issued by Lambda after permission checks.
 CORS on the bucket:
 
 ```json
-[{
-  "AllowedOrigins": ["https://app.bindersnap.com"],
-  "AllowedMethods": ["GET", "PUT", "HEAD"],
-  "AllowedHeaders": ["*"],
-  "ExposeHeaders": ["x-amz-version-id", "ETag"],
-  "MaxAgeSeconds": 3600
-}]
+[
+  {
+    "AllowedOrigins": ["https://app.bindersnap.com"],
+    "AllowedMethods": ["GET", "PUT", "HEAD"],
+    "AllowedHeaders": ["*"],
+    "ExposeHeaders": ["x-amz-version-id", "ETag"],
+    "MaxAgeSeconds": 3600
+  }
+]
 ```
 
 `x-amz-version-id` must be exposed so the SPA can read the S3 VersionId from
@@ -131,43 +135,43 @@ unless noted. All timestamps are ISO 8601 UTC strings.
 
 ### Table: `bindersnap-collections`
 
-| Attribute | Type | Notes |
-|---|---|---|
-| `collectionId` (PK) | S | UUID |
-| `name` | S | Display name |
-| `description` | S | Optional |
-| `ownerId` | S | Cognito sub of creator |
-| `createdAt` | S | ISO 8601 |
-| `requiredApprovals` | N | Minimum votes before merge allowed; default 1 |
-| `allowedFileTypes` | SS | Set of extensions; empty set = all allowed |
+| Attribute           | Type | Notes                                         |
+| ------------------- | ---- | --------------------------------------------- |
+| `collectionId` (PK) | S    | UUID                                          |
+| `name`              | S    | Display name                                  |
+| `description`       | S    | Optional                                      |
+| `ownerId`           | S    | Cognito sub of creator                        |
+| `createdAt`         | S    | ISO 8601                                      |
+| `requiredApprovals` | N    | Minimum votes before merge allowed; default 1 |
+| `allowedFileTypes`  | SS   | Set of extensions; empty set = all allowed    |
 
 ### Table: `bindersnap-memberships`
 
-| Attribute | Type | Notes |
-|---|---|---|
-| `collectionId` (PK) | S | |
-| `userId` (SK) | S | Cognito sub |
-| `role` | S | `viewer` \| `uploader` \| `reviewer` \| `publisher` \| `owner` |
-| `addedAt` | S | |
-| `addedBy` | S | Cognito sub of admin who granted access |
+| Attribute           | Type | Notes                                                          |
+| ------------------- | ---- | -------------------------------------------------------------- |
+| `collectionId` (PK) | S    |                                                                |
+| `userId` (SK)       | S    | Cognito sub                                                    |
+| `role`              | S    | `viewer` \| `uploader` \| `reviewer` \| `publisher` \| `owner` |
+| `addedAt`           | S    |                                                                |
+| `addedBy`           | S    | Cognito sub of admin who granted access                        |
 
 GSI: `userId-index` (PK: `userId`) — list all collections a user belongs to.
 
 ### Table: `bindersnap-documents`
 
-| Attribute | Type | Notes |
-|---|---|---|
-| `collectionId` (PK) | S | |
-| `documentId` (SK) | S | UUID |
-| `title` | S | |
-| `documentSlug` | S | Stable lowercase kebab-case; unique within collection |
-| `canonicalExtension` | S | e.g. `docx`, `pdf`; set on first upload; immutable |
-| `currentVersionId` | S | S3 VersionId of the published version; null until first merge |
-| `publishedVersionNumber` | N | Monotonic counter; increments on each merge; maps to `doc/vNNNN` from ADR 0001 |
-| `createdAt` | S | |
-| `createdBy` | S | Cognito sub |
-| `lastModifiedAt` | S | |
-| `lastModifiedBy` | S | Cognito sub |
+| Attribute                | Type | Notes                                                                          |
+| ------------------------ | ---- | ------------------------------------------------------------------------------ |
+| `collectionId` (PK)      | S    |                                                                                |
+| `documentId` (SK)        | S    | UUID                                                                           |
+| `title`                  | S    |                                                                                |
+| `documentSlug`           | S    | Stable lowercase kebab-case; unique within collection                          |
+| `canonicalExtension`     | S    | e.g. `docx`, `pdf`; set on first upload; immutable                             |
+| `currentVersionId`       | S    | S3 VersionId of the published version; null until first merge                  |
+| `publishedVersionNumber` | N    | Monotonic counter; increments on each merge; maps to `doc/vNNNN` from ADR 0001 |
+| `createdAt`              | S    |                                                                                |
+| `createdBy`              | S    | Cognito sub                                                                    |
+| `lastModifiedAt`         | S    |                                                                                |
+| `lastModifiedBy`         | S    | Cognito sub                                                                    |
 
 GSI: `documentSlug-index` (PK: `collectionId`, SK: `documentSlug`) — resolve slug to documentId.
 
@@ -177,51 +181,51 @@ Each row is one uploaded file version (one S3 PutObject). Created during
 confirm-upload, not at upload-request time (the S3 VersionId is unknown until
 after the PUT completes).
 
-| Attribute | Type | Notes |
-|---|---|---|
-| `documentId` (PK) | S | |
-| `s3VersionId` (SK) | S | The `x-amz-version-id` from S3 PUT response |
-| `collectionId` | S | For access-pattern queries |
-| `versionNumber` | N | Null until published; set to `publishedVersionNumber` on merge |
-| `uploadedBy` | S | Cognito sub |
-| `uploadedAt` | S | ISO 8601 |
-| `originalFilename` | S | User's filename before canonicalization |
-| `fileSizeBytes` | N | |
-| `sha256Hash` | S | Hex; computed client-side before upload, verified by Lambda |
-| `mimeType` | S | |
-| `reviewId` | S | Set on merge; the review that published this version |
-| `status` | S | `pending` \| `available` \| `published` |
+| Attribute          | Type | Notes                                                          |
+| ------------------ | ---- | -------------------------------------------------------------- |
+| `documentId` (PK)  | S    |                                                                |
+| `s3VersionId` (SK) | S    | The `x-amz-version-id` from S3 PUT response                    |
+| `collectionId`     | S    | For access-pattern queries                                     |
+| `versionNumber`    | N    | Null until published; set to `publishedVersionNumber` on merge |
+| `uploadedBy`       | S    | Cognito sub                                                    |
+| `uploadedAt`       | S    | ISO 8601                                                       |
+| `originalFilename` | S    | User's filename before canonicalization                        |
+| `fileSizeBytes`    | N    |                                                                |
+| `sha256Hash`       | S    | Hex; computed client-side before upload, verified by Lambda    |
+| `mimeType`         | S    |                                                                |
+| `reviewId`         | S    | Set on merge; the review that published this version           |
+| `status`           | S    | `pending` \| `available` \| `published`                        |
 
 ### Table: `bindersnap-reviews`
 
 Each row is one review request (equivalent to a PR in ADR 0001).
 
-| Attribute | Type | Notes |
-|---|---|---|
-| `reviewId` (PK) | S | UUID |
-| `collectionId` | S | |
-| `documentId` | S | |
-| `title` | S | |
-| `description` | S | Optional |
-| `status` | S | `open` \| `approved` \| `changes_requested` \| `merged` \| `abandoned` |
-| `authorId` | S | Cognito sub |
-| `createdAt` | S | |
-| `updatedAt` | S | |
-| `baseVersionId` | S | S3 VersionId of the current published version at time of review creation |
-| `proposedVersionId` | S | S3 VersionId being proposed for publication |
+| Attribute           | Type | Notes                                                                    |
+| ------------------- | ---- | ------------------------------------------------------------------------ |
+| `reviewId` (PK)     | S    | UUID                                                                     |
+| `collectionId`      | S    |                                                                          |
+| `documentId`        | S    |                                                                          |
+| `title`             | S    |                                                                          |
+| `description`       | S    | Optional                                                                 |
+| `status`            | S    | `open` \| `approved` \| `changes_requested` \| `merged` \| `abandoned`   |
+| `authorId`          | S    | Cognito sub                                                              |
+| `createdAt`         | S    |                                                                          |
+| `updatedAt`         | S    |                                                                          |
+| `baseVersionId`     | S    | S3 VersionId of the current published version at time of review creation |
+| `proposedVersionId` | S    | S3 VersionId being proposed for publication                              |
 
 GSI: `collectionId-status-index` (PK: `collectionId`, SK: `status`) — list open reviews per collection.  
 GSI: `documentId-index` (PK: `documentId`, SK: `createdAt`) — list reviews per document in order.
 
 ### Table: `bindersnap-review-votes`
 
-| Attribute | Type | Notes |
-|---|---|---|
-| `reviewId` (PK) | S | |
-| `userId` (SK) | S | Cognito sub |
-| `vote` | S | `approve` \| `request_changes` |
-| `comment` | S | Optional |
-| `votedAt` | S | |
+| Attribute       | Type | Notes                          |
+| --------------- | ---- | ------------------------------ |
+| `reviewId` (PK) | S    |                                |
+| `userId` (SK)   | S    | Cognito sub                    |
+| `vote`          | S    | `approve` \| `request_changes` |
+| `comment`       | S    | Optional                       |
+| `votedAt`       | S    |                                |
 
 One row per user per review. A second vote by the same user overwrites the first
 (update, not append). Lambda counts rows with `vote = approve` when evaluating
@@ -357,39 +361,39 @@ All routes except `/auth/*` require `Authorization: Bearer <id_token>`.
 
 ### Collections
 
-| Method | Path | Min role | Action |
-|---|---|---|---|
-| POST | `/collections` | — | Create collection; caller becomes owner |
-| GET | `/collections` | any member | List caller's collections |
-| GET | `/collections/{id}` | any member | Get collection details + member list |
-| POST | `/collections/{id}/members` | owner | Add member |
-| PATCH | `/collections/{id}/members/{userId}` | owner | Update member role |
-| DELETE | `/collections/{id}/members/{userId}` | owner | Remove member |
+| Method | Path                                 | Min role   | Action                                  |
+| ------ | ------------------------------------ | ---------- | --------------------------------------- |
+| POST   | `/collections`                       | —          | Create collection; caller becomes owner |
+| GET    | `/collections`                       | any member | List caller's collections               |
+| GET    | `/collections/{id}`                  | any member | Get collection details + member list    |
+| POST   | `/collections/{id}/members`          | owner      | Add member                              |
+| PATCH  | `/collections/{id}/members/{userId}` | owner      | Update member role                      |
+| DELETE | `/collections/{id}/members/{userId}` | owner      | Remove member                           |
 
 ### Documents
 
-| Method | Path | Min role | Action |
-|---|---|---|---|
-| POST | `/collections/{id}/documents` | uploader | Create document record |
-| GET | `/collections/{id}/documents` | viewer | List documents in collection |
-| GET | `/collections/{id}/documents/{docId}` | viewer | Get document metadata |
-| POST | `/documents/{docId}/upload-request` | uploader | Get pre-signed PUT URL |
-| POST | `/documents/{docId}/confirm-upload` | uploader | Register S3 VersionId in DynamoDB |
-| GET | `/documents/{docId}/download` | viewer | Get pre-signed GET URL for current version |
-| GET | `/documents/{docId}/download/{versionId}` | viewer | Get pre-signed GET URL for specific version |
-| GET | `/documents/{docId}/versions` | viewer | List all versions with metadata |
+| Method | Path                                      | Min role | Action                                      |
+| ------ | ----------------------------------------- | -------- | ------------------------------------------- |
+| POST   | `/collections/{id}/documents`             | uploader | Create document record                      |
+| GET    | `/collections/{id}/documents`             | viewer   | List documents in collection                |
+| GET    | `/collections/{id}/documents/{docId}`     | viewer   | Get document metadata                       |
+| POST   | `/documents/{docId}/upload-request`       | uploader | Get pre-signed PUT URL                      |
+| POST   | `/documents/{docId}/confirm-upload`       | uploader | Register S3 VersionId in DynamoDB           |
+| GET    | `/documents/{docId}/download`             | viewer   | Get pre-signed GET URL for current version  |
+| GET    | `/documents/{docId}/download/{versionId}` | viewer   | Get pre-signed GET URL for specific version |
+| GET    | `/documents/{docId}/versions`             | viewer   | List all versions with metadata             |
 
 ### Reviews
 
-| Method | Path | Min role | Action |
-|---|---|---|---|
-| POST | `/reviews` | uploader | Create review |
-| GET | `/collections/{id}/reviews` | viewer | List reviews (filterable by status) |
-| GET | `/reviews/{reviewId}` | viewer | Get review details + vote summary |
-| POST | `/reviews/{reviewId}/votes` | reviewer | Cast or update vote |
-| POST | `/reviews/{reviewId}/merge` | publisher | Merge review (publish version) |
-| POST | `/reviews/{reviewId}/abandon` | owner or author | Abandon review |
-| POST | `/reviews/{reviewId}/reopen` | author | Reopen after changes_requested (requires new proposedVersionId) |
+| Method | Path                          | Min role        | Action                                                          |
+| ------ | ----------------------------- | --------------- | --------------------------------------------------------------- |
+| POST   | `/reviews`                    | uploader        | Create review                                                   |
+| GET    | `/collections/{id}/reviews`   | viewer          | List reviews (filterable by status)                             |
+| GET    | `/reviews/{reviewId}`         | viewer          | Get review details + vote summary                               |
+| POST   | `/reviews/{reviewId}/votes`   | reviewer        | Cast or update vote                                             |
+| POST   | `/reviews/{reviewId}/merge`   | publisher       | Merge review (publish version)                                  |
+| POST   | `/reviews/{reviewId}/abandon` | owner or author | Abandon review                                                  |
+| POST   | `/reviews/{reviewId}/reopen`  | author          | Reopen after changes_requested (requires new proposedVersionId) |
 
 ---
 
@@ -397,13 +401,13 @@ All routes except `/auth/*` require `Authorization: Bearer <id_token>`.
 
 Preserved from ADR 0001 without modification.
 
-| Role | Upload | Vote (review) | Merge | Manage members |
-|---|---|---|---|---|
-| viewer | No | No | No | No |
-| uploader | Yes | No | No | No |
-| reviewer | No | Yes | No | No |
-| publisher | No | Yes | Yes | No |
-| owner | Yes | Yes | Yes | Yes |
+| Role      | Upload | Vote (review) | Merge | Manage members |
+| --------- | ------ | ------------- | ----- | -------------- |
+| viewer    | No     | No            | No    | No             |
+| uploader  | Yes    | No            | No    | No             |
+| reviewer  | No     | Yes           | No    | No             |
+| publisher | No     | Yes           | Yes   | No             |
+| owner     | Yes    | Yes           | Yes   | Yes            |
 
 Enforcement: Lambda reads the `bindersnap-memberships` row for
 `(collectionId, userId)` on every request and compares role to the minimum
@@ -418,20 +422,20 @@ role implies all permissions.
 
 ## Mapping: ADR 0001 Git Concepts → This Architecture
 
-| ADR 0001 (Gitea / git) | ADR 0002 (S3 + DynamoDB) |
-|---|---|
-| Gitea repository per document | S3 prefix `{collectionId}/{documentId}` + DynamoDB rows |
-| Upload branch | S3 object version (VersionId) |
-| Upload branch naming convention | S3 VersionId (auto-generated, sortable by creation time) |
-| PR from upload branch → main | `bindersnap-reviews` row |
-| PR status (open, approved, etc.) | `reviews.status` field |
-| Merge commit to `main` | DynamoDB transactional write updating reviews + documents + versions |
-| Annotated tag `doc/vNNNN` | `documents.publishedVersionNumber` (integer) |
-| Commit trailers (provenance metadata) | `bindersnap-versions` row attributes |
-| `main` HEAD = current version | `documents.currentVersionId` (S3 VersionId) |
-| Historical version by tag | `bindersnap-versions` row where `versionNumber = N` → `s3VersionId` |
-| 25 MiB file size limit | Enforced in Lambda upload-request handler; unchanged |
-| Role model (viewer/uploader/reviewer/publisher/owner) | `bindersnap-memberships.role`; unchanged |
+| ADR 0001 (Gitea / git)                                | ADR 0002 (S3 + DynamoDB)                                             |
+| ----------------------------------------------------- | -------------------------------------------------------------------- |
+| Gitea repository per document                         | S3 prefix `{collectionId}/{documentId}` + DynamoDB rows              |
+| Upload branch                                         | S3 object version (VersionId)                                        |
+| Upload branch naming convention                       | S3 VersionId (auto-generated, sortable by creation time)             |
+| PR from upload branch → main                          | `bindersnap-reviews` row                                             |
+| PR status (open, approved, etc.)                      | `reviews.status` field                                               |
+| Merge commit to `main`                                | DynamoDB transactional write updating reviews + documents + versions |
+| Annotated tag `doc/vNNNN`                             | `documents.publishedVersionNumber` (integer)                         |
+| Commit trailers (provenance metadata)                 | `bindersnap-versions` row attributes                                 |
+| `main` HEAD = current version                         | `documents.currentVersionId` (S3 VersionId)                          |
+| Historical version by tag                             | `bindersnap-versions` row where `versionNumber = N` → `s3VersionId`  |
+| 25 MiB file size limit                                | Enforced in Lambda upload-request handler; unchanged                 |
+| Role model (viewer/uploader/reviewer/publisher/owner) | `bindersnap-memberships.role`; unchanged                             |
 
 ---
 
@@ -454,7 +458,7 @@ reproduced:
 4. **`main` branch as canonical pointer.** `documents.currentVersionId` is the
    canonical pointer to the published version.
 
-5. **Gitea Docker Compose dev stack.** The `dev/` Docker Compose stack is
+5. **Gitea Docker Compose dev stack.** The `tests/` Docker Compose stack is
    obsolete for this architecture. Local development uses AWS SAM CLI or
    LocalStack for Lambda + DynamoDB + S3 emulation. This is a separate ADR or
    issue.
@@ -523,6 +527,6 @@ Tradeoffs:
    object integrity is guaranteed by AWS but is not independently verifiable by
    the user without AWS access. This may matter for some regulated-industry
    customers — document if so.
-3. Replacing the git model means existing `dev/` tooling, the Gitea seed script,
+3. Replacing the git model means existing `tests/` tooling, the Gitea seed script,
    and any Playwright tests targeting Gitea must be retired or rewritten. Scope
    this as a migration issue before starting implementation.

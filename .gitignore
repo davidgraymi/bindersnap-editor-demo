@@ -34,5 +34,7 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # Finder (MacOS) folder config
 .DS_Store
 
-# Lighthouse
+# Generated files
 lighthouse.json
+packages/gitea-client/spec/openapi3.json
+packages/gitea-client/spec/swagger2.json

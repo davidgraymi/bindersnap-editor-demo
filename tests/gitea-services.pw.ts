@@ -9,7 +9,7 @@ import {
 import {
   fetchDocumentAtSha,
   listDocumentCommits,
-} from "../../packages/gitea-client/documents";
+} from "../packages/gitea-client/documents";
 import {
   type ApprovalState,
   getPullRequestForBranch,

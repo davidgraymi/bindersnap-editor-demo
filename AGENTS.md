@@ -26,6 +26,10 @@ bindersnap-editor-demo/
 │       ├── App.tsx             ← App root (auth + routing)
 │       ├── auth/               ← PKCE OAuth2 flow
 │       └── components/         ← App shell components
+|
+├── infra/                      ← Infrastructure as code (placeholder)
+│   ├── aws/                    ← Terraform/Pulumi for S3, CloudFront, Fargate
+│   └── railway/                ← Gitea provisioning config
 │
 ├── packages/                   ← Shared internal libraries
 │   ├── editor/                 ← Tiptap editor component (shared by both apps)
@@ -40,22 +44,17 @@ bindersnap-editor-demo/
 │       ├── server.ts           ← Hocuspocus server entry
 │       └── Dockerfile
 │
-├── infra/                      ← Infrastructure as code (placeholder)
-│   ├── aws/                    ← Terraform/Pulumi for S3, CloudFront, Fargate
-│   └── railway/                ← Gitea provisioning config
-│
-├── dev/                        ← Local dev stack (Docker Compose)
-│   ├── docker-compose.yml      ← Gitea + Hocuspocus + app
-│   ├── app/                    ← Dev-only Dockerfile for the app container
-│   ├── gitea-seed/             ← Seed script + fixture documents
-│   └── tests/                  ← Integration tests (requires docker compose up)
+├── tests/                      ← Integration tests
+│   └── data/                   ← Files used to seed services (e.g. documents)
 │
 ├── server.ts                   ← Bun dev/prod server (serves both apps)
 ├── scripts/                    ← Build and utility scripts
 ├── docs/                       ← Brand and social media assets
 ├── .github/workflows/          ← CI/CD pipelines
 ├── .claude/                    ← Claude agent definitions
-└── AGENTS.md                   ← This file
+├── AGENTS.md                   ← This file
+├── docker-compose.yml          ← Gitea + Hocuspocus + app
+└── Dockerfile                  ← Dev-only Dockerfile for the app container
 ```
 
 ### The two applications
@@ -75,16 +74,16 @@ by design — it receives a `giteaClient` prop when wired to the real app, and
 operates in read-only demo mode when that prop is absent. Never import from
 `packages/gitea-client/` directly inside `packages/editor/`.
 
-### The dev stack
+### The integration testing stack
 
-`dev/docker-compose.yml` runs Gitea + Hocuspocus locally. `docker compose up`
+`docker-compose.yml` runs Gitea + Hocuspocus locally. `docker compose up`
 seeds demo users and documents automatically. Use this to:
 
 - Verify Gitea service implementations against a real API
 - Run integration tests (`bun run test:integration`)
 - See how the real app looks with realistic data
 
-See `dev/README.md` for full usage.
+See `tests/README.md` for full usage.
 
 ### When editor UI changes
 

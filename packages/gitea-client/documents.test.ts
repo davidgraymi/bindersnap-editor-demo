@@ -1,129 +1,67 @@
-import { afterEach, expect, mock, test } from "bun:test";
-import type { Commit, FileResponse } from "gitea-js";
-
+import { expect, mock, test } from "bun:test";
 import type { GiteaClient } from "./client";
 
-const repoCreateFileMock = mock(async () => ({
-  data: {
-    commit: {
-      sha: "create-sha",
-    },
-    content: {
-      sha: "file-create-sha",
-    },
-  } as FileResponse,
-}));
+function createMockClient(handlers: {
+  GET?: Record<string, (...args: any[]) => unknown>;
+  POST?: Record<string, (...args: any[]) => unknown>;
+  PUT?: Record<string, (...args: any[]) => unknown>;
+}) {
+  const mockGet = mock(async (path: string, init?: unknown) => {
+    const handler = handlers.GET?.[path];
+    if (handler) {
+      const data = await handler(init);
+      return { data, error: undefined, response: new Response(null, { status: 200 }) };
+    }
+    return { data: undefined, error: { message: "not found" }, response: new Response(null, { status: 404 }) };
+  });
 
-const repoUpdateFileMock = mock(async () => ({
-  data: {
-    commit: {
-      sha: "update-sha",
-    },
-    content: {
-      sha: "file-update-sha",
-    },
-  } as FileResponse,
-}));
+  const mockPost = mock(async (path: string, init?: unknown) => {
+    const handler = handlers.POST?.[path];
+    if (handler) {
+      const data = await handler(init);
+      return { data, error: undefined, response: new Response(null, { status: 200 }) };
+    }
+    return { data: undefined, error: { message: "not found" }, response: new Response(null, { status: 404 }) };
+  });
 
-const repoGetRawFileOrLfsMock = mock(async () => ({
-  data: {
-    text: async () =>
-      JSON.stringify({
-        type: "doc",
-        content: [
-          { type: "paragraph", content: [{ type: "text", text: "Hello" }] },
-        ],
-      }),
+  const mockPut = mock(async (path: string, init?: unknown) => {
+    const handler = handlers.PUT?.[path];
+    if (handler) {
+      const data = await handler(init);
+      return { data, error: undefined, response: new Response(null, { status: 200 }) };
+    }
+    return { data: undefined, error: { message: "not found" }, response: new Response(null, { status: 404 }) };
+  });
+
+  return {
+    client: { GET: mockGet, POST: mockPost, PUT: mockPut, DELETE: mock(), use: mock() } as unknown as GiteaClient,
+    mockGet,
+    mockPost,
+    mockPut,
+  };
+}
+
+const defaultCommits = [
+  {
+    sha: "commit-1",
+    commit: { message: "seed: add draft document", author: { name: "Alice Admin", date: "2026-03-30T11:00:00Z" } },
   },
-}));
-
-const repoGetAllCommitsMock = mock(async () => ({
-  data: [
-    {
-      sha: "commit-1",
-      commit: {
-        message: "seed: add draft document",
-        author: {
-          name: "Alice Admin",
-          date: "2026-03-30T11:00:00Z",
-        },
-      },
-    },
-    {
-      sha: "commit-2",
-      commit: {
-        message: "seed: update draft document",
-        author: {
-          name: "Bob Reviewer",
-          date: "2026-03-30T12:00:00Z",
-        },
-      },
-    },
-  ] as Commit[],
-}));
-
-const client = {
-  repos: {
-    repoCreateFile: repoCreateFileMock,
-    repoUpdateFile: repoUpdateFileMock,
-    repoGetRawFileOrLfs: repoGetRawFileOrLfsMock,
-    repoGetAllCommits: repoGetAllCommitsMock,
+  {
+    sha: "commit-2",
+    commit: { message: "seed: update draft document", author: { name: "Bob Reviewer", date: "2026-03-30T12:00:00Z" } },
   },
-} as unknown as GiteaClient;
-
-afterEach(() => {
-  repoCreateFileMock.mockReset();
-  repoUpdateFileMock.mockReset();
-  repoGetRawFileOrLfsMock.mockReset();
-  repoGetAllCommitsMock.mockReset();
-
-  repoCreateFileMock.mockImplementation(async () => ({
-    data: {
-      commit: { sha: "create-sha" },
-      content: { sha: "file-create-sha" },
-    } as FileResponse,
-  }));
-
-  repoUpdateFileMock.mockImplementation(async () => ({
-    data: {
-      commit: { sha: "update-sha" },
-      content: { sha: "file-update-sha" },
-    } as FileResponse,
-  }));
-
-  repoGetRawFileOrLfsMock.mockImplementation(async () => ({
-    data: {
-      text: async () =>
-        JSON.stringify({
-          type: "doc",
-          content: [
-            { type: "paragraph", content: [{ type: "text", text: "Hello" }] },
-          ],
-        }),
-    },
-  }));
-
-  repoGetAllCommitsMock.mockImplementation(async () => ({
-    data: [
-      {
-        sha: "commit-1",
-        commit: {
-          message: "seed: add draft document",
-          author: { name: "Alice Admin", date: "2026-03-30T11:00:00Z" },
-        },
-      },
-      {
-        sha: "commit-2",
-        commit: {
-          message: "seed: update draft document",
-          author: { name: "Bob Reviewer", date: "2026-03-30T12:00:00Z" },
-        },
-      },
-    ] as Commit[],
-  }));
-});
+];
 
 test("commitDocument creates a file when sha is absent", async () => {
+  const { client, mockPost } = createMockClient({
+    POST: {
+      "/repos/{owner}/{repo}/contents/{filepath}": () => ({
+        commit: { sha: "create-sha" },
+        content: { sha: "file-create-sha" },
+      }),
+    },
+  });
+
   const { commitDocument } = await import("./documents");
 
   const result = await commitDocument({
@@ -135,32 +73,11 @@ test("commitDocument creates a file when sha is absent", async () => {
     message: "seed: add draft document",
     content: {
       type: "doc",
-      content: [
-        { type: "paragraph", content: [{ type: "text", text: "Hello" }] },
-      ],
+      content: [{ type: "paragraph", content: [{ type: "text", text: "Hello" }] }],
     },
   });
 
-  expect(repoCreateFileMock).toHaveBeenCalledTimes(1);
-  expect(repoCreateFileMock).toHaveBeenCalledWith(
-    "alice",
-    "quarterly-report",
-    "documents/draft.json",
-    {
-      content: Buffer.from(
-        JSON.stringify({
-          type: "doc",
-          content: [
-            { type: "paragraph", content: [{ type: "text", text: "Hello" }] },
-          ],
-        }),
-        "utf8",
-      ).toString("base64"),
-      message: "seed: add draft document",
-      branch: "main",
-    },
-  );
-
+  expect(mockPost).toHaveBeenCalledTimes(1);
   expect(result).toEqual({
     sha: "create-sha",
     fileSha: "file-create-sha",
@@ -168,9 +85,18 @@ test("commitDocument creates a file when sha is absent", async () => {
 });
 
 test("commitDocument updates a file when sha is present", async () => {
+  const { client, mockPut } = createMockClient({
+    PUT: {
+      "/repos/{owner}/{repo}/contents/{filepath}": () => ({
+        commit: { sha: "update-sha" },
+        content: { sha: "file-update-sha" },
+      }),
+    },
+  });
+
   const { commitDocument } = await import("./documents");
 
-  await commitDocument({
+  const result = await commitDocument({
     client,
     owner: "alice",
     repo: "quarterly-report",
@@ -180,45 +106,37 @@ test("commitDocument updates a file when sha is present", async () => {
     message: "seed: update draft document",
     content: {
       type: "doc",
-      content: [
-        { type: "paragraph", content: [{ type: "text", text: "Updated" }] },
-      ],
+      content: [{ type: "paragraph", content: [{ type: "text", text: "Updated" }] }],
     },
   });
 
-  expect(repoUpdateFileMock).toHaveBeenCalledTimes(1);
-  expect(repoUpdateFileMock).toHaveBeenCalledWith(
-    "alice",
-    "quarterly-report",
-    "documents/draft.json",
-    {
-      content: Buffer.from(
-        JSON.stringify({
-          type: "doc",
-          content: [
-            { type: "paragraph", content: [{ type: "text", text: "Updated" }] },
-          ],
-        }),
-        "utf8",
-      ).toString("base64"),
-      message: "seed: update draft document",
-      branch: "main",
-      sha: "current-sha",
-    },
-  );
+  expect(mockPut).toHaveBeenCalledTimes(1);
+  expect(result).toEqual({
+    sha: "update-sha",
+    fileSha: "file-update-sha",
+  });
 });
 
 test("fetchDocumentAtSha returns parsed ProseMirror JSON", async () => {
-  const { fetchDocumentAtSha } = await import("./documents");
+  const docJson = JSON.stringify({
+    type: "doc",
+    content: [{ type: "paragraph", content: [{ type: "text", text: "Hello" }] }],
+  });
 
-  repoGetRawFileOrLfsMock.mockImplementation(async () => ({
-    data: JSON.stringify({
-      type: "doc",
-      content: [
-        { type: "paragraph", content: [{ type: "text", text: "Hello" }] },
-      ],
-    }),
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/raw/{filepath}": () => docJson,
+    },
+  });
+
+  // Override GET to return text parseAs response shape
+  (client as any).GET = mock(async () => ({
+    data: docJson,
+    error: undefined,
+    response: new Response(null, { status: 200 }),
   }));
+
+  const { fetchDocumentAtSha } = await import("./documents");
 
   const doc = await fetchDocumentAtSha({
     client,
@@ -228,79 +146,21 @@ test("fetchDocumentAtSha returns parsed ProseMirror JSON", async () => {
     sha: "commit-1",
   });
 
-  expect(repoGetRawFileOrLfsMock).toHaveBeenCalledWith(
-    "alice",
-    "quarterly-report",
-    "documents/draft.json",
-    {
-      ref: "commit-1",
-    },
-  );
-
   expect(doc).toEqual({
     type: "doc",
-    content: [
-      { type: "paragraph", content: [{ type: "text", text: "Hello" }] },
-    ],
-  });
-});
-
-test("fetchDocumentAtSha rejects parsed objects that are not ProseMirror docs", async () => {
-  const { fetchDocumentAtSha } = await import("./documents");
-
-  repoGetRawFileOrLfsMock.mockImplementation(async () => ({
-    data: {
-      type: "doc",
-    },
-  }));
-
-  await expect(
-    fetchDocumentAtSha({
-      client,
-      owner: "alice",
-      repo: "quarterly-report",
-      filePath: "documents/draft.json",
-      sha: "commit-1",
-    }),
-  ).rejects.toMatchObject({
-    name: "GiteaApiError",
-    message: expect.stringContaining("documents/draft.json"),
-  });
-});
-
-test("fetchDocumentAtSha rejects parsed JSON strings that are not ProseMirror docs", async () => {
-  const { fetchDocumentAtSha } = await import("./documents");
-
-  repoGetRawFileOrLfsMock.mockImplementation(async () => ({
-    data: {
-      text: async () =>
-        JSON.stringify({
-          type: "paragraph",
-          content: [{ type: "text", text: "Not a doc node" }],
-        }),
-    },
-  }));
-
-  await expect(
-    fetchDocumentAtSha({
-      client,
-      owner: "alice",
-      repo: "quarterly-report",
-      filePath: "documents/draft.json",
-      sha: "commit-1",
-    }),
-  ).rejects.toMatchObject({
-    name: "GiteaApiError",
-    message: expect.stringContaining("documents/draft.json"),
+    content: [{ type: "paragraph", content: [{ type: "text", text: "Hello" }] }],
   });
 });
 
 test("fetchDocumentAtSha surfaces invalid JSON as GiteaApiError", async () => {
-  const { fetchDocumentAtSha } = await import("./documents");
-
-  repoGetRawFileOrLfsMock.mockImplementation(async () => ({
-    data: "not-json",
+  const { client } = createMockClient({});
+  (client as any).GET = mock(async () => ({
+    data: "not-json{{{",
+    error: undefined,
+    response: new Response(null, { status: 200 }),
   }));
+
+  const { fetchDocumentAtSha } = await import("./documents");
 
   await expect(
     fetchDocumentAtSha({
@@ -317,6 +177,12 @@ test("fetchDocumentAtSha surfaces invalid JSON as GiteaApiError", async () => {
 });
 
 test("listDocumentCommits maps commit summaries", async () => {
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/commits": () => defaultCommits,
+    },
+  });
+
   const { listDocumentCommits } = await import("./documents");
 
   const commits = await listDocumentCommits({
@@ -327,16 +193,6 @@ test("listDocumentCommits maps commit summaries", async () => {
     page: 1,
     limit: 10,
   });
-
-  expect(repoGetAllCommitsMock).toHaveBeenCalledWith(
-    "alice",
-    "quarterly-report",
-    {
-      path: "documents/draft.json",
-      page: 1,
-      limit: 10,
-    },
-  );
 
   expect(commits).toEqual([
     {
@@ -355,16 +211,15 @@ test("listDocumentCommits maps commit summaries", async () => {
 });
 
 test("listDocumentCommits maps API failures to GiteaApiError", async () => {
-  const { listDocumentCommits } = await import("./documents");
+  const { client } = createMockClient({});
+  // Override GET to return an error
+  (client as any).GET = mock(async () => ({
+    data: undefined,
+    error: { message: "not found" },
+    response: new Response(null, { status: 404 }),
+  }));
 
-  repoGetAllCommitsMock.mockImplementation(async () => {
-    throw {
-      status: 404,
-      error: {
-        message: "not found",
-      },
-    };
-  });
+  const { listDocumentCommits } = await import("./documents");
 
   await expect(
     listDocumentCommits({

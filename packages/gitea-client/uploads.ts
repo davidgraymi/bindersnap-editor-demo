@@ -1,4 +1,4 @@
-import { GiteaApiError, type GiteaClient } from "./client";
+import { unwrap, type GiteaClient } from "./client";
 import { createPullRequest } from "./pullRequests";
 import type { PullRequestWithApprovalState } from "./pullRequests";
 
@@ -112,35 +112,20 @@ export function buildUploadCommitMessage(
   ].join("\n");
 }
 
-function toGiteaApiError(error: unknown): GiteaApiError {
-  if (error instanceof GiteaApiError) {
-    return error;
-  }
-  const status =
-    typeof error === "object" && error !== null && "status" in error
-      ? Number((error as { status?: unknown }).status)
-      : 0;
-  const message =
-    error instanceof Error
-      ? error.message
-      : typeof error === "string"
-        ? error
-        : "Gitea request failed.";
-  return new GiteaApiError(Number.isFinite(status) ? status : 0, message);
-}
-
 export async function createUploadBranch(
   params: CreateUploadBranchParams,
 ): Promise<void> {
   const { client, owner, repo, branchName, from = "main" } = params;
-  try {
-    await client.repos.repoCreateBranch(owner, repo, {
-      new_branch_name: branchName,
-      old_branch_name: from,
-    });
-  } catch (error) {
-    throw toGiteaApiError(error);
-  }
+
+  await unwrap(
+    client.POST("/repos/{owner}/{repo}/branches", {
+      params: { path: { owner, repo } },
+      body: {
+        new_branch_name: branchName,
+        old_branch_name: from,
+      },
+    }),
+  );
 }
 
 export async function commitBinaryFile(
@@ -148,16 +133,19 @@ export async function commitBinaryFile(
 ): Promise<{ sha: string }> {
   const { client, owner, repo, branch, filePath, base64Content, message } =
     params;
-  try {
-    const response = await client.repos.repoCreateFile(owner, repo, filePath, {
-      content: base64Content,
-      message,
-      branch,
-    });
-    return { sha: response.data.commit?.sha ?? "" };
-  } catch (error) {
-    throw toGiteaApiError(error);
-  }
+
+  const result = await unwrap(
+    client.POST("/repos/{owner}/{repo}/contents/{filepath}", {
+      params: { path: { owner, repo, filepath: filePath } },
+      body: {
+        content: base64Content,
+        message,
+        branch,
+      },
+    }),
+  );
+
+  return { sha: result.commit?.sha ?? "" };
 }
 
 async function readFileAsBase64(file: File): Promise<string> {
@@ -192,6 +180,7 @@ export async function uploadFile(
   // Client-side validation
   const validation = validateUploadFile(file);
   if (!validation.valid) {
+    const { GiteaApiError } = await import("./client");
     throw new GiteaApiError(0, validation.reason ?? "Invalid file.");
   }
 

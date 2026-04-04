@@ -1,6 +1,6 @@
 import type { JSONContent } from "@tiptap/core";
 
-import { GiteaApiError, type GiteaClient } from "./client";
+import { GiteaApiError, unwrap, type GiteaClient } from "./client";
 
 export type ProseMirrorJSON = JSONContent;
 
@@ -87,70 +87,6 @@ function toBase64(value: string): string {
   return Buffer.from(value, "utf8").toString("base64");
 }
 
-function toGiteaApiError(error: unknown): GiteaApiError {
-  if (error instanceof GiteaApiError) {
-    return error;
-  }
-
-  const status =
-    typeof error === "object" && error !== null && "status" in error
-      ? Number((error as { status?: unknown }).status)
-      : 0;
-
-  const message = readErrorMessage(error);
-  return new GiteaApiError(Number.isFinite(status) ? status : 0, message);
-}
-
-function readErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  if (typeof error === "string" && error.trim() !== "") {
-    return error;
-  }
-
-  if (typeof error === "object" && error !== null) {
-    const responseLike = error as {
-      error?: unknown;
-      message?: unknown;
-      statusText?: unknown;
-    };
-
-    if (
-      typeof responseLike.message === "string" &&
-      responseLike.message.trim() !== ""
-    ) {
-      return responseLike.message;
-    }
-
-    if (
-      typeof responseLike.error === "string" &&
-      responseLike.error.trim() !== ""
-    ) {
-      return responseLike.error;
-    }
-
-    if (
-      typeof responseLike.error === "object" &&
-      responseLike.error !== null &&
-      "message" in responseLike.error &&
-      typeof (responseLike.error as { message?: unknown }).message === "string"
-    ) {
-      return (responseLike.error as { message: string }).message;
-    }
-
-    if (
-      typeof responseLike.statusText === "string" &&
-      responseLike.statusText.trim() !== ""
-    ) {
-      return responseLike.statusText;
-    }
-  }
-
-  return "Gitea request failed.";
-}
-
 async function readRawResponseBody(raw: unknown): Promise<string> {
   if (typeof raw === "string") {
     return raw;
@@ -202,27 +138,33 @@ export async function commitDocument(
     params;
   const encodedContent = toBase64(JSON.stringify(content));
 
-  try {
-    const response = sha
-      ? await client.repos.repoUpdateFile(owner, repo, filePath, {
-          content: encodedContent,
-          message,
-          branch,
-          sha,
-        })
-      : await client.repos.repoCreateFile(owner, repo, filePath, {
-          content: encodedContent,
-          message,
-          branch,
-        });
+  const result = sha
+    ? await unwrap(
+        client.PUT("/repos/{owner}/{repo}/contents/{filepath}", {
+          params: { path: { owner, repo, filepath: filePath } },
+          body: {
+            content: encodedContent,
+            message,
+            branch,
+            sha,
+          },
+        }),
+      )
+    : await unwrap(
+        client.POST("/repos/{owner}/{repo}/contents/{filepath}", {
+          params: { path: { owner, repo, filepath: filePath } },
+          body: {
+            content: encodedContent,
+            message,
+            branch,
+          },
+        }),
+      );
 
-    return {
-      sha: response.data.commit?.sha ?? "",
-      fileSha: response.data.content?.sha ?? null,
-    };
-  } catch (error) {
-    throw toGiteaApiError(error);
-  }
+  return {
+    sha: result.commit?.sha ?? "",
+    fileSha: result.content?.sha ?? null,
+  };
 }
 
 export async function fetchDocumentAtSha(
@@ -230,20 +172,29 @@ export async function fetchDocumentAtSha(
 ): Promise<ProseMirrorJSON> {
   const { client, owner, repo, filePath, sha } = params;
 
-  try {
-    const response = await client.repos.repoGetRawFileOrLfs(
-      owner,
-      repo,
-      filePath,
-      { ref: sha },
+  const response = await client.GET("/repos/{owner}/{repo}/raw/{filepath}", {
+    params: {
+      path: { owner, repo, filepath: filePath },
+      query: { ref: sha },
+    },
+    parseAs: "text",
+  });
+
+  if (response.error !== undefined || response.data === undefined) {
+    throw new GiteaApiError(
+      response.response.status,
+      `Failed to fetch document at ${filePath}`,
     );
-    const rawBody = response.data;
+  }
 
-    // Some gitea-js runtimes deserialize JSON responses for us.
-    if (typeof rawBody === "object" && rawBody !== null) {
-      return assertProseMirrorDocument(rawBody, filePath);
-    }
+  const rawBody = response.data;
 
+  // Some runtimes may have already deserialized the response
+  if (typeof rawBody === "object" && rawBody !== null) {
+    return assertProseMirrorDocument(rawBody, filePath);
+  }
+
+  try {
     const rawText = await readRawResponseBody(rawBody);
     const parsed = JSON.parse(rawText) as unknown;
     return assertProseMirrorDocument(parsed, filePath);
@@ -254,8 +205,7 @@ export async function fetchDocumentAtSha(
         `Unable to parse document JSON at ${filePath}.`,
       );
     }
-
-    throw toGiteaApiError(error);
+    throw error;
   }
 }
 
@@ -264,24 +214,30 @@ export async function listDocumentCommits(
 ): Promise<CommitSummary[]> {
   const { client, owner, repo, filePath, page, limit } = params;
 
-  try {
-    const response = await client.repos.repoGetAllCommits(owner, repo, {
-      path: filePath,
-      page,
-      limit,
-    });
+  const commits = await unwrap(
+    client.GET("/repos/{owner}/{repo}/commits", {
+      params: {
+        path: { owner, repo },
+        query: {
+          path: filePath,
+          page,
+          limit,
+          stat: false,
+          verification: false,
+          files: false,
+        },
+      },
+    }),
+  );
 
-    return response.data.map((commit) => ({
-      sha: commit.sha ?? "",
-      message: commit.commit?.message ?? "",
-      author:
-        commit.commit?.author?.name ??
-        commit.author?.full_name ??
-        commit.author?.login ??
-        "Unknown",
-      timestamp: commit.commit?.author?.date ?? commit.created ?? "",
-    }));
-  } catch (error) {
-    throw toGiteaApiError(error);
-  }
+  return commits.map((commit) => ({
+    sha: commit.sha ?? "",
+    message: commit.commit?.message ?? "",
+    author:
+      commit.commit?.author?.name ??
+      commit.author?.full_name ??
+      commit.author?.login ??
+      "Unknown",
+    timestamp: commit.commit?.author?.date ?? commit.created ?? "",
+  }));
 }
