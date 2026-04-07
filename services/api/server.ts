@@ -233,7 +233,7 @@ function corsHeaders(req: Request): Headers {
   const headers = new Headers();
   const origin = requestOrigin(req);
 
-  if (isAllowedOrigin(origin)) {
+  if (origin && isAllowedOrigin(origin)) {
     headers.set("Access-Control-Allow-Origin", origin);
     headers.set("Access-Control-Allow-Credentials", "true");
     headers.set("Access-Control-Allow-Headers", "Content-Type");
@@ -405,6 +405,67 @@ async function giteaFetch(path: string, init?: RequestInit): Promise<Response> {
   return fetch(new URL(path, giteaUrl), init);
 }
 
+async function readResponsePayload(response: Response): Promise<unknown> {
+  const body = await response.text().catch(() => "");
+  if (body.trim() === "") {
+    return null;
+  }
+
+  try {
+    return JSON.parse(body) as unknown;
+  } catch {
+    return body;
+  }
+}
+
+async function readGiteaErrorMessage(
+  response: Response,
+  fallback: string,
+): Promise<string> {
+  const headerMessage = response.headers.get("message")?.trim();
+  if (headerMessage) {
+    return headerMessage;
+  }
+
+  const payload = await readResponsePayload(response).catch(() => null);
+  if (typeof payload === "string") {
+    return payload.trim() || fallback;
+  }
+
+  if (typeof payload === "object" && payload !== null) {
+    const candidate = payload as {
+      error?: unknown;
+      message?: unknown;
+      err?: unknown;
+      description?: unknown;
+    };
+
+    if (typeof candidate.error === "string" && candidate.error.trim() !== "") {
+      return candidate.error.trim();
+    }
+
+    if (
+      typeof candidate.message === "string" &&
+      candidate.message.trim() !== ""
+    ) {
+      return candidate.message.trim();
+    }
+
+    if (typeof candidate.err === "string" && candidate.err.trim() !== "") {
+      return candidate.err.trim();
+    }
+
+    if (
+      typeof candidate.description === "string" &&
+      candidate.description.trim() !== ""
+    ) {
+      return candidate.description.trim();
+    }
+  }
+
+  return fallback;
+}
+
 async function verifyUserCredentials(
   username: string,
   password: string,
@@ -425,6 +486,71 @@ async function verifyUserCredentials(
   return typeof payload.login === "string" && payload.login.trim() !== ""
     ? payload.login.trim()
     : null;
+}
+
+type GiteaEmailRecord = {
+  email?: unknown;
+  username?: unknown;
+};
+
+async function findUsernameByEmail(email: string): Promise<string | null> {
+  if (!adminUsername || !adminPassword) {
+    return null;
+  }
+
+  const response = await giteaFetch(
+    `/api/v1/admin/emails/search?q=${encodeURIComponent(email)}&limit=10`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: buildBasicAuthHeader(adminUsername, adminPassword),
+        Accept: "application/json",
+      },
+    },
+  ).catch(() => null);
+
+  if (!response?.ok) {
+    return null;
+  }
+
+  const payload = (await response.json().catch(() => null)) as
+    | GiteaEmailRecord[]
+    | null;
+  if (!Array.isArray(payload)) {
+    return null;
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const match = payload.find((entry) => {
+    if (typeof entry?.email !== "string") {
+      return false;
+    }
+
+    return entry.email.trim().toLowerCase() === normalizedEmail;
+  });
+
+  return typeof match?.username === "string" && match.username.trim() !== ""
+    ? match.username.trim()
+    : null;
+}
+
+async function verifyUserCredentialsByEmail(
+  email: string,
+  password: string,
+): Promise<string | null> {
+  const directLoginName = await verifyUserCredentials(email, password).catch(
+    () => null,
+  );
+  if (directLoginName) {
+    return directLoginName;
+  }
+
+  const username = await findUsernameByEmail(email).catch(() => null);
+  if (!username) {
+    return null;
+  }
+
+  return verifyUserCredentials(username, password).catch(() => null);
 }
 
 async function createUserToken(
@@ -490,10 +616,16 @@ async function revokeUserToken(session: SessionRecord): Promise<void> {
 
 async function createGiteaUser(
   username: string,
+  email: string,
   password: string,
-): Promise<"created" | "exists" | "error"> {
+): Promise<
+  { status: 502; error: string } | { status: number; error: string } | "created"
+> {
   if (!adminUsername || !adminPassword) {
-    return "error";
+    return {
+      status: 502,
+      error: "Gitea admin credentials are not configured.",
+    };
   }
 
   const response = await giteaFetch("/api/v1/admin/users", {
@@ -506,27 +638,34 @@ async function createGiteaUser(
     body: JSON.stringify({
       username,
       password,
-      email: `${username}@${emailDomain}`,
+      email,
       must_change_password: false,
       restricted: false,
       send_notify: false,
-      visibility: "private",
+      visibility: "limited",
     }),
   }).catch(() => null);
 
   if (!response) {
-    return "error";
+    return {
+      status: 502,
+      error: "Unable to reach Gitea while creating the account.",
+    };
   }
 
   if (response.ok || response.status === 201) {
     return "created";
   }
 
-  if (response.status === 409 || response.status === 422) {
-    return "exists";
-  }
-
-  return "error";
+  return {
+    status: response.status,
+    error: await readGiteaErrorMessage(
+      response,
+      response.status === 409 || response.status === 422
+        ? "Unable to create account with those details."
+        : "Unable to create account.",
+    ),
+  };
 }
 
 function createSession(
@@ -661,29 +800,28 @@ async function handleSignup(
     );
   }
 
-  const payload = await readJson<{ username?: unknown; password?: unknown }>(
-    req,
-  );
+  const payload = await readJson<{
+    username?: unknown;
+    email?: unknown;
+    password?: unknown;
+  }>(req);
   const username =
-    typeof payload?.username === "string" ? payload.username.trim() : "";
+    typeof payload?.username === "string" ? payload.username : "";
+  const email = typeof payload?.email === "string" ? payload.email : "";
   const password =
     typeof payload?.password === "string" ? payload.password : "";
 
-  if (!username || !password) {
+  if (!username || !email || !password) {
     return json(
       400,
-      { error: "Username and password are required." },
+      { error: "Username, email and password are required." },
       baseHeaders,
     );
   }
 
-  const created = await createGiteaUser(username, password);
-  if (created === "exists") {
-    return json(409, { error: "Username is unavailable." }, baseHeaders);
-  }
-
+  const created = await createGiteaUser(username, email, password);
   if (created !== "created") {
-    return json(502, { error: "Unable to create account." }, baseHeaders);
+    return json(created.status, { error: created.error }, baseHeaders);
   }
 
   const response = await createLoginSession(
@@ -713,20 +851,22 @@ async function handleLogin(
     );
   }
 
-  const payload = await readJson<{ username?: unknown; password?: unknown }>(
-    req,
-  );
-  const username =
-    typeof payload?.username === "string" ? payload.username.trim() : "";
+  const payload = await readJson<{ email?: unknown; password?: unknown }>(req);
+  const email = typeof payload?.email === "string" ? payload.email.trim() : "";
   const password =
     typeof payload?.password === "string" ? payload.password : "";
 
-  if (!username || !password) {
+  if (!email || !password) {
     return json(
       400,
-      { error: "Username and password are required." },
+      { error: "Email and password are required." },
       baseHeaders,
     );
+  }
+
+  const username = await verifyUserCredentialsByEmail(email, password);
+  if (!username) {
+    return json(401, { error: "Invalid email or password." }, baseHeaders);
   }
 
   const response = await createLoginSession(

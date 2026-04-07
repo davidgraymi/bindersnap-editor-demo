@@ -9,9 +9,7 @@
 
 import { test, expect } from "@playwright/test";
 
-import {
-  getPullRequestForBranch,
-} from "../packages/gitea-client/pullRequests";
+import { getPullRequestForBranch } from "../packages/gitea-client/pullRequests";
 
 import {
   APP_BASE_URL,
@@ -209,13 +207,11 @@ test.describe("app shell routes", () => {
     // Unauthenticated path: verify the login form is present.
     await expect(page).toHaveURL(/\/login$/);
     await expect(loginHeading).toBeVisible();
-    await expect(page.getByLabel("Username")).toBeVisible();
-    await expect(page.getByLabel("Password")).toBeVisible();
+    await expect(page.getByLabel("Email")).toBeVisible();
+    await expect(page.getByLabel("Password", { exact: true })).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Open workspace" }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Create one" }),
-    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Sign up" })).toBeVisible();
   });
 });
