@@ -85,19 +85,46 @@ test.describe("Gitea dev stack health", () => {
     expect(payload.permission).toBe("write");
   });
 
-  test("seeded repository contains the three expected document files", async ({
+  test("seeded repository keeps main empty before review", async ({
     request,
   }) => {
     const res = await request.get(
-      `${GITEA_URL}/api/v1/repos/alice/quarterly-report/contents/documents`,
+      `${GITEA_URL}/api/v1/repos/alice/quarterly-report/contents/document.json`,
+      { headers: authHeaders },
+    );
+    expect(res.status()).toBe(404);
+  });
+
+  test("seeded repository stores the canonical document file on the review branch", async ({
+    request,
+  }) => {
+    const res = await request.get(
+      `${GITEA_URL}/api/v1/repos/alice/quarterly-report/contents/document.json?ref=feature/q2-amendments`,
       { headers: authHeaders },
     );
     expect(res.status()).toBe(200);
-    const files = (await res.json()) as Array<{ name: string }>;
-    const names = files.map((f) => f.name);
-    expect(names).toContain("draft.json");
-    expect(names).toContain("in-review.json");
-    expect(names).toContain("changes-requested.json");
+    const file = (await res.json()) as { name?: string; type?: string };
+    expect(file.name).toBe("document.json");
+    expect(file.type).toBe("file");
+  });
+
+  test("seeded repository protects main with review rules", async ({
+    request,
+  }) => {
+    const res = await request.get(
+      `${GITEA_URL}/api/v1/repos/alice/quarterly-report/branch_protections`,
+      { headers: authHeaders },
+    );
+    expect(res.status()).toBe(200);
+    const rules = (await res.json()) as Array<{
+      rule_name?: string;
+      required_approvals?: number;
+      block_on_rejected_reviews?: boolean;
+    }>;
+    const mainRule = rules.find((rule) => rule.rule_name === "main");
+    expect(mainRule).toBeTruthy();
+    expect(mainRule?.required_approvals).toBe(1);
+    expect(mainRule?.block_on_rejected_reviews).toBe(true);
   });
 
   test("seeded PR from feature/q2-amendments has bob's changes_requested review", async ({

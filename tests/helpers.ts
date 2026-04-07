@@ -18,20 +18,16 @@ import { seedDevStack } from "./seed";
 // Environment constants
 // ---------------------------------------------------------------------------
 
-export const GITEA_URL =
-  process.env.VITE_GITEA_URL ?? "http://localhost:3000";
+export const GITEA_URL = process.env.VITE_GITEA_URL ?? "http://localhost:3000";
 
-export const GITEA_ADMIN_USER =
-  process.env.GITEA_ADMIN_USER ?? "alice";
+export const GITEA_ADMIN_USER = process.env.GITEA_ADMIN_USER ?? "alice";
 
 export const GITEA_ADMIN_PASS =
   process.env.GITEA_ADMIN_PASS ?? "bindersnap-dev";
 
-export const GITEA_BOB_USER =
-  process.env.GITEA_BOB_USER ?? "bob";
+export const GITEA_BOB_USER = process.env.GITEA_BOB_USER ?? "bob";
 
-export const GITEA_BOB_PASS =
-  process.env.GITEA_BOB_PASS ?? "bindersnap-dev";
+export const GITEA_BOB_PASS = process.env.GITEA_BOB_PASS ?? "bindersnap-dev";
 
 /** Raw token string from the environment — may be empty. */
 export const ENV_TOKEN = process.env.VITE_GITEA_TOKEN ?? "";
@@ -49,7 +45,7 @@ export const APP_BASE_URL =
 export const OWNER = "alice";
 export const REPO = "quarterly-report";
 export const SEEDED_BRANCH = "feature/q2-amendments";
-export const SEEDED_DOC_PATH = "documents/draft.json";
+export const SEEDED_DOC_PATH = "document.json";
 
 // ---------------------------------------------------------------------------
 // In-memory Storage
@@ -177,7 +173,10 @@ export async function createBobClient() {
   ).toString("base64");
 
   const response = await fetch(
-    new URL(`/api/v1/users/${encodeURIComponent(GITEA_BOB_USER)}/tokens`, GITEA_URL),
+    new URL(
+      `/api/v1/users/${encodeURIComponent(GITEA_BOB_USER)}/tokens`,
+      GITEA_URL,
+    ),
     {
       method: "POST",
       headers: {
@@ -190,9 +189,7 @@ export async function createBobClient() {
 
   if (response.status !== 201) {
     const body = await response.text();
-    throw new Error(
-      `Failed to create bob token (${response.status}): ${body}`,
-    );
+    throw new Error(`Failed to create bob token (${response.status}): ${body}`);
   }
 
   const json = (await response.json()) as { sha1?: string };

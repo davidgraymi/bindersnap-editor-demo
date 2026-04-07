@@ -28,6 +28,7 @@ export interface ListDocumentCommitsParams {
   owner: string;
   repo: string;
   filePath: string;
+  ref?: string;
   page?: number;
   limit?: number;
 }
@@ -212,13 +213,14 @@ export async function fetchDocumentAtSha(
 export async function listDocumentCommits(
   params: ListDocumentCommitsParams,
 ): Promise<CommitSummary[]> {
-  const { client, owner, repo, filePath, page, limit } = params;
+  const { client, owner, repo, filePath, ref, page, limit } = params;
 
   const commits = await unwrap(
     client.GET("/repos/{owner}/{repo}/commits", {
       params: {
         path: { owner, repo },
         query: {
+          sha: ref,
           path: filePath,
           page,
           limit,

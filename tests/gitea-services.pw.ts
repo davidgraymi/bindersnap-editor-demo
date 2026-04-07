@@ -136,6 +136,7 @@ test.describe("documents", () => {
       owner: OWNER,
       repo: REPO,
       filePath: SEEDED_DOC_PATH,
+      ref: SEEDED_BRANCH,
     });
 
     expect(commits.length).toBeGreaterThan(0);
@@ -154,6 +155,7 @@ test.describe("documents", () => {
       owner: OWNER,
       repo: REPO,
       filePath: SEEDED_DOC_PATH,
+      ref: SEEDED_BRANCH,
     });
     expect(commits.length).toBeGreaterThan(0);
 
