@@ -9,6 +9,7 @@ import {
 import "./app.css";
 
 import { AppShell } from "./components/AppShell";
+import { resolveGiteaTokenScopes } from "./giteaTokenScopes";
 import {
   clearToken,
   createAuthenticatedClient,
@@ -204,11 +205,8 @@ async function createGiteaSessionToken(
   const tokenScopesRaw =
     appEnv?.BUN_PUBLIC_GITEA_TOKEN_SCOPES ??
     appEnv?.VITE_GITEA_TOKEN_SCOPES ??
-    "write:repository,write:issue";
-  const tokenScopes = tokenScopesRaw
-    .split(",")
-    .map((scope) => scope.trim())
-    .filter((scope) => scope.length > 0);
+    "";
+  const tokenScopes = resolveGiteaTokenScopes(tokenScopesRaw);
   const credentials = btoa(`${username}:${password}`);
   const response = await fetch(
     `${baseUrl}/api/v1/users/${encodeURIComponent(username)}/tokens`,
@@ -221,7 +219,7 @@ async function createGiteaSessionToken(
       },
       body: JSON.stringify({
         name: tokenName,
-        scopes: tokenScopes.length > 0 ? tokenScopes : ["read:repository"],
+        scopes: tokenScopes,
       }),
     },
   );

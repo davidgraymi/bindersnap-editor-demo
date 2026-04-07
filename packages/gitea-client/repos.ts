@@ -4,6 +4,13 @@ import { GiteaApiError, unwrap, type GiteaClient } from "./client";
 
 type Repository = components["schemas"]["Repository"];
 type Tag = components["schemas"]["Tag"];
+type BranchProtection = components["schemas"]["BranchProtection"];
+type CreateBranchProtectionOption =
+  components["schemas"]["CreateBranchProtectionOption"];
+type RepoFileContent = {
+  sha?: string;
+  type?: string;
+};
 
 export interface WorkspaceRepo {
   id: number;
@@ -19,6 +26,25 @@ export interface DocTag {
   version: number;
   sha: string;
   created: string;
+}
+
+export interface CreatePrivateCurrentUserRepoParams {
+  client: GiteaClient;
+  name: string;
+  description?: string;
+}
+
+export interface CreateMainBranchProtectionParams {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+  requiredApprovals?: number;
+}
+
+export interface BootstrapEmptyMainBranchParams {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
 }
 
 function normalizeWorkspaceRepo(repo: Repository): WorkspaceRepo {
@@ -70,6 +96,123 @@ export async function listWorkspaceRepos(
   );
 
   return result.data?.map(normalizeWorkspaceRepo) ?? [];
+}
+
+export async function createPrivateCurrentUserRepo(
+  params: CreatePrivateCurrentUserRepoParams,
+): Promise<Repository> {
+  const { client, name, description } = params;
+
+  return await unwrap(
+    client.POST("/user/repos", {
+      body: {
+        name,
+        description,
+        private: true,
+        auto_init: true,
+        default_branch: "main",
+      },
+    }),
+  );
+}
+
+export async function repoExists(
+  client: GiteaClient,
+  owner: string,
+  repo: string,
+): Promise<boolean> {
+  try {
+    await unwrap(
+      client.GET("/repos/{owner}/{repo}", {
+        params: { path: { owner, repo } },
+      }),
+    );
+    return true;
+  } catch (err) {
+    if (err instanceof GiteaApiError && err.status === 404) {
+      return false;
+    }
+    throw err;
+  }
+}
+
+function normalizeBranchProtection(
+  raw: BranchProtection,
+): RepoBranchProtection {
+  return {
+    requiredApprovals: raw.required_approvals ?? 0,
+    enableApprovalsWhitelist: raw.enable_approvals_whitelist ?? false,
+    approvalsWhitelistUsernames: raw.approvals_whitelist_username ?? [],
+    enableMergeWhitelist: raw.enable_merge_whitelist ?? false,
+    mergeWhitelistUsernames: raw.merge_whitelist_usernames ?? [],
+    blockOnRejectedReviews: raw.block_on_rejected_reviews ?? false,
+  };
+}
+
+export async function createMainBranchProtection(
+  params: CreateMainBranchProtectionParams,
+): Promise<RepoBranchProtection> {
+  const { client, owner, repo, requiredApprovals = 0 } = params;
+
+  const protection = await unwrap(
+    client.POST("/repos/{owner}/{repo}/branch_protections", {
+      params: { path: { owner, repo } },
+      body: {
+        rule_name: "main",
+        required_approvals: requiredApprovals,
+        enable_approvals_whitelist: false,
+        enable_merge_whitelist: false,
+        block_on_rejected_reviews: true,
+        block_on_outdated_branch: true,
+        dismiss_stale_approvals: true,
+        enable_force_push: false,
+        enable_push: false,
+      } satisfies CreateBranchProtectionOption,
+    }),
+  );
+
+  return normalizeBranchProtection(protection);
+}
+
+export async function bootstrapEmptyMainBranch(
+  params: BootstrapEmptyMainBranchParams,
+): Promise<void> {
+  const { client, owner, repo } = params;
+
+  let readme: RepoFileContent | RepoFileContent[] | null = null;
+
+  try {
+    readme = await unwrap(
+      client.GET("/repos/{owner}/{repo}/contents/{filepath}", {
+        params: {
+          path: { owner, repo, filepath: "README.md" },
+          query: { ref: "main" },
+        },
+      }),
+    );
+  } catch (err) {
+    if (err instanceof GiteaApiError && err.status === 404) {
+      return;
+    }
+    throw err;
+  }
+
+  if (Array.isArray(readme) || typeof readme?.sha !== "string") {
+    return;
+  }
+
+  await unwrap(
+    client.DELETE("/repos/{owner}/{repo}/contents/{filepath}", {
+      params: {
+        path: { owner, repo, filepath: "README.md" },
+      },
+      body: {
+        branch: "main",
+        sha: readme.sha,
+        message: "Bootstrap empty main branch",
+      },
+    }),
+  );
 }
 
 export async function getLatestDocTag(
@@ -127,19 +270,6 @@ export interface RepoBranchProtection {
   enableMergeWhitelist: boolean;
   mergeWhitelistUsernames: string[];
   blockOnRejectedReviews: boolean;
-}
-
-function normalizeBranchProtection(
-  raw: components["schemas"]["BranchProtection"],
-): RepoBranchProtection {
-  return {
-    requiredApprovals: raw.required_approvals ?? 0,
-    enableApprovalsWhitelist: raw.enable_approvals_whitelist ?? false,
-    approvalsWhitelistUsernames: raw.approvals_whitelist_username ?? [],
-    enableMergeWhitelist: raw.enable_merge_whitelist ?? false,
-    mergeWhitelistUsernames: raw.merge_whitelist_usernames ?? [],
-    blockOnRejectedReviews: raw.block_on_rejected_reviews ?? false,
-  };
 }
 
 export async function getRepoBranchProtection(

@@ -19,6 +19,7 @@ interface UploadModalProps {
   docSlug: string;
   uploaderSlug: string;
   nextVersion: number;
+  canonicalFileName?: string | null;
   onClose: () => void;
   onSuccess: (result: UploadResult) => void;
 }
@@ -54,6 +55,7 @@ export function UploadModal({
   docSlug,
   uploaderSlug,
   nextVersion,
+  canonicalFileName,
   onClose,
   onSuccess,
 }: UploadModalProps) {
@@ -118,8 +120,10 @@ export function UploadModal({
 
       // Step 4: Commit file
       setStatus("committing");
-      const ext = selectedFile.name.split(".").pop()!.toLowerCase();
-      const canonicalFile = `${docSlug}.${ext}`;
+      const canonicalFile =
+        canonicalFileName && canonicalFileName.trim() !== ""
+          ? canonicalFileName
+          : `${docSlug}.${selectedFile.name.split(".").pop()!.toLowerCase()}`;
 
       const commitMessage = buildUploadCommitMessage({
         docSlug,
