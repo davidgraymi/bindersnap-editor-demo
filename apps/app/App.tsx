@@ -42,8 +42,12 @@ interface SessionUser {
 
 interface LoginPageProps {
   callbackError: string | null;
-  onLogin: (username: string, password: string) => Promise<void>;
-  onSignup: (username: string, password: string) => Promise<void>;
+  onLogin: (identifier: string, password: string) => Promise<void>;
+  onSignup: (
+    username: string,
+    email: string,
+    password: string,
+  ) => Promise<void>;
 }
 
 function getRoute(pathname: string): AppRoute {
@@ -85,11 +89,18 @@ function readErrorMessage(payload: unknown, fallback: string): string {
   return fallback;
 }
 
+/**
+ * Authenticates with the app's own API server (the Bun backend at API_BASE_URL).
+ * @param path
+ * @param username
+ * @param password
+ */
 async function sendAuthRequest(
   path: "/auth/login" | "/auth/signup",
-  username: string,
+  username: string | null,
+  email: string,
   password: string,
-): Promise<void> {
+): Promise<SessionUser | null> {
   const response = await fetch(resolveApiUrl(path), {
     method: "POST",
     credentials: "include",
@@ -97,7 +108,7 @@ async function sendAuthRequest(
       "Content-Type": "application/json",
       Accept: "application/json",
     },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ username, email, password }),
   });
 
   const payload = (await response.json().catch(() => null)) as unknown;
@@ -106,6 +117,8 @@ async function sendAuthRequest(
       readErrorMessage(payload, "Unable to complete authentication right now."),
     );
   }
+
+  return parseSessionUser(payload);
 }
 
 function parseSessionUser(payload: unknown): SessionUser | null {
@@ -174,9 +187,17 @@ async function fetchSessionUser(): Promise<SessionUser | null> {
   return parseSessionUser(payload);
 }
 
+/**
+ * Authenticates directly with Gitea using Basic Auth to mint an API token,
+ * then stores it in sessionStorage via `storeToken()`.
+ * @param baseUrl
+ * @param username
+ * @param password
+ */
 async function createGiteaSessionToken(
   baseUrl: string,
   username: string,
+  // email: string,
   password: string,
 ): Promise<void> {
   const tokenName = `bindersnap-session-${Date.now()}`;
@@ -207,12 +228,7 @@ async function createGiteaSessionToken(
 
   const payload = (await response.json().catch(() => null)) as unknown;
   if (!response.ok) {
-    throw new Error(
-      readErrorMessage(
-        payload,
-        "Unable to connect to the document vault. Check that your Gitea account is active.",
-      ),
-    );
+    throw new Error(readErrorMessage(payload, "Unable to connect."));
   }
 
   const token =
@@ -239,7 +255,9 @@ async function logoutSession(): Promise<void> {
 function LoginPage({ callbackError, onLogin, onSignup }: LoginPageProps) {
   const [mode, setMode] = useState<AuthMode>("signin");
   const [username, setUsername] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(callbackError);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -250,9 +268,28 @@ function LoginPage({ callbackError, onLogin, onSignup }: LoginPageProps) {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const nextUsername = username.trim();
-    if (!nextUsername || !password) {
-      setError("Enter your username and password.");
+    const normalizedUsername = username.trim();
+    const normalizedIdentifier = identifier.trim();
+
+    if (mode === "signup") {
+      if (
+        !normalizedUsername ||
+        !normalizedIdentifier ||
+        !password ||
+        !confirmPassword
+      ) {
+        setError(
+          "Enter a username, email, password, and password confirmation.",
+        );
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        setError("Passwords do not match.");
+        return;
+      }
+    } else if (!normalizedIdentifier || !password) {
+      setError("Enter your username or email and password.");
       return;
     }
 
@@ -261,16 +298,16 @@ function LoginPage({ callbackError, onLogin, onSignup }: LoginPageProps) {
 
     try {
       if (mode === "signin") {
-        await onLogin(nextUsername, password);
+        await onLogin(normalizedIdentifier, password);
       } else {
-        await onSignup(nextUsername, password);
+        await onSignup(normalizedUsername, normalizedIdentifier, password);
       }
     } catch (submitError) {
       if (submitError instanceof Error && submitError.message.trim() !== "") {
         setError(submitError.message);
       } else {
         setError(
-          `Unable to ${mode === "signin" ? "sign in" : "create your account"} right now.`,
+          `Unable to ${mode === "signin" ? "sign in" : "sign up"} right now.`,
         );
       }
     } finally {
@@ -288,22 +325,37 @@ function LoginPage({ callbackError, onLogin, onSignup }: LoginPageProps) {
               ? "Step into the clean version."
               : "Create your Bindersnap workspace."}
           </h1>
-          <p className="app-gate-copy">
-            {mode === "signin"
-              ? "Sign in to pick up the live workspace without reopening another approval chain by hand."
-              : "Choose a username and password once. We will use that account to open your workspace the same way every time."}
-          </p>
 
           <form className="app-form" onSubmit={handleSubmit}>
+            {mode === "signup" ? (
+              <label className="app-field">
+                <span className="bs-label">Username</span>
+                <input
+                  className="bs-input"
+                  type="text"
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value)}
+                  placeholder="Choose a username"
+                  autoComplete="username"
+                />
+              </label>
+            ) : null}
+
             <label className="app-field">
-              <span className="bs-label">Username</span>
+              <span className="bs-label">
+                {mode === "signin" ? "Username or Email" : "Email"}
+              </span>
               <input
                 className="bs-input"
                 type="text"
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
-                placeholder="alice"
-                autoComplete="username"
+                value={identifier}
+                onChange={(event) => setIdentifier(event.target.value)}
+                placeholder={
+                  mode === "signin"
+                    ? "Enter your username or email"
+                    : "Enter your email"
+                }
+                autoComplete={mode === "signin" ? "username" : "email"}
                 spellCheck={false}
               />
             </label>
@@ -321,6 +373,20 @@ function LoginPage({ callbackError, onLogin, onSignup }: LoginPageProps) {
                 }
               />
             </label>
+
+            {mode === "signup" ? (
+              <label className="app-field">
+                <span className="bs-label">Confirm Password</span>
+                <input
+                  className="bs-input"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  placeholder="Confirm your password"
+                  autoComplete="new-password"
+                />
+              </label>
+            ) : null}
 
             <button
               className="bs-btn bs-btn-primary app-submit"
@@ -351,7 +417,7 @@ function LoginPage({ callbackError, onLogin, onSignup }: LoginPageProps) {
                 setError(callbackError);
               }}
             >
-              {mode === "signin" ? "Create one" : "Sign in instead"}
+              {mode === "signin" ? "Sign up" : "Sign in"}
             </button>
           </div>
 
@@ -435,7 +501,7 @@ export function App() {
     }
 
     setCallbackError(
-      "Single sign-on callback is not enabled in this build. Sign in with your username and password.",
+      "Single sign-on callback is not enabled in this build. Sign in with your username or email and password.",
     );
     navigateTo("/login", true);
   }, [route]);
@@ -492,10 +558,26 @@ export function App() {
     return (
       <LoginPage
         callbackError={callbackError}
-        onLogin={async (username, password) => {
+        onLogin={async (identifier, password) => {
           clearToken();
-          await sendAuthRequest("/auth/login", username, password);
-          await createGiteaSessionToken(giteaBaseUrl, username, password);
+          const loginIdentifier = identifier.trim();
+          const authenticatedUser = await sendAuthRequest(
+            "/auth/login",
+            loginIdentifier.includes("@") ? null : loginIdentifier,
+            loginIdentifier.includes("@") ? loginIdentifier : "",
+            password,
+          );
+          const loginUser = authenticatedUser ?? (await refreshSession());
+          if (!loginUser) {
+            throw new Error(
+              "Sign-in completed, but the session could not be verified.",
+            );
+          }
+          await createGiteaSessionToken(
+            giteaBaseUrl,
+            loginUser.username,
+            password,
+          );
           const nextUser = await refreshSession();
           if (!nextUser) {
             throw new Error(
@@ -504,10 +586,25 @@ export function App() {
           }
           navigateTo("/app", true);
         }}
-        onSignup={async (username, password) => {
+        onSignup={async (username, email, password) => {
           clearToken();
-          await sendAuthRequest("/auth/signup", username, password);
-          await createGiteaSessionToken(giteaBaseUrl, username, password);
+          const authenticatedUser = await sendAuthRequest(
+            "/auth/signup",
+            username,
+            email,
+            password,
+          );
+          const signupUser = authenticatedUser ?? (await refreshSession());
+          if (!signupUser) {
+            throw new Error(
+              "Account created, but the session could not be verified.",
+            );
+          }
+          await createGiteaSessionToken(
+            giteaBaseUrl,
+            signupUser.username,
+            password,
+          );
           const nextUser = await refreshSession();
           if (!nextUser) {
             throw new Error(
