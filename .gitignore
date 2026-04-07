@@ -38,3 +38,5 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 lighthouse.json
 packages/gitea-client/spec/openapi3.json
 packages/gitea-client/spec/swagger2.json
+conf/app.ini
+conf/app.prod.ini
