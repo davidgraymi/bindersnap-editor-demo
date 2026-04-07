@@ -341,6 +341,19 @@ export function DocumentCollaborators({
   const collaboratorMap = useMemo(() => {
     return new Map(collaborators.map((row) => [row.login, row]));
   }, [collaborators]);
+  const visibleSearchResults = useMemo(() => {
+    return searchResults.filter((result) => {
+      if (!result.login) {
+        return false;
+      }
+
+      return !(
+        result.login === currentUsername ||
+        result.login === owner ||
+        collaboratorMap.has(result.login)
+      );
+    });
+  }, [collaboratorMap, currentUsername, owner, searchResults]);
 
   const canManageCollaborators =
     currentPermission === "owner" || currentPermission === "admin";
@@ -624,18 +637,9 @@ export function DocumentCollaborators({
         upsertCollaboratorRow(normalized);
       }
 
-      setSearchResults((prev) =>
-        prev.map((result) =>
-          result.login === login
-            ? {
-                ...result,
-                fullName: user.fullName,
-                email: user.email,
-                avatarUrl: user.avatarUrl,
-              }
-            : result,
-        ),
-      );
+      setSearchQuery("");
+      setDebouncedSearchQuery("");
+      setSearchResults([]);
     } catch (err) {
       setManageError(
         readPermissionError(err, `Unable to update access for ${login}.`),
@@ -701,6 +705,7 @@ export function DocumentCollaborators({
     debouncedSearchQuery.length >= 2
       ? `Search results for "${debouncedSearchQuery}"`
       : "";
+  const showSearchDropdown = searchQuery.trim().length >= 2;
 
   return (
     <div className="vault-detail collaborators-page">
@@ -968,14 +973,104 @@ export function DocumentCollaborators({
               Search users by name
             </label>
             <div className="collaborator-search-input-row">
-              <input
-                id="collaborator-search"
-                className="collaborator-search-input"
-                type="search"
-                value={searchQuery}
-                placeholder="Start typing a name or username"
-                onChange={(event) => setSearchQuery(event.target.value)}
-              />
+              <div className="collaborator-search-shell">
+                <input
+                  id="collaborator-search"
+                  className="collaborator-search-input"
+                  type="search"
+                  value={searchQuery}
+                  placeholder="Start typing a name or username"
+                  autoComplete="off"
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                />
+                {showSearchDropdown ? (
+                  <div
+                    className="collaborator-search-dropdown"
+                    role="listbox"
+                    aria-label="Matching users"
+                  >
+                    {isSearching ? (
+                      <div className="collaborators-empty-state" role="status">
+                        Searching Gitea...
+                      </div>
+                    ) : searchError ? (
+                      <div className="collaborators-empty-state collaborators-search-error">
+                        {searchError}
+                      </div>
+                    ) : visibleSearchResults.length === 0 ? (
+                      <div className="collaborators-empty-state">
+                        {searchResults.length > 0
+                          ? "Everyone matching that search already has access."
+                          : "No users matched that search."}
+                      </div>
+                    ) : (
+                      <>
+                        <div className="collaborator-search-heading">
+                          {activeSearch}
+                        </div>
+                        <div className="collaborator-search-results">
+                          {visibleSearchResults.map((user) => {
+                            const busy = rowBusy[user.login] ?? false;
+                            const selectValue =
+                              draftPermissions[user.login] ?? defaultPermission;
+
+                            return (
+                              <article
+                                className="collaborator-search-result"
+                                key={user.login}
+                              >
+                                <div className="collaborator-search-result-main">
+                                  {renderUserIdentity(user)}
+                                  <div className="collaborator-search-result-copy">
+                                    {user.email ? (
+                                      <div className="collaborator-row-email">
+                                        {user.email}
+                                      </div>
+                                    ) : (
+                                      <div className="collaborator-row-email">
+                                        Email not public
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="collaborator-result-actions">
+                                  <select
+                                    className="collaborator-permission-select"
+                                    value={selectValue}
+                                    disabled={busy}
+                                    onChange={(event) =>
+                                      updateDraftPermission(
+                                        user.login,
+                                        event.target
+                                          .value as WritablePermission,
+                                      )
+                                    }
+                                  >
+                                    <option value="read">Read</option>
+                                    <option value="write">Write</option>
+                                    <option value="admin">Admin</option>
+                                  </select>
+                                  <button
+                                    className="bs-btn bs-btn-primary"
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={() =>
+                                      void handleGrantCollaborator(user)
+                                    }
+                                  >
+                                    {busy ? "Saving..." : "Add collaborator"}
+                                  </button>
+                                </div>
+                              </article>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ) : null}
+              </div>
               <select
                 className="collaborator-permission-select collaborator-default-permission"
                 value={defaultPermission}
@@ -992,110 +1087,6 @@ export function DocumentCollaborators({
             <p className="collaborator-search-hint">
               Search results are loaded from Gitea after a short debounce.
             </p>
-          </div>
-
-          <div className="collaborator-search-results">
-            {searchQuery.trim().length < 2 ? (
-              <div className="collaborators-empty-state">
-                Type at least two characters to search for a user.
-              </div>
-            ) : isSearching ? (
-              <div className="collaborators-empty-state" role="status">
-                Searching Gitea...
-              </div>
-            ) : searchError ? (
-              <div className="collaborators-empty-state collaborators-search-error">
-                {searchError}
-              </div>
-            ) : searchResults.length === 0 ? (
-              <div className="collaborators-empty-state">
-                No users matched that search.
-              </div>
-            ) : (
-              <>
-                <div className="collaborator-search-heading">
-                  {activeSearch}
-                </div>
-                {searchResults.map((user) => {
-                  const existing = collaboratorMap.get(user.login);
-                  const busy = rowBusy[user.login] ?? false;
-                  const permission = existing ? existing.permission : "unknown";
-                  const editable =
-                    !existing || isManagedPermission(existing.permission);
-                  const selectValue =
-                    draftPermissions[user.login] ?? defaultPermission;
-
-                  return (
-                    <article
-                      className="collaborator-search-result"
-                      key={user.login}
-                    >
-                      <div className="collaborator-search-result-main">
-                        {renderUserIdentity(user)}
-                        <div className="collaborator-search-result-copy">
-                          {user.email ? (
-                            <div className="collaborator-row-email">
-                              {user.email}
-                            </div>
-                          ) : (
-                            <div className="collaborator-row-email">
-                              Email not public
-                            </div>
-                          )}
-                          {existing ? (
-                            <span className="collaborator-existing-badge">
-                              Already a collaborator
-                            </span>
-                          ) : null}
-                        </div>
-                      </div>
-
-                      <div className="collaborator-result-actions">
-                        <select
-                          className="collaborator-permission-select"
-                          value={selectValue}
-                          disabled={busy || !editable}
-                          onChange={(event) =>
-                            updateDraftPermission(
-                              user.login,
-                              event.target.value as WritablePermission,
-                            )
-                          }
-                        >
-                          <option value="read">Read</option>
-                          <option value="write">Write</option>
-                          <option value="admin">Admin</option>
-                        </select>
-                        <button
-                          className="bs-btn bs-btn-primary"
-                          type="button"
-                          disabled={busy || !editable}
-                          onClick={() =>
-                            void handleGrantCollaborator(
-                              user,
-                              existing?.permission,
-                            )
-                          }
-                        >
-                          {busy
-                            ? "Saving..."
-                            : existing && editable
-                              ? "Update access"
-                              : existing
-                                ? "Owner access"
-                                : "Add collaborator"}
-                        </button>
-                        {existing ? (
-                          <span className={permissionBadgeClass(permission)}>
-                            {formatPermissionLabel(permission)}
-                          </span>
-                        ) : null}
-                      </div>
-                    </article>
-                  );
-                })}
-              </>
-            )}
           </div>
 
           {manageError ? (
