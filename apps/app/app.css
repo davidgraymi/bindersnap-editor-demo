@@ -523,6 +523,44 @@ input {
   color: var(--bs-text-muted);
 }
 
+.document-detail-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--brand-space-2);
+  margin-top: var(--brand-space-2);
+}
+
+.document-detail-tab {
+  appearance: none;
+  border: 1px solid var(--color-rule);
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-surface-1);
+  color: var(--bs-text-muted);
+  cursor: pointer;
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-label);
+  letter-spacing: var(--brand-tracking-wide);
+  padding: var(--brand-space-2) var(--brand-space-4);
+  text-transform: uppercase;
+  transition:
+    background var(--transition-base),
+    color var(--transition-base),
+    border-color var(--transition-base);
+}
+
+.document-detail-tab:hover,
+.document-detail-tab:focus-visible {
+  border-color: var(--color-coral);
+  color: var(--color-ink);
+  outline: none;
+}
+
+.document-detail-tab-active {
+  background: var(--color-coral);
+  border-color: var(--color-coral);
+  color: var(--color-paper);
+}
+
 .vault-pr-list,
 .vault-version-list {
   margin-top: var(--brand-space-4);

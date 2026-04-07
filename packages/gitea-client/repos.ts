@@ -60,10 +60,7 @@ export interface RepoUserSummary {
 }
 
 export type RepoCollaboratorAccess = "read" | "write" | "admin";
-export type RepoCollaboratorRole =
-  | RepoCollaboratorAccess
-  | "owner"
-  | "unknown";
+export type RepoCollaboratorRole = RepoCollaboratorAccess | "owner" | "unknown";
 
 export interface RepoCollaboratorPermissionSummary {
   permission: string;
@@ -137,7 +134,9 @@ function normalizeWorkspaceRepo(repo: Repository): WorkspaceRepo {
   };
 }
 
-function normalizeUser(user: Partial<User> | null | undefined): RepoUserSummary {
+function normalizeUser(
+  user: Partial<User> | null | undefined,
+): RepoUserSummary {
   return {
     id: user.id ?? 0,
     login: user.login ?? "",
@@ -256,11 +255,14 @@ async function loadRepoCollaboratorPermission(
   collaborator: string,
 ): Promise<RepoCollaboratorPermissionSummary> {
   const permission = await unwrap(
-    client.GET("/repos/{owner}/{repo}/collaborators/{collaborator}/permission", {
-      params: {
-        path: { owner, repo, collaborator },
+    client.GET(
+      "/repos/{owner}/{repo}/collaborators/{collaborator}/permission",
+      {
+        params: {
+          path: { owner, repo, collaborator },
+        },
       },
-    }),
+    ),
   );
 
   return normalizeRepoCollaboratorPermission(permission);
@@ -309,7 +311,12 @@ export async function getRepoCollaboratorPermission(
   params: GetRepoCollaboratorPermissionParams,
 ): Promise<RepoCollaboratorPermissionSummary> {
   const { client, owner, repo, collaborator } = params;
-  return await loadRepoCollaboratorPermission(client, owner, repo, collaborator);
+  return await loadRepoCollaboratorPermission(
+    client,
+    owner,
+    repo,
+    collaborator,
+  );
 }
 
 export async function getCurrentUserRepoPermission(

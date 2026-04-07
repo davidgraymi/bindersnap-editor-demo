@@ -2,11 +2,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { GiteaClient } from "../../../packages/gitea-client/client";
 import { GiteaApiError, unwrap } from "../../../packages/gitea-client/client";
-import type { components } from "../../../packages/gitea-client/spec/gitea";
-
-type GiteaUser = components["schemas"]["User"];
-type RepoCollaboratorPermission =
-  components["schemas"]["RepoCollaboratorPermission"];
+import {
+  addRepoCollaborator,
+  getCurrentUserRepoPermission,
+  getRepoCollaboratorPermission,
+  listRepoCollaborators,
+  searchUsers,
+  type RepoCollaboratorPermissionSummary,
+  type RepoUserSummary,
+} from "../../../packages/gitea-client/repos";
 
 type WritablePermission = "read" | "write" | "admin";
 type DisplayPermission = WritablePermission | "owner" | "unknown";
@@ -48,25 +52,25 @@ function readString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function getUserLogin(user: GiteaUser): string {
+function getUserLogin(user: RepoUserSummary): string {
   return (
     readString((user as { login?: unknown }).login) ||
     readString((user as { username?: unknown }).username)
   );
 }
 
-function getUserFullName(user: GiteaUser): string {
+function getUserFullName(user: RepoUserSummary): string {
   return (
     readString((user as { full_name?: unknown }).full_name) ||
     readString((user as { fullName?: unknown }).fullName)
   );
 }
 
-function getUserEmail(user: GiteaUser): string {
+function getUserEmail(user: RepoUserSummary): string {
   return readString((user as { email?: unknown }).email);
 }
 
-function getUserAvatarUrl(user: GiteaUser): string {
+function getUserAvatarUrl(user: RepoUserSummary): string {
   return readString((user as { avatar_url?: unknown }).avatar_url);
 }
 
@@ -145,8 +149,8 @@ function readPermissionError(err: unknown, fallback: string): string {
 }
 
 function normalizeCollaborator(
-  user: GiteaUser,
-  permission: RepoCollaboratorPermission | null,
+  user: RepoUserSummary,
+  permission: RepoCollaboratorPermissionSummary | null,
   currentUsername: string,
 ): CollaboratorRow | null {
   const login = getUserLogin(user);
@@ -159,7 +163,7 @@ function normalizeCollaborator(
     fullName: getUserFullName(user),
     email: getUserEmail(user),
     permission: normalizeDisplayPermission(permission?.permission),
-    roleName: readString(permission?.role_name),
+    roleName: readString(permission?.roleName),
     avatarUrl: getUserAvatarUrl(user),
     isCurrentUser: login === currentUsername,
   };
@@ -170,16 +174,14 @@ async function fetchCollaboratorPermission(
   owner: string,
   repo: string,
   collaborator: string,
-): Promise<RepoCollaboratorPermission | null> {
+): Promise<RepoCollaboratorPermissionSummary | null> {
   try {
-    return await unwrap(
-      giteaClient.GET(
-        "/repos/{owner}/{repo}/collaborators/{collaborator}/permission",
-        {
-          params: { path: { owner, repo, collaborator } },
-        },
-      ),
-    );
+    return await getRepoCollaboratorPermission({
+      client: giteaClient,
+      owner,
+      repo,
+      collaborator,
+    });
   } catch (err) {
     if (err instanceof GiteaApiError && err.status === 404) {
       return null;
@@ -196,41 +198,21 @@ async function fetchCollaboratorPage(
   page: number,
   limit: number,
 ): Promise<CollaboratorPageResult> {
-  const collaborators = await unwrap(
-    giteaClient.GET("/repos/{owner}/{repo}/collaborators", {
-      params: {
-        path: { owner, repo },
-        query: { page, limit },
-      },
-    }),
-  );
+  const result = await listRepoCollaborators({
+    client: giteaClient,
+    owner,
+    repo,
+    page,
+    limit,
+  });
 
-  const rows = await Promise.all(
-    collaborators.map(async (user) => {
-      const login = getUserLogin(user);
-      if (!login) {
-        return null;
-      }
-
-      let permission: RepoCollaboratorPermission | null = null;
-      try {
-        permission = await fetchCollaboratorPermission(
-          giteaClient,
-          owner,
-          repo,
-          login,
-        );
-      } catch {
-        permission = null;
-      }
-
-      return normalizeCollaborator(user, permission, currentUsername);
-    }),
+  const rows = result.collaborators.map((collaborator) =>
+    normalizeCollaborator(collaborator.user, collaborator, currentUsername),
   );
 
   return {
     rows: rows.filter((row): row is CollaboratorRow => row !== null),
-    hasMore: collaborators.length === limit,
+    hasMore: result.hasMore,
   };
 }
 
@@ -248,17 +230,45 @@ async function fetchCurrentUserPermission(
     return "owner";
   }
 
-  const permission = await fetchCollaboratorPermission(
-    giteaClient,
+  const permission = await getCurrentUserRepoPermission({
+    client: giteaClient,
     owner,
     repo,
-    currentUsername,
-  );
+    username: currentUsername,
+  }).catch((err) => {
+    if (err instanceof GiteaApiError && err.status === 404) {
+      return null;
+    }
+
+    throw err;
+  });
+
+  if (!permission) {
+    const repository = await unwrap(
+      giteaClient.GET("/repos/{owner}/{repo}", {
+        params: {
+          path: { owner, repo },
+        },
+      }),
+    );
+
+    if (repository.permissions?.admin) {
+      return "admin";
+    }
+
+    if (repository.permissions?.push) {
+      return "write";
+    }
+
+    if (repository.permissions?.pull) {
+      return "read";
+    }
+  }
 
   return normalizeDisplayPermission(permission?.permission);
 }
 
-function normalizeSearchResult(user: GiteaUser): SearchResultRow | null {
+function normalizeSearchResult(user: RepoUserSummary): SearchResultRow | null {
   const login = getUserLogin(user);
   if (!login) {
     return null;
@@ -456,30 +466,21 @@ export function DocumentCollaborators({
 
     void (async () => {
       try {
-        const result = await unwrap(
-          giteaClient.GET("/users/search", {
-            params: {
-              query: {
-                q: query,
-                page: 1,
-                limit: SEARCH_PAGE_SIZE,
-              },
-            },
-          }),
-        );
+        const result = await searchUsers({
+          client: giteaClient,
+          query,
+          page: 1,
+          limit: SEARCH_PAGE_SIZE,
+        });
 
         if (requestId !== searchRequestId.current) {
           return;
         }
 
-        const rows = (result.data ?? [])
+        const rows = result.users
           .map(normalizeSearchResult)
           .filter((row): row is SearchResultRow => row !== null);
         setSearchResults(rows);
-
-        if (result.ok === false) {
-          setSearchError("Gitea reported a partial user search failure.");
-        }
       } catch (err) {
         if (requestId !== searchRequestId.current) {
           return;
@@ -592,16 +593,13 @@ export function DocumentCollaborators({
     setBusy(login, true);
 
     try {
-      await unwrap(
-        giteaClient.PUT("/repos/{owner}/{repo}/collaborators/{collaborator}", {
-          params: {
-            path: { owner, repo, collaborator: login },
-          },
-          body: {
-            permission,
-          },
-        }),
-      );
+      await addRepoCollaborator({
+        client: giteaClient,
+        owner,
+        repo,
+        collaborator: login,
+        permission,
+      });
 
       const updatedPermission = await fetchCollaboratorPermission(
         giteaClient,
@@ -616,7 +614,8 @@ export function DocumentCollaborators({
           full_name: user.fullName,
           email: user.email,
           avatar_url: user.avatarUrl,
-        } as GiteaUser,
+          id: 0,
+        },
         updatedPermission,
         currentUsername,
       );

@@ -4,7 +4,9 @@ import type { components } from "./spec/gitea";
 import type { GiteaClient } from "./client";
 
 // Use partial types for test fixtures — generated types require many fields
-type Repository = Partial<Omit<components["schemas"]["Repository"], "owner">> & {
+type Repository = Partial<
+  Omit<components["schemas"]["Repository"], "owner">
+> & {
   owner?: Partial<components["schemas"]["User"]>;
 };
 type Tag = Partial<components["schemas"]["Tag"]>;
@@ -32,56 +34,62 @@ function createMockClient(handlers: {
     };
   });
 
-  const mockPost = mock(async (path: string, init?: { params?: unknown; body?: unknown }) => {
-    const handler = handlers.POST?.[path];
-    if (handler) {
-      const data = await handler(init);
+  const mockPost = mock(
+    async (path: string, init?: { params?: unknown; body?: unknown }) => {
+      const handler = handlers.POST?.[path];
+      if (handler) {
+        const data = await handler(init);
+        return {
+          data,
+          error: undefined,
+          response: new Response(null, { status: 200 }),
+        };
+      }
       return {
-        data,
-        error: undefined,
-        response: new Response(null, { status: 200 }),
+        data: undefined,
+        error: { message: "not found" },
+        response: new Response(null, { status: 404 }),
       };
-    }
-    return {
-      data: undefined,
-      error: { message: "not found" },
-      response: new Response(null, { status: 404 }),
-    };
-  });
+    },
+  );
 
-  const mockDelete = mock(async (path: string, init?: { params?: unknown; body?: unknown }) => {
-    const handler = handlers.DELETE?.[path];
-    if (handler) {
-      const data = await handler(init);
+  const mockDelete = mock(
+    async (path: string, init?: { params?: unknown; body?: unknown }) => {
+      const handler = handlers.DELETE?.[path];
+      if (handler) {
+        const data = await handler(init);
+        return {
+          data,
+          error: undefined,
+          response: new Response(null, { status: 200 }),
+        };
+      }
       return {
-        data,
-        error: undefined,
-        response: new Response(null, { status: 200 }),
+        data: undefined,
+        error: { message: "not found" },
+        response: new Response(null, { status: 404 }),
       };
-    }
-    return {
-      data: undefined,
-      error: { message: "not found" },
-      response: new Response(null, { status: 404 }),
-    };
-  });
+    },
+  );
 
-  const mockPut = mock(async (path: string, init?: { params?: unknown; body?: unknown }) => {
-    const handler = handlers.PUT?.[path];
-    if (handler) {
-      const data = await handler(init);
+  const mockPut = mock(
+    async (path: string, init?: { params?: unknown; body?: unknown }) => {
+      const handler = handlers.PUT?.[path];
+      if (handler) {
+        const data = await handler(init);
+        return {
+          data,
+          error: undefined,
+          response: new Response(null, { status: 200 }),
+        };
+      }
       return {
-        data,
-        error: undefined,
-        response: new Response(null, { status: 200 }),
+        data: undefined,
+        error: { message: "not found" },
+        response: new Response(null, { status: 404 }),
       };
-    }
-    return {
-      data: undefined,
-      error: { message: "not found" },
-      response: new Response(null, { status: 404 }),
-    };
-  });
+    },
+  );
 
   return {
     client: {
@@ -147,7 +155,14 @@ test("listWorkspaceRepos handles empty response", async () => {
 test("createPrivateCurrentUserRepo creates a private initialized repo on main", async () => {
   const { client, mockPost } = createMockClient({
     POST: {
-      "/user/repos": (init: { body?: { name?: string; private?: boolean; auto_init?: boolean; default_branch?: string } }) => ({
+      "/user/repos": (init: {
+        body?: {
+          name?: string;
+          private?: boolean;
+          auto_init?: boolean;
+          default_branch?: string;
+        };
+      }) => ({
         id: 42,
         name: init?.body?.name,
         full_name: `alice/${init?.body?.name ?? ""}`,
@@ -167,7 +182,20 @@ test("createPrivateCurrentUserRepo creates a private initialized repo on main", 
   expect(repo.name).toBe("quarterly-report");
   expect(repo.owner?.login).toBe("alice");
 
-  const calls = mockPost.mock.calls as Array<[string, { body?: { name?: string; private?: boolean; auto_init?: boolean; default_branch?: string; description?: string } }]>;
+  const calls = mockPost.mock.calls as Array<
+    [
+      string,
+      {
+        body?: {
+          name?: string;
+          private?: boolean;
+          auto_init?: boolean;
+          default_branch?: string;
+          description?: string;
+        };
+      },
+    ]
+  >;
   expect(calls[0]?.[1]?.body).toMatchObject({
     name: "quarterly-report",
     description: "Q2 report",
@@ -196,9 +224,9 @@ test("listRepoCollaborators loads collaborators and their permissions per page",
           avatar_url: "https://example.com/b.png",
         },
       ],
-      "/repos/{owner}/{repo}/collaborators/{collaborator}/permission": (
-        init: { params?: { path?: { collaborator?: string } } },
-      ) => ({
+      "/repos/{owner}/{repo}/collaborators/{collaborator}/permission": (init: {
+        params?: { path?: { collaborator?: string } };
+      }) => ({
         permission:
           init?.params?.path?.collaborator === "alice" ? "admin" : "write",
         role_name:
@@ -285,18 +313,21 @@ test("addRepoCollaborator sends the requested permission level", async () => {
   });
 
   expect(mockPut).toHaveBeenCalled();
-  const calls = mockPut.mock.calls as Array<[
-    string,
-    { body?: { permission?: string } },
-  ]>;
-  expect(calls[0]?.[0]).toBe("/repos/{owner}/{repo}/collaborators/{collaborator}");
+  const calls = mockPut.mock.calls as Array<
+    [string, { body?: { permission?: string } }]
+  >;
+  expect(calls[0]?.[0]).toBe(
+    "/repos/{owner}/{repo}/collaborators/{collaborator}",
+  );
   expect(calls[0]?.[1]?.body).toMatchObject({ permission: "write" });
 });
 
 test("searchUsers returns normalized user results for typeahead", async () => {
   const { client } = createMockClient({
     GET: {
-      "/users/search": (init: { params?: { query?: { q?: string; page?: number; limit?: number } } }) => ({
+      "/users/search": (init: {
+        params?: { query?: { q?: string; page?: number; limit?: number } };
+      }) => ({
         data: [
           {
             id: 7,
@@ -354,14 +385,20 @@ test("repoExists returns false for missing repos and true for existing repos", a
   const missingClient = createMockClient({});
 
   const { repoExists } = await import("./repos");
-  await expect(repoExists(client, "alice", "quarterly-report")).resolves.toBe(true);
-  await expect(repoExists(missingClient.client, "alice", "missing")).resolves.toBe(false);
+  await expect(repoExists(client, "alice", "quarterly-report")).resolves.toBe(
+    true,
+  );
+  await expect(
+    repoExists(missingClient.client, "alice", "missing"),
+  ).resolves.toBe(false);
 });
 
 test("createMainBranchProtection creates a main rule with required approvals", async () => {
   const { client, mockPost } = createMockClient({
     POST: {
-      "/repos/{owner}/{repo}/branch_protections": (init: { body?: { rule_name?: string; required_approvals?: number } }) => ({
+      "/repos/{owner}/{repo}/branch_protections": (init: {
+        body?: { rule_name?: string; required_approvals?: number };
+      }) => ({
         rule_name: init?.body?.rule_name,
         required_approvals: init?.body?.required_approvals,
       }),
@@ -379,7 +416,20 @@ test("createMainBranchProtection creates a main rule with required approvals", a
   expect(mockPost).toHaveBeenCalled();
   expect(protection.requiredApprovals).toBe(2);
 
-  const calls = mockPost.mock.calls as Array<[string, { body?: { rule_name?: string; required_approvals?: number; enable_approvals_whitelist?: boolean; enable_merge_whitelist?: boolean; block_on_rejected_reviews?: boolean } }]>;
+  const calls = mockPost.mock.calls as Array<
+    [
+      string,
+      {
+        body?: {
+          rule_name?: string;
+          required_approvals?: number;
+          enable_approvals_whitelist?: boolean;
+          enable_merge_whitelist?: boolean;
+          block_on_rejected_reviews?: boolean;
+        };
+      },
+    ]
+  >;
   expect(calls[0]?.[1]?.body).toMatchObject({
     rule_name: "main",
     required_approvals: 2,
@@ -410,7 +460,9 @@ test("bootstrapEmptyMainBranch deletes README.md from main when present", async 
   });
 
   expect(mockDelete).toHaveBeenCalled();
-  const calls = mockDelete.mock.calls as Array<[string, { body?: { branch?: string; sha?: string; message?: string } }]>;
+  const calls = mockDelete.mock.calls as Array<
+    [string, { body?: { branch?: string; sha?: string; message?: string } }]
+  >;
   expect(calls[0]?.[1]?.body).toMatchObject({
     branch: "main",
     sha: "readme-sha",
@@ -524,7 +576,9 @@ test("parseDocTagVersion rejects invalid tag names", async () => {
 test("createDocTag creates a tag with zero-padded version name", async () => {
   const { client, mockPost } = createMockClient({
     POST: {
-      "/repos/{owner}/{repo}/tags": (init: { body?: { tag_name?: string; target?: string; message?: string } }) => ({
+      "/repos/{owner}/{repo}/tags": (init: {
+        body?: { tag_name?: string; target?: string; message?: string };
+      }) => ({
         name: init?.body?.tag_name,
         commit: { sha: "newsha123", created: "2026-04-02T10:00:00Z" },
       }),
@@ -532,7 +586,13 @@ test("createDocTag creates a tag with zero-padded version name", async () => {
   });
 
   const { createDocTag } = await import("./repos");
-  const tag = await createDocTag({ client, owner: "alice", repo: "quarterly-report", version: 4, target: "main" });
+  const tag = await createDocTag({
+    client,
+    owner: "alice",
+    repo: "quarterly-report",
+    version: 4,
+    target: "main",
+  });
 
   expect(mockPost).toHaveBeenCalled();
   expect(tag.name).toBe("doc/v0004");
@@ -543,7 +603,9 @@ test("createDocTag creates a tag with zero-padded version name", async () => {
 test("createDocTag zero-pads version numbers with fewer than 4 digits", async () => {
   const { client, mockPost } = createMockClient({
     POST: {
-      "/repos/{owner}/{repo}/tags": (init: { body?: { tag_name?: string } }) => ({
+      "/repos/{owner}/{repo}/tags": (init: {
+        body?: { tag_name?: string };
+      }) => ({
         name: init?.body?.tag_name,
         commit: { sha: "abc", created: "2026-04-02T10:00:00Z" },
       }),
@@ -551,9 +613,17 @@ test("createDocTag zero-pads version numbers with fewer than 4 digits", async ()
   });
 
   const { createDocTag } = await import("./repos");
-  await createDocTag({ client, owner: "alice", repo: "quarterly-report", version: 1, target: "abc123" });
+  await createDocTag({
+    client,
+    owner: "alice",
+    repo: "quarterly-report",
+    version: 1,
+    target: "abc123",
+  });
 
-  const calls = mockPost.mock.calls as Array<[string, { body?: { tag_name?: string } }]>;
+  const calls = mockPost.mock.calls as Array<
+    [string, { body?: { tag_name?: string } }]
+  >;
   expect(calls[0]?.[1]?.body?.tag_name).toBe("doc/v0001");
 });
 
@@ -563,13 +633,25 @@ test("createDocTag throws GiteaApiError on network failure", async () => {
     error: { message: "Network error" },
     response: new Response(null, { status: 500 }),
   }));
-  const client = { GET: mock(), POST: mockPost, PUT: mock(), DELETE: mock(), use: mock() } as unknown as GiteaClient;
+  const client = {
+    GET: mock(),
+    POST: mockPost,
+    PUT: mock(),
+    DELETE: mock(),
+    use: mock(),
+  } as unknown as GiteaClient;
 
   const { createDocTag } = await import("./repos");
   const { GiteaApiError } = await import("./client");
 
   await expect(
-    createDocTag({ client, owner: "alice", repo: "quarterly-report", version: 2, target: "main" }),
+    createDocTag({
+      client,
+      owner: "alice",
+      repo: "quarterly-report",
+      version: 2,
+      target: "main",
+    }),
   ).rejects.toThrow(GiteaApiError);
 });
 
@@ -587,7 +669,13 @@ test("createDocTag throws GiteaApiError when tag name does not match doc/v* patt
   const { GiteaApiError } = await import("./client");
 
   await expect(
-    createDocTag({ client, owner: "alice", repo: "quarterly-report", version: 3, target: "main" }),
+    createDocTag({
+      client,
+      owner: "alice",
+      repo: "quarterly-report",
+      version: 3,
+      target: "main",
+    }),
   ).rejects.toThrow(GiteaApiError);
 });
 
@@ -609,7 +697,12 @@ test("getRepoBranchProtection returns normalised protection for matching branch"
   });
 
   const { getRepoBranchProtection } = await import("./repos");
-  const protection = await getRepoBranchProtection(client, "alice", "quarterly-report", "main");
+  const protection = await getRepoBranchProtection(
+    client,
+    "alice",
+    "quarterly-report",
+    "main",
+  );
 
   expect(protection).not.toBeNull();
   expect(protection?.requiredApprovals).toBe(1);
@@ -623,7 +716,12 @@ test("getRepoBranchProtection returns null when no rules exist", async () => {
   });
 
   const { getRepoBranchProtection } = await import("./repos");
-  const protection = await getRepoBranchProtection(client, "alice", "quarterly-report", "main");
+  const protection = await getRepoBranchProtection(
+    client,
+    "alice",
+    "quarterly-report",
+    "main",
+  );
 
   expect(protection).toBeNull();
 });
@@ -646,7 +744,12 @@ test("getRepoBranchProtection falls back to first rule when branch name has no e
   });
 
   const { getRepoBranchProtection } = await import("./repos");
-  const protection = await getRepoBranchProtection(client, "alice", "quarterly-report", "main");
+  const protection = await getRepoBranchProtection(
+    client,
+    "alice",
+    "quarterly-report",
+    "main",
+  );
 
   expect(protection).not.toBeNull();
   expect(protection?.requiredApprovals).toBe(2);
@@ -660,7 +763,13 @@ test("getRepoBranchProtection throws GiteaApiError on network failure", async ()
     error: { message: "Network error" },
     response: new Response(null, { status: 500 }),
   }));
-  const client = { GET: mockGet, POST: mock(), PUT: mock(), DELETE: mock(), use: mock() } as unknown as GiteaClient;
+  const client = {
+    GET: mockGet,
+    POST: mock(),
+    PUT: mock(),
+    DELETE: mock(),
+    use: mock(),
+  } as unknown as GiteaClient;
 
   const { getRepoBranchProtection } = await import("./repos");
   const { GiteaApiError } = await import("./client");
