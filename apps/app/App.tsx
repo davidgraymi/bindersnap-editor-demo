@@ -42,7 +42,7 @@ interface SessionUser {
 
 interface LoginPageProps {
   callbackError: string | null;
-  onLogin: (email: string, password: string) => Promise<void>;
+  onLogin: (identifier: string, password: string) => Promise<void>;
   onSignup: (
     username: string,
     email: string,
@@ -255,7 +255,7 @@ async function logoutSession(): Promise<void> {
 function LoginPage({ callbackError, onLogin, onSignup }: LoginPageProps) {
   const [mode, setMode] = useState<AuthMode>("signin");
   const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(callbackError);
@@ -269,9 +269,15 @@ function LoginPage({ callbackError, onLogin, onSignup }: LoginPageProps) {
     event.preventDefault();
 
     const normalizedUsername = username.trim();
+    const normalizedIdentifier = identifier.trim();
 
     if (mode === "signup") {
-      if (!normalizedUsername || !email || !password || !confirmPassword) {
+      if (
+        !normalizedUsername ||
+        !normalizedIdentifier ||
+        !password ||
+        !confirmPassword
+      ) {
         setError(
           "Enter a username, email, password, and password confirmation.",
         );
@@ -282,8 +288,8 @@ function LoginPage({ callbackError, onLogin, onSignup }: LoginPageProps) {
         setError("Passwords do not match.");
         return;
       }
-    } else if (!email || !password) {
-      setError("Enter your email and password.");
+    } else if (!normalizedIdentifier || !password) {
+      setError("Enter your username or email and password.");
       return;
     }
 
@@ -292,9 +298,9 @@ function LoginPage({ callbackError, onLogin, onSignup }: LoginPageProps) {
 
     try {
       if (mode === "signin") {
-        await onLogin(email, password);
+        await onLogin(normalizedIdentifier, password);
       } else {
-        await onSignup(normalizedUsername, email, password);
+        await onSignup(normalizedUsername, normalizedIdentifier, password);
       }
     } catch (submitError) {
       if (submitError instanceof Error && submitError.message.trim() !== "") {
@@ -336,14 +342,20 @@ function LoginPage({ callbackError, onLogin, onSignup }: LoginPageProps) {
             ) : null}
 
             <label className="app-field">
-              <span className="bs-label">Email</span>
+              <span className="bs-label">
+                {mode === "signin" ? "Username or Email" : "Email"}
+              </span>
               <input
                 className="bs-input"
                 type="text"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="Enter your email"
-                autoComplete="email"
+                value={identifier}
+                onChange={(event) => setIdentifier(event.target.value)}
+                placeholder={
+                  mode === "signin"
+                    ? "Enter your username or email"
+                    : "Enter your email"
+                }
+                autoComplete={mode === "signin" ? "username" : "email"}
                 spellCheck={false}
               />
             </label>
@@ -489,7 +501,7 @@ export function App() {
     }
 
     setCallbackError(
-      "Single sign-on callback is not enabled in this build. Sign in with your username and password.",
+      "Single sign-on callback is not enabled in this build. Sign in with your username or email and password.",
     );
     navigateTo("/login", true);
   }, [route]);
@@ -546,12 +558,13 @@ export function App() {
     return (
       <LoginPage
         callbackError={callbackError}
-        onLogin={async (email, password) => {
+        onLogin={async (identifier, password) => {
           clearToken();
+          const loginIdentifier = identifier.trim();
           const authenticatedUser = await sendAuthRequest(
             "/auth/login",
-            null,
-            email,
+            loginIdentifier.includes("@") ? null : loginIdentifier,
+            loginIdentifier.includes("@") ? loginIdentifier : "",
             password,
           );
           const loginUser = authenticatedUser ?? (await refreshSession());

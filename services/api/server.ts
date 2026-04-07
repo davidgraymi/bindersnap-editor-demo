@@ -493,64 +493,187 @@ type GiteaEmailRecord = {
   username?: unknown;
 };
 
-async function findUsernameByEmail(email: string): Promise<string | null> {
+type LoginResolution =
+  | { kind: "authenticated"; username: string }
+  | { kind: "not_found" }
+  | { kind: "unavailable"; status: number; error: string };
+
+function looksLikeEmailAddress(value: string): boolean {
+  return value.includes("@");
+}
+
+async function findUsernameByEmail(email: string): Promise<LoginResolution> {
   if (!adminUsername || !adminPassword) {
-    return null;
-  }
-
-  const response = await giteaFetch(
-    `/api/v1/admin/emails/search?q=${encodeURIComponent(email)}&limit=10`,
-    {
-      method: "GET",
-      headers: {
-        Authorization: buildBasicAuthHeader(adminUsername, adminPassword),
-        Accept: "application/json",
-      },
-    },
-  ).catch(() => null);
-
-  if (!response?.ok) {
-    return null;
-  }
-
-  const payload = (await response.json().catch(() => null)) as
-    | GiteaEmailRecord[]
-    | null;
-  if (!Array.isArray(payload)) {
-    return null;
+    return {
+      kind: "unavailable",
+      status: 503,
+      error: "Email login is temporarily unavailable.",
+    };
   }
 
   const normalizedEmail = email.trim().toLowerCase();
-  const match = payload.find((entry) => {
-    if (typeof entry?.email !== "string") {
-      return false;
+  if (normalizedEmail === "") {
+    return { kind: "not_found" };
+  }
+
+  const pageSize = 100;
+  const maxPages = 100;
+
+  for (let page = 1; page <= maxPages; page += 1) {
+    const response = await giteaFetch(
+      `/api/v1/admin/emails/search?q=${encodeURIComponent(email)}&page=${page}&limit=${pageSize}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: buildBasicAuthHeader(adminUsername, adminPassword),
+          Accept: "application/json",
+        },
+      },
+    ).catch(() => null);
+
+    if (!response) {
+      return {
+        kind: "unavailable",
+        status: 502,
+        error: "Unable to reach Gitea while checking the login email.",
+      };
     }
 
-    return entry.email.trim().toLowerCase() === normalizedEmail;
-  });
+    if (!response.ok) {
+      return {
+        kind: "unavailable",
+        status: response.status,
+        error: await readGiteaErrorMessage(
+          response,
+          "Unable to check the login email right now.",
+        ),
+      };
+    }
 
-  return typeof match?.username === "string" && match.username.trim() !== ""
-    ? match.username.trim()
-    : null;
+    const payload = (await response.json().catch(() => null)) as
+      | GiteaEmailRecord[]
+      | null;
+    if (!Array.isArray(payload)) {
+      return {
+        kind: "unavailable",
+        status: 502,
+        error: "Gitea returned an unexpected email search response.",
+      };
+    }
+
+    const match = payload.find((entry) => {
+      if (typeof entry?.email !== "string") {
+        return false;
+      }
+
+      return entry.email.trim().toLowerCase() === normalizedEmail;
+    });
+
+    if (typeof match?.username === "string" && match.username.trim() !== "") {
+      return {
+        kind: "authenticated",
+        username: match.username.trim(),
+      };
+    }
+
+    if (payload.length < pageSize) {
+      return { kind: "not_found" };
+    }
+  }
+
+  return {
+    kind: "unavailable",
+    status: 502,
+    error: "Email search did not complete after checking all pages.",
+  };
 }
 
-async function verifyUserCredentialsByEmail(
-  email: string,
+async function resolveLoginUsername(
+  identifier: string,
+  emailCandidate: string,
   password: string,
-): Promise<string | null> {
-  const directLoginName = await verifyUserCredentials(email, password).catch(
+): Promise<LoginResolution> {
+  const directLoginName = await verifyUserCredentials(
+    identifier,
+    password,
+  ).catch(() => null);
+  if (directLoginName) {
+    return { kind: "authenticated", username: directLoginName };
+  }
+
+  if (!looksLikeEmailAddress(emailCandidate)) {
+    return { kind: "not_found" };
+  }
+
+  const emailLookup = await findUsernameByEmail(emailCandidate).catch(
+    () =>
+      ({
+        kind: "unavailable",
+        status: 502,
+        error: "Unable to resolve the login email right now.",
+      }) as LoginResolution,
+  );
+  if (emailLookup.kind !== "authenticated") {
+    return emailLookup;
+  }
+
+  const username = await verifyUserCredentials(
+    emailLookup.username,
+    password,
+  ).catch(() => null);
+  if (username) {
+    return { kind: "authenticated", username };
+  }
+
+  return { kind: "not_found" };
+}
+
+async function createAuthenticatedSession(
+  username: string,
+  password: string,
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const tokenName = `bindersnap-session-${randomUUID()}`;
+  const token = await createUserToken(username, password, tokenName).catch(
     () => null,
   );
-  if (directLoginName) {
-    return directLoginName;
+  if (!token) {
+    return json(502, { error: "Unable to sign in." }, baseHeaders);
   }
 
-  const username = await findUsernameByEmail(email).catch(() => null);
-  if (!username) {
-    return null;
+  await revokeOtherUserSessions(username);
+
+  const session = createSession(username, token, tokenName);
+  const headers = mergeHeaders(baseHeaders, {
+    "Set-Cookie": serializeCookie(req, session.id, session.expiresAt),
+  });
+
+  return json(
+    200,
+    {
+      user: {
+        username: session.username,
+      },
+    },
+    headers,
+  );
+}
+
+async function createLoginSession(
+  username: string,
+  password: string,
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const loginName = await verifyUserCredentials(username, password).catch(
+    () => null,
+  );
+  if (!loginName) {
+    return json(401, { error: "Invalid username or password." }, baseHeaders);
   }
 
-  return verifyUserCredentials(username, password).catch(() => null);
+  return createAuthenticatedSession(loginName, password, req, baseHeaders);
 }
 
 async function createUserToken(
@@ -705,45 +828,6 @@ async function revokeOtherUserSessions(username: string): Promise<void> {
   );
 }
 
-async function createLoginSession(
-  username: string,
-  password: string,
-  req: Request,
-  baseHeaders: Headers,
-): Promise<Response> {
-  const loginName = await verifyUserCredentials(username, password).catch(
-    () => null,
-  );
-  if (!loginName) {
-    return json(401, { error: "Invalid username or password." }, baseHeaders);
-  }
-
-  const tokenName = `bindersnap-session-${randomUUID()}`;
-  const token = await createUserToken(loginName, password, tokenName).catch(
-    () => null,
-  );
-  if (!token) {
-    return json(502, { error: "Unable to sign in." }, baseHeaders);
-  }
-
-  await revokeOtherUserSessions(loginName);
-
-  const session = createSession(loginName, token, tokenName);
-  const headers = mergeHeaders(baseHeaders, {
-    "Set-Cookie": serializeCookie(req, session.id, session.expiresAt),
-  });
-
-  return json(
-    200,
-    {
-      user: {
-        username: session.username,
-      },
-    },
-    headers,
-  );
-}
-
 async function listLatestCommit(
   token: string,
   filePath: string,
@@ -851,26 +935,50 @@ async function handleLogin(
     );
   }
 
-  const payload = await readJson<{ email?: unknown; password?: unknown }>(req);
+  const payload = await readJson<{
+    username?: unknown;
+    email?: unknown;
+    identifier?: unknown;
+    password?: unknown;
+  }>(req);
+  const username =
+    typeof payload?.username === "string" ? payload.username.trim() : "";
   const email = typeof payload?.email === "string" ? payload.email.trim() : "";
+  const identifier =
+    typeof payload?.identifier === "string"
+      ? payload.identifier.trim()
+      : username || email;
+  const emailCandidate = email || identifier;
   const password =
     typeof payload?.password === "string" ? payload.password : "";
 
-  if (!email || !password) {
+  if (!identifier || !password) {
     return json(
       400,
-      { error: "Email and password are required." },
+      { error: "Username or email and password are required." },
       baseHeaders,
     );
   }
 
-  const username = await verifyUserCredentialsByEmail(email, password);
-  if (!username) {
-    return json(401, { error: "Invalid email or password." }, baseHeaders);
+  const resolution = await resolveLoginUsername(
+    identifier,
+    emailCandidate,
+    password,
+  );
+  if (resolution.kind === "unavailable") {
+    return json(resolution.status, { error: resolution.error }, baseHeaders);
   }
 
-  const response = await createLoginSession(
-    username,
+  if (resolution.kind !== "authenticated") {
+    return json(
+      401,
+      { error: "Invalid username, email, or password." },
+      baseHeaders,
+    );
+  }
+
+  const response = await createAuthenticatedSession(
+    resolution.username,
     password,
     req,
     baseHeaders,

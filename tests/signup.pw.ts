@@ -53,11 +53,11 @@ async function submitSignupForm(page: Page): Promise<void> {
 async function fillLoginForm(
   page: Page,
   credentials: {
-    email: string;
+    identifier: string;
     password: string;
   },
 ): Promise<void> {
-  await page.getByLabel("Email").fill(credentials.email);
+  await page.getByLabel("Username or Email").fill(credentials.identifier);
   await page.getByLabel("Password", { exact: true }).fill(credentials.password);
 }
 
@@ -76,63 +76,130 @@ async function attachScreenshot(
   });
 }
 
+async function signUpAndReturnToLogin(
+  page: Page,
+  testInfo: TestInfo,
+  credentials: {
+    username: string;
+    email: string;
+    password: string;
+  },
+  screenshotPrefix: string,
+): Promise<void> {
+  await openSignupForm(page);
+  await fillSignupForm(page, credentials);
+  await attachScreenshot(page, testInfo, `${screenshotPrefix}-signup-form`);
+
+  const signupRequestPromise = page.waitForRequest(
+    (request) =>
+      request.url().endsWith("/auth/signup") && request.method() === "POST",
+  );
+
+  await submitSignupForm(page);
+
+  const signupRequest = await signupRequestPromise;
+  expect(signupRequest.postDataJSON()).toMatchObject({
+    username: credentials.username,
+    email: credentials.email,
+    password: credentials.password,
+  });
+
+  await expect(page).toHaveURL(/\/app$/);
+  await expect(
+    page.getByText(`Signed in as ${credentials.username}`),
+  ).toBeVisible();
+  await attachScreenshot(
+    page,
+    testInfo,
+    `${screenshotPrefix}-workspace-after-signup`,
+  );
+
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page).toHaveURL(/\/login$/);
+  await expect(
+    page.getByRole("heading", { name: "Step into the clean version." }),
+  ).toBeVisible();
+}
+
+async function logInWithIdentifier(
+  page: Page,
+  testInfo: TestInfo,
+  credentials: {
+    identifier: string;
+    password: string;
+  },
+  expectedPayload: Record<string, string>,
+  screenshotPrefix: string,
+  expectedUsername: string,
+): Promise<void> {
+  await fillLoginForm(page, credentials);
+  await attachScreenshot(page, testInfo, `${screenshotPrefix}-login-form`);
+
+  const loginRequestPromise = page.waitForRequest(
+    (request) =>
+      request.url().endsWith("/auth/login") && request.method() === "POST",
+  );
+
+  await submitLoginForm(page);
+
+  const loginRequest = await loginRequestPromise;
+  expect(loginRequest.postDataJSON()).toMatchObject(expectedPayload);
+
+  await expect(page).toHaveURL(/\/app$/);
+  await expect(
+    page.getByText(`Signed in as ${expectedUsername}`),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+  await attachScreenshot(
+    page,
+    testInfo,
+    `${screenshotPrefix}-workspace-after-login`,
+  );
+}
+
 test.describe("signup flow", () => {
-  test("creates an account, signs out, and logs back in with email and password", async ({
+  test("creates an account, signs out, and logs back in with a username", async ({
     page,
   }, testInfo) => {
     const credentials = buildUniqueSignupCredentials();
 
-    await openSignupForm(page);
-    await fillSignupForm(page, credentials);
-    await attachScreenshot(page, testInfo, "signup-form");
-
-    const signupRequestPromise = page.waitForRequest(
-      (request) =>
-        request.url().endsWith("/auth/signup") && request.method() === "POST",
+    await signUpAndReturnToLogin(page, testInfo, credentials, "username-auth");
+    await logInWithIdentifier(
+      page,
+      testInfo,
+      {
+        identifier: credentials.username,
+        password: credentials.password,
+      },
+      {
+        username: credentials.username,
+        password: credentials.password,
+      },
+      "username-auth",
+      credentials.username,
     );
+  });
 
-    await submitSignupForm(page);
+  test("creates an account, signs out, and logs back in with an email", async ({
+    page,
+  }, testInfo) => {
+    const credentials = buildUniqueSignupCredentials();
 
-    const signupRequest = await signupRequestPromise;
-    expect(signupRequest.postDataJSON()).toMatchObject({
-      username: credentials.username,
-      email: credentials.email,
-      password: credentials.password,
-    });
-
-    await expect(page).toHaveURL(/\/app$/);
-    await expect(
-      page.getByText(`Signed in as ${credentials.username}`),
-    ).toBeVisible();
-    await attachScreenshot(page, testInfo, "workspace-after-signup");
-
-    await page.getByRole("button", { name: "Sign out" }).click();
-    await expect(page).toHaveURL(/\/login$/);
-    await expect(
-      page.getByRole("heading", { name: "Step into the clean version." }),
-    ).toBeVisible();
-    await fillLoginForm(page, credentials);
-    await attachScreenshot(page, testInfo, "login-after-signout");
-
-    const loginRequestPromise = page.waitForRequest(
-      (request) =>
-        request.url().endsWith("/auth/login") && request.method() === "POST",
+    await signUpAndReturnToLogin(page, testInfo, credentials, "email-auth");
+    await logInWithIdentifier(
+      page,
+      testInfo,
+      {
+        identifier: credentials.email,
+        password: credentials.password,
+      },
+      {
+        email: credentials.email,
+        password: credentials.password,
+      },
+      "email-auth",
+      credentials.username,
     );
-
-    await submitLoginForm(page);
-
-    const loginRequest = await loginRequestPromise;
-    expect(loginRequest.postDataJSON()).toMatchObject({
-      email: credentials.email,
-      password: credentials.password,
-    });
-
-    await expect(page).toHaveURL(/\/app$/);
-    await expect(
-      page.getByText(`Signed in as ${credentials.username}`),
-    ).toBeVisible();
-    await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
-    await attachScreenshot(page, testInfo, "workspace-after-login");
   });
 
   test("blocks signup in the browser when passwords do not match", async ({

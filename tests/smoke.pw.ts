@@ -207,7 +207,7 @@ test.describe("app shell routes", () => {
     // Unauthenticated path: verify the login form is present.
     await expect(page).toHaveURL(/\/login$/);
     await expect(loginHeading).toBeVisible();
-    await expect(page.getByLabel("Email")).toBeVisible();
+    await expect(page.getByLabel("Username or Email")).toBeVisible();
     await expect(page.getByLabel("Password", { exact: true })).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Open workspace" }),
