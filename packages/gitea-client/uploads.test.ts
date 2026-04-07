@@ -1,9 +1,83 @@
-import { describe, expect, test } from "bun:test";
+import { expect, mock, test } from "bun:test";
 import {
+  buildCanonicalDocumentFileName,
   buildUploadBranchName,
   buildUploadCommitMessage,
+  createInitialDocumentUpload,
+  getFileExtension,
   validateUploadFile,
 } from "./uploads";
+import type { GiteaClient } from "./client";
+
+function createMockClient(handlers: {
+  GET?: Record<string, (...args: any[]) => unknown>;
+  POST?: Record<string, (...args: any[]) => unknown>;
+  DELETE?: Record<string, (...args: any[]) => unknown>;
+}) {
+  const mockGet = mock(async (path: string, init?: unknown) => {
+    const handler = handlers.GET?.[path];
+    if (handler) {
+      const data = await handler(init);
+      return {
+        data,
+        error: undefined,
+        response: new Response(null, { status: 200 }),
+      };
+    }
+    return {
+      data: undefined,
+      error: { message: "not found" },
+      response: new Response(null, { status: 404 }),
+    };
+  });
+
+  const mockPost = mock(async (path: string, init?: { params?: unknown; body?: unknown }) => {
+    const handler = handlers.POST?.[path];
+    if (handler) {
+      const data = await handler(init);
+      return {
+        data,
+        error: undefined,
+        response: new Response(null, { status: 200 }),
+      };
+    }
+    return {
+      data: undefined,
+      error: { message: "not found" },
+      response: new Response(null, { status: 404 }),
+    };
+  });
+
+  const mockDelete = mock(async (path: string, init?: { params?: unknown; body?: unknown }) => {
+    const handler = handlers.DELETE?.[path];
+    if (handler) {
+      const data = await handler(init);
+      return {
+        data,
+        error: undefined,
+        response: new Response(null, { status: 200 }),
+      };
+    }
+    return {
+      data: undefined,
+      error: { message: "not found" },
+      response: new Response(null, { status: 404 }),
+    };
+  });
+
+  return {
+    client: {
+      GET: mockGet,
+      POST: mockPost,
+      DELETE: mockDelete,
+      PUT: mock(),
+      use: mock(),
+    } as unknown as GiteaClient,
+    mockGet,
+    mockPost,
+    mockDelete,
+  };
+}
 
 // ────────────────────────────────────────────────────────────────
 // validateUploadFile tests
@@ -64,6 +138,26 @@ test("validateUploadFile accepts files exactly at 25 MiB limit", () => {
     type: "application/pdf",
   });
   expect(validateUploadFile(file).valid).toBe(true);
+});
+
+// ────────────────────────────────────────────────────────────────
+// filename utility tests
+// ────────────────────────────────────────────────────────────────
+
+test("getFileExtension returns the trailing extension when present", () => {
+  expect(getFileExtension("quarterly-report-final.docx")).toBe("docx");
+  expect(getFileExtension("archive.tar.gz")).toBe("gz");
+});
+
+test("getFileExtension returns empty string when no extension exists", () => {
+  expect(getFileExtension("Makefile")).toBe("");
+  expect(getFileExtension(".env")).toBe("");
+});
+
+test("buildCanonicalDocumentFileName normalizes the canonical file name", () => {
+  expect(buildCanonicalDocumentFileName("pdf")).toBe("document.pdf");
+  expect(buildCanonicalDocumentFileName(".DOCX")).toBe("document.docx");
+  expect(buildCanonicalDocumentFileName("")).toBe("document");
 });
 
 // ────────────────────────────────────────────────────────────────
@@ -173,4 +267,123 @@ test("buildUploadCommitMessage handles special characters in filenames", () => {
   expect(message).toContain(
     "Bindersnap-Source-Filename: File (with) [special] chars & stuff.pdf",
   );
+});
+
+test("createInitialDocumentUpload creates the repo, bootstraps main, and opens a PR", async () => {
+  const file = new File(["hello world"], "Quarterly Report Final.docx", {
+    type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  });
+
+  const { client, mockPost, mockDelete } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/contents/{filepath}": () => ({
+        sha: "readme-sha",
+        type: "file",
+      }),
+      "/repos/{owner}/{repo}/pulls/{index}/reviews": () => [],
+    },
+    POST: {
+      "/user/repos": (init: { body?: { name?: string; private?: boolean; auto_init?: boolean; default_branch?: string; description?: string } }) => ({
+        id: 99,
+        name: init?.body?.name,
+        full_name: `alice/${init?.body?.name ?? ""}`,
+        owner: { login: "alice" },
+      }),
+      "/repos/{owner}/{repo}/branch_protections": (init: { body?: { rule_name?: string; required_approvals?: number } }) => ({
+        rule_name: init?.body?.rule_name,
+        required_approvals: init?.body?.required_approvals,
+      }),
+      "/repos/{owner}/{repo}/branches": (init: { body?: { new_branch_name?: string; old_branch_name?: string } }) => ({
+        name: init?.body?.new_branch_name,
+      }),
+      "/repos/{owner}/{repo}/contents/{filepath}": (init: {
+        params?: { path?: { filepath?: string } };
+        body?: { content?: string; message?: string; branch?: string };
+      }) => ({
+        commit: { sha: "commit-sha" },
+        content: {
+          path: init?.params?.path?.filepath,
+        },
+      }),
+      "/repos/{owner}/{repo}/pulls": (init: { body?: { title?: string; head?: string; base?: string } }) => ({
+        number: 17,
+        title: init?.body?.title,
+      }),
+    },
+    DELETE: {
+      "/repos/{owner}/{repo}/contents/{filepath}": () => ({}),
+    },
+  });
+
+  const originalFileReader = globalThis.FileReader;
+  class MockFileReader {
+    result: string | ArrayBuffer | null = null;
+    onload: ((this: FileReader, ev: ProgressEvent<FileReader>) => unknown) | null = null;
+    onerror: ((this: FileReader, ev: ProgressEvent<FileReader>) => unknown) | null = null;
+
+    readAsDataURL() {
+      this.result = "data:application/octet-stream;base64,aGVsbG8gd29ybGQ=";
+      this.onload?.(new Event("load") as unknown as ProgressEvent<FileReader>);
+    }
+  }
+  globalThis.FileReader = MockFileReader as unknown as typeof FileReader;
+
+  try {
+    const { computeFileHash, createInitialDocumentUpload } = await import("./uploads");
+    const fullHash = await computeFileHash(file);
+
+    const result = await createInitialDocumentUpload({
+      client,
+      repoName: "quarterly-report",
+      file,
+      uploaderSlug: "alice",
+      nextVersion: 1,
+    });
+
+    expect(result.owner).toBe("alice");
+    expect(result.repo).toBe("quarterly-report");
+    expect(result.canonicalFile).toBe("document.docx");
+    expect(result.prNumber).toBe(17);
+    expect(result.prTitle).toBe("Upload v1: Quarterly Report");
+    expect(result.commitSha).toBe("commit-sha");
+    expect(mockDelete).toHaveBeenCalled();
+
+    const postCalls = mockPost.mock.calls as Array<[string, { body?: { name?: string; private?: boolean; auto_init?: boolean; default_branch?: string; rule_name?: string; required_approvals?: number; new_branch_name?: string; old_branch_name?: string; content?: string; message?: string; branch?: string; title?: string; head?: string; base?: string } } ]>;
+
+    expect(postCalls.find(([path]) => path === "/user/repos")?.[1]?.body).toMatchObject({
+      name: "quarterly-report",
+      private: true,
+      auto_init: true,
+      default_branch: "main",
+    });
+    expect(postCalls.find(([path]) => path === "/repos/{owner}/{repo}/branch_protections")?.[1]?.body).toMatchObject({
+      rule_name: "main",
+      required_approvals: 1,
+      enable_approvals_whitelist: false,
+      enable_merge_whitelist: false,
+      block_on_rejected_reviews: true,
+    });
+
+    const branchCall = postCalls.find(([path]) => path === "/repos/{owner}/{repo}/branches");
+    expect(branchCall?.[1]?.body?.old_branch_name).toBe("main");
+    expect(branchCall?.[1]?.body?.new_branch_name).toContain("upload/quarterly-report/");
+    expect(branchCall?.[1]?.body?.new_branch_name).toContain(`-alice-${fullHash.slice(0, 8)}`);
+
+    const fileCall = postCalls.find(([path]) => path === "/repos/{owner}/{repo}/contents/{filepath}");
+    expect(fileCall?.[0]).toBe("/repos/{owner}/{repo}/contents/{filepath}");
+    expect(fileCall?.[1]?.params?.path?.filepath).toBe("document.docx");
+    expect(fileCall?.[1]?.body).toMatchObject({
+      branch: result.branchName,
+    });
+    expect(fileCall?.[1]?.body?.message).toContain("Bindersnap-Canonical-File: document.docx");
+
+    const prCall = postCalls.find(([path]) => path === "/repos/{owner}/{repo}/pulls");
+    expect(prCall?.[1]?.body).toMatchObject({
+      title: "Upload v1: Quarterly Report",
+      head: result.branchName,
+      base: "main",
+    });
+  } finally {
+    globalThis.FileReader = originalFileReader;
+  }
 });

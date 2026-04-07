@@ -1,19 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 
 import {
-  GiteaApiError,
-  unwrap,
-  type GiteaClient,
-} from "../../../packages/gitea-client/client";
-import { createPullRequest } from "../../../packages/gitea-client/pullRequests";
-import {
-  buildUploadBranchName,
-  buildUploadCommitMessage,
-  commitBinaryFile,
-  computeFileHash,
-  createUploadBranch,
+  buildCanonicalDocumentFileName,
+  createInitialDocumentUpload,
+  getFileExtension,
+  type InitialDocumentUploadStep,
   validateUploadFile,
 } from "../../../packages/gitea-client/uploads";
+import type { GiteaClient } from "../../../packages/gitea-client/client";
+import { repoExists } from "../../../packages/gitea-client/repos";
 
 interface CreateDocumentModalProps {
   giteaClient: GiteaClient;
@@ -25,42 +20,15 @@ interface CreateDocumentModalProps {
 type CreateDocumentStatus =
   | "idle"
   | "checking-repo"
-  | "hashing"
-  | "creating-repo"
-  | "bootstrapping"
-  | "protecting"
-  | "creating-branch"
-  | "committing"
-  | "opening-pr"
+  | InitialDocumentUploadStep
   | "done"
   | "error";
-
-function readFileAsBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      resolve(result.split(",")[1] ?? "");
-    };
-    reader.onerror = () => {
-      reject(new Error("Failed to read file as base64."));
-    };
-    reader.readAsDataURL(file);
-  });
-}
 
 function stripExtension(fileName: string): string {
   const cleanName = fileName.split(/[\\/]/).pop() ?? fileName;
   const lastDot = cleanName.lastIndexOf(".");
   if (lastDot <= 0) return cleanName;
   return cleanName.slice(0, lastDot);
-}
-
-function getOriginalExtension(fileName: string): string {
-  const cleanName = fileName.split(/[\\/]/).pop() ?? fileName;
-  const lastDot = cleanName.lastIndexOf(".");
-  if (lastDot <= 0 || lastDot === cleanName.length - 1) return "";
-  return cleanName.slice(lastDot + 1).toLowerCase();
 }
 
 function makeFriendlyDocumentName(fileName: string): string {
@@ -81,14 +49,6 @@ function slugifyRepoName(value: string): string {
     .replace(/-{2,}/g, "-");
 }
 
-function titleCase(value: string): string {
-  return value
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
-
 function formatFileSize(bytes: number): string {
   const mebibytes = bytes / (1024 * 1024);
   if (mebibytes >= 1) {
@@ -96,91 +56,6 @@ function formatFileSize(bytes: number): string {
   }
   const kibibytes = bytes / 1024;
   return `${kibibytes.toFixed(0)} KiB`;
-}
-
-async function repoExists(
-  client: GiteaClient,
-  owner: string,
-  repo: string,
-): Promise<boolean> {
-  try {
-    await unwrap(
-      client.GET("/repos/{owner}/{repo}", {
-        params: { path: { owner, repo } },
-      }),
-    );
-    return true;
-  } catch (err) {
-    if (err instanceof GiteaApiError && err.status === 404) {
-      return false;
-    }
-    throw err;
-  }
-}
-
-async function deleteReadmeIfPresent(
-  client: GiteaClient,
-  owner: string,
-  repo: string,
-): Promise<void> {
-  try {
-    const readme = await unwrap(
-      client.GET("/repos/{owner}/{repo}/contents/{filepath}", {
-        params: {
-          path: { owner, repo, filepath: "README.md" },
-          query: { ref: "main" },
-        },
-      }),
-    );
-
-    const sha =
-      !Array.isArray(readme) && typeof readme.sha === "string"
-        ? readme.sha
-        : "";
-
-    if (!sha) return;
-
-    await unwrap(
-      client.DELETE("/repos/{owner}/{repo}/contents/{filepath}", {
-        params: {
-          path: { owner, repo, filepath: "README.md" },
-        },
-        body: {
-          branch: "main",
-          message: "Bootstrap empty repository",
-          sha,
-        },
-      }),
-    );
-  } catch (err) {
-    if (err instanceof GiteaApiError && err.status === 404) {
-      return;
-    }
-    throw err;
-  }
-}
-
-async function createMainBranchProtection(
-  client: GiteaClient,
-  owner: string,
-  repo: string,
-): Promise<void> {
-  await unwrap(
-    client.POST("/repos/{owner}/{repo}/branch_protections", {
-      params: { path: { owner, repo } },
-      body: {
-        rule_name: "main",
-        required_approvals: 1,
-        block_on_official_review_requests: true,
-        block_on_outdated_branch: true,
-        block_on_rejected_reviews: true,
-        dismiss_stale_approvals: true,
-        enable_approvals_whitelist: false,
-        enable_merge_whitelist: false,
-        enable_push: false,
-      },
-    }),
-  );
 }
 
 export function CreateDocumentModal({
@@ -197,16 +72,10 @@ export function CreateDocumentModal({
 
   const repoSlug = useMemo(() => slugifyRepoName(documentName), [documentName]);
   const repoSlugValid = repoSlug.length > 0;
-  const originalExtension = selectedFile
-    ? getOriginalExtension(selectedFile.name)
-    : "";
-  const canonicalFileName = originalExtension
-    ? `document.${originalExtension}`
+  const canonicalFileName = selectedFile
+    ? buildCanonicalDocumentFileName(getFileExtension(selectedFile.name))
     : "document";
   const friendlyDocumentName = documentName.trim();
-  const displayDocumentName = titleCase(
-    (friendlyDocumentName || repoSlug.replace(/-/g, " ")).trim(),
-  );
   const isBusy = status !== "idle" && status !== "error" && status !== "done";
 
   useEffect(() => {
@@ -282,83 +151,16 @@ export function CreateDocumentModal({
         return;
       }
 
-      setStatus("hashing");
-      const fileHashSha256 = await computeFileHash(selectedFile);
-      const contentHash8 = fileHashSha256.slice(0, 8);
-
-      const base64Content = await readFileAsBase64(selectedFile);
-
-      setStatus("creating-repo");
-      await unwrap(
-        giteaClient.POST("/user/repos", {
-          body: {
-            name: repoSlug,
-            private: true,
-            auto_init: true,
-            default_branch: "main",
-          },
-        }),
-      );
-
-      setStatus("bootstrapping");
-      await deleteReadmeIfPresent(giteaClient, owner, repoSlug);
-
-      setStatus("protecting");
-      await createMainBranchProtection(giteaClient, owner, repoSlug);
-
-      setStatus("creating-branch");
-      const branchName = buildUploadBranchName(repoSlug, owner, contentHash8);
-      await createUploadBranch({
+      const result = await createInitialDocumentUpload({
         client: giteaClient,
-        owner,
-        repo: repoSlug,
-        branchName,
-        from: "main",
-      });
-
-      setStatus("committing");
-      const commitMessage = buildUploadCommitMessage({
-        docSlug: repoSlug,
-        canonicalFile: canonicalFileName,
-        sourceFilename: selectedFile.name,
-        uploadBranch: branchName,
+        repoName: repoSlug,
+        file: selectedFile,
         uploaderSlug: owner,
-        fileHashSha256,
+        nextVersion: 1,
+        onProgress: setStatus,
       });
-
-      await commitBinaryFile({
-        client: giteaClient,
-        owner,
-        repo: repoSlug,
-        branch: branchName,
-        filePath: canonicalFileName,
-        base64Content,
-        message: commitMessage,
-      });
-
-      setStatus("opening-pr");
-      const prTitle = `Upload v1: ${displayDocumentName}`;
-      const prBody = [
-        "Automated upload from Bindersnap file vault.",
-        "",
-        `Source file: ${selectedFile.name}`,
-        `Document: ${trimmedName}`,
-        `Uploaded by: ${owner}`,
-        `File hash (SHA-256): ${fileHashSha256}`,
-      ].join("\n");
-
-      await createPullRequest({
-        client: giteaClient,
-        owner,
-        repo: repoSlug,
-        title: prTitle,
-        head: branchName,
-        base: "main",
-        body: prBody,
-      });
-
       setStatus("done");
-      onSuccess(owner, repoSlug);
+      onSuccess(result.owner, result.repo);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Unable to create document.";

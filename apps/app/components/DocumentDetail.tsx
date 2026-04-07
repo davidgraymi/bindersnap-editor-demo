@@ -7,7 +7,8 @@ import type {
   RepoBranchProtection,
 } from "../../../packages/gitea-client/repos";
 import type { UploadResult } from "../../../packages/gitea-client/uploads";
-import { GiteaApiError } from "../../../packages/gitea-client/client";
+import { getStoredToken } from "../../../packages/gitea-client/auth";
+import { GiteaApiError, unwrap } from "../../../packages/gitea-client/client";
 import {
   listPullRequests,
   mergePullRequest,
@@ -33,6 +34,22 @@ interface PRActionState {
   error: string | null;
   changesComment: string;
   showChangesForm: boolean;
+}
+
+interface CanonicalFileInfo {
+  storedFileName: string;
+  downloadFileName: string;
+}
+
+interface RepoContentsEntry {
+  name?: string;
+  path?: string;
+  type?: string;
+}
+
+interface RepoContentsExtResponse {
+  dir_contents?: RepoContentsEntry[];
+  file_contents?: RepoContentsEntry;
 }
 
 function getApprovalStateBadgeClass(state: string): string {
@@ -98,6 +115,96 @@ function buildRawFileUrl(
   canonicalFile: string,
 ): string {
   return `${giteaBaseUrl}/${owner}/${repo}/raw/${ref}/${canonicalFile}`;
+}
+
+function triggerBrowserDownload(blob: Blob, fileName: string): void {
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = fileName;
+  anchor.rel = "noopener";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(objectUrl);
+}
+
+function extractFileExtension(fileName: string): string | null {
+  const trimmed = fileName.trim();
+  const lastDotIndex = trimmed.lastIndexOf(".");
+
+  if (lastDotIndex <= 0 || lastDotIndex === trimmed.length - 1) {
+    return null;
+  }
+
+  return trimmed.slice(lastDotIndex + 1);
+}
+
+function buildDownloadFileName(repo: string, storedFileName: string): string {
+  const extension = extractFileExtension(storedFileName);
+  return extension ? `${repo}.${extension}` : repo;
+}
+
+function inferStoredDocumentFileName(
+  entries: RepoContentsEntry[],
+  repo: string,
+): string | null {
+  const files = entries.filter(
+    (entry): entry is RepoContentsEntry & { name: string } =>
+      entry.type === "file" && typeof entry.name === "string",
+  );
+
+  const documentFile = files.find(
+    (entry) => entry.name === "document" || entry.name.startsWith("document."),
+  );
+  if (documentFile) {
+    return documentFile.name;
+  }
+
+  const legacyFile = files.find(
+    (entry) => entry.name === repo || entry.name.startsWith(`${repo}.`),
+  );
+  if (legacyFile) {
+    return legacyFile.name;
+  }
+
+  if (files.length === 1) {
+    return files[0]?.name ?? null;
+  }
+
+  return null;
+}
+
+async function resolveCanonicalFileInfo(
+  giteaClient: GiteaClient,
+  owner: string,
+  repo: string,
+  ref = "main",
+): Promise<CanonicalFileInfo | null> {
+  const result = await unwrap(
+    giteaClient.GET("/repos/{owner}/{repo}/contents-ext/{filepath}", {
+      params: {
+        path: { owner, repo, filepath: "." },
+        query: { ref },
+      },
+    }),
+  );
+
+  const response = result as RepoContentsExtResponse;
+  const entries = [
+    ...(response.dir_contents ?? []),
+    ...(response.file_contents ? [response.file_contents] : []),
+  ];
+  const storedFileName = inferStoredDocumentFileName(entries, repo);
+
+  if (!storedFileName) {
+    return null;
+  }
+
+  return {
+    storedFileName,
+    downloadFileName: buildDownloadFileName(repo, storedFileName),
+  };
 }
 
 function readPermissionError(err: unknown, fallback: string): string {
@@ -166,9 +273,15 @@ export function DocumentDetail({
   const [openPRs, setOpenPRs] = useState<PullRequestWithApprovalState[]>([]);
   const [branchProtection, setBranchProtection] =
     useState<RepoBranchProtection | null>(null);
+  const [canonicalFileInfo, setCanonicalFileInfo] =
+    useState<CanonicalFileInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [downloadState, setDownloadState] = useState<{
+    ref: string | null;
+    error: string | null;
+  }>({ ref: null, error: null });
   const [prActionStates, setPrActionStates] = useState<
     Record<number, PRActionState>
   >({});
@@ -195,15 +308,39 @@ export function DocumentDetail({
         ),
       ]);
 
+      const uploadPRs = pullRequests
+        .filter((pr) => (pr.head?.ref ?? "").startsWith("upload/"))
+        .sort((left, right) => (right.number ?? 0) - (left.number ?? 0));
+
+      let fileInfo =
+        (await resolveCanonicalFileInfo(giteaClient, owner, repo).catch(
+          () => null,
+        )) ?? null;
+
+      if (!fileInfo) {
+        const fallbackRef = uploadPRs[0]?.head?.ref;
+        if (fallbackRef) {
+          fileInfo =
+            (await resolveCanonicalFileInfo(
+              giteaClient,
+              owner,
+              repo,
+              fallbackRef,
+            ).catch(() => null)) ?? null;
+        }
+      }
+
       setTags(docTags);
       setOpenPRs(pullRequests);
       setBranchProtection(protection);
+      setCanonicalFileInfo(fileInfo);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Unable to load document details.";
       setError(message);
       setTags([]);
       setOpenPRs([]);
+      setCanonicalFileInfo(null);
     } finally {
       setIsLoading(false);
     }
@@ -214,7 +351,6 @@ export function DocumentDetail({
   }, [loadDocumentData]);
 
   const latestTag = tags.length > 0 ? tags[0] : null;
-  const canonicalFileName = `${repo}.pdf`;
   const nextVersion = (latestTag?.version ?? 0) + 1;
 
   function getPRActionState(pullNumber: number): PRActionState {
@@ -314,6 +450,58 @@ export function DocumentDetail({
     }
   }
 
+  async function handleDownload(ref: string) {
+    if (!canonicalFileInfo) {
+      setDownloadState({
+        ref: null,
+        error: "Unable to determine which file to download for this document.",
+      });
+      return;
+    }
+
+    const token = getStoredToken();
+    if (!token) {
+      setDownloadState({
+        ref: null,
+        error: "Your Gitea session expired. Sign in again to download files.",
+      });
+      return;
+    }
+
+    setDownloadState({ ref, error: null });
+
+    try {
+      const response = await fetch(
+        buildRawFileUrl(
+          giteaBaseUrl,
+          owner,
+          repo,
+          ref,
+          canonicalFileInfo.storedFileName,
+        ),
+        {
+          headers: {
+            Authorization: `token ${token}`,
+          },
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error(`Download failed (${response.status}).`);
+      }
+
+      const blob = await response.blob();
+      triggerBrowserDownload(blob, canonicalFileInfo.downloadFileName);
+      setDownloadState({ ref: null, error: null });
+    } catch (err) {
+      setDownloadState({
+        ref: null,
+        error:
+          err instanceof Error ? err.message : "Unable to download document.",
+      });
+    }
+  }
+
   const handleUploadSuccess = (_result: UploadResult) => {
     setShowUploadModal(false);
     void loadDocumentData();
@@ -393,21 +581,25 @@ export function DocumentDetail({
               Published on {formatTimestamp(latestTag.created)} (tag:{" "}
               <code>{latestTag.name}</code>)
             </p>
-            <a
-              className="bs-btn bs-btn-secondary"
-              href={buildRawFileUrl(
-                giteaBaseUrl,
-                owner,
-                repo,
-                "main",
-                canonicalFileName,
-              )}
-              download
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Download Current Version
-            </a>
+            {canonicalFileInfo ? (
+              <button
+                className="bs-btn bs-btn-secondary"
+                type="button"
+                disabled={downloadState.ref === "main"}
+                onClick={() => void handleDownload("main")}
+              >
+                {downloadState.ref === "main"
+                  ? "Downloading…"
+                  : "Download Current Version"}
+              </button>
+            ) : (
+              <p>Unable to determine the document file for this repository.</p>
+            )}
+            {downloadState.error ? (
+              <p className="vault-pr-error" role="alert">
+                {downloadState.error}
+              </p>
+            ) : null}
           </>
         ) : (
           <p>
@@ -583,21 +775,20 @@ export function DocumentDetail({
                 <p className="vault-version-sha">
                   Commit: <code>{tag.sha.slice(0, 7)}</code>
                 </p>
-                <a
-                  className="bs-btn bs-btn-secondary vault-version-download"
-                  href={buildRawFileUrl(
-                    giteaBaseUrl,
-                    owner,
-                    repo,
-                    tag.name,
-                    canonicalFileName,
-                  )}
-                  download
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Download v{tag.version}
-                </a>
+                {canonicalFileInfo ? (
+                  <button
+                    className="bs-btn bs-btn-secondary vault-version-download"
+                    type="button"
+                    disabled={downloadState.ref === tag.name}
+                    onClick={() => void handleDownload(tag.name)}
+                  >
+                    {downloadState.ref === tag.name
+                      ? "Downloading…"
+                      : `Download v${tag.version}`}
+                  </button>
+                ) : (
+                  <p>No document file is available for this version.</p>
+                )}
               </div>
             ))}
           </div>
@@ -614,6 +805,7 @@ export function DocumentDetail({
           docSlug={repo}
           uploaderSlug={uploaderSlug}
           nextVersion={nextVersion}
+          canonicalFileName={canonicalFileInfo?.storedFileName ?? null}
           onClose={() => setShowUploadModal(false)}
           onSuccess={handleUploadSuccess}
         />

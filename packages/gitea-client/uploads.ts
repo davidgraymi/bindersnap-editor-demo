@@ -1,6 +1,11 @@
 import { unwrap, type GiteaClient } from "./client";
 import { createPullRequest } from "./pullRequests";
 import type { PullRequestWithApprovalState } from "./pullRequests";
+import {
+  bootstrapEmptyMainBranch,
+  createMainBranchProtection,
+  createPrivateCurrentUserRepo,
+} from "./repos";
 
 const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024; // 25 MiB
 
@@ -54,6 +59,32 @@ export interface UploadResult {
   commitSha: string;
 }
 
+export interface InitialDocumentUploadParams {
+  client: GiteaClient;
+  repoName: string;
+  file: File;
+  uploaderSlug: string;
+  nextVersion: number;
+  requiredApprovals?: number;
+  description?: string;
+  onProgress?: (step: InitialDocumentUploadStep) => void;
+}
+
+export interface InitialDocumentUploadResult extends UploadResult {
+  owner: string;
+  repo: string;
+  canonicalFile: string;
+}
+
+export type InitialDocumentUploadStep =
+  | "hashing"
+  | "creating-repo"
+  | "bootstrapping"
+  | "protecting"
+  | "creating-branch"
+  | "committing"
+  | "opening-pr";
+
 export function validateUploadFile(file: File): UploadValidationResult {
   if (file.size > MAX_FILE_SIZE_BYTES) {
     const sizeMiB = (file.size / (1024 * 1024)).toFixed(1);
@@ -63,6 +94,20 @@ export function validateUploadFile(file: File): UploadValidationResult {
     };
   }
   return { valid: true };
+}
+
+export function getFileExtension(fileName: string): string {
+  const dotIndex = fileName.lastIndexOf(".");
+  if (dotIndex <= 0 || dotIndex === fileName.length - 1) {
+    return "";
+  }
+
+  return fileName.slice(dotIndex + 1).toLowerCase();
+}
+
+export function buildCanonicalDocumentFileName(extension: string): string {
+  const normalized = extension.replace(/^\.+/, "").trim().toLowerCase();
+  return normalized === "" ? "document" : `document.${normalized}`;
 }
 
 export async function computeFileHash(file: File): Promise<string> {
@@ -112,6 +157,13 @@ export function buildUploadCommitMessage(
   ].join("\n");
 }
 
+function humanizeRepositoryName(repoName: string): string {
+  return repoName
+    .split("-")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
 export async function createUploadBranch(
   params: CreateUploadBranchParams,
 ): Promise<void> {
@@ -146,6 +198,128 @@ export async function commitBinaryFile(
   );
 
   return { sha: result.commit?.sha ?? "" };
+}
+
+export async function createInitialDocumentUpload(
+  params: InitialDocumentUploadParams,
+): Promise<InitialDocumentUploadResult> {
+  const {
+    client,
+    repoName,
+    file,
+    uploaderSlug,
+    nextVersion,
+    requiredApprovals = 1,
+    description,
+    onProgress,
+  } = params;
+
+  const validation = validateUploadFile(file);
+  if (!validation.valid) {
+    const { GiteaApiError } = await import("./client");
+    throw new GiteaApiError(0, validation.reason ?? "Invalid file.");
+  }
+
+  onProgress?.("hashing");
+  const fullHash = await computeFileHash(file);
+  const contentHash8 = fullHash.slice(0, 8);
+  const base64Content = await readFileAsBase64(file);
+  const extension = getFileExtension(file.name);
+  const canonicalFile = buildCanonicalDocumentFileName(extension);
+  const branchName = buildUploadBranchName(
+    repoName,
+    uploaderSlug,
+    contentHash8,
+  );
+
+  onProgress?.("creating-repo");
+  const createdRepo = await createPrivateCurrentUserRepo({
+    client,
+    name: repoName,
+    description,
+  });
+
+  const owner = createdRepo.owner?.login ?? "";
+  if (owner.trim() === "") {
+    throw new Error(
+      "Gitea did not return an owner for the created repository.",
+    );
+  }
+
+  onProgress?.("bootstrapping");
+  await bootstrapEmptyMainBranch({
+    client,
+    owner,
+    repo: repoName,
+  });
+
+  onProgress?.("protecting");
+  await createMainBranchProtection({
+    client,
+    owner,
+    repo: repoName,
+    requiredApprovals,
+  });
+
+  onProgress?.("creating-branch");
+  await createUploadBranch({
+    client,
+    owner,
+    repo: repoName,
+    branchName,
+    from: "main",
+  });
+
+  const commitMessage = buildUploadCommitMessage({
+    docSlug: repoName,
+    canonicalFile,
+    sourceFilename: file.name,
+    uploadBranch: branchName,
+    uploaderSlug,
+    fileHashSha256: fullHash,
+  });
+
+  onProgress?.("committing");
+  const { sha: commitSha } = await commitBinaryFile({
+    client,
+    owner,
+    repo: repoName,
+    branch: branchName,
+    filePath: canonicalFile,
+    base64Content,
+    message: commitMessage,
+  });
+
+  const prTitle = `Upload v${nextVersion}: ${humanizeRepositoryName(repoName)}`;
+  const prBody = [
+    `Automated upload from Bindersnap file vault.`,
+    ``,
+    `Source file: ${file.name}`,
+    `Document: ${repoName}`,
+    `Uploaded by: ${uploaderSlug}`,
+    `File hash (SHA-256): ${fullHash}`,
+  ].join("\n");
+
+  onProgress?.("opening-pr");
+  const pr = await createPullRequest({
+    client,
+    owner,
+    repo: repoName,
+    title: prTitle,
+    head: branchName,
+    base: "main",
+    body: prBody,
+  });
+
+  return {
+    owner,
+    repo: repoName,
+    canonicalFile,
+    prNumber: pr.number ?? 0,
+    prTitle,
+    branchName,
+    commitSha,
+  };
 }
 
 async function readFileAsBase64(file: File): Promise<string> {

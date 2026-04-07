@@ -12,6 +12,7 @@ type Tag = Partial<components["schemas"]["Tag"]>;
 function createMockClient(handlers: {
   GET?: Record<string, (...args: any[]) => unknown>;
   POST?: Record<string, (...args: any[]) => unknown>;
+  DELETE?: Record<string, (...args: any[]) => unknown>;
 }) {
   const mockGet = mock(async (path: string, init?: unknown) => {
     const handler = handlers.GET?.[path];
@@ -47,16 +48,34 @@ function createMockClient(handlers: {
     };
   });
 
+  const mockDelete = mock(async (path: string, init?: { params?: unknown; body?: unknown }) => {
+    const handler = handlers.DELETE?.[path];
+    if (handler) {
+      const data = await handler(init);
+      return {
+        data,
+        error: undefined,
+        response: new Response(null, { status: 200 }),
+      };
+    }
+    return {
+      data: undefined,
+      error: { message: "not found" },
+      response: new Response(null, { status: 404 }),
+    };
+  });
+
   return {
     client: {
       GET: mockGet,
       POST: mockPost,
+      DELETE: mockDelete,
       PUT: mock(),
-      DELETE: mock(),
       use: mock(),
     } as unknown as GiteaClient,
     mockGet,
     mockPost,
+    mockDelete,
   };
 }
 
@@ -104,6 +123,131 @@ test("listWorkspaceRepos handles empty response", async () => {
   const result = await listWorkspaceRepos(client);
 
   expect(result).toHaveLength(0);
+});
+
+test("createPrivateCurrentUserRepo creates a private initialized repo on main", async () => {
+  const { client, mockPost } = createMockClient({
+    POST: {
+      "/user/repos": (init: { body?: { name?: string; private?: boolean; auto_init?: boolean; default_branch?: string } }) => ({
+        id: 42,
+        name: init?.body?.name,
+        full_name: `alice/${init?.body?.name ?? ""}`,
+        owner: { login: "alice" },
+      }),
+    },
+  });
+
+  const { createPrivateCurrentUserRepo } = await import("./repos");
+  const repo = await createPrivateCurrentUserRepo({
+    client,
+    name: "quarterly-report",
+    description: "Q2 report",
+  });
+
+  expect(mockPost).toHaveBeenCalled();
+  expect(repo.name).toBe("quarterly-report");
+  expect(repo.owner?.login).toBe("alice");
+
+  const calls = mockPost.mock.calls as Array<[string, { body?: { name?: string; private?: boolean; auto_init?: boolean; default_branch?: string; description?: string } }]>;
+  expect(calls[0]?.[1]?.body).toMatchObject({
+    name: "quarterly-report",
+    description: "Q2 report",
+    private: true,
+    auto_init: true,
+    default_branch: "main",
+  });
+});
+
+test("repoExists returns false for missing repos and true for existing repos", async () => {
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}": () => ({
+        id: 7,
+        name: "quarterly-report",
+        full_name: "alice/quarterly-report",
+        owner: { login: "alice" },
+      }),
+    },
+  });
+
+  const missingClient = createMockClient({});
+
+  const { repoExists } = await import("./repos");
+  await expect(repoExists(client, "alice", "quarterly-report")).resolves.toBe(true);
+  await expect(repoExists(missingClient.client, "alice", "missing")).resolves.toBe(false);
+});
+
+test("createMainBranchProtection creates a main rule with required approvals", async () => {
+  const { client, mockPost } = createMockClient({
+    POST: {
+      "/repos/{owner}/{repo}/branch_protections": (init: { body?: { rule_name?: string; required_approvals?: number } }) => ({
+        rule_name: init?.body?.rule_name,
+        required_approvals: init?.body?.required_approvals,
+      }),
+    },
+  });
+
+  const { createMainBranchProtection } = await import("./repos");
+  const protection = await createMainBranchProtection({
+    client,
+    owner: "alice",
+    repo: "quarterly-report",
+    requiredApprovals: 2,
+  });
+
+  expect(mockPost).toHaveBeenCalled();
+  expect(protection.requiredApprovals).toBe(2);
+
+  const calls = mockPost.mock.calls as Array<[string, { body?: { rule_name?: string; required_approvals?: number; enable_approvals_whitelist?: boolean; enable_merge_whitelist?: boolean; block_on_rejected_reviews?: boolean } }]>;
+  expect(calls[0]?.[1]?.body).toMatchObject({
+    rule_name: "main",
+    required_approvals: 2,
+    enable_approvals_whitelist: false,
+    enable_merge_whitelist: false,
+    block_on_rejected_reviews: true,
+  });
+});
+
+test("bootstrapEmptyMainBranch deletes README.md from main when present", async () => {
+  const { client, mockDelete } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/contents/{filepath}": () => ({
+        sha: "readme-sha",
+        type: "file",
+      }),
+    },
+    DELETE: {
+      "/repos/{owner}/{repo}/contents/{filepath}": () => ({}),
+    },
+  });
+
+  const { bootstrapEmptyMainBranch } = await import("./repos");
+  await bootstrapEmptyMainBranch({
+    client,
+    owner: "alice",
+    repo: "quarterly-report",
+  });
+
+  expect(mockDelete).toHaveBeenCalled();
+  const calls = mockDelete.mock.calls as Array<[string, { body?: { branch?: string; sha?: string; message?: string } }]>;
+  expect(calls[0]?.[1]?.body).toMatchObject({
+    branch: "main",
+    sha: "readme-sha",
+    message: "Bootstrap empty main branch",
+  });
+});
+
+test("bootstrapEmptyMainBranch is a no-op when README.md is missing", async () => {
+  const { client, mockDelete } = createMockClient({});
+
+  const { bootstrapEmptyMainBranch } = await import("./repos");
+  await bootstrapEmptyMainBranch({
+    client,
+    owner: "alice",
+    repo: "quarterly-report",
+  });
+
+  expect(mockDelete).not.toHaveBeenCalled();
 });
 
 test("getLatestDocTag returns the highest version tag", async () => {
