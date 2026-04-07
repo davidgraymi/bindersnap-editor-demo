@@ -13,6 +13,7 @@ function createMockClient(handlers: {
   GET?: Record<string, (...args: any[]) => unknown>;
   POST?: Record<string, (...args: any[]) => unknown>;
   DELETE?: Record<string, (...args: any[]) => unknown>;
+  PUT?: Record<string, (...args: any[]) => unknown>;
 }) {
   const mockGet = mock(async (path: string, init?: unknown) => {
     const handler = handlers.GET?.[path];
@@ -65,17 +66,35 @@ function createMockClient(handlers: {
     };
   });
 
+  const mockPut = mock(async (path: string, init?: { params?: unknown; body?: unknown }) => {
+    const handler = handlers.PUT?.[path];
+    if (handler) {
+      const data = await handler(init);
+      return {
+        data,
+        error: undefined,
+        response: new Response(null, { status: 200 }),
+      };
+    }
+    return {
+      data: undefined,
+      error: { message: "not found" },
+      response: new Response(null, { status: 404 }),
+    };
+  });
+
   return {
     client: {
       GET: mockGet,
       POST: mockPost,
       DELETE: mockDelete,
-      PUT: mock(),
+      PUT: mockPut,
       use: mock(),
     } as unknown as GiteaClient,
     mockGet,
     mockPost,
     mockDelete,
+    mockPut,
   };
 }
 
@@ -155,6 +174,168 @@ test("createPrivateCurrentUserRepo creates a private initialized repo on main", 
     private: true,
     auto_init: true,
     default_branch: "main",
+  });
+});
+
+test("listRepoCollaborators loads collaborators and their permissions per page", async () => {
+  const { client, mockGet } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/collaborators": () => [
+        {
+          id: 1,
+          login: "alice",
+          full_name: "Alice Example",
+          email: "alice@example.com",
+          avatar_url: "https://example.com/a.png",
+        },
+        {
+          id: 2,
+          login: "bob",
+          full_name: "Bob Example",
+          email: "bob@example.com",
+          avatar_url: "https://example.com/b.png",
+        },
+      ],
+      "/repos/{owner}/{repo}/collaborators/{collaborator}/permission": (
+        init: { params?: { path?: { collaborator?: string } } },
+      ) => ({
+        permission:
+          init?.params?.path?.collaborator === "alice" ? "admin" : "write",
+        role_name:
+          init?.params?.path?.collaborator === "alice"
+            ? "repo admin"
+            : "collaborator",
+        user: {
+          login: init?.params?.path?.collaborator,
+        },
+      }),
+    },
+  });
+
+  const { listRepoCollaborators } = await import("./repos");
+  const result = await listRepoCollaborators({
+    client,
+    owner: "alice",
+    repo: "quarterly-report",
+    page: 2,
+    limit: 2,
+  });
+
+  expect(mockGet).toHaveBeenCalledTimes(3);
+  expect(result.page).toBe(2);
+  expect(result.limit).toBe(2);
+  expect(result.hasMore).toBe(true);
+  expect(result.collaborators).toHaveLength(2);
+  expect(result.collaborators[0]?.user.login).toBe("alice");
+  expect(result.collaborators[0]?.permission).toBe("admin");
+  expect(result.collaborators[0]?.access).toBe("admin");
+  expect(result.collaborators[0]?.permissionLabel).toBe("Admin");
+  expect(result.collaborators[1]?.user.full_name).toBe("Bob Example");
+  expect(result.collaborators[1]?.permission).toBe("write");
+});
+
+test("getCurrentUserRepoPermission returns the current user's repository access", async () => {
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/collaborators/{collaborator}/permission": () => ({
+        permission: "owner",
+        role_name: "repository owner",
+        user: {
+          login: "alice",
+          full_name: "Alice Example",
+          email: "alice@example.com",
+          avatar_url: "https://example.com/a.png",
+        },
+      }),
+    },
+  });
+
+  const { getCurrentUserRepoPermission } = await import("./repos");
+  const permission = await getCurrentUserRepoPermission({
+    client,
+    owner: "alice",
+    repo: "quarterly-report",
+    username: "alice",
+  });
+
+  expect(permission.permission).toBe("owner");
+  expect(permission.access).toBe("owner");
+  expect(permission.permissionLabel).toBe("Owner");
+  expect(permission.user.login).toBe("alice");
+});
+
+test("addRepoCollaborator sends the requested permission level", async () => {
+  const { client, mockPut } = createMockClient({
+    PUT: {
+      "/repos/{owner}/{repo}/collaborators/{collaborator}": (init: {
+        body?: { permission?: string };
+      }) => ({
+        permission: init?.body?.permission,
+      }),
+    },
+  });
+
+  const { addRepoCollaborator } = await import("./repos");
+  await addRepoCollaborator({
+    client,
+    owner: "alice",
+    repo: "quarterly-report",
+    collaborator: "bob",
+    permission: "write",
+  });
+
+  expect(mockPut).toHaveBeenCalled();
+  const calls = mockPut.mock.calls as Array<[
+    string,
+    { body?: { permission?: string } },
+  ]>;
+  expect(calls[0]?.[0]).toBe("/repos/{owner}/{repo}/collaborators/{collaborator}");
+  expect(calls[0]?.[1]?.body).toMatchObject({ permission: "write" });
+});
+
+test("searchUsers returns normalized user results for typeahead", async () => {
+  const { client } = createMockClient({
+    GET: {
+      "/users/search": (init: { params?: { query?: { q?: string; page?: number; limit?: number } } }) => ({
+        data: [
+          {
+            id: 7,
+            login: "jane",
+            full_name: "Jane Doe",
+            email: "jane@example.com",
+            avatar_url: "https://example.com/jane.png",
+          },
+          {
+            id: 8,
+            login: "janet",
+            full_name: "Janet Roe",
+            email: "",
+            avatar_url: "",
+          },
+        ],
+        ok: true,
+        query: init?.params?.query?.q,
+      }),
+    },
+  });
+
+  const { searchUsers } = await import("./repos");
+  const result = await searchUsers({
+    client,
+    query: "jan",
+    page: 1,
+    limit: 5,
+  });
+
+  expect(result.page).toBe(1);
+  expect(result.limit).toBe(5);
+  expect(result.hasMore).toBe(false);
+  expect(result.users).toHaveLength(2);
+  expect(result.users[0]).toMatchObject({
+    id: 7,
+    login: "jane",
+    full_name: "Jane Doe",
+    email: "jane@example.com",
   });
 });
 
