@@ -721,48 +721,163 @@ export function DocumentCollaborators({
         </p>
       </section>
 
-      <section
-        className="collaborators-summary-grid"
-        aria-label="Repository access summary"
-      >
-        <article className="bs-card collaborators-summary-card">
-          <div className="collaborator-summary-label">Loaded collaborators</div>
-          <div className="collaborator-summary-value">{loadedCount}</div>
-          <p>Paginated from the repository collaborator list.</p>
-        </article>
+      {canManageCollaborators ? (
+        <section className="bs-card collaborators-panel collaborators-panel-search">
+          <div className="collaborators-panel-header">
+            <div>
+              <div className="bs-eyebrow">Add People</div>
+              <h2>Grant access</h2>
+            </div>
+            <div className="collaborators-panel-meta">
+              <span className="collaborator-panel-status">
+                Type a name, pick a match, then set access.
+              </span>
+            </div>
+          </div>
 
-        <article className="bs-card collaborators-summary-card">
-          <div className="collaborator-summary-label">Your access</div>
-          <div className="collaborator-summary-value">
+          <div className="collaborator-search-form">
+            <label
+              className="collaborator-search-label"
+              htmlFor="collaborator-search"
+            >
+              Search users by name
+            </label>
+            <div className="collaborator-search-input-row">
+              <div className="collaborator-search-shell">
+                <input
+                  id="collaborator-search"
+                  className="collaborator-search-input"
+                  type="search"
+                  value={searchQuery}
+                  placeholder="Start typing a name or username"
+                  autoComplete="off"
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                />
+                {showSearchDropdown ? (
+                  <div
+                    className="collaborator-search-dropdown"
+                    role="listbox"
+                    aria-label="Matching users"
+                  >
+                    {isSearching ? (
+                      <div className="collaborators-empty-state" role="status">
+                        Searching Gitea...
+                      </div>
+                    ) : searchError ? (
+                      <div className="collaborators-empty-state collaborators-search-error">
+                        {searchError}
+                      </div>
+                    ) : visibleSearchResults.length === 0 ? (
+                      <div className="collaborators-empty-state">
+                        {searchResults.length > 0
+                          ? "Everyone matching that search already has access."
+                          : "No users matched that search."}
+                      </div>
+                    ) : (
+                      <>
+                        <div className="collaborator-search-heading">
+                          {activeSearch}
+                        </div>
+                        <div className="collaborator-search-results">
+                          {visibleSearchResults.map((user) => {
+                            const busy = rowBusy[user.login] ?? false;
+                            const selectValue =
+                              draftPermissions[user.login] ?? defaultPermission;
+
+                            return (
+                              <article
+                                className="collaborator-search-result"
+                                key={user.login}
+                              >
+                                <div className="collaborator-search-result-main">
+                                  {renderUserIdentity(user)}
+                                  <div className="collaborator-search-result-copy">
+                                    {user.email ? (
+                                      <div className="collaborator-row-email">
+                                        {user.email}
+                                      </div>
+                                    ) : (
+                                      <div className="collaborator-row-email">
+                                        Email not public
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="collaborator-result-actions">
+                                  <select
+                                    className="collaborator-permission-select"
+                                    value={selectValue}
+                                    disabled={busy}
+                                    onChange={(event) =>
+                                      updateDraftPermission(
+                                        user.login,
+                                        event.target
+                                          .value as WritablePermission,
+                                      )
+                                    }
+                                  >
+                                    <option value="read">Read</option>
+                                    <option value="write">Write</option>
+                                    <option value="admin">Admin</option>
+                                  </select>
+                                  <button
+                                    className="bs-btn bs-btn-primary"
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={() =>
+                                      void handleGrantCollaborator(user)
+                                    }
+                                  >
+                                    {busy ? "Saving..." : "Add collaborator"}
+                                  </button>
+                                </div>
+                              </article>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+              <select
+                className="collaborator-permission-select collaborator-default-permission"
+                value={defaultPermission}
+                onChange={(event) =>
+                  setDefaultPermission(event.target.value as WritablePermission)
+                }
+              >
+                <option value="read">Read</option>
+                <option value="write">Write</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+
+            <p className="collaborator-search-hint">
+              Search results are loaded from Gitea after a short debounce.
+            </p>
+          </div>
+
+          {manageError ? (
+            <p className="collaborator-manage-error" role="alert">
+              {manageError}
+            </p>
+          ) : null}
+        </section>
+      ) : (
+        <section className="bs-card collaborators-panel collaborators-readonly">
+          <div className="bs-eyebrow">Access</div>
+          <h2>Only owners and admins can add collaborators</h2>
+          <p>
             {permissionLoadPending
-              ? "Checking..."
-              : formatPermissionLabel(currentPermission ?? "unknown")}
-          </div>
-          <p>
-            {permissionLoadError
-              ? permissionLoadError
-              : canManageCollaborators
-                ? "You can add or update collaborator access."
-                : "View-only access for this repository."}
+              ? "Checking your repository access..."
+              : permissionLoadError
+                ? permissionLoadError
+                : "You can still review collaborator access, but only repo owners and admins can change it."}
           </p>
-        </article>
-
-        <article className="bs-card collaborators-summary-card">
-          <div className="collaborator-summary-label">Workspace state</div>
-          <div className="collaborator-summary-value">
-            {isLoadingCollaborators
-              ? "Loading"
-              : hasMoreCollaborators
-                ? "More available"
-                : "Complete"}
-          </div>
-          <p>
-            {isLoadingCollaborators || isLoadingMore
-              ? "Fetching collaborator pages from Gitea."
-              : "Additional pages load on demand."}
-          </p>
-        </article>
-      </section>
+        </section>
+      )}
 
       {collaboratorError ? (
         <section className="bs-card collaborators-panel collaborators-panel-error">
@@ -950,162 +1065,6 @@ export function DocumentCollaborators({
           </div>
         ) : null}
       </section>
-
-      {canManageCollaborators ? (
-        <section className="bs-card collaborators-panel">
-          <div className="collaborators-panel-header">
-            <div>
-              <div className="bs-eyebrow">Add People</div>
-              <h2>Grant access</h2>
-            </div>
-            <div className="collaborators-panel-meta">
-              <span className="collaborator-panel-status">
-                Type a name, pick a match, then set access.
-              </span>
-            </div>
-          </div>
-
-          <div className="collaborator-search-form">
-            <label
-              className="collaborator-search-label"
-              htmlFor="collaborator-search"
-            >
-              Search users by name
-            </label>
-            <div className="collaborator-search-input-row">
-              <div className="collaborator-search-shell">
-                <input
-                  id="collaborator-search"
-                  className="collaborator-search-input"
-                  type="search"
-                  value={searchQuery}
-                  placeholder="Start typing a name or username"
-                  autoComplete="off"
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                />
-                {showSearchDropdown ? (
-                  <div
-                    className="collaborator-search-dropdown"
-                    role="listbox"
-                    aria-label="Matching users"
-                  >
-                    {isSearching ? (
-                      <div className="collaborators-empty-state" role="status">
-                        Searching Gitea...
-                      </div>
-                    ) : searchError ? (
-                      <div className="collaborators-empty-state collaborators-search-error">
-                        {searchError}
-                      </div>
-                    ) : visibleSearchResults.length === 0 ? (
-                      <div className="collaborators-empty-state">
-                        {searchResults.length > 0
-                          ? "Everyone matching that search already has access."
-                          : "No users matched that search."}
-                      </div>
-                    ) : (
-                      <>
-                        <div className="collaborator-search-heading">
-                          {activeSearch}
-                        </div>
-                        <div className="collaborator-search-results">
-                          {visibleSearchResults.map((user) => {
-                            const busy = rowBusy[user.login] ?? false;
-                            const selectValue =
-                              draftPermissions[user.login] ?? defaultPermission;
-
-                            return (
-                              <article
-                                className="collaborator-search-result"
-                                key={user.login}
-                              >
-                                <div className="collaborator-search-result-main">
-                                  {renderUserIdentity(user)}
-                                  <div className="collaborator-search-result-copy">
-                                    {user.email ? (
-                                      <div className="collaborator-row-email">
-                                        {user.email}
-                                      </div>
-                                    ) : (
-                                      <div className="collaborator-row-email">
-                                        Email not public
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-
-                                <div className="collaborator-result-actions">
-                                  <select
-                                    className="collaborator-permission-select"
-                                    value={selectValue}
-                                    disabled={busy}
-                                    onChange={(event) =>
-                                      updateDraftPermission(
-                                        user.login,
-                                        event.target
-                                          .value as WritablePermission,
-                                      )
-                                    }
-                                  >
-                                    <option value="read">Read</option>
-                                    <option value="write">Write</option>
-                                    <option value="admin">Admin</option>
-                                  </select>
-                                  <button
-                                    className="bs-btn bs-btn-primary"
-                                    type="button"
-                                    disabled={busy}
-                                    onClick={() =>
-                                      void handleGrantCollaborator(user)
-                                    }
-                                  >
-                                    {busy ? "Saving..." : "Add collaborator"}
-                                  </button>
-                                </div>
-                              </article>
-                            );
-                          })}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-              <select
-                className="collaborator-permission-select collaborator-default-permission"
-                value={defaultPermission}
-                onChange={(event) =>
-                  setDefaultPermission(event.target.value as WritablePermission)
-                }
-              >
-                <option value="read">Read</option>
-                <option value="write">Write</option>
-                <option value="admin">Admin</option>
-              </select>
-            </div>
-
-            <p className="collaborator-search-hint">
-              Search results are loaded from Gitea after a short debounce.
-            </p>
-          </div>
-
-          {manageError ? (
-            <p className="collaborator-manage-error" role="alert">
-              {manageError}
-            </p>
-          ) : null}
-        </section>
-      ) : (
-        <section className="bs-card collaborators-panel collaborators-readonly">
-          <div className="bs-eyebrow">Access</div>
-          <h2>Only owners and admins can add collaborators</h2>
-          <p>
-            {permissionLoadPending
-              ? "Checking your repository access..."
-              : "You can still review collaborator access, but only repo owners and admins can change it."}
-          </p>
-        </section>
-      )}
     </div>
   );
 }
