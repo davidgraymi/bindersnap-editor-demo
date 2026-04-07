@@ -5,7 +5,6 @@ import { GiteaApiError, unwrap } from "../../../packages/gitea-client/client";
 import {
   addRepoCollaborator,
   getCurrentUserRepoPermission,
-  getRepoCollaboratorPermission,
   listRepoCollaborators,
   searchUsers,
   type RepoCollaboratorPermissionSummary,
@@ -47,9 +46,65 @@ interface CollaboratorPageResult {
 const COLLABORATORS_PAGE_SIZE = 12;
 const SEARCH_PAGE_SIZE = 8;
 const DEBOUNCE_MS = 250;
+const COLLABORATOR_PERMISSION_CACHE_KEY =
+  "bindersnap_document_collaborator_permissions";
 
 function readString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function collaboratorPermissionCacheKey(owner: string, repo: string): string {
+  return `${owner}/${repo}`;
+}
+
+function readCachedCollaboratorPermissions(
+  owner: string,
+  repo: string,
+): Record<string, WritablePermission> {
+  try {
+    const raw = globalThis.sessionStorage?.getItem(
+      COLLABORATOR_PERMISSION_CACHE_KEY,
+    );
+    if (!raw) {
+      return {};
+    }
+
+    const parsed = JSON.parse(raw) as Record<string, Record<string, string>>;
+    const repoPermissions =
+      parsed[collaboratorPermissionCacheKey(owner, repo)] ?? {};
+
+    return Object.fromEntries(
+      Object.entries(repoPermissions).filter(
+        (entry): entry is [string, WritablePermission] =>
+          entry[1] === "read" || entry[1] === "write" || entry[1] === "admin",
+      ),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function writeCachedCollaboratorPermissions(
+  owner: string,
+  repo: string,
+  permissions: Record<string, WritablePermission>,
+): void {
+  try {
+    const raw = globalThis.sessionStorage?.getItem(
+      COLLABORATOR_PERMISSION_CACHE_KEY,
+    );
+    const parsed = raw
+      ? (JSON.parse(raw) as Record<string, Record<string, WritablePermission>>)
+      : {};
+
+    parsed[collaboratorPermissionCacheKey(owner, repo)] = permissions;
+    globalThis.sessionStorage?.setItem(
+      COLLABORATOR_PERMISSION_CACHE_KEY,
+      JSON.stringify(parsed),
+    );
+  } catch {
+    // Ignore cache write failures and fall back to live API data.
+  }
 }
 
 function getUserLogin(user: RepoUserSummary): string {
@@ -87,6 +142,42 @@ function normalizeDisplayPermission(permission?: string): DisplayPermission {
     default:
       return "unknown";
   }
+}
+
+function resolveCollaboratorPermission(
+  login: string,
+  repoOwner: string,
+  permission: RepoCollaboratorPermissionSummary | null,
+  explicitPermission?: WritablePermission,
+): DisplayPermission {
+  if (login === repoOwner) {
+    return "owner";
+  }
+
+  if (explicitPermission) {
+    return explicitPermission;
+  }
+
+  const rawPermission = readString(permission?.permission).toLowerCase();
+  const rawRoleName = readString(permission?.roleName).toLowerCase();
+
+  if (rawPermission === "owner") {
+    if (rawRoleName.includes("read")) {
+      return "read";
+    }
+
+    if (rawRoleName.includes("write")) {
+      return "write";
+    }
+
+    if (rawRoleName.includes("admin")) {
+      return "admin";
+    }
+
+    return "admin";
+  }
+
+  return normalizeDisplayPermission(rawPermission);
 }
 
 function normalizeWritablePermission(permission?: string): WritablePermission {
@@ -152,42 +243,36 @@ function normalizeCollaborator(
   user: RepoUserSummary,
   permission: RepoCollaboratorPermissionSummary | null,
   currentUsername: string,
+  repoOwner: string,
+  explicitPermission?: WritablePermission,
 ): CollaboratorRow | null {
   const login = getUserLogin(user);
-  if (!login) {
+  if (!login || login === repoOwner) {
     return null;
   }
+
+  const resolvedPermission = resolveCollaboratorPermission(
+    login,
+    repoOwner,
+    permission,
+    explicitPermission,
+  );
+  const roleName =
+    explicitPermission ||
+    (resolvedPermission !== "owner" &&
+      readString(permission?.roleName).toLowerCase() === "owner")
+      ? ""
+      : readString(permission?.roleName);
 
   return {
     login,
     fullName: getUserFullName(user),
     email: getUserEmail(user),
-    permission: normalizeDisplayPermission(permission?.permission),
-    roleName: readString(permission?.roleName),
+    permission: resolvedPermission,
+    roleName,
     avatarUrl: getUserAvatarUrl(user),
     isCurrentUser: login === currentUsername,
   };
-}
-
-async function fetchCollaboratorPermission(
-  giteaClient: GiteaClient,
-  owner: string,
-  repo: string,
-  collaborator: string,
-): Promise<RepoCollaboratorPermissionSummary | null> {
-  try {
-    return await getRepoCollaboratorPermission({
-      client: giteaClient,
-      owner,
-      repo,
-      collaborator,
-    });
-  } catch (err) {
-    if (err instanceof GiteaApiError && err.status === 404) {
-      return null;
-    }
-    throw err;
-  }
 }
 
 async function fetchCollaboratorPage(
@@ -195,6 +280,7 @@ async function fetchCollaboratorPage(
   owner: string,
   repo: string,
   currentUsername: string,
+  explicitPermissions: Record<string, WritablePermission>,
   page: number,
   limit: number,
 ): Promise<CollaboratorPageResult> {
@@ -207,7 +293,13 @@ async function fetchCollaboratorPage(
   });
 
   const rows = result.collaborators.map((collaborator) =>
-    normalizeCollaborator(collaborator.user, collaborator, currentUsername),
+    normalizeCollaborator(
+      collaborator.user,
+      collaborator,
+      currentUsername,
+      owner,
+      explicitPermissions[collaborator.user.login],
+    ),
   );
 
   return {
@@ -307,6 +399,9 @@ export function DocumentCollaborators({
   repo,
   currentUsername,
 }: DocumentCollaboratorsProps) {
+  const [explicitPermissions, setExplicitPermissions] = useState<
+    Record<string, WritablePermission>
+  >({});
   const [collaborators, setCollaborators] = useState<CollaboratorRow[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMoreCollaborators, setHasMoreCollaborators] = useState(true);
@@ -361,7 +456,9 @@ export function DocumentCollaborators({
   useEffect(() => {
     const requestId = ++collaboratorRequestId.current;
     const permissionRequestIdValue = ++permissionRequestId.current;
+    const cachedPermissions = readCachedCollaboratorPermissions(owner, repo);
 
+    setExplicitPermissions(cachedPermissions);
     setCollaborators([]);
     setCurrentPage(1);
     setHasMoreCollaborators(true);
@@ -386,6 +483,7 @@ export function DocumentCollaborators({
           owner,
           repo,
           currentUsername,
+          cachedPermissions,
           1,
           COLLABORATORS_PAGE_SIZE,
         );
@@ -543,6 +641,20 @@ export function DocumentCollaborators({
     }));
   }
 
+  function persistExplicitPermission(
+    login: string,
+    permission: WritablePermission,
+  ): void {
+    setExplicitPermissions((prev) => {
+      const next = {
+        ...prev,
+        [login]: permission,
+      };
+      writeCachedCollaboratorPermissions(owner, repo, next);
+      return next;
+    });
+  }
+
   async function loadMoreCollaborators(): Promise<void> {
     if (isLoadingCollaborators || isLoadingMore || !hasMoreCollaborators) {
       return;
@@ -559,6 +671,7 @@ export function DocumentCollaborators({
         owner,
         repo,
         currentUsername,
+        explicitPermissions,
         nextPage,
         COLLABORATORS_PAGE_SIZE,
       );
@@ -613,13 +726,7 @@ export function DocumentCollaborators({
         collaborator: login,
         permission,
       });
-
-      const updatedPermission = await fetchCollaboratorPermission(
-        giteaClient,
-        owner,
-        repo,
-        login,
-      );
+      persistExplicitPermission(login, permission);
 
       const normalized = normalizeCollaborator(
         {
@@ -629,8 +736,10 @@ export function DocumentCollaborators({
           avatar_url: user.avatarUrl,
           id: 0,
         },
-        updatedPermission,
+        null,
         currentUsername,
+        owner,
+        permission,
       );
 
       if (normalized) {
@@ -853,10 +962,6 @@ export function DocumentCollaborators({
                 <option value="admin">Admin</option>
               </select>
             </div>
-
-            <p className="collaborator-search-hint">
-              Search results are loaded from Gitea after a short debounce.
-            </p>
           </div>
 
           {manageError ? (
@@ -901,6 +1006,7 @@ export function DocumentCollaborators({
                     owner,
                     repo,
                     currentUsername,
+                    explicitPermissions,
                     1,
                     COLLABORATORS_PAGE_SIZE,
                   );

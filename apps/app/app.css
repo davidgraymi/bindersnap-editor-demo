@@ -731,7 +731,6 @@ input {
 .collaborator-panel-status,
 .collaborator-role-name,
 .collaborator-search-heading,
-.collaborator-search-hint,
 .collaborator-current-user,
 .collaborator-row-note,
 .collaborator-manage-error {
@@ -744,7 +743,6 @@ input {
 .collaborator-panel-count,
 .collaborator-panel-status,
 .collaborator-search-heading,
-.collaborator-search-hint,
 .collaborator-row-note {
   color: var(--bs-text-muted);
 }
