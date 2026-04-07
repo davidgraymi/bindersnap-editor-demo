@@ -36,6 +36,54 @@ function composeDown(): void {
   );
 }
 
+function runComposeCommand(args: string[]): ReturnType<typeof spawnSync> {
+  return spawnSync("docker", ["compose", "-f", COMPOSE_FILE, ...args], {
+    stdio: "pipe",
+    encoding: "utf8",
+    env: { ...process.env, APP_PORT },
+  });
+}
+
+function printComposeOutput(label: string, output?: string | null): void {
+  const trimmed = output?.trim();
+  if (!trimmed) {
+    return;
+  }
+
+  process.stderr.write(`[global-setup] ${label}\n${trimmed}\n`);
+}
+
+function collectFailedServiceLogs(): void {
+  const ps = runComposeCommand(["ps", "-a"]);
+  printComposeOutput("docker compose ps -a", ps.stdout);
+  printComposeOutput("docker compose ps -a stderr", ps.stderr);
+
+  const exitedServices = runComposeCommand([
+    "ps",
+    "-a",
+    "--status",
+    "exited",
+    "--services",
+  ]);
+
+  const serviceNames = new Set(
+    (exitedServices.stdout ?? "")
+      .split("\n")
+      .map((name) => name.trim())
+      .filter((name) => name.length > 0),
+  );
+
+  if (serviceNames.size === 0) {
+    serviceNames.add("seed");
+  }
+
+  for (const service of serviceNames) {
+    const logs = runComposeCommand(["logs", "--no-color", service]);
+    printComposeOutput(`docker compose logs ${service}`, logs.stdout);
+    printComposeOutput(`docker compose logs ${service} stderr`, logs.stderr);
+  }
+}
+
 async function waitForUrl(
   url: string,
   attempts: number,
@@ -89,6 +137,8 @@ export default async function globalSetup(): Promise<void> {
   );
 
   if (up.status !== 0) {
+    log("docker compose up failed. Collecting logs from exited services...");
+    collectFailedServiceLogs();
     throw new Error("docker compose up failed — see output above.");
   }
 

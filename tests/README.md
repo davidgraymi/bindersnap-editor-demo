@@ -55,9 +55,11 @@ bun run test:landing  # apps/landing + packages/editor + packages/utils
 After Gitea is healthy, the `seed` container runs `tests/seed.ts` automatically and creates:
 
 - Two users: `alice` (admin) and `bob` (collaborator)
-- A demo repository: `alice/quarterly-report`
-- Three documents in different approval states (see `documents/`)
-- An open PR from `bob/feature/q2-amendments` → `main` with a "Changes Requested" review
+- Two private demo document repositories: `alice/quarterly-report` and `alice/vendor-contracts`
+- Canonical document files stored on the seeded review branches at the repo root as `document.json`
+- Empty, protected `main` branches on the seeded document repositories
+- An open PR on `alice/quarterly-report` with a "Changes Requested" review
+- An open PR on `alice/vendor-contracts` awaiting review
 - A public OAuth2 app registered for PKCE login at the app's redirect URI
 
 Integration tests call `seedDevStack()` from `seed.ts` themselves to ensure these

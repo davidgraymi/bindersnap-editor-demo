@@ -8,14 +8,13 @@ const DEFAULT_BOB_USER = "bob";
 const DEFAULT_BOB_PASS = "bindersnap-dev";
 const DEFAULT_REPO_NAME = "quarterly-report";
 const FEATURE_BRANCH = "feature/q2-amendments";
-const FEATURE_DOC_PATH = "documents/in-review.json";
+const CANONICAL_DOCUMENT_PATH = "document.json";
 const PR_TITLE = "Q2 amendments — GDPR section update";
 const REVIEW_BODY =
   "Section 4.2 needs to reference the updated GDPR guidance from the January memo.";
 
 const SECOND_REPO_NAME = "vendor-contracts";
 const SECOND_FEATURE_BRANCH = "feature/acme-renewal";
-const SECOND_FEATURE_DOC_PATH = "documents/draft.json";
 const SECOND_PR_TITLE = "Acme Corp contract renewal — 2025 terms";
 
 type BasicAuth = {
@@ -74,6 +73,10 @@ type GiteaOAuthApp = {
   id: number;
   name: string;
   client_id: string;
+};
+
+type GiteaBranchProtection = {
+  rule_name?: string;
 };
 
 type RequestOptions = {
@@ -268,7 +271,7 @@ async function ensureRepo(
     body: JSON.stringify({
       name: repoName,
       description: "Quarterly compliance report",
-      private: false,
+      private: true,
       auto_init: true,
       default_branch: "main",
     }),
@@ -280,6 +283,99 @@ async function ensureRepo(
       ? `Created repo: ${repoName}`
       : `Repo already exists: ${repoName}`,
   );
+}
+
+async function bootstrapEmptyMainBranch(
+  baseUrl: string,
+  adminAuth: BasicAuth,
+  owner: string,
+  repo: string,
+  log: (message: string) => void,
+): Promise<void> {
+  let removedAnyFile = false;
+
+  for (const path of ["README.md", CANONICAL_DOCUMENT_PATH]) {
+    const currentFile = await giteaRequest(
+      baseUrl,
+      `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${path}?ref=main`,
+      {
+        auth: adminAuth,
+        expectedStatuses: [200, 404],
+      },
+    );
+
+    if (currentFile.status === 404) {
+      continue;
+    }
+
+    const filePayload = (await currentFile.json()) as GiteaContentFile;
+    await giteaRequest(
+      baseUrl,
+      `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${path}`,
+      {
+        method: "DELETE",
+        auth: adminAuth,
+        body: JSON.stringify({
+          branch: "main",
+          message: `seed: remove ${path} from main`,
+          sha: filePayload.sha,
+        }),
+        expectedStatuses: [200],
+      },
+    );
+    removedAnyFile = true;
+  }
+
+  log(
+    removedAnyFile
+      ? `Bootstrapped empty main branch: ${repo}`
+      : `Main branch already bootstrapped: ${repo}`,
+  );
+}
+
+async function ensureMainBranchProtection(
+  baseUrl: string,
+  adminAuth: BasicAuth,
+  owner: string,
+  repo: string,
+  log: (message: string) => void,
+): Promise<void> {
+  const protections = await giteaJson<GiteaBranchProtection[]>(
+    baseUrl,
+    `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branch_protections`,
+    { auth: adminAuth },
+  );
+
+  const existing = protections.find(
+    (protection) => protection.rule_name === "main",
+  );
+  if (existing) {
+    log(`Main branch protection already exists: ${repo}`);
+    return;
+  }
+
+  await giteaRequest(
+    baseUrl,
+    `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branch_protections`,
+    {
+      method: "POST",
+      auth: adminAuth,
+      body: JSON.stringify({
+        rule_name: "main",
+        required_approvals: 1,
+        enable_approvals_whitelist: false,
+        enable_merge_whitelist: false,
+        block_on_rejected_reviews: true,
+        block_on_outdated_branch: true,
+        dismiss_stale_approvals: true,
+        enable_force_push: false,
+        enable_push: false,
+      }),
+      expectedStatuses: [201],
+    },
+  );
+
+  log(`Ensured main branch protection: ${repo}`);
 }
 
 async function ensureFile(
@@ -654,40 +750,14 @@ export async function seedDevStack(
 
   const draft = await fixtureText("draft.json");
   const inReview = await fixtureText("in-review.json");
-  const changesRequested = await fixtureText("changes-requested.json");
   const featureDocument = buildFeatureDocument(inReview);
 
-  await ensureFile(
+  await bootstrapEmptyMainBranch(baseUrl, adminAuth, adminUser, repoName, log);
+  await ensureMainBranchProtection(
     baseUrl,
     adminAuth,
     adminUser,
     repoName,
-    "documents/draft.json",
-    draft,
-    "seed: add draft document",
-    undefined,
-    log,
-  );
-  await ensureFile(
-    baseUrl,
-    adminAuth,
-    adminUser,
-    repoName,
-    "documents/in-review.json",
-    inReview,
-    "seed: add in-review document",
-    undefined,
-    log,
-  );
-  await ensureFile(
-    baseUrl,
-    adminAuth,
-    adminUser,
-    repoName,
-    "documents/changes-requested.json",
-    changesRequested,
-    "seed: add changes-requested document",
-    undefined,
     log,
   );
 
@@ -713,9 +783,9 @@ export async function seedDevStack(
     adminAuth,
     adminUser,
     repoName,
-    FEATURE_DOC_PATH,
+    CANONICAL_DOCUMENT_PATH,
     featureDocument,
-    `seed: update ${FEATURE_DOC_PATH} for q2 amendments`,
+    `seed: add ${CANONICAL_DOCUMENT_PATH} for q2 amendments`,
     FEATURE_BRANCH,
     log,
   );
@@ -742,15 +812,18 @@ export async function seedDevStack(
 
   // Second repo: vendor-contracts (alice owns, bob collaborates, open PR)
   await ensureRepo(baseUrl, adminAuth, SECOND_REPO_NAME, log);
-  await ensureFile(
+  await bootstrapEmptyMainBranch(
     baseUrl,
     adminAuth,
     adminUser,
     SECOND_REPO_NAME,
-    SECOND_FEATURE_DOC_PATH,
-    draft,
-    "seed: add draft vendor contract",
-    undefined,
+    log,
+  );
+  await ensureMainBranchProtection(
+    baseUrl,
+    adminAuth,
+    adminUser,
+    SECOND_REPO_NAME,
     log,
   );
   await ensureCollaborator(
@@ -781,9 +854,9 @@ export async function seedDevStack(
     adminAuth,
     adminUser,
     SECOND_REPO_NAME,
-    SECOND_FEATURE_DOC_PATH,
+    CANONICAL_DOCUMENT_PATH,
     secondFeatureDoc,
-    `seed: update ${SECOND_FEATURE_DOC_PATH} for acme renewal`,
+    `seed: add ${CANONICAL_DOCUMENT_PATH} for acme renewal`,
     SECOND_FEATURE_BRANCH,
     log,
   );

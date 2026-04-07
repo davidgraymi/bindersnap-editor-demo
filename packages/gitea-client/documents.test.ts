@@ -10,31 +10,61 @@ function createMockClient(handlers: {
     const handler = handlers.GET?.[path];
     if (handler) {
       const data = await handler(init);
-      return { data, error: undefined, response: new Response(null, { status: 200 }) };
+      return {
+        data,
+        error: undefined,
+        response: new Response(null, { status: 200 }),
+      };
     }
-    return { data: undefined, error: { message: "not found" }, response: new Response(null, { status: 404 }) };
+    return {
+      data: undefined,
+      error: { message: "not found" },
+      response: new Response(null, { status: 404 }),
+    };
   });
 
   const mockPost = mock(async (path: string, init?: unknown) => {
     const handler = handlers.POST?.[path];
     if (handler) {
       const data = await handler(init);
-      return { data, error: undefined, response: new Response(null, { status: 200 }) };
+      return {
+        data,
+        error: undefined,
+        response: new Response(null, { status: 200 }),
+      };
     }
-    return { data: undefined, error: { message: "not found" }, response: new Response(null, { status: 404 }) };
+    return {
+      data: undefined,
+      error: { message: "not found" },
+      response: new Response(null, { status: 404 }),
+    };
   });
 
   const mockPut = mock(async (path: string, init?: unknown) => {
     const handler = handlers.PUT?.[path];
     if (handler) {
       const data = await handler(init);
-      return { data, error: undefined, response: new Response(null, { status: 200 }) };
+      return {
+        data,
+        error: undefined,
+        response: new Response(null, { status: 200 }),
+      };
     }
-    return { data: undefined, error: { message: "not found" }, response: new Response(null, { status: 404 }) };
+    return {
+      data: undefined,
+      error: { message: "not found" },
+      response: new Response(null, { status: 404 }),
+    };
   });
 
   return {
-    client: { GET: mockGet, POST: mockPost, PUT: mockPut, DELETE: mock(), use: mock() } as unknown as GiteaClient,
+    client: {
+      GET: mockGet,
+      POST: mockPost,
+      PUT: mockPut,
+      DELETE: mock(),
+      use: mock(),
+    } as unknown as GiteaClient,
     mockGet,
     mockPost,
     mockPut,
@@ -44,11 +74,17 @@ function createMockClient(handlers: {
 const defaultCommits = [
   {
     sha: "commit-1",
-    commit: { message: "seed: add draft document", author: { name: "Alice Admin", date: "2026-03-30T11:00:00Z" } },
+    commit: {
+      message: "seed: add draft document",
+      author: { name: "Alice Admin", date: "2026-03-30T11:00:00Z" },
+    },
   },
   {
     sha: "commit-2",
-    commit: { message: "seed: update draft document", author: { name: "Bob Reviewer", date: "2026-03-30T12:00:00Z" } },
+    commit: {
+      message: "seed: update draft document",
+      author: { name: "Bob Reviewer", date: "2026-03-30T12:00:00Z" },
+    },
   },
 ];
 
@@ -73,7 +109,9 @@ test("commitDocument creates a file when sha is absent", async () => {
     message: "seed: add draft document",
     content: {
       type: "doc",
-      content: [{ type: "paragraph", content: [{ type: "text", text: "Hello" }] }],
+      content: [
+        { type: "paragraph", content: [{ type: "text", text: "Hello" }] },
+      ],
     },
   });
 
@@ -106,7 +144,9 @@ test("commitDocument updates a file when sha is present", async () => {
     message: "seed: update draft document",
     content: {
       type: "doc",
-      content: [{ type: "paragraph", content: [{ type: "text", text: "Updated" }] }],
+      content: [
+        { type: "paragraph", content: [{ type: "text", text: "Updated" }] },
+      ],
     },
   });
 
@@ -120,7 +160,9 @@ test("commitDocument updates a file when sha is present", async () => {
 test("fetchDocumentAtSha returns parsed ProseMirror JSON", async () => {
   const docJson = JSON.stringify({
     type: "doc",
-    content: [{ type: "paragraph", content: [{ type: "text", text: "Hello" }] }],
+    content: [
+      { type: "paragraph", content: [{ type: "text", text: "Hello" }] },
+    ],
   });
 
   const { client } = createMockClient({
@@ -148,7 +190,9 @@ test("fetchDocumentAtSha returns parsed ProseMirror JSON", async () => {
 
   expect(doc).toEqual({
     type: "doc",
-    content: [{ type: "paragraph", content: [{ type: "text", text: "Hello" }] }],
+    content: [
+      { type: "paragraph", content: [{ type: "text", text: "Hello" }] },
+    ],
   });
 });
 
@@ -177,7 +221,7 @@ test("fetchDocumentAtSha surfaces invalid JSON as GiteaApiError", async () => {
 });
 
 test("listDocumentCommits maps commit summaries", async () => {
-  const { client } = createMockClient({
+  const { client, mockGet } = createMockClient({
     GET: {
       "/repos/{owner}/{repo}/commits": () => defaultCommits,
     },
@@ -190,8 +234,24 @@ test("listDocumentCommits maps commit summaries", async () => {
     owner: "alice",
     repo: "quarterly-report",
     filePath: "documents/draft.json",
+    ref: "feature/q2-amendments",
     page: 1,
     limit: 10,
+  });
+
+  expect(mockGet).toHaveBeenCalledWith("/repos/{owner}/{repo}/commits", {
+    params: {
+      path: { owner: "alice", repo: "quarterly-report" },
+      query: {
+        sha: "feature/q2-amendments",
+        path: "documents/draft.json",
+        page: 1,
+        limit: 10,
+        stat: false,
+        verification: false,
+        files: false,
+      },
+    },
   });
 
   expect(commits).toEqual([
@@ -227,6 +287,7 @@ test("listDocumentCommits maps API failures to GiteaApiError", async () => {
       owner: "alice",
       repo: "quarterly-report",
       filePath: "documents/missing.json",
+      ref: "feature/q2-amendments",
     }),
   ).rejects.toMatchObject({
     name: "GiteaApiError",
