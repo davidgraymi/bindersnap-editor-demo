@@ -152,12 +152,7 @@ function normalizeBranchProtection(
 export async function createMainBranchProtection(
   params: CreateMainBranchProtectionParams,
 ): Promise<RepoBranchProtection> {
-  const {
-    client,
-    owner,
-    repo,
-    requiredApprovals = 1,
-  } = params;
+  const { client, owner, repo, requiredApprovals = 0 } = params;
 
   const protection = await unwrap(
     client.POST("/repos/{owner}/{repo}/branch_protections", {

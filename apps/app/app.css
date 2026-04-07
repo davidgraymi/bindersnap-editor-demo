@@ -714,25 +714,6 @@ input {
   outline-offset: 1px;
 }
 
-.create-document-preview {
-  display: grid;
-  gap: var(--brand-space-3);
-  padding: var(--brand-space-4);
-  background: var(--bs-surface-2);
-  border-radius: var(--brand-radius-lg);
-}
-
-.create-document-preview-label {
-  display: block;
-  margin-bottom: var(--brand-space-1);
-  font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-label);
-  color: var(--bs-text-muted);
-  text-transform: uppercase;
-  letter-spacing: var(--brand-tracking-wide);
-}
-
-.create-document-preview-value,
 .create-document-file-summary {
   margin: 0;
   color: var(--bs-text-secondary);

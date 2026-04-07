@@ -202,7 +202,7 @@ export function FileVaultWorkspace({
         <div className="bs-card vault-empty-state">
           <div className="bs-eyebrow">Loading</div>
           <h2>Loading workspace repositories...</h2>
-          <p>Fetching your document repositories from Gitea.</p>
+          <p>Fetching your documents.</p>
         </div>
       </div>
     );
@@ -233,10 +233,7 @@ export function FileVaultWorkspace({
         <div className="bs-card vault-empty-state">
           <div className="bs-eyebrow">Empty Workspace</div>
           <h2>No documents found</h2>
-          <p>
-            Your workspace is empty. Create a repository in Gitea to get
-            started.
-          </p>
+          <p>Your workspace is empty. Create your first document to get started.</p>
           <div className="vault-empty-state-actions">
             <button
               className="bs-btn bs-btn-primary"
@@ -281,8 +278,7 @@ export function FileVaultWorkspace({
           </button>
         </div>
         <p>
-          All documents are stored as Gitea repositories. Each card shows the
-          current published version and any pending reviews.
+          Each card shows the current published version and any pending reviews.
         </p>
       </section>
 

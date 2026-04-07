@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import {
-  buildCanonicalDocumentFileName,
   createInitialDocumentUpload,
-  getFileExtension,
   type InitialDocumentUploadStep,
   validateUploadFile,
 } from "../../../packages/gitea-client/uploads";
@@ -72,9 +70,6 @@ export function CreateDocumentModal({
 
   const repoSlug = useMemo(() => slugifyRepoName(documentName), [documentName]);
   const repoSlugValid = repoSlug.length > 0;
-  const canonicalFileName = selectedFile
-    ? buildCanonicalDocumentFileName(getFileExtension(selectedFile.name))
-    : "document";
   const friendlyDocumentName = documentName.trim();
   const isBusy = status !== "idle" && status !== "error" && status !== "done";
 
@@ -125,14 +120,12 @@ export function CreateDocumentModal({
     }
 
     if (!repoSlugValid) {
-      setValidationError(
-        "The document name must produce a valid repository name.",
-      );
+      setValidationError("Enter a document name with at least one letter or number.");
       return;
     }
 
     if (!owner) {
-      setError("Missing repository owner. Sign in again and retry.");
+      setError("Your session is missing account details. Sign in again and retry.");
       setStatus("error");
       return;
     }
@@ -230,27 +223,6 @@ export function CreateDocumentModal({
               />
             </label>
 
-            <div className="create-document-preview">
-              <div>
-                <span className="create-document-preview-label">
-                  Repository Slug
-                </span>
-                <p className="create-document-preview-value">
-                  {repoSlugValid
-                    ? repoSlug
-                    : "Enter a name to generate the repo slug"}
-                </p>
-              </div>
-              <div>
-                <span className="create-document-preview-label">
-                  Canonical File
-                </span>
-                <p className="create-document-preview-value">
-                  {canonicalFileName}
-                </p>
-              </div>
-            </div>
-
             {validationError ? (
               <p className="upload-validation-error">{validationError}</p>
             ) : null}
@@ -291,7 +263,7 @@ export function CreateDocumentModal({
                     : "upload-step"
                 }
               >
-                Checking repository name...
+                Checking document name...
               </li>
               <li
                 className={
@@ -309,7 +281,7 @@ export function CreateDocumentModal({
                     : "upload-step"
                 }
               >
-                Creating private repository...
+                Setting up your document...
               </li>
               <li
                 className={
@@ -318,7 +290,7 @@ export function CreateDocumentModal({
                     : "upload-step"
                 }
               >
-                Removing bootstrap README...
+                Preparing the first draft...
               </li>
               <li
                 className={
@@ -327,7 +299,7 @@ export function CreateDocumentModal({
                     : "upload-step"
                 }
               >
-                Protecting main branch...
+                Locking review rules...
               </li>
               <li
                 className={
@@ -336,7 +308,7 @@ export function CreateDocumentModal({
                     : "upload-step"
                 }
               >
-                Creating upload branch...
+                Creating the review draft...
               </li>
               <li
                 className={
@@ -354,7 +326,7 @@ export function CreateDocumentModal({
                     : "upload-step"
                 }
               >
-                Opening pull request...
+                Opening the first review...
               </li>
             </ul>
           </div>
