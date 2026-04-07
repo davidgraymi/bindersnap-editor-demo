@@ -84,6 +84,7 @@ export function AppShell({ user, giteaClient, onSignOut }: AppShellProps) {
         {view === "workspace" ? (
           <FileVaultWorkspace
             giteaClient={giteaClient}
+            currentUsername={user?.username ?? ""}
             onSelectDocument={handleSelectDocument}
           />
         ) : selectedDocument ? (

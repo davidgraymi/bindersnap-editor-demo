@@ -11,9 +11,11 @@ import {
   getLatestDocTag,
   listWorkspaceRepos,
 } from "../../../packages/gitea-client/repos";
+import { CreateDocumentModal } from "./CreateDocumentModal";
 
 interface FileVaultWorkspaceProps {
   giteaClient: GiteaClient;
+  currentUsername: string;
   onSelectDocument: (owner: string, repo: string) => void;
 }
 
@@ -87,6 +89,7 @@ function getApprovalStateLabel(state: string): string {
 
 export function FileVaultWorkspace({
   giteaClient,
+  currentUsername,
   onSelectDocument,
 }: FileVaultWorkspaceProps) {
   const [repos, setRepos] = useState<WorkspaceRepo[]>([]);
@@ -95,6 +98,7 @@ export function FileVaultWorkspace({
   );
   const [isLoadingRepos, setIsLoadingRepos] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showCreateDocumentModal, setShowCreateDocumentModal] = useState(false);
 
   const loadRepos = useCallback(async () => {
     setIsLoadingRepos(true);
@@ -233,7 +237,29 @@ export function FileVaultWorkspace({
             Your workspace is empty. Create a repository in Gitea to get
             started.
           </p>
+          <div className="vault-empty-state-actions">
+            <button
+              className="bs-btn bs-btn-primary"
+              type="button"
+              onClick={() => setShowCreateDocumentModal(true)}
+            >
+              New Document
+            </button>
+          </div>
         </div>
+
+        {showCreateDocumentModal ? (
+          <CreateDocumentModal
+            giteaClient={giteaClient}
+            owner={currentUsername}
+            onClose={() => setShowCreateDocumentModal(false)}
+            onSuccess={(owner, repo) => {
+              setShowCreateDocumentModal(false);
+              void loadRepos();
+              onSelectDocument(owner, repo);
+            }}
+          />
+        ) : null}
       </div>
     );
   }
@@ -241,8 +267,19 @@ export function FileVaultWorkspace({
   return (
     <div className="vault-workspace">
       <section className="vault-section">
-        <div className="bs-eyebrow">File Vault</div>
-        <h1>Your Documents</h1>
+        <div className="vault-section-header">
+          <div>
+            <div className="bs-eyebrow">File Vault</div>
+            <h1>Your Documents</h1>
+          </div>
+          <button
+            className="bs-btn bs-btn-primary"
+            type="button"
+            onClick={() => setShowCreateDocumentModal(true)}
+          >
+            New Document
+          </button>
+        </div>
         <p>
           All documents are stored as Gitea repositories. Each card shows the
           current published version and any pending reviews.
@@ -316,6 +353,19 @@ export function FileVaultWorkspace({
           );
         })}
       </div>
+
+      {showCreateDocumentModal ? (
+        <CreateDocumentModal
+          giteaClient={giteaClient}
+          owner={currentUsername}
+          onClose={() => setShowCreateDocumentModal(false)}
+          onSuccess={(owner, repo) => {
+            setShowCreateDocumentModal(false);
+            void loadRepos();
+            onSelectDocument(owner, repo);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
