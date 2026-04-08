@@ -1,0 +1,76 @@
+name: Deploy to Production (S3 + CloudFront)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# Only one deploy at a time
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  id-token: write   # Required for OIDC → AWS role assumption
+  contents: read
+
+jobs:
+  build-and-deploy:
+    name: Build SPA and deploy to S3
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build SPA
+        env:
+          # These are public build-time env vars — safe to expose in the bundle.
+          BUN_PUBLIC_GITEA_URL: ${{ vars.VITE_GITEA_URL }}
+          BUN_PUBLIC_GITEA_OAUTH_CLIENT_ID: ${{ vars.VITE_GITEA_CLIENT_ID }}
+          BUN_PUBLIC_GITEA_OAUTH_REDIRECT_URI: https://bindersnap.com/auth/callback
+          BUN_PUBLIC_PANDOC_SERVICE_URL: ${{ vars.VITE_PANDOC_SERVICE_URL }}
+        run: bun run build
+
+      # ── AWS auth via OIDC (no long-lived credentials) ───────────────────────
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      # ── Upload to S3 ─────────────────────────────────────────────────────────
+      - name: Sync dist/ to S3
+        run: |
+          # Upload static assets with long cache (1 year) — they're content-hashed
+          aws s3 sync dist/ s3://${{ vars.S3_BUCKET_NAME }} \
+            --delete \
+            --cache-control "public, max-age=31536000, immutable" \
+            --exclude "index.html"
+
+          # Upload index.html with no-cache so deploys take effect immediately
+          aws s3 cp dist/index.html s3://${{ vars.S3_BUCKET_NAME }}/index.html \
+            --cache-control "no-cache, no-store, must-revalidate"
+
+      # ── Invalidate CloudFront ─────────────────────────────────────────────────
+      - name: Invalidate CloudFront distribution
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
+            --paths "/*"
+
+      - name: Deployment summary
+        run: |
+          echo "### Production deployment complete" >> $GITHUB_STEP_SUMMARY
+          echo "- **Bucket:** s3://${{ vars.S3_BUCKET_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **CloudFront:** ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **URL:** https://bindersnap.com" >> $GITHUB_STEP_SUMMARY
