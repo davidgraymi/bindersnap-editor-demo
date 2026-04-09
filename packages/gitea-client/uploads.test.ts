@@ -12,69 +12,52 @@ import type { GiteaClient } from "./client";
 function createMockClient(handlers: {
   GET?: Record<string, (...args: any[]) => unknown>;
   POST?: Record<string, (...args: any[]) => unknown>;
+  PUT?: Record<string, (...args: any[]) => unknown>;
   DELETE?: Record<string, (...args: any[]) => unknown>;
 }) {
-  const mockGet = mock(async (path: string, init?: unknown) => {
-    const handler = handlers.GET?.[path];
-    if (handler) {
-      const data = await handler(init);
+  function makeMock(methodHandlers?: Record<string, (...args: any[]) => unknown>) {
+    return mock(async (path: string, init?: unknown) => {
+      const handler = methodHandlers?.[path];
+      if (handler) {
+        try {
+          const data = await handler(init);
+          return {
+            data,
+            error: undefined,
+            response: new Response(null, { status: 200 }),
+          };
+        } catch (error) {
+          return {
+            data: undefined,
+            error: { message: "not found" },
+            response: new Response(null, { status: 404 }),
+          };
+        }
+      }
       return {
-        data,
-        error: undefined,
-        response: new Response(null, { status: 200 }),
+        data: undefined,
+        error: { message: "not found" },
+        response: new Response(null, { status: 404 }),
       };
-    }
-    return {
-      data: undefined,
-      error: { message: "not found" },
-      response: new Response(null, { status: 404 }),
-    };
-  });
+    });
+  }
 
-  const mockPost = mock(async (path: string, init?: { params?: unknown; body?: unknown }) => {
-    const handler = handlers.POST?.[path];
-    if (handler) {
-      const data = await handler(init);
-      return {
-        data,
-        error: undefined,
-        response: new Response(null, { status: 200 }),
-      };
-    }
-    return {
-      data: undefined,
-      error: { message: "not found" },
-      response: new Response(null, { status: 404 }),
-    };
-  });
-
-  const mockDelete = mock(async (path: string, init?: { params?: unknown; body?: unknown }) => {
-    const handler = handlers.DELETE?.[path];
-    if (handler) {
-      const data = await handler(init);
-      return {
-        data,
-        error: undefined,
-        response: new Response(null, { status: 200 }),
-      };
-    }
-    return {
-      data: undefined,
-      error: { message: "not found" },
-      response: new Response(null, { status: 404 }),
-    };
-  });
+  const mockGet = makeMock(handlers.GET);
+  const mockPost = makeMock(handlers.POST);
+  const mockPut = makeMock(handlers.PUT);
+  const mockDelete = makeMock(handlers.DELETE);
 
   return {
     client: {
       GET: mockGet,
       POST: mockPost,
+      PUT: mockPut,
       DELETE: mockDelete,
-      PUT: mock(),
       use: mock(),
     } as unknown as GiteaClient,
     mockGet,
     mockPost,
+    mockPut,
     mockDelete,
   };
 }
@@ -276,10 +259,17 @@ test("createInitialDocumentUpload creates the repo, bootstraps main, and opens a
 
   const { client, mockPost, mockDelete } = createMockClient({
     GET: {
-      "/repos/{owner}/{repo}/contents/{filepath}": () => ({
-        sha: "readme-sha",
-        type: "file",
-      }),
+      "/repos/{owner}/{repo}/contents/{filepath}": (init: {
+        params?: { path?: { filepath?: string } };
+        query?: { ref?: string };
+      }) => {
+        // README.md exists on main (for bootstrap deletion);
+        // document.docx does NOT exist on the upload branch yet.
+        if (init?.params?.path?.filepath === "README.md") {
+          return { sha: "readme-sha", type: "file" };
+        }
+        throw { status: 404, message: "not found" };
+      },
       "/repos/{owner}/{repo}/pulls/{index}/reviews": () => [],
     },
     POST: {

@@ -289,14 +289,18 @@ export async function mergePullRequest(
       return;
     }
 
-    // Gitea returns 405 with "Please try again later" while its internal
-    // mergeability check is still running. This is transient — wait and retry.
+    // Gitea returns 405 while its internal mergeability check is still running.
+    // Known transient messages:
+    //   - "Please try again later" — merge-check in progress
+    //   - "Does not have enough approvals" — approval not yet indexed by merge check
+    // Both resolve on their own once Gitea catches up. Wait and retry.
     const apiError = toGiteaApiError(response.status, error);
-    if (
+    const msg = apiError.message.toLowerCase();
+    const isTransient405 =
       response.status === 405 &&
-      apiError.message.toLowerCase().includes("please try again later") &&
-      attempt < MAX_ATTEMPTS
-    ) {
+      (msg.includes("please try again later") ||
+        msg.includes("not have enough approvals"));
+    if (isTransient405 && attempt < MAX_ATTEMPTS) {
       await new Promise<void>((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
       continue;
     }

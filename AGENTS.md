@@ -517,16 +517,6 @@ Every PR must include workflow evidence:
 
 Do not merge PRs that omit workflow evidence or contain unexplained fallback.
 
-## MCP Preflight Checklist (Run Before GitHub Writes)
-
-Before creating branches, updating issues, or opening PRs, verify:
-
-1. MCP identity is healthy (`get_me` succeeds)
-2. Repo read path is healthy (`list_issues` or `list_branches` succeeds)
-3. Write path is healthy (perform one safe write probe in a test branch or
-   update an existing test PR body)
-4. If any write fails, stop and fix auth before continuing feature work
-
 ## Deterministic MCP Setup
 
 Use one GitHub MCP server configuration path at a time. Avoid mixed auth paths
