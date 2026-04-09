@@ -450,7 +450,7 @@ export async function createMainBranchProtection(
         enable_merge_whitelist: false,
         block_on_rejected_reviews: true,
         block_on_outdated_branch: true,
-        dismiss_stale_approvals: true,
+        dismiss_stale_approvals: false,
         enable_force_push: false,
         enable_push: false,
       } satisfies CreateBranchProtectionOption,

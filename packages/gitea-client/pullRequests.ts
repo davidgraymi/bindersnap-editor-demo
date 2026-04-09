@@ -49,6 +49,8 @@ export interface MergePullRequestParams {
   pullNumber: number;
   mergeStyle: "merge" | "squash" | "rebase";
   message?: string;
+  /** When true, 409 merge conflicts are resolved by rebasing the head branch onto main. */
+  resolveConflicts?: boolean;
 }
 
 export interface ListPullRequestsParams {
@@ -260,15 +262,19 @@ export async function submitReview(
   );
 }
 
-export async function mergePullRequest(
-  params: MergePullRequestParams,
-): Promise<void> {
-  const { client, owner, repo, pullNumber, mergeStyle, message } = params;
-
-  // Gitea computes PR mergeability asynchronously. If a recent state change
-  // (e.g. an approval) triggered a re-check, the merge endpoint returns
-  // "Please try again later" (405) until the check completes. Poll until the
-  // merge succeeds or a non-transient error is returned.
+/**
+ * Attempt a single merge API call and return the outcome.
+ * Returns `"ok"` on success, `"conflict"` on 409, or throws on any other error.
+ * Transient 405 errors (mergeability check in progress) are retried internally.
+ */
+async function attemptMerge(
+  client: GiteaClient,
+  owner: string,
+  repo: string,
+  pullNumber: number,
+  mergeStyle: "merge" | "squash" | "rebase",
+  message?: string,
+): Promise<"ok" | "conflict"> {
   const MAX_ATTEMPTS = 15;
   const RETRY_DELAY_MS = 2000;
 
@@ -284,16 +290,15 @@ export async function mergePullRequest(
       },
     );
 
-    // Gitea returns 200 on a successful merge (not 204 as one might expect).
     if (response.status >= 200 && response.status < 300) {
-      return;
+      return "ok";
+    }
+
+    if (response.status === 409) {
+      return "conflict";
     }
 
     // Gitea returns 405 while its internal mergeability check is still running.
-    // Known transient messages:
-    //   - "Please try again later" — merge-check in progress
-    //   - "Does not have enough approvals" — approval not yet indexed by merge check
-    // Both resolve on their own once Gitea catches up. Wait and retry.
     const apiError = toGiteaApiError(response.status, error);
     const msg = apiError.message.toLowerCase();
     const isTransient405 =
@@ -306,6 +311,200 @@ export async function mergePullRequest(
     }
 
     throw apiError;
+  }
+
+  throw toGiteaApiError(405, "Merge timed out after maximum retry attempts.");
+}
+
+/**
+ * Resolve merge conflicts on a PR's head branch by rebasing it onto the
+ * current base branch. Works by reading the file from the head branch,
+ * deleting the branch, recreating it from the base, and re-committing the
+ * file. The PR stays open because Gitea tracks PRs by branch name.
+ *
+ * This is designed for single-file document repos where the uploaded file
+ * should always completely overwrite whatever is on the base branch.
+ */
+async function resolveConflictsByRebase(
+  client: GiteaClient,
+  owner: string,
+  repo: string,
+  pullNumber: number,
+): Promise<void> {
+  // 1. Get the PR to find the head branch name.
+  const pr = await unwrap(
+    client.GET("/repos/{owner}/{repo}/pulls/{index}", {
+      params: { path: { owner, repo, index: pullNumber } },
+    }),
+  );
+
+  const headBranch = pr.head?.ref;
+  if (!headBranch) {
+    throw toGiteaApiError(0, "PR has no head branch ref.");
+  }
+
+  // 2. List files on the head branch to find the document file.
+  //    Document repos have a single file (e.g. document.pdf). We look for
+  //    any file that isn't a dotfile or README.
+  const contents = await unwrap(
+    client.GET("/repos/{owner}/{repo}/contents/{filepath}", {
+      params: {
+        path: { owner, repo, filepath: "" },
+        query: { ref: headBranch },
+      },
+    }),
+  );
+
+  const entries = Array.isArray(contents) ? contents : [];
+  const docEntry = entries.find(
+    (entry: { name?: string; type?: string }) =>
+      entry.type === "file" &&
+      typeof entry.name === "string" &&
+      !entry.name.startsWith(".") &&
+      entry.name !== "README.md",
+  );
+
+  if (!docEntry?.path) {
+    throw toGiteaApiError(0, "Could not find document file on head branch.");
+  }
+
+  const filePath = docEntry.path as string;
+
+  // 3. Read the full file content from the head branch.
+  const fileData = await unwrap(
+    client.GET("/repos/{owner}/{repo}/contents/{filepath}", {
+      params: {
+        path: { owner, repo, filepath: filePath },
+        query: { ref: headBranch },
+      },
+    }),
+  );
+
+  const fileContent = (fileData as { content?: string }).content;
+  if (!fileContent) {
+    throw toGiteaApiError(0, "Could not read file content from head branch.");
+  }
+
+  // 4. Delete the head branch.
+  const { response: deleteResponse } = await client.DELETE(
+    "/repos/{owner}/{repo}/branches/{branch}",
+    {
+      params: { path: { owner, repo, branch: headBranch } },
+    },
+  );
+
+  if (deleteResponse.status !== 204 && deleteResponse.status !== 200) {
+    throw toGiteaApiError(
+      deleteResponse.status,
+      "Failed to delete head branch for conflict resolution.",
+    );
+  }
+
+  // 5. Recreate the branch from current main.
+  await unwrap(
+    client.POST("/repos/{owner}/{repo}/branches", {
+      params: { path: { owner, repo } },
+      body: {
+        new_branch_name: headBranch,
+        old_branch_name: "main",
+      },
+    }),
+  );
+
+  // 6. Re-commit the document file to the recreated branch.
+  //    The branch was just created from main, so if main has the file we
+  //    need its SHA for an update; if not, we create it.
+  let existingSha: string | undefined;
+  try {
+    const existing = await unwrap(
+      client.GET("/repos/{owner}/{repo}/contents/{filepath}", {
+        params: {
+          path: { owner, repo, filepath: filePath },
+          query: { ref: headBranch },
+        },
+      }),
+    );
+    if (existing && !Array.isArray(existing) && existing.sha) {
+      existingSha = existing.sha;
+    }
+  } catch {
+    // File doesn't exist on main — will create it
+  }
+
+  if (existingSha) {
+    await unwrap(
+      client.PUT("/repos/{owner}/{repo}/contents/{filepath}", {
+        params: { path: { owner, repo, filepath: filePath } },
+        body: {
+          content: fileContent,
+          message: `Rebase: update ${filePath} after conflict resolution`,
+          branch: headBranch,
+          sha: existingSha,
+        },
+      }),
+    );
+  } else {
+    await unwrap(
+      client.POST("/repos/{owner}/{repo}/contents/{filepath}", {
+        params: { path: { owner, repo, filepath: filePath } },
+        body: {
+          content: fileContent,
+          message: `Rebase: add ${filePath} after conflict resolution`,
+          branch: headBranch,
+        },
+      }),
+    );
+  }
+}
+
+export async function mergePullRequest(
+  params: MergePullRequestParams,
+): Promise<void> {
+  const {
+    client,
+    owner,
+    repo,
+    pullNumber,
+    mergeStyle,
+    message,
+    resolveConflicts: shouldResolveConflicts = false,
+  } = params;
+
+  const result = await attemptMerge(
+    client,
+    owner,
+    repo,
+    pullNumber,
+    mergeStyle,
+    message,
+  );
+
+  if (result === "ok") {
+    return;
+  }
+
+  // 409 conflict — resolve if the caller opted in.
+  if (!shouldResolveConflicts) {
+    throw toGiteaApiError(409, "Merge conflict: the pull request cannot be merged.");
+  }
+
+  await resolveConflictsByRebase(client, owner, repo, pullNumber);
+
+  // After resolving, retry the merge. If this still fails, let the error propagate.
+  const retryResult = await attemptMerge(
+    client,
+    owner,
+    repo,
+    pullNumber,
+    mergeStyle,
+    message,
+  );
+
+  if (retryResult !== "ok") {
+    throw toGiteaApiError(
+      409,
+      "Merge conflict persisted after conflict resolution.",
+    );
   }
 }
 

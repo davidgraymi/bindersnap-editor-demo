@@ -440,6 +440,7 @@ export function DocumentDetail({
         repo,
         pullNumber,
         mergeStyle: "merge",
+        resolveConflicts: true,
       });
       await createDocTag({
         client: giteaClient,
