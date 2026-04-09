@@ -186,6 +186,40 @@ export async function commitBinaryFile(
   const { client, owner, repo, branch, filePath, base64Content, message } =
     params;
 
+  // Check if the file already exists on this branch so we can update (PUT)
+  // instead of create (POST). Gitea requires the existing file's SHA for updates.
+  let existingSha: string | undefined;
+  try {
+    const existing = await unwrap(
+      client.GET("/repos/{owner}/{repo}/contents/{filepath}", {
+        params: {
+          path: { owner, repo, filepath: filePath },
+          query: { ref: branch },
+        },
+      }),
+    );
+    if (existing && !Array.isArray(existing) && existing.sha) {
+      existingSha = existing.sha;
+    }
+  } catch {
+    // File doesn't exist on this branch — will use POST (create)
+  }
+
+  if (existingSha) {
+    const result = await unwrap(
+      client.PUT("/repos/{owner}/{repo}/contents/{filepath}", {
+        params: { path: { owner, repo, filepath: filePath } },
+        body: {
+          content: base64Content,
+          message,
+          branch,
+          sha: existingSha,
+        },
+      }),
+    );
+    return { sha: result.commit?.sha ?? "" };
+  }
+
   const result = await unwrap(
     client.POST("/repos/{owner}/{repo}/contents/{filepath}", {
       params: { path: { owner, repo, filepath: filePath } },

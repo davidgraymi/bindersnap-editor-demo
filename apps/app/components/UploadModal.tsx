@@ -84,6 +84,19 @@ export function UploadModal({
       return;
     }
 
+    // Reject if the uploaded file's extension doesn't match the existing document
+    if (canonicalFileName) {
+      const existingExt = canonicalFileName.split(".").pop()?.toLowerCase() ?? "";
+      const uploadedExt = file.name.split(".").pop()?.toLowerCase() ?? "";
+      if (existingExt && uploadedExt && existingExt !== uploadedExt) {
+        setSelectedFile(null);
+        setValidationError(
+          `File type mismatch: the current document is .${existingExt} but you selected a .${uploadedExt} file. Please upload a .${existingExt} file.`,
+        );
+        return;
+      }
+    }
+
     setSelectedFile(file);
     setValidationError(null);
   };
