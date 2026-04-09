@@ -19,6 +19,7 @@ import {
   getRepoBranchProtection,
   listDocTags,
 } from "../../../packages/gitea-client/repos";
+import { DocumentCollaborators } from "./DocumentCollaborators";
 import { UploadModal } from "./UploadModal";
 
 interface DocumentDetailProps {
@@ -51,6 +52,8 @@ interface RepoContentsExtResponse {
   dir_contents?: RepoContentsEntry[];
   file_contents?: RepoContentsEntry;
 }
+
+type DocumentDetailView = "overview" | "collaborators";
 
 function getApprovalStateBadgeClass(state: string): string {
   switch (state) {
@@ -285,6 +288,7 @@ export function DocumentDetail({
   const [prActionStates, setPrActionStates] = useState<
     Record<number, PRActionState>
   >({});
+  const [activeView, setActiveView] = useState<DocumentDetailView>("overview");
 
   const giteaBaseUrl =
     (import.meta as ImportMeta & { env?: Record<string, string | undefined> })
@@ -349,6 +353,10 @@ export function DocumentDetail({
   useEffect(() => {
     void loadDocumentData();
   }, [loadDocumentData]);
+
+  useEffect(() => {
+    setActiveView("overview");
+  }, [owner, repo]);
 
   const latestTag = tags.length > 0 ? tags[0] : null;
   const nextVersion = (latestTag?.version ?? 0) + 1;
@@ -570,245 +578,298 @@ export function DocumentDetail({
         <p className="vault-repo-path">
           {owner}/{repo}
         </p>
-      </section>
-
-      <section className="bs-card vault-section">
-        <div className="bs-eyebrow">Current Version</div>
-        <h2>{latestTag ? `Version ${latestTag.version}` : "Unpublished"}</h2>
-        {latestTag ? (
-          <>
-            <p>
-              Published on {formatTimestamp(latestTag.created)} (tag:{" "}
-              <code>{latestTag.name}</code>)
-            </p>
-            {canonicalFileInfo ? (
-              <button
-                className="bs-btn bs-btn-secondary"
-                type="button"
-                disabled={downloadState.ref === "main"}
-                onClick={() => void handleDownload("main")}
-              >
-                {downloadState.ref === "main"
-                  ? "Downloading…"
-                  : "Download Current Version"}
-              </button>
-            ) : (
-              <p>Unable to determine the document file for this repository.</p>
-            )}
-            {downloadState.error ? (
-              <p className="vault-pr-error" role="alert">
-                {downloadState.error}
-              </p>
-            ) : null}
-          </>
-        ) : (
-          <p>
-            No published version exists yet. Publish your first version to begin
-            tracking releases.
-          </p>
-        )}
-        <button
-          className="bs-btn bs-btn-primary"
-          type="button"
-          onClick={() => setShowUploadModal(true)}
+        <div
+          className="document-detail-nav"
+          role="tablist"
+          aria-label="Document pages"
         >
-          Upload New Version
-        </button>
+          <button
+            className={`document-detail-tab${activeView === "overview" ? " document-detail-tab-active" : ""}`}
+            type="button"
+            role="tab"
+            aria-selected={activeView === "overview"}
+            onClick={() => setActiveView("overview")}
+          >
+            Overview
+          </button>
+          <button
+            className={`document-detail-tab${activeView === "collaborators" ? " document-detail-tab-active" : ""}`}
+            type="button"
+            role="tab"
+            aria-selected={activeView === "collaborators"}
+            onClick={() => setActiveView("collaborators")}
+          >
+            Collaborators
+          </button>
+        </div>
       </section>
 
-      {openPRs.length > 0 ? (
-        <section className="bs-card vault-section">
-          <div className="bs-eyebrow">Pending Reviews</div>
-          <h2>
-            {openPRs.length} Open Pull Request{openPRs.length === 1 ? "" : "s"}
-          </h2>
-          <div className="vault-pr-list">
-            {openPRs.map((pr) => {
-              const prNum = pr.number ?? 0;
-              const actionState = getPRActionState(prNum);
-              const isSubmitting = actionState.status === "submitting";
-              const reviewPerms = canUserReview(
-                uploaderSlug,
-                pr.user?.login,
-                branchProtection,
-              );
-              const mergePerms = canUserMerge(uploaderSlug, branchProtection);
-              const mergeReady = pr.approvalState === "approved";
+      {activeView === "collaborators" ? (
+        <DocumentCollaborators
+          giteaClient={giteaClient}
+          owner={owner}
+          repo={repo}
+          currentUsername={uploaderSlug}
+        />
+      ) : (
+        <>
+          <section className="bs-card vault-section">
+            <div className="bs-eyebrow">Current Version</div>
+            <h2>
+              {latestTag ? `Version ${latestTag.version}` : "Unpublished"}
+            </h2>
+            {latestTag ? (
+              <>
+                <p>
+                  Published on {formatTimestamp(latestTag.created)} (tag:{" "}
+                  <code>{latestTag.name}</code>)
+                </p>
+                {canonicalFileInfo ? (
+                  <button
+                    className="bs-btn bs-btn-secondary"
+                    type="button"
+                    disabled={downloadState.ref === "main"}
+                    onClick={() => void handleDownload("main")}
+                  >
+                    {downloadState.ref === "main"
+                      ? "Downloading…"
+                      : "Download Current Version"}
+                  </button>
+                ) : (
+                  <p>
+                    Unable to determine the document file for this repository.
+                  </p>
+                )}
+                {downloadState.error ? (
+                  <p className="vault-pr-error" role="alert">
+                    {downloadState.error}
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <p>
+                No published version exists yet. Publish your first version to
+                begin tracking releases.
+              </p>
+            )}
+            <button
+              className="bs-btn bs-btn-primary"
+              type="button"
+              onClick={() => setShowUploadModal(true)}
+            >
+              Upload New Version
+            </button>
+          </section>
 
-              return (
-                <div className="vault-pr-item" key={pr.number}>
-                  <h3 className="vault-pr-title">
-                    #{pr.number}: {pr.title}
-                  </h3>
-                  <div className="vault-pr-meta">
-                    <span
-                      className={getApprovalStateBadgeClass(pr.approvalState)}
-                    >
-                      {getApprovalStateLabel(pr.approvalState)}
-                    </span>
-                    {pr.head?.ref ? (
-                      <span className="vault-pr-branch">{pr.head.ref}</span>
-                    ) : null}
-                  </div>
-                  {pr.body ? <p className="vault-pr-body">{pr.body}</p> : null}
+          {openPRs.length > 0 ? (
+            <section className="bs-card vault-section">
+              <div className="bs-eyebrow">Pending Reviews</div>
+              <h2>
+                {openPRs.length} Open Pull Request
+                {openPRs.length === 1 ? "" : "s"}
+              </h2>
+              <div className="vault-pr-list">
+                {openPRs.map((pr) => {
+                  const prNum = pr.number ?? 0;
+                  const actionState = getPRActionState(prNum);
+                  const isSubmitting = actionState.status === "submitting";
+                  const reviewPerms = canUserReview(
+                    uploaderSlug,
+                    pr.user?.login,
+                    branchProtection,
+                  );
+                  const mergePerms = canUserMerge(
+                    uploaderSlug,
+                    branchProtection,
+                  );
+                  const mergeReady = pr.approvalState === "approved";
 
-                  {reviewPerms.allowed ? (
-                    <div className="vault-pr-actions">
-                      <button
-                        className="bs-btn bs-btn-secondary"
-                        type="button"
-                        disabled={isSubmitting}
-                        onClick={() => void handleApprove(prNum)}
-                      >
-                        {isSubmitting ? "Submitting…" : "Approve"}
-                      </button>
+                  return (
+                    <div className="vault-pr-item" key={pr.number}>
+                      <h3 className="vault-pr-title">
+                        #{pr.number}: {pr.title}
+                      </h3>
+                      <div className="vault-pr-meta">
+                        <span
+                          className={getApprovalStateBadgeClass(
+                            pr.approvalState,
+                          )}
+                        >
+                          {getApprovalStateLabel(pr.approvalState)}
+                        </span>
+                        {pr.head?.ref ? (
+                          <span className="vault-pr-branch">{pr.head.ref}</span>
+                        ) : null}
+                      </div>
+                      {pr.body ? (
+                        <p className="vault-pr-body">{pr.body}</p>
+                      ) : null}
 
-                      {actionState.showChangesForm ? (
-                        <div className="vault-pr-comment-form">
-                          <textarea
-                            className="vault-pr-comment-input"
-                            placeholder="Describe what needs to change…"
-                            value={actionState.changesComment}
-                            rows={3}
+                      {reviewPerms.allowed ? (
+                        <div className="vault-pr-actions">
+                          <button
+                            className="bs-btn bs-btn-secondary"
+                            type="button"
                             disabled={isSubmitting}
-                            onChange={(e) =>
-                              updatePRActionState(prNum, {
-                                changesComment: e.target.value,
-                                error: null,
-                              })
-                            }
-                          />
-                          <div className="vault-pr-comment-actions">
-                            <button
-                              className="bs-btn bs-btn-primary"
-                              type="button"
-                              disabled={isSubmitting}
-                              onClick={() => void handleRequestChanges(prNum)}
-                            >
-                              {isSubmitting ? "Submitting…" : "Submit Request"}
-                            </button>
+                            onClick={() => void handleApprove(prNum)}
+                          >
+                            {isSubmitting ? "Submitting…" : "Approve"}
+                          </button>
+
+                          {actionState.showChangesForm ? (
+                            <div className="vault-pr-comment-form">
+                              <textarea
+                                className="vault-pr-comment-input"
+                                placeholder="Describe what needs to change…"
+                                value={actionState.changesComment}
+                                rows={3}
+                                disabled={isSubmitting}
+                                onChange={(e) =>
+                                  updatePRActionState(prNum, {
+                                    changesComment: e.target.value,
+                                    error: null,
+                                  })
+                                }
+                              />
+                              <div className="vault-pr-comment-actions">
+                                <button
+                                  className="bs-btn bs-btn-primary"
+                                  type="button"
+                                  disabled={isSubmitting}
+                                  onClick={() =>
+                                    void handleRequestChanges(prNum)
+                                  }
+                                >
+                                  {isSubmitting
+                                    ? "Submitting…"
+                                    : "Submit Request"}
+                                </button>
+                                <button
+                                  className="bs-btn bs-btn-secondary"
+                                  type="button"
+                                  disabled={isSubmitting}
+                                  onClick={() =>
+                                    updatePRActionState(prNum, {
+                                      showChangesForm: false,
+                                      changesComment: "",
+                                      error: null,
+                                    })
+                                  }
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
                             <button
                               className="bs-btn bs-btn-secondary"
                               type="button"
                               disabled={isSubmitting}
                               onClick={() =>
                                 updatePRActionState(prNum, {
-                                  showChangesForm: false,
-                                  changesComment: "",
+                                  showChangesForm: true,
                                   error: null,
                                 })
                               }
                             >
-                              Cancel
+                              Request Changes
                             </button>
-                          </div>
+                          )}
                         </div>
                       ) : (
-                        <button
-                          className="bs-btn bs-btn-secondary"
-                          type="button"
-                          disabled={isSubmitting}
-                          onClick={() =>
-                            updatePRActionState(prNum, {
-                              showChangesForm: true,
-                              error: null,
-                            })
-                          }
-                        >
-                          Request Changes
-                        </button>
+                        <p className="vault-pr-notice">{reviewPerms.reason}</p>
                       )}
+
+                      {mergePerms.allowed && mergeReady ? (
+                        <div className="vault-pr-actions">
+                          <button
+                            className="bs-btn bs-btn-primary vault-pr-publish-btn"
+                            type="button"
+                            disabled={isSubmitting}
+                            onClick={() => void handleMerge(prNum)}
+                          >
+                            {isSubmitting ? "Publishing…" : "Publish"}
+                          </button>
+                        </div>
+                      ) : mergeReady && !mergePerms.allowed ? (
+                        <p className="vault-pr-notice">{mergePerms.reason}</p>
+                      ) : null}
+
+                      {actionState.error ? (
+                        <p className="vault-pr-error" role="alert">
+                          {actionState.error}
+                        </p>
+                      ) : null}
                     </div>
-                  ) : (
-                    <p className="vault-pr-notice">{reviewPerms.reason}</p>
-                  )}
-
-                  {mergePerms.allowed && mergeReady ? (
-                    <div className="vault-pr-actions">
-                      <button
-                        className="bs-btn bs-btn-primary vault-pr-publish-btn"
-                        type="button"
-                        disabled={isSubmitting}
-                        onClick={() => void handleMerge(prNum)}
-                      >
-                        {isSubmitting ? "Publishing…" : "Publish"}
-                      </button>
-                    </div>
-                  ) : mergeReady && !mergePerms.allowed ? (
-                    <p className="vault-pr-notice">{mergePerms.reason}</p>
-                  ) : null}
-
-                  {actionState.error ? (
-                    <p className="vault-pr-error" role="alert">
-                      {actionState.error}
-                    </p>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      ) : (
-        <section className="bs-card vault-section">
-          <div className="bs-eyebrow">Pending Reviews</div>
-          <h2>No pending reviews</h2>
-          <p>
-            All changes have been published. Upload a new version to start a
-            review.
-          </p>
-        </section>
-      )}
-
-      <section className="bs-card vault-section">
-        <div className="bs-eyebrow">Version History</div>
-        <h2>Published Versions</h2>
-        {tags.length > 0 ? (
-          <div className="vault-version-list">
-            {tags.map((tag) => (
-              <div className="vault-version-item" key={tag.name}>
-                <div className="vault-version-header">
-                  <span className="vault-version-badge">v{tag.version}</span>
-                  <span className="vault-version-date">
-                    {formatTimestamp(tag.created)}
-                  </span>
-                </div>
-                <p className="vault-version-sha">
-                  Commit: <code>{tag.sha.slice(0, 7)}</code>
-                </p>
-                {canonicalFileInfo ? (
-                  <button
-                    className="bs-btn bs-btn-secondary vault-version-download"
-                    type="button"
-                    disabled={downloadState.ref === tag.name}
-                    onClick={() => void handleDownload(tag.name)}
-                  >
-                    {downloadState.ref === tag.name
-                      ? "Downloading…"
-                      : `Download v${tag.version}`}
-                  </button>
-                ) : (
-                  <p>No document file is available for this version.</p>
-                )}
+                  );
+                })}
               </div>
-            ))}
-          </div>
-        ) : (
-          <p>No published versions yet.</p>
-        )}
-      </section>
+            </section>
+          ) : (
+            <section className="bs-card vault-section">
+              <div className="bs-eyebrow">Pending Reviews</div>
+              <h2>No pending reviews</h2>
+              <p>
+                All changes have been published. Upload a new version to start a
+                review.
+              </p>
+            </section>
+          )}
 
-      {showUploadModal && (
-        <UploadModal
-          giteaClient={giteaClient}
-          owner={owner}
-          repo={repo}
-          docSlug={repo}
-          uploaderSlug={uploaderSlug}
-          nextVersion={nextVersion}
-          canonicalFileName={canonicalFileInfo?.storedFileName ?? null}
-          onClose={() => setShowUploadModal(false)}
-          onSuccess={handleUploadSuccess}
-        />
+          <section className="bs-card vault-section">
+            <div className="bs-eyebrow">Version History</div>
+            <h2>Published Versions</h2>
+            {tags.length > 0 ? (
+              <div className="vault-version-list">
+                {tags.map((tag) => (
+                  <div className="vault-version-item" key={tag.name}>
+                    <div className="vault-version-header">
+                      <span className="vault-version-badge">
+                        v{tag.version}
+                      </span>
+                      <span className="vault-version-date">
+                        {formatTimestamp(tag.created)}
+                      </span>
+                    </div>
+                    <p className="vault-version-sha">
+                      Commit: <code>{tag.sha.slice(0, 7)}</code>
+                    </p>
+                    {canonicalFileInfo ? (
+                      <button
+                        className="bs-btn bs-btn-secondary vault-version-download"
+                        type="button"
+                        disabled={downloadState.ref === tag.name}
+                        onClick={() => void handleDownload(tag.name)}
+                      >
+                        {downloadState.ref === tag.name
+                          ? "Downloading…"
+                          : `Download v${tag.version}`}
+                      </button>
+                    ) : (
+                      <p>No document file is available for this version.</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p>No published versions yet.</p>
+            )}
+          </section>
+
+          {showUploadModal && (
+            <UploadModal
+              giteaClient={giteaClient}
+              owner={owner}
+              repo={repo}
+              docSlug={repo}
+              uploaderSlug={uploaderSlug}
+              nextVersion={nextVersion}
+              canonicalFileName={canonicalFileInfo?.storedFileName ?? null}
+              onClose={() => setShowUploadModal(false)}
+              onSuccess={handleUploadSuccess}
+            />
+          )}
+        </>
       )}
     </div>
   );

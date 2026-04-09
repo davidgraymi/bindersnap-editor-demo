@@ -1,12 +1,21 @@
 import type { components } from "./spec/gitea";
 
-import { GiteaApiError, unwrap, type GiteaClient } from "./client";
+import {
+  GiteaApiError,
+  toGiteaApiError,
+  unwrap,
+  type GiteaClient,
+} from "./client";
 
 type Repository = components["schemas"]["Repository"];
 type Tag = components["schemas"]["Tag"];
 type BranchProtection = components["schemas"]["BranchProtection"];
+type User = components["schemas"]["User"];
+type RepoCollaboratorPermission =
+  components["schemas"]["RepoCollaboratorPermission"];
 type CreateBranchProtectionOption =
   components["schemas"]["CreateBranchProtectionOption"];
+type AddCollaboratorOption = components["schemas"]["AddCollaboratorOption"];
 type RepoFileContent = {
   sha?: string;
   type?: string;
@@ -47,6 +56,83 @@ export interface BootstrapEmptyMainBranchParams {
   repo: string;
 }
 
+export interface RepoUserSummary {
+  id: number;
+  login: string;
+  full_name: string;
+  email: string;
+  avatar_url: string;
+}
+
+export type RepoCollaboratorAccess = "read" | "write" | "admin";
+export type RepoCollaboratorRole = RepoCollaboratorAccess | "owner" | "unknown";
+
+export interface RepoCollaboratorPermissionSummary {
+  permission: string;
+  access: RepoCollaboratorRole;
+  permissionLabel: string;
+  roleName: string;
+  user: RepoUserSummary;
+}
+
+export interface RepoCollaboratorListResult {
+  collaborators: RepoCollaboratorPermissionSummary[];
+  page: number;
+  limit: number;
+  hasMore: boolean;
+}
+
+export interface SearchUsersResult {
+  users: RepoUserSummary[];
+  page: number;
+  limit: number;
+  hasMore: boolean;
+}
+
+export interface ListRepoCollaboratorsParams {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface GetRepoCollaboratorPermissionParams {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+  collaborator: string;
+}
+
+export interface GetCurrentUserRepoPermissionParams {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+  username: string;
+}
+
+export interface AddRepoCollaboratorParams {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+  collaborator: string;
+  permission: RepoCollaboratorAccess;
+}
+
+export interface RemoveRepoCollaboratorParams {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+  collaborator: string;
+}
+
+export interface SearchUsersParams {
+  client: GiteaClient;
+  query: string;
+  page?: number;
+  limit?: number;
+}
+
 function normalizeWorkspaceRepo(repo: Repository): WorkspaceRepo {
   return {
     id: repo.id ?? 0,
@@ -57,6 +143,64 @@ function normalizeWorkspaceRepo(repo: Repository): WorkspaceRepo {
     owner: {
       login: repo.owner?.login ?? "",
     },
+  };
+}
+
+function normalizeUser(
+  user: Partial<User> | null | undefined,
+): RepoUserSummary {
+  return {
+    id: user.id ?? 0,
+    login: user.login ?? "",
+    full_name: user.full_name ?? "",
+    email: user.email ?? "",
+    avatar_url: user.avatar_url ?? "",
+  };
+}
+
+function normalizeRepoCollaboratorAccess(
+  permission: string,
+): RepoCollaboratorRole {
+  switch (permission) {
+    case "read":
+    case "write":
+    case "admin":
+    case "owner":
+      return permission;
+    default:
+      return "unknown";
+  }
+}
+
+function formatRepoCollaboratorPermissionLabel(
+  permission: RepoCollaboratorRole,
+): string {
+  switch (permission) {
+    case "read":
+      return "Read";
+    case "write":
+      return "Write";
+    case "admin":
+      return "Admin";
+    case "owner":
+      return "Owner";
+    default:
+      return "Unknown";
+  }
+}
+
+function normalizeRepoCollaboratorPermission(
+  raw: RepoCollaboratorPermission,
+): RepoCollaboratorPermissionSummary {
+  const permission = raw.permission ?? "";
+  const access = normalizeRepoCollaboratorAccess(permission);
+
+  return {
+    permission,
+    access,
+    permissionLabel: formatRepoCollaboratorPermissionLabel(access),
+    roleName: raw.role_name ?? "",
+    user: normalizeUser(raw.user),
   };
 }
 
@@ -114,6 +258,148 @@ export async function createPrivateCurrentUserRepo(
       },
     }),
   );
+}
+
+async function loadRepoCollaboratorPermission(
+  client: GiteaClient,
+  owner: string,
+  repo: string,
+  collaborator: string,
+): Promise<RepoCollaboratorPermissionSummary> {
+  const permission = await unwrap(
+    client.GET(
+      "/repos/{owner}/{repo}/collaborators/{collaborator}/permission",
+      {
+        params: {
+          path: { owner, repo, collaborator },
+        },
+      },
+    ),
+  );
+
+  return normalizeRepoCollaboratorPermission(permission);
+}
+
+export async function listRepoCollaborators(
+  params: ListRepoCollaboratorsParams,
+): Promise<RepoCollaboratorListResult> {
+  const { client, owner, repo, page = 1, limit = 20 } = params;
+
+  const collaborators = await unwrap(
+    client.GET("/repos/{owner}/{repo}/collaborators", {
+      params: {
+        path: { owner, repo },
+        query: { page, limit },
+      },
+    }),
+  );
+
+  const collaboratorsWithPermissions = await Promise.all(
+    collaborators.map(async (collaborator) => {
+      const user = normalizeUser(collaborator);
+      const permission = await loadRepoCollaboratorPermission(
+        client,
+        owner,
+        repo,
+        user.login,
+      );
+
+      return {
+        ...permission,
+        user,
+      };
+    }),
+  );
+
+  return {
+    collaborators: collaboratorsWithPermissions,
+    page,
+    limit,
+    hasMore: collaborators.length === limit,
+  };
+}
+
+export async function getRepoCollaboratorPermission(
+  params: GetRepoCollaboratorPermissionParams,
+): Promise<RepoCollaboratorPermissionSummary> {
+  const { client, owner, repo, collaborator } = params;
+  return await loadRepoCollaboratorPermission(
+    client,
+    owner,
+    repo,
+    collaborator,
+  );
+}
+
+export async function getCurrentUserRepoPermission(
+  params: GetCurrentUserRepoPermissionParams,
+): Promise<RepoCollaboratorPermissionSummary> {
+  const { client, owner, repo, username } = params;
+  return await loadRepoCollaboratorPermission(client, owner, repo, username);
+}
+
+export async function addRepoCollaborator(
+  params: AddRepoCollaboratorParams,
+): Promise<void> {
+  const { client, owner, repo, collaborator, permission } = params;
+
+  const { error, response } = await client.PUT(
+    "/repos/{owner}/{repo}/collaborators/{collaborator}",
+    {
+      params: { path: { owner, repo, collaborator } },
+      body: {
+        permission,
+      } satisfies AddCollaboratorOption,
+    },
+  );
+
+  if (error !== undefined || !response.ok) {
+    throw toGiteaApiError(response.status, error);
+  }
+}
+
+export async function removeRepoCollaborator(
+  params: RemoveRepoCollaboratorParams,
+): Promise<void> {
+  const { client, owner, repo, collaborator } = params;
+
+  const { error, response } = await client.DELETE(
+    "/repos/{owner}/{repo}/collaborators/{collaborator}",
+    {
+      params: { path: { owner, repo, collaborator } },
+    },
+  );
+
+  if (error !== undefined || !response.ok) {
+    throw toGiteaApiError(response.status, error);
+  }
+}
+
+export async function searchUsers(
+  params: SearchUsersParams,
+): Promise<SearchUsersResult> {
+  const { client, query, page = 1, limit = 10 } = params;
+
+  const result = await unwrap(
+    client.GET("/users/search", {
+      params: {
+        query: {
+          q: query,
+          page,
+          limit,
+        },
+      },
+    }),
+  );
+
+  const users = (result.data ?? []).map(normalizeUser);
+
+  return {
+    users,
+    page,
+    limit,
+    hasMore: users.length === limit,
+  };
 }
 
 export async function repoExists(

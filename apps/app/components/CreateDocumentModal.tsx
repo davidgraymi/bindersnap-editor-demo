@@ -120,12 +120,16 @@ export function CreateDocumentModal({
     }
 
     if (!repoSlugValid) {
-      setValidationError("Enter a document name with at least one letter or number.");
+      setValidationError(
+        "Enter a document name with at least one letter or number.",
+      );
       return;
     }
 
     if (!owner) {
-      setError("Your session is missing account details. Sign in again and retry.");
+      setError(
+        "Your session is missing account details. Sign in again and retry.",
+      );
       setStatus("error");
       return;
     }
@@ -219,7 +223,7 @@ export function CreateDocumentModal({
                   setError(null);
                   setValidationError(null);
                 }}
-                placeholder="Quarterly Report"
+                placeholder="Enter the name of the document"
               />
             </label>
 
