@@ -1,45 +1,74 @@
 /**
- * Integration test for uploading new versions to an existing document repo.
+ * Browser-based integration test for uploading multiple versions of a document.
  *
- * Tests the fix for the bug where uploading v2+ failed with "repository file
- * already exists" because commitBinaryFile was using POST (create) instead of
- * PUT (update) when the file already existed on the branch (inherited from main).
+ * Tests the complete upload → approve → merge flow for both v1 and v2 of a
+ * document, exercising the actual UI that users interact with.
  *
  * Flow:
- * 1. Seed a v1 file on main (create branch → commit binary → create PR → approve → merge → tag)
- * 2. Upload v2 to a new branch (the critical test — file exists on main, so PUT must be used)
- * 3. Approve the v2 PR
- * 4. Merge/publish and tag as doc/v0002
+ * 1. Alice signs in, creates a new document (v1 uploaded as part of creation)
+ * 2. Bob approves v1 via API (can't sign in as two users simultaneously)
+ * 3. Alice publishes v1 through the UI
+ * 4. Alice uploads v2 via the "Upload New Version" button
+ * 5. Bob approves v2 via API
+ * 6. Alice publishes v2 through the UI
+ * 7. Verify the page shows v2 as the latest version
  *
  * Requires the full Docker Compose stack — run via `bun run test:integration`.
  */
 
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import {
-  createPullRequest,
   getPullRequestForBranch,
-  mergePullRequest,
+  listPullRequests,
   submitReview,
 } from "../packages/gitea-client/pullRequests";
 import {
-  createDocTag,
-  getLatestDocTag,
-} from "../packages/gitea-client/repos";
-import {
-  commitBinaryFile,
-  createUploadBranch,
-} from "../packages/gitea-client/uploads";
-
-import {
   createBobClient,
+  GITEA_ADMIN_PASS,
+  GITEA_ADMIN_USER,
   installMemorySessionStorage,
   makeClient,
-  OWNER,
   pollUntil,
-  REPO,
   resolveAndStoreToken,
 } from "./helpers";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+async function signInAsAlice(page: Page): Promise<void> {
+  await page.goto("/login");
+  await expect(
+    page.getByRole("heading", { name: "Step into the clean version." }),
+  ).toBeVisible();
+
+  await page.getByLabel("Username or Email").fill(GITEA_ADMIN_USER);
+  await page.getByLabel("Password", { exact: true }).fill(GITEA_ADMIN_PASS);
+  await page.getByRole("button", { name: "Open workspace" }).click();
+
+  await expect(page).toHaveURL(/\/app$/);
+  await expect(
+    page.getByText(`Signed in as ${GITEA_ADMIN_USER}`),
+  ).toBeVisible();
+}
+
+/**
+ * Navigate from the workspace to a document detail page by clicking its card.
+ */
+async function navigateToDocument(page: Page, docName: string): Promise<void> {
+  // Wait for the card to appear (workspace may still be loading)
+  const card = page.locator(".vault-doc-card", { hasText: docName });
+  await expect(card).toBeVisible({ timeout: 30_000 });
+
+  // Click the card
+  await card.click();
+
+  // Wait for the detail view to load
+  await expect(
+    page.getByRole("button", { name: "← Back to workspace" }),
+  ).toBeVisible({ timeout: 30_000 });
+}
 
 // ---------------------------------------------------------------------------
 // Suite setup
@@ -47,345 +76,251 @@ import {
 
 test.beforeAll(async () => {
   installMemorySessionStorage();
-  await resolveAndStoreToken("bindersnap-version-upload");
+  await resolveAndStoreToken("bindersnap-version-upload-ui");
 });
 
 // ---------------------------------------------------------------------------
-// Document version upload lifecycle
+// Browser-based document version upload flow
 // ---------------------------------------------------------------------------
 
-test.describe("document version upload lifecycle", () => {
-  // Use serial mode — each step depends on the prior step's state.
-  test.describe.configure({ mode: "serial" });
+test.describe("UI document version upload flow", () => {
+  test.describe.configure({ mode: "serial", timeout: 120_000 });
 
-  let bobClient: Awaited<ReturnType<typeof createBobClient>>;
-  let v1Branch: string;
-  let v2Branch: string;
-  const filePath = "document.txt";
+  const timestamp = Date.now();
+  const randomString = Math.random().toString(36).slice(2, 8);
+  const suffix = `${timestamp}-${randomString}`;
+  const fileName = `version-upload-test-${suffix}.txt`;
 
-  test.beforeAll(async () => {
-    bobClient = await createBobClient();
-    v1Branch = `test/version-upload-v1-${Date.now()}`;
-    v2Branch = `test/version-upload-v2-${Date.now()}`;
+  // The unique suffix is used to find the document card in the workspace.
+  // formatDocumentName title-cases dashes, so "version-upload-test-abc123"
+  // becomes "Version Upload Test Abc123". We search for the random string
+  // portion (no dashes) so it matches the formatted card text.
+  const cardSearchText = randomString;
+
+  // Shared state across serial tests — set during the first test.
+  let owner = "";
+  let repo = "";
+
+  test("create new document and upload v1", async ({ page }) => {
+    const fileData = Buffer.from("Version 1 content\n");
+
+    await signInAsAlice(page);
+
+    // Open the create document modal
+    await page.getByRole("button", { name: "New Document" }).first().click();
+    await expect(
+      page.getByRole("heading", { name: "Create workspace document" }),
+    ).toBeVisible();
+
+    // Upload file
+    await page.locator("#create-document-file").setInputFiles({
+      name: fileName,
+      mimeType: "text/plain",
+      buffer: fileData,
+    });
+
+    // Wait for name to auto-fill
+    await expect(page.locator("#create-document-name")).not.toHaveValue("");
+
+    // Create the document
+    await page.getByRole("button", { name: "Create Document" }).click();
+
+    // Wait for navigation to document detail
+    await expect(
+      page.getByRole("button", { name: "← Back to workspace" }),
+    ).toBeVisible({ timeout: 10_000 });
+
+    // Verify unpublished state
+    await expect(
+      page.getByRole("heading", { name: "Unpublished" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: /1 Open Pull Request/ }),
+    ).toBeVisible();
+    await expect(page.getByText(/Upload v1:/)).toBeVisible();
+
+    // Capture repo info from the page
+    const repoPathText =
+      (await page.locator(".vault-repo-path").textContent()) ?? "";
+    const parts = repoPathText.trim().split("/");
+    owner = parts[0] ?? "";
+    repo = parts[1] ?? "";
+    expect(owner).toBeTruthy();
+    expect(repo).toBeTruthy();
   });
 
-  // Step 1: Seed v1 on main
-  test("seed v1: create branch, commit binary file, create PR", async () => {
+  test("bob approves v1 and alice publishes", async ({ page }) => {
+    expect(repo).toBeTruthy();
+
+    // Add bob as a collaborator so he can review (repo is private)
     const client = makeClient();
-
-    // Create branch for v1
-    await createUploadBranch({
-      client,
-      owner: OWNER,
-      repo: REPO,
-      branchName: v1Branch,
-      from: "main",
+    await client.PUT("/repos/{owner}/{repo}/collaborators/{collaborator}", {
+      params: {
+        path: { owner, repo, collaborator: "bob" },
+      },
+      body: { permission: "write" },
     });
 
-    // Commit v1 content
-    const v1Content = btoa("v1 content");
-    const result = await commitBinaryFile({
+    // Find the open PR via API and have bob approve it
+    const prs = await listPullRequests({
       client,
-      owner: OWNER,
-      repo: REPO,
-      branch: v1Branch,
-      filePath,
-      base64Content: v1Content,
-      message: "test: add v1 of document",
+      owner,
+      repo,
+      state: "open",
     });
+    expect(prs.length).toBe(1);
+    const prNumber = prs[0]!.number!;
 
-    expect(result.sha).toBeTruthy();
-    expect(result.sha.length).toBeGreaterThan(0);
-
-    // Create PR
-    await createPullRequest({
-      client,
-      owner: OWNER,
-      repo: REPO,
-      title: "Test: upload v1",
-      head: v1Branch,
-      base: "main",
-      body: "v1 upload for version upload test.",
-    });
-
-    // Verify PR state
-    const pr = await getPullRequestForBranch({
-      client,
-      owner: OWNER,
-      repo: REPO,
-      branch: v1Branch,
-    });
-
-    expect(pr).not.toBeNull();
-    expect(pr!.approvalState).toBe("in_review");
-  });
-
-  test("seed v1: bob approves the PR", async () => {
-    const client = makeClient();
-
-    const pr = await getPullRequestForBranch({
-      client,
-      owner: OWNER,
-      repo: REPO,
-      branch: v1Branch,
-    });
-    expect(pr).not.toBeNull();
-    const pullNumber = pr!.number!;
-
+    const bobClient = await createBobClient();
     await submitReview({
       client: bobClient,
-      owner: OWNER,
-      repo: REPO,
-      pullNumber,
+      owner,
+      repo,
+      pullNumber: prNumber,
       event: "APPROVE",
       body: "Approved v1 by integration test.",
     });
 
+    // Wait for Gitea to index the approval
     await pollUntil(async () => {
-      const updated = await getPullRequestForBranch({
+      const pr = await getPullRequestForBranch({
         client,
-        owner: OWNER,
-        repo: REPO,
-        branch: v1Branch,
+        owner,
+        repo,
+        branch: prs[0]!.head!.ref!,
       });
-      return updated?.approvalState === "approved";
-    }, `v1 PR #${pullNumber} to reach approved state`);
+      return pr?.approvalState === "approved";
+    }, "v1 PR approval to be indexed");
 
-    const approved = await getPullRequestForBranch({
-      client,
-      owner: OWNER,
-      repo: REPO,
-      branch: v1Branch,
+    // Now sign in and navigate to the document
+    await signInAsAlice(page);
+    await navigateToDocument(page, cardSearchText);
+
+    // The Publish button should be visible (PR is approved and alice can merge)
+    await expect(page.getByRole("button", { name: "Publish" })).toBeVisible({
+      timeout: 30_000,
     });
-    expect(approved!.approvalState).toBe("approved");
+
+    // Click Publish
+    await page.getByRole("button", { name: "Publish" }).click();
+
+    // Wait for publish to complete — pending reviews section shows "No pending reviews"
+    await expect(
+      page.getByRole("heading", { name: "No pending reviews" }),
+    ).toBeVisible({ timeout: 60_000 });
+
+    // Should now show Version 1
+    await expect(
+      page.getByRole("heading", { name: "Version 1" }),
+    ).toBeVisible();
   });
 
-  test("seed v1: merge PR and tag as doc/v0001", async () => {
-    const client = makeClient();
+  test("alice uploads v2 via the UI", async ({ page }) => {
+    expect(repo).toBeTruthy();
 
-    const pr = await getPullRequestForBranch({
-      client,
-      owner: OWNER,
-      repo: REPO,
-      branch: v1Branch,
-    });
-    expect(pr).not.toBeNull();
-    const pullNumber = pr!.number!;
+    await signInAsAlice(page);
+    await navigateToDocument(page, cardSearchText);
 
-    await mergePullRequest({
-      client,
-      owner: OWNER,
-      repo: REPO,
-      pullNumber,
-      mergeStyle: "merge",
-      message: "Merged v1 by integration test.",
+    // Should show Version 1 as current
+    await expect(page.getByRole("heading", { name: "Version 1" })).toBeVisible({
+      timeout: 30_000,
     });
 
-    await pollUntil(async () => {
-      const updated = await getPullRequestForBranch({
-        client,
-        owner: OWNER,
-        repo: REPO,
-        branch: v1Branch,
-      });
-      return updated?.approvalState === "published";
-    }, `v1 PR #${pullNumber} to reach published state after merge`);
+    // Click Upload New Version
+    await page.getByRole("button", { name: "Upload New Version" }).click();
 
-    const published = await getPullRequestForBranch({
-      client,
-      owner: OWNER,
-      repo: REPO,
-      branch: v1Branch,
-    });
-    expect(published!.approvalState).toBe("published");
+    // Wait for modal
+    await expect(
+      page.getByRole("heading", { name: "Upload Document" }),
+    ).toBeVisible();
 
-    // Tag the merge commit as doc/v0001
-    // The merge commit sha is in the PR's merge_commit_sha field
-    const { data: prData } = await client.GET(
-      "/repos/{owner}/{repo}/pulls/{index}",
-      {
-        params: { path: { owner: OWNER, repo: REPO, index: pullNumber } },
-      },
-    );
-    const mergeCommitSha = prData?.merge_commit_sha;
-    expect(mergeCommitSha).toBeTruthy();
-
-    const tag = await createDocTag({
-      client,
-      owner: OWNER,
-      repo: REPO,
-      version: 1,
-      target: mergeCommitSha!,
+    // Select a file — same extension (.txt) as v1
+    const fileData = Buffer.from("Version 2 content with updates\n");
+    await page.locator("#file-upload").setInputFiles({
+      name: fileName,
+      mimeType: "text/plain",
+      buffer: fileData,
     });
 
-    expect(tag.name).toBe("doc/v0001");
-    expect(tag.version).toBe(1);
+    // Click Upload
+    await page
+      .locator(".upload-modal")
+      .getByRole("button", { name: "Upload" })
+      .click();
 
-    // Verify tag via getLatestDocTag
-    const latestTag = await getLatestDocTag(client, OWNER, REPO);
-    expect(latestTag).not.toBeNull();
-    expect(latestTag!.name).toBe("doc/v0001");
+    // Wait for the upload to complete — the modal shows PR creation success
+    // then auto-closes. Wait for the PR to appear in the document detail.
+    await expect(
+      page.getByRole("heading", { name: /1 Open Pull Request/ }),
+    ).toBeVisible({ timeout: 60_000 });
+
+    // Current version should still be v1
+    await expect(
+      page.getByRole("heading", { name: "Version 1" }),
+    ).toBeVisible();
   });
 
-  // Step 2: Upload v2 (the critical test)
-  test("upload v2: create branch from main and commit NEW version of the file", async () => {
+  test("bob approves v2 and alice publishes", async ({ page }) => {
+    expect(repo).toBeTruthy();
+
+    // Find the open PR via API and have bob approve it
     const client = makeClient();
-
-    // Create branch for v2 from main (which now has the v1 file)
-    await createUploadBranch({
+    const prs = await listPullRequests({
       client,
-      owner: OWNER,
-      repo: REPO,
-      branchName: v2Branch,
-      from: "main",
+      owner,
+      repo,
+      state: "open",
     });
+    expect(prs.length).toBe(1);
+    const prNumber = prs[0]!.number!;
 
-    // Critical assertion: commitBinaryFile must succeed when the file already
-    // exists on the branch (inherited from main). Before the fix, this threw
-    // "repository file already exists" because POST was used instead of PUT.
-    const v2Content = btoa("v2 content");
-    const result = await commitBinaryFile({
-      client,
-      owner: OWNER,
-      repo: REPO,
-      branch: v2Branch,
-      filePath, // Same path as v1
-      base64Content: v2Content,
-      message: "test: update to v2 of document",
-    });
-
-    expect(result.sha).toBeTruthy();
-    expect(result.sha.length).toBeGreaterThan(0);
-
-    // Create PR
-    await createPullRequest({
-      client,
-      owner: OWNER,
-      repo: REPO,
-      title: "Test: upload v2",
-      head: v2Branch,
-      base: "main",
-      body: "v2 upload for version upload test.",
-    });
-
-    // Verify PR state
-    const pr = await getPullRequestForBranch({
-      client,
-      owner: OWNER,
-      repo: REPO,
-      branch: v2Branch,
-    });
-
-    expect(pr).not.toBeNull();
-    expect(pr!.approvalState).toBe("in_review");
-  });
-
-  // Step 3: Approve v2
-  test("upload v2: bob approves the PR", async () => {
-    const client = makeClient();
-
-    const pr = await getPullRequestForBranch({
-      client,
-      owner: OWNER,
-      repo: REPO,
-      branch: v2Branch,
-    });
-    expect(pr).not.toBeNull();
-    const pullNumber = pr!.number!;
-
+    const bobClient = await createBobClient();
     await submitReview({
       client: bobClient,
-      owner: OWNER,
-      repo: REPO,
-      pullNumber,
+      owner,
+      repo,
+      pullNumber: prNumber,
       event: "APPROVE",
       body: "Approved v2 by integration test.",
     });
 
+    // Wait for Gitea to index the approval
     await pollUntil(async () => {
-      const updated = await getPullRequestForBranch({
+      const pr = await getPullRequestForBranch({
         client,
-        owner: OWNER,
-        repo: REPO,
-        branch: v2Branch,
+        owner,
+        repo,
+        branch: prs[0]!.head!.ref!,
       });
-      return updated?.approvalState === "approved";
-    }, `v2 PR #${pullNumber} to reach approved state`);
+      return pr?.approvalState === "approved";
+    }, "v2 PR approval to be indexed");
 
-    const approved = await getPullRequestForBranch({
-      client,
-      owner: OWNER,
-      repo: REPO,
-      branch: v2Branch,
+    // Sign in and navigate to the document
+    await signInAsAlice(page);
+    await navigateToDocument(page, cardSearchText);
+
+    // Publish
+    await expect(page.getByRole("button", { name: "Publish" })).toBeVisible({
+      timeout: 30_000,
     });
-    expect(approved!.approvalState).toBe("approved");
-  });
+    await page.getByRole("button", { name: "Publish" }).click();
 
-  // Step 4: Merge/publish v2 and tag
-  test("upload v2: merge PR and tag as doc/v0002", async () => {
-    const client = makeClient();
+    // Wait for publish to complete
+    await expect(
+      page.getByRole("heading", { name: "No pending reviews" }),
+    ).toBeVisible({ timeout: 60_000 });
 
-    const pr = await getPullRequestForBranch({
-      client,
-      owner: OWNER,
-      repo: REPO,
-      branch: v2Branch,
-    });
-    expect(pr).not.toBeNull();
-    const pullNumber = pr!.number!;
+    // Should now show Version 2 as current
+    await expect(
+      page.getByRole("heading", { name: "Version 2" }),
+    ).toBeVisible();
 
-    await mergePullRequest({
-      client,
-      owner: OWNER,
-      repo: REPO,
-      pullNumber,
-      mergeStyle: "merge",
-      message: "Merged v2 by integration test.",
-    });
-
-    await pollUntil(async () => {
-      const updated = await getPullRequestForBranch({
-        client,
-        owner: OWNER,
-        repo: REPO,
-        branch: v2Branch,
-      });
-      return updated?.approvalState === "published";
-    }, `v2 PR #${pullNumber} to reach published state after merge`);
-
-    const published = await getPullRequestForBranch({
-      client,
-      owner: OWNER,
-      repo: REPO,
-      branch: v2Branch,
-    });
-    expect(published!.approvalState).toBe("published");
-
-    // Tag the merge commit as doc/v0002
-    const { data: prData } = await client.GET(
-      "/repos/{owner}/{repo}/pulls/{index}",
-      {
-        params: { path: { owner: OWNER, repo: REPO, index: pullNumber } },
-      },
-    );
-    const mergeCommitSha = prData?.merge_commit_sha;
-    expect(mergeCommitSha).toBeTruthy();
-
-    const tag = await createDocTag({
-      client,
-      owner: OWNER,
-      repo: REPO,
-      version: 2,
-      target: mergeCommitSha!,
-    });
-
-    expect(tag.name).toBe("doc/v0002");
-    expect(tag.version).toBe(2);
-
-    // Verify tag via getLatestDocTag
-    const latestTag = await getLatestDocTag(client, OWNER, REPO);
-    expect(latestTag).not.toBeNull();
-    expect(latestTag!.name).toBe("doc/v0002");
-    expect(latestTag!.version).toBe(2);
+    // Version history should show both versions
+    await expect(
+      page.locator(".vault-version-badge", { hasText: "v2" }),
+    ).toBeVisible();
+    await expect(
+      page.locator(".vault-version-badge", { hasText: "v1" }),
+    ).toBeVisible();
   });
 });

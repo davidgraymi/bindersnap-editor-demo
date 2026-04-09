@@ -267,6 +267,7 @@ test.describe("pull request workflow", () => {
   test.describe("create / approve / merge lifecycle", () => {
     let testBranch: string;
     let bobClient: Awaited<ReturnType<typeof createBobClient>>;
+    let lifecycleRepo: string;
 
     test.beforeAll(async () => {
       testBranch = `test/pr-workflow-${Date.now()}`;
@@ -274,10 +275,41 @@ test.describe("pull request workflow", () => {
       bobClient = await createBobClient();
       const testFilePath = `documents/pr-workflow-test-${testBranch.replace(/[^a-z0-9]/gi, "-")}.json`;
 
+      // Create a dedicated repo for this test to avoid parallel test interference
+      const repoName = `pr-lifecycle-test-${Date.now()}`;
+      const { data: createdRepo } = await client.POST("/user/repos", {
+        body: {
+          name: repoName,
+          private: true,
+          auto_init: true,
+          default_branch: "main",
+        },
+      });
+      lifecycleRepo = repoName;
+
+      // Add bob as a collaborator with write access
+      await client.PUT("/repos/{owner}/{repo}/collaborators/{collaborator}", {
+        params: { path: { owner: OWNER, repo: repoName, collaborator: "bob" } },
+        body: { permission: "write" },
+      });
+
+      // Set up branch protection requiring 1 approval
+      await client.POST("/repos/{owner}/{repo}/branch_protections", {
+        params: { path: { owner: OWNER, repo: repoName } },
+        body: {
+          rule_name: "main",
+          required_approvals: 1,
+          block_on_rejected_reviews: true,
+          enable_approvals_whitelist: false,
+          enable_merge_whitelist: false,
+          dismiss_stale_approvals: false,
+        },
+      });
+
       await createUploadBranch({
         client,
         owner: OWNER,
-        repo: REPO,
+        repo: lifecycleRepo,
         branchName: testBranch,
         from: "main",
       });
@@ -285,7 +317,7 @@ test.describe("pull request workflow", () => {
       await commitDocument({
         client,
         owner: OWNER,
-        repo: REPO,
+        repo: lifecycleRepo,
         filePath: testFilePath,
         branch: testBranch,
         message: "test: add document for PR workflow test",
@@ -303,7 +335,7 @@ test.describe("pull request workflow", () => {
       await createPullRequest({
         client,
         owner: OWNER,
-        repo: REPO,
+        repo: lifecycleRepo,
         title: "Test: PR workflow",
         head: testBranch,
         base: "main",
@@ -317,7 +349,7 @@ test.describe("pull request workflow", () => {
       const found = await getPullRequestForBranch({
         client,
         owner: OWNER,
-        repo: REPO,
+        repo: lifecycleRepo,
         branch: testBranch,
       });
 
@@ -332,7 +364,7 @@ test.describe("pull request workflow", () => {
       const before = await getPullRequestForBranch({
         client,
         owner: OWNER,
-        repo: REPO,
+        repo: lifecycleRepo,
         branch: testBranch,
       });
       expect(before).not.toBeNull();
@@ -341,7 +373,7 @@ test.describe("pull request workflow", () => {
       await submitReview({
         client: bobClient,
         owner: OWNER,
-        repo: REPO,
+        repo: lifecycleRepo,
         pullNumber,
         event: "APPROVE",
         body: "Approved by integration test.",
@@ -351,7 +383,7 @@ test.describe("pull request workflow", () => {
         const pr = await getPullRequestForBranch({
           client,
           owner: OWNER,
-          repo: REPO,
+          repo: lifecycleRepo,
           branch: testBranch,
         });
         return pr?.approvalState === "approved";
@@ -360,7 +392,7 @@ test.describe("pull request workflow", () => {
       const after = await getPullRequestForBranch({
         client,
         owner: OWNER,
-        repo: REPO,
+        repo: lifecycleRepo,
         branch: testBranch,
       });
       expect(after!.approvalState).toBe("approved");
@@ -372,26 +404,16 @@ test.describe("pull request workflow", () => {
       const before = await getPullRequestForBranch({
         client,
         owner: OWNER,
-        repo: REPO,
+        repo: lifecycleRepo,
         branch: testBranch,
       });
       expect(before).not.toBeNull();
       const pullNumber = before!.number!;
 
-      // Update the PR branch to ensure it's up-to-date with the base branch.
-      // This prevents "head branch is behind the base branch" errors when other
-      // tests running in parallel have merged to main.
-      await client.POST("/repos/{owner}/{repo}/pulls/{index}/update", {
-        params: { path: { owner: OWNER, repo: REPO, index: pullNumber } },
-      });
-
-      // Wait a moment for the update to complete
-      await new Promise<void>((resolve) => setTimeout(resolve, 1000));
-
       await mergePullRequest({
         client,
         owner: OWNER,
-        repo: REPO,
+        repo: lifecycleRepo,
         pullNumber,
         mergeStyle: "merge",
         message: "Merged by integration test.",
@@ -401,7 +423,7 @@ test.describe("pull request workflow", () => {
         const pr = await getPullRequestForBranch({
           client,
           owner: OWNER,
-          repo: REPO,
+          repo: lifecycleRepo,
           branch: testBranch,
         });
         return pr?.approvalState === "published";
@@ -410,7 +432,7 @@ test.describe("pull request workflow", () => {
       const after = await getPullRequestForBranch({
         client,
         owner: OWNER,
-        repo: REPO,
+        repo: lifecycleRepo,
         branch: testBranch,
       });
       expect(after!.approvalState).toBe("published");

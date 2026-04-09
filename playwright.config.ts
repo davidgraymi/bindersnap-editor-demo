@@ -7,7 +7,7 @@ const baseURL =
 export default defineConfig({
   testDir: "./tests/",
   testMatch: "**/*.pw.ts",
-  timeout: 60_000,
+  timeout: 10_000,
   retries: process.env.CI ? 2 : 1,
 
   // globalSetup starts the Docker Compose stack before any test runs.
