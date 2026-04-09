@@ -205,9 +205,10 @@ test.describe("UI document version upload flow", () => {
     await page.getByRole("button", { name: "Publish" }).click();
 
     // Wait for publish to complete — pending reviews section shows "No pending reviews"
+    // The merge can take longer on second run due to Gitea indexing
     await expect(
       page.getByRole("heading", { name: "No pending reviews" }),
-    ).toBeVisible({ timeout: 60_000 });
+    ).toBeVisible({ timeout: 120_000 });
 
     // Should now show Version 1
     await expect(
@@ -306,9 +307,10 @@ test.describe("UI document version upload flow", () => {
     await page.getByRole("button", { name: "Publish" }).click();
 
     // Wait for publish to complete
+    // The merge can take longer on second run due to Gitea indexing
     await expect(
       page.getByRole("heading", { name: "No pending reviews" }),
-    ).toBeVisible({ timeout: 60_000 });
+    ).toBeVisible({ timeout: 120_000 });
 
     // Should now show Version 2 as current
     await expect(
