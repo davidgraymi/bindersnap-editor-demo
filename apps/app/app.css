@@ -894,6 +894,10 @@ input {
   gap: var(--brand-space-3);
 }
 
+.collaborator-remove-button {
+  color: var(--color-coral);
+}
+
 .collaborator-permission-select {
   min-width: 140px;
   padding: var(--brand-space-3);

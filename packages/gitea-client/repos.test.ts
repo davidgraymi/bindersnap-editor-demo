@@ -322,6 +322,91 @@ test("addRepoCollaborator sends the requested permission level", async () => {
   expect(calls[0]?.[1]?.body).toMatchObject({ permission: "write" });
 });
 
+test("addRepoCollaborator accepts a 204 no-content response", async () => {
+  const mockPut = mock(async () => ({
+    data: undefined,
+    error: undefined,
+    response: new Response(null, { status: 204 }),
+  }));
+
+  const { addRepoCollaborator } = await import("./repos");
+  await addRepoCollaborator({
+    client: {
+      GET: mock(),
+      POST: mock(),
+      DELETE: mock(),
+      PUT: mockPut,
+      use: mock(),
+    } as unknown as GiteaClient,
+    owner: "alice",
+    repo: "quarterly-report",
+    collaborator: "bob",
+    permission: "read",
+  });
+
+  expect(mockPut).toHaveBeenCalled();
+});
+
+test("removeRepoCollaborator deletes the requested collaborator", async () => {
+  const { client, mockDelete } = createMockClient({
+    DELETE: {
+      "/repos/{owner}/{repo}/collaborators/{collaborator}": () => ({}),
+    },
+  });
+
+  const { removeRepoCollaborator } = await import("./repos");
+  await removeRepoCollaborator({
+    client,
+    owner: "alice",
+    repo: "quarterly-report",
+    collaborator: "bob",
+  });
+
+  expect(mockDelete).toHaveBeenCalled();
+  const calls = mockDelete.mock.calls as Array<
+    [
+      string,
+      {
+        params?: {
+          path?: { owner?: string; repo?: string; collaborator?: string };
+        };
+      },
+    ]
+  >;
+  expect(calls[0]?.[0]).toBe(
+    "/repos/{owner}/{repo}/collaborators/{collaborator}",
+  );
+  expect(calls[0]?.[1]?.params?.path).toMatchObject({
+    owner: "alice",
+    repo: "quarterly-report",
+    collaborator: "bob",
+  });
+});
+
+test("removeRepoCollaborator accepts a 204 no-content response", async () => {
+  const mockDelete = mock(async () => ({
+    data: undefined,
+    error: undefined,
+    response: new Response(null, { status: 204 }),
+  }));
+
+  const { removeRepoCollaborator } = await import("./repos");
+  await removeRepoCollaborator({
+    client: {
+      GET: mock(),
+      POST: mock(),
+      DELETE: mockDelete,
+      PUT: mock(),
+      use: mock(),
+    } as unknown as GiteaClient,
+    owner: "alice",
+    repo: "quarterly-report",
+    collaborator: "bob",
+  });
+
+  expect(mockDelete).toHaveBeenCalled();
+});
+
 test("searchUsers returns normalized user results for typeahead", async () => {
   const { client } = createMockClient({
     GET: {

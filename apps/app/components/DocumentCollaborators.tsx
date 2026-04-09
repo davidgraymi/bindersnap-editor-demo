@@ -6,6 +6,7 @@ import {
   addRepoCollaborator,
   getCurrentUserRepoPermission,
   listRepoCollaborators,
+  removeRepoCollaborator,
   searchUsers,
   type RepoCollaboratorPermissionSummary,
   type RepoUserSummary,
@@ -98,6 +99,46 @@ function writeCachedCollaboratorPermissions(
       : {};
 
     parsed[collaboratorPermissionCacheKey(owner, repo)] = permissions;
+    globalThis.sessionStorage?.setItem(
+      COLLABORATOR_PERMISSION_CACHE_KEY,
+      JSON.stringify(parsed),
+    );
+  } catch {
+    // Ignore cache write failures and fall back to live API data.
+  }
+}
+
+function deleteCachedCollaboratorPermission(
+  owner: string,
+  repo: string,
+  login: string,
+): void {
+  try {
+    const raw = globalThis.sessionStorage?.getItem(
+      COLLABORATOR_PERMISSION_CACHE_KEY,
+    );
+    if (!raw) {
+      return;
+    }
+
+    const parsed = JSON.parse(raw) as Record<
+      string,
+      Record<string, WritablePermission>
+    >;
+    const key = collaboratorPermissionCacheKey(owner, repo);
+    const repoPermissions = parsed[key];
+    if (!repoPermissions) {
+      return;
+    }
+
+    delete repoPermissions[login];
+
+    if (Object.keys(repoPermissions).length === 0) {
+      delete parsed[key];
+    } else {
+      parsed[key] = repoPermissions;
+    }
+
     globalThis.sessionStorage?.setItem(
       COLLABORATOR_PERMISSION_CACHE_KEY,
       JSON.stringify(parsed),
@@ -421,6 +462,7 @@ export function DocumentCollaborators({
   const [searchResults, setSearchResults] = useState<SearchResultRow[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
   const [draftPermissions, setDraftPermissions] = useState<
     Record<string, WritablePermission>
   >({});
@@ -472,6 +514,7 @@ export function DocumentCollaborators({
     setDebouncedSearchQuery("");
     setSearchResults([]);
     setSearchError(null);
+    setIsSearchDropdownOpen(false);
     setCurrentPermission(null);
     setPermissionLoadError(null);
     setPermissionLoadPending(true);
@@ -569,6 +612,7 @@ export function DocumentCollaborators({
       setSearchResults([]);
       setSearchError(null);
       setIsSearching(false);
+      setIsSearchDropdownOpen(false);
       return;
     }
 
@@ -653,6 +697,57 @@ export function DocumentCollaborators({
       writeCachedCollaboratorPermissions(owner, repo, next);
       return next;
     });
+  }
+
+  function clearExplicitPermission(login: string): void {
+    setExplicitPermissions((prev) => {
+      const next = { ...prev };
+      delete next[login];
+      deleteCachedCollaboratorPermission(owner, repo, login);
+      return next;
+    });
+    setDraftPermissions((prev) => {
+      if (!(login in prev)) {
+        return prev;
+      }
+
+      const next = { ...prev };
+      delete next[login];
+      return next;
+    });
+  }
+
+  async function handleRemoveCollaborator(row: CollaboratorRow): Promise<void> {
+    const login = row.login.trim();
+    if (!login || !isManagedPermission(row.permission)) {
+      return;
+    }
+
+    setManageError(null);
+    setBusy(login, true);
+
+    try {
+      await removeRepoCollaborator({
+        client: giteaClient,
+        owner,
+        repo,
+        collaborator: login,
+      });
+
+      clearExplicitPermission(login);
+      setCollaborators((prev) =>
+        prev.filter((candidate) => candidate.login !== login),
+      );
+    } catch (err) {
+      setManageError(
+        readPermissionError(
+          err,
+          `Unable to remove ${login} from this repository.`,
+        ),
+      );
+    } finally {
+      setBusy(login, false);
+    }
   }
 
   async function loadMoreCollaborators(): Promise<void> {
@@ -746,6 +841,7 @@ export function DocumentCollaborators({
         upsertCollaboratorRow(normalized);
       }
 
+      setIsSearchDropdownOpen(false);
       setSearchQuery("");
       setDebouncedSearchQuery("");
       setSearchResults([]);
@@ -814,7 +910,8 @@ export function DocumentCollaborators({
     debouncedSearchQuery.length >= 2
       ? `Search results for "${debouncedSearchQuery}"`
       : "";
-  const showSearchDropdown = searchQuery.trim().length >= 2;
+  const showSearchDropdown =
+    isSearchDropdownOpen && searchQuery.trim().length >= 2;
 
   return (
     <div className="vault-detail collaborators-page">
@@ -860,7 +957,11 @@ export function DocumentCollaborators({
                   value={searchQuery}
                   placeholder="Start typing a name or username"
                   autoComplete="off"
-                  onChange={(event) => setSearchQuery(event.target.value)}
+                  onChange={(event) => {
+                    const nextValue = event.target.value;
+                    setSearchQuery(nextValue);
+                    setIsSearchDropdownOpen(nextValue.trim().length >= 2);
+                  }}
                 />
                 {showSearchDropdown ? (
                   <div
@@ -1142,6 +1243,14 @@ export function DocumentCollaborators({
                           }
                         >
                           {busy ? "Saving..." : collaboratorActionLabel(row)}
+                        </button>
+                        <button
+                          className="bs-btn bs-btn-secondary collaborator-remove-button"
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void handleRemoveCollaborator(row)}
+                        >
+                          {busy ? "Working..." : "Remove"}
                         </button>
                       </>
                     ) : (

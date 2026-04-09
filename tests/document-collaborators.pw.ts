@@ -6,18 +6,21 @@
  * - create a new document repository
  * - add alice and bob as read collaborators
  * - assert collaborator rows update immediately without a refresh
+ * - remove one collaborator and verify the list updates immediately
  * - reload, reopen the document, and verify owner/admin labeling is correct
  */
 
 import { expect, test, type Page } from "@playwright/test";
 
 function buildUniqueCollaboratorTestData() {
-  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const suffix = `${Date.now().toString(36)}-${Math.random()
+    .toString(36)
+    .slice(2, 5)}`;
   return {
-    username: `collab-owner-${suffix}`,
-    email: `collab-owner-${suffix}@users.bindersnap.local`,
+    username: `co-${suffix}`,
+    email: `co-${suffix}@users.bindersnap.local`,
     password: `Bindersnap-${suffix}!`,
-    fileName: `collaborator-coverage-${suffix}.pdf`,
+    fileName: `co-${suffix}.pdf`,
   };
 }
 
@@ -79,18 +82,35 @@ async function createDocument(page: Page, fileName: string): Promise<void> {
     expectedDocumentName(fileName),
   );
 
+  const backToWorkspaceButton = page.getByRole("button", {
+    name: "← Back to workspace",
+  });
+  const createError = page
+    .locator(".upload-validation-error, .upload-error-message")
+    .first();
+
   await page.getByRole("button", { name: "Create Document" }).click();
 
-  await expect(
-    page.getByRole("button", { name: "← Back to workspace" }),
-  ).toBeVisible({ timeout: 120_000 });
+  await Promise.race([
+    backToWorkspaceButton.waitFor({ state: "visible", timeout: 20_000 }),
+    createError
+      .waitFor({ state: "visible", timeout: 20_000 })
+      .then(async () => {
+        const message =
+          (await createError.textContent())?.trim() ||
+          "Unknown document creation error.";
+        throw new Error(`Create document failed: ${message}`);
+      }),
+  ]);
 }
 
 async function openCollaboratorsTab(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Collaborators" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Grant access" }),
-  ).toBeVisible();
+  const collaboratorsTab = page.getByRole("tab", { name: "Collaborators" });
+  await expect(collaboratorsTab).toBeVisible({ timeout: 10_000 });
+  await collaboratorsTab.click();
+  await expect(page.getByRole("heading", { name: "Grant access" })).toBeVisible(
+    { timeout: 10_000 },
+  );
 }
 
 async function addReadCollaborator(page: Page, login: string): Promise<void> {
@@ -98,15 +118,17 @@ async function addReadCollaborator(page: Page, login: string): Promise<void> {
   const searchResult = page
     .locator(".collaborator-search-result")
     .filter({ hasText: `@${login}` });
+  const searchDropdown = page.locator(".collaborator-search-dropdown");
 
   await page.locator(".collaborator-default-permission").selectOption("read");
   await searchLabel.fill(login);
-  await expect(searchResult).toBeVisible({ timeout: 30_000 });
+  await expect(searchResult).toBeVisible({ timeout: 10_000 });
   await searchResult.getByRole("button", { name: "Add collaborator" }).click();
+  await expect(searchDropdown).toHaveCount(0);
 
   await expect(page.locator(".collaborator-row")).toHaveCount(
     login === "alice" ? 1 : 2,
-    { timeout: 30_000 },
+    { timeout: 10_000 },
   );
 }
 
@@ -115,21 +137,31 @@ async function reopenDocumentFromWorkspace(page: Page): Promise<void> {
   await expect(
     page.getByRole("heading", { name: "Your Documents" }),
   ).toBeVisible({
-    timeout: 120_000,
+    timeout: 10_000,
   });
 
   await expect(page.locator(".vault-doc-card")).toHaveCount(1, {
-    timeout: 120_000,
+    timeout: 10_000,
   });
   await page.locator(".vault-doc-card").first().click();
-  await expect(
-    page.getByRole("button", { name: "Collaborators" }),
-  ).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Collaborators" })).toBeVisible({
+    timeout: 10_000,
+  });
   await openCollaboratorsTab(page);
 }
 
+async function removeCollaborator(page: Page, login: string): Promise<void> {
+  const row = page
+    .locator(".collaborators-table .collaborator-row")
+    .filter({ hasText: `@${login}` });
+
+  await expect(row).toHaveCount(1);
+  await row.getByRole("button", { name: "Remove" }).click();
+  await expect(row).toHaveCount(0, { timeout: 10_000 });
+}
+
 test.describe("document collaborator management", () => {
-  test.describe.configure({ timeout: 120_000 });
+  test.describe.configure({ timeout: 45_000 });
 
   test("adds read collaborators immediately and keeps owner out of the list", async ({
     page,
@@ -160,6 +192,12 @@ test.describe("document collaborator management", () => {
       page.locator(".collaborator-row").filter({ hasText: "Owner" }),
     ).toHaveCount(0);
 
+    await removeCollaborator(page, "bob");
+    await expect(page.locator(".collaborator-row")).toHaveCount(1);
+    await expect(
+      page.locator(".collaborator-row").filter({ hasText: "@bob" }),
+    ).toHaveCount(0);
+
     await reopenDocumentFromWorkspace(page);
 
     await expect(
@@ -176,7 +214,7 @@ test.describe("document collaborator management", () => {
       page.locator(".collaborators-table .collaborator-row").filter({
         hasText: "@bob",
       }),
-    ).toContainText("Read");
+    ).toHaveCount(0);
     await expect(
       page.locator(".collaborators-table .collaborator-row").filter({
         hasText: "Owner",

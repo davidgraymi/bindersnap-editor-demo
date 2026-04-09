@@ -1,6 +1,11 @@
 import type { components } from "./spec/gitea";
 
-import { GiteaApiError, unwrap, type GiteaClient } from "./client";
+import {
+  GiteaApiError,
+  toGiteaApiError,
+  unwrap,
+  type GiteaClient,
+} from "./client";
 
 type Repository = components["schemas"]["Repository"];
 type Tag = components["schemas"]["Tag"];
@@ -112,6 +117,13 @@ export interface AddRepoCollaboratorParams {
   repo: string;
   collaborator: string;
   permission: RepoCollaboratorAccess;
+}
+
+export interface RemoveRepoCollaboratorParams {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+  collaborator: string;
 }
 
 export interface SearchUsersParams {
@@ -331,14 +343,36 @@ export async function addRepoCollaborator(
 ): Promise<void> {
   const { client, owner, repo, collaborator, permission } = params;
 
-  await unwrap(
-    client.PUT("/repos/{owner}/{repo}/collaborators/{collaborator}", {
+  const { error, response } = await client.PUT(
+    "/repos/{owner}/{repo}/collaborators/{collaborator}",
+    {
       params: { path: { owner, repo, collaborator } },
       body: {
         permission,
       } satisfies AddCollaboratorOption,
-    }),
+    },
   );
+
+  if (error !== undefined || !response.ok) {
+    throw toGiteaApiError(response.status, error);
+  }
+}
+
+export async function removeRepoCollaborator(
+  params: RemoveRepoCollaboratorParams,
+): Promise<void> {
+  const { client, owner, repo, collaborator } = params;
+
+  const { error, response } = await client.DELETE(
+    "/repos/{owner}/{repo}/collaborators/{collaborator}",
+    {
+      params: { path: { owner, repo, collaborator } },
+    },
+  );
+
+  if (error !== undefined || !response.ok) {
+    throw toGiteaApiError(response.status, error);
+  }
 }
 
 export async function searchUsers(
