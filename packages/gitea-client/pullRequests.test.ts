@@ -442,16 +442,9 @@ test("mergePullRequest with resolveConflicts=true succeeds when there is no conf
 
 test("mergePullRequest without resolveConflicts throws on 409 conflict", async () => {
   const handlers = buildDefaultHandlers();
-
-  // Override merge handler to return 409
-  handlers.POST["/repos/{owner}/{repo}/pulls/{index}/merge"] = () => {
-    throw new Error("Should return 409");
-  };
-
   const { client } = createMockClient(handlers);
 
-  // Manually mock POST to return 409 for merge endpoint
-  const mockPost = mock(
+  client.POST = mock(
     async (path: string, init?: { params?: unknown; body?: unknown }) => {
       if (path === "/repos/{owner}/{repo}/pulls/{index}/merge") {
         return {
@@ -463,21 +456,11 @@ test("mergePullRequest without resolveConflicts throws on 409 conflict", async (
       const handler = handlers.POST?.[path];
       if (handler) {
         const data = await handler(init);
-        return {
-          data,
-          error: undefined,
-          response: new Response(null, { status: 200 }),
-        };
+        return { data, error: undefined, response: new Response(null, { status: 200 }) };
       }
-      return {
-        data: undefined,
-        error: { message: "not found" },
-        response: new Response(null, { status: 404 }),
-      };
+      return { data: undefined, error: { message: "not found" }, response: new Response(null, { status: 404 }) };
     },
   );
-
-  client.POST = mockPost;
 
   const { mergePullRequest } = await import("./pullRequests");
 
@@ -488,7 +471,6 @@ test("mergePullRequest without resolveConflicts throws on 409 conflict", async (
       repo: "quarterly-report",
       pullNumber: 2,
       mergeStyle: "squash",
-      message: "Merge after approvals",
       resolveConflicts: false,
     });
     throw new Error("Should have thrown GiteaApiError");
@@ -496,6 +478,137 @@ test("mergePullRequest without resolveConflicts throws on 409 conflict", async (
     expect(error).toBeInstanceOf(GiteaApiError);
     expect((error as GiteaApiError).status).toBe(409);
   }
+});
+
+test("mergePullRequest without resolveConflicts throws on non-transient 405", async () => {
+  const handlers = buildDefaultHandlers();
+  const { client } = createMockClient(handlers);
+
+  // Gitea returns 405 for actual merge conflicts (not just transient states)
+  client.POST = mock(
+    async (path: string, init?: { params?: unknown; body?: unknown }) => {
+      if (path === "/repos/{owner}/{repo}/pulls/{index}/merge") {
+        return {
+          data: undefined,
+          error: { message: "merge is not allowed" },
+          response: new Response(null, { status: 405 }),
+        };
+      }
+      const handler = handlers.POST?.[path];
+      if (handler) {
+        const data = await handler(init);
+        return { data, error: undefined, response: new Response(null, { status: 200 }) };
+      }
+      return { data: undefined, error: { message: "not found" }, response: new Response(null, { status: 404 }) };
+    },
+  );
+
+  const { mergePullRequest } = await import("./pullRequests");
+
+  try {
+    await mergePullRequest({
+      client,
+      owner: "alice",
+      repo: "quarterly-report",
+      pullNumber: 2,
+      mergeStyle: "squash",
+      resolveConflicts: false,
+    });
+    throw new Error("Should have thrown GiteaApiError");
+  } catch (error) {
+    expect(error).toBeInstanceOf(GiteaApiError);
+    // Non-transient 405 is treated as a conflict
+    expect((error as GiteaApiError).status).toBe(409);
+  }
+});
+
+test("mergePullRequest with resolveConflicts=true resolves non-transient 405 and retries", async () => {
+  const handlers = buildDefaultHandlers();
+  let mergeCallCount = 0;
+
+  handlers.GET["/repos/{owner}/{repo}/pulls/{index}"] = () => ({
+    number: 2,
+    title: "Test PR",
+    head: { ref: "feature/test-branch" },
+    state: "open",
+  });
+
+  handlers.GET["/repos/{owner}/{repo}/contents/{filepath}"] = (init: {
+    params?: { path?: { filepath?: string }; query?: { ref?: string } };
+  }) => {
+    const filepath = init?.params?.path?.filepath ?? "";
+    const ref = init?.params?.query?.ref;
+    if (filepath === "") {
+      return [{ name: "document.pdf", type: "file", path: "document.pdf" }];
+    }
+    if (filepath === "document.pdf") {
+      if (ref === "feature/test-branch") {
+        return { content: "base64-encoded-pdf-content", sha: "abc123" };
+      }
+      return { content: "old-content", sha: "def456" };
+    }
+    return undefined;
+  };
+
+  handlers.DELETE = {
+    "/repos/{owner}/{repo}/branches/{branch}": () => ({}),
+  };
+
+  handlers.POST["/repos/{owner}/{repo}/branches"] = () => ({
+    name: "feature/test-branch",
+  });
+
+  handlers.PUT = {
+    "/repos/{owner}/{repo}/contents/{filepath}": () => ({
+      content: { path: "document.pdf" },
+      commit: { sha: "new-commit-sha" },
+    }),
+  };
+
+  const { client, mockGet, mockPut, mockDelete } = createMockClient(handlers);
+
+  // First merge returns 405 (non-transient — actual conflict), second succeeds
+  client.POST = mock(
+    async (path: string, init?: { params?: unknown; body?: unknown }) => {
+      if (path === "/repos/{owner}/{repo}/pulls/{index}/merge") {
+        mergeCallCount += 1;
+        if (mergeCallCount === 1) {
+          return {
+            data: undefined,
+            error: { message: "merge is not allowed" },
+            response: new Response(null, { status: 405 }),
+          };
+        }
+        return {
+          data: {},
+          error: undefined,
+          response: new Response(null, { status: 200 }),
+        };
+      }
+      const handler = handlers.POST?.[path];
+      if (handler) {
+        const data = await handler(init);
+        return { data, error: undefined, response: new Response(null, { status: 200 }) };
+      }
+      return { data: undefined, error: { message: "not found" }, response: new Response(null, { status: 404 }) };
+    },
+  );
+
+  const { mergePullRequest } = await import("./pullRequests");
+
+  await mergePullRequest({
+    client,
+    owner: "alice",
+    repo: "quarterly-report",
+    pullNumber: 2,
+    mergeStyle: "squash",
+    resolveConflicts: true,
+  });
+
+  expect(mergeCallCount).toBe(2);
+  expect(mockGet).toHaveBeenCalled();
+  expect(mockDelete).toHaveBeenCalled();
+  expect(mockPut).toHaveBeenCalled();
 });
 
 test("mergePullRequest with resolveConflicts=true resolves 409 and retries", async () => {

@@ -264,8 +264,12 @@ export async function submitReview(
 
 /**
  * Attempt a single merge API call and return the outcome.
- * Returns `"ok"` on success, `"conflict"` on 409, or throws on any other error.
- * Transient 405 errors (mergeability check in progress) are retried internally.
+ * Returns `"ok"` on success, `"conflict"` on 405/409 non-transient errors
+ * (merge conflicts, unmergeable PRs), or throws on any other error.
+ *
+ * Gitea uses 405 for both transient states ("please try again later") and
+ * permanent merge failures (conflicts, unmergeable). Transient 405s are
+ * retried internally; non-transient 405s are treated as conflicts.
  */
 async function attemptMerge(
   client: GiteaClient,
@@ -298,22 +302,35 @@ async function attemptMerge(
       return "conflict";
     }
 
-    // Gitea returns 405 while its internal mergeability check is still running.
-    const apiError = toGiteaApiError(response.status, error);
-    const msg = apiError.message.toLowerCase();
-    const isTransient405 =
-      response.status === 405 &&
-      (msg.includes("please try again later") ||
-        msg.includes("not have enough approvals"));
-    if (isTransient405 && attempt < MAX_ATTEMPTS) {
-      await new Promise<void>((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
-      continue;
+    // Gitea returns 405 for multiple reasons. Only these two are transient
+    // (Gitea's async mergeability check hasn't finished yet):
+    //   - "Please try again later"
+    //   - "Does not have enough approvals" (approval not yet indexed)
+    // Any other 405 means the PR genuinely cannot be merged (e.g. conflicts).
+    if (response.status === 405) {
+      const apiError = toGiteaApiError(response.status, error);
+      const msg = apiError.message.toLowerCase();
+      const isTransient =
+        msg.includes("please try again later") ||
+        msg.includes("not have enough approvals");
+
+      if (isTransient && attempt < MAX_ATTEMPTS) {
+        await new Promise<void>((resolve) =>
+          setTimeout(resolve, RETRY_DELAY_MS),
+        );
+        continue;
+      }
+
+      // Non-transient 405 or exhausted retries — treat as conflict.
+      return "conflict";
     }
 
-    throw apiError;
+    // Any other status code is a real error (403, 422, 423, etc.)
+    throw toGiteaApiError(response.status, error);
   }
 
-  throw toGiteaApiError(405, "Merge timed out after maximum retry attempts.");
+  // Should not be reachable, but guard against it.
+  return "conflict";
 }
 
 /**
