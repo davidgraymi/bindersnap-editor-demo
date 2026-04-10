@@ -200,15 +200,21 @@ test.describe("Merge conflict resolution on publish", () => {
     ).toBeVisible({ timeout: 60_000 });
 
     // --- Bob approves v2 via UI ---
-    // PR titles follow the pattern "Upload v2: <docTitle>" so we can locate
-    // the correct PR item by title text even when both are visible.
+    // Both PRs have the same "Upload v2:" title because version numbering is
+    // based on published tags only — since neither is published yet, both get
+    // "Upload v2:". Use position-based selection instead: Gitea returns PRs
+    // newest-first (descending by PR number), so .last() is the older PR
+    // (lower PR number, created first). We approve the older PR first so it
+    // can be published cleanly before the newer PR creates a conflict.
     await signInAsBob(page);
     await navigateToDocument(page, cardSearchText);
 
-    const v2PrItem = page.locator(".vault-pr-item", { hasText: "Upload v2:" });
-    await expect(v2PrItem).toBeVisible({ timeout: 30_000 });
-    await v2PrItem.getByRole("button", { name: "Approve" }).click();
-    await expect(v2PrItem.locator(".vault-status-approved")).toBeVisible({
+    await expect(page.locator(".vault-pr-item")).toHaveCount(2, {
+      timeout: 30_000,
+    });
+    const firstPr = page.locator(".vault-pr-item").last();
+    await firstPr.getByRole("button", { name: "Approve" }).click();
+    await expect(firstPr.locator(".vault-status-approved")).toBeVisible({
       timeout: 30_000,
     });
 
@@ -234,13 +240,16 @@ test.describe("Merge conflict resolution on publish", () => {
     // --- Bob approves v3 via UI ---
     // v3's branch was created from old main, but main now has v2's changes,
     // so this PR has a merge conflict that must be resolved on publish.
+    // After publishing the first PR there is exactly 1 PR remaining.
     await signInAsBob(page);
     await navigateToDocument(page, cardSearchText);
 
-    const v3PrItem = page.locator(".vault-pr-item", { hasText: "Upload v3:" });
-    await expect(v3PrItem).toBeVisible({ timeout: 30_000 });
-    await v3PrItem.getByRole("button", { name: "Approve" }).click();
-    await expect(v3PrItem.locator(".vault-status-approved")).toBeVisible({
+    await expect(page.locator(".vault-pr-item")).toHaveCount(1, {
+      timeout: 30_000,
+    });
+    const secondPr = page.locator(".vault-pr-item");
+    await secondPr.getByRole("button", { name: "Approve" }).click();
+    await expect(secondPr.locator(".vault-status-approved")).toBeVisible({
       timeout: 30_000,
     });
 

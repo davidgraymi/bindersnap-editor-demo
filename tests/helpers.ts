@@ -323,16 +323,17 @@ export async function signInAsBob(page: Page): Promise<void> {
  * Navigate from the workspace to a document detail page by clicking the
  * `.vault-doc-card` that contains `docName`, then wait for the back button.
  *
- * Stability fix: waits for network idle before clicking so the card is fully
- * rendered (skeleton → loaded), then uses `{ force: true }` as a safety net
- * against the built-in stability check spinning on a card that is still
- * transitioning.
+ * Stability fix: waits for DOM content to be loaded before clicking so the
+ * card is fully rendered (skeleton → loaded), then uses `{ force: true }` as
+ * a safety net against the built-in stability check spinning on a card that
+ * is still transitioning. networkidle is intentionally avoided because
+ * persistent WebSocket connections (Hocuspocus) prevent it from ever resolving.
  */
 export async function navigateToDocument(
   page: Page,
   docName: string,
 ): Promise<void> {
-  await page.waitForLoadState("networkidle");
+  await page.waitForLoadState("domcontentloaded");
   const card = page.locator(".vault-doc-card", { hasText: docName });
   await expect(card).toBeVisible({ timeout: 10_000 });
   await card.click({ force: true });
