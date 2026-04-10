@@ -263,13 +263,16 @@ export async function submitReview(
 }
 
 /**
- * Attempt a single merge API call and return the outcome.
+ * Attempt to merge a PR and return the outcome.
  * Returns `"ok"` on success, `"conflict"` on 405/409 non-transient errors
  * (merge conflicts, unmergeable PRs), or throws on any other error.
  *
  * Gitea uses 405 for both transient states ("please try again later") and
  * permanent merge failures (conflicts, unmergeable). Transient 405s are
- * retried internally; non-transient 405s are treated as conflicts.
+ * retried up to `maxAttempts`; non-transient 405s are treated as conflicts.
+ *
+ * The default `maxAttempts = 1` makes the first merge attempt fail fast so
+ * the caller can decide whether to resolve conflicts without blocking the UI.
  */
 async function attemptMerge(
   client: GiteaClient,
@@ -278,11 +281,11 @@ async function attemptMerge(
   pullNumber: number,
   mergeStyle: "merge" | "squash" | "rebase",
   message?: string,
+  maxAttempts = 1,
 ): Promise<"ok" | "conflict"> {
-  const MAX_ATTEMPTS = 15;
   const RETRY_DELAY_MS = 2000;
 
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const { response, error } = await client.POST(
       "/repos/{owner}/{repo}/pulls/{index}/merge",
       {
@@ -314,7 +317,7 @@ async function attemptMerge(
         msg.includes("please try again later") ||
         msg.includes("not have enough approvals");
 
-      if (isTransient && attempt < MAX_ATTEMPTS) {
+      if (isTransient && attempt < maxAttempts) {
         await new Promise<void>((resolve) =>
           setTimeout(resolve, RETRY_DELAY_MS),
         );
@@ -395,14 +398,14 @@ async function resolveConflictsByRebase(
 
   // 3. Read the uploaded file content from the head branch (we'll re-apply
   //    this after syncing with main).
-  const headFile = await unwrap(
+  const headFile = (await unwrap(
     client.GET("/repos/{owner}/{repo}/contents/{filepath}", {
       params: {
         path: { owner, repo, filepath: filePath },
         query: { ref: headBranch },
       },
     }),
-  ) as { content?: string; sha?: string };
+  )) as { content?: string; sha?: string };
 
   const uploadedContent = headFile.content;
   const headFileSha = headFile.sha;
@@ -411,14 +414,14 @@ async function resolveConflictsByRebase(
   }
 
   // 4. Read the same file from main so we can make the head branch match.
-  const mainFile = await unwrap(
+  const mainFile = (await unwrap(
     client.GET("/repos/{owner}/{repo}/contents/{filepath}", {
       params: {
         path: { owner, repo, filepath: filePath },
         query: { ref: "main" },
       },
     }),
-  ) as { content?: string };
+  )) as { content?: string };
 
   if (!mainFile.content) {
     throw toGiteaApiError(0, "Could not read file content from main branch.");
@@ -442,10 +445,12 @@ async function resolveConflictsByRebase(
   // 6. Merge main into the head branch via the PR update endpoint.
   //    Now that file contents match, the merge is conflict-free.
   //    This endpoint returns 200 with an empty body on success.
-  const { error: updateError, response: updateResponse } =
-    await client.POST("/repos/{owner}/{repo}/pulls/{index}/update", {
+  const { error: updateError, response: updateResponse } = await client.POST(
+    "/repos/{owner}/{repo}/pulls/{index}/update",
+    {
       params: { path: { owner, repo, index: pullNumber } },
-    });
+    },
+  );
 
   if (!updateResponse.ok) {
     throw toGiteaApiError(updateResponse.status, updateError);
@@ -453,14 +458,14 @@ async function resolveConflictsByRebase(
 
   // 7. Read the file SHA on the now-synced head branch (it changed after
   //    the merge-update commit).
-  const syncedFile = await unwrap(
+  const syncedFile = (await unwrap(
     client.GET("/repos/{owner}/{repo}/contents/{filepath}", {
       params: {
         path: { owner, repo, filepath: filePath },
         query: { ref: headBranch },
       },
     }),
-  ) as { sha?: string };
+  )) as { sha?: string };
 
   if (!syncedFile.sha) {
     throw toGiteaApiError(0, "Could not read synced file SHA after update.");
@@ -509,12 +514,17 @@ export async function mergePullRequest(
 
   // 409 conflict — resolve if the caller opted in.
   if (!shouldResolveConflicts) {
-    throw toGiteaApiError(409, "Merge conflict: the pull request cannot be merged.");
+    throw toGiteaApiError(
+      409,
+      "Merge conflict: the pull request cannot be merged.",
+    );
   }
 
   await resolveConflictsByRebase(client, owner, repo, pullNumber);
 
-  // After resolving, retry the merge. If this still fails, let the error propagate.
+  // After resolving, retry the merge with retries — Gitea needs time to
+  // recalculate mergeability after the branch update.
+  const RETRY_ATTEMPTS = 15;
   const retryResult = await attemptMerge(
     client,
     owner,
@@ -522,6 +532,7 @@ export async function mergePullRequest(
     pullNumber,
     mergeStyle,
     message,
+    RETRY_ATTEMPTS,
   );
 
   if (retryResult !== "ok") {
