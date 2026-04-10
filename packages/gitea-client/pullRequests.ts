@@ -49,8 +49,6 @@ export interface MergePullRequestParams {
   pullNumber: number;
   mergeStyle: "merge" | "squash" | "rebase";
   message?: string;
-  /** When true, 409 merge conflicts are resolved by rebasing the head branch onto main. */
-  resolveConflicts?: boolean;
 }
 
 export interface ListPullRequestsParams {
@@ -270,9 +268,6 @@ export async function submitReview(
  * Gitea uses 405 for both transient states ("please try again later") and
  * permanent merge failures (conflicts, unmergeable). Transient 405s are
  * retried up to `maxAttempts`; non-transient 405s are treated as conflicts.
- *
- * The default `maxAttempts = 1` makes the first merge attempt fail fast so
- * the caller can decide whether to resolve conflicts without blocking the UI.
  */
 async function attemptMerge(
   client: GiteaClient,
@@ -281,7 +276,7 @@ async function attemptMerge(
   pullNumber: number,
   mergeStyle: "merge" | "squash" | "rebase",
   message?: string,
-  maxAttempts = 1,
+  maxAttempts = 5,
 ): Promise<"ok" | "conflict"> {
   const RETRY_DELAY_MS = 2000;
 
@@ -489,15 +484,7 @@ async function resolveConflictsByRebase(
 export async function mergePullRequest(
   params: MergePullRequestParams,
 ): Promise<void> {
-  const {
-    client,
-    owner,
-    repo,
-    pullNumber,
-    mergeStyle,
-    message,
-    resolveConflicts: shouldResolveConflicts = false,
-  } = params;
+  const { client, owner, repo, pullNumber, mergeStyle, message } = params;
 
   const result = await attemptMerge(
     client,
@@ -508,23 +495,53 @@ export async function mergePullRequest(
     message,
   );
 
-  if (result === "ok") {
-    return;
-  }
-
-  // 409 conflict — resolve if the caller opted in.
-  if (!shouldResolveConflicts) {
+  if (result !== "ok") {
     throw toGiteaApiError(
       409,
       "Merge conflict: the pull request cannot be merged.",
     );
   }
+}
+
+/**
+ * Merge a PR, automatically resolving merge conflicts if present.
+ *
+ * Checks the PR's mergeable status first to avoid wasted retries:
+ * - If mergeable: merges normally (fast path, ~5 retries for transient states).
+ * - If not mergeable: resolves conflicts by syncing the head branch with
+ *   main, then retries the merge (slower path, up to 15 retries).
+ */
+export async function mergeOrResolveConflicts(
+  params: MergePullRequestParams,
+): Promise<void> {
+  const { client, owner, repo, pullNumber, mergeStyle, message } = params;
+
+  // Check if the PR has merge conflicts before attempting.
+  const pr = await unwrap(
+    client.GET("/repos/{owner}/{repo}/pulls/{index}", {
+      params: { path: { owner, repo, index: pullNumber } },
+    }),
+  );
+
+  if (pr.mergeable !== false) {
+    // No known conflict — try normal merge.
+    const result = await attemptMerge(
+      client,
+      owner,
+      repo,
+      pullNumber,
+      mergeStyle,
+      message,
+    );
+    if (result === "ok") return;
+    // Still failed — fall through to conflict resolution.
+  }
 
   await resolveConflictsByRebase(client, owner, repo, pullNumber);
 
-  // After resolving, retry the merge with retries — Gitea needs time to
+  // Retry after resolution with more attempts — Gitea needs time to
   // recalculate mergeability after the branch update.
-  const RETRY_ATTEMPTS = 15;
+  const POST_RESOLVE_ATTEMPTS = 15;
   const retryResult = await attemptMerge(
     client,
     owner,
@@ -532,7 +549,7 @@ export async function mergePullRequest(
     pullNumber,
     mergeStyle,
     message,
-    RETRY_ATTEMPTS,
+    POST_RESOLVE_ATTEMPTS,
   );
 
   if (retryResult !== "ok") {
