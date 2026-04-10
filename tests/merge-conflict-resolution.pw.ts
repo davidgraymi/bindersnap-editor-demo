@@ -7,75 +7,30 @@
  *
  * Flow:
  * 1. Alice creates a new document (uploads v1, PR created)
- * 2. Bob approves v1
- * 3. Alice publishes v1 (PR merged, tag created)
- * 4. Alice uploads v2 (new PR created from current main)
- * 5. Alice directly commits to main via API to create a divergence
- * 6. Bob approves v2
- * 7. Alice clicks Publish — merge conflicts are resolved automatically
- * 8. Verify v2 is published successfully
+ * 2. Alice adds Bob as a collaborator via UI
+ * 3. Bob approves v1 via UI
+ * 4. Alice publishes v1 (PR merged, tag created)
+ * 5. Alice uploads v2 and v3 while v2 PR is still open
+ * 6. Bob approves v2 via UI
+ * 7. Alice publishes v2 — main now has v2, creating a conflict for v3's branch
+ * 8. Bob approves v3 via UI
+ * 9. Alice clicks Publish for v3 — merge conflict is resolved automatically
+ * 10. Verify v3 is published successfully with full version history
  *
  * Requires the full Docker Compose stack — run via `bun run test:integration`.
  */
 
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
 import {
-  getPullRequestForBranch,
-  listPullRequests,
-  submitReview,
-} from "../packages/gitea-client/pullRequests";
-import {
-  createBobClient,
-  GITEA_ADMIN_PASS,
-  GITEA_ADMIN_USER,
+  GITEA_BOB_USER,
   installMemorySessionStorage,
-  makeClient,
-  pollUntil,
+  navigateToDocument,
+  openCollaboratorsTab,
   resolveAndStoreToken,
+  signInAsAlice,
+  signInAsBob,
 } from "./helpers";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-async function signInAsAlice(page: Page): Promise<void> {
-  await page.goto("/app");
-
-  // If already signed in (token persisted), we land on the workspace directly.
-  // Otherwise we need to go through the login flow.
-  const alreadySignedIn = await page
-    .getByText(`Signed in as ${GITEA_ADMIN_USER}`)
-    .isVisible({ timeout: 2_000 })
-    .catch(() => false);
-
-  if (alreadySignedIn) {
-    return;
-  }
-
-  await page.goto("/login");
-  await expect(
-    page.getByRole("heading", { name: "Step into the clean version." }),
-  ).toBeVisible();
-
-  await page.getByLabel("Username or Email").fill(GITEA_ADMIN_USER);
-  await page.getByLabel("Password", { exact: true }).fill(GITEA_ADMIN_PASS);
-  await page.getByRole("button", { name: "Open workspace" }).click();
-
-  await expect(page).toHaveURL(/\/app$/);
-  await expect(
-    page.getByText(`Signed in as ${GITEA_ADMIN_USER}`),
-  ).toBeVisible();
-}
-
-async function navigateToDocument(page: Page, docName: string): Promise<void> {
-  const card = page.locator(".vault-doc-card", { hasText: docName });
-  await expect(card).toBeVisible({ timeout: 30_000 });
-  await card.click();
-  await expect(
-    page.getByRole("button", { name: "← Back to workspace" }),
-  ).toBeVisible({ timeout: 30_000 });
-}
 
 // ---------------------------------------------------------------------------
 // Suite setup
@@ -135,53 +90,55 @@ test.describe("Merge conflict resolution on publish", () => {
     expect(owner).toBeTruthy();
     expect(repo).toBeTruthy();
 
-    // Bob approves v1
-    const client = makeClient();
-    await client.PUT("/repos/{owner}/{repo}/collaborators/{collaborator}", {
-      params: {
-        path: { owner, repo, collaborator: "bob" },
-      },
-      body: { permission: "write" },
+    // Add Bob as a collaborator via UI
+    await openCollaboratorsTab(page);
+    await page.locator("#collaborator-search").fill(GITEA_BOB_USER);
+
+    // Wait for Bob's result to appear in the search dropdown
+    const bobResult = page.locator(".collaborator-search-result", {
+      hasText: GITEA_BOB_USER,
     });
+    await expect(bobResult).toBeVisible({ timeout: 15_000 });
 
-    const prs = await listPullRequests({
-      client,
-      owner,
-      repo,
-      state: "open",
-    });
-    expect(prs.length).toBe(1);
-    const prNumber = prs[0]!.number!;
+    // Set write permission and submit
+    await bobResult
+      .locator(".collaborator-permission-select")
+      .selectOption("write");
+    await bobResult.getByRole("button", { name: "Add collaborator" }).click();
 
-    const bobClient = await createBobClient();
-    await submitReview({
-      client: bobClient,
-      owner,
-      repo,
-      pullNumber: prNumber,
-      event: "APPROVE",
-      body: "Approved v1.",
-    });
+    // Wait for Bob to appear in the collaborators table confirming success
+    await expect(
+      page.locator(".collaborator-row", { hasText: GITEA_BOB_USER }),
+    ).toBeVisible({ timeout: 15_000 });
 
-    await pollUntil(async () => {
-      const pr = await getPullRequestForBranch({
-        client,
-        owner,
-        repo,
-        branch: prs[0]!.head!.ref!,
-      });
-      return pr?.approvalState === "approved";
-    }, "v1 PR approval to be indexed");
+    await page.getByRole("button", { name: "Sign out" }).click();
+    await expect(page).toHaveURL(/\/login$/);
 
-    // Navigate back to pick up the approval state
-    await page.getByRole("button", { name: "← Back to workspace" }).click();
+    // Switch to Bob to approve v1
+    await signInAsBob(page);
     await navigateToDocument(page, cardSearchText);
 
-    // Publish v1
+    // Bob approves v1
+    await expect(page.getByRole("button", { name: "Approve" })).toBeVisible({
+      timeout: 30_000,
+    });
+    await page.getByRole("button", { name: "Approve" }).click();
+
+    // Wait for the approval status badge to reflect approval
+    await expect(page.locator(".vault-status-approved")).toBeVisible({
+      timeout: 30_000,
+    });
+
+    // Switch back to Alice to publish v1
+    await signInAsAlice(page);
+    await navigateToDocument(page, cardSearchText);
+
     await expect(page.getByRole("button", { name: "Publish" })).toBeVisible({
       timeout: 30_000,
     });
-    await page.getByRole("button", { name: "Publish" }).click();
+    setTimeout(() => {
+      page.getByRole("button", { name: "Publish" }).click();
+    }, 3000);
 
     await expect(
       page.getByRole("heading", { name: "No pending reviews" }),
@@ -196,9 +153,6 @@ test.describe("Merge conflict resolution on publish", () => {
     page,
   }) => {
     expect(repo).toBeTruthy();
-
-    const client = makeClient();
-    const bobClient = await createBobClient();
 
     await signInAsAlice(page);
     await navigateToDocument(page, cardSearchText);
@@ -245,49 +199,24 @@ test.describe("Merge conflict resolution on publish", () => {
       page.getByRole("heading", { name: /2 Open Pull Request/ }),
     ).toBeVisible({ timeout: 60_000 });
 
-    // --- Approve and publish v2 (branch-1) via API ---
-    // Both PRs are open. We'll merge the first one, creating a conflict
-    // for the second.
-    const allPRs = await listPullRequests({
-      client,
-      owner,
-      repo,
-      state: "open",
-    });
-    expect(allPRs.length).toBe(2);
-
-    // Sort by PR number — lowest first (v2 PR was created first)
-    const sortedPRs = [...allPRs].sort(
-      (a, b) => (a.number ?? 0) - (b.number ?? 0),
-    );
-    const v2PR = sortedPRs[0]!;
-    const v3PR = sortedPRs[1]!;
-
-    // Bob approves v2
-    await submitReview({
-      client: bobClient,
-      owner,
-      repo,
-      pullNumber: v2PR.number!,
-      event: "APPROVE",
-      body: "Approved v2.",
-    });
-
-    await pollUntil(async () => {
-      const pr = await getPullRequestForBranch({
-        client,
-        owner,
-        repo,
-        branch: v2PR.head!.ref!,
-      });
-      return pr?.approvalState === "approved";
-    }, "v2 PR approval to be indexed");
-
-    // Navigate to pick up approval and publish v2
-    await page.getByRole("button", { name: "← Back to workspace" }).click();
+    // --- Bob approves v2 via UI ---
+    // PR titles follow the pattern "Upload v2: <docTitle>" so we can locate
+    // the correct PR item by title text even when both are visible.
+    await signInAsBob(page);
     await navigateToDocument(page, cardSearchText);
 
-    // Find the first Publish button (for v2 which is approved)
+    const v2PrItem = page.locator(".vault-pr-item", { hasText: "Upload v2:" });
+    await expect(v2PrItem).toBeVisible({ timeout: 30_000 });
+    await v2PrItem.getByRole("button", { name: "Approve" }).click();
+    await expect(v2PrItem.locator(".vault-status-approved")).toBeVisible({
+      timeout: 30_000,
+    });
+
+    // --- Alice publishes v2 ---
+    // Only v2 is approved, so there is exactly one Publish button.
+    await signInAsAlice(page);
+    await navigateToDocument(page, cardSearchText);
+
     await expect(page.getByRole("button", { name: "Publish" })).toBeVisible({
       timeout: 30_000,
     });
@@ -302,42 +231,30 @@ test.describe("Merge conflict resolution on publish", () => {
       page.getByRole("heading", { name: "Version 2" }),
     ).toBeVisible();
 
-    // --- Now approve and publish v3 (branch-2) which has a merge conflict ---
-    // v3's branch was created from old main, but main now has v2's changes.
-    await submitReview({
-      client: bobClient,
-      owner,
-      repo,
-      pullNumber: v3PR.number!,
-      event: "APPROVE",
-      body: "Approved v3.",
-    });
-
-    await pollUntil(async () => {
-      const pr = await getPullRequestForBranch({
-        client,
-        owner,
-        repo,
-        branch: v3PR.head!.ref!,
-      });
-      return pr?.approvalState === "approved";
-    }, "v3 PR approval to be indexed");
-
-    // Navigate to pick up approval
-    await page.getByRole("button", { name: "← Back to workspace" }).click();
+    // --- Bob approves v3 via UI ---
+    // v3's branch was created from old main, but main now has v2's changes,
+    // so this PR has a merge conflict that must be resolved on publish.
+    await signInAsBob(page);
     await navigateToDocument(page, cardSearchText);
 
-    // The Publish button should appear for v3
+    const v3PrItem = page.locator(".vault-pr-item", { hasText: "Upload v3:" });
+    await expect(v3PrItem).toBeVisible({ timeout: 30_000 });
+    await v3PrItem.getByRole("button", { name: "Approve" }).click();
+    await expect(v3PrItem.locator(".vault-status-approved")).toBeVisible({
+      timeout: 30_000,
+    });
+
+    // --- Alice publishes v3 (conflict resolution path) ---
+    await signInAsAlice(page);
+    await navigateToDocument(page, cardSearchText);
+
     await expect(page.getByRole("button", { name: "Publish" })).toBeVisible({
       timeout: 30_000,
     });
 
-    // Click Publish — this will hit a merge conflict, which should be
-    // automatically resolved by the conflict resolution logic
+    // Conflict resolution + retry may take longer than a normal merge
     await page.getByRole("button", { name: "Publish" }).click();
 
-    // Wait for publish to complete — the conflict resolution + retry
-    // may take longer than a normal merge
     await expect(
       page.getByRole("heading", { name: "No pending reviews" }),
     ).toBeVisible({ timeout: 120_000 });

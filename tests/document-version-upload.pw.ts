@@ -16,7 +16,7 @@
  * Requires the full Docker Compose stack — run via `bun run test:integration`.
  */
 
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
 import {
   getPullRequestForBranch,
@@ -25,50 +25,13 @@ import {
 } from "../packages/gitea-client/pullRequests";
 import {
   createBobClient,
-  GITEA_ADMIN_PASS,
-  GITEA_ADMIN_USER,
   installMemorySessionStorage,
   makeClient,
+  navigateToDocument,
   pollUntil,
   resolveAndStoreToken,
+  signInAsAlice,
 } from "./helpers";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-async function signInAsAlice(page: Page): Promise<void> {
-  await page.goto("/login");
-  await expect(
-    page.getByRole("heading", { name: "Step into the clean version." }),
-  ).toBeVisible();
-
-  await page.getByLabel("Username or Email").fill(GITEA_ADMIN_USER);
-  await page.getByLabel("Password", { exact: true }).fill(GITEA_ADMIN_PASS);
-  await page.getByRole("button", { name: "Open workspace" }).click();
-
-  await expect(page).toHaveURL(/\/app$/);
-  await expect(
-    page.getByText(`Signed in as ${GITEA_ADMIN_USER}`),
-  ).toBeVisible();
-}
-
-/**
- * Navigate from the workspace to a document detail page by clicking its card.
- */
-async function navigateToDocument(page: Page, docName: string): Promise<void> {
-  // Wait for the card to appear (workspace may still be loading)
-  const card = page.locator(".vault-doc-card", { hasText: docName });
-  await expect(card).toBeVisible({ timeout: 30_000 });
-
-  // Click the card
-  await card.click();
-
-  // Wait for the detail view to load
-  await expect(
-    page.getByRole("button", { name: "← Back to workspace" }),
-  ).toBeVisible({ timeout: 30_000 });
-}
 
 // ---------------------------------------------------------------------------
 // Suite setup
