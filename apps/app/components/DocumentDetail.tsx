@@ -117,7 +117,8 @@ function buildRawFileUrl(
   ref: string,
   canonicalFile: string,
 ): string {
-  return `${giteaBaseUrl}/${owner}/${repo}/raw/${ref}/${canonicalFile}`;
+  const params = new URLSearchParams({ ref });
+  return `${giteaBaseUrl}/api/v1/repos/${owner}/${repo}/raw/${canonicalFile}?${params}`;
 }
 
 function triggerBrowserDownload(blob: Blob, fileName: string): void {
