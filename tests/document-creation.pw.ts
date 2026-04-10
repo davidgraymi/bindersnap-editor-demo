@@ -8,7 +8,7 @@
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { GITEA_BOB_PASS, GITEA_BOB_USER } from "./helpers";
+import { signInAsBob } from "./helpers";
 
 function buildUniqueDocumentMetadata() {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -23,20 +23,6 @@ function expectedPrefilledDocumentName(fileName: string): string {
     .replace(/[_-]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-}
-
-async function signInAsBob(page: Page): Promise<void> {
-  await page.goto("/login");
-  await expect(
-    page.getByRole("heading", { name: "Step into the clean version." }),
-  ).toBeVisible();
-
-  await page.getByLabel("Username or Email").fill(GITEA_BOB_USER);
-  await page.getByLabel("Password", { exact: true }).fill(GITEA_BOB_PASS);
-  await page.getByRole("button", { name: "Open workspace" }).click();
-
-  await expect(page).toHaveURL(/\/app$/);
-  await expect(page.getByText(`Signed in as ${GITEA_BOB_USER}`)).toBeVisible();
 }
 
 async function openNewDocumentModal(page: Page): Promise<void> {

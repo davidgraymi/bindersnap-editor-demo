@@ -1,7 +1,7 @@
 import { afterEach, expect, mock, test } from "bun:test";
 import type { components } from "./spec/gitea";
 
-import type { GiteaClient } from "./client";
+import { GiteaApiError, type GiteaClient } from "./client";
 
 type PullRequest = components["schemas"]["PullRequest"];
 // Use partial types for test fixtures — generated types require many fields
@@ -10,12 +10,15 @@ type TestPullReview = Partial<Omit<components["schemas"]["PullReview"], "user">>
 };
 
 /**
- * Build a mock GiteaClient (openapi-fetch style) where GET and POST
- * route to per-path handlers.
+ * Build a mock GiteaClient (openapi-fetch style) where GET, POST, PUT, DELETE,
+ * and PATCH route to per-path handlers.
  */
 function createMockClient(handlers: {
   GET?: Record<string, (...args: unknown[]) => unknown>;
   POST?: Record<string, (...args: unknown[]) => unknown>;
+  PUT?: Record<string, (...args: unknown[]) => unknown>;
+  DELETE?: Record<string, (...args: unknown[]) => unknown>;
+  PATCH?: Record<string, (...args: unknown[]) => unknown>;
 }) {
   const mockGet = mock(async (path: string, init?: { params?: unknown }) => {
     const handler = handlers.GET?.[path];
@@ -53,16 +56,75 @@ function createMockClient(handlers: {
     },
   );
 
+  const mockPut = mock(
+    async (path: string, init?: { params?: unknown; body?: unknown }) => {
+      const handler = handlers.PUT?.[path];
+      if (handler) {
+        const data = await handler(init);
+        return {
+          data,
+          error: undefined,
+          response: new Response(null, { status: 200 }),
+        };
+      }
+      return {
+        data: undefined,
+        error: { message: "not found" },
+        response: new Response(null, { status: 404 }),
+      };
+    },
+  );
+
+  const mockDelete = mock(async (path: string, init?: { params?: unknown }) => {
+    const handler = handlers.DELETE?.[path];
+    if (handler) {
+      const data = await handler(init);
+      return {
+        data,
+        error: undefined,
+        response: new Response(null, { status: 204 }),
+      };
+    }
+    return {
+      data: undefined,
+      error: { message: "not found" },
+      response: new Response(null, { status: 404 }),
+    };
+  });
+
+  const mockPatch = mock(
+    async (path: string, init?: { params?: unknown; body?: unknown }) => {
+      const handler = handlers.PATCH?.[path];
+      if (handler) {
+        const data = await handler(init);
+        return {
+          data,
+          error: undefined,
+          response: new Response(null, { status: 200 }),
+        };
+      }
+      return {
+        data: undefined,
+        error: { message: "not found" },
+        response: new Response(null, { status: 404 }),
+      };
+    },
+  );
+
   return {
     client: {
       GET: mockGet,
       POST: mockPost,
-      PUT: mock(),
-      DELETE: mock(),
+      PUT: mockPut,
+      DELETE: mockDelete,
+      PATCH: mockPatch,
       use: mock(),
     } as unknown as GiteaClient,
     mockGet,
     mockPost,
+    mockPut,
+    mockDelete,
+    mockPatch,
   };
 }
 
@@ -382,4 +444,282 @@ test("mergePullRequest forwards the merge style", async () => {
   });
 
   expect(mockPost).toHaveBeenCalled();
+});
+
+test("mergePullRequest throws on 409 conflict", async () => {
+  const handlers = buildDefaultHandlers();
+  const { client } = createMockClient(handlers);
+
+  client.POST = mock(
+    async (path: string, init?: { params?: unknown; body?: unknown }) => {
+      if (path === "/repos/{owner}/{repo}/pulls/{index}/merge") {
+        return {
+          data: undefined,
+          error: { message: "Merge conflict: the pull request cannot be merged." },
+          response: new Response(null, { status: 409 }),
+        };
+      }
+      const handler = handlers.POST?.[path];
+      if (handler) {
+        const data = await handler(init);
+        return { data, error: undefined, response: new Response(null, { status: 200 }) };
+      }
+      return { data: undefined, error: { message: "not found" }, response: new Response(null, { status: 404 }) };
+    },
+  );
+
+  const { mergePullRequest } = await import("./pullRequests");
+
+  try {
+    await mergePullRequest({
+      client,
+      owner: "alice",
+      repo: "quarterly-report",
+      pullNumber: 2,
+      mergeStyle: "squash",
+    });
+    throw new Error("Should have thrown GiteaApiError");
+  } catch (error) {
+    expect(error).toBeInstanceOf(GiteaApiError);
+    expect((error as GiteaApiError).status).toBe(409);
+  }
+});
+
+test("mergePullRequest throws on non-transient 405", async () => {
+  const handlers = buildDefaultHandlers();
+  const { client } = createMockClient(handlers);
+
+  client.POST = mock(
+    async (path: string, init?: { params?: unknown; body?: unknown }) => {
+      if (path === "/repos/{owner}/{repo}/pulls/{index}/merge") {
+        return {
+          data: undefined,
+          error: { message: "merge is not allowed" },
+          response: new Response(null, { status: 405 }),
+        };
+      }
+      const handler = handlers.POST?.[path];
+      if (handler) {
+        const data = await handler(init);
+        return { data, error: undefined, response: new Response(null, { status: 200 }) };
+      }
+      return { data: undefined, error: { message: "not found" }, response: new Response(null, { status: 404 }) };
+    },
+  );
+
+  const { mergePullRequest } = await import("./pullRequests");
+
+  try {
+    await mergePullRequest({
+      client,
+      owner: "alice",
+      repo: "quarterly-report",
+      pullNumber: 2,
+      mergeStyle: "squash",
+    });
+    throw new Error("Should have thrown GiteaApiError");
+  } catch (error) {
+    expect(error).toBeInstanceOf(GiteaApiError);
+    expect((error as GiteaApiError).status).toBe(409);
+  }
+});
+
+/**
+ * Build handlers for the conflict resolution tests.
+ * The resolution flow uses: GET PR, GET dir listing, GET file (head),
+ * GET file (main), PUT file (overwrite with main), POST update PR branch,
+ * GET file (synced SHA), PUT file (restore uploaded content).
+ */
+function buildConflictResolutionHandlers() {
+  const handlers = buildDefaultHandlers();
+  let putCallCount = 0;
+
+  handlers.GET["/repos/{owner}/{repo}/pulls/{index}"] = () => ({
+    number: 2,
+    title: "Test PR",
+    head: { ref: "feature/test-branch" },
+    state: "open",
+    mergeable: false,
+  });
+
+  handlers.GET["/repos/{owner}/{repo}/contents/{filepath}"] = (init: {
+    params?: { path?: { filepath?: string }; query?: { ref?: string } };
+  }) => {
+    const filepath = init?.params?.path?.filepath ?? "";
+    const ref = init?.params?.query?.ref;
+
+    if (filepath === "") {
+      return [
+        { name: "document.pdf", type: "file", path: "document.pdf" },
+        { name: ".gitkeep", type: "file", path: ".gitkeep" },
+      ];
+    }
+
+    if (filepath === "document.pdf") {
+      if (ref === "feature/test-branch") {
+        return { content: "uploaded-v3-content", sha: "head-sha-111" };
+      }
+      if (ref === "main") {
+        return { content: "main-v2-content", sha: "main-sha-222" };
+      }
+      // After sync (no ref or after update) — return updated SHA
+      return { content: "main-v2-content", sha: "synced-sha-333" };
+    }
+
+    return undefined;
+  };
+
+  // PR update endpoint (merge main into head)
+  handlers.POST["/repos/{owner}/{repo}/pulls/{index}/update"] = () => ({});
+
+  handlers.PUT = {
+    "/repos/{owner}/{repo}/contents/{filepath}": () => {
+      putCallCount += 1;
+      return {
+        content: { path: "document.pdf" },
+        commit: { sha: `put-commit-${putCallCount}` },
+      };
+    },
+  };
+
+  return { handlers, getPutCallCount: () => putCallCount };
+}
+
+test("mergeOrResolveConflicts skips initial merge when mergeable=false and succeeds after rebase", async () => {
+  const { handlers } = buildConflictResolutionHandlers();
+  let mergeCallCount = 0;
+
+  const { client, mockGet, mockPut } = createMockClient(handlers);
+
+  // Since mergeable=false, the initial attemptMerge is skipped entirely.
+  // After resolveConflictsByRebase, the merge should succeed on the first try.
+  client.POST = mock(
+    async (path: string, init?: { params?: unknown; body?: unknown }) => {
+      if (path === "/repos/{owner}/{repo}/pulls/{index}/merge") {
+        mergeCallCount += 1;
+        return {
+          data: {},
+          error: undefined,
+          response: new Response(null, { status: 200 }),
+        };
+      }
+      const handler = handlers.POST?.[path];
+      if (handler) {
+        const data = await handler(init);
+        return { data, error: undefined, response: new Response(null, { status: 200 }) };
+      }
+      return { data: undefined, error: { message: "not found" }, response: new Response(null, { status: 404 }) };
+    },
+  );
+
+  const { mergeOrResolveConflicts } = await import("./pullRequests");
+
+  await mergeOrResolveConflicts({
+    client,
+    owner: "alice",
+    repo: "quarterly-report",
+    pullNumber: 2,
+    mergeStyle: "squash",
+  });
+
+  // Only one merge attempt — after conflict resolution
+  expect(mergeCallCount).toBe(1);
+  expect(mockGet).toHaveBeenCalled();
+  // PUT is called twice: once to overwrite with main, once to restore uploaded content
+  expect(mockPut).toHaveBeenCalled();
+});
+
+test("mergeOrResolveConflicts handles transient 405 after rebase and eventually succeeds", async () => {
+  const { handlers } = buildConflictResolutionHandlers();
+  let mergeCallCount = 0;
+
+  const { client, mockGet, mockPut } = createMockClient(handlers);
+
+  // After rebase, first merge attempt gets a transient 405 (Gitea still recalculating),
+  // second attempt succeeds.
+  client.POST = mock(
+    async (path: string, init?: { params?: unknown; body?: unknown }) => {
+      if (path === "/repos/{owner}/{repo}/pulls/{index}/merge") {
+        mergeCallCount += 1;
+        if (mergeCallCount === 1) {
+          return {
+            data: undefined,
+            error: { message: "Please try again later" },
+            response: new Response(null, { status: 405 }),
+          };
+        }
+        return {
+          data: {},
+          error: undefined,
+          response: new Response(null, { status: 200 }),
+        };
+      }
+
+      const handler = handlers.POST?.[path];
+      if (handler) {
+        const data = await handler(init);
+        return { data, error: undefined, response: new Response(null, { status: 200 }) };
+      }
+      return { data: undefined, error: { message: "not found" }, response: new Response(null, { status: 404 }) };
+    },
+  );
+
+  const { mergeOrResolveConflicts } = await import("./pullRequests");
+
+  await mergeOrResolveConflicts({
+    client,
+    owner: "alice",
+    repo: "quarterly-report",
+    pullNumber: 2,
+    mergeStyle: "squash",
+    message: "Merge after approvals",
+  });
+
+  expect(mergeCallCount).toBe(2);
+  expect(mockGet).toHaveBeenCalled();
+  expect(mockPut).toHaveBeenCalled();
+});
+
+test("mergeOrResolveConflicts throws if 409 persists after conflict resolution", async () => {
+  const { handlers } = buildConflictResolutionHandlers();
+
+  const { client } = createMockClient(handlers);
+
+  // Override POST to always return 409 for merge endpoint
+  client.POST = mock(
+    async (path: string, init?: { params?: unknown; body?: unknown }) => {
+      if (path === "/repos/{owner}/{repo}/pulls/{index}/merge") {
+        return {
+          data: undefined,
+          error: { message: "Merge conflict" },
+          response: new Response(null, { status: 409 }),
+        };
+      }
+
+      const handler = handlers.POST?.[path];
+      if (handler) {
+        const data = await handler(init);
+        return { data, error: undefined, response: new Response(null, { status: 200 }) };
+      }
+      return { data: undefined, error: { message: "not found" }, response: new Response(null, { status: 404 }) };
+    },
+  );
+
+  const { mergeOrResolveConflicts } = await import("./pullRequests");
+
+  try {
+    await mergeOrResolveConflicts({
+      client,
+      owner: "alice",
+      repo: "quarterly-report",
+      pullNumber: 2,
+      mergeStyle: "squash",
+      message: "Merge after approvals",
+    });
+    throw new Error("Should have thrown GiteaApiError");
+  } catch (error) {
+    expect(error).toBeInstanceOf(GiteaApiError);
+    expect((error as GiteaApiError).status).toBe(409);
+    expect((error as GiteaApiError).message).toContain("persisted");
+  }
 });

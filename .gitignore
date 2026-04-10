@@ -5,7 +5,6 @@ node_modules
 out
 dist
 *.tgz
-test-results
 
 # code coverage
 coverage
@@ -40,3 +39,10 @@ packages/gitea-client/spec/openapi3.json
 packages/gitea-client/spec/swagger2.json
 conf/app.ini
 conf/app.prod.ini
+
+# Playwright
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
+/test-results/
