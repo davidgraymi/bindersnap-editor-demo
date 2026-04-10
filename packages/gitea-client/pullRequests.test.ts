@@ -10,14 +10,15 @@ type TestPullReview = Partial<Omit<components["schemas"]["PullReview"], "user">>
 };
 
 /**
- * Build a mock GiteaClient (openapi-fetch style) where GET, POST, PUT, and DELETE
- * route to per-path handlers.
+ * Build a mock GiteaClient (openapi-fetch style) where GET, POST, PUT, DELETE,
+ * and PATCH route to per-path handlers.
  */
 function createMockClient(handlers: {
   GET?: Record<string, (...args: unknown[]) => unknown>;
   POST?: Record<string, (...args: unknown[]) => unknown>;
   PUT?: Record<string, (...args: unknown[]) => unknown>;
   DELETE?: Record<string, (...args: unknown[]) => unknown>;
+  PATCH?: Record<string, (...args: unknown[]) => unknown>;
 }) {
   const mockGet = mock(async (path: string, init?: { params?: unknown }) => {
     const handler = handlers.GET?.[path];
@@ -91,18 +92,39 @@ function createMockClient(handlers: {
     };
   });
 
+  const mockPatch = mock(
+    async (path: string, init?: { params?: unknown; body?: unknown }) => {
+      const handler = handlers.PATCH?.[path];
+      if (handler) {
+        const data = await handler(init);
+        return {
+          data,
+          error: undefined,
+          response: new Response(null, { status: 200 }),
+        };
+      }
+      return {
+        data: undefined,
+        error: { message: "not found" },
+        response: new Response(null, { status: 404 }),
+      };
+    },
+  );
+
   return {
     client: {
       GET: mockGet,
       POST: mockPost,
       PUT: mockPut,
       DELETE: mockDelete,
+      PATCH: mockPatch,
       use: mock(),
     } as unknown as GiteaClient,
     mockGet,
     mockPost,
     mockPut,
     mockDelete,
+    mockPatch,
   };
 }
 
@@ -522,9 +544,15 @@ test("mergePullRequest without resolveConflicts throws on non-transient 405", as
   }
 });
 
-test("mergePullRequest with resolveConflicts=true resolves non-transient 405 and retries", async () => {
+/**
+ * Build handlers for the conflict resolution tests.
+ * The resolution flow uses: GET PR, GET dir listing, GET file (head),
+ * GET file (main), PUT file (overwrite with main), POST update PR branch,
+ * GET file (synced SHA), PUT file (restore uploaded content).
+ */
+function buildConflictResolutionHandlers() {
   const handlers = buildDefaultHandlers();
-  let mergeCallCount = 0;
+  let putCallCount = 0;
 
   handlers.GET["/repos/{owner}/{repo}/pulls/{index}"] = () => ({
     number: 2,
@@ -538,34 +566,49 @@ test("mergePullRequest with resolveConflicts=true resolves non-transient 405 and
   }) => {
     const filepath = init?.params?.path?.filepath ?? "";
     const ref = init?.params?.query?.ref;
+
     if (filepath === "") {
-      return [{ name: "document.pdf", type: "file", path: "document.pdf" }];
+      return [
+        { name: "document.pdf", type: "file", path: "document.pdf" },
+        { name: ".gitkeep", type: "file", path: ".gitkeep" },
+      ];
     }
+
     if (filepath === "document.pdf") {
       if (ref === "feature/test-branch") {
-        return { content: "base64-encoded-pdf-content", sha: "abc123" };
+        return { content: "uploaded-v3-content", sha: "head-sha-111" };
       }
-      return { content: "old-content", sha: "def456" };
+      if (ref === "main") {
+        return { content: "main-v2-content", sha: "main-sha-222" };
+      }
+      // After sync (no ref or after update) — return updated SHA
+      return { content: "main-v2-content", sha: "synced-sha-333" };
     }
+
     return undefined;
   };
 
-  handlers.DELETE = {
-    "/repos/{owner}/{repo}/branches/{branch}": () => ({}),
-  };
-
-  handlers.POST["/repos/{owner}/{repo}/branches"] = () => ({
-    name: "feature/test-branch",
-  });
+  // PR update endpoint (merge main into head)
+  handlers.POST["/repos/{owner}/{repo}/pulls/{index}/update"] = () => ({});
 
   handlers.PUT = {
-    "/repos/{owner}/{repo}/contents/{filepath}": () => ({
-      content: { path: "document.pdf" },
-      commit: { sha: "new-commit-sha" },
-    }),
+    "/repos/{owner}/{repo}/contents/{filepath}": () => {
+      putCallCount += 1;
+      return {
+        content: { path: "document.pdf" },
+        commit: { sha: `put-commit-${putCallCount}` },
+      };
+    },
   };
 
-  const { client, mockGet, mockPut, mockDelete } = createMockClient(handlers);
+  return { handlers, getPutCallCount: () => putCallCount };
+}
+
+test("mergePullRequest with resolveConflicts=true resolves non-transient 405 and retries", async () => {
+  const { handlers } = buildConflictResolutionHandlers();
+  let mergeCallCount = 0;
+
+  const { client, mockGet, mockPut } = createMockClient(handlers);
 
   // First merge returns 405 (non-transient — actual conflict), second succeeds
   client.POST = mock(
@@ -607,87 +650,28 @@ test("mergePullRequest with resolveConflicts=true resolves non-transient 405 and
 
   expect(mergeCallCount).toBe(2);
   expect(mockGet).toHaveBeenCalled();
-  expect(mockDelete).toHaveBeenCalled();
+  // PUT is called twice: once to overwrite with main, once to restore uploaded content
   expect(mockPut).toHaveBeenCalled();
 });
 
 test("mergePullRequest with resolveConflicts=true resolves 409 and retries", async () => {
-  const handlers = buildDefaultHandlers();
-
+  const { handlers } = buildConflictResolutionHandlers();
   let mergeCallCount = 0;
 
-  // Add handler for getting the PR
-  handlers.GET["/repos/{owner}/{repo}/pulls/{index}"] = () => ({
-    number: 2,
-    title: "Test PR",
-    head: { ref: "feature/test-branch" },
-    state: "open",
-  });
-
-  // Add handler for listing files on the head branch
-  handlers.GET["/repos/{owner}/{repo}/contents/{filepath}"] = (init: {
-    params?: { path?: { filepath?: string }; query?: { ref?: string } };
-  }) => {
-    const filepath = init?.params?.path?.filepath ?? "";
-    const ref = init?.params?.query?.ref;
-
-    // Directory listing when filepath is ""
-    if (filepath === "") {
-      return [
-        { name: "document.pdf", type: "file", path: "document.pdf" },
-        { name: ".gitkeep", type: "file", path: ".gitkeep" },
-      ];
-    }
-
-    // File content when filepath is "document.pdf"
-    if (filepath === "document.pdf") {
-      if (ref === "feature/test-branch") {
-        // Reading from head branch
-        return { content: "base64-encoded-pdf-content", sha: "abc123" };
-      }
-      // Reading from recreated branch (checking for existing file)
-      return { content: "old-content", sha: "def456" };
-    }
-
-    return undefined;
-  };
-
-  // Add handler for deleting the branch
-  handlers.DELETE = {
-    "/repos/{owner}/{repo}/branches/{branch}": () => ({}),
-  };
-
-  // Add handler for creating the branch
-  handlers.POST["/repos/{owner}/{repo}/branches"] = (init: {
-    body?: { new_branch_name?: string; old_branch_name?: string };
-  }) => ({
-    name: init?.body?.new_branch_name,
-  });
-
-  // Add handler for updating the file
-  handlers.PUT = {
-    "/repos/{owner}/{repo}/contents/{filepath}": () => ({
-      content: { path: "document.pdf" },
-      commit: { sha: "new-commit-sha" },
-    }),
-  };
-
-  const { client, mockGet, mockPost, mockPut, mockDelete } = createMockClient(handlers);
+  const { client, mockGet, mockPut } = createMockClient(handlers);
 
   // Override POST to track merge calls and return 409 on first call, 200 on second
-  const mockPostWithConflict = mock(
+  client.POST = mock(
     async (path: string, init?: { params?: unknown; body?: unknown }) => {
       if (path === "/repos/{owner}/{repo}/pulls/{index}/merge") {
         mergeCallCount += 1;
         if (mergeCallCount === 1) {
-          // First call: return 409
           return {
             data: undefined,
             error: { message: "Merge conflict" },
             response: new Response(null, { status: 409 }),
           };
         }
-        // Second call: succeed
         return {
           data: {},
           error: undefined,
@@ -698,21 +682,11 @@ test("mergePullRequest with resolveConflicts=true resolves 409 and retries", asy
       const handler = handlers.POST?.[path];
       if (handler) {
         const data = await handler(init);
-        return {
-          data,
-          error: undefined,
-          response: new Response(null, { status: 200 }),
-        };
+        return { data, error: undefined, response: new Response(null, { status: 200 }) };
       }
-      return {
-        data: undefined,
-        error: { message: "not found" },
-        response: new Response(null, { status: 404 }),
-      };
+      return { data: undefined, error: { message: "not found" }, response: new Response(null, { status: 404 }) };
     },
   );
-
-  client.POST = mockPostWithConflict;
 
   const { mergePullRequest } = await import("./pullRequests");
 
@@ -726,67 +700,18 @@ test("mergePullRequest with resolveConflicts=true resolves 409 and retries", asy
     resolveConflicts: true,
   });
 
-  // Verify the resolution workflow was executed
   expect(mergeCallCount).toBe(2);
   expect(mockGet).toHaveBeenCalled();
-  expect(mockDelete).toHaveBeenCalled();
-  expect(mockPostWithConflict).toHaveBeenCalled();
   expect(mockPut).toHaveBeenCalled();
 });
 
 test("mergePullRequest throws if 409 persists after conflict resolution", async () => {
-  const handlers = buildDefaultHandlers();
-
-  // Add handler for getting the PR
-  handlers.GET["/repos/{owner}/{repo}/pulls/{index}"] = () => ({
-    number: 2,
-    title: "Test PR",
-    head: { ref: "feature/test-branch" },
-    state: "open",
-  });
-
-  // Add handler for listing files on the head branch
-  handlers.GET["/repos/{owner}/{repo}/contents/{filepath}"] = (init: {
-    params?: { path?: { filepath?: string }; query?: { ref?: string } };
-  }) => {
-    const filepath = init?.params?.path?.filepath ?? "";
-    const ref = init?.params?.query?.ref;
-
-    if (filepath === "") {
-      return [
-        { name: "document.pdf", type: "file", path: "document.pdf" },
-      ];
-    }
-
-    if (filepath === "document.pdf") {
-      if (ref === "feature/test-branch") {
-        return { content: "base64-encoded-pdf-content", sha: "abc123" };
-      }
-      return { content: "old-content", sha: "def456" };
-    }
-
-    return undefined;
-  };
-
-  handlers.DELETE = {
-    "/repos/{owner}/{repo}/branches/{branch}": () => ({}),
-  };
-
-  handlers.POST["/repos/{owner}/{repo}/branches"] = () => ({
-    name: "feature/test-branch",
-  });
-
-  handlers.PUT = {
-    "/repos/{owner}/{repo}/contents/{filepath}": () => ({
-      content: { path: "document.pdf" },
-      commit: { sha: "new-commit-sha" },
-    }),
-  };
+  const { handlers } = buildConflictResolutionHandlers();
 
   const { client } = createMockClient(handlers);
 
   // Override POST to always return 409 for merge endpoint
-  const mockPostAlwaysConflict = mock(
+  client.POST = mock(
     async (path: string, init?: { params?: unknown; body?: unknown }) => {
       if (path === "/repos/{owner}/{repo}/pulls/{index}/merge") {
         return {
@@ -799,21 +724,11 @@ test("mergePullRequest throws if 409 persists after conflict resolution", async 
       const handler = handlers.POST?.[path];
       if (handler) {
         const data = await handler(init);
-        return {
-          data,
-          error: undefined,
-          response: new Response(null, { status: 200 }),
-        };
+        return { data, error: undefined, response: new Response(null, { status: 200 }) };
       }
-      return {
-        data: undefined,
-        error: { message: "not found" },
-        response: new Response(null, { status: 404 }),
-      };
+      return { data: undefined, error: { message: "not found" }, response: new Response(null, { status: 404 }) };
     },
   );
-
-  client.POST = mockPostAlwaysConflict;
 
   const { mergePullRequest } = await import("./pullRequests");
 

@@ -334,10 +334,18 @@ async function attemptMerge(
 }
 
 /**
- * Resolve merge conflicts on a PR's head branch by rebasing it onto the
- * current base branch. Works by reading the file from the head branch,
- * deleting the branch, recreating it from the base, and re-committing the
- * file. The PR stays open because Gitea tracks PRs by branch name.
+ * Resolve merge conflicts on a PR's head branch by synchronising it with
+ * the current base branch (main), then re-applying the uploaded file.
+ *
+ * Strategy (avoids deleting the branch, which permanently breaks the PR
+ * in Gitea's merge index):
+ *   1. Read the document file content from the head branch (save for later).
+ *   2. Overwrite the file on the head branch with main's version so the
+ *      two branches have identical file content — this eliminates the
+ *      merge conflict.
+ *   3. Use the PR update endpoint to merge main into the head branch.
+ *   4. Re-commit the original uploaded content on top of the now-synced
+ *      branch, making the PR diff show the intended change.
  *
  * This is designed for single-file document repos where the uploaded file
  * should always completely overwrite whatever is on the base branch.
@@ -361,8 +369,6 @@ async function resolveConflictsByRebase(
   }
 
   // 2. List files on the head branch to find the document file.
-  //    Document repos have a single file (e.g. document.pdf). We look for
-  //    any file that isn't a dotfile or README.
   const contents = await unwrap(
     client.GET("/repos/{owner}/{repo}/contents/{filepath}", {
       params: {
@@ -387,91 +393,92 @@ async function resolveConflictsByRebase(
 
   const filePath = docEntry.path as string;
 
-  // 3. Read the full file content from the head branch.
-  const fileData = await unwrap(
+  // 3. Read the uploaded file content from the head branch (we'll re-apply
+  //    this after syncing with main).
+  const headFile = await unwrap(
     client.GET("/repos/{owner}/{repo}/contents/{filepath}", {
       params: {
         path: { owner, repo, filepath: filePath },
         query: { ref: headBranch },
       },
     }),
-  );
+  ) as { content?: string; sha?: string };
 
-  const fileContent = (fileData as { content?: string }).content;
-  if (!fileContent) {
+  const uploadedContent = headFile.content;
+  const headFileSha = headFile.sha;
+  if (!uploadedContent || !headFileSha) {
     throw toGiteaApiError(0, "Could not read file content from head branch.");
   }
 
-  // 4. Delete the head branch.
-  const { response: deleteResponse } = await client.DELETE(
-    "/repos/{owner}/{repo}/branches/{branch}",
-    {
-      params: { path: { owner, repo, branch: headBranch } },
-    },
-  );
+  // 4. Read the same file from main so we can make the head branch match.
+  const mainFile = await unwrap(
+    client.GET("/repos/{owner}/{repo}/contents/{filepath}", {
+      params: {
+        path: { owner, repo, filepath: filePath },
+        query: { ref: "main" },
+      },
+    }),
+  ) as { content?: string };
 
-  if (deleteResponse.status !== 204 && deleteResponse.status !== 200) {
-    throw toGiteaApiError(
-      deleteResponse.status,
-      "Failed to delete head branch for conflict resolution.",
-    );
+  if (!mainFile.content) {
+    throw toGiteaApiError(0, "Could not read file content from main branch.");
   }
 
-  // 5. Recreate the branch from current main.
+  // 5. Overwrite the file on the head branch with main's content.
+  //    This eliminates the merge conflict since both branches now have
+  //    identical file content.
   await unwrap(
-    client.POST("/repos/{owner}/{repo}/branches", {
-      params: { path: { owner, repo } },
+    client.PUT("/repos/{owner}/{repo}/contents/{filepath}", {
+      params: { path: { owner, repo, filepath: filePath } },
       body: {
-        new_branch_name: headBranch,
-        old_branch_name: "main",
+        content: mainFile.content,
+        message: "Sync with main for conflict resolution",
+        branch: headBranch,
+        sha: headFileSha,
       },
     }),
   );
 
-  // 6. Re-commit the document file to the recreated branch.
-  //    The branch was just created from main, so if main has the file we
-  //    need its SHA for an update; if not, we create it.
-  let existingSha: string | undefined;
-  try {
-    const existing = await unwrap(
-      client.GET("/repos/{owner}/{repo}/contents/{filepath}", {
-        params: {
-          path: { owner, repo, filepath: filePath },
-          query: { ref: headBranch },
-        },
-      }),
-    );
-    if (existing && !Array.isArray(existing) && existing.sha) {
-      existingSha = existing.sha;
-    }
-  } catch {
-    // File doesn't exist on main — will create it
+  // 6. Merge main into the head branch via the PR update endpoint.
+  //    Now that file contents match, the merge is conflict-free.
+  //    This endpoint returns 200 with an empty body on success.
+  const { error: updateError, response: updateResponse } =
+    await client.POST("/repos/{owner}/{repo}/pulls/{index}/update", {
+      params: { path: { owner, repo, index: pullNumber } },
+    });
+
+  if (!updateResponse.ok) {
+    throw toGiteaApiError(updateResponse.status, updateError);
   }
 
-  if (existingSha) {
-    await unwrap(
-      client.PUT("/repos/{owner}/{repo}/contents/{filepath}", {
-        params: { path: { owner, repo, filepath: filePath } },
-        body: {
-          content: fileContent,
-          message: `Rebase: update ${filePath} after conflict resolution`,
-          branch: headBranch,
-          sha: existingSha,
-        },
-      }),
-    );
-  } else {
-    await unwrap(
-      client.POST("/repos/{owner}/{repo}/contents/{filepath}", {
-        params: { path: { owner, repo, filepath: filePath } },
-        body: {
-          content: fileContent,
-          message: `Rebase: add ${filePath} after conflict resolution`,
-          branch: headBranch,
-        },
-      }),
-    );
+  // 7. Read the file SHA on the now-synced head branch (it changed after
+  //    the merge-update commit).
+  const syncedFile = await unwrap(
+    client.GET("/repos/{owner}/{repo}/contents/{filepath}", {
+      params: {
+        path: { owner, repo, filepath: filePath },
+        query: { ref: headBranch },
+      },
+    }),
+  ) as { sha?: string };
+
+  if (!syncedFile.sha) {
+    throw toGiteaApiError(0, "Could not read synced file SHA after update.");
   }
+
+  // 8. Re-commit the original uploaded content so the PR shows the
+  //    intended file change against the current main.
+  await unwrap(
+    client.PUT("/repos/{owner}/{repo}/contents/{filepath}", {
+      params: { path: { owner, repo, filepath: filePath } },
+      body: {
+        content: uploadedContent,
+        message: "Restore uploaded content after conflict resolution",
+        branch: headBranch,
+        sha: syncedFile.sha,
+      },
+    }),
+  );
 }
 
 export async function mergePullRequest(

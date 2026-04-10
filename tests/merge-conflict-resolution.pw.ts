@@ -192,25 +192,27 @@ test.describe("Merge conflict resolution on publish", () => {
     ).toBeVisible();
   });
 
-  test("upload v2, create conflict on main, then publish successfully", async ({
+  test("upload v2 and v3, publish v2, then publish conflicting v3", async ({
     page,
   }) => {
     expect(repo).toBeTruthy();
 
+    const client = makeClient();
+    const bobClient = await createBobClient();
+
     await signInAsAlice(page);
     await navigateToDocument(page, cardSearchText);
 
-    // Upload v2
+    // --- Upload v2 (branch-1) ---
     await page.getByRole("button", { name: "Upload New Version" }).click();
     await expect(
       page.getByRole("heading", { name: "Upload Document" }),
     ).toBeVisible();
 
-    const fileData = Buffer.from("Version 2 content with updates\n");
     await page.locator("#file-upload").setInputFiles({
       name: fileName,
       mimeType: "text/plain",
-      buffer: fileData,
+      buffer: Buffer.from("Version 2 content\n"),
     });
 
     await page
@@ -222,77 +224,51 @@ test.describe("Merge conflict resolution on publish", () => {
       page.getByRole("heading", { name: /1 Open Pull Request/ }),
     ).toBeVisible({ timeout: 60_000 });
 
-    // Now create a conflict: directly modify the file on main via API.
-    // This simulates the scenario where main has advanced (e.g. another
-    // version was published) after the upload branch was created.
-    const client = makeClient();
+    // --- Upload v3 (branch-2) while v2 PR is still open ---
+    await page.getByRole("button", { name: "Upload New Version" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Upload Document" }),
+    ).toBeVisible();
 
-    // Find the canonical file on main
-    const mainContents = await client.GET(
-      "/repos/{owner}/{repo}/contents/{filepath}",
-      {
-        params: {
-          path: { owner, repo, filepath: "." },
-          query: { ref: "main" },
-        },
-      },
-    );
-    const entries = (mainContents.data ?? []) as Array<{
-      name: string;
-      type: string;
-      path: string;
-    }>;
-    const docFile = entries.find(
-      (e) =>
-        e.type === "file" &&
-        !e.name.startsWith(".") &&
-        e.name !== "README.md",
-    );
-    expect(docFile).toBeTruthy();
-
-    // Get the current file SHA on main
-    const currentFile = await client.GET(
-      "/repos/{owner}/{repo}/contents/{filepath}",
-      {
-        params: {
-          path: { owner, repo, filepath: docFile!.path },
-          query: { ref: "main" },
-        },
-      },
-    );
-    const currentSha = (currentFile.data as { sha?: string })?.sha;
-    expect(currentSha).toBeTruthy();
-
-    // Commit a different version directly to main to create a conflict
-    const conflictContent = Buffer.from(
-      "Conflicting content committed directly to main\n",
-    ).toString("base64");
-    await client.PUT("/repos/{owner}/{repo}/contents/{filepath}", {
-      params: { path: { owner, repo, filepath: docFile!.path } },
-      body: {
-        content: conflictContent,
-        message: "Direct commit to main to create merge conflict",
-        branch: "main",
-        sha: currentSha!,
-      },
+    await page.locator("#file-upload").setInputFiles({
+      name: fileName,
+      mimeType: "text/plain",
+      buffer: Buffer.from("Version 3 content\n"),
     });
 
-    // Bob approves v2
-    const prs = await listPullRequests({
+    await page
+      .locator(".upload-modal")
+      .getByRole("button", { name: "Upload" })
+      .click();
+
+    await expect(
+      page.getByRole("heading", { name: /2 Open Pull Request/ }),
+    ).toBeVisible({ timeout: 60_000 });
+
+    // --- Approve and publish v2 (branch-1) via API ---
+    // Both PRs are open. We'll merge the first one, creating a conflict
+    // for the second.
+    const allPRs = await listPullRequests({
       client,
       owner,
       repo,
       state: "open",
     });
-    expect(prs.length).toBe(1);
-    const prNumber = prs[0]!.number!;
+    expect(allPRs.length).toBe(2);
 
-    const bobClient = await createBobClient();
+    // Sort by PR number — lowest first (v2 PR was created first)
+    const sortedPRs = [...allPRs].sort(
+      (a, b) => (a.number ?? 0) - (b.number ?? 0),
+    );
+    const v2PR = sortedPRs[0]!;
+    const v3PR = sortedPRs[1]!;
+
+    // Bob approves v2
     await submitReview({
       client: bobClient,
       owner,
       repo,
-      pullNumber: prNumber,
+      pullNumber: v2PR.number!,
       event: "APPROVE",
       body: "Approved v2.",
     });
@@ -302,16 +278,56 @@ test.describe("Merge conflict resolution on publish", () => {
         client,
         owner,
         repo,
-        branch: prs[0]!.head!.ref!,
+        branch: v2PR.head!.ref!,
       });
       return pr?.approvalState === "approved";
     }, "v2 PR approval to be indexed");
 
-    // Navigate back to pick up the approval state
+    // Navigate to pick up approval and publish v2
     await page.getByRole("button", { name: "← Back to workspace" }).click();
     await navigateToDocument(page, cardSearchText);
 
-    // The Publish button should appear (PR is approved)
+    // Find the first Publish button (for v2 which is approved)
+    await expect(page.getByRole("button", { name: "Publish" })).toBeVisible({
+      timeout: 30_000,
+    });
+    await page.getByRole("button", { name: "Publish" }).click();
+
+    // Wait for v2 to be published — PR count drops to 1
+    await expect(
+      page.getByRole("heading", { name: /1 Open Pull Request/ }),
+    ).toBeVisible({ timeout: 120_000 });
+
+    await expect(
+      page.getByRole("heading", { name: "Version 2" }),
+    ).toBeVisible();
+
+    // --- Now approve and publish v3 (branch-2) which has a merge conflict ---
+    // v3's branch was created from old main, but main now has v2's changes.
+    await submitReview({
+      client: bobClient,
+      owner,
+      repo,
+      pullNumber: v3PR.number!,
+      event: "APPROVE",
+      body: "Approved v3.",
+    });
+
+    await pollUntil(async () => {
+      const pr = await getPullRequestForBranch({
+        client,
+        owner,
+        repo,
+        branch: v3PR.head!.ref!,
+      });
+      return pr?.approvalState === "approved";
+    }, "v3 PR approval to be indexed");
+
+    // Navigate to pick up approval
+    await page.getByRole("button", { name: "← Back to workspace" }).click();
+    await navigateToDocument(page, cardSearchText);
+
+    // The Publish button should appear for v3
     await expect(page.getByRole("button", { name: "Publish" })).toBeVisible({
       timeout: 30_000,
     });
@@ -326,12 +342,15 @@ test.describe("Merge conflict resolution on publish", () => {
       page.getByRole("heading", { name: "No pending reviews" }),
     ).toBeVisible({ timeout: 120_000 });
 
-    // Should now show Version 2 as current
+    // Should now show Version 3 as current
     await expect(
-      page.getByRole("heading", { name: "Version 2" }),
+      page.getByRole("heading", { name: "Version 3" }),
     ).toBeVisible();
 
-    // Version history should show both versions
+    // Version history should show all three versions
+    await expect(
+      page.locator(".vault-version-badge", { hasText: "v3" }),
+    ).toBeVisible();
     await expect(
       page.locator(".vault-version-badge", { hasText: "v2" }),
     ).toBeVisible();
