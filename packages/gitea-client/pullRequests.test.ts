@@ -446,23 +446,7 @@ test("mergePullRequest forwards the merge style", async () => {
   expect(mockPost).toHaveBeenCalled();
 });
 
-test("mergePullRequest with resolveConflicts=true succeeds when there is no conflict", async () => {
-  const { client } = createMockClient(buildDefaultHandlers());
-  const { mergePullRequest } = await import("./pullRequests");
-
-  // Should not throw, should return cleanly
-  await mergePullRequest({
-    client,
-    owner: "alice",
-    repo: "quarterly-report",
-    pullNumber: 2,
-    mergeStyle: "squash",
-    message: "Merge after approvals",
-    resolveConflicts: true,
-  });
-});
-
-test("mergePullRequest without resolveConflicts throws on 409 conflict", async () => {
+test("mergePullRequest throws on 409 conflict", async () => {
   const handlers = buildDefaultHandlers();
   const { client } = createMockClient(handlers);
 
@@ -493,7 +477,6 @@ test("mergePullRequest without resolveConflicts throws on 409 conflict", async (
       repo: "quarterly-report",
       pullNumber: 2,
       mergeStyle: "squash",
-      resolveConflicts: false,
     });
     throw new Error("Should have thrown GiteaApiError");
   } catch (error) {
@@ -502,11 +485,10 @@ test("mergePullRequest without resolveConflicts throws on 409 conflict", async (
   }
 });
 
-test("mergePullRequest without resolveConflicts throws on non-transient 405", async () => {
+test("mergePullRequest throws on non-transient 405", async () => {
   const handlers = buildDefaultHandlers();
   const { client } = createMockClient(handlers);
 
-  // Gitea returns 405 for actual merge conflicts (not just transient states)
   client.POST = mock(
     async (path: string, init?: { params?: unknown; body?: unknown }) => {
       if (path === "/repos/{owner}/{repo}/pulls/{index}/merge") {
@@ -534,12 +516,10 @@ test("mergePullRequest without resolveConflicts throws on non-transient 405", as
       repo: "quarterly-report",
       pullNumber: 2,
       mergeStyle: "squash",
-      resolveConflicts: false,
     });
     throw new Error("Should have thrown GiteaApiError");
   } catch (error) {
     expect(error).toBeInstanceOf(GiteaApiError);
-    // Non-transient 405 is treated as a conflict
     expect((error as GiteaApiError).status).toBe(409);
   }
 });
@@ -559,6 +539,7 @@ function buildConflictResolutionHandlers() {
     title: "Test PR",
     head: { ref: "feature/test-branch" },
     state: "open",
+    mergeable: false,
   });
 
   handlers.GET["/repos/{owner}/{repo}/contents/{filepath}"] = (init: {
@@ -604,13 +585,58 @@ function buildConflictResolutionHandlers() {
   return { handlers, getPutCallCount: () => putCallCount };
 }
 
-test("mergePullRequest with resolveConflicts=true resolves non-transient 405 and retries", async () => {
+test("mergeOrResolveConflicts skips initial merge when mergeable=false and succeeds after rebase", async () => {
   const { handlers } = buildConflictResolutionHandlers();
   let mergeCallCount = 0;
 
   const { client, mockGet, mockPut } = createMockClient(handlers);
 
-  // First merge returns 405 (non-transient — actual conflict), second succeeds
+  // Since mergeable=false, the initial attemptMerge is skipped entirely.
+  // After resolveConflictsByRebase, the merge should succeed on the first try.
+  client.POST = mock(
+    async (path: string, init?: { params?: unknown; body?: unknown }) => {
+      if (path === "/repos/{owner}/{repo}/pulls/{index}/merge") {
+        mergeCallCount += 1;
+        return {
+          data: {},
+          error: undefined,
+          response: new Response(null, { status: 200 }),
+        };
+      }
+      const handler = handlers.POST?.[path];
+      if (handler) {
+        const data = await handler(init);
+        return { data, error: undefined, response: new Response(null, { status: 200 }) };
+      }
+      return { data: undefined, error: { message: "not found" }, response: new Response(null, { status: 404 }) };
+    },
+  );
+
+  const { mergeOrResolveConflicts } = await import("./pullRequests");
+
+  await mergeOrResolveConflicts({
+    client,
+    owner: "alice",
+    repo: "quarterly-report",
+    pullNumber: 2,
+    mergeStyle: "squash",
+  });
+
+  // Only one merge attempt — after conflict resolution
+  expect(mergeCallCount).toBe(1);
+  expect(mockGet).toHaveBeenCalled();
+  // PUT is called twice: once to overwrite with main, once to restore uploaded content
+  expect(mockPut).toHaveBeenCalled();
+});
+
+test("mergeOrResolveConflicts handles transient 405 after rebase and eventually succeeds", async () => {
+  const { handlers } = buildConflictResolutionHandlers();
+  let mergeCallCount = 0;
+
+  const { client, mockGet, mockPut } = createMockClient(handlers);
+
+  // After rebase, first merge attempt gets a transient 405 (Gitea still recalculating),
+  // second attempt succeeds.
   client.POST = mock(
     async (path: string, init?: { params?: unknown; body?: unknown }) => {
       if (path === "/repos/{owner}/{repo}/pulls/{index}/merge") {
@@ -618,7 +644,7 @@ test("mergePullRequest with resolveConflicts=true resolves non-transient 405 and
         if (mergeCallCount === 1) {
           return {
             data: undefined,
-            error: { message: "merge is not allowed" },
+            error: { message: "Please try again later" },
             response: new Response(null, { status: 405 }),
           };
         }
@@ -628,56 +654,6 @@ test("mergePullRequest with resolveConflicts=true resolves non-transient 405 and
           response: new Response(null, { status: 200 }),
         };
       }
-      const handler = handlers.POST?.[path];
-      if (handler) {
-        const data = await handler(init);
-        return { data, error: undefined, response: new Response(null, { status: 200 }) };
-      }
-      return { data: undefined, error: { message: "not found" }, response: new Response(null, { status: 404 }) };
-    },
-  );
-
-  const { mergePullRequest } = await import("./pullRequests");
-
-  await mergePullRequest({
-    client,
-    owner: "alice",
-    repo: "quarterly-report",
-    pullNumber: 2,
-    mergeStyle: "squash",
-    resolveConflicts: true,
-  });
-
-  expect(mergeCallCount).toBe(2);
-  expect(mockGet).toHaveBeenCalled();
-  // PUT is called twice: once to overwrite with main, once to restore uploaded content
-  expect(mockPut).toHaveBeenCalled();
-});
-
-test("mergePullRequest with resolveConflicts=true resolves 409 and retries", async () => {
-  const { handlers } = buildConflictResolutionHandlers();
-  let mergeCallCount = 0;
-
-  const { client, mockGet, mockPut } = createMockClient(handlers);
-
-  // Override POST to track merge calls and return 409 on first call, 200 on second
-  client.POST = mock(
-    async (path: string, init?: { params?: unknown; body?: unknown }) => {
-      if (path === "/repos/{owner}/{repo}/pulls/{index}/merge") {
-        mergeCallCount += 1;
-        if (mergeCallCount === 1) {
-          return {
-            data: undefined,
-            error: { message: "Merge conflict" },
-            response: new Response(null, { status: 409 }),
-          };
-        }
-        return {
-          data: {},
-          error: undefined,
-          response: new Response(null, { status: 200 }),
-        };
-      }
 
       const handler = handlers.POST?.[path];
       if (handler) {
@@ -688,16 +664,15 @@ test("mergePullRequest with resolveConflicts=true resolves 409 and retries", asy
     },
   );
 
-  const { mergePullRequest } = await import("./pullRequests");
+  const { mergeOrResolveConflicts } = await import("./pullRequests");
 
-  await mergePullRequest({
+  await mergeOrResolveConflicts({
     client,
     owner: "alice",
     repo: "quarterly-report",
     pullNumber: 2,
     mergeStyle: "squash",
     message: "Merge after approvals",
-    resolveConflicts: true,
   });
 
   expect(mergeCallCount).toBe(2);
@@ -705,7 +680,7 @@ test("mergePullRequest with resolveConflicts=true resolves 409 and retries", asy
   expect(mockPut).toHaveBeenCalled();
 });
 
-test("mergePullRequest throws if 409 persists after conflict resolution", async () => {
+test("mergeOrResolveConflicts throws if 409 persists after conflict resolution", async () => {
   const { handlers } = buildConflictResolutionHandlers();
 
   const { client } = createMockClient(handlers);
@@ -730,17 +705,16 @@ test("mergePullRequest throws if 409 persists after conflict resolution", async 
     },
   );
 
-  const { mergePullRequest } = await import("./pullRequests");
+  const { mergeOrResolveConflicts } = await import("./pullRequests");
 
   try {
-    await mergePullRequest({
+    await mergeOrResolveConflicts({
       client,
       owner: "alice",
       repo: "quarterly-report",
       pullNumber: 2,
       mergeStyle: "squash",
       message: "Merge after approvals",
-      resolveConflicts: true,
     });
     throw new Error("Should have thrown GiteaApiError");
   } catch (error) {

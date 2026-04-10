@@ -11,7 +11,7 @@ import { getStoredToken } from "../../../packages/gitea-client/auth";
 import { GiteaApiError, unwrap } from "../../../packages/gitea-client/client";
 import {
   listPullRequests,
-  mergePullRequest,
+  mergeOrResolveConflicts,
   submitReview,
 } from "../../../packages/gitea-client/pullRequests";
 import {
@@ -434,13 +434,12 @@ export function DocumentDetail({
   async function handleMerge(pullNumber: number) {
     updatePRActionState(pullNumber, { status: "submitting", error: null });
     try {
-      await mergePullRequest({
+      await mergeOrResolveConflicts({
         client: giteaClient,
         owner,
         repo,
         pullNumber,
         mergeStyle: "merge",
-        resolveConflicts: true,
       });
       await createDocTag({
         client: giteaClient,
