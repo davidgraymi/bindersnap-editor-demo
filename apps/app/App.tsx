@@ -69,7 +69,7 @@ function getRoute(pathname: string): AppRoute {
   }
 
   const collaboratorsMatch = normalizedPath.match(
-    /^\/app\/docs\/([^/]+)\/([^/]+)\/collaborators$/,
+    /^\/docs\/([^/]+)\/([^/]+)\/collaborators$/,
   );
   if (collaboratorsMatch) {
     return {
@@ -80,7 +80,7 @@ function getRoute(pathname: string): AppRoute {
     };
   }
 
-  const docMatch = normalizedPath.match(/^\/app\/docs\/([^/]+)\/([^/]+)$/);
+  const docMatch = normalizedPath.match(/^\/docs\/([^/]+)\/([^/]+)$/);
   if (docMatch) {
     return {
       kind: "document",
@@ -106,12 +106,12 @@ function navigateTo(route: AppRoute, replace = false): void {
     case "document":
       path =
         route.tab === "collaborators"
-          ? `/app/docs/${route.owner}/${route.repo}/collaborators`
-          : `/app/docs/${route.owner}/${route.repo}`;
+          ? `/docs/${route.owner}/${route.repo}/collaborators`
+          : `/docs/${route.owner}/${route.repo}`;
       break;
     case "workspace":
     default:
-      path = "/app";
+      path = "/";
       break;
   }
 
