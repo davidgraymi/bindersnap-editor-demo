@@ -517,6 +517,9 @@ export function App() {
     };
   }, []);
 
+  // Session check runs once on mount only. In-app navigation (popstate) does
+  // not change the session, so re-running on every route change would flash
+  // the loading screen on every back/forward press.
   useEffect(() => {
     if (route.kind === "callback") {
       setIsCheckingSession(false);
@@ -524,7 +527,8 @@ export function App() {
     }
 
     void refreshSession();
-  }, [refreshSession, route]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (route.kind === "callback" || isCheckingSession) {
