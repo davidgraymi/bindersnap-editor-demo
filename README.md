@@ -7,28 +7,16 @@ Monorepo with two separate frontend apps and supporting services:
 - `services/api`: auth/BFF API for the product app
 - `services/hocuspocus`: collaboration websocket service
 
-## Scripts
+## Quick Start
+
+### Prerequisites
+
+- [Bun](https://bun.com)
+- [Docker](https://www.docker.com/)
 
 ```bash
-# App targets
-bun run dev:landing
-bun run dev:app
-bun run dev:api
-
-# Build
-bun run build:landing
-bun run build:app
-bun run build:all
-
-# Test
-bun run test:landing
-bun run test:app
-bun run test:integration
-
-# Production-style serve
-bun run serve:landing
-bun run serve:app
-bun run serve:api
+bun install
+bun run up
 ```
 
 ## Environment Variables
