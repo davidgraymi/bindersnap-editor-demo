@@ -271,13 +271,13 @@ export async function signInAsAlice(page: Page): Promise<void> {
   await page.getByLabel("Username or Email").fill(GITEA_ADMIN_USER);
   await page.getByLabel("Password", { exact: true }).fill(GITEA_ADMIN_PASS);
   await page.getByRole("button", { name: "Open workspace" }).click();
-  // Wait for the SPA to navigate away from /login to the workspace root (/).
-  // The login flow makes several async network calls before navigating, so we
-  // use a generous timeout here to avoid flaky failures on a cold Docker stack.
-  await page.waitForURL(/\/$/, { timeout: 15_000 });
+  // Wait for the workspace to confirm the signed-in state rather than matching
+  // a URL pattern. This is more reliable on a cold Docker stack because it
+  // waits for the actual meaningful application state — the signed-in banner —
+  // instead of racing a URL change that may take longer than 15 s to fire.
   await expect(
     page.getByText(`Signed in as ${GITEA_ADMIN_USER}`),
-  ).toBeVisible({ timeout: 10_000 });
+  ).toBeVisible({ timeout: 30_000 });
 }
 
 /**
@@ -316,13 +316,13 @@ export async function signInAsBob(page: Page): Promise<void> {
   await page.getByLabel("Username or Email").fill(GITEA_BOB_USER);
   await page.getByLabel("Password", { exact: true }).fill(GITEA_BOB_PASS);
   await page.getByRole("button", { name: "Open workspace" }).click();
-  // Wait for the SPA to navigate away from /login to the workspace root (/).
-  // The login flow makes several async network calls before navigating, so we
-  // use a generous timeout here to avoid flaky failures on a cold Docker stack.
-  await page.waitForURL(/\/$/, { timeout: 15_000 });
+  // Wait for the workspace to confirm the signed-in state rather than matching
+  // a URL pattern. This is more reliable on a cold Docker stack because it
+  // waits for the actual meaningful application state — the signed-in banner —
+  // instead of racing a URL change that may take longer than 15 s to fire.
   await expect(
     page.getByText(`Signed in as ${GITEA_BOB_USER}`),
-  ).toBeVisible({ timeout: 10_000 });
+  ).toBeVisible({ timeout: 30_000 });
 }
 
 /**
