@@ -11,11 +11,6 @@ const appPort =
 const server = serve({
   port: appPort,
   routes: {
-    "/": appIndex,
-    "/login": appIndex,
-    "/login/*": appIndex,
-    "/auth/callback": appIndex,
-    "/docs/*": appIndex,
     "/*": appIndex,
   },
   development: process.env.NODE_ENV !== "production" && {

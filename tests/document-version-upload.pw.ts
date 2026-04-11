@@ -25,9 +25,11 @@ import {
 } from "../packages/gitea-client/pullRequests";
 import {
   createBobClient,
+  expectedPrefilledDocumentName,
   installMemorySessionStorage,
   makeClient,
   navigateToDocument,
+  openNewDocumentModal,
   pollUntil,
   resolveAndStoreToken,
   signInAsAlice,
@@ -69,12 +71,7 @@ test.describe("UI document version upload flow", () => {
     const fileData = Buffer.from("Version 1 content\n");
 
     await signInAsAlice(page);
-
-    // Open the create document modal
-    await page.getByRole("button", { name: "New Document" }).first().click();
-    await expect(
-      page.getByRole("heading", { name: "Create workspace document" }),
-    ).toBeVisible();
+    await openNewDocumentModal(page);
 
     // Upload file
     await page.locator("#create-document-file").setInputFiles({
@@ -83,9 +80,9 @@ test.describe("UI document version upload flow", () => {
       buffer: fileData,
     });
 
-    // Wait for name to auto-fill
-    await expect(page.locator("#create-document-name")).not.toHaveValue("");
-
+    await expect(page.locator("#create-document-name")).toHaveValue(
+      expectedPrefilledDocumentName(fileName),
+    );
     // Create the document
     await page.getByRole("button", { name: "Create Document" }).click();
 
@@ -93,10 +90,11 @@ test.describe("UI document version upload flow", () => {
     await expect(
       page.getByRole("button", { name: "← Back to workspace" }),
     ).toBeVisible({ timeout: 10_000 });
-
-    // Verify unpublished state
     await expect(
       page.getByRole("heading", { name: "Unpublished" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("No published version exists yet."),
     ).toBeVisible();
     await expect(
       page.getByRole("heading", { name: /1 Open Pull Request/ }),
@@ -179,9 +177,9 @@ test.describe("UI document version upload flow", () => {
     await navigateToDocument(page, cardSearchText);
 
     // Should now show Version 1
-    await expect(
-      page.getByRole("heading", { name: "Version 1" }),
-    ).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("heading", { name: "Version 1" })).toBeVisible({
+      timeout: 30_000,
+    });
   });
 
   test("alice uploads v2 via the UI", async ({ page }) => {
@@ -285,9 +283,9 @@ test.describe("UI document version upload flow", () => {
     await navigateToDocument(page, cardSearchText);
 
     // Should now show Version 2 as current
-    await expect(
-      page.getByRole("heading", { name: "Version 2" }),
-    ).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("heading", { name: "Version 2" })).toBeVisible({
+      timeout: 30_000,
+    });
 
     // Version history should show both versions
     await expect(

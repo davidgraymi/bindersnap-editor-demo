@@ -571,7 +571,7 @@ export async function getRepoBranchProtection(
   );
 
   const exact = rules.find((r) => r.rule_name === branchName);
-  const rule = exact ?? rules[0] ?? null;
+  const rule = exact ?? null;
 
   return rule ? normalizeBranchProtection(rule) : null;
 }

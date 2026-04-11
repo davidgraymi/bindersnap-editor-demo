@@ -8,33 +8,12 @@
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { signInAsBob } from "./helpers";
-
-function buildUniqueDocumentMetadata() {
-  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  return {
-    fileName: `ui-document-creation-${suffix}.pdf`,
-  };
-}
-
-function expectedPrefilledDocumentName(fileName: string): string {
-  return fileName
-    .replace(/\.[^.]+$/, "")
-    .replace(/[_-]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-async function openNewDocumentModal(page: Page): Promise<void> {
-  await expect(
-    page.getByRole("button", { name: "New Document" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "New Document" }).first().click();
-
-  await expect(
-    page.getByRole("heading", { name: "Create workspace document" }),
-  ).toBeVisible();
-}
+import {
+  buildUniqueDocumentMetadata,
+  expectedPrefilledDocumentName,
+  openNewDocumentModal,
+  signInAsBob,
+} from "./helpers";
 
 test.describe("UI document creation flow", () => {
   test.describe.configure({ timeout: 60_000 });

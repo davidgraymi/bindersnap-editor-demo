@@ -440,6 +440,9 @@ async function resolveConflictsByRebase(
   // 6. Merge main into the head branch via the PR update endpoint.
   //    Now that file contents match, the merge is conflict-free.
   //    This endpoint returns 200 with an empty body on success.
+  //    It may also return a non-2xx with "up to date" when the head branch
+  //    is already based on the latest main commit — that is fine and means
+  //    the sync is already complete; we skip this step and continue.
   const { error: updateError, response: updateResponse } = await client.POST(
     "/repos/{owner}/{repo}/pulls/{index}/update",
     {
@@ -448,7 +451,14 @@ async function resolveConflictsByRebase(
   );
 
   if (!updateResponse.ok) {
-    throw toGiteaApiError(updateResponse.status, updateError);
+    const apiError = toGiteaApiError(updateResponse.status, updateError);
+    const isAlreadyUpToDate = apiError.message
+      .toLowerCase()
+      .includes("up to date");
+    if (!isAlreadyUpToDate) {
+      throw apiError;
+    }
+    // Head is already up to date with main — no merge needed, continue.
   }
 
   // 7. Read the file SHA on the now-synced head branch (it changed after

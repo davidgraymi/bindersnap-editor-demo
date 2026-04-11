@@ -336,7 +336,7 @@ export function DocumentDetail({
       }
 
       setTags(docTags);
-      setOpenPRs(pullRequests);
+      setOpenPRs(uploadPRs);
       setBranchProtection(protection);
       setCanonicalFileInfo(fileInfo);
     } catch (err) {
@@ -509,7 +509,9 @@ export function DocumentDetail({
 
   const handleUploadSuccess = (_result: UploadResult) => {
     setShowUploadModal(false);
-    void loadDocumentData();
+    loadDocumentData().catch((err: unknown) => {
+      console.error("Failed to reload document after upload:", err);
+    });
   };
 
   if (isLoading) {

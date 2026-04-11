@@ -275,9 +275,9 @@ export async function signInAsAlice(page: Page): Promise<void> {
   // a URL pattern. This is more reliable on a cold Docker stack because it
   // waits for the actual meaningful application state — the signed-in banner —
   // instead of racing a URL change that may take longer than 15 s to fire.
-  await expect(
-    page.getByText(`Signed in as ${GITEA_ADMIN_USER}`),
-  ).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText(`Signed in as ${GITEA_ADMIN_USER}`)).toBeVisible({
+    timeout: 60_000,
+  });
 }
 
 /**
@@ -320,9 +320,9 @@ export async function signInAsBob(page: Page): Promise<void> {
   // a URL pattern. This is more reliable on a cold Docker stack because it
   // waits for the actual meaningful application state — the signed-in banner —
   // instead of racing a URL change that may take longer than 15 s to fire.
-  await expect(
-    page.getByText(`Signed in as ${GITEA_BOB_USER}`),
-  ).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText(`Signed in as ${GITEA_BOB_USER}`)).toBeVisible({
+    timeout: 60_000,
+  });
 }
 
 /**
@@ -378,12 +378,56 @@ export async function waitForNoPendingReviews(
   const deadline = Date.now() + totalMs;
 
   while (Date.now() < deadline) {
+    // Wait for any in-progress publish action to settle before inspecting state
+    // or navigating away. When the user clicks "Publish", the React component
+    // sets status:"submitting" and the button text changes to "Publishing…".
+    // Navigating away while the merge fetch is still running unmounts the
+    // component, discards the result, and loses any error state. We wait up to
+    // 60 s for the button to revert (merge done or failed) before proceeding.
+    await page
+      .getByRole("button", { name: "Publishing…" })
+      .waitFor({ state: "hidden", timeout: 60_000 })
+      .catch(() => {
+        // If the button was never visible (already done or component already
+        // unmounted), that is fine — just proceed.
+      });
+
+    // Before navigating away, check if the app rendered a merge error alert on
+    // the current page load. The error state lives in React component state and
+    // is reset on every remount, so this check must happen before clicking the
+    // back button.
+    //
+    // handleMerge in DocumentDetail.tsx calls readPermissionError(err, fallback)
+    // which returns the raw Gitea API error message (e.g. "Does not have enough
+    // approvals", "Merge conflict persisted after conflict resolution.") — NOT
+    // the fallback string "Failed to publish document.". We therefore match any
+    // [role="alert"] that is rendered inside the PR list section rather than
+    // anchoring to a specific substring.
+    const mergeErrorLocator = page
+      .locator(".vault-pr-item")
+      .locator('[role="alert"]');
+    const hasMergeError = await mergeErrorLocator
+      .isVisible({ timeout: 500 })
+      .catch(() => false);
+    if (hasMergeError) {
+      const alertText = await mergeErrorLocator
+        .textContent()
+        .catch(() => "unknown error");
+      throw new Error(
+        `Publish failed with a merge error — aborting poll. Alert text: "${alertText}"`,
+      );
+    }
+
     // Navigate back to the workspace then back into the document so the app
     // fetches a completely fresh PR list from Gitea. This uses the SPA's
     // internal pushState routing and never triggers a full page reload, which
     // keeps the session alive.
-    const backButton = page.getByRole("button", { name: "← Back to workspace" });
-    const backVisible = await backButton.isVisible({ timeout: 3_000 }).catch(() => false);
+    const backButton = page.getByRole("button", {
+      name: "← Back to workspace",
+    });
+    const backVisible = await backButton
+      .isVisible({ timeout: 3_000 })
+      .catch(() => false);
     if (backVisible) {
       await backButton.click();
       // Wait for the workspace card list to be visible.
@@ -392,7 +436,19 @@ export async function waitForNoPendingReviews(
 
     await navigateToDocument(page, cardSearchText);
 
-    // Check immediately after navigating so we don't waste time on a fixed delay.
+    // navigateToDocument returns as soon as the "← Back to workspace" button
+    // appears, which also happens during the isLoading skeleton state.  Wait
+    // for the loading heading to disappear so that loadDocumentData() has
+    // finished and the component has settled before we check for the target
+    // heading.  A 30 s timeout gives Gitea plenty of time to respond.
+    await page
+      .getByRole("heading", { name: "Loading document details..." })
+      .waitFor({ state: "hidden", timeout: 30_000 })
+      .catch(() => {
+        // If the loading heading was never visible or already gone, continue.
+      });
+
+    // Check immediately after the component has settled.
     const isVisible = await page
       .getByRole("heading", { name: "No pending reviews" })
       .isVisible({ timeout: 3_000 })
@@ -424,4 +480,30 @@ export async function openCollaboratorsTab(page: Page): Promise<void> {
   await expect(page.locator("#collaborator-search")).toBeVisible({
     timeout: 5_000,
   });
+}
+
+export function buildUniqueDocumentMetadata() {
+  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return {
+    fileName: `ui-document-creation-${suffix}.pdf`,
+  };
+}
+
+export function expectedPrefilledDocumentName(fileName: string): string {
+  return fileName
+    .replace(/\.[^.]+$/, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export async function openNewDocumentModal(page: Page): Promise<void> {
+  await expect(
+    page.getByRole("button", { name: "New Document" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "New Document" }).first().click();
+
+  await expect(
+    page.getByRole("heading", { name: "Create workspace document" }),
+  ).toBeVisible();
 }

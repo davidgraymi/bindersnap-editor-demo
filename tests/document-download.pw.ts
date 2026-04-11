@@ -26,6 +26,7 @@ import {
 } from "../packages/gitea-client/pullRequests";
 import {
   createBobClient,
+  GITEA_URL,
   installMemorySessionStorage,
   makeClient,
   navigateToDocument,
@@ -49,7 +50,7 @@ test.beforeAll(async () => {
 // ---------------------------------------------------------------------------
 
 test.describe("Document download", () => {
-  test.describe.configure({ mode: "serial", timeout: 180_000 });
+  test.describe.configure({ mode: "serial", timeout: 120_000 });
 
   const timestamp = Date.now();
   const randomString = Math.random().toString(36).slice(2, 8);
@@ -114,14 +115,36 @@ test.describe("Document download", () => {
   test("bob approves v1 and alice publishes", async ({ page }) => {
     expect(repo).toBeTruthy();
 
-    // Add bob as a collaborator so he can review (repo is private by default)
+    // Add bob as a collaborator so he can review (repo is private by default).
+    // Validate the response — a silent failure here would cause the subsequent
+    // submitReview to fail or the merge to be blocked without an obvious cause.
     const client = makeClient();
-    await client.PUT("/repos/{owner}/{repo}/collaborators/{collaborator}", {
-      params: {
-        path: { owner, repo, collaborator: "bob" },
+    const { response: collabResponse } = await client.PUT(
+      "/repos/{owner}/{repo}/collaborators/{collaborator}",
+      {
+        params: {
+          path: { owner, repo, collaborator: "bob" },
+        },
+        body: { permission: "write" },
       },
-      body: { permission: "write" },
-    });
+    );
+    if (!collabResponse.ok) {
+      const body = await collabResponse.text().catch(() => "(unreadable)");
+      throw new Error(
+        `Failed to add bob as collaborator (HTTP ${collabResponse.status}): ${body}`,
+      );
+    }
+
+    // Confirm bob is now listed as a collaborator before proceeding.
+    // Gitea's collaborator index may not be immediately consistent after the PUT.
+    await pollUntil(async () => {
+      const { response: checkRes } = await client.GET(
+        "/repos/{owner}/{repo}/collaborators/{collaborator}",
+        { params: { path: { owner, repo, collaborator: "bob" } } },
+      );
+      // Gitea returns 204 when the user is a collaborator, 404 otherwise.
+      return checkRes.status === 204;
+    }, "bob to appear in collaborator list");
 
     // Find the single open PR and have bob approve it via API
     const prs = await listPullRequests({
@@ -134,7 +157,7 @@ test.describe("Document download", () => {
     const prNumber = prs[0]!.number!;
 
     const bobClient = await createBobClient();
-    await submitReview({
+    let pr = await submitReview({
       client: bobClient,
       owner,
       repo,
@@ -142,6 +165,7 @@ test.describe("Document download", () => {
       event: "APPROVE",
       body: "Approved v1 by download integration test.",
     });
+    expect(pr.state).toBe("APPROVED");
 
     // Wait for Gitea to index the approval before proceeding in the UI
     await pollUntil(async () => {
@@ -177,9 +201,9 @@ test.describe("Document download", () => {
     await navigateToDocument(page, cardSearchText);
 
     // The page should now report Version 1 as the current published version
-    await expect(
-      page.getByRole("heading", { name: "Version 1" }),
-    ).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("heading", { name: "Version 1" })).toBeVisible({
+      timeout: 30_000,
+    });
   });
 
   test("download current version after v1 publish", async ({ page }) => {
@@ -189,9 +213,9 @@ test.describe("Document download", () => {
     await navigateToDocument(page, cardSearchText);
 
     // Wait for the v1 published state to render before attempting download
-    await expect(
-      page.getByRole("heading", { name: "Version 1" }),
-    ).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("heading", { name: "Version 1" })).toBeVisible({
+      timeout: 30_000,
+    });
 
     // Intercept the download triggered by clicking "Download Current Version"
     const [download] = await Promise.all([
@@ -200,9 +224,7 @@ test.describe("Document download", () => {
     ]);
 
     // The suggested filename must be {repo-name}.txt
-    expect(download.suggestedFilename()).toMatch(
-      new RegExp(`^${repo}\\.txt$`),
-    );
+    expect(download.suggestedFilename()).toMatch(new RegExp(`^${repo}\\.txt$`));
   });
 
   test("alice uploads v2 via UI", async ({ page }) => {
@@ -303,9 +325,9 @@ test.describe("Document download", () => {
     await navigateToDocument(page, cardSearchText);
 
     // Version 2 should now be the current published version
-    await expect(
-      page.getByRole("heading", { name: "Version 2" }),
-    ).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("heading", { name: "Version 2" })).toBeVisible({
+      timeout: 30_000,
+    });
 
     // Version history must list both published versions
     await expect(
@@ -323,9 +345,9 @@ test.describe("Document download", () => {
     await navigateToDocument(page, cardSearchText);
 
     // Wait for the v2 published state to render
-    await expect(
-      page.getByRole("heading", { name: "Version 2" }),
-    ).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("heading", { name: "Version 2" })).toBeVisible({
+      timeout: 30_000,
+    });
 
     // Intercept the download triggered by "Download Current Version"
     const [download] = await Promise.all([
@@ -334,9 +356,7 @@ test.describe("Document download", () => {
     ]);
 
     // The filename must still be {repo-name}.txt for v2
-    expect(download.suggestedFilename()).toMatch(
-      new RegExp(`^${repo}\\.txt$`),
-    );
+    expect(download.suggestedFilename()).toMatch(new RegExp(`^${repo}\\.txt$`));
   });
 
   test("download v1 from version history", async ({ page }) => {
@@ -357,8 +377,6 @@ test.describe("Document download", () => {
     ]);
 
     // The v1 history download filename must also match {repo-name}.txt
-    expect(download.suggestedFilename()).toMatch(
-      new RegExp(`^${repo}\\.txt$`),
-    );
+    expect(download.suggestedFilename()).toMatch(new RegExp(`^${repo}\\.txt$`));
   });
 });

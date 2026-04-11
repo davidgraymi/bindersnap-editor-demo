@@ -23,10 +23,12 @@
 import { expect, test } from "@playwright/test";
 
 import {
+  expectedPrefilledDocumentName,
   GITEA_BOB_USER,
   installMemorySessionStorage,
   navigateToDocument,
   openCollaboratorsTab,
+  openNewDocumentModal,
   resolveAndStoreToken,
   signInAsAlice,
   signInAsBob,
@@ -61,12 +63,7 @@ test.describe("Merge conflict resolution on publish", () => {
     const fileData = Buffer.from("Version 1 content\n");
 
     await signInAsAlice(page);
-
-    // Create the document
-    await page.getByRole("button", { name: "New Document" }).first().click();
-    await expect(
-      page.getByRole("heading", { name: "Create workspace document" }),
-    ).toBeVisible();
+    await openNewDocumentModal(page);
 
     await page.locator("#create-document-file").setInputFiles({
       name: fileName,
@@ -74,12 +71,25 @@ test.describe("Merge conflict resolution on publish", () => {
       buffer: fileData,
     });
 
-    await expect(page.locator("#create-document-name")).not.toHaveValue("");
+    await expect(page.locator("#create-document-name")).toHaveValue(
+      expectedPrefilledDocumentName(fileName),
+    );
+
     await page.getByRole("button", { name: "Create Document" }).click();
 
     await expect(
       page.getByRole("button", { name: "← Back to workspace" }),
     ).toBeVisible({ timeout: 10_000 });
+    await expect(
+      page.getByRole("heading", { name: "Unpublished" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("No published version exists yet."),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: /1 Open Pull Request/ }),
+    ).toBeVisible();
+    await expect(page.getByText(/Upload v1:/)).toBeVisible();
 
     // Capture repo info
     const repoPathText =
