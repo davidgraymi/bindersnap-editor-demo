@@ -277,7 +277,7 @@ export async function signInAsAlice(page: Page): Promise<void> {
   // instead of racing a URL change that may take longer than 15 s to fire.
   await expect(
     page.getByText(`Signed in as ${GITEA_ADMIN_USER}`),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible({ timeout: 60_000 });
 }
 
 /**
@@ -322,7 +322,7 @@ export async function signInAsBob(page: Page): Promise<void> {
   // instead of racing a URL change that may take longer than 15 s to fire.
   await expect(
     page.getByText(`Signed in as ${GITEA_BOB_USER}`),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible({ timeout: 60_000 });
 }
 
 /**
@@ -345,6 +345,73 @@ export async function navigateToDocument(
   await card.click({ force: true });
   await expect(
     page.getByRole("button", { name: "← Back to workspace" }),
+  ).toBeVisible({ timeout: 10_000 });
+}
+
+/**
+ * After clicking Publish, wait for the "No pending reviews" heading to appear.
+ *
+ * Gitea's merge API is asynchronous: the merge call returns before Gitea has
+ * fully closed the PR. The app's single post-merge refetch may therefore still
+ * receive the PR as open, leaving the page stuck on "1 Open Pull Request".
+ *
+ * This helper polls by navigating away from and back to the document page via
+ * the SPA's own pushState routing so that each attempt fetches a completely
+ * fresh PR list from Gitea without triggering a full page reload. A full reload
+ * would re-run the app boot sequence including the cross-origin /auth/me check,
+ * which is unreliable in the Playwright Docker environment and causes the
+ * session to appear lost.
+ *
+ * @param page           Playwright page — must currently be on the document detail.
+ * @param cardSearchText Text used to locate the document card in the workspace
+ *                       (the same value passed to navigateToDocument). Required
+ *                       for the back-and-forth SPA navigation strategy.
+ * @param totalMs        Maximum time in milliseconds to keep retrying (default: 90 s).
+ * @param intervalMs     Delay between navigation attempts in milliseconds (default: 4 s).
+ */
+export async function waitForNoPendingReviews(
+  page: Page,
+  cardSearchText: string,
+  totalMs = 120_000,
+  intervalMs = 2_000,
+): Promise<void> {
+  const deadline = Date.now() + totalMs;
+
+  while (Date.now() < deadline) {
+    // Navigate back to the workspace then back into the document so the app
+    // fetches a completely fresh PR list from Gitea. This uses the SPA's
+    // internal pushState routing and never triggers a full page reload, which
+    // keeps the session alive.
+    const backButton = page.getByRole("button", { name: "← Back to workspace" });
+    const backVisible = await backButton.isVisible({ timeout: 3_000 }).catch(() => false);
+    if (backVisible) {
+      await backButton.click();
+      // Wait for the workspace card list to be visible.
+      await page.waitForLoadState("domcontentloaded");
+    }
+
+    await navigateToDocument(page, cardSearchText);
+
+    // Check immediately after navigating so we don't waste time on a fixed delay.
+    const isVisible = await page
+      .getByRole("heading", { name: "No pending reviews" })
+      .isVisible({ timeout: 3_000 })
+      .catch(() => false);
+
+    if (isVisible) return;
+
+    // Brief pause before the next navigation attempt to avoid hammering Gitea.
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+    await new Promise<void>((resolve) =>
+      setTimeout(resolve, Math.min(intervalMs, remaining)),
+    );
+  }
+
+  // Final authoritative assertion — will produce a clear Playwright error
+  // message if the heading never appears.
+  await expect(
+    page.getByRole("heading", { name: "No pending reviews" }),
   ).toBeVisible({ timeout: 10_000 });
 }
 

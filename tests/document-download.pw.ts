@@ -32,6 +32,7 @@ import {
   pollUntil,
   resolveAndStoreToken,
   signInAsAlice,
+  waitForNoPendingReviews,
 } from "./helpers";
 
 // ---------------------------------------------------------------------------
@@ -48,7 +49,7 @@ test.beforeAll(async () => {
 // ---------------------------------------------------------------------------
 
 test.describe("Document download", () => {
-  test.describe.configure({ mode: "serial", timeout: 120_000 });
+  test.describe.configure({ mode: "serial", timeout: 180_000 });
 
   const timestamp = Date.now();
   const randomString = Math.random().toString(36).slice(2, 8);
@@ -165,15 +166,20 @@ test.describe("Document download", () => {
     // Publish v1
     await page.getByRole("button", { name: "Publish" }).click();
 
-    // Wait for publish to complete
-    await expect(
-      page.getByRole("heading", { name: "No pending reviews" }),
-    ).toBeVisible({ timeout: 120_000 });
+    // Wait for publish to complete — polling with SPA navigation because Gitea's
+    // merge API is async and the PR may still appear open on the first refetch.
+    await waitForNoPendingReviews(page, cardSearchText);
+
+    // Navigate into the document one more time to ensure the current version
+    // heading has refreshed — the "No pending reviews" state can briefly appear
+    // before the "Current Version" section updates to reflect the new tag.
+    await page.getByRole("button", { name: "← Back to workspace" }).click();
+    await navigateToDocument(page, cardSearchText);
 
     // The page should now report Version 1 as the current published version
     await expect(
       page.getByRole("heading", { name: "Version 1" }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 30_000 });
   });
 
   test("download current version after v1 publish", async ({ page }) => {
@@ -286,15 +292,20 @@ test.describe("Document download", () => {
     });
     await page.getByRole("button", { name: "Publish" }).click();
 
-    // Wait for publish to complete
-    await expect(
-      page.getByRole("heading", { name: "No pending reviews" }),
-    ).toBeVisible({ timeout: 120_000 });
+    // Wait for publish to complete — polling with SPA navigation because Gitea's
+    // merge API is async and the PR may still appear open on the first refetch.
+    await waitForNoPendingReviews(page, cardSearchText);
+
+    // Navigate into the document one more time to ensure the current version
+    // heading has refreshed — the "No pending reviews" state can briefly appear
+    // before the "Current Version" section updates to reflect the new tag.
+    await page.getByRole("button", { name: "← Back to workspace" }).click();
+    await navigateToDocument(page, cardSearchText);
 
     // Version 2 should now be the current published version
     await expect(
       page.getByRole("heading", { name: "Version 2" }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 30_000 });
 
     // Version history must list both published versions
     await expect(

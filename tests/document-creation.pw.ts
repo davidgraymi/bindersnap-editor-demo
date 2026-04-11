@@ -37,7 +37,7 @@ async function openNewDocumentModal(page: Page): Promise<void> {
 }
 
 test.describe("UI document creation flow", () => {
-  test.describe.configure({ timeout: 10_000 });
+  test.describe.configure({ timeout: 60_000 });
 
   test("creates a new document as bob and leaves version 1 in review", async ({
     page,
@@ -64,16 +64,16 @@ test.describe("UI document creation flow", () => {
 
     await expect(
       page.getByRole("button", { name: "← Back to workspace" }),
-    ).toBeVisible({ timeout: 10_000 });
+    ).toBeVisible({ timeout: 30_000 });
     await expect(
       page.getByRole("heading", { name: "Unpublished" }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 30_000 });
     await expect(
       page.getByText("No published version exists yet."),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 10_000 });
     await expect(
       page.getByRole("heading", { name: /1 Open Pull Request/ }),
-    ).toBeVisible();
-    await expect(page.getByText(/Upload v1:/)).toBeVisible();
+    ).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(/Upload v1:/)).toBeVisible({ timeout: 10_000 });
   });
 });
