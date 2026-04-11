@@ -188,20 +188,10 @@ test.describe("Gitea dev stack health", () => {
 // ---------------------------------------------------------------------------
 
 test.describe("app shell routes", () => {
-  test("landing route serves a page titled 'Finally Kill the Email Approval Chain'", async ({
+  test("/ route either shows the workspace heading or redirects to the login page", async ({
     page,
   }) => {
-    await page.goto("/landing");
-    await expect(page).toHaveTitle(/Finally Kill the Email Approval Chain/);
-    await expect(
-      page.getByRole("link", { name: "Join the Waitlist" }),
-    ).toBeVisible();
-  });
-
-  test("/app route either shows the workspace heading or redirects to the login page", async ({
-    page,
-  }) => {
-    await page.goto("/app");
+    await page.goto("/");
 
     const appHeading = page.getByRole("heading", {
       name: "alice/quarterly-report",

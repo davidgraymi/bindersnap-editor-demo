@@ -104,7 +104,7 @@ async function signUpAndReturnToLogin(
     password: credentials.password,
   });
 
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(page.context()._options.baseURL + '/');
   await expect(
     page.getByText(`Signed in as ${credentials.username}`),
   ).toBeVisible();
@@ -145,7 +145,7 @@ async function logInWithIdentifier(
   const loginRequest = await loginRequestPromise;
   expect(loginRequest.postDataJSON()).toMatchObject(expectedPayload);
 
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(page.context()._options.baseURL + '/');
   await expect(
     page.getByText(`Signed in as ${expectedUsername}`),
   ).toBeVisible();
@@ -237,7 +237,7 @@ test.describe("signup flow", () => {
     await fillSignupForm(page, firstAccount);
     await submitSignupForm(page);
 
-    await expect(page).toHaveURL(/\/app$/);
+    await expect(page).toHaveURL(page.context()._options.baseURL + '/');
     await page.getByRole("button", { name: "Sign out" }).click();
     await expect(page).toHaveURL(/\/login$/);
 
