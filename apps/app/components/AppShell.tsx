@@ -1,6 +1,5 @@
-import { useState } from "react";
-
 import type { GiteaClient } from "../../../packages/gitea-client/client";
+import type { AppRoute } from "../App";
 import { DocumentDetail } from "./DocumentDetail";
 import { FileVaultWorkspace } from "./FileVaultWorkspace";
 
@@ -10,31 +9,18 @@ interface AppShellProps {
     fullName?: string;
   } | null;
   giteaClient: GiteaClient;
+  route: AppRoute;
+  onNavigate: (route: AppRoute, replace?: boolean) => void;
   onSignOut: () => void | Promise<void>;
 }
 
-type AppView = "workspace" | "document";
-
-interface DocumentSelection {
-  owner: string;
-  repo: string;
-}
-
-export function AppShell({ user, giteaClient, onSignOut }: AppShellProps) {
-  const [view, setView] = useState<AppView>("workspace");
-  const [selectedDocument, setSelectedDocument] =
-    useState<DocumentSelection | null>(null);
-
-  const handleSelectDocument = (owner: string, repo: string) => {
-    setSelectedDocument({ owner, repo });
-    setView("document");
-  };
-
-  const handleBackToWorkspace = () => {
-    setView("workspace");
-    setSelectedDocument(null);
-  };
-
+export function AppShell({
+  user,
+  giteaClient,
+  route,
+  onNavigate,
+  onSignOut,
+}: AppShellProps) {
   return (
     <div className="app-shell">
       <header className="app-topbar">
@@ -81,21 +67,27 @@ export function AppShell({ user, giteaClient, onSignOut }: AppShellProps) {
       </header>
 
       <main className="app-main">
-        {view === "workspace" ? (
+        {route.kind === "document" ? (
+          <DocumentDetail
+            giteaClient={giteaClient}
+            owner={route.owner}
+            repo={route.repo}
+            uploaderSlug={user?.username ?? "unknown"}
+            activeView={route.tab}
+            onTabChange={(tab) =>
+              onNavigate({ kind: "document", owner: route.owner, repo: route.repo, tab })
+            }
+            onBack={() => onNavigate({ kind: "workspace" })}
+          />
+        ) : (
           <FileVaultWorkspace
             giteaClient={giteaClient}
             currentUsername={user?.username ?? ""}
-            onSelectDocument={handleSelectDocument}
+            onSelectDocument={(owner, repo) =>
+              onNavigate({ kind: "document", owner, repo, tab: "overview" })
+            }
           />
-        ) : selectedDocument ? (
-          <DocumentDetail
-            giteaClient={giteaClient}
-            owner={selectedDocument.owner}
-            repo={selectedDocument.repo}
-            uploaderSlug={user?.username ?? "unknown"}
-            onBack={handleBackToWorkspace}
-          />
-        ) : null}
+        )}
       </main>
     </div>
   );

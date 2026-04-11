@@ -32,7 +32,12 @@ const API_BASE_URL = (
   (isLocalHost ? devDefaultApiBaseUrl : "")
 ).replace(/\/$/, "");
 
-type AppRoute = "app" | "login" | "callback";
+export type AppRoute =
+  | { kind: "login" }
+  | { kind: "callback" }
+  | { kind: "workspace" }
+  | { kind: "document"; owner: string; repo: string; tab: "overview" | "collaborators" };
+
 type AuthView = "loading" | "callback" | "login" | "app";
 type AuthMode = "signin" | "signup";
 
@@ -56,17 +61,60 @@ function getRoute(pathname: string): AppRoute {
     pathname !== "/" ? pathname.replace(/\/+$/, "") : pathname;
 
   if (normalizedPath === "/auth/callback") {
-    return "callback";
+    return { kind: "callback" };
   }
 
   if (normalizedPath === "/login") {
-    return "login";
+    return { kind: "login" };
   }
 
-  return "app";
+  const collaboratorsMatch = normalizedPath.match(
+    /^\/app\/docs\/([^/]+)\/([^/]+)\/collaborators$/,
+  );
+  if (collaboratorsMatch) {
+    return {
+      kind: "document",
+      owner: collaboratorsMatch[1]!,
+      repo: collaboratorsMatch[2]!,
+      tab: "collaborators",
+    };
+  }
+
+  const docMatch = normalizedPath.match(/^\/app\/docs\/([^/]+)\/([^/]+)$/);
+  if (docMatch) {
+    return {
+      kind: "document",
+      owner: docMatch[1]!,
+      repo: docMatch[2]!,
+      tab: "overview",
+    };
+  }
+
+  return { kind: "workspace" };
 }
 
-function navigateTo(path: "/app" | "/login", replace = false): void {
+function navigateTo(route: AppRoute, replace = false): void {
+  let path: string;
+
+  switch (route.kind) {
+    case "login":
+      path = "/login";
+      break;
+    case "callback":
+      path = "/auth/callback";
+      break;
+    case "document":
+      path =
+        route.tab === "collaborators"
+          ? `/app/docs/${route.owner}/${route.repo}/collaborators`
+          : `/app/docs/${route.owner}/${route.repo}`;
+      break;
+    case "workspace":
+    default:
+      path = "/app";
+      break;
+  }
+
   const method = replace ? "replaceState" : "pushState";
   window.history[method]({}, "", path);
   window.dispatchEvent(new PopStateEvent("popstate"));
@@ -432,7 +480,7 @@ export function App() {
   );
   const [user, setUser] = useState<SessionUser | null>(null);
   const [isCheckingSession, setIsCheckingSession] = useState(
-    () => route !== "callback",
+    () => route.kind !== "callback",
   );
   const [callbackError, setCallbackError] = useState<string | null>(null);
 
@@ -470,7 +518,7 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (route === "callback") {
+    if (route.kind === "callback") {
       setIsCheckingSession(false);
       return;
     }
@@ -479,33 +527,33 @@ export function App() {
   }, [refreshSession, route]);
 
   useEffect(() => {
-    if (route === "callback" || isCheckingSession) {
+    if (route.kind === "callback" || isCheckingSession) {
       return;
     }
 
-    if (user && route !== "app") {
-      navigateTo("/app", true);
+    if (user && route.kind !== "workspace" && route.kind !== "document") {
+      navigateTo({ kind: "workspace" }, true);
       return;
     }
 
-    if (!user && route === "app") {
-      navigateTo("/login", true);
+    if (!user && (route.kind === "workspace" || route.kind === "document")) {
+      navigateTo({ kind: "login" }, true);
     }
   }, [isCheckingSession, route, user]);
 
   useEffect(() => {
-    if (route !== "callback") {
+    if (route.kind !== "callback") {
       return;
     }
 
     setCallbackError(
       "Single sign-on callback is not enabled in this build. Sign in with your username or email and password.",
     );
-    navigateTo("/login", true);
+    navigateTo({ kind: "login" }, true);
   }, [route]);
 
   const view: AuthView = useMemo(() => {
-    if (route === "callback") {
+    if (route.kind === "callback") {
       return "callback";
     }
 
@@ -582,7 +630,7 @@ export function App() {
               "Sign-in completed, but the session could not be verified.",
             );
           }
-          navigateTo("/app", true);
+          navigateTo({ kind: "workspace" }, true);
         }}
         onSignup={async (username, email, password) => {
           clearToken();
@@ -609,7 +657,7 @@ export function App() {
               "Account created, but the session could not be verified.",
             );
           }
-          navigateTo("/app", true);
+          navigateTo({ kind: "workspace" }, true);
         }}
       />
     );
@@ -641,7 +689,7 @@ export function App() {
               await logoutSession();
               setUser(null);
               setCallbackError(null);
-              navigateTo("/login", true);
+              navigateTo({ kind: "login" }, true);
             }}
           >
             Sign out
@@ -656,12 +704,14 @@ export function App() {
       <AppShell
         user={user}
         giteaClient={giteaClient}
+        route={route}
+        onNavigate={navigateTo}
         onSignOut={async () => {
           await logoutSession();
           clearToken();
           setUser(null);
           setCallbackError(null);
-          navigateTo("/login", true);
+          navigateTo({ kind: "login" }, true);
         }}
       />
     </div>
