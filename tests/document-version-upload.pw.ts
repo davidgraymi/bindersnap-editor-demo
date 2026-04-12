@@ -87,28 +87,23 @@ test.describe("UI document version upload flow", () => {
     // Create the document
     await page.getByRole("button", { name: "Create Document" }).click();
 
-    // Wait for navigation to document detail
+    // Wait for navigation to document detail — new UI uses breadcrumb navigation
     await expect(
-      page.getByRole("button", { name: "← Back to workspace" }),
+      page.locator("nav[aria-label='Breadcrumb'] button", { hasText: "Documents" }),
     ).toBeVisible({ timeout: 10_000 });
 
     await expect(
-      page.getByRole("heading", { name: "Unpublished" }),
+      page.getByRole("heading", { name: /No approved version yet/i }),
     ).toBeVisible();
     await expect(
-      page.getByText("No published version exists yet."),
+      page.getByRole("heading", { name: /1 Pending Approval/i }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: /1 Open Pull Request/ }),
-    ).toBeVisible();
-    await expect(page.getByText(/Upload v1:/)).toBeVisible();
 
-    // Capture repo info from the page
-    const repoPathText =
-      (await page.locator(".vault-repo-path").textContent()) ?? "";
-    const parts = repoPathText.trim().split("/");
-    owner = parts[0] ?? "";
-    repo = parts[1] ?? "";
+    // Capture repo info from the URL (e.g. /docs/alice/my-document)
+    const url = page.url();
+    const urlParts = url.replace(/.*\/docs\//, "").split("/");
+    owner = urlParts[0] ?? "";
+    repo = urlParts[1] ?? "";
     expect(owner).toBeTruthy();
     expect(repo).toBeTruthy();
   });
@@ -162,16 +157,16 @@ test.describe("UI document version upload flow", () => {
 
     // The Publish button should be visible (PR is approved and alice can merge)
     await expect(
-      page.getByRole("button", { name: "Publish", exact: true }),
+      page.getByRole("button", { name: "Publish as Official Version", exact: true }),
     ).toBeVisible({
       timeout: 30_000,
     });
 
     // Click Publish
-    await page.getByRole("button", { name: "Publish", exact: true }).click();
+    await page.getByRole("button", { name: "Publish as Official Version", exact: true }).click();
 
     await waitForNoPendingReviews(page, cardSearchText);
-    await page.getByRole("button", { name: "← Back to workspace" }).click();
+    await page.locator("nav[aria-label='Breadcrumb'] button", { hasText: "Documents" }).click();
     await navigateToDocument(page, cardSearchText);
 
     // Should now show Version 1
@@ -191,8 +186,8 @@ test.describe("UI document version upload flow", () => {
       timeout: 30_000,
     });
 
-    // Click Upload New Version
-    await page.getByRole("button", { name: "Upload New Version" }).click();
+    // Click Submit New Version (button label changed in new UI)
+    await page.getByRole("button", { name: "Submit New Version" }).click();
 
     // Wait for modal
     await expect(
@@ -216,7 +211,7 @@ test.describe("UI document version upload flow", () => {
     // Wait for the upload to complete — the modal shows PR creation success
     // then auto-closes. Wait for the PR to appear in the document detail.
     await expect(
-      page.getByRole("heading", { name: /1 Open Pull Request/ }),
+      page.getByRole("heading", { name: /1 Pending Approval/i }),
     ).toBeVisible({ timeout: 60_000 });
 
     // Current version should still be v1
@@ -266,14 +261,14 @@ test.describe("UI document version upload flow", () => {
 
     // Publish
     await expect(
-      page.getByRole("button", { name: "Publish", exact: true }),
+      page.getByRole("button", { name: "Publish as Official Version", exact: true }),
     ).toBeVisible({
       timeout: 30_000,
     });
-    await page.getByRole("button", { name: "Publish", exact: true }).click();
+    await page.getByRole("button", { name: "Publish as Official Version", exact: true }).click();
 
     await waitForNoPendingReviews(page, cardSearchText);
-    await page.getByRole("button", { name: "← Back to workspace" }).click();
+    await page.locator("nav[aria-label='Breadcrumb'] button", { hasText: "Documents" }).click();
     await navigateToDocument(page, cardSearchText);
 
     // Should now show Version 2 as current

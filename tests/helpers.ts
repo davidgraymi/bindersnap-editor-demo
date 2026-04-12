@@ -248,7 +248,7 @@ export async function signInAsAlice(page: Page): Promise<void> {
 
   // Fast check — already the right user?
   const isAlice = await page
-    .getByText(`Signed in as ${GITEA_ADMIN_USER}`)
+    .locator(".app-user-badge", { hasText: GITEA_ADMIN_USER })
     .isVisible({ timeout: 3_000 })
     .catch(() => false);
   if (isAlice) return;
@@ -271,9 +271,9 @@ export async function signInAsAlice(page: Page): Promise<void> {
   await page.getByLabel("Username or Email").fill(GITEA_ADMIN_USER);
   await page.getByLabel("Password", { exact: true }).fill(GITEA_ADMIN_PASS);
   await page.getByRole("button", { name: "Open workspace" }).click();
-  await expect(page.getByText(`Signed in as ${GITEA_ADMIN_USER}`)).toBeVisible({
-    timeout: 60_000,
-  });
+  await expect(
+    page.locator(".app-user-badge", { hasText: GITEA_ADMIN_USER }),
+  ).toBeVisible({ timeout: 60_000 });
 }
 
 /**
@@ -289,7 +289,7 @@ export async function signInAsBob(page: Page): Promise<void> {
 
   // Fast check — already the right user?
   const isBob = await page
-    .getByText(`Signed in as ${GITEA_BOB_USER}`)
+    .locator(".app-user-badge", { hasText: GITEA_BOB_USER })
     .isVisible({ timeout: 3_000 })
     .catch(() => false);
   if (isBob) return;
@@ -312,9 +312,9 @@ export async function signInAsBob(page: Page): Promise<void> {
   await page.getByLabel("Username or Email").fill(GITEA_BOB_USER);
   await page.getByLabel("Password", { exact: true }).fill(GITEA_BOB_PASS);
   await page.getByRole("button", { name: "Open workspace" }).click();
-  await expect(page.getByText(`Signed in as ${GITEA_BOB_USER}`)).toBeVisible({
-    timeout: 60_000,
-  });
+  await expect(
+    page.locator(".app-user-badge", { hasText: GITEA_BOB_USER }),
+  ).toBeVisible({ timeout: 60_000 });
 }
 
 /**
@@ -333,8 +333,9 @@ export async function navigateToDocument(
   const card = page.locator(".vault-doc-card", { hasText: docName });
   await expect(card).toBeVisible({ timeout: 10_000 });
   await card.click({ force: true });
+  // New UI uses breadcrumb navigation instead of a back button.
   await expect(
-    page.getByRole("button", { name: "← Back to workspace" }),
+    page.locator("nav[aria-label='Breadcrumb'] button", { hasText: "Documents" }),
   ).toBeVisible({ timeout: 10_000 });
 }
 
@@ -346,13 +347,20 @@ export async function waitForNoPendingReviews(
 ): Promise<void> {
   const deadline = Date.now() + totalMs;
   let lastAlertText: string | null = null;
+  // New UI uses "No pending approvals" heading (was "No pending reviews")
   const noPendingHeading = page.getByRole("heading", {
-    name: "No pending reviews",
+    name: "No pending approvals",
   });
+  // New UI breadcrumb "Documents" button replaces the old "← Back to workspace" button
+  const breadcrumbBack = page.locator(
+    "nav[aria-label='Breadcrumb'] button",
+    { hasText: "Documents" },
+  );
 
   while (Date.now() < deadline) {
+    // New UI: publish button is "Publish as Official Version"
     const publishButton = page.getByRole("button", {
-      name: "Publish",
+      name: "Publish as Official Version",
       exact: true,
     });
     const canPublish = await publishButton
@@ -375,14 +383,11 @@ export async function waitForNoPendingReviews(
       .catch(() => false);
     if (isVisibleOnCurrentPage) return;
 
-    const backButton = page.getByRole("button", {
-      name: "← Back to workspace",
-    });
-    const backVisible = await backButton
+    const backVisible = await breadcrumbBack
       .isVisible({ timeout: 3_000 })
       .catch(() => false);
     if (backVisible) {
-      await backButton.click();
+      await breadcrumbBack.click();
       await page.waitForLoadState("domcontentloaded");
     }
 
@@ -426,11 +431,11 @@ export async function waitForNoPendingReviews(
 }
 
 /**
- * Click the "Collaborators" tab in the document detail view and wait for the
- * collaborator search input to become visible.
+ * Click the "Team" tab (formerly "Collaborators") in the document detail view
+ * and wait for the collaborator search input to become visible.
  */
 export async function openCollaboratorsTab(page: Page): Promise<void> {
-  await page.getByRole("tab", { name: "Collaborators" }).click();
+  await page.getByRole("tab", { name: "Team" }).click();
   await expect(page.locator("#collaborator-search")).toBeVisible({
     timeout: 5_000,
   });

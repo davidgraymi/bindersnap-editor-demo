@@ -86,28 +86,24 @@ test.describe("Document download", () => {
     // Submit the create form
     await page.getByRole("button", { name: "Create Document" }).click();
 
-    // Wait for navigation to the document detail page
+    // Wait for navigation to document detail — new UI uses breadcrumb navigation
     await expect(
-      page.getByRole("button", { name: "← Back to workspace" }),
+      page.locator("nav[aria-label='Breadcrumb'] button", { hasText: "Documents" }),
     ).toBeVisible({ timeout: 10_000 });
 
-    // Verify the document is in the unpublished state with 1 open PR
+    // Verify the document is in the unpublished state with 1 pending approval
     await expect(
-      page.getByRole("heading", { name: "Unpublished" }),
+      page.getByRole("heading", { name: /No approved version yet/i }),
     ).toBeVisible();
     await expect(
-      page.getByText("No published version exists yet."),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: /1 Open Pull Request/ }),
+      page.getByRole("heading", { name: /1 Pending Approval/i }),
     ).toBeVisible();
 
-    // Capture the repo owner and name from the page for subsequent API calls
-    const repoPathText =
-      (await page.locator(".vault-repo-path").textContent()) ?? "";
-    const parts = repoPathText.trim().split("/");
-    owner = parts[0] ?? "";
-    repo = parts[1] ?? "";
+    // Capture the repo owner and name from the URL for subsequent API calls
+    const url = page.url();
+    const urlParts = url.replace(/.*\/docs\//, "").split("/");
+    owner = urlParts[0] ?? "";
+    repo = urlParts[1] ?? "";
     expect(owner).toBeTruthy();
     expect(repo).toBeTruthy();
   });
@@ -161,16 +157,16 @@ test.describe("Document download", () => {
 
     // The Publish button must appear now that the PR is approved
     await expect(
-      page.getByRole("button", { name: "Publish", exact: true }),
+      page.getByRole("button", { name: "Publish as Official Version", exact: true }),
     ).toBeVisible({
       timeout: 30_000,
     });
 
     // Publish v1
-    await page.getByRole("button", { name: "Publish", exact: true }).click();
+    await page.getByRole("button", { name: "Publish as Official Version", exact: true }).click();
 
     await waitForNoPendingReviews(page, cardSearchText);
-    await page.getByRole("button", { name: "← Back to workspace" }).click();
+    await page.locator("nav[aria-label='Breadcrumb'] button", { hasText: "Documents" }).click();
     await navigateToDocument(page, cardSearchText);
 
     // The page should now report Version 1 as the current published version
@@ -211,8 +207,8 @@ test.describe("Document download", () => {
       timeout: 30_000,
     });
 
-    // Open the Upload New Version modal
-    await page.getByRole("button", { name: "Upload New Version" }).click();
+    // Open the Submit New Version modal (button label changed in new UI)
+    await page.getByRole("button", { name: "Submit New Version" }).click();
     await expect(
       page.getByRole("heading", { name: "Upload Document" }),
     ).toBeVisible();
@@ -233,7 +229,7 @@ test.describe("Document download", () => {
 
     // Wait for the PR to appear on the document detail page
     await expect(
-      page.getByRole("heading", { name: /1 Open Pull Request/ }),
+      page.getByRole("heading", { name: /1 Pending Approval/i }),
     ).toBeVisible({ timeout: 60_000 });
 
     // The current published version remains v1 until the PR is merged
@@ -283,14 +279,14 @@ test.describe("Document download", () => {
 
     // Publish v2
     await expect(
-      page.getByRole("button", { name: "Publish", exact: true }),
+      page.getByRole("button", { name: "Publish as Official Version", exact: true }),
     ).toBeVisible({
       timeout: 30_000,
     });
-    await page.getByRole("button", { name: "Publish", exact: true }).click();
+    await page.getByRole("button", { name: "Publish as Official Version", exact: true }).click();
 
     await waitForNoPendingReviews(page, cardSearchText);
-    await page.getByRole("button", { name: "← Back to workspace" }).click();
+    await page.locator("nav[aria-label='Breadcrumb'] button", { hasText: "Documents" }).click();
     await navigateToDocument(page, cardSearchText);
 
     // Version 2 should now be the current published version
