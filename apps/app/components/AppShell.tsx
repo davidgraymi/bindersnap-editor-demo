@@ -55,6 +55,25 @@ export function AppShell({
           <div className="app-logo-text">Bindersnap</div>
         </div>
 
+        {route.kind === "document" ? (
+          <nav className="app-topbar-breadcrumb" aria-label="Breadcrumb">
+            <button
+              className="app-breadcrumb-back"
+              type="button"
+              onClick={() => onNavigate({ kind: "workspace" })}
+            >
+              Workspace
+            </button>
+            <span className="app-breadcrumb-sep" aria-hidden="true">›</span>
+            <span className="app-breadcrumb-current">
+              {route.repo
+                .split("-")
+                .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+                .join(" ")}
+            </span>
+          </nav>
+        ) : null}
+
         <div className="app-topbar-actions">
           {user ? (
             <span className="app-user-badge">

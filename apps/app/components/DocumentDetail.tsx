@@ -324,14 +324,6 @@ export function DocumentDetail({
   if (isLoading) {
     return (
       <div className="vault-detail">
-        <button
-          className="bs-btn bs-btn-secondary"
-          type="button"
-          onClick={onBack}
-        >
-          ← Back to workspace
-        </button>
-
         <div className="bs-card vault-empty-state">
           <div className="bs-eyebrow">Loading</div>
           <h2>Loading document details...</h2>
@@ -344,14 +336,6 @@ export function DocumentDetail({
   if (error) {
     return (
       <div className="vault-detail">
-        <button
-          className="bs-btn bs-btn-secondary"
-          type="button"
-          onClick={onBack}
-        >
-          ← Back to workspace
-        </button>
-
         <div className="bs-card vault-error-state">
           <div className="bs-eyebrow">Error</div>
           <h2>Unable to load document</h2>
@@ -370,14 +354,6 @@ export function DocumentDetail({
 
   return (
     <div className="vault-detail">
-      <button
-        className="bs-btn bs-btn-secondary"
-        type="button"
-        onClick={onBack}
-      >
-        ← Back to workspace
-      </button>
-
       <section className="vault-section">
         <div className="bs-eyebrow">Document Detail</div>
         <h1>{formatDocumentName(repo)}</h1>
