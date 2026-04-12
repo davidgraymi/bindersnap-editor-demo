@@ -23,7 +23,7 @@ The browser only receives a Bindersnap session cookie. Gitea access tokens stay 
 - `BINDERSNAP_USER_EMAIL_DOMAIN`: Placeholder signup email domain. Default `users.bindersnap.local`.
 - `BINDERSNAP_SESSION_COOKIE_NAME`: Session cookie name. Default `bindersnap_session`.
 - `BINDERSNAP_SESSION_TTL_MS`: Session lifetime in milliseconds. Default `604800000` (7 days).
-- `BINDERSNAP_GITEA_TOKEN_SCOPES`: Comma-separated Gitea token scopes. Default `read:repository`.
+- `BINDERSNAP_GITEA_TOKEN_SCOPES`: Optional comma-separated extra Gitea token scopes. The API always adds `write:user`, `write:repository`, and `write:issue` so session-minted tokens can create repos, open PRs, and manage collaborators.
 - `BINDERSNAP_REQUIRE_HTTPS`: Enforce HTTPS for non-local requests. Default `true` in production, `false` otherwise.
 - `BINDERSNAP_AUTH_RATE_LIMIT_ENABLED`: Enable auth endpoint rate limiting. Default `true`.
 - `BINDERSNAP_AUTH_RATE_LIMIT_WINDOW_MS`: Rate-limit window for `/auth/login` and `/auth/signup`. Default `600000` (10 minutes).

@@ -5,7 +5,9 @@ import { GiteaApiError, type GiteaClient } from "./client";
 
 type PullRequest = components["schemas"]["PullRequest"];
 // Use partial types for test fixtures — generated types require many fields
-type TestPullReview = Partial<Omit<components["schemas"]["PullReview"], "user">> & {
+type TestPullReview = Partial<
+  Omit<components["schemas"]["PullReview"], "user">
+> & {
   user?: Partial<components["schemas"]["User"]>;
 };
 
@@ -346,11 +348,23 @@ test("getPullRequestForBranch evaluates review state across paginated review res
     user: { login: "alice" },
   }));
   const page2Reviews = [
-    { id: 222, state: "REQUEST_CHANGES", body: "Found one more issue.", user: { login: "bob" } },
+    {
+      id: 222,
+      state: "REQUEST_CHANGES",
+      body: "Found one more issue.",
+      user: { login: "bob" },
+    },
   ];
 
   const handlers = buildDefaultHandlers(
-    [{ number: 23, title: "Long review history PR", head: { ref: "feature/paginated-reviews", label: "" }, state: "open" }],
+    [
+      {
+        number: 23,
+        title: "Long review history PR",
+        head: { ref: "feature/paginated-reviews", label: "" },
+        state: "open",
+      },
+    ],
     {},
   );
 
@@ -378,8 +392,24 @@ test("getPullRequestForBranch evaluates review state across paginated review res
 
 test("toApprovalStateFromReview recognises Gitea APPROVE state (no trailing D)", async () => {
   const handlers = buildDefaultHandlers(
-    [{ number: 5, title: "Gitea-style approval", head: { ref: "feature/gitea-approve", label: "" }, state: "open" }],
-    { 5: [{ id: 55, state: "APPROVE", body: "Approved", user: { login: "carol" } }] },
+    [
+      {
+        number: 5,
+        title: "Gitea-style approval",
+        head: { ref: "feature/gitea-approve", label: "" },
+        state: "open",
+      },
+    ],
+    {
+      5: [
+        {
+          id: 55,
+          state: "APPROVE",
+          body: "Approved",
+          user: { login: "carol" },
+        },
+      ],
+    },
   );
   const { client } = createMockClient(handlers);
   const { getPullRequestForBranch } = await import("./pullRequests");
@@ -455,16 +485,26 @@ test("mergePullRequest throws on 409 conflict", async () => {
       if (path === "/repos/{owner}/{repo}/pulls/{index}/merge") {
         return {
           data: undefined,
-          error: { message: "Merge conflict: the pull request cannot be merged." },
+          error: {
+            message: "Merge conflict: the pull request cannot be merged.",
+          },
           response: new Response(null, { status: 409 }),
         };
       }
       const handler = handlers.POST?.[path];
       if (handler) {
         const data = await handler(init);
-        return { data, error: undefined, response: new Response(null, { status: 200 }) };
+        return {
+          data,
+          error: undefined,
+          response: new Response(null, { status: 200 }),
+        };
       }
-      return { data: undefined, error: { message: "not found" }, response: new Response(null, { status: 404 }) };
+      return {
+        data: undefined,
+        error: { message: "not found" },
+        response: new Response(null, { status: 404 }),
+      };
     },
   );
 
@@ -501,9 +541,17 @@ test("mergePullRequest throws on non-transient 405", async () => {
       const handler = handlers.POST?.[path];
       if (handler) {
         const data = await handler(init);
-        return { data, error: undefined, response: new Response(null, { status: 200 }) };
+        return {
+          data,
+          error: undefined,
+          response: new Response(null, { status: 200 }),
+        };
       }
-      return { data: undefined, error: { message: "not found" }, response: new Response(null, { status: 404 }) };
+      return {
+        data: undefined,
+        error: { message: "not found" },
+        response: new Response(null, { status: 404 }),
+      };
     },
   );
 
@@ -542,18 +590,16 @@ function buildConflictResolutionHandlers() {
     mergeable: false,
   });
 
+  handlers.GET["/repos/{owner}/{repo}/contents"] = () => [
+    { name: "document.pdf", type: "file", path: "document.pdf" },
+    { name: ".gitkeep", type: "file", path: ".gitkeep" },
+  ];
+
   handlers.GET["/repos/{owner}/{repo}/contents/{filepath}"] = (init: {
     params?: { path?: { filepath?: string }; query?: { ref?: string } };
   }) => {
     const filepath = init?.params?.path?.filepath ?? "";
     const ref = init?.params?.query?.ref;
-
-    if (filepath === "") {
-      return [
-        { name: "document.pdf", type: "file", path: "document.pdf" },
-        { name: ".gitkeep", type: "file", path: ".gitkeep" },
-      ];
-    }
 
     if (filepath === "document.pdf") {
       if (ref === "feature/test-branch") {
@@ -606,9 +652,17 @@ test("mergeOrResolveConflicts skips initial merge when mergeable=false and succe
       const handler = handlers.POST?.[path];
       if (handler) {
         const data = await handler(init);
-        return { data, error: undefined, response: new Response(null, { status: 200 }) };
+        return {
+          data,
+          error: undefined,
+          response: new Response(null, { status: 200 }),
+        };
       }
-      return { data: undefined, error: { message: "not found" }, response: new Response(null, { status: 404 }) };
+      return {
+        data: undefined,
+        error: { message: "not found" },
+        response: new Response(null, { status: 404 }),
+      };
     },
   );
 
@@ -658,9 +712,17 @@ test("mergeOrResolveConflicts handles transient 405 after rebase and eventually 
       const handler = handlers.POST?.[path];
       if (handler) {
         const data = await handler(init);
-        return { data, error: undefined, response: new Response(null, { status: 200 }) };
+        return {
+          data,
+          error: undefined,
+          response: new Response(null, { status: 200 }),
+        };
       }
-      return { data: undefined, error: { message: "not found" }, response: new Response(null, { status: 404 }) };
+      return {
+        data: undefined,
+        error: { message: "not found" },
+        response: new Response(null, { status: 404 }),
+      };
     },
   );
 
@@ -676,6 +738,64 @@ test("mergeOrResolveConflicts handles transient 405 after rebase and eventually 
   });
 
   expect(mergeCallCount).toBe(2);
+  expect(mockGet).toHaveBeenCalled();
+  expect(mockPut).toHaveBeenCalled();
+});
+
+test("mergeOrResolveConflicts tolerates an already up-to-date branch during rebase", async () => {
+  const { handlers } = buildConflictResolutionHandlers();
+  let mergeCallCount = 0;
+
+  const { client, mockGet, mockPut } = createMockClient(handlers);
+
+  client.POST = mock(
+    async (path: string, init?: { params?: unknown; body?: unknown }) => {
+      if (path === "/repos/{owner}/{repo}/pulls/{index}/merge") {
+        mergeCallCount += 1;
+        return {
+          data: {},
+          error: undefined,
+          response: new Response(null, { status: 200 }),
+        };
+      }
+
+      if (path === "/repos/{owner}/{repo}/pulls/{index}/update") {
+        return {
+          data: undefined,
+          error: { message: "HeadBranch of PR 2 is up to date" },
+          response: new Response(null, { status: 422 }),
+        };
+      }
+
+      const handler = handlers.POST?.[path];
+      if (handler) {
+        const data = await handler(init);
+        return {
+          data,
+          error: undefined,
+          response: new Response(null, { status: 200 }),
+        };
+      }
+
+      return {
+        data: undefined,
+        error: { message: "not found" },
+        response: new Response(null, { status: 404 }),
+      };
+    },
+  );
+
+  const { mergeOrResolveConflicts } = await import("./pullRequests");
+
+  await mergeOrResolveConflicts({
+    client,
+    owner: "alice",
+    repo: "quarterly-report",
+    pullNumber: 2,
+    mergeStyle: "squash",
+  });
+
+  expect(mergeCallCount).toBe(1);
   expect(mockGet).toHaveBeenCalled();
   expect(mockPut).toHaveBeenCalled();
 });
@@ -699,9 +819,17 @@ test("mergeOrResolveConflicts throws if 409 persists after conflict resolution",
       const handler = handlers.POST?.[path];
       if (handler) {
         const data = await handler(init);
-        return { data, error: undefined, response: new Response(null, { status: 200 }) };
+        return {
+          data,
+          error: undefined,
+          response: new Response(null, { status: 200 }),
+        };
       }
-      return { data: undefined, error: { message: "not found" }, response: new Response(null, { status: 404 }) };
+      return {
+        data: undefined,
+        error: { message: "not found" },
+        response: new Response(null, { status: 404 }),
+      };
     },
   );
 

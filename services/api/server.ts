@@ -1,5 +1,45 @@
 import { randomUUID } from "crypto";
 
+import {
+  createGiteaClient,
+  GiteaApiError,
+  unwrap,
+  type GiteaClient,
+} from "../../packages/gitea-client/client";
+import {
+  addRepoCollaborator,
+  bootstrapEmptyMainBranch,
+  createDocTag,
+  createMainBranchProtection,
+  createPrivateCurrentUserRepo,
+  getCurrentUserRepoPermission,
+  getLatestDocTag,
+  getRepoBranchProtection,
+  getRepoCollaboratorPermission,
+  listDocTags,
+  listRepoCollaborators,
+  listWorkspaceRepos,
+  repoExists,
+  searchUsers,
+  removeRepoCollaborator,
+  type RepoCollaboratorPermissionSummary,
+  type WorkspaceRepo,
+} from "../../packages/gitea-client/repos";
+import {
+  buildUploadBranchName,
+  buildUploadCommitMessage,
+  commitBinaryFile,
+  createUploadBranch,
+  validateUploadFile,
+} from "../../packages/gitea-client/uploads";
+import {
+  createPullRequest,
+  listPullRequests,
+  mergeOrResolveConflicts,
+  submitReview,
+  type PullRequestWithApprovalState,
+} from "../../packages/gitea-client/pullRequests";
+
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
   if (value === undefined) {
     return fallback;
@@ -39,12 +79,26 @@ const emailDomain =
   process.env.BINDERSNAP_USER_EMAIL_DOMAIN ?? "users.bindersnap.local";
 const sessionCookieName =
   process.env.BINDERSNAP_SESSION_COOKIE_NAME ?? "bindersnap_session";
-const tokenScopes = (
-  process.env.BINDERSNAP_GITEA_TOKEN_SCOPES ?? "read:repository"
-)
-  .split(",")
-  .map((scope) => scope.trim())
-  .filter((scope) => scope !== "");
+const REQUIRED_GITEA_TOKEN_SCOPES = [
+  "write:user",
+  "write:repository",
+  "write:issue",
+] as const;
+
+function resolveGiteaTokenScopes(scopesRaw?: string): string[] {
+  const configuredScopes = (scopesRaw ?? "")
+    .split(",")
+    .map((scope) => scope.trim())
+    .filter((scope) => scope !== "");
+
+  return Array.from(
+    new Set<string>([...configuredScopes, ...REQUIRED_GITEA_TOKEN_SCOPES]),
+  );
+}
+
+const tokenScopes = resolveGiteaTokenScopes(
+  process.env.BINDERSNAP_GITEA_TOKEN_SCOPES,
+);
 const sessionTtlMs = Number.parseInt(
   process.env.BINDERSNAP_SESSION_TTL_MS ?? `${7 * 24 * 60 * 60 * 1000}`,
   10,
@@ -75,12 +129,6 @@ const configuredAllowedOrigins = (
   .map((origin) => origin.trim())
   .filter((origin) => origin !== "");
 
-const SEEDED_DOCUMENTS = [
-  { title: "Draft", path: "documents/draft.json" },
-  { title: "In Review", path: "documents/in-review.json" },
-  { title: "Changes Requested", path: "documents/changes-requested.json" },
-] as const;
-
 interface SessionRecord {
   id: string;
   username: string;
@@ -88,13 +136,6 @@ interface SessionRecord {
   giteaTokenName: string;
   createdAt: number;
   expiresAt: number;
-}
-
-interface CommitSummary {
-  sha: string;
-  message: string;
-  author: string;
-  timestamp: string;
 }
 
 const sessions = new Map<string, SessionRecord>();
@@ -126,11 +167,7 @@ function normalizeOrigin(origin: string | null | undefined): string | null {
   }
 }
 
-function json(
-  status: number,
-  body: Record<string, unknown>,
-  headers?: HeadersInit,
-): Response {
+function json(status: number, body: unknown, headers?: HeadersInit): Response {
   const responseHeaders = new Headers({
     "Content-Type": "application/json",
     "Cache-Control": "no-store",
@@ -236,8 +273,8 @@ function corsHeaders(req: Request): Headers {
   if (origin && isAllowedOrigin(origin)) {
     headers.set("Access-Control-Allow-Origin", origin);
     headers.set("Access-Control-Allow-Credentials", "true");
-    headers.set("Access-Control-Allow-Headers", "Content-Type");
-    headers.set("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    headers.set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
     headers.set("Vary", "Origin");
   }
 
@@ -466,6 +503,403 @@ async function readGiteaErrorMessage(
   return fallback;
 }
 
+function createSessionGiteaClient(session: SessionRecord): GiteaClient {
+  return createGiteaClient(giteaUrl, session.giteaToken);
+}
+
+function requireSession(
+  req: Request,
+  baseHeaders: Headers,
+): { session: SessionRecord; client: GiteaClient } | Response {
+  const session = getSessionFromRequest(req);
+  if (!session) {
+    return json(401, { error: "Unauthorized." }, baseHeaders);
+  }
+
+  return { session, client: createSessionGiteaClient(session) };
+}
+
+function parsePositiveIntInput(
+  value: string | number | null | undefined,
+  fallback: number,
+): number {
+  const parsed =
+    typeof value === "number" ? value : Number.parseInt(value ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function parseNonNegativeIntInput(
+  value: string | number | null | undefined,
+  fallback: number,
+): number {
+  const parsed =
+    typeof value === "number" ? value : Number.parseInt(value ?? "", 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function parseOptionalString(
+  value: FormDataEntryValue | null | undefined,
+): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function parseOptionalFile(
+  value: FormDataEntryValue | null | undefined,
+): File | null {
+  return value instanceof File ? value : null;
+}
+
+function toRepoCollaboratorRole(
+  permission: string,
+): "read" | "write" | "admin" | "owner" | "unknown" {
+  switch (permission) {
+    case "read":
+    case "write":
+    case "admin":
+    case "owner":
+      return permission;
+    default:
+      return "unknown";
+  }
+}
+
+function buildDownloadFileName(repo: string, storedFileName: string): string {
+  const lastDotIndex = storedFileName.lastIndexOf(".");
+  const extension =
+    lastDotIndex > 0 && lastDotIndex < storedFileName.length - 1
+      ? storedFileName.slice(lastDotIndex + 1)
+      : "";
+
+  return extension ? `${repo}.${extension}` : repo;
+}
+
+function getFileExtension(fileName: string): string {
+  const dotIndex = fileName.lastIndexOf(".");
+  if (dotIndex <= 0 || dotIndex === fileName.length - 1) {
+    return "";
+  }
+
+  return fileName.slice(dotIndex + 1).toLowerCase();
+}
+
+function buildCanonicalDocumentFileName(extension: string): string {
+  const normalized = extension.replace(/^\.+/, "").trim().toLowerCase();
+  return normalized === "" ? "document" : `document.${normalized}`;
+}
+
+function normalizeWorkspaceRepoSummary(repo: {
+  id?: number;
+  name?: string;
+  full_name?: string;
+  description?: string;
+  updated_at?: string;
+  owner?: { login?: string };
+}): WorkspaceRepo {
+  return {
+    id: repo.id ?? 0,
+    name: repo.name ?? "",
+    full_name: repo.full_name ?? "",
+    description: repo.description ?? "",
+    updated_at: repo.updated_at ?? "",
+    owner: {
+      login: repo.owner?.login ?? "",
+    },
+  };
+}
+
+async function computeFileHash(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function readFileAsBase64(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  return Buffer.from(buffer).toString("base64");
+}
+
+type RepoContentsEntry = {
+  name?: unknown;
+  type?: unknown;
+};
+
+type RepoContentsExtResponse = {
+  dir_contents?: RepoContentsEntry[];
+  file_contents?: RepoContentsEntry;
+};
+
+interface CanonicalFileInfo {
+  storedFileName: string;
+  downloadFileName: string;
+}
+
+function inferStoredDocumentFileName(
+  entries: RepoContentsEntry[],
+  repo: string,
+): string | null {
+  const files = entries.filter(
+    (entry): entry is RepoContentsEntry & { name: string } =>
+      entry.type === "file" && typeof entry.name === "string",
+  );
+
+  const documentFile = files.find(
+    (entry) => entry.name === "document" || entry.name.startsWith("document."),
+  );
+  if (documentFile) {
+    return documentFile.name;
+  }
+
+  const legacyFile = files.find(
+    (entry) => entry.name === repo || entry.name.startsWith(`${repo}.`),
+  );
+  if (legacyFile) {
+    return legacyFile.name;
+  }
+
+  if (files.length === 1) {
+    return files[0]?.name ?? null;
+  }
+
+  return null;
+}
+
+async function resolveCanonicalFileInfo(
+  client: GiteaClient,
+  owner: string,
+  repo: string,
+  ref = "main",
+): Promise<CanonicalFileInfo | null> {
+  const result = await unwrap(
+    client.GET("/repos/{owner}/{repo}/contents-ext/{filepath}", {
+      params: {
+        path: { owner, repo, filepath: "." },
+        query: { ref },
+      },
+    }),
+  );
+
+  const response = result as RepoContentsExtResponse;
+  const entries = [
+    ...(response.dir_contents ?? []),
+    ...(response.file_contents ? [response.file_contents] : []),
+  ];
+  const storedFileName = inferStoredDocumentFileName(entries, repo);
+
+  if (!storedFileName) {
+    return null;
+  }
+
+  return {
+    storedFileName,
+    downloadFileName: buildDownloadFileName(repo, storedFileName),
+  };
+}
+
+async function resolveCurrentUserPermission(
+  client: GiteaClient,
+  owner: string,
+  repo: string,
+  currentUsername: string,
+): Promise<RepoCollaboratorPermissionSummary | null> {
+  if (!currentUsername) {
+    return null;
+  }
+
+  if (currentUsername === owner) {
+    return {
+      permission: "owner",
+      access: "owner",
+      permissionLabel: "Owner",
+      roleName: "owner",
+      user: {
+        id: 0,
+        login: currentUsername,
+        full_name: "",
+        email: "",
+        avatar_url: "",
+      },
+    };
+  }
+
+  try {
+    return await getCurrentUserRepoPermission({
+      client,
+      owner,
+      repo,
+      username: currentUsername,
+    });
+  } catch (err) {
+    if (err instanceof GiteaApiError && err.status === 404) {
+      const repository = (await unwrap(
+        client.GET("/repos/{owner}/{repo}", {
+          params: { path: { owner, repo } },
+        }),
+      )) as {
+        permissions?: { admin?: boolean; push?: boolean; pull?: boolean };
+      };
+
+      if (repository.permissions?.admin) {
+        return {
+          permission: "admin",
+          access: "admin",
+          permissionLabel: "Admin",
+          roleName: "admin",
+          user: {
+            id: 0,
+            login: currentUsername,
+            full_name: "",
+            email: "",
+            avatar_url: "",
+          },
+        };
+      }
+
+      if (repository.permissions?.push) {
+        return {
+          permission: "write",
+          access: "write",
+          permissionLabel: "Write",
+          roleName: "write",
+          user: {
+            id: 0,
+            login: currentUsername,
+            full_name: "",
+            email: "",
+            avatar_url: "",
+          },
+        };
+      }
+
+      if (repository.permissions?.pull) {
+        return {
+          permission: "read",
+          access: "read",
+          permissionLabel: "Read",
+          roleName: "read",
+          user: {
+            id: 0,
+            login: currentUsername,
+            full_name: "",
+            email: "",
+            avatar_url: "",
+          },
+        };
+      }
+
+      return null;
+    }
+
+    throw err;
+  }
+}
+
+async function resolveLatestUploadRef(
+  client: GiteaClient,
+  owner: string,
+  repo: string,
+): Promise<string | null> {
+  const pullRequests = await listPullRequests({
+    client,
+    owner,
+    repo,
+    state: "open",
+  });
+
+  const uploadPullRequests = pullRequests
+    .filter((pullRequest) =>
+      (pullRequest.head?.ref ?? "").startsWith("upload/"),
+    )
+    .sort((left, right) => (right.number ?? 0) - (left.number ?? 0));
+
+  return uploadPullRequests[0]?.head?.ref ?? null;
+}
+
+function readInputString(
+  payload: Record<string, unknown> | null,
+  form: FormData | null,
+  key: string,
+): string {
+  if (payload && typeof payload[key] === "string") {
+    return payload[key].trim();
+  }
+
+  return parseOptionalString(form?.get(key) ?? null);
+}
+
+function readInputNumber(
+  payload: Record<string, unknown> | null,
+  form: FormData | null,
+  key: string,
+): string {
+  if (payload) {
+    const value = payload[key];
+    if (typeof value === "string" || typeof value === "number") {
+      return String(value).trim();
+    }
+  }
+
+  return parseOptionalString(form?.get(key) ?? null);
+}
+
+function decodePathParam(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+async function readJsonBody<T extends Record<string, unknown>>(
+  req: Request,
+): Promise<T | null> {
+  return await readJson<T>(req);
+}
+
+async function readMultipartBody(req: Request): Promise<FormData | null> {
+  try {
+    return await req.formData();
+  } catch {
+    return null;
+  }
+}
+
+function downloadHeaders(baseHeaders: Headers, response: Response): Headers {
+  const headers = mergeHeaders(baseHeaders);
+  for (const key of [
+    "content-type",
+    "content-length",
+    "content-disposition",
+    "cache-control",
+    "etag",
+    "last-modified",
+  ]) {
+    const value = response.headers.get(key);
+    if (value) {
+      headers.set(key, value);
+    }
+  }
+  return headers;
+}
+
+function responseFromError(
+  err: unknown,
+  baseHeaders: Headers,
+  fallback: string,
+): Response {
+  if (err instanceof GiteaApiError) {
+    return json(err.status, { error: err.message || fallback }, baseHeaders);
+  }
+
+  return json(
+    500,
+    {
+      error: err instanceof Error && err.message ? err.message : fallback,
+    },
+    baseHeaders,
+  );
+}
+
 async function verifyUserCredentials(
   username: string,
   password: string,
@@ -642,8 +1076,6 @@ async function createAuthenticatedSession(
     return json(502, { error: "Unable to sign in." }, baseHeaders);
   }
 
-  await revokeOtherUserSessions(username);
-
   const session = createSession(username, token, tokenName);
   const headers = mergeHeaders(baseHeaders, {
     "Set-Cookie": serializeCookie(req, session.id, session.expiresAt),
@@ -655,6 +1087,7 @@ async function createAuthenticatedSession(
       user: {
         username: session.username,
       },
+      token: session.giteaToken,
     },
     headers,
   );
@@ -815,60 +1248,6 @@ async function revokeAndDeleteSession(session: SessionRecord): Promise<void> {
   await revokeUserToken(session).catch(() => undefined);
 }
 
-async function revokeOtherUserSessions(username: string): Promise<void> {
-  const staleSessions = [...sessions.values()].filter(
-    (session) => session.username === username,
-  );
-  if (staleSessions.length === 0) {
-    return;
-  }
-
-  await Promise.allSettled(
-    staleSessions.map((session) => revokeAndDeleteSession(session)),
-  );
-}
-
-async function listLatestCommit(
-  token: string,
-  filePath: string,
-): Promise<CommitSummary | null> {
-  const response = await giteaFetch(
-    `/api/v1/repos/alice/quarterly-report/commits?path=${encodeURIComponent(filePath)}&limit=1`,
-    {
-      method: "GET",
-      headers: {
-        Authorization: buildTokenAuthHeader(token),
-        Accept: "application/json",
-      },
-    },
-  );
-
-  if (!response.ok) {
-    return null;
-  }
-
-  const commits = (await response.json()) as Array<{
-    sha?: string;
-    commit?: { message?: string; author?: { name?: string; date?: string } };
-    author?: { full_name?: string; login?: string };
-    created?: string;
-  }>;
-
-  const commit = commits[0];
-  if (!commit) return null;
-
-  return {
-    sha: commit.sha ?? "",
-    message: commit.commit?.message ?? "",
-    author:
-      commit.commit?.author?.name ??
-      commit.author?.full_name ??
-      commit.author?.login ??
-      "Unknown",
-    timestamp: commit.commit?.author?.date ?? commit.created ?? "",
-  };
-}
-
 async function handleSignup(
   req: Request,
   baseHeaders: Headers,
@@ -1021,6 +1400,7 @@ async function handleAuthMe(
       user: {
         username: session.username,
       },
+      token: session.giteaToken,
     },
     baseHeaders,
   );
@@ -1030,26 +1410,828 @@ async function handleDocuments(
   req: Request,
   baseHeaders: Headers,
 ): Promise<Response> {
-  const session = getSessionFromRequest(req);
-  if (!session) {
-    return json(401, { error: "Unauthorized." }, baseHeaders);
+  const auth = requireSession(req, baseHeaders);
+  if (auth instanceof Response) {
+    return auth;
   }
 
-  const documents = await Promise.all(
-    SEEDED_DOCUMENTS.map(async (document) => ({
-      ...document,
-      latestCommit: await listLatestCommit(session.giteaToken, document.path),
-    })),
+  const { client } = auth;
+
+  try {
+    const repos = await listWorkspaceRepos(client);
+    const documents = await Promise.all(
+      repos.map(async (repo) => {
+        try {
+          const [latestTag, pullRequests] = await Promise.all([
+            getLatestDocTag(client, repo.owner.login, repo.name),
+            listPullRequests({
+              client,
+              owner: repo.owner.login,
+              repo: repo.name,
+              state: "open",
+            }),
+          ]);
+
+          const pendingPRs = pullRequests
+            .filter((pullRequest) =>
+              (pullRequest.head?.ref ?? "").startsWith("upload/"),
+            )
+            .sort((left, right) => (right.number ?? 0) - (left.number ?? 0));
+
+          return {
+            repo: normalizeWorkspaceRepoSummary(repo),
+            latestTag,
+            pendingPRs,
+            error: null,
+          };
+        } catch (err) {
+          return {
+            repo: normalizeWorkspaceRepoSummary(repo),
+            latestTag: null,
+            pendingPRs: [] as PullRequestWithApprovalState[],
+            error:
+              err instanceof Error
+                ? err.message
+                : "Unable to load document details.",
+          };
+        }
+      }),
+    );
+
+    return json(200, { documents }, baseHeaders);
+  } catch (err) {
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to load workspace documents.",
+    );
+  }
+}
+
+async function handleCreateDocument(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = requireSession(req, baseHeaders);
+  if (auth instanceof Response) {
+    return auth;
+  }
+
+  const { session, client } = auth;
+  const form = await readMultipartBody(req);
+  if (!form) {
+    return json(
+      400,
+      { error: "Multipart form data is required." },
+      baseHeaders,
+    );
+  }
+
+  const file = parseOptionalFile(form.get("file"));
+  const repoName = parseOptionalString(form.get("repoName"));
+  const description = parseOptionalString(form.get("description")) || undefined;
+  const requiredApprovals = parseNonNegativeIntInput(
+    parseOptionalString(form.get("requiredApprovals")) || null,
+    1,
+  );
+  const nextVersion = parsePositiveIntInput(
+    parseOptionalString(form.get("nextVersion")) || null,
+    1,
   );
 
-  return json(
-    200,
-    {
-      repository: "alice/quarterly-report",
-      documents,
-    },
-    baseHeaders,
+  if (!file || !repoName) {
+    return json(400, { error: "file and repoName are required." }, baseHeaders);
+  }
+
+  const validation = validateUploadFile(file);
+  if (!validation.valid) {
+    return json(
+      400,
+      { error: validation.reason ?? "Invalid file." },
+      baseHeaders,
+    );
+  }
+
+  try {
+    const exists = await repoExists(client, session.username, repoName);
+    if (exists) {
+      return json(
+        409,
+        { error: `A document named "${repoName}" already exists.` },
+        baseHeaders,
+      );
+    }
+
+    const createdRepo = await createPrivateCurrentUserRepo({
+      client,
+      name: repoName,
+      description,
+    });
+    const normalizedRepo = normalizeWorkspaceRepoSummary(createdRepo);
+    const owner = normalizedRepo.owner.login || session.username;
+    const extension = getFileExtension(file.name);
+    const canonicalFile = buildCanonicalDocumentFileName(extension);
+
+    const fullHash = await computeFileHash(file);
+    const contentHash8 = fullHash.slice(0, 8);
+    const base64Content = await readFileAsBase64(file);
+    const branchName = buildUploadBranchName(repoName, owner, contentHash8);
+
+    await bootstrapEmptyMainBranch({
+      client,
+      owner,
+      repo: repoName,
+    });
+
+    await createMainBranchProtection({
+      client,
+      owner,
+      repo: repoName,
+      requiredApprovals,
+    });
+
+    await createUploadBranch({
+      client,
+      owner,
+      repo: repoName,
+      branchName,
+      from: "main",
+    });
+
+    const commitMessage = buildUploadCommitMessage({
+      docSlug: repoName,
+      canonicalFile,
+      sourceFilename: file.name,
+      uploadBranch: branchName,
+      uploaderSlug: owner,
+      fileHashSha256: fullHash,
+    });
+
+    const { sha: commitSha } = await commitBinaryFile({
+      client,
+      owner,
+      repo: repoName,
+      branch: branchName,
+      filePath: canonicalFile,
+      base64Content,
+      message: commitMessage,
+    });
+
+    const prTitle = `Upload v${nextVersion}: ${repoName
+      .split("-")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ")}`;
+    const prBody = [
+      "Automated upload from Bindersnap file vault.",
+      "",
+      `Source file: ${file.name}`,
+      `Document: ${repoName}`,
+      `Uploaded by: ${owner}`,
+      `File hash (SHA-256): ${fullHash}`,
+    ].join("\n");
+
+    const pr = await createPullRequest({
+      client,
+      owner,
+      repo: repoName,
+      title: prTitle,
+      head: branchName,
+      base: "main",
+      body: prBody,
+    });
+
+    return json(
+      201,
+      {
+        repository: normalizedRepo,
+        owner,
+        repo: repoName,
+        canonicalFile,
+        prNumber: pr.number ?? 0,
+        prTitle,
+        branchName,
+        commitSha,
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to create the document.",
+    );
+  }
+}
+
+async function handleDocumentDetail(
+  req: Request,
+  baseHeaders: Headers,
+  owner: string,
+  repo: string,
+): Promise<Response> {
+  const auth = requireSession(req, baseHeaders);
+  if (auth instanceof Response) {
+    return auth;
+  }
+
+  const { client, session } = auth;
+
+  try {
+    const repository = normalizeWorkspaceRepoSummary(
+      (await unwrap(
+        client.GET("/repos/{owner}/{repo}", {
+          params: { path: { owner, repo } },
+        }),
+      )) as {
+        id?: number;
+        name?: string;
+        full_name?: string;
+        description?: string;
+        updated_at?: string;
+        owner?: { login?: string };
+      },
+    );
+
+    const [tags, openPullRequests, branchProtection] = await Promise.all([
+      listDocTags(client, owner, repo),
+      listPullRequests({
+        client,
+        owner,
+        repo,
+        state: "open",
+      }),
+      getRepoBranchProtection(client, owner, repo, "main").catch(() => null),
+    ]);
+
+    const latestTag = tags[0] ?? null;
+    const uploadPullRequests = openPullRequests
+      .filter((pullRequest) =>
+        (pullRequest.head?.ref ?? "").startsWith("upload/"),
+      )
+      .sort((left, right) => (right.number ?? 0) - (left.number ?? 0));
+
+    let canonicalFile = await resolveCanonicalFileInfo(
+      client,
+      owner,
+      repo,
+    ).catch(() => null);
+    if (!canonicalFile) {
+      const fallbackRef = await resolveLatestUploadRef(client, owner, repo);
+      if (fallbackRef) {
+        canonicalFile =
+          (await resolveCanonicalFileInfo(
+            client,
+            owner,
+            repo,
+            fallbackRef,
+          ).catch(() => null)) ?? null;
+      }
+    }
+
+    const currentUserPermission = await resolveCurrentUserPermission(
+      client,
+      owner,
+      repo,
+      session.username,
+    ).catch(() => null);
+
+    return json(
+      200,
+      {
+        repository,
+        tags,
+        latestTag,
+        openPullRequests,
+        uploadPullRequests,
+        branchProtection,
+        canonicalFile,
+        currentUserPermission,
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to load document details.",
+    );
+  }
+}
+
+async function handleDocumentVersions(
+  req: Request,
+  baseHeaders: Headers,
+  owner: string,
+  repo: string,
+): Promise<Response> {
+  const auth = requireSession(req, baseHeaders);
+  if (auth instanceof Response) {
+    return auth;
+  }
+
+  const { client, session } = auth;
+  const form = await readMultipartBody(req);
+  if (!form) {
+    return json(
+      400,
+      { error: "Multipart form data is required." },
+      baseHeaders,
+    );
+  }
+
+  const file = parseOptionalFile(form.get("file"));
+  const docSlug = parseOptionalString(form.get("docSlug")) || repo;
+  const uploaderSlug =
+    parseOptionalString(form.get("uploaderSlug")) || session.username;
+  const nextVersionRaw = parseOptionalString(form.get("nextVersion"));
+  const canonicalFileName = parseOptionalString(form.get("canonicalFileName"));
+
+  if (!file || !docSlug || !uploaderSlug || nextVersionRaw === "") {
+    return json(
+      400,
+      {
+        error: "file, docSlug, uploaderSlug, and nextVersion are required.",
+      },
+      baseHeaders,
+    );
+  }
+
+  const nextVersion = parsePositiveIntInput(nextVersionRaw, 0);
+  if (nextVersion <= 0) {
+    return json(
+      400,
+      { error: "nextVersion must be a positive integer." },
+      baseHeaders,
+    );
+  }
+
+  const validation = validateUploadFile(file);
+  if (!validation.valid) {
+    return json(
+      400,
+      { error: validation.reason ?? "Invalid file." },
+      baseHeaders,
+    );
+  }
+
+  try {
+    const fullHash = await computeFileHash(file);
+    const contentHash8 = fullHash.slice(0, 8);
+    const base64Content = await readFileAsBase64(file);
+    const branchName = buildUploadBranchName(
+      docSlug,
+      uploaderSlug,
+      contentHash8,
+    );
+    const extension = getFileExtension(file.name);
+    const canonicalFile =
+      canonicalFileName || `${docSlug}${extension ? `.${extension}` : ""}`;
+
+    await createUploadBranch({
+      client,
+      owner,
+      repo,
+      branchName,
+      from: "main",
+    });
+
+    const commitMessage = buildUploadCommitMessage({
+      docSlug,
+      canonicalFile,
+      sourceFilename: file.name,
+      uploadBranch: branchName,
+      uploaderSlug,
+      fileHashSha256: fullHash,
+    });
+
+    const { sha: commitSha } = await commitBinaryFile({
+      client,
+      owner,
+      repo,
+      branch: branchName,
+      filePath: canonicalFile,
+      base64Content,
+      message: commitMessage,
+    });
+
+    const prTitle = `Upload v${nextVersion}: ${docSlug
+      .split("-")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ")}`;
+    const prBody = [
+      "Automated upload from Bindersnap file vault.",
+      "",
+      `Source file: ${file.name}`,
+      `Document: ${docSlug}`,
+      `Uploaded by: ${uploaderSlug}`,
+      `File hash (SHA-256): ${fullHash}`,
+    ].join("\n");
+
+    const pr = await createPullRequest({
+      client,
+      owner,
+      repo,
+      title: prTitle,
+      head: branchName,
+      base: "main",
+      body: prBody,
+    });
+
+    return json(
+      201,
+      {
+        owner,
+        repo,
+        canonicalFile,
+        prNumber: pr.number ?? 0,
+        prTitle,
+        branchName,
+        commitSha,
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to upload the new version.",
+    );
+  }
+}
+
+async function handleDocumentReview(
+  req: Request,
+  baseHeaders: Headers,
+  owner: string,
+  repo: string,
+  prNumber: number,
+): Promise<Response> {
+  const auth = requireSession(req, baseHeaders);
+  if (auth instanceof Response) {
+    return auth;
+  }
+
+  const { client } = auth;
+  const payload = (await readJsonBody(req)) ?? null;
+  const form = payload ? null : await readMultipartBody(req);
+  const eventRaw = readInputString(payload, form, "event").toUpperCase();
+  const bodyText = readInputString(payload, form, "body");
+  const event =
+    eventRaw === "APPROVE" ||
+    eventRaw === "REQUEST_CHANGES" ||
+    eventRaw === "COMMENT"
+      ? eventRaw
+      : "";
+
+  if (!event) {
+    return json(
+      400,
+      {
+        error: "event must be APPROVE, REQUEST_CHANGES, or COMMENT.",
+      },
+      baseHeaders,
+    );
+  }
+
+  const reviewBody = event === "APPROVE" ? bodyText || "APPROVED" : bodyText;
+  if ((event === "REQUEST_CHANGES" || event === "COMMENT") && !reviewBody) {
+    return json(
+      400,
+      { error: "body is required for REQUEST_CHANGES and COMMENT reviews." },
+      baseHeaders,
+    );
+  }
+
+  try {
+    const review = await submitReview({
+      client,
+      owner,
+      repo,
+      pullNumber: prNumber,
+      event,
+      body: reviewBody,
+    });
+
+    return json(200, { review }, baseHeaders);
+  } catch (err) {
+    return responseFromError(err, baseHeaders, "Unable to submit review.");
+  }
+}
+
+async function handleDocumentPublish(
+  req: Request,
+  baseHeaders: Headers,
+  owner: string,
+  repo: string,
+  prNumber: number,
+): Promise<Response> {
+  const auth = requireSession(req, baseHeaders);
+  if (auth instanceof Response) {
+    return auth;
+  }
+
+  const { client } = auth;
+  const payload = (await readJsonBody(req)) ?? null;
+  const form = payload ? null : await readMultipartBody(req);
+  const mergeStyleRaw = readInputString(
+    payload,
+    form,
+    "mergeStyle",
+  ).toLowerCase();
+  const mergeStyle =
+    mergeStyleRaw === "squash" || mergeStyleRaw === "rebase"
+      ? (mergeStyleRaw as "squash" | "rebase")
+      : "merge";
+  const nextVersionRaw = readInputNumber(payload, form, "nextVersion");
+  const latestTag = await getLatestDocTag(client, owner, repo).catch(
+    () => null,
   );
+  const nextVersion = parsePositiveIntInput(
+    nextVersionRaw || null,
+    (latestTag?.version ?? 0) + 1,
+  );
+
+  try {
+    await mergeOrResolveConflicts({
+      client,
+      owner,
+      repo,
+      pullNumber: prNumber,
+      mergeStyle,
+    });
+
+    const tag = await createDocTag({
+      client,
+      owner,
+      repo,
+      version: nextVersion,
+      target: "main",
+    });
+
+    return json(200, { ok: true, tag }, baseHeaders);
+  } catch (err) {
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to publish the document.",
+    );
+  }
+}
+
+async function handleDocumentDownload(
+  req: Request,
+  baseHeaders: Headers,
+  owner: string,
+  repo: string,
+): Promise<Response> {
+  const auth = requireSession(req, baseHeaders);
+  if (auth instanceof Response) {
+    return auth;
+  }
+
+  const { session, client } = auth;
+  const url = new URL(req.url);
+  const ref = url.searchParams.get("ref")?.trim() || "main";
+
+  try {
+    let canonicalFile = await resolveCanonicalFileInfo(
+      client,
+      owner,
+      repo,
+      ref,
+    ).catch(() => null);
+    if (!canonicalFile && ref === "main") {
+      const fallbackRef = await resolveLatestUploadRef(client, owner, repo);
+      if (fallbackRef) {
+        canonicalFile =
+          (await resolveCanonicalFileInfo(
+            client,
+            owner,
+            repo,
+            fallbackRef,
+          ).catch(() => null)) ?? null;
+      }
+    }
+
+    if (!canonicalFile) {
+      return json(
+        404,
+        { error: "Unable to determine the document file for this version." },
+        baseHeaders,
+      );
+    }
+
+    const response = await giteaFetch(
+      `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/raw/${encodeURIComponent(canonicalFile.storedFileName)}?ref=${encodeURIComponent(ref)}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: buildTokenAuthHeader(session.giteaToken),
+          Accept: "*/*",
+        },
+      },
+    );
+
+    if (!response.ok) {
+      return json(
+        response.status,
+        {
+          error: await readGiteaErrorMessage(
+            response,
+            "Unable to download document.",
+          ),
+        },
+        baseHeaders,
+      );
+    }
+
+    return new Response(response.body, {
+      status: response.status,
+      headers: downloadHeaders(baseHeaders, response),
+    });
+  } catch (err) {
+    return responseFromError(err, baseHeaders, "Unable to download document.");
+  }
+}
+
+async function handleDocumentCollaborators(
+  req: Request,
+  baseHeaders: Headers,
+  owner: string,
+  repo: string,
+): Promise<Response> {
+  const auth = requireSession(req, baseHeaders);
+  if (auth instanceof Response) {
+    return auth;
+  }
+
+  const { client, session } = auth;
+  const url = new URL(req.url);
+  const page = parsePositiveIntInput(url.searchParams.get("page"), 1);
+  const limit = parsePositiveIntInput(url.searchParams.get("limit"), 12);
+
+  try {
+    const result = await listRepoCollaborators({
+      client,
+      owner,
+      repo,
+      page,
+      limit,
+    });
+
+    const currentUserPermission = await resolveCurrentUserPermission(
+      client,
+      owner,
+      repo,
+      session.username,
+    ).catch(() => null);
+
+    return json(
+      200,
+      {
+        ...result,
+        currentUserPermission,
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    return responseFromError(err, baseHeaders, "Unable to load collaborators.");
+  }
+}
+
+async function handleSearchUsersRoute(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = requireSession(req, baseHeaders);
+  if (auth instanceof Response) {
+    return auth;
+  }
+
+  const { client } = auth;
+  const url = new URL(req.url);
+  const query = url.searchParams.get("q")?.trim() || "";
+  const page = parsePositiveIntInput(url.searchParams.get("page"), 1);
+  const limit = parsePositiveIntInput(url.searchParams.get("limit"), 8);
+
+  if (!query) {
+    return json(400, { error: "q is required." }, baseHeaders);
+  }
+
+  try {
+    const result = await searchUsers({
+      client,
+      query,
+      page,
+      limit,
+    });
+
+    return json(200, result, baseHeaders);
+  } catch (err) {
+    return responseFromError(err, baseHeaders, "Unable to search users.");
+  }
+}
+
+async function handleAddCollaborator(
+  req: Request,
+  baseHeaders: Headers,
+  owner: string,
+  repo: string,
+  login: string,
+): Promise<Response> {
+  const auth = requireSession(req, baseHeaders);
+  if (auth instanceof Response) {
+    return auth;
+  }
+
+  const { client } = auth;
+  const payload = (await readJsonBody(req)) ?? null;
+  const form = payload ? null : await readMultipartBody(req);
+  const permissionRaw = readInputString(
+    payload,
+    form,
+    "permission",
+  ).toLowerCase();
+  const permission =
+    permissionRaw === "read" ||
+    permissionRaw === "write" ||
+    permissionRaw === "admin"
+      ? permissionRaw
+      : "write";
+
+  try {
+    await addRepoCollaborator({
+      client,
+      owner,
+      repo,
+      collaborator: login,
+      permission,
+    });
+
+    const collaborator = await getRepoCollaboratorPermission({
+      client,
+      owner,
+      repo,
+      collaborator: login,
+    }).catch(() => ({
+      permission,
+      access: toRepoCollaboratorRole(permission),
+      permissionLabel:
+        permission === "read"
+          ? "Read"
+          : permission === "admin"
+            ? "Admin"
+            : "Write",
+      roleName: permission,
+      user: {
+        id: 0,
+        login,
+        full_name: "",
+        email: "",
+        avatar_url: "",
+      },
+    }));
+
+    return json(200, { collaborator }, baseHeaders);
+  } catch (err) {
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to update collaborator access.",
+    );
+  }
+}
+
+async function handleDeleteCollaborator(
+  req: Request,
+  baseHeaders: Headers,
+  owner: string,
+  repo: string,
+  login: string,
+): Promise<Response> {
+  const auth = requireSession(req, baseHeaders);
+  if (auth instanceof Response) {
+    return auth;
+  }
+
+  const { client } = auth;
+
+  try {
+    await removeRepoCollaborator({
+      client,
+      owner,
+      repo,
+      collaborator: login,
+    });
+
+    return json(200, { ok: true }, baseHeaders);
+  } catch (err) {
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to remove collaborator.",
+    );
+  }
 }
 
 async function cleanupExpiredSessions(): Promise<void> {
@@ -1121,6 +2303,110 @@ const server = Bun.serve({
 
     if (pathname === "/api/app/documents" && req.method === "GET") {
       return handleDocuments(req, baseHeaders);
+    }
+
+    if (pathname === "/api/app/documents" && req.method === "POST") {
+      return handleCreateDocument(req, baseHeaders);
+    }
+
+    if (pathname === "/api/app/users/search" && req.method === "GET") {
+      return handleSearchUsersRoute(req, baseHeaders);
+    }
+
+    const reviewMatch = pathname.match(
+      /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/reviews$/,
+    );
+    if (reviewMatch && req.method === "POST") {
+      return handleDocumentReview(
+        req,
+        baseHeaders,
+        decodePathParam(reviewMatch[1] ?? ""),
+        decodePathParam(reviewMatch[2] ?? ""),
+        Number.parseInt(reviewMatch[3] ?? "", 10),
+      );
+    }
+
+    const publishMatch = pathname.match(
+      /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/publish$/,
+    );
+    if (publishMatch && req.method === "POST") {
+      return handleDocumentPublish(
+        req,
+        baseHeaders,
+        decodePathParam(publishMatch[1] ?? ""),
+        decodePathParam(publishMatch[2] ?? ""),
+        Number.parseInt(publishMatch[3] ?? "", 10),
+      );
+    }
+
+    const downloadMatch = pathname.match(
+      /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/download$/,
+    );
+    if (downloadMatch && req.method === "GET") {
+      return handleDocumentDownload(
+        req,
+        baseHeaders,
+        decodePathParam(downloadMatch[1] ?? ""),
+        decodePathParam(downloadMatch[2] ?? ""),
+      );
+    }
+
+    const versionsMatch = pathname.match(
+      /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/versions$/,
+    );
+    if (versionsMatch && req.method === "POST") {
+      return handleDocumentVersions(
+        req,
+        baseHeaders,
+        decodePathParam(versionsMatch[1] ?? ""),
+        decodePathParam(versionsMatch[2] ?? ""),
+      );
+    }
+
+    const collaboratorsActionMatch = pathname.match(
+      /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/collaborators\/([^/]+)$/,
+    );
+    if (collaboratorsActionMatch && req.method === "PUT") {
+      return handleAddCollaborator(
+        req,
+        baseHeaders,
+        decodePathParam(collaboratorsActionMatch[1] ?? ""),
+        decodePathParam(collaboratorsActionMatch[2] ?? ""),
+        decodePathParam(collaboratorsActionMatch[3] ?? ""),
+      );
+    }
+    if (collaboratorsActionMatch && req.method === "DELETE") {
+      return handleDeleteCollaborator(
+        req,
+        baseHeaders,
+        decodePathParam(collaboratorsActionMatch[1] ?? ""),
+        decodePathParam(collaboratorsActionMatch[2] ?? ""),
+        decodePathParam(collaboratorsActionMatch[3] ?? ""),
+      );
+    }
+
+    const collaboratorsMatch = pathname.match(
+      /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/collaborators$/,
+    );
+    if (collaboratorsMatch && req.method === "GET") {
+      return handleDocumentCollaborators(
+        req,
+        baseHeaders,
+        decodePathParam(collaboratorsMatch[1] ?? ""),
+        decodePathParam(collaboratorsMatch[2] ?? ""),
+      );
+    }
+
+    const documentMatch = pathname.match(
+      /^\/api\/app\/documents\/([^/]+)\/([^/]+)$/,
+    );
+    if (documentMatch && req.method === "GET") {
+      return handleDocumentDetail(
+        req,
+        baseHeaders,
+        decodePathParam(documentMatch[1] ?? ""),
+        decodePathParam(documentMatch[2] ?? ""),
+      );
     }
 
     return json(404, { error: "Not found." }, baseHeaders);

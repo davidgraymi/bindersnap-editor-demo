@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import type { GiteaClient } from "../../../packages/gitea-client/client";
-import { GiteaApiError, unwrap } from "../../../packages/gitea-client/client";
 import {
-  addRepoCollaborator,
-  getCurrentUserRepoPermission,
-  listRepoCollaborators,
-  removeRepoCollaborator,
-  searchUsers,
-  type RepoCollaboratorPermissionSummary,
-  type RepoUserSummary,
+  addDocumentCollaborator,
+  listDocumentCollaborators,
+  removeDocumentCollaborator,
+  searchWorkspaceUsers,
+} from "../api";
+import type {
+  RepoCollaboratorPermissionSummary,
+  RepoUserSummary,
 } from "../../../packages/gitea-client/repos";
 
 type WritablePermission = "read" | "write" | "admin";
@@ -33,7 +32,6 @@ interface SearchResultRow {
 }
 
 interface DocumentCollaboratorsProps {
-  giteaClient: GiteaClient;
   owner: string;
   repo: string;
   currentUsername: string;
@@ -42,6 +40,7 @@ interface DocumentCollaboratorsProps {
 interface CollaboratorPageResult {
   rows: CollaboratorRow[];
   hasMore: boolean;
+  currentPermission: DisplayPermission | null;
 }
 
 const COLLABORATORS_PAGE_SIZE = 12;
@@ -269,14 +268,6 @@ function isManagedPermission(permission: DisplayPermission): boolean {
 }
 
 function readPermissionError(err: unknown, fallback: string): string {
-  if (err instanceof GiteaApiError && err.status === 403) {
-    return "You do not have permission to manage collaborators for this repository.";
-  }
-
-  if (err instanceof GiteaApiError && err.status === 404) {
-    return "That collaborator could not be found in Gitea.";
-  }
-
   return err instanceof Error ? err.message : fallback;
 }
 
@@ -317,7 +308,6 @@ function normalizeCollaborator(
 }
 
 async function fetchCollaboratorPage(
-  giteaClient: GiteaClient,
   owner: string,
   repo: string,
   currentUsername: string,
@@ -325,13 +315,7 @@ async function fetchCollaboratorPage(
   page: number,
   limit: number,
 ): Promise<CollaboratorPageResult> {
-  const result = await listRepoCollaborators({
-    client: giteaClient,
-    owner,
-    repo,
-    page,
-    limit,
-  });
+  const result = await listDocumentCollaborators(owner, repo, page, limit);
 
   const rows = result.collaborators.map((collaborator) =>
     normalizeCollaborator(
@@ -346,59 +330,10 @@ async function fetchCollaboratorPage(
   return {
     rows: rows.filter((row): row is CollaboratorRow => row !== null),
     hasMore: result.hasMore,
+    currentPermission: normalizeDisplayPermission(
+      result.currentUserPermission?.permission,
+    ),
   };
-}
-
-async function fetchCurrentUserPermission(
-  giteaClient: GiteaClient,
-  owner: string,
-  repo: string,
-  currentUsername: string,
-): Promise<DisplayPermission | null> {
-  if (!currentUsername) {
-    return null;
-  }
-
-  if (currentUsername === owner) {
-    return "owner";
-  }
-
-  const permission = await getCurrentUserRepoPermission({
-    client: giteaClient,
-    owner,
-    repo,
-    username: currentUsername,
-  }).catch((err) => {
-    if (err instanceof GiteaApiError && err.status === 404) {
-      return null;
-    }
-
-    throw err;
-  });
-
-  if (!permission) {
-    const repository = await unwrap(
-      giteaClient.GET("/repos/{owner}/{repo}", {
-        params: {
-          path: { owner, repo },
-        },
-      }),
-    );
-
-    if (repository.permissions?.admin) {
-      return "admin";
-    }
-
-    if (repository.permissions?.push) {
-      return "write";
-    }
-
-    if (repository.permissions?.pull) {
-      return "read";
-    }
-  }
-
-  return normalizeDisplayPermission(permission?.permission);
 }
 
 function normalizeSearchResult(user: RepoUserSummary): SearchResultRow | null {
@@ -435,7 +370,6 @@ function mergeCollaboratorRows(
 }
 
 export function DocumentCollaborators({
-  giteaClient,
   owner,
   repo,
   currentUsername,
@@ -472,7 +406,6 @@ export function DocumentCollaborators({
     useState<WritablePermission>("write");
 
   const collaboratorRequestId = useRef(0);
-  const permissionRequestId = useRef(0);
   const searchRequestId = useRef(0);
 
   const collaboratorMap = useMemo(() => {
@@ -497,7 +430,6 @@ export function DocumentCollaborators({
 
   useEffect(() => {
     const requestId = ++collaboratorRequestId.current;
-    const permissionRequestIdValue = ++permissionRequestId.current;
     const cachedPermissions = readCachedCollaboratorPermissions(owner, repo);
 
     setExplicitPermissions(cachedPermissions);
@@ -522,7 +454,6 @@ export function DocumentCollaborators({
     void (async () => {
       try {
         const firstPage = await fetchCollaboratorPage(
-          giteaClient,
           owner,
           repo,
           currentUsername,
@@ -537,6 +468,8 @@ export function DocumentCollaborators({
 
         setCollaborators(firstPage.rows);
         setHasMoreCollaborators(firstPage.hasMore);
+        setCurrentPermission(firstPage.currentPermission);
+        setPermissionLoadError(null);
       } catch (err) {
         if (requestId !== collaboratorRequestId.current) {
           return;
@@ -548,32 +481,6 @@ export function DocumentCollaborators({
             "Unable to load collaborators for this repository.",
           ),
         );
-      } finally {
-        if (requestId === collaboratorRequestId.current) {
-          setIsLoadingCollaborators(false);
-        }
-      }
-    })();
-
-    void (async () => {
-      try {
-        const permission = await fetchCurrentUserPermission(
-          giteaClient,
-          owner,
-          repo,
-          currentUsername,
-        );
-
-        if (permissionRequestIdValue !== permissionRequestId.current) {
-          return;
-        }
-
-        setCurrentPermission(permission);
-      } catch (err) {
-        if (permissionRequestIdValue !== permissionRequestId.current) {
-          return;
-        }
-
         setPermissionLoadError(
           readPermissionError(
             err,
@@ -581,7 +488,8 @@ export function DocumentCollaborators({
           ),
         );
       } finally {
-        if (permissionRequestIdValue === permissionRequestId.current) {
+        if (requestId === collaboratorRequestId.current) {
+          setIsLoadingCollaborators(false);
           setPermissionLoadPending(false);
         }
       }
@@ -589,10 +497,9 @@ export function DocumentCollaborators({
 
     return () => {
       collaboratorRequestId.current += 1;
-      permissionRequestId.current += 1;
       searchRequestId.current += 1;
     };
-  }, [currentUsername, giteaClient, owner, repo]);
+  }, [currentUsername, owner, repo]);
 
   useEffect(() => {
     const handle = window.setTimeout(() => {
@@ -621,12 +528,7 @@ export function DocumentCollaborators({
 
     void (async () => {
       try {
-        const result = await searchUsers({
-          client: giteaClient,
-          query,
-          page: 1,
-          limit: SEARCH_PAGE_SIZE,
-        });
+        const result = await searchWorkspaceUsers(query, 1, SEARCH_PAGE_SIZE);
 
         if (requestId !== searchRequestId.current) {
           return;
@@ -651,7 +553,7 @@ export function DocumentCollaborators({
         }
       }
     })();
-  }, [debouncedSearchQuery, giteaClient]);
+  }, [debouncedSearchQuery]);
 
   function upsertCollaboratorRow(row: CollaboratorRow): void {
     setCollaborators((prev) => {
@@ -727,12 +629,7 @@ export function DocumentCollaborators({
     setBusy(login, true);
 
     try {
-      await removeRepoCollaborator({
-        client: giteaClient,
-        owner,
-        repo,
-        collaborator: login,
-      });
+      await removeDocumentCollaborator(owner, repo, login);
 
       clearExplicitPermission(login);
       setCollaborators((prev) =>
@@ -762,7 +659,6 @@ export function DocumentCollaborators({
 
     try {
       const page = await fetchCollaboratorPage(
-        giteaClient,
         owner,
         repo,
         currentUsername,
@@ -814,13 +710,7 @@ export function DocumentCollaborators({
     setBusy(login, true);
 
     try {
-      await addRepoCollaborator({
-        client: giteaClient,
-        owner,
-        repo,
-        collaborator: login,
-        permission,
-      });
+      await addDocumentCollaborator(owner, repo, login, permission);
       persistExplicitPermission(login, permission);
 
       const normalized = normalizeCollaborator(
@@ -1095,7 +985,6 @@ export function DocumentCollaborators({
             type="button"
             onClick={() => {
               collaboratorRequestId.current += 1;
-              permissionRequestId.current += 1;
               searchRequestId.current += 1;
               setIsLoadingCollaborators(true);
               setCollaboratorError(null);
@@ -1103,7 +992,6 @@ export function DocumentCollaborators({
               void (async () => {
                 try {
                   const page = await fetchCollaboratorPage(
-                    giteaClient,
                     owner,
                     repo,
                     currentUsername,
@@ -1113,6 +1001,7 @@ export function DocumentCollaborators({
                   );
                   setCollaborators(page.rows);
                   setHasMoreCollaborators(page.hasMore);
+                  setCurrentPermission(page.currentPermission);
                 } catch (err) {
                   setCollaboratorError(
                     readPermissionError(

@@ -1,6 +1,5 @@
 import { useState } from "react";
 
-import type { GiteaClient } from "../../../packages/gitea-client/client";
 import { DocumentDetail } from "./DocumentDetail";
 import { FileVaultWorkspace } from "./FileVaultWorkspace";
 
@@ -9,7 +8,6 @@ interface AppShellProps {
     username: string;
     fullName?: string;
   } | null;
-  giteaClient: GiteaClient;
   onSignOut: () => void | Promise<void>;
 }
 
@@ -20,7 +18,7 @@ interface DocumentSelection {
   repo: string;
 }
 
-export function AppShell({ user, giteaClient, onSignOut }: AppShellProps) {
+export function AppShell({ user, onSignOut }: AppShellProps) {
   const [view, setView] = useState<AppView>("workspace");
   const [selectedDocument, setSelectedDocument] =
     useState<DocumentSelection | null>(null);
@@ -83,13 +81,11 @@ export function AppShell({ user, giteaClient, onSignOut }: AppShellProps) {
       <main className="app-main">
         {view === "workspace" ? (
           <FileVaultWorkspace
-            giteaClient={giteaClient}
             currentUsername={user?.username ?? ""}
             onSelectDocument={handleSelectDocument}
           />
         ) : selectedDocument ? (
           <DocumentDetail
-            giteaClient={giteaClient}
             owner={selectedDocument.owner}
             repo={selectedDocument.repo}
             uploaderSlug={user?.username ?? "unknown"}

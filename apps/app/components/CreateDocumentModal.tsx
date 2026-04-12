@@ -1,15 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 
+import { createInitialDocumentUpload } from "../api";
 import {
-  createInitialDocumentUpload,
   type InitialDocumentUploadStep,
   validateUploadFile,
 } from "../../../packages/gitea-client/uploads";
-import type { GiteaClient } from "../../../packages/gitea-client/client";
-import { repoExists } from "../../../packages/gitea-client/repos";
 
 interface CreateDocumentModalProps {
-  giteaClient: GiteaClient;
   owner: string;
   onClose: () => void;
   onSuccess: (owner: string, repo: string) => void;
@@ -57,7 +54,6 @@ function formatFileSize(bytes: number): string {
 }
 
 export function CreateDocumentModal({
-  giteaClient,
   owner,
   onClose,
   onSuccess,
@@ -138,24 +134,13 @@ export function CreateDocumentModal({
       setError(null);
       setValidationError(null);
       setStatus("checking-repo");
+      setStatus("creating-repo");
 
-      const exists = await repoExists(giteaClient, owner, repoSlug);
-      if (exists) {
-        setStatus("error");
-        setError(
-          `A document named "${trimmedName}" already exists. Choose a different name.`,
-        );
-        return;
-      }
-
-      const result = await createInitialDocumentUpload({
-        client: giteaClient,
-        repoName: repoSlug,
-        file: selectedFile,
-        uploaderSlug: owner,
-        nextVersion: 1,
-        onProgress: setStatus,
-      });
+      const result = await createInitialDocumentUpload(
+        repoSlug,
+        selectedFile,
+        1,
+      );
       setStatus("done");
       onSuccess(result.owner, result.repo);
     } catch (err) {
