@@ -251,7 +251,10 @@ export async function signInAsAlice(page: Page): Promise<void> {
     .getByText(`Signed in as ${GITEA_ADMIN_USER}`)
     .isVisible({ timeout: 3_000 })
     .catch(() => false);
-  if (isAlice) return;
+  if (isAlice) {
+    await waitForWorkspaceReady(page);
+    return;
+  }
 
   // A different session may be active; sign out first if the button is present.
   const hasSignOut = await page
@@ -272,9 +275,10 @@ export async function signInAsAlice(page: Page): Promise<void> {
   await page.getByLabel("Password", { exact: true }).fill(GITEA_ADMIN_PASS);
   await page.getByRole("button", { name: "Open workspace" }).click();
   await page.waitForURL(/\/app$/, { timeout: 10_000 });
-  await expect(
-    page.getByText(`Signed in as ${GITEA_ADMIN_USER}`),
-  ).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText(`Signed in as ${GITEA_ADMIN_USER}`)).toBeVisible({
+    timeout: 5_000,
+  });
+  await waitForWorkspaceReady(page);
 }
 
 /**
@@ -293,7 +297,10 @@ export async function signInAsBob(page: Page): Promise<void> {
     .getByText(`Signed in as ${GITEA_BOB_USER}`)
     .isVisible({ timeout: 3_000 })
     .catch(() => false);
-  if (isBob) return;
+  if (isBob) {
+    await waitForWorkspaceReady(page);
+    return;
+  }
 
   // A different session may be active; sign out first if the button is present.
   const hasSignOut = await page
@@ -314,32 +321,57 @@ export async function signInAsBob(page: Page): Promise<void> {
   await page.getByLabel("Password", { exact: true }).fill(GITEA_BOB_PASS);
   await page.getByRole("button", { name: "Open workspace" }).click();
   await page.waitForURL(/\/app$/, { timeout: 10_000 });
-  await expect(
-    page.getByText(`Signed in as ${GITEA_BOB_USER}`),
-  ).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByText(`Signed in as ${GITEA_BOB_USER}`)).toBeVisible({
+    timeout: 5_000,
+  });
+  await waitForWorkspaceReady(page);
 }
 
 /**
  * Navigate from the workspace to a document detail page by clicking the
  * `.vault-doc-card` that contains `docName`, then wait for the back button.
  *
- * Stability fix: waits for DOM content to be loaded before clicking so the
- * card is fully rendered (skeleton → loaded), then uses `{ force: true }` as
- * a safety net against the built-in stability check spinning on a card that
- * is still transitioning. networkidle is intentionally avoided because
- * persistent WebSocket connections (Hocuspocus) prevent it from ever resolving.
+ * Stability fix: waits for the workspace to be interactive before clicking the
+ * card, then uses a forced click so minor layout shifts in the card grid do
+ * not stall Playwright's actionability checks.
  */
 export async function navigateToDocument(
   page: Page,
   docName: string,
 ): Promise<void> {
   await page.waitForLoadState("domcontentloaded");
+  await waitForWorkspaceReady(page);
   const card = page.locator(".vault-doc-card", { hasText: docName });
   await expect(card).toBeVisible({ timeout: 10_000 });
   await card.click({ force: true });
   await expect(
     page.getByRole("button", { name: "← Back to workspace" }),
   ).toBeVisible({ timeout: 10_000 });
+}
+
+async function waitForWorkspaceReady(page: Page): Promise<void> {
+  const newDocumentButton = page
+    .getByRole("button", { name: "New Document" })
+    .first();
+  const workspaceError = page.locator(".vault-error-state");
+  const deadline = Date.now() + 10_000;
+
+  while (Date.now() < deadline) {
+    if (await newDocumentButton.isVisible().catch(() => false)) {
+      return;
+    }
+
+    if (await workspaceError.isVisible().catch(() => false)) {
+      const errorText =
+        (await workspaceError.textContent())?.replace(/\s+/g, " ").trim() ||
+        "Workspace failed to load.";
+      throw new Error(errorText);
+    }
+
+    await page.waitForTimeout(250);
+  }
+
+  throw new Error("Workspace did not become ready in time.");
 }
 
 /**

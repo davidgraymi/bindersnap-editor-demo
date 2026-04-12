@@ -9,28 +9,14 @@ import {
 import "./app.css";
 
 import { AppShell } from "./components/AppShell";
-import { resolveGiteaTokenScopes } from "./giteaTokenScopes";
 import {
   clearToken,
-  createAuthenticatedClient,
+  fetchSessionUser,
+  login,
+  logoutSession,
+  signup,
   storeToken,
-} from "../../packages/gitea-client/auth";
-
-const appEnv = (
-  import.meta as ImportMeta & { env?: Record<string, string | undefined> }
-).env;
-const isLocalHost =
-  window.location.hostname === "localhost" ||
-  window.location.hostname === "127.0.0.1";
-const devDefaultApiBaseUrl = `${window.location.protocol}//${window.location.hostname}:${
-  appEnv?.BUN_PUBLIC_API_PORT ?? appEnv?.API_PORT ?? "8787"
-}`;
-const API_BASE_URL = (
-  appEnv?.BUN_PUBLIC_API_BASE_URL ??
-  appEnv?.BUN_PUBLIC_API_URL ??
-  appEnv?.VITE_API_URL ??
-  (isLocalHost ? devDefaultApiBaseUrl : "")
-).replace(/\/$/, "");
+} from "./api";
 
 type AppRoute = "app" | "login" | "callback";
 type AuthView = "loading" | "callback" | "login" | "app";
@@ -70,184 +56,6 @@ function navigateTo(path: "/app" | "/login", replace = false): void {
   const method = replace ? "replaceState" : "pushState";
   window.history[method]({}, "", path);
   window.dispatchEvent(new PopStateEvent("popstate"));
-}
-
-function resolveApiUrl(path: string): string {
-  return API_BASE_URL ? `${API_BASE_URL}${path}` : path;
-}
-
-function readErrorMessage(payload: unknown, fallback: string): string {
-  if (typeof payload === "object" && payload !== null) {
-    if (typeof (payload as { error?: unknown }).error === "string") {
-      return (payload as { error: string }).error;
-    }
-
-    if (typeof (payload as { message?: unknown }).message === "string") {
-      return (payload as { message: string }).message;
-    }
-  }
-
-  return fallback;
-}
-
-/**
- * Authenticates with the app's own API server (the Bun backend at API_BASE_URL).
- * @param path
- * @param username
- * @param password
- */
-async function sendAuthRequest(
-  path: "/auth/login" | "/auth/signup",
-  username: string | null,
-  email: string,
-  password: string,
-): Promise<SessionUser | null> {
-  const response = await fetch(resolveApiUrl(path), {
-    method: "POST",
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify({ username, email, password }),
-  });
-
-  const payload = (await response.json().catch(() => null)) as unknown;
-  if (!response.ok) {
-    throw new Error(
-      readErrorMessage(payload, "Unable to complete authentication right now."),
-    );
-  }
-
-  return parseSessionUser(payload);
-}
-
-function parseSessionUser(payload: unknown): SessionUser | null {
-  if (typeof payload !== "object" || payload === null) {
-    return null;
-  }
-
-  const root = payload as {
-    username?: unknown;
-    login?: unknown;
-    fullName?: unknown;
-    full_name?: unknown;
-    user?: {
-      username?: unknown;
-      login?: unknown;
-      fullName?: unknown;
-      full_name?: unknown;
-    };
-  };
-
-  const candidate = root.user ?? root;
-  const username =
-    typeof candidate.username === "string"
-      ? candidate.username
-      : typeof candidate.login === "string"
-        ? candidate.login
-        : "";
-
-  if (username.trim() === "") {
-    return null;
-  }
-
-  const fullName =
-    typeof candidate.fullName === "string"
-      ? candidate.fullName
-      : typeof candidate.full_name === "string"
-        ? candidate.full_name
-        : undefined;
-
-  return {
-    username: username.trim(),
-    fullName: fullName?.trim() || undefined,
-  };
-}
-
-async function fetchSessionUser(): Promise<SessionUser | null> {
-  const response = await fetch(resolveApiUrl("/auth/me"), {
-    method: "GET",
-    credentials: "include",
-    headers: {
-      Accept: "application/json",
-    },
-  });
-
-  if (response.status === 401 || response.status === 404) {
-    return null;
-  }
-
-  const payload = (await response.json().catch(() => null)) as unknown;
-  if (!response.ok) {
-    throw new Error(
-      readErrorMessage(payload, "Unable to check your session right now."),
-    );
-  }
-
-  return parseSessionUser(payload);
-}
-
-/**
- * Authenticates directly with Gitea using Basic Auth to mint an API token,
- * then stores it in sessionStorage via `storeToken()`.
- * @param baseUrl
- * @param username
- * @param password
- */
-async function createGiteaSessionToken(
-  baseUrl: string,
-  username: string,
-  // email: string,
-  password: string,
-): Promise<void> {
-  const tokenName = `bindersnap-session-${Date.now()}`;
-  const tokenScopesRaw =
-    appEnv?.BUN_PUBLIC_GITEA_TOKEN_SCOPES ??
-    appEnv?.VITE_GITEA_TOKEN_SCOPES ??
-    "";
-  const tokenScopes = resolveGiteaTokenScopes(tokenScopesRaw);
-  const credentials = btoa(`${username}:${password}`);
-  const response = await fetch(
-    `${baseUrl}/api/v1/users/${encodeURIComponent(username)}/tokens`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${credentials}`,
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify({
-        name: tokenName,
-        scopes: tokenScopes,
-      }),
-    },
-  );
-
-  const payload = (await response.json().catch(() => null)) as unknown;
-  if (!response.ok) {
-    throw new Error(readErrorMessage(payload, "Unable to connect."));
-  }
-
-  const token =
-    typeof (payload as { sha1?: unknown }).sha1 === "string"
-      ? (payload as { sha1: string }).sha1
-      : null;
-  if (!token) {
-    throw new Error("Gitea did not return a usable token.");
-  }
-
-  storeToken(token);
-}
-
-async function logoutSession(): Promise<void> {
-  await fetch(resolveApiUrl("/auth/logout"), {
-    method: "POST",
-    credentials: "include",
-    headers: {
-      Accept: "application/json",
-    },
-  }).catch(() => undefined);
 }
 
 function LoginPage({ callbackError, onLogin, onSignup }: LoginPageProps) {
@@ -440,10 +248,13 @@ export function App() {
     setIsCheckingSession(true);
 
     try {
-      const nextUser = await fetchSessionUser();
-      setUser(nextUser);
+      const nextSession = await fetchSessionUser();
+      if (nextSession?.token) {
+        storeToken(nextSession.token);
+      }
+      setUser(nextSession?.user ?? null);
       setCallbackError(null);
-      return nextUser;
+      return nextSession?.user ?? null;
     } catch (sessionError) {
       setUser(null);
       setCallbackError(
@@ -516,14 +327,6 @@ export function App() {
     return user ? "app" : "login";
   }, [isCheckingSession, route, user]);
 
-  const giteaBaseUrl = appEnv?.VITE_GITEA_BASE_URL ?? "http://localhost:3000";
-  let giteaClient = null;
-  try {
-    giteaClient = createAuthenticatedClient(giteaBaseUrl);
-  } catch {
-    giteaClient = null;
-  }
-
   if (view === "callback") {
     return (
       <section className="app-gate">
@@ -558,24 +361,17 @@ export function App() {
         callbackError={callbackError}
         onLogin={async (identifier, password) => {
           clearToken();
-          const loginIdentifier = identifier.trim();
-          const authenticatedUser = await sendAuthRequest(
-            "/auth/login",
-            loginIdentifier.includes("@") ? null : loginIdentifier,
-            loginIdentifier.includes("@") ? loginIdentifier : "",
-            password,
-          );
-          const loginUser = authenticatedUser ?? (await refreshSession());
+          const authenticatedSession = await login(identifier, password);
+          if (authenticatedSession.token) {
+            storeToken(authenticatedSession.token);
+          }
+          const loginUser =
+            authenticatedSession.user ?? (await refreshSession());
           if (!loginUser) {
             throw new Error(
               "Sign-in completed, but the session could not be verified.",
             );
           }
-          await createGiteaSessionToken(
-            giteaBaseUrl,
-            loginUser.username,
-            password,
-          );
           const nextUser = await refreshSession();
           if (!nextUser) {
             throw new Error(
@@ -586,23 +382,17 @@ export function App() {
         }}
         onSignup={async (username, email, password) => {
           clearToken();
-          const authenticatedUser = await sendAuthRequest(
-            "/auth/signup",
-            username,
-            email,
-            password,
-          );
-          const signupUser = authenticatedUser ?? (await refreshSession());
+          const authenticatedSession = await signup(username, email, password);
+          if (authenticatedSession.token) {
+            storeToken(authenticatedSession.token);
+          }
+          const signupUser =
+            authenticatedSession.user ?? (await refreshSession());
           if (!signupUser) {
             throw new Error(
               "Account created, but the session could not be verified.",
             );
           }
-          await createGiteaSessionToken(
-            giteaBaseUrl,
-            signupUser.username,
-            password,
-          );
           const nextUser = await refreshSession();
           if (!nextUser) {
             throw new Error(
@@ -615,47 +405,10 @@ export function App() {
     );
   }
 
-  if (!giteaClient) {
-    return (
-      <section className="app-gate">
-        <div className="app-gate-panel bs-card">
-          <div className="bs-eyebrow">Workspace</div>
-          <h1>Unable to open the document vault</h1>
-          <p className="app-gate-copy">
-            Workspace token bootstrap failed. Retry, or sign out and sign in
-            again to mint a fresh session token.
-          </p>
-          <button
-            className="bs-btn bs-btn-primary"
-            type="button"
-            onClick={() => {
-              window.location.reload();
-            }}
-          >
-            Retry
-          </button>
-          <button
-            className="bs-btn bs-btn-secondary"
-            type="button"
-            onClick={async () => {
-              await logoutSession();
-              setUser(null);
-              setCallbackError(null);
-              navigateTo("/login", true);
-            }}
-          >
-            Sign out
-          </button>
-        </div>
-      </section>
-    );
-  }
-
   return (
     <div className="app-root">
       <AppShell
         user={user}
-        giteaClient={giteaClient}
         onSignOut={async () => {
           await logoutSession();
           clearToken();

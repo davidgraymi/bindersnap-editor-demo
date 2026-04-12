@@ -366,11 +366,13 @@ async function resolveConflictsByRebase(
     throw toGiteaApiError(0, "PR has no head branch ref.");
   }
 
-  // 2. List files on the head branch to find the document file.
+  // 2. List files at the repo root on the head branch to find the document
+  //    file. The root-listing endpoint is distinct from the filepath variant;
+  //    passing an empty filepath can fail on real Gitea with GetContentsOrList.
   const contents = await unwrap(
-    client.GET("/repos/{owner}/{repo}/contents/{filepath}", {
+    client.GET("/repos/{owner}/{repo}/contents", {
       params: {
-        path: { owner, repo, filepath: "" },
+        path: { owner, repo },
         query: { ref: headBranch },
       },
     }),
@@ -448,7 +450,14 @@ async function resolveConflictsByRebase(
   );
 
   if (!updateResponse.ok) {
-    throw toGiteaApiError(updateResponse.status, updateError);
+    const apiError = toGiteaApiError(updateResponse.status, updateError);
+    const normalizedMessage = apiError.message.toLowerCase();
+    const isAlreadySynced =
+      normalizedMessage.includes("headbranch") &&
+      normalizedMessage.includes("up to date");
+    if (!isAlreadySynced) {
+      throw apiError;
+    }
   }
 
   // 7. Read the file SHA on the now-synced head branch (it changed after

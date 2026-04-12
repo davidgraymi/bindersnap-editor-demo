@@ -1,29 +1,21 @@
 import { useCallback, useEffect, useState } from "react";
 
-import type { GiteaClient } from "../../../packages/gitea-client/client";
 import type { PullRequestWithApprovalState } from "../../../packages/gitea-client/pullRequests";
 import type {
   DocTag,
   RepoBranchProtection,
 } from "../../../packages/gitea-client/repos";
 import type { UploadResult } from "../../../packages/gitea-client/uploads";
-import { getStoredToken } from "../../../packages/gitea-client/auth";
-import { GiteaApiError, unwrap } from "../../../packages/gitea-client/client";
 import {
-  listPullRequests,
-  mergeOrResolveConflicts,
-  submitReview,
-} from "../../../packages/gitea-client/pullRequests";
-import {
-  createDocTag,
-  getRepoBranchProtection,
-  listDocTags,
-} from "../../../packages/gitea-client/repos";
+  downloadDocument,
+  getDocumentDetail,
+  publishDocument,
+  submitDocumentReview,
+} from "../api";
 import { DocumentCollaborators } from "./DocumentCollaborators";
 import { UploadModal } from "./UploadModal";
 
 interface DocumentDetailProps {
-  giteaClient: GiteaClient;
   owner: string;
   repo: string;
   uploaderSlug: string;
@@ -40,17 +32,6 @@ interface PRActionState {
 interface CanonicalFileInfo {
   storedFileName: string;
   downloadFileName: string;
-}
-
-interface RepoContentsEntry {
-  name?: string;
-  path?: string;
-  type?: string;
-}
-
-interface RepoContentsExtResponse {
-  dir_contents?: RepoContentsEntry[];
-  file_contents?: RepoContentsEntry;
 }
 
 type DocumentDetailView = "overview" | "collaborators";
@@ -110,17 +91,6 @@ function formatTimestamp(timestamp: string): string {
   }
 }
 
-function buildRawFileUrl(
-  giteaBaseUrl: string,
-  owner: string,
-  repo: string,
-  ref: string,
-  canonicalFile: string,
-): string {
-  const params = new URLSearchParams({ ref });
-  return `${giteaBaseUrl}/api/v1/repos/${owner}/${repo}/raw/${canonicalFile}?${params}`;
-}
-
 function triggerBrowserDownload(blob: Blob, fileName: string): void {
   const objectUrl = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -133,88 +103,7 @@ function triggerBrowserDownload(blob: Blob, fileName: string): void {
   URL.revokeObjectURL(objectUrl);
 }
 
-function extractFileExtension(fileName: string): string | null {
-  const trimmed = fileName.trim();
-  const lastDotIndex = trimmed.lastIndexOf(".");
-
-  if (lastDotIndex <= 0 || lastDotIndex === trimmed.length - 1) {
-    return null;
-  }
-
-  return trimmed.slice(lastDotIndex + 1);
-}
-
-function buildDownloadFileName(repo: string, storedFileName: string): string {
-  const extension = extractFileExtension(storedFileName);
-  return extension ? `${repo}.${extension}` : repo;
-}
-
-function inferStoredDocumentFileName(
-  entries: RepoContentsEntry[],
-  repo: string,
-): string | null {
-  const files = entries.filter(
-    (entry): entry is RepoContentsEntry & { name: string } =>
-      entry.type === "file" && typeof entry.name === "string",
-  );
-
-  const documentFile = files.find(
-    (entry) => entry.name === "document" || entry.name.startsWith("document."),
-  );
-  if (documentFile) {
-    return documentFile.name;
-  }
-
-  const legacyFile = files.find(
-    (entry) => entry.name === repo || entry.name.startsWith(`${repo}.`),
-  );
-  if (legacyFile) {
-    return legacyFile.name;
-  }
-
-  if (files.length === 1) {
-    return files[0]?.name ?? null;
-  }
-
-  return null;
-}
-
-async function resolveCanonicalFileInfo(
-  giteaClient: GiteaClient,
-  owner: string,
-  repo: string,
-  ref = "main",
-): Promise<CanonicalFileInfo | null> {
-  const result = await unwrap(
-    giteaClient.GET("/repos/{owner}/{repo}/contents-ext/{filepath}", {
-      params: {
-        path: { owner, repo, filepath: "." },
-        query: { ref },
-      },
-    }),
-  );
-
-  const response = result as RepoContentsExtResponse;
-  const entries = [
-    ...(response.dir_contents ?? []),
-    ...(response.file_contents ? [response.file_contents] : []),
-  ];
-  const storedFileName = inferStoredDocumentFileName(entries, repo);
-
-  if (!storedFileName) {
-    return null;
-  }
-
-  return {
-    storedFileName,
-    downloadFileName: buildDownloadFileName(repo, storedFileName),
-  };
-}
-
 function readPermissionError(err: unknown, fallback: string): string {
-  if (err instanceof GiteaApiError && err.status === 403) {
-    return "You don't have permission to perform this action.";
-  }
   return err instanceof Error ? err.message : fallback;
 }
 
@@ -267,7 +156,6 @@ const DEFAULT_PR_ACTION_STATE: PRActionState = {
 };
 
 export function DocumentDetail({
-  giteaClient,
   owner,
   repo,
   uploaderSlug,
@@ -291,54 +179,17 @@ export function DocumentDetail({
   >({});
   const [activeView, setActiveView] = useState<DocumentDetailView>("overview");
 
-  const giteaBaseUrl =
-    (import.meta as ImportMeta & { env?: Record<string, string | undefined> })
-      .env?.VITE_GITEA_BASE_URL ?? "http://localhost:3000";
-
   const loadDocumentData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
     try {
-      const [docTags, pullRequests, protection] = await Promise.all([
-        listDocTags(giteaClient, owner, repo),
-        listPullRequests({
-          client: giteaClient,
-          owner,
-          repo,
-          state: "open",
-        }),
-        getRepoBranchProtection(giteaClient, owner, repo, "main").catch(
-          () => null,
-        ),
-      ]);
+      const detail = await getDocumentDetail(owner, repo);
 
-      const uploadPRs = pullRequests
-        .filter((pr) => (pr.head?.ref ?? "").startsWith("upload/"))
-        .sort((left, right) => (right.number ?? 0) - (left.number ?? 0));
-
-      let fileInfo =
-        (await resolveCanonicalFileInfo(giteaClient, owner, repo).catch(
-          () => null,
-        )) ?? null;
-
-      if (!fileInfo) {
-        const fallbackRef = uploadPRs[0]?.head?.ref;
-        if (fallbackRef) {
-          fileInfo =
-            (await resolveCanonicalFileInfo(
-              giteaClient,
-              owner,
-              repo,
-              fallbackRef,
-            ).catch(() => null)) ?? null;
-        }
-      }
-
-      setTags(docTags);
-      setOpenPRs(pullRequests);
-      setBranchProtection(protection);
-      setCanonicalFileInfo(fileInfo);
+      setTags(detail.tags);
+      setOpenPRs(detail.openPullRequests);
+      setBranchProtection(detail.branchProtection);
+      setCanonicalFileInfo(detail.canonicalFile);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Unable to load document details.";
@@ -349,7 +200,7 @@ export function DocumentDetail({
     } finally {
       setIsLoading(false);
     }
-  }, [giteaClient, owner, repo]);
+  }, [owner, repo]);
 
   useEffect(() => {
     void loadDocumentData();
@@ -382,14 +233,13 @@ export function DocumentDetail({
   async function handleApprove(pullNumber: number) {
     updatePRActionState(pullNumber, { status: "submitting", error: null });
     try {
-      await submitReview({
-        client: giteaClient,
+      await submitDocumentReview(
         owner,
         repo,
         pullNumber,
-        event: "APPROVE",
-        body: "APPROVED",
-      });
+        "APPROVE",
+        "APPROVED",
+      );
       updatePRActionState(pullNumber, { status: "idle" });
       await loadDocumentData();
     } catch (err) {
@@ -410,14 +260,13 @@ export function DocumentDetail({
     }
     updatePRActionState(pullNumber, { status: "submitting", error: null });
     try {
-      await submitReview({
-        client: giteaClient,
+      await submitDocumentReview(
         owner,
         repo,
         pullNumber,
-        event: "REQUEST_CHANGES",
-        body: comment,
-      });
+        "REQUEST_CHANGES",
+        comment,
+      );
       updatePRActionState(pullNumber, {
         status: "idle",
         showChangesForm: false,
@@ -435,20 +284,7 @@ export function DocumentDetail({
   async function handleMerge(pullNumber: number) {
     updatePRActionState(pullNumber, { status: "submitting", error: null });
     try {
-      await mergeOrResolveConflicts({
-        client: giteaClient,
-        owner,
-        repo,
-        pullNumber,
-        mergeStyle: "merge",
-      });
-      await createDocTag({
-        client: giteaClient,
-        owner,
-        repo,
-        version: nextVersion,
-        target: "main",
-      });
+      await publishDocument(owner, repo, pullNumber, nextVersion);
       updatePRActionState(pullNumber, { status: "idle" });
       await loadDocumentData();
     } catch (err) {
@@ -468,38 +304,10 @@ export function DocumentDetail({
       return;
     }
 
-    const token = getStoredToken();
-    if (!token) {
-      setDownloadState({
-        ref: null,
-        error: "Your Gitea session expired. Sign in again to download files.",
-      });
-      return;
-    }
-
     setDownloadState({ ref, error: null });
 
     try {
-      const response = await fetch(
-        buildRawFileUrl(
-          giteaBaseUrl,
-          owner,
-          repo,
-          ref,
-          canonicalFileInfo.storedFileName,
-        ),
-        {
-          headers: {
-            Authorization: `token ${token}`,
-          },
-        },
-      );
-
-      if (!response.ok) {
-        throw new Error(`Download failed (${response.status}).`);
-      }
-
-      const blob = await response.blob();
+      const blob = await downloadDocument(owner, repo, ref);
       triggerBrowserDownload(blob, canonicalFileInfo.downloadFileName);
       setDownloadState({ ref: null, error: null });
     } catch (err) {
@@ -607,7 +415,6 @@ export function DocumentDetail({
 
       {activeView === "collaborators" ? (
         <DocumentCollaborators
-          giteaClient={giteaClient}
           owner={owner}
           repo={repo}
           currentUsername={uploaderSlug}
@@ -859,7 +666,6 @@ export function DocumentDetail({
 
           {showUploadModal && (
             <UploadModal
-              giteaClient={giteaClient}
               owner={owner}
               repo={repo}
               docSlug={repo}

@@ -1,30 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 
-import type { GiteaClient } from "../../../packages/gitea-client/client";
-import type { PullRequestWithApprovalState } from "../../../packages/gitea-client/pullRequests";
-import type {
-  DocTag,
-  WorkspaceRepo,
-} from "../../../packages/gitea-client/repos";
-import { listPullRequests } from "../../../packages/gitea-client/pullRequests";
-import {
-  getLatestDocTag,
-  listWorkspaceRepos,
-} from "../../../packages/gitea-client/repos";
+import { getWorkspaceDocuments, type WorkspaceDocumentSummary } from "../api";
 import { CreateDocumentModal } from "./CreateDocumentModal";
 
 interface FileVaultWorkspaceProps {
-  giteaClient: GiteaClient;
   currentUsername: string;
   onSelectDocument: (owner: string, repo: string) => void;
-}
-
-interface DocumentData {
-  repo: WorkspaceRepo;
-  latestTag: DocTag | null;
-  pendingPRs: PullRequestWithApprovalState[];
-  isLoading: boolean;
-  error: string | null;
 }
 
 function formatRelativeTime(timestamp: string): string {
@@ -88,115 +69,37 @@ function getApprovalStateLabel(state: string): string {
 }
 
 export function FileVaultWorkspace({
-  giteaClient,
   currentUsername,
   onSelectDocument,
 }: FileVaultWorkspaceProps) {
-  const [repos, setRepos] = useState<WorkspaceRepo[]>([]);
-  const [documentData, setDocumentData] = useState<Map<number, DocumentData>>(
-    new Map(),
-  );
-  const [isLoadingRepos, setIsLoadingRepos] = useState(true);
+  const [documents, setDocuments] = useState<WorkspaceDocumentSummary[]>([]);
+  const [isLoadingDocuments, setIsLoadingDocuments] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreateDocumentModal, setShowCreateDocumentModal] = useState(false);
 
-  const loadRepos = useCallback(async () => {
-    setIsLoadingRepos(true);
+  const loadDocuments = useCallback(async () => {
+    setIsLoadingDocuments(true);
     setError(null);
 
     try {
-      const workspaceRepos = await listWorkspaceRepos(giteaClient);
-      setRepos(workspaceRepos);
-
-      const initialData = new Map<number, DocumentData>();
-      for (const repo of workspaceRepos) {
-        initialData.set(repo.id, {
-          repo,
-          latestTag: null,
-          pendingPRs: [],
-          isLoading: true,
-          error: null,
-        });
-      }
-      setDocumentData(initialData);
+      setDocuments(await getWorkspaceDocuments());
     } catch (err) {
-      const message =
+      setError(
         err instanceof Error
           ? err.message
-          : "Unable to load workspace repositories.";
-      setError(message);
-      setRepos([]);
-      setDocumentData(new Map());
+          : "Unable to load workspace documents.",
+      );
+      setDocuments([]);
     } finally {
-      setIsLoadingRepos(false);
+      setIsLoadingDocuments(false);
     }
-  }, [giteaClient]);
-
-  const loadDocumentDetails = useCallback(
-    async (repo: WorkspaceRepo) => {
-      try {
-        const [latestTag, pullRequests] = await Promise.all([
-          getLatestDocTag(giteaClient, repo.owner.login, repo.name),
-          listPullRequests({
-            client: giteaClient,
-            owner: repo.owner.login,
-            repo: repo.name,
-            state: "open",
-          }),
-        ]);
-
-        const uploadPRs = pullRequests.filter((pr) => {
-          const headRef = pr.head?.ref ?? "";
-          return headRef.startsWith("upload/");
-        });
-
-        setDocumentData((prev) => {
-          const next = new Map(prev);
-          const existing = next.get(repo.id);
-          if (existing) {
-            next.set(repo.id, {
-              ...existing,
-              latestTag,
-              pendingPRs: uploadPRs,
-              isLoading: false,
-              error: null,
-            });
-          }
-          return next;
-        });
-      } catch (err) {
-        const message =
-          err instanceof Error
-            ? err.message
-            : "Unable to load document details.";
-        setDocumentData((prev) => {
-          const next = new Map(prev);
-          const existing = next.get(repo.id);
-          if (existing) {
-            next.set(repo.id, {
-              ...existing,
-              isLoading: false,
-              error: message,
-            });
-          }
-          return next;
-        });
-      }
-    },
-    [giteaClient],
-  );
+  }, []);
 
   useEffect(() => {
-    void loadRepos();
-  }, [loadRepos]);
+    void loadDocuments();
+  }, [loadDocuments]);
 
-  useEffect(() => {
-    for (const repo of repos) {
-      void loadDocumentDetails(repo);
-    }
-  }, [repos, loadDocumentDetails]);
-
-  if (isLoadingRepos) {
+  if (isLoadingDocuments) {
     return (
       <div className="vault-workspace">
         <div className="bs-card vault-empty-state">
@@ -218,7 +121,7 @@ export function FileVaultWorkspace({
           <button
             className="bs-btn bs-btn-primary"
             type="button"
-            onClick={() => void loadRepos()}
+            onClick={() => void loadDocuments()}
           >
             Retry
           </button>
@@ -227,13 +130,15 @@ export function FileVaultWorkspace({
     );
   }
 
-  if (repos.length === 0) {
+  if (documents.length === 0) {
     return (
       <div className="vault-workspace">
         <div className="bs-card vault-empty-state">
           <div className="bs-eyebrow">Empty Workspace</div>
           <h2>No documents found</h2>
-          <p>Your workspace is empty. Create your first document to get started.</p>
+          <p>
+            Your workspace is empty. Create your first document to get started.
+          </p>
           <div className="vault-empty-state-actions">
             <button
               className="bs-btn bs-btn-primary"
@@ -247,12 +152,11 @@ export function FileVaultWorkspace({
 
         {showCreateDocumentModal ? (
           <CreateDocumentModal
-            giteaClient={giteaClient}
             owner={currentUsername}
             onClose={() => setShowCreateDocumentModal(false)}
             onSuccess={(owner, repo) => {
               setShowCreateDocumentModal(false);
-              void loadRepos();
+              void loadDocuments();
               onSelectDocument(owner, repo);
             }}
           />
@@ -283,13 +187,13 @@ export function FileVaultWorkspace({
       </section>
 
       <div className="vault-doc-grid">
-        {repos.map((repo) => {
-          const data = documentData.get(repo.id);
-          const latestTag = data?.latestTag ?? null;
-          const pendingPRs = data?.pendingPRs ?? [];
-          const dataLoading = data?.isLoading ?? false;
-          const dataError = data?.error ?? null;
-
+        {documents.map((document) => {
+          const {
+            repo,
+            latestTag,
+            pendingPRs,
+            error: documentError,
+          } = document;
           const mostRecentApprovalState =
             pendingPRs.length > 0 ? pendingPRs[0].approvalState : null;
 
@@ -306,10 +210,8 @@ export function FileVaultWorkspace({
                 <p className="vault-doc-description">{repo.description}</p>
               ) : null}
 
-              {dataLoading ? (
-                <p className="vault-doc-loading">Loading details...</p>
-              ) : dataError ? (
-                <p className="vault-doc-error">{dataError}</p>
+              {documentError ? (
+                <p className="vault-doc-error">{documentError}</p>
               ) : (
                 <div className="vault-doc-metadata">
                   <div className="vault-badges">
@@ -352,12 +254,11 @@ export function FileVaultWorkspace({
 
       {showCreateDocumentModal ? (
         <CreateDocumentModal
-          giteaClient={giteaClient}
           owner={currentUsername}
           onClose={() => setShowCreateDocumentModal(false)}
           onSuccess={(owner, repo) => {
             setShowCreateDocumentModal(false);
-            void loadRepos();
+            void loadDocuments();
             onSelectDocument(owner, repo);
           }}
         />

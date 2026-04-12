@@ -136,9 +136,7 @@ test.describe("Merge conflict resolution on publish", () => {
     await expect(page.getByRole("button", { name: "Publish" })).toBeVisible({
       timeout: 30_000,
     });
-    setTimeout(() => {
-      page.getByRole("button", { name: "Publish" }).click();
-    }, 3000);
+    await page.getByRole("button", { name: "Publish" }).click();
 
     await expect(
       page.getByRole("heading", { name: "No pending reviews" }),
