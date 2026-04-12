@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { getWorkspaceDocuments, type WorkspaceDocumentSummary } from "../api";
 import { CreateDocumentModal } from "./CreateDocumentModal";
@@ -76,6 +76,7 @@ export function FileVaultWorkspace({
   const [isLoadingDocuments, setIsLoadingDocuments] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreateDocumentModal, setShowCreateDocumentModal] = useState(false);
+  const gridRef = useRef<HTMLDivElement>(null);
 
   const loadDocuments = useCallback(async () => {
     setIsLoadingDocuments(true);
@@ -99,13 +100,34 @@ export function FileVaultWorkspace({
     void loadDocuments();
   }, [loadDocuments]);
 
+  useEffect(() => {
+    if (!gridRef.current || isLoadingDocuments) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            e.target.classList.add("bs-in");
+            io.unobserve(e.target);
+          }
+        });
+      },
+      { threshold: 0.1 },
+    );
+    gridRef.current.querySelectorAll(".bs-reveal").forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, [isLoadingDocuments, documents]);
+
   if (isLoadingDocuments) {
     return (
       <div className="vault-workspace">
-        <div className="bs-card vault-empty-state">
-          <div className="bs-eyebrow">Loading</div>
-          <h2>Loading workspace repositories...</h2>
-          <p>Fetching your documents.</p>
+        <div className="vault-doc-grid">
+          {[1, 2, 3].map((i) => (
+            <article key={i} className="bs-card vault-doc-card vault-skeleton-card">
+              <div className="vault-skeleton-line vault-skeleton-line--medium" />
+              <div className="vault-skeleton-line vault-skeleton-line--wide" />
+              <div className="vault-skeleton-line vault-skeleton-line--short" />
+            </article>
+          ))}
         </div>
       </div>
     );
@@ -134,10 +156,10 @@ export function FileVaultWorkspace({
     return (
       <div className="vault-workspace">
         <div className="bs-card vault-empty-state">
-          <div className="bs-eyebrow">Empty Workspace</div>
-          <h2>No documents found</h2>
+          <div className="bs-eyebrow">File Vault</div>
+          <h2>Your vault is ready.</h2>
           <p>
-            Your workspace is empty. Create your first document to get started.
+            Add your first document to start tracking versions and reviews.
           </p>
           <div className="vault-empty-state-actions">
             <button
@@ -186,8 +208,8 @@ export function FileVaultWorkspace({
         </p>
       </section>
 
-      <div className="vault-doc-grid">
-        {documents.map((document) => {
+      <div className="vault-doc-grid" ref={gridRef}>
+        {documents.map((document, index) => {
           const {
             repo,
             latestTag,
@@ -196,10 +218,11 @@ export function FileVaultWorkspace({
           } = document;
           const mostRecentApprovalState =
             pendingPRs.length > 0 ? pendingPRs[0].approvalState : null;
+          const revealClass = index < 4 ? `bs-reveal bs-reveal-d${index + 1}` : "bs-reveal";
 
           return (
             <article
-              className="bs-card vault-doc-card"
+              className={`bs-card vault-doc-card ${revealClass}`}
               key={repo.id}
               onClick={() => onSelectDocument(repo.owner.login, repo.name)}
             >
