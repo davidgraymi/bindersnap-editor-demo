@@ -176,6 +176,31 @@ function LoginPage({ callbackError, onLogin, onSignup }: LoginPageProps) {
   return (
     <section className="app-login-shell">
       <div className="app-login-wrap">
+        <div className="app-login-logo">
+          <div className="app-login-logo-mark" aria-hidden="true">
+            <svg viewBox="0 0 18 18" fill="none" width="24" height="24">
+              <rect
+                x="2"
+                y="1"
+                width="9"
+                height="13"
+                rx="1.5"
+                stroke="currentColor"
+                strokeWidth="1.4"
+              />
+              <rect
+                x="6"
+                y="4"
+                width="9"
+                height="13"
+                rx="1.5"
+                stroke="currentColor"
+                strokeWidth="1.4"
+              />
+            </svg>
+          </div>
+          <span className="app-login-logo-text">Bindersnap</span>
+        </div>
         <div className="app-login-panel bs-card">
           <div className="bs-eyebrow">Secure Access</div>
           <h1>
