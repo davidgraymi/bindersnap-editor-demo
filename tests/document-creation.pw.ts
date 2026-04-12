@@ -41,18 +41,15 @@ test.describe("UI document creation flow", () => {
 
     await page.getByRole("button", { name: "Create Document" }).click();
 
+    // New UI uses breadcrumb navigation instead of a back button
     await expect(
-      page.getByRole("button", { name: "← Back to workspace" }),
+      page.locator("nav[aria-label='Breadcrumb'] button", { hasText: "Documents" }),
     ).toBeVisible({ timeout: 10_000 });
     await expect(
-      page.getByRole("heading", { name: "Unpublished" }),
+      page.getByRole("heading", { name: /No approved version yet/i }),
     ).toBeVisible();
     await expect(
-      page.getByText("No published version exists yet."),
+      page.getByRole("heading", { name: /1 Pending Approval/i }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: /1 Open Pull Request/ }),
-    ).toBeVisible();
-    await expect(page.getByText(/Upload v1:/)).toBeVisible();
   });
 });
