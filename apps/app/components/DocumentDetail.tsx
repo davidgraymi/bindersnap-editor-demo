@@ -19,6 +19,8 @@ interface DocumentDetailProps {
   owner: string;
   repo: string;
   uploaderSlug: string;
+  activeView: "overview" | "collaborators";
+  onTabChange: (tab: "overview" | "collaborators") => void;
   onBack: () => void;
 }
 
@@ -33,8 +35,6 @@ interface CanonicalFileInfo {
   storedFileName: string;
   downloadFileName: string;
 }
-
-type DocumentDetailView = "overview" | "collaborators";
 
 function getApprovalStateBadgeClass(state: string): string {
   switch (state) {
@@ -159,6 +159,8 @@ export function DocumentDetail({
   owner,
   repo,
   uploaderSlug,
+  activeView,
+  onTabChange,
   onBack,
 }: DocumentDetailProps) {
   const [tags, setTags] = useState<DocTag[]>([]);
@@ -177,7 +179,6 @@ export function DocumentDetail({
   const [prActionStates, setPrActionStates] = useState<
     Record<number, PRActionState>
   >({});
-  const [activeView, setActiveView] = useState<DocumentDetailView>("overview");
 
   const loadDocumentData = useCallback(async () => {
     setIsLoading(true);
@@ -205,10 +206,6 @@ export function DocumentDetail({
   useEffect(() => {
     void loadDocumentData();
   }, [loadDocumentData]);
-
-  useEffect(() => {
-    setActiveView("overview");
-  }, [owner, repo]);
 
   const latestTag = tags.length > 0 ? tags[0] : null;
   const nextVersion = (latestTag?.version ?? 0) + 1;
@@ -397,7 +394,7 @@ export function DocumentDetail({
             type="button"
             role="tab"
             aria-selected={activeView === "overview"}
-            onClick={() => setActiveView("overview")}
+            onClick={() => onTabChange("overview")}
           >
             Overview
           </button>
@@ -406,7 +403,7 @@ export function DocumentDetail({
             type="button"
             role="tab"
             aria-selected={activeView === "collaborators"}
-            onClick={() => setActiveView("collaborators")}
+            onClick={() => onTabChange("collaborators")}
           >
             Collaborators
           </button>

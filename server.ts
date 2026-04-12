@@ -1,9 +1,4 @@
-/**
- * This is a development only server for
- */
-
 import { serve } from "bun";
-import index from "./apps/landing/index.html";
 import appIndex from "./apps/app/index.html";
 
 const configuredPort = Number.parseInt(
@@ -16,18 +11,12 @@ const appPort =
 const server = serve({
   port: appPort,
   routes: {
-    "/app": appIndex,
-    "/app/*": appIndex,
+    "/": appIndex,
+    "/docs/*": appIndex,
     "/auth/callback": appIndex,
     "/login": appIndex,
     "/login/*": appIndex,
-
-    // Both apps are always reachable at their explicit prefix.
-    "/landing": index,
-    "/landing/*": index,
-
-    // Wildcard: serve whichever app is the current dev target.
-    "/*": process.env.APP_TARGET === "landing" ? index : appIndex,
+    "/*": appIndex,
   },
 
   development: process.env.NODE_ENV !== "production" && {
@@ -39,4 +28,4 @@ const server = serve({
   },
 });
 
-console.log(`🚀 Server running at http://localhost:${appPort}/`);
+console.log(`🚀 App server running at http://localhost:${appPort}/`);

@@ -26,12 +26,15 @@ import {
 } from "../packages/gitea-client/pullRequests";
 import {
   createBobClient,
+  expectedPrefilledDocumentName,
   installMemorySessionStorage,
   makeClient,
   navigateToDocument,
+  openNewDocumentModal,
   pollUntil,
   resolveAndStoreToken,
   signInAsAlice,
+  waitForNoPendingReviews,
 } from "./helpers";
 
 // ---------------------------------------------------------------------------
@@ -48,7 +51,7 @@ test.beforeAll(async () => {
 // ---------------------------------------------------------------------------
 
 test.describe("Document download", () => {
-  test.describe.configure({ mode: "serial", timeout: 120_000 });
+  test.describe.configure({ mode: "serial", timeout: 180_000 });
 
   const timestamp = Date.now();
   const randomString = Math.random().toString(36).slice(2, 8);
@@ -67,12 +70,7 @@ test.describe("Document download", () => {
     const fileData = Buffer.from("Version 1 content for download test\n");
 
     await signInAsAlice(page);
-
-    // Open the create document modal
-    await page.getByRole("button", { name: "New Document" }).first().click();
-    await expect(
-      page.getByRole("heading", { name: "Create workspace document" }),
-    ).toBeVisible();
+    await openNewDocumentModal(page);
 
     // Upload the v1 file
     await page.locator("#create-document-file").setInputFiles({
@@ -81,8 +79,9 @@ test.describe("Document download", () => {
       buffer: fileData,
     });
 
-    // Wait for the document name to auto-fill from the filename
-    await expect(page.locator("#create-document-name")).not.toHaveValue("");
+    await expect(page.locator("#create-document-name")).toHaveValue(
+      expectedPrefilledDocumentName(fileName),
+    );
 
     // Submit the create form
     await page.getByRole("button", { name: "Create Document" }).click();
@@ -95,6 +94,9 @@ test.describe("Document download", () => {
     // Verify the document is in the unpublished state with 1 open PR
     await expect(
       page.getByRole("heading", { name: "Unpublished" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("No published version exists yet."),
     ).toBeVisible();
     await expect(
       page.getByRole("heading", { name: /1 Open Pull Request/ }),
@@ -158,22 +160,23 @@ test.describe("Document download", () => {
     await navigateToDocument(page, cardSearchText);
 
     // The Publish button must appear now that the PR is approved
-    await expect(page.getByRole("button", { name: "Publish" })).toBeVisible({
+    await expect(
+      page.getByRole("button", { name: "Publish", exact: true }),
+    ).toBeVisible({
       timeout: 30_000,
     });
 
     // Publish v1
-    await page.getByRole("button", { name: "Publish" }).click();
+    await page.getByRole("button", { name: "Publish", exact: true }).click();
 
-    // Wait for publish to complete
-    await expect(
-      page.getByRole("heading", { name: "No pending reviews" }),
-    ).toBeVisible({ timeout: 120_000 });
+    await waitForNoPendingReviews(page, cardSearchText);
+    await page.getByRole("button", { name: "← Back to workspace" }).click();
+    await navigateToDocument(page, cardSearchText);
 
     // The page should now report Version 1 as the current published version
-    await expect(
-      page.getByRole("heading", { name: "Version 1" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Version 1" })).toBeVisible({
+      timeout: 30_000,
+    });
   });
 
   test("download current version after v1 publish", async ({ page }) => {
@@ -183,9 +186,9 @@ test.describe("Document download", () => {
     await navigateToDocument(page, cardSearchText);
 
     // Wait for the v1 published state to render before attempting download
-    await expect(
-      page.getByRole("heading", { name: "Version 1" }),
-    ).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("heading", { name: "Version 1" })).toBeVisible({
+      timeout: 30_000,
+    });
 
     // Intercept the download triggered by clicking "Download Current Version"
     const [download] = await Promise.all([
@@ -194,9 +197,7 @@ test.describe("Document download", () => {
     ]);
 
     // The suggested filename must be {repo-name}.txt
-    expect(download.suggestedFilename()).toMatch(
-      new RegExp(`^${repo}\\.txt$`),
-    );
+    expect(download.suggestedFilename()).toMatch(new RegExp(`^${repo}\\.txt$`));
   });
 
   test("alice uploads v2 via UI", async ({ page }) => {
@@ -281,15 +282,16 @@ test.describe("Document download", () => {
     await navigateToDocument(page, cardSearchText);
 
     // Publish v2
-    await expect(page.getByRole("button", { name: "Publish" })).toBeVisible({
+    await expect(
+      page.getByRole("button", { name: "Publish", exact: true }),
+    ).toBeVisible({
       timeout: 30_000,
     });
-    await page.getByRole("button", { name: "Publish" }).click();
+    await page.getByRole("button", { name: "Publish", exact: true }).click();
 
-    // Wait for publish to complete
-    await expect(
-      page.getByRole("heading", { name: "No pending reviews" }),
-    ).toBeVisible({ timeout: 120_000 });
+    await waitForNoPendingReviews(page, cardSearchText);
+    await page.getByRole("button", { name: "← Back to workspace" }).click();
+    await navigateToDocument(page, cardSearchText);
 
     // Version 2 should now be the current published version
     await expect(
@@ -312,9 +314,9 @@ test.describe("Document download", () => {
     await navigateToDocument(page, cardSearchText);
 
     // Wait for the v2 published state to render
-    await expect(
-      page.getByRole("heading", { name: "Version 2" }),
-    ).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("heading", { name: "Version 2" })).toBeVisible({
+      timeout: 30_000,
+    });
 
     // Intercept the download triggered by "Download Current Version"
     const [download] = await Promise.all([
@@ -323,9 +325,7 @@ test.describe("Document download", () => {
     ]);
 
     // The filename must still be {repo-name}.txt for v2
-    expect(download.suggestedFilename()).toMatch(
-      new RegExp(`^${repo}\\.txt$`),
-    );
+    expect(download.suggestedFilename()).toMatch(new RegExp(`^${repo}\\.txt$`));
   });
 
   test("download v1 from version history", async ({ page }) => {
@@ -346,8 +346,6 @@ test.describe("Document download", () => {
     ]);
 
     // The v1 history download filename must also match {repo-name}.txt
-    expect(download.suggestedFilename()).toMatch(
-      new RegExp(`^${repo}\\.txt$`),
-    );
+    expect(download.suggestedFilename()).toMatch(new RegExp(`^${repo}\\.txt$`));
   });
 });

@@ -56,7 +56,7 @@ async function signUp(
     .fill(credentials.password);
   await page.getByRole("button", { name: "Create account" }).click();
 
-  await expect(page).toHaveURL(/\/app$/);
+  await expect(page).toHaveURL(/\/$/);
   await expect(
     page.getByText(`Signed in as ${credentials.username}`),
   ).toBeVisible();
@@ -133,6 +133,13 @@ async function addReadCollaborator(page: Page, login: string): Promise<void> {
 }
 
 async function reopenDocumentFromWorkspace(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "← Back to workspace" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Your Documents" }),
+  ).toBeVisible({
+    timeout: 10_000,
+  });
+
   await page.reload();
   await expect(
     page.getByRole("heading", { name: "Your Documents" }),
