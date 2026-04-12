@@ -189,24 +189,22 @@ export function FileVaultWorkspace({
 
   return (
     <div className="vault-workspace">
-      <section className="vault-section">
-        <div className="vault-section-header">
-          <div>
-            <div className="bs-eyebrow">File Vault</div>
-            <h1>Your Documents</h1>
-          </div>
-          <button
-            className="bs-btn bs-btn-primary"
-            type="button"
-            onClick={() => setShowCreateDocumentModal(true)}
-          >
-            New Document
-          </button>
+      <div className="vault-workspace-toolbar">
+        <div>
+          <div className="bs-eyebrow">File Vault</div>
+          <h1>Your Documents</h1>
         </div>
-        <p>
-          Each card shows the current published version and any pending reviews.
-        </p>
-      </section>
+        <button
+          className="bs-btn bs-btn-primary"
+          type="button"
+          onClick={() => setShowCreateDocumentModal(true)}
+        >
+          New Document
+        </button>
+      </div>
+      <p className="vault-workspace-desc">
+        Each card shows the current published version and any pending reviews.
+      </p>
 
       <div className="vault-doc-grid" ref={gridRef}>
         {documents.map((document, index) => {

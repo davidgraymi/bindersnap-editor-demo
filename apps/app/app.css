@@ -413,13 +413,25 @@ input {
   align-items: center;
   justify-content: space-between;
   gap: var(--brand-space-4);
+}
+
+/* Workspace toolbar — sticky within .vault-workspace so button stays visible */
+.vault-workspace-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--brand-space-4);
   position: sticky;
   top: 0;
   z-index: 10;
   background: var(--bs-page-bg);
   padding-top: var(--brand-space-4);
   padding-bottom: var(--brand-space-4);
-  margin-bottom: var(--brand-space-2);
+}
+
+.vault-workspace-desc {
+  margin: 0 0 var(--brand-space-4);
+  color: var(--bs-text-muted);
 }
 
 .vault-section h1 {
