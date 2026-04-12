@@ -137,7 +137,9 @@ async function addReadCollaborator(page: Page, login: string): Promise<void> {
 
 async function reopenDocumentFromWorkspace(page: Page): Promise<void> {
   // New UI uses breadcrumb navigation instead of a back button
-  await page.locator("nav[aria-label='Breadcrumb'] button", { hasText: "Documents" }).click();
+  await page
+    .locator("nav[aria-label='Breadcrumb'] button", { hasText: "Documents" })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Your Documents" }),
   ).toBeVisible({

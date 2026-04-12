@@ -43,7 +43,9 @@ test.describe("UI document creation flow", () => {
 
     // New UI uses breadcrumb navigation instead of a back button
     await expect(
-      page.locator("nav[aria-label='Breadcrumb'] button", { hasText: "Documents" }),
+      page.locator("nav[aria-label='Breadcrumb'] button", {
+        hasText: "Documents",
+      }),
     ).toBeVisible({ timeout: 10_000 });
     await expect(
       page.getByRole("heading", { name: /No approved version yet/i }),

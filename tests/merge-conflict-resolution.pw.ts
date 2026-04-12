@@ -79,7 +79,9 @@ test.describe("Merge conflict resolution on publish", () => {
 
     // New UI uses breadcrumb navigation instead of a back button
     await expect(
-      page.locator("nav[aria-label='Breadcrumb'] button", { hasText: "Documents" }),
+      page.locator("nav[aria-label='Breadcrumb'] button", {
+        hasText: "Documents",
+      }),
     ).toBeVisible({ timeout: 10_000 });
     await expect(
       page.getByRole("heading", { name: /No approved version yet/i }),
@@ -130,7 +132,9 @@ test.describe("Merge conflict resolution on publish", () => {
     });
     await page.getByRole("button", { name: "Approve" }).click();
     // Confirm the approval in the confirmation dialog
-    await expect(page.getByRole("button", { name: "Confirm Approval" })).toBeVisible({
+    await expect(
+      page.getByRole("button", { name: "Confirm Approval" }),
+    ).toBeVisible({
       timeout: 5_000,
     });
     await page.getByRole("button", { name: "Confirm Approval" }).click();
@@ -145,13 +149,20 @@ test.describe("Merge conflict resolution on publish", () => {
     await navigateToDocument(page, cardSearchText);
 
     await expect(
-      page.getByRole("button", { name: "Publish as Official Version", exact: true }),
+      page.getByRole("button", {
+        name: "Publish as Official Version",
+        exact: true,
+      }),
     ).toBeVisible({
       timeout: 30_000,
     });
-    await page.getByRole("button", { name: "Publish as Official Version", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Publish as Official Version", exact: true })
+      .click();
     await waitForNoPendingReviews(page, cardSearchText);
-    await page.locator("nav[aria-label='Breadcrumb'] button", { hasText: "Documents" }).click();
+    await page
+      .locator("nav[aria-label='Breadcrumb'] button", { hasText: "Documents" })
+      .click();
     await navigateToDocument(page, cardSearchText);
 
     await expect(page.getByRole("heading", { name: "Version 1" })).toBeVisible({
@@ -225,7 +236,9 @@ test.describe("Merge conflict resolution on publish", () => {
     const firstPr = page.locator(".vault-pr-item").last();
     await firstPr.getByRole("button", { name: "Approve" }).click();
     // Confirm the approval in the two-step confirm dialog
-    await expect(page.getByRole("button", { name: "Confirm Approval" })).toBeVisible({
+    await expect(
+      page.getByRole("button", { name: "Confirm Approval" }),
+    ).toBeVisible({
       timeout: 5_000,
     });
     await page.getByRole("button", { name: "Confirm Approval" }).click();
@@ -239,11 +252,16 @@ test.describe("Merge conflict resolution on publish", () => {
     await navigateToDocument(page, cardSearchText);
 
     await expect(
-      page.getByRole("button", { name: "Publish as Official Version", exact: true }),
+      page.getByRole("button", {
+        name: "Publish as Official Version",
+        exact: true,
+      }),
     ).toBeVisible({
       timeout: 30_000,
     });
-    await page.getByRole("button", { name: "Publish as Official Version", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Publish as Official Version", exact: true })
+      .click();
 
     // Wait for v2 to be published — PR count drops to 1
     await expect(
@@ -267,7 +285,9 @@ test.describe("Merge conflict resolution on publish", () => {
     const secondPr = page.locator(".vault-pr-item");
     await secondPr.getByRole("button", { name: "Approve" }).click();
     // Confirm the approval in the two-step confirm dialog
-    await expect(page.getByRole("button", { name: "Confirm Approval" })).toBeVisible({
+    await expect(
+      page.getByRole("button", { name: "Confirm Approval" }),
+    ).toBeVisible({
       timeout: 5_000,
     });
     await page.getByRole("button", { name: "Confirm Approval" }).click();
@@ -280,13 +300,18 @@ test.describe("Merge conflict resolution on publish", () => {
     await navigateToDocument(page, cardSearchText);
 
     await expect(
-      page.getByRole("button", { name: "Publish as Official Version", exact: true }),
+      page.getByRole("button", {
+        name: "Publish as Official Version",
+        exact: true,
+      }),
     ).toBeVisible({
       timeout: 30_000,
     });
 
     // Conflict resolution + retry may take longer than a normal merge
-    await page.getByRole("button", { name: "Publish as Official Version", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Publish as Official Version", exact: true })
+      .click();
 
     await expect(
       page.getByRole("heading", { name: "No pending approvals" }),

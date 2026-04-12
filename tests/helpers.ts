@@ -335,7 +335,9 @@ export async function navigateToDocument(
   await card.click({ force: true });
   // New UI uses breadcrumb navigation instead of a back button.
   await expect(
-    page.locator("nav[aria-label='Breadcrumb'] button", { hasText: "Documents" }),
+    page.locator("nav[aria-label='Breadcrumb'] button", {
+      hasText: "Documents",
+    }),
   ).toBeVisible({ timeout: 10_000 });
 }
 
@@ -352,10 +354,9 @@ export async function waitForNoPendingReviews(
     name: "No pending approvals",
   });
   // New UI breadcrumb "Documents" button replaces the old "← Back to workspace" button
-  const breadcrumbBack = page.locator(
-    "nav[aria-label='Breadcrumb'] button",
-    { hasText: "Documents" },
-  );
+  const breadcrumbBack = page.locator("nav[aria-label='Breadcrumb'] button", {
+    hasText: "Documents",
+  });
 
   while (Date.now() < deadline) {
     // New UI: publish button is "Publish as Official Version"

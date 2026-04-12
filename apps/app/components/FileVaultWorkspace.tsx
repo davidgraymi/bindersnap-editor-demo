@@ -135,7 +135,9 @@ export function FileVaultWorkspace({
       },
       { threshold: 0.1 },
     );
-    gridRef.current.querySelectorAll(".bs-reveal").forEach((el) => io.observe(el));
+    gridRef.current
+      .querySelectorAll(".bs-reveal")
+      .forEach((el) => io.observe(el));
     return () => io.disconnect();
   }, [isLoadingDocuments, documents, activeFilter]);
 
@@ -144,7 +146,10 @@ export function FileVaultWorkspace({
       <div className="vault-workspace">
         <div className="vault-doc-grid">
           {[1, 2, 3].map((i) => (
-            <article key={i} className="bs-card vault-doc-card vault-skeleton-card">
+            <article
+              key={i}
+              className="bs-card vault-doc-card vault-skeleton-card"
+            >
               <div className="vault-skeleton-line vault-skeleton-line--medium" />
               <div className="vault-skeleton-line vault-skeleton-line--wide" />
               <div className="vault-skeleton-line vault-skeleton-line--short" />
@@ -339,7 +344,8 @@ export function FileVaultWorkspace({
           } = document;
           const firstPR = pendingPRs.length > 0 ? pendingPRs[0] : null;
           const mostRecentApprovalState = firstPR?.approvalState ?? null;
-          const revealClass = index < 4 ? `bs-reveal bs-reveal-d${index + 1}` : "bs-reveal";
+          const revealClass =
+            index < 4 ? `bs-reveal bs-reveal-d${index + 1}` : "bs-reveal";
           const cardStatusClass = getCardStatusClass(mostRecentApprovalState);
           const submitterLogin = firstPR?.user?.login ?? null;
           const submittedAt = firstPR?.created_at ?? null;
@@ -374,7 +380,8 @@ export function FileVaultWorkspace({
 
                     {pendingPRs.length > 0 ? (
                       <span className="vault-pending-badge">
-                        {pendingPRs.length} pending approval{pendingPRs.length === 1 ? "" : "s"}
+                        {pendingPRs.length} pending approval
+                        {pendingPRs.length === 1 ? "" : "s"}
                       </span>
                     ) : null}
 

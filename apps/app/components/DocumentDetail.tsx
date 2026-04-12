@@ -182,7 +182,10 @@ function canUserReview(
   return { allowed: true, reason: null };
 }
 
-function isOwnSubmission(currentUser: string, prAuthor: string | undefined): boolean {
+function isOwnSubmission(
+  currentUser: string,
+  prAuthor: string | undefined,
+): boolean {
   return currentUser === prAuthor;
 }
 
@@ -451,13 +454,13 @@ export function DocumentDetail({
               <section className="bs-card vault-section">
                 <div className="bs-eyebrow">Current Version</div>
                 <h2>
-                  {latestTag ? `Version ${latestTag.version}` : "No approved version yet"}
+                  {latestTag
+                    ? `Version ${latestTag.version}`
+                    : "No approved version yet"}
                 </h2>
                 {latestTag ? (
                   <>
-                    <p>
-                      Approved on {formatDate(latestTag.created)}
-                    </p>
+                    <p>Approved on {formatDate(latestTag.created)}</p>
                     {canonicalFileInfo ? (
                       <button
                         className="bs-btn bs-btn-secondary"
@@ -471,7 +474,8 @@ export function DocumentDetail({
                       </button>
                     ) : (
                       <p>
-                        Unable to determine the document file for this repository.
+                        Unable to determine the document file for this
+                        repository.
                       </p>
                     )}
                     {downloadState.error ? (
@@ -500,7 +504,8 @@ export function DocumentDetail({
                 <section className="bs-card vault-section">
                   <div className="bs-eyebrow">Pending Approvals</div>
                   <h2>
-                    {openPRs.length} Pending Approval{openPRs.length === 1 ? "" : "s"}
+                    {openPRs.length} Pending Approval
+                    {openPRs.length === 1 ? "" : "s"}
                   </h2>
                   <div className="vault-pr-list">
                     {openPRs.map((pr) => {
@@ -517,7 +522,10 @@ export function DocumentDetail({
                         branchProtection,
                       );
                       const mergeReady = pr.approvalState === "approved";
-                      const ownSubmission = isOwnSubmission(uploaderSlug, pr.user?.login);
+                      const ownSubmission = isOwnSubmission(
+                        uploaderSlug,
+                        pr.user?.login,
+                      );
 
                       // Parse the PR body — hide raw auto-generated content
                       const parsedBody = parsePRBody(pr.body);
@@ -554,17 +562,20 @@ export function DocumentDetail({
 
                           {ownSubmission ? (
                             <p className="vault-pr-own-notice">
-                              ℹ You submitted this version — waiting on other reviewers to approve.
+                              ℹ You submitted this version — waiting on other
+                              reviewers to approve.
                             </p>
                           ) : reviewPerms.allowed ? (
                             <div className="vault-pr-actions">
                               {actionState.showApproveConfirm ? (
                                 <div className="vault-pr-confirm">
                                   <p className="vault-pr-confirm-heading">
-                                    Approve version {nextVersion} of {formatDocumentName(repo)}?
+                                    Approve version {nextVersion} of{" "}
+                                    {formatDocumentName(repo)}?
                                   </p>
                                   <p className="vault-pr-confirm-sub">
-                                    This approval will be recorded with your name and timestamp.
+                                    This approval will be recorded with your
+                                    name and timestamp.
                                   </p>
                                   <div className="vault-pr-confirm-actions">
                                     <button
@@ -578,7 +589,9 @@ export function DocumentDetail({
                                         void handleApprove(prNum);
                                       }}
                                     >
-                                      {isSubmitting ? "Submitting…" : "Confirm Approval"}
+                                      {isSubmitting
+                                        ? "Submitting…"
+                                        : "Confirm Approval"}
                                     </button>
                                     <button
                                       className="bs-btn bs-btn-secondary"
@@ -670,7 +683,9 @@ export function DocumentDetail({
                               )}
                             </div>
                           ) : reviewPerms.reason ? (
-                            <p className="vault-pr-notice">{reviewPerms.reason}</p>
+                            <p className="vault-pr-notice">
+                              {reviewPerms.reason}
+                            </p>
                           ) : null}
 
                           {mergePerms.allowed && mergeReady ? (
@@ -681,11 +696,15 @@ export function DocumentDetail({
                                 disabled={isSubmitting}
                                 onClick={() => void handleMerge(prNum)}
                               >
-                                {isSubmitting ? "Publishing…" : "Publish as Official Version"}
+                                {isSubmitting
+                                  ? "Publishing…"
+                                  : "Publish as Official Version"}
                               </button>
                             </div>
                           ) : mergeReady && !mergePerms.allowed ? (
-                            <p className="vault-pr-notice">{mergePerms.reason}</p>
+                            <p className="vault-pr-notice">
+                              {mergePerms.reason}
+                            </p>
                           ) : null}
 
                           {actionState.error ? (
@@ -703,8 +722,8 @@ export function DocumentDetail({
                   <div className="bs-eyebrow">Pending Approvals</div>
                   <h2>No pending approvals</h2>
                   <p>
-                    All versions have been published. Submit a new version to start an
-                    approval.
+                    All versions have been published. Submit a new version to
+                    start an approval.
                   </p>
                 </section>
               )}

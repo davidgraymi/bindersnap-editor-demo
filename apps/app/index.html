@@ -15,10 +15,13 @@
       href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap"
     />
     <script>
-      (function(){
-        var s=localStorage.getItem('bs-theme');
-        var p=window.matchMedia('(prefers-color-scheme: dark)').matches;
-        document.documentElement.setAttribute('data-theme',s||(p?'dark':'light'));
+      (function () {
+        var s = localStorage.getItem("bs-theme");
+        var p = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        document.documentElement.setAttribute(
+          "data-theme",
+          s || (p ? "dark" : "light"),
+        );
       })();
     </script>
   </head>

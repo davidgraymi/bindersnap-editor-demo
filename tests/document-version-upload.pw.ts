@@ -89,7 +89,9 @@ test.describe("UI document version upload flow", () => {
 
     // Wait for navigation to document detail — new UI uses breadcrumb navigation
     await expect(
-      page.locator("nav[aria-label='Breadcrumb'] button", { hasText: "Documents" }),
+      page.locator("nav[aria-label='Breadcrumb'] button", {
+        hasText: "Documents",
+      }),
     ).toBeVisible({ timeout: 10_000 });
 
     await expect(
@@ -157,16 +159,23 @@ test.describe("UI document version upload flow", () => {
 
     // The Publish button should be visible (PR is approved and alice can merge)
     await expect(
-      page.getByRole("button", { name: "Publish as Official Version", exact: true }),
+      page.getByRole("button", {
+        name: "Publish as Official Version",
+        exact: true,
+      }),
     ).toBeVisible({
       timeout: 30_000,
     });
 
     // Click Publish
-    await page.getByRole("button", { name: "Publish as Official Version", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Publish as Official Version", exact: true })
+      .click();
 
     await waitForNoPendingReviews(page, cardSearchText);
-    await page.locator("nav[aria-label='Breadcrumb'] button", { hasText: "Documents" }).click();
+    await page
+      .locator("nav[aria-label='Breadcrumb'] button", { hasText: "Documents" })
+      .click();
     await navigateToDocument(page, cardSearchText);
 
     // Should now show Version 1
@@ -261,14 +270,21 @@ test.describe("UI document version upload flow", () => {
 
     // Publish
     await expect(
-      page.getByRole("button", { name: "Publish as Official Version", exact: true }),
+      page.getByRole("button", {
+        name: "Publish as Official Version",
+        exact: true,
+      }),
     ).toBeVisible({
       timeout: 30_000,
     });
-    await page.getByRole("button", { name: "Publish as Official Version", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Publish as Official Version", exact: true })
+      .click();
 
     await waitForNoPendingReviews(page, cardSearchText);
-    await page.locator("nav[aria-label='Breadcrumb'] button", { hasText: "Documents" }).click();
+    await page
+      .locator("nav[aria-label='Breadcrumb'] button", { hasText: "Documents" })
+      .click();
     await navigateToDocument(page, cardSearchText);
 
     // Should now show Version 2 as current

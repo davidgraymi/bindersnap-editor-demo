@@ -54,7 +54,9 @@ test.describe("PKCE SPA route availability", () => {
     expect(text).toContain("<!doctype html");
   });
 
-  test("/auth/callback route serves the app HTML shell", async ({ request }) => {
+  test("/auth/callback route serves the app HTML shell", async ({
+    request,
+  }) => {
     const response = await request.get(`${APP_BASE_URL}/auth/callback`);
     expect(response.status()).toBe(200);
     const text = await response.text();

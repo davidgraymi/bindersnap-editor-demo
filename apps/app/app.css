@@ -11,7 +11,11 @@ body {
   margin: 0;
   background:
     radial-gradient(circle at top left, var(--bs-coral-dim), transparent 30%),
-    radial-gradient(circle at bottom right, var(--bs-green-dim), transparent 28%),
+    radial-gradient(
+      circle at bottom right,
+      var(--bs-green-dim),
+      transparent 28%
+    ),
     var(--bs-page-bg);
   color: var(--bs-text-primary);
 }
@@ -356,7 +360,12 @@ input {
 }
 
 @media (max-width: 640px) {
-  html, body, #root, .app-root { height: auto; }
+  html,
+  body,
+  #root,
+  .app-root {
+    height: auto;
+  }
 
   .app-shell {
     height: auto;
@@ -1240,8 +1249,13 @@ input {
 /* ── Skeleton loading ───────────────────────────────────────── */
 
 @keyframes vault-skeleton-pulse {
-  0%, 100% { opacity: 0.65; }
-  50% { opacity: 1; }
+  0%,
+  100% {
+    opacity: 0.65;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 .vault-skeleton-card {
@@ -1256,9 +1270,15 @@ input {
   margin-top: var(--brand-space-3);
 }
 
-.vault-skeleton-line--short { width: 40%; }
-.vault-skeleton-line--medium { width: 65%; }
-.vault-skeleton-line--wide { width: 85%; }
+.vault-skeleton-line--short {
+  width: 40%;
+}
+.vault-skeleton-line--medium {
+  width: 65%;
+}
+.vault-skeleton-line--wide {
+  width: 85%;
+}
 
 /* ── Login logo lockup ─────────────────────────────────────── */
 
@@ -1445,7 +1465,9 @@ input {
 /* Scroll reveal — shorter travel, faster settle than token defaults */
 .bs-reveal {
   transform: translateY(10px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
+  transition:
+    opacity 0.4s ease,
+    transform 0.4s ease;
 }
 
 .bs-reveal.bs-in {

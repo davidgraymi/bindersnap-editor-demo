@@ -5,17 +5,19 @@ import { afterEach, expect, mock, test } from "bun:test";
  * The mock client has GET/POST/PUT/DELETE as mock functions whose return
  * values can be set per-test.
  */
-const mockGet = mock(async (): Promise<{ data: unknown; error: unknown; response: Response }> => ({
-  data: {
-    id: 42,
-    login: "alice",
-    full_name: "Alice Admin",
-    email: "alice@example.com",
-    avatar_url: "https://example.com/alice.png",
-  },
-  error: undefined,
-  response: new Response(null, { status: 200 }),
-}));
+const mockGet = mock(
+  async (): Promise<{ data: unknown; error: unknown; response: Response }> => ({
+    data: {
+      id: 42,
+      login: "alice",
+      full_name: "Alice Admin",
+      email: "alice@example.com",
+      avatar_url: "https://example.com/alice.png",
+    },
+    error: undefined,
+    response: new Response(null, { status: 200 }),
+  }),
+);
 
 const mockClient = {
   GET: mockGet,

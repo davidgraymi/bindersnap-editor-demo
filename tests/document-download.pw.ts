@@ -88,7 +88,9 @@ test.describe("Document download", () => {
 
     // Wait for navigation to document detail — new UI uses breadcrumb navigation
     await expect(
-      page.locator("nav[aria-label='Breadcrumb'] button", { hasText: "Documents" }),
+      page.locator("nav[aria-label='Breadcrumb'] button", {
+        hasText: "Documents",
+      }),
     ).toBeVisible({ timeout: 10_000 });
 
     // Verify the document is in the unpublished state with 1 pending approval
@@ -157,16 +159,23 @@ test.describe("Document download", () => {
 
     // The Publish button must appear now that the PR is approved
     await expect(
-      page.getByRole("button", { name: "Publish as Official Version", exact: true }),
+      page.getByRole("button", {
+        name: "Publish as Official Version",
+        exact: true,
+      }),
     ).toBeVisible({
       timeout: 30_000,
     });
 
     // Publish v1
-    await page.getByRole("button", { name: "Publish as Official Version", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Publish as Official Version", exact: true })
+      .click();
 
     await waitForNoPendingReviews(page, cardSearchText);
-    await page.locator("nav[aria-label='Breadcrumb'] button", { hasText: "Documents" }).click();
+    await page
+      .locator("nav[aria-label='Breadcrumb'] button", { hasText: "Documents" })
+      .click();
     await navigateToDocument(page, cardSearchText);
 
     // The page should now report Version 1 as the current published version
@@ -279,14 +288,21 @@ test.describe("Document download", () => {
 
     // Publish v2
     await expect(
-      page.getByRole("button", { name: "Publish as Official Version", exact: true }),
+      page.getByRole("button", {
+        name: "Publish as Official Version",
+        exact: true,
+      }),
     ).toBeVisible({
       timeout: 30_000,
     });
-    await page.getByRole("button", { name: "Publish as Official Version", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Publish as Official Version", exact: true })
+      .click();
 
     await waitForNoPendingReviews(page, cardSearchText);
-    await page.locator("nav[aria-label='Breadcrumb'] button", { hasText: "Documents" }).click();
+    await page
+      .locator("nav[aria-label='Breadcrumb'] button", { hasText: "Documents" })
+      .click();
     await navigateToDocument(page, cardSearchText);
 
     // Version 2 should now be the current published version

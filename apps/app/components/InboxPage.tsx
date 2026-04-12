@@ -30,7 +30,10 @@ function humanizeRepoName(repoName: string): string {
     .join(" ");
 }
 
-export function InboxPage({ currentUsername, onSelectDocument }: InboxPageProps) {
+export function InboxPage({
+  currentUsername,
+  onSelectDocument,
+}: InboxPageProps) {
   const [documents, setDocuments] = useState<WorkspaceDocumentSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -176,13 +179,16 @@ export function InboxPage({ currentUsername, onSelectDocument }: InboxPageProps)
                         {humanizeRepoName(doc.repo.name)}
                         {doc.latestTag ? (
                           <span className="inbox-item-version">
-                            {" "}— {doc.latestTag.name}
+                            {" "}
+                            — {doc.latestTag.name}
                           </span>
                         ) : null}
                       </p>
                       <p className="inbox-item-meta">
                         Submitted by {prSubmitter || "unknown"}
-                        {prCreatedAt ? ` · ${formatRelativeTime(prCreatedAt)}` : ""}
+                        {prCreatedAt
+                          ? ` · ${formatRelativeTime(prCreatedAt)}`
+                          : ""}
                       </p>
                     </div>
                     <button
@@ -219,7 +225,8 @@ export function InboxPage({ currentUsername, onSelectDocument }: InboxPageProps)
                         {humanizeRepoName(doc.repo.name)}
                         {doc.latestTag ? (
                           <span className="inbox-item-version">
-                            {" "}— {doc.latestTag.name}
+                            {" "}
+                            — {doc.latestTag.name}
                           </span>
                         ) : null}
                       </p>
@@ -254,7 +261,8 @@ export function InboxPage({ currentUsername, onSelectDocument }: InboxPageProps)
                         {humanizeRepoName(doc.repo.name)}
                         {doc.latestTag ? (
                           <span className="inbox-item-version">
-                            {" "}— {doc.latestTag.name}
+                            {" "}
+                            — {doc.latestTag.name}
                           </span>
                         ) : null}
                       </p>

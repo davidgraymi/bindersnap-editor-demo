@@ -66,7 +66,9 @@ export function AppShell({
             >
               Documents
             </button>
-            <span className="app-breadcrumb-sep" aria-hidden="true">›</span>
+            <span className="app-breadcrumb-sep" aria-hidden="true">
+              ›
+            </span>
             <span className="app-breadcrumb-current">
               {route.repo
                 .split("-")
