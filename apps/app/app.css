@@ -4,7 +4,7 @@ html,
 body,
 #root,
 .app-root {
-  min-height: 100%;
+  height: 100%;
 }
 
 body {
@@ -149,8 +149,12 @@ input {
 }
 
 .app-shell {
-  min-height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: var(--brand-space-6);
+  box-sizing: border-box;
 }
 
 .app-topbar,
@@ -160,6 +164,7 @@ input {
 }
 
 .app-topbar {
+  flex-shrink: 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -214,6 +219,9 @@ input {
 }
 
 .app-main {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
   margin-top: var(--brand-space-5);
   display: grid;
   gap: var(--brand-space-5);
@@ -292,11 +300,31 @@ input {
   .app-doc-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .vault-overview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .vault-version-list,
+  .vault-pr-list {
+    max-height: none;
+    overflow-y: visible;
+  }
 }
 
 @media (max-width: 640px) {
+  html, body, #root, .app-root { height: auto; }
+
   .app-shell {
+    height: auto;
+    overflow: visible;
     padding: var(--brand-space-4);
+  }
+
+  .app-main {
+    flex: none;
+    min-height: auto;
+    overflow-y: visible;
   }
 
   .app-login-shell,
@@ -379,8 +407,12 @@ input {
   transition: var(--brand-mode-transition);
 }
 
+.bs-card:hover {
+  transform: translateY(-2px);
+}
+
 .vault-doc-card:hover {
-  transform: translateY(-4px);
+  transform: translateY(-2px);
   box-shadow: var(--bs-shadow-lg);
   border-color: transparent;
 }
@@ -519,6 +551,30 @@ input {
 .vault-detail {
   display: grid;
   gap: var(--brand-space-5);
+  align-content: start;
+}
+
+.vault-overview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr);
+  gap: var(--brand-space-5);
+  align-items: start;
+}
+
+.vault-overview-left,
+.vault-overview-right {
+  display: grid;
+  gap: var(--brand-space-5);
+}
+
+.vault-version-list {
+  overflow-y: auto;
+  max-height: clamp(160px, 28dvh, 280px);
+}
+
+.vault-pr-list {
+  overflow-y: auto;
+  max-height: clamp(260px, 50dvh, 520px);
 }
 
 .vault-repo-path {
@@ -1104,13 +1160,13 @@ input {
 /* ── Skeleton loading ───────────────────────────────────────── */
 
 @keyframes vault-skeleton-pulse {
-  0%, 100% { opacity: 0.5; }
+  0%, 100% { opacity: 0.65; }
   50% { opacity: 1; }
 }
 
 .vault-skeleton-card {
   pointer-events: none;
-  animation: vault-skeleton-pulse 1.5s ease-in-out infinite;
+  animation: vault-skeleton-pulse 2s ease-in-out infinite;
 }
 
 .vault-skeleton-line {
@@ -1302,4 +1358,42 @@ input {
   background: var(--bs-coral-dim);
   border-radius: var(--brand-radius-md);
   margin: 0;
+}
+
+/* ── Motion calibration ─────────────────────────────────────── */
+
+/* Scroll reveal — shorter travel, faster settle than token defaults */
+.bs-reveal {
+  transform: translateY(10px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+.bs-reveal.bs-in {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Reduced motion — respect OS preference */
+@media (prefers-reduced-motion: reduce) {
+  .bs-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .vault-skeleton-card {
+    animation: none;
+    opacity: 0.75;
+  }
+
+  .bs-card,
+  .bs-card:hover {
+    transform: none;
+    transition: none;
+  }
+
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

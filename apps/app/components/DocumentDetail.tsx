@@ -418,8 +418,10 @@ export function DocumentDetail({
         />
       ) : (
         <>
-          <section className="bs-card vault-section">
-            <div className="bs-eyebrow">Current Version</div>
+          <div className="vault-overview-grid">
+            <div className="vault-overview-left">
+              <section className="bs-card vault-section">
+                <div className="bs-eyebrow">Current Version</div>
             <h2>
               {latestTag ? `Version ${latestTag.version}` : "Unpublished"}
             </h2>
@@ -465,7 +467,8 @@ export function DocumentDetail({
               Upload New Version
             </button>
           </section>
-
+            </div>
+            <div className="vault-overview-right">
           {openPRs.length > 0 ? (
             <section className="bs-card vault-section">
               <div className="bs-eyebrow">Pending Reviews</div>
@@ -620,6 +623,8 @@ export function DocumentDetail({
               </p>
             </section>
           )}
+            </div>
+          </div>
 
           <section className="bs-card vault-section">
             <div className="bs-eyebrow">Version History</div>
