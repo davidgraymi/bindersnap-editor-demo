@@ -77,25 +77,22 @@ test.describe("Merge conflict resolution on publish", () => {
     );
     await page.getByRole("button", { name: "Create Document" }).click();
 
+    // New UI uses breadcrumb navigation instead of a back button
     await expect(
-      page.getByRole("button", { name: "← Back to workspace" }),
+      page.locator("nav[aria-label='Breadcrumb'] button", { hasText: "Documents" }),
     ).toBeVisible({ timeout: 10_000 });
     await expect(
-      page.getByRole("heading", { name: "Unpublished" }),
+      page.getByRole("heading", { name: /No approved version yet/i }),
     ).toBeVisible();
     await expect(
-      page.getByText("No published version exists yet."),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: /1 Open Pull Request/ }),
+      page.getByRole("heading", { name: /1 Pending Approval/i }),
     ).toBeVisible();
 
-    // Capture repo info
-    const repoPathText =
-      (await page.locator(".vault-repo-path").textContent()) ?? "";
-    const parts = repoPathText.trim().split("/");
-    owner = parts[0] ?? "";
-    repo = parts[1] ?? "";
+    // Capture repo info from the URL
+    const url = page.url();
+    const urlParts = url.replace(/.*\/docs\//, "").split("/");
+    owner = urlParts[0] ?? "";
+    repo = urlParts[1] ?? "";
     expect(owner).toBeTruthy();
     expect(repo).toBeTruthy();
 
@@ -127,11 +124,16 @@ test.describe("Merge conflict resolution on publish", () => {
     await signInAsBob(page);
     await navigateToDocument(page, cardSearchText);
 
-    // Bob approves v1
+    // Bob approves v1 — new UI has a two-step confirm flow
     await expect(page.getByRole("button", { name: "Approve" })).toBeVisible({
       timeout: 30_000,
     });
     await page.getByRole("button", { name: "Approve" }).click();
+    // Confirm the approval in the confirmation dialog
+    await expect(page.getByRole("button", { name: "Confirm Approval" })).toBeVisible({
+      timeout: 5_000,
+    });
+    await page.getByRole("button", { name: "Confirm Approval" }).click();
 
     // Wait for the approval status badge to reflect approval
     await expect(page.locator(".vault-status-approved")).toBeVisible({
@@ -143,13 +145,13 @@ test.describe("Merge conflict resolution on publish", () => {
     await navigateToDocument(page, cardSearchText);
 
     await expect(
-      page.getByRole("button", { name: "Publish", exact: true }),
+      page.getByRole("button", { name: "Publish as Official Version", exact: true }),
     ).toBeVisible({
       timeout: 30_000,
     });
-    await page.getByRole("button", { name: "Publish", exact: true }).click();
+    await page.getByRole("button", { name: "Publish as Official Version", exact: true }).click();
     await waitForNoPendingReviews(page, cardSearchText);
-    await page.getByRole("button", { name: "← Back to workspace" }).click();
+    await page.locator("nav[aria-label='Breadcrumb'] button", { hasText: "Documents" }).click();
     await navigateToDocument(page, cardSearchText);
 
     await expect(page.getByRole("heading", { name: "Version 1" })).toBeVisible({
@@ -166,7 +168,7 @@ test.describe("Merge conflict resolution on publish", () => {
     await navigateToDocument(page, cardSearchText);
 
     // --- Upload v2 (branch-1) ---
-    await page.getByRole("button", { name: "Upload New Version" }).click();
+    await page.getByRole("button", { name: "Submit New Version" }).click();
     await expect(
       page.getByRole("heading", { name: "Upload Document" }),
     ).toBeVisible();
@@ -183,11 +185,11 @@ test.describe("Merge conflict resolution on publish", () => {
       .click();
 
     await expect(
-      page.getByRole("heading", { name: /1 Open Pull Request/ }),
+      page.getByRole("heading", { name: /1 Pending Approval/i }),
     ).toBeVisible({ timeout: 60_000 });
 
     // --- Upload v3 (branch-2) while v2 PR is still open ---
-    await page.getByRole("button", { name: "Upload New Version" }).click();
+    await page.getByRole("button", { name: "Submit New Version" }).click();
     await expect(
       page.getByRole("heading", { name: "Upload Document" }),
     ).toBeVisible();
@@ -204,7 +206,7 @@ test.describe("Merge conflict resolution on publish", () => {
       .click();
 
     await expect(
-      page.getByRole("heading", { name: /2 Open Pull Request/ }),
+      page.getByRole("heading", { name: /2 Pending Approvals/i }),
     ).toBeVisible({ timeout: 60_000 });
 
     // --- Bob approves v2 via UI ---
@@ -222,6 +224,11 @@ test.describe("Merge conflict resolution on publish", () => {
     });
     const firstPr = page.locator(".vault-pr-item").last();
     await firstPr.getByRole("button", { name: "Approve" }).click();
+    // Confirm the approval in the two-step confirm dialog
+    await expect(page.getByRole("button", { name: "Confirm Approval" })).toBeVisible({
+      timeout: 5_000,
+    });
+    await page.getByRole("button", { name: "Confirm Approval" }).click();
     await expect(firstPr.locator(".vault-status-approved")).toBeVisible({
       timeout: 30_000,
     });
@@ -232,15 +239,15 @@ test.describe("Merge conflict resolution on publish", () => {
     await navigateToDocument(page, cardSearchText);
 
     await expect(
-      page.getByRole("button", { name: "Publish", exact: true }),
+      page.getByRole("button", { name: "Publish as Official Version", exact: true }),
     ).toBeVisible({
       timeout: 30_000,
     });
-    await page.getByRole("button", { name: "Publish", exact: true }).click();
+    await page.getByRole("button", { name: "Publish as Official Version", exact: true }).click();
 
     // Wait for v2 to be published — PR count drops to 1
     await expect(
-      page.getByRole("heading", { name: /1 Open Pull Request/ }),
+      page.getByRole("heading", { name: /1 Pending Approval/i }),
     ).toBeVisible({ timeout: 120_000 });
 
     await expect(
@@ -259,6 +266,11 @@ test.describe("Merge conflict resolution on publish", () => {
     });
     const secondPr = page.locator(".vault-pr-item");
     await secondPr.getByRole("button", { name: "Approve" }).click();
+    // Confirm the approval in the two-step confirm dialog
+    await expect(page.getByRole("button", { name: "Confirm Approval" })).toBeVisible({
+      timeout: 5_000,
+    });
+    await page.getByRole("button", { name: "Confirm Approval" }).click();
     await expect(secondPr.locator(".vault-status-approved")).toBeVisible({
       timeout: 30_000,
     });
@@ -268,16 +280,16 @@ test.describe("Merge conflict resolution on publish", () => {
     await navigateToDocument(page, cardSearchText);
 
     await expect(
-      page.getByRole("button", { name: "Publish", exact: true }),
+      page.getByRole("button", { name: "Publish as Official Version", exact: true }),
     ).toBeVisible({
       timeout: 30_000,
     });
 
     // Conflict resolution + retry may take longer than a normal merge
-    await page.getByRole("button", { name: "Publish", exact: true }).click();
+    await page.getByRole("button", { name: "Publish as Official Version", exact: true }).click();
 
     await expect(
-      page.getByRole("heading", { name: "No pending reviews" }),
+      page.getByRole("heading", { name: "No pending approvals" }),
     ).toBeVisible({ timeout: 120_000 });
 
     // Should now show Version 3 as current

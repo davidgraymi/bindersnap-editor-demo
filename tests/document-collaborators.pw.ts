@@ -58,7 +58,7 @@ async function signUp(
 
   await expect(page).toHaveURL(/\/$/);
   await expect(
-    page.getByText(`Signed in as ${credentials.username}`),
+    page.locator(".app-user-badge", { hasText: credentials.username }),
   ).toBeVisible();
 }
 
@@ -82,9 +82,11 @@ async function createDocument(page: Page, fileName: string): Promise<void> {
     expectedDocumentName(fileName),
   );
 
-  const backToWorkspaceButton = page.getByRole("button", {
-    name: "← Back to workspace",
-  });
+  // New UI uses breadcrumb navigation instead of a back button
+  const breadcrumbBackButton = page.locator(
+    "nav[aria-label='Breadcrumb'] button",
+    { hasText: "Documents" },
+  );
   const createError = page
     .locator(".upload-validation-error, .upload-error-message")
     .first();
@@ -92,7 +94,7 @@ async function createDocument(page: Page, fileName: string): Promise<void> {
   await page.getByRole("button", { name: "Create Document" }).click();
 
   await Promise.race([
-    backToWorkspaceButton.waitFor({ state: "visible", timeout: 20_000 }),
+    breadcrumbBackButton.waitFor({ state: "visible", timeout: 20_000 }),
     createError
       .waitFor({ state: "visible", timeout: 20_000 })
       .then(async () => {
@@ -105,7 +107,8 @@ async function createDocument(page: Page, fileName: string): Promise<void> {
 }
 
 async function openCollaboratorsTab(page: Page): Promise<void> {
-  const collaboratorsTab = page.getByRole("tab", { name: "Collaborators" });
+  // Tab is now labeled "Team" (was "Collaborators") in the new UI
+  const collaboratorsTab = page.getByRole("tab", { name: "Team" });
   await expect(collaboratorsTab).toBeVisible({ timeout: 10_000 });
   await collaboratorsTab.click();
   await expect(page.getByRole("heading", { name: "Grant access" })).toBeVisible(
@@ -133,7 +136,8 @@ async function addReadCollaborator(page: Page, login: string): Promise<void> {
 }
 
 async function reopenDocumentFromWorkspace(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "← Back to workspace" }).click();
+  // New UI uses breadcrumb navigation instead of a back button
+  await page.locator("nav[aria-label='Breadcrumb'] button", { hasText: "Documents" }).click();
   await expect(
     page.getByRole("heading", { name: "Your Documents" }),
   ).toBeVisible({
@@ -151,7 +155,8 @@ async function reopenDocumentFromWorkspace(page: Page): Promise<void> {
     timeout: 10_000,
   });
   await page.locator(".vault-doc-card").first().click();
-  await expect(page.getByRole("tab", { name: "Collaborators" })).toBeVisible({
+  // Tab is now labeled "Team" (was "Collaborators") in the new UI
+  await expect(page.getByRole("tab", { name: "Team" })).toBeVisible({
     timeout: 10_000,
   });
   await openCollaboratorsTab(page);

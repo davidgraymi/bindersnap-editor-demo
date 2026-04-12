@@ -1,6 +1,8 @@
 import type { AppRoute } from "../App";
+import { ActivityLogPage } from "./ActivityLogPage";
 import { DocumentDetail } from "./DocumentDetail";
 import { FileVaultWorkspace } from "./FileVaultWorkspace";
+import { InboxPage } from "./InboxPage";
 
 interface AppShellProps {
   user: {
@@ -55,6 +57,25 @@ export function AppShell({
           <div className="app-logo-text">Bindersnap</div>
         </div>
 
+        {route.kind === "document" ? (
+          <nav className="app-topbar-breadcrumb" aria-label="Breadcrumb">
+            <button
+              className="app-breadcrumb-back"
+              type="button"
+              onClick={() => onNavigate({ kind: "workspace" })}
+            >
+              Documents
+            </button>
+            <span className="app-breadcrumb-sep" aria-hidden="true">›</span>
+            <span className="app-breadcrumb-current">
+              {route.repo
+                .split("-")
+                .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+                .join(" ")}
+            </span>
+          </nav>
+        ) : null}
+
         <div className="app-topbar-actions">
           {user ? (
             <span className="app-user-badge">
@@ -107,6 +128,32 @@ export function AppShell({
         </div>
       </header>
 
+      {route.kind !== "document" ? (
+        <nav className="app-nav" aria-label="Main navigation">
+          <button
+            type="button"
+            className={`app-nav-link${route.kind === "workspace" ? " app-nav-link--active" : ""}`}
+            onClick={() => onNavigate({ kind: "workspace" })}
+          >
+            Documents
+          </button>
+          <button
+            type="button"
+            className={`app-nav-link${route.kind === "inbox" ? " app-nav-link--active" : ""}`}
+            onClick={() => onNavigate({ kind: "inbox" })}
+          >
+            Inbox
+          </button>
+          <button
+            type="button"
+            className={`app-nav-link${route.kind === "activity" ? " app-nav-link--active" : ""}`}
+            onClick={() => onNavigate({ kind: "activity" })}
+          >
+            Activity
+          </button>
+        </nav>
+      ) : null}
+
       <main className="app-main">
         {route.kind === "document" ? (
           <DocumentDetail
@@ -124,6 +171,15 @@ export function AppShell({
             }
             onBack={() => onNavigate({ kind: "workspace" })}
           />
+        ) : route.kind === "inbox" ? (
+          <InboxPage
+            currentUsername={user?.username ?? ""}
+            onSelectDocument={(owner, repo) =>
+              onNavigate({ kind: "document", owner, repo, tab: "overview" })
+            }
+          />
+        ) : route.kind === "activity" ? (
+          <ActivityLogPage />
         ) : (
           <FileVaultWorkspace
             currentUsername={user?.username ?? ""}
