@@ -22,6 +22,8 @@ export type AppRoute =
   | { kind: "login" }
   | { kind: "callback" }
   | { kind: "workspace" }
+  | { kind: "inbox" }
+  | { kind: "activity" }
   | {
       kind: "document";
       owner: string;
@@ -56,6 +58,14 @@ function getRoute(pathname: string): AppRoute {
 
   if (normalizedPath === "/login") {
     return { kind: "login" };
+  }
+
+  if (normalizedPath === "/inbox") {
+    return { kind: "inbox" };
+  }
+
+  if (normalizedPath === "/activity") {
+    return { kind: "activity" };
   }
 
   const collaboratorsMatch = normalizedPath.match(
@@ -98,6 +108,12 @@ function navigateTo(route: AppRoute, replace = false): void {
         route.tab === "collaborators"
           ? `/docs/${route.owner}/${route.repo}/collaborators`
           : `/docs/${route.owner}/${route.repo}`;
+      break;
+    case "inbox":
+      path = "/inbox";
+      break;
+    case "activity":
+      path = "/activity";
       break;
     case "workspace":
     default:
@@ -372,12 +388,18 @@ export function App() {
       return;
     }
 
-    if (user && route.kind !== "workspace" && route.kind !== "document") {
+    const isAppRoute =
+      route.kind === "workspace" ||
+      route.kind === "document" ||
+      route.kind === "inbox" ||
+      route.kind === "activity";
+
+    if (user && !isAppRoute) {
       navigateTo({ kind: "workspace" }, true);
       return;
     }
 
-    if (!user && (route.kind === "workspace" || route.kind === "document")) {
+    if (!user && isAppRoute) {
       navigateTo({ kind: "login" }, true);
     }
   }, [isCheckingSession, route, user]);
