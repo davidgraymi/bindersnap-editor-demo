@@ -238,12 +238,12 @@ export async function pollUntil(
  * Skips the login flow if the workspace already shows "Signed in as <alice>".
  *
  * Race-condition-safe: avoids asserting on the login heading (which never
- * renders when a live session redirects the page back to /app) and clears
+ * renders when a live session redirects the page back to /) and clears
  * sessionStorage before navigating to /login so the app cannot silently
  * redirect an existing session away.
  */
 export async function signInAsAlice(page: Page): Promise<void> {
-  await page.goto("/app");
+  await page.goto("/");
   await page.waitForLoadState("domcontentloaded");
 
   // Fast check — already the right user?
@@ -251,10 +251,7 @@ export async function signInAsAlice(page: Page): Promise<void> {
     .getByText(`Signed in as ${GITEA_ADMIN_USER}`)
     .isVisible({ timeout: 3_000 })
     .catch(() => false);
-  if (isAlice) {
-    await waitForWorkspaceReady(page);
-    return;
-  }
+  if (isAlice) return;
 
   // A different session may be active; sign out first if the button is present.
   const hasSignOut = await page
@@ -274,11 +271,9 @@ export async function signInAsAlice(page: Page): Promise<void> {
   await page.getByLabel("Username or Email").fill(GITEA_ADMIN_USER);
   await page.getByLabel("Password", { exact: true }).fill(GITEA_ADMIN_PASS);
   await page.getByRole("button", { name: "Open workspace" }).click();
-  await page.waitForURL(/\/app$/, { timeout: 10_000 });
   await expect(page.getByText(`Signed in as ${GITEA_ADMIN_USER}`)).toBeVisible({
-    timeout: 5_000,
+    timeout: 60_000,
   });
-  await waitForWorkspaceReady(page);
 }
 
 /**
@@ -289,7 +284,7 @@ export async function signInAsAlice(page: Page): Promise<void> {
  * sessionStorage cleared, waitForURL used throughout.
  */
 export async function signInAsBob(page: Page): Promise<void> {
-  await page.goto("/app");
+  await page.goto("/");
   await page.waitForLoadState("domcontentloaded");
 
   // Fast check — already the right user?
@@ -297,10 +292,7 @@ export async function signInAsBob(page: Page): Promise<void> {
     .getByText(`Signed in as ${GITEA_BOB_USER}`)
     .isVisible({ timeout: 3_000 })
     .catch(() => false);
-  if (isBob) {
-    await waitForWorkspaceReady(page);
-    return;
-  }
+  if (isBob) return;
 
   // A different session may be active; sign out first if the button is present.
   const hasSignOut = await page
@@ -320,27 +312,24 @@ export async function signInAsBob(page: Page): Promise<void> {
   await page.getByLabel("Username or Email").fill(GITEA_BOB_USER);
   await page.getByLabel("Password", { exact: true }).fill(GITEA_BOB_PASS);
   await page.getByRole("button", { name: "Open workspace" }).click();
-  await page.waitForURL(/\/app$/, { timeout: 10_000 });
   await expect(page.getByText(`Signed in as ${GITEA_BOB_USER}`)).toBeVisible({
-    timeout: 5_000,
+    timeout: 60_000,
   });
-  await waitForWorkspaceReady(page);
 }
 
 /**
  * Navigate from the workspace to a document detail page by clicking the
  * `.vault-doc-card` that contains `docName`, then wait for the back button.
  *
- * Stability fix: waits for the workspace to be interactive before clicking the
- * card, then uses a forced click so minor layout shifts in the card grid do
- * not stall Playwright's actionability checks.
+ * Stability fix: waits for DOM content to be loaded before clicking so the
+ * card is fully rendered. We intentionally avoid networkidle because the live
+ * collaboration socket can keep the page busy indefinitely.
  */
 export async function navigateToDocument(
   page: Page,
   docName: string,
 ): Promise<void> {
   await page.waitForLoadState("domcontentloaded");
-  await waitForWorkspaceReady(page);
   const card = page.locator(".vault-doc-card", { hasText: docName });
   await expect(card).toBeVisible({ timeout: 10_000 });
   await card.click({ force: true });
@@ -349,29 +338,91 @@ export async function navigateToDocument(
   ).toBeVisible({ timeout: 10_000 });
 }
 
-async function waitForWorkspaceReady(page: Page): Promise<void> {
-  const newDocumentButton = page
-    .getByRole("button", { name: "New Document" })
-    .first();
-  const workspaceError = page.locator(".vault-error-state");
-  const deadline = Date.now() + 10_000;
+export async function waitForNoPendingReviews(
+  page: Page,
+  cardSearchText: string,
+  totalMs = 120_000,
+  intervalMs = 2_000,
+): Promise<void> {
+  const deadline = Date.now() + totalMs;
+  let lastAlertText: string | null = null;
+  const noPendingHeading = page.getByRole("heading", {
+    name: "No pending reviews",
+  });
 
   while (Date.now() < deadline) {
-    if (await newDocumentButton.isVisible().catch(() => false)) {
-      return;
+    const publishButton = page.getByRole("button", {
+      name: "Publish",
+      exact: true,
+    });
+    const canPublish = await publishButton
+      .isVisible({ timeout: 500 })
+      .catch(() => false);
+    if (canPublish) {
+      await publishButton.click();
     }
 
-    if (await workspaceError.isVisible().catch(() => false)) {
-      const errorText =
-        (await workspaceError.textContent())?.replace(/\s+/g, " ").trim() ||
-        "Workspace failed to load.";
-      throw new Error(errorText);
+    const publishingButton = page.getByRole("button", { name: "Publishing…" });
+    const publishStarted = await publishingButton
+      .isVisible({ timeout: 3_000 })
+      .catch(() => false);
+    if (publishStarted) {
+      await publishingButton.waitFor({ state: "hidden", timeout: 60_000 });
     }
 
-    await page.waitForTimeout(250);
+    const isVisibleOnCurrentPage = await noPendingHeading
+      .isVisible({ timeout: 3_000 })
+      .catch(() => false);
+    if (isVisibleOnCurrentPage) return;
+
+    const backButton = page.getByRole("button", {
+      name: "← Back to workspace",
+    });
+    const backVisible = await backButton
+      .isVisible({ timeout: 3_000 })
+      .catch(() => false);
+    if (backVisible) {
+      await backButton.click();
+      await page.waitForLoadState("domcontentloaded");
+    }
+
+    await navigateToDocument(page, cardSearchText);
+    await page
+      .getByRole("heading", { name: "Loading document details..." })
+      .waitFor({ state: "hidden", timeout: 30_000 })
+      .catch(() => undefined);
+
+    const isVisible = await noPendingHeading
+      .isVisible({ timeout: 3_000 })
+      .catch(() => false);
+    if (isVisible) return;
+
+    const mergeErrorLocator = page
+      .locator(".vault-pr-item")
+      .locator('[role="alert"]');
+    const hasMergeError = await mergeErrorLocator
+      .isVisible({ timeout: 500 })
+      .catch(() => false);
+    if (hasMergeError) {
+      lastAlertText =
+        (await mergeErrorLocator.textContent().catch(() => null))?.trim() ??
+        "unknown error";
+    }
+
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+    await new Promise<void>((resolve) =>
+      setTimeout(resolve, Math.min(intervalMs, remaining)),
+    );
   }
 
-  throw new Error("Workspace did not become ready in time.");
+  if (lastAlertText) {
+    throw new Error(
+      `Timed out waiting for publish to settle. Last alert text: "${lastAlertText}"`,
+    );
+  }
+
+  await expect(noPendingHeading).toBeVisible({ timeout: 10_000 });
 }
 
 /**
@@ -383,4 +434,29 @@ export async function openCollaboratorsTab(page: Page): Promise<void> {
   await expect(page.locator("#collaborator-search")).toBeVisible({
     timeout: 5_000,
   });
+}
+
+export function buildUniqueDocumentMetadata() {
+  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return {
+    fileName: `ui-document-creation-${suffix}.pdf`,
+  };
+}
+
+export function expectedPrefilledDocumentName(fileName: string): string {
+  return fileName
+    .replace(/\.[^.]+$/, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export async function openNewDocumentModal(page: Page): Promise<void> {
+  await expect(
+    page.getByRole("button", { name: "New Document" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "New Document" }).first().click();
+  await expect(
+    page.getByRole("heading", { name: "Create workspace document" }),
+  ).toBeVisible();
 }

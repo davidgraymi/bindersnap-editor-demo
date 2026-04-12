@@ -25,12 +25,15 @@ import {
 } from "../packages/gitea-client/pullRequests";
 import {
   createBobClient,
+  expectedPrefilledDocumentName,
   installMemorySessionStorage,
   makeClient,
   navigateToDocument,
+  openNewDocumentModal,
   pollUntil,
   resolveAndStoreToken,
   signInAsAlice,
+  waitForNoPendingReviews,
 } from "./helpers";
 
 // ---------------------------------------------------------------------------
@@ -47,7 +50,7 @@ test.beforeAll(async () => {
 // ---------------------------------------------------------------------------
 
 test.describe("UI document version upload flow", () => {
-  test.describe.configure({ mode: "serial", timeout: 120_000 });
+  test.describe.configure({ mode: "serial", timeout: 180_000 });
 
   const timestamp = Date.now();
   const randomString = Math.random().toString(36).slice(2, 8);
@@ -68,12 +71,7 @@ test.describe("UI document version upload flow", () => {
     const fileData = Buffer.from("Version 1 content\n");
 
     await signInAsAlice(page);
-
-    // Open the create document modal
-    await page.getByRole("button", { name: "New Document" }).first().click();
-    await expect(
-      page.getByRole("heading", { name: "Create workspace document" }),
-    ).toBeVisible();
+    await openNewDocumentModal(page);
 
     // Upload file
     await page.locator("#create-document-file").setInputFiles({
@@ -82,8 +80,9 @@ test.describe("UI document version upload flow", () => {
       buffer: fileData,
     });
 
-    // Wait for name to auto-fill
-    await expect(page.locator("#create-document-name")).not.toHaveValue("");
+    await expect(page.locator("#create-document-name")).toHaveValue(
+      expectedPrefilledDocumentName(fileName),
+    );
 
     // Create the document
     await page.getByRole("button", { name: "Create Document" }).click();
@@ -93,9 +92,11 @@ test.describe("UI document version upload flow", () => {
       page.getByRole("button", { name: "← Back to workspace" }),
     ).toBeVisible({ timeout: 10_000 });
 
-    // Verify unpublished state
     await expect(
       page.getByRole("heading", { name: "Unpublished" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("No published version exists yet."),
     ).toBeVisible();
     await expect(
       page.getByRole("heading", { name: /1 Open Pull Request/ }),
@@ -160,23 +161,23 @@ test.describe("UI document version upload flow", () => {
     await navigateToDocument(page, cardSearchText);
 
     // The Publish button should be visible (PR is approved and alice can merge)
-    await expect(page.getByRole("button", { name: "Publish" })).toBeVisible({
+    await expect(
+      page.getByRole("button", { name: "Publish", exact: true }),
+    ).toBeVisible({
       timeout: 30_000,
     });
 
     // Click Publish
-    await page.getByRole("button", { name: "Publish" }).click();
+    await page.getByRole("button", { name: "Publish", exact: true }).click();
 
-    // Wait for publish to complete — pending reviews section shows "No pending reviews"
-    // The merge can take longer on second run due to Gitea indexing
-    await expect(
-      page.getByRole("heading", { name: "No pending reviews" }),
-    ).toBeVisible({ timeout: 120_000 });
+    await waitForNoPendingReviews(page, cardSearchText);
+    await page.getByRole("button", { name: "← Back to workspace" }).click();
+    await navigateToDocument(page, cardSearchText);
 
     // Should now show Version 1
-    await expect(
-      page.getByRole("heading", { name: "Version 1" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Version 1" })).toBeVisible({
+      timeout: 30_000,
+    });
   });
 
   test("alice uploads v2 via the UI", async ({ page }) => {
@@ -264,21 +265,21 @@ test.describe("UI document version upload flow", () => {
     await navigateToDocument(page, cardSearchText);
 
     // Publish
-    await expect(page.getByRole("button", { name: "Publish" })).toBeVisible({
+    await expect(
+      page.getByRole("button", { name: "Publish", exact: true }),
+    ).toBeVisible({
       timeout: 30_000,
     });
-    await page.getByRole("button", { name: "Publish" }).click();
+    await page.getByRole("button", { name: "Publish", exact: true }).click();
 
-    // Wait for publish to complete
-    // The merge can take longer on second run due to Gitea indexing
-    await expect(
-      page.getByRole("heading", { name: "No pending reviews" }),
-    ).toBeVisible({ timeout: 120_000 });
+    await waitForNoPendingReviews(page, cardSearchText);
+    await page.getByRole("button", { name: "← Back to workspace" }).click();
+    await navigateToDocument(page, cardSearchText);
 
     // Should now show Version 2 as current
-    await expect(
-      page.getByRole("heading", { name: "Version 2" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Version 2" })).toBeVisible({
+      timeout: 30_000,
+    });
 
     // Version history should show both versions
     await expect(

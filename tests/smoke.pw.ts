@@ -2,7 +2,7 @@
  * Smoke tests — basic stack health and app-shell route availability.
  *
  * These tests verify that the Docker Compose stack is up and seeded correctly,
- * and that the two app routes (landing, app shell) respond as expected.
+ * and that the app shell responds as expected at the SPA root.
  *
  * Requires: docker compose up (or `bun run test:integration`).
  */
@@ -188,20 +188,10 @@ test.describe("Gitea dev stack health", () => {
 // ---------------------------------------------------------------------------
 
 test.describe("app shell routes", () => {
-  test("landing route serves a page titled 'Finally Kill the Email Approval Chain'", async ({
+  test("/ route either shows the workspace heading or redirects to the login page", async ({
     page,
   }) => {
-    await page.goto("/landing");
-    await expect(page).toHaveTitle(/Finally Kill the Email Approval Chain/);
-    await expect(
-      page.getByRole("link", { name: "Join the Waitlist" }),
-    ).toBeVisible();
-  });
-
-  test("/app route either shows the workspace heading or redirects to the login page", async ({
-    page,
-  }) => {
-    await page.goto("/app");
+    await page.goto("/");
 
     const appHeading = page.getByRole("heading", {
       name: "alice/quarterly-report",
