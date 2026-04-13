@@ -517,6 +517,17 @@ Every PR must include workflow evidence:
 
 Do not merge PRs that omit workflow evidence or contain unexplained fallback.
 
+## Production Security Rules
+
+These apply to any changes touching `docker-compose.prod.yml`, `Caddyfile.prod`, or EC2 deployment:
+
+1. **Never hardcode credentials.** All secrets (`GITEA_ADMIN_PASS`, `GITEA_SECRET_KEY`, etc.) must come from environment variables, loaded from `.env.prod` on the server. `.env.prod` is in `.gitignore` and must never be committed.
+2. **Registration is disabled in prod.** `GITEA__service__DISABLE_REGISTRATION=true` is non-negotiable for production. Dev compose may differ.
+3. **`INSTALL_LOCK=true` in prod.** Prevents Gitea setup wizard from re-running after first boot.
+4. **Rotate credentials on first deploy.** Generate with `openssl rand -base64 20` for passwords and `openssl rand -base64 32` for secret keys.
+
+---
+
 ## Deterministic MCP Setup
 
 Use one GitHub MCP server configuration path at a time. Avoid mixed auth paths

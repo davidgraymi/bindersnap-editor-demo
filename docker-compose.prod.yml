@@ -1,0 +1,108 @@
+# Bindersnap production stack (EC2 deployment)
+# Run: docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+#
+# Prerequisites:
+#   1. Copy .env.prod.example to .env.prod and fill in real values
+#   2. Generate secrets: openssl rand -base64 32
+#   3. Never commit .env.prod (it is in .gitignore)
+#
+# This file is standalone — it does NOT extend docker-compose.yml.
+# The dev compose must never be used for production.
+
+services:
+  gitea-init:
+    image: alpine:latest
+    container_name: bindersnap-gitea-init-prod
+    user: "0:0"
+    command: ["sh", "-c", "chown -R 1000:1000 /data"]
+    volumes:
+      - gitea-data:/data
+    restart: "no"
+
+  gitea:
+    image: gitea/gitea:1.25
+    container_name: bindersnap-gitea-prod
+    restart: unless-stopped
+    depends_on:
+      gitea-init:
+        condition: service_completed_successfully
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      # --- Server ---
+      - GITEA__server__ROOT_URL=https://gitea.bindersnap.com
+      - GITEA__server__HTTP_PORT=3000
+      - GITEA__server__DISABLE_SSH=true
+      # --- Database ---
+      - GITEA__database__DB_TYPE=sqlite3
+      - GITEA__database__PATH=/data/gitea.db
+      # --- Service (registration disabled) ---
+      - GITEA__service__DISABLE_REGISTRATION=true
+      - GITEA__service__REQUIRE_SIGNIN_VIEW=true
+      - GITEA__service__ALLOW_ONLY_EXTERNAL_REGISTRATION=false
+      - GITEA__service__ENABLE_CAPTCHA=false
+      # --- CORS ---
+      - GITEA__cors__ENABLED=true
+      - GITEA__cors__ALLOW_DOMAIN=https://app.bindersnap.com
+      - GITEA__cors__METHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
+      - GITEA__cors__ALLOW_CREDENTIALS=true
+      # --- Logging ---
+      - GITEA__log__LEVEL=warn
+      - GITEA__log__MODE=console
+      # --- Security ---
+      - GITEA__security__INSTALL_LOCK=true
+      - GITEA__security__SECRET_KEY=${GITEA_SECRET_KEY}
+      - GITEA__security__INTERNAL_TOKEN=${GITEA_INTERNAL_TOKEN}
+      # --- Disable unused auth ---
+      - GITEA__mailer__ENABLED=false
+      - GITEA__openid__ENABLE_OPENID_SIGNIN=false
+      - GITEA__openid__ENABLE_OPENID_SIGNUP=false
+      - GITEA__oauth2__ENABLE=false
+      # --- Admin credentials (first-boot only) ---
+      - GITEA_ADMIN_USER=${GITEA_ADMIN_USER}
+      - GITEA_ADMIN_PASS=${GITEA_ADMIN_PASS}
+    volumes:
+      - gitea-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  hocuspocus:
+    build:
+      context: .
+      dockerfile: services/hocuspocus/Dockerfile
+    container_name: bindersnap-hocuspocus-prod
+    restart: unless-stopped
+
+  api:
+    image: oven/bun:1
+    container_name: bindersnap-api-prod
+    restart: unless-stopped
+    depends_on:
+      gitea:
+        condition: service_healthy
+    working_dir: /app
+    command: ["bun", "services/api/server.ts"]
+    environment:
+      - API_PORT=8787
+      - PORT=8787
+      - GITEA_INTERNAL_URL=http://gitea:3000
+      - GITEA_ADMIN_USER=${GITEA_ADMIN_USER}
+      - GITEA_ADMIN_PASS=${GITEA_ADMIN_PASS}
+      - BINDERSNAP_APP_ORIGIN=https://app.bindersnap.com
+      - BINDERSNAP_USER_EMAIL_DOMAIN=${BINDERSNAP_USER_EMAIL_DOMAIN:-users.bindersnap.com}
+      - BINDERSNAP_GITEA_TOKEN_SCOPES=${BINDERSNAP_GITEA_TOKEN_SCOPES:-write:user,write:repository,write:issue}
+      - BINDERSNAP_REQUIRE_HTTPS=true
+      - BINDERSNAP_AUTH_RATE_LIMIT_ENABLED=true
+    volumes:
+      - .:/app:ro
+
+volumes:
+  gitea-data:
+
+networks:
+  default:
+    name: bindersnap-prod
