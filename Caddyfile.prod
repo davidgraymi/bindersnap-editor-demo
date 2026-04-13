@@ -1,0 +1,32 @@
+# Bindersnap production reverse proxy
+# Caddy handles TLS automatically via Let's Encrypt.
+# Run alongside docker-compose.prod.yml on the same network.
+
+(security_headers) {
+	header {
+		X-Frame-Options "DENY"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "same-origin"
+		-Server
+	}
+}
+
+gitea.bindersnap.com {
+	import security_headers
+
+	# Optional: restrict Gitea admin UI to your IP.
+	# Uncomment and replace YOUR.IP.HERE with your static IP.
+	# @admin_routes path /admin/* /-/admin/*
+	# handle @admin_routes {
+	#     @blocked not remote_ip YOUR.IP.HERE
+	#     respond @blocked 403
+	# }
+
+	reverse_proxy gitea:3000
+}
+
+api.bindersnap.com {
+	import security_headers
+
+	reverse_proxy api:8787
+}
