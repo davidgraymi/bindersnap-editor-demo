@@ -70,13 +70,6 @@ services:
       retries: 12
       start_period: 30s
 
-  hocuspocus:
-    build:
-      context: .
-      dockerfile: services/hocuspocus/Dockerfile
-    container_name: bindersnap-hocuspocus-prod
-    restart: unless-stopped
-
   api:
     image: oven/bun:1
     container_name: bindersnap-api-prod
