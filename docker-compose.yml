@@ -68,15 +68,15 @@ services:
       - "1234:1234"
 
   api:
-    image: oven/bun:1
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
     container_name: bindersnap-api
     depends_on:
       gitea:
         condition: service_healthy
       seed:
         condition: service_completed_successfully
-    working_dir: /app
-    command: ["bun", "--hot", "services/api/server.ts"]
     environment:
       - API_PORT=${API_PORT:-8787}
       - PORT=${API_PORT:-8787}
@@ -94,8 +94,6 @@ services:
     ports:
       - "${API_PORT:-8787}:${API_PORT:-8787}"
     volumes:
-      - .:/app
-      - app-node-modules:/app/node_modules
       - api-data:/var/lib/bindersnap
 
   app:

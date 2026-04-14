@@ -71,14 +71,12 @@ services:
       start_period: 30s
 
   api:
-    image: oven/bun:1
+    image: ghcr.io/davidgraymi/bindersnap-api:${API_TAG:-latest}
     container_name: bindersnap-api-prod
     restart: unless-stopped
     depends_on:
       gitea:
         condition: service_healthy
-    working_dir: /app
-    command: ["bun", "services/api/server.ts"]
     environment:
       - API_PORT=8787
       - PORT=8787
@@ -92,7 +90,6 @@ services:
       - BINDERSNAP_AUTH_RATE_LIMIT_ENABLED=true
       - BINDERSNAP_SESSIONS_DB_PATH=/var/lib/bindersnap/sessions.db
     volumes:
-      - .:/app:ro
       - api-data:/var/lib/bindersnap
 
   litestream:
