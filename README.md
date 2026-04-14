@@ -65,6 +65,7 @@ This is the complete environment variable reference used by repo code, scripts, 
 | `BINDERSNAP_AUTH_RATE_LIMIT_WINDOW_MS` | `600000`                                  | `services/api/server.ts`, compose                                        | Rate-limit window duration in milliseconds.                                                             |
 | `BINDERSNAP_AUTH_RATE_LIMIT_MAX`       | `20`                                      | `services/api/server.ts`, compose                                        | Max login/signup attempts per IP+action per window.                                                     |
 | `BINDERSNAP_SESSIONS_DB_PATH`          | `/var/lib/bindersnap/sessions.db`         | `services/api/sessions.ts`, prod compose                                 | Persistent SQLite path for API-backed sessions.                                                         |
+| `API_TAG`                              | `latest`                                  | `docker-compose.prod.yml`, GitHub Actions deploys                        | API image tag to pull from GHCR; pin to a prior commit SHA for rollback.                               |
 | `AWS_REGION`                           | `us-east-1`                               | `docker-compose.prod.yml`, `litestream.yml`, Terraform backups module    | AWS region used by the Litestream container and backup infrastructure.                                  |
 | `LITESTREAM_S3_BUCKET`                 | none                                      | `docker-compose.prod.yml`, `litestream.yml`, `scripts/restore.sh`        | Required S3 bucket for continuous SQLite replication and restores.                                      |
 | `PLAYWRIGHT_BASE_URL`                  | `http://localhost:${APP_PORT}`            | Playwright config, integration script                                    | Base URL for integration browser tests.                                                                 |
@@ -104,3 +105,24 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
 Use `./scripts/restore.sh api` to restore the API session store instead. The
 script assumes the production Docker volumes are mounted at `/data/...`, so run
 it from the production app host or an equivalent recovery environment.
+
+## Production API Image
+
+The production API service now runs from a published GHCR image instead of a
+source bind mount. Build and publish happens in
+`.github/workflows/build-api.yml`, which pushes:
+
+- `ghcr.io/davidgraymi/bindersnap-api:${GITHUB_SHA}`
+- `ghcr.io/davidgraymi/bindersnap-api:latest`
+
+Production hosts pull the image selected by `API_TAG` in `.env.prod`.
+
+To deploy the currently selected API tag:
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.prod pull api
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d api
+```
+
+To roll back, set `API_TAG` to a previous commit SHA in `.env.prod`, then run
+the same `pull` and `up -d api` commands again.

@@ -68,7 +68,9 @@ services:
       - "1234:1234"
 
   api:
-    image: oven/bun:1
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
     container_name: bindersnap-api
     depends_on:
       gitea:
