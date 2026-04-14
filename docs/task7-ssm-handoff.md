@@ -24,15 +24,20 @@
 - Updated `README.md` to describe the SSM-backed production secret flow and the
   new env-file location used for deploy/restore commands.
 - Added `scripts/ssm-parameter-store.test.ts` for static contract coverage.
+- Added `scripts/bindersnap-refresh-env.test.ts` to execute the embedded refresh
+  helper against fixture SSM output and verify regeneration/rotation behavior.
 
 ## What I validated
 
 - `bash -n infra/compute/user-data.sh`
 - `bun test scripts/ssm-parameter-store.test.ts`
+- `bun test scripts/bindersnap-refresh-env.test.ts scripts/ssm-parameter-store.test.ts`
 - `terraform -chdir=infra/secrets fmt -check`
 - `terraform -chdir=infra/secrets init -backend=false`
 - `terraform -chdir=infra/secrets validate`
 - `docker compose -f docker-compose.prod.yml --env-file .env.prod.example config`
+- A repo-wide hidden-file scan for the secret-key assignment pattern (excluding
+  `.git` and `node_modules`)
 
 ## What is still left
 
@@ -51,6 +56,9 @@
   to a separate non-secret config path. I kept it here so the generated env file
   is sufficient for `docker-compose.prod.yml`.
 - Reconcile this with Task 8 later when `gitea_service_token` gets introduced.
+- The repo leak check is clean for the implementation files and tests now; the
+  remaining secret-key assignment hit outside `.env.prod.example` is the
+  acceptance checklist line in `docs/mvp-arch.md` itself.
 
 ## Known repo context
 

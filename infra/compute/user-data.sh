@@ -55,9 +55,11 @@ for item in parameters:
 ' "${PARAMETER_PATH}" <"${JSON_FILE}" >"${TMP_FILE}"
 
 install -d -m 0755 "${APP_DIR}"
-install -o root -g root -m 0600 "${TMP_FILE}" "${ENV_FILE}"
+install -m 0600 "${TMP_FILE}" "${ENV_FILE}"
 chmod 600 "${ENV_FILE}"
-chown root:root "${ENV_FILE}"
+if [ "$(id -u)" -eq 0 ]; then
+  chown root:root "${ENV_FILE}"
+fi
 SCRIPT
 
 chmod 0755 /usr/local/bin/bindersnap-refresh-env

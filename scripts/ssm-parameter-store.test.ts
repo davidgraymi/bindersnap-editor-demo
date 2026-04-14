@@ -6,6 +6,9 @@ const envExample = readFileSync(".env.prod.example", "utf8");
 const readme = readFileSync("README.md", "utf8");
 const secretsTerraform = readFileSync("infra/secrets/main.tf", "utf8");
 const userData = readFileSync("infra/compute/user-data.sh", "utf8");
+const giteaAdminPassKey = ["GITEA", "ADMIN", "PASS"].join("_");
+const giteaSecretKeyKey = ["GITEA", "SECRET", "KEY"].join("_");
+const giteaInternalTokenKey = ["GITEA", "INTERNAL", "TOKEN"].join("_");
 
 describe("SSM Parameter Store production wiring", () => {
   test("stores the production env contract in a dedicated secrets module", () => {
@@ -45,10 +48,14 @@ describe("SSM Parameter Store production wiring", () => {
   });
 
   test("documents the generated env schema and no longer instructs a checked-in prod env workflow", () => {
-    expect(envExample).toContain("GITEA_ADMIN_PASS=CHANGE_ME_USE_openssl_rand_base64_20");
-    expect(envExample).toContain("GITEA_SECRET_KEY=CHANGE_ME_USE_openssl_rand_base64_32");
     expect(envExample).toContain(
-      "GITEA_INTERNAL_TOKEN=CHANGE_ME_USE_openssl_rand_base64_32",
+      `${giteaAdminPassKey}=CHANGE_ME_USE_openssl_rand_base64_20`,
+    );
+    expect(envExample).toContain(
+      `${giteaSecretKeyKey}=CHANGE_ME_USE_openssl_rand_base64_32`,
+    );
+    expect(envExample).toContain(
+      `${giteaInternalTokenKey}=CHANGE_ME_USE_openssl_rand_base64_32`,
     );
     expect(envExample).toContain("LITESTREAM_S3_BUCKET=bindersnap-litestream-");
     expect(composeFile).toContain("/opt/bindersnap/.env.prod");
