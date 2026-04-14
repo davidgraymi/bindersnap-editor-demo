@@ -48,3 +48,6 @@ conf/app.prod.ini
 /playwright/.cache/
 /playwright/.auth/
 /test-results/
+
+# Terraform
+/infra/backups/.terraform
