@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 
+import { sessionStore, type SessionRecord } from "./sessions";
 import {
   createGiteaClient,
   GiteaApiError,
@@ -129,16 +130,6 @@ const configuredAllowedOrigins = (
   .map((origin) => origin.trim())
   .filter((origin) => origin !== "");
 
-interface SessionRecord {
-  id: string;
-  username: string;
-  giteaToken: string;
-  giteaTokenName: string;
-  createdAt: number;
-  expiresAt: number;
-}
-
-const sessions = new Map<string, SessionRecord>();
 const authAttempts = new Map<string, { count: number; resetAt: number }>();
 const sessionTtl =
   Number.isFinite(sessionTtlMs) && sessionTtlMs > 0
@@ -375,11 +366,11 @@ function getSessionFromRequest(req: Request): SessionRecord | null {
   const sessionId = parseCookies(req).get(sessionCookieName);
   if (!sessionId) return null;
 
-  const session = sessions.get(sessionId);
+  const session = sessionStore.get(sessionId);
   if (!session) return null;
 
   if (session.expiresAt <= Date.now()) {
-    sessions.delete(sessionId);
+    sessionStore.delete(sessionId);
     void revokeUserToken(session);
     return null;
   }
@@ -1239,12 +1230,12 @@ function createSession(
     expiresAt: now + sessionTtl,
   };
 
-  sessions.set(session.id, session);
+  sessionStore.put(session);
   return session;
 }
 
 async function revokeAndDeleteSession(session: SessionRecord): Promise<void> {
-  sessions.delete(session.id);
+  sessionStore.delete(session.id);
   await revokeUserToken(session).catch(() => undefined);
 }
 
@@ -1374,7 +1365,7 @@ async function handleLogout(
 ): Promise<Response> {
   const session = getSessionFromRequest(req);
   if (session) {
-    sessions.delete(session.id);
+    sessionStore.delete(session.id);
     await revokeUserToken(session);
   }
 
@@ -2236,19 +2227,10 @@ async function handleDeleteCollaborator(
 
 async function cleanupExpiredSessions(): Promise<void> {
   const now = Date.now();
-  const expiredSessions: SessionRecord[] = [];
+  const expired = sessionStore.reap(now);
 
-  for (const [id, session] of sessions.entries()) {
-    if (session.expiresAt <= now) {
-      sessions.delete(id);
-      expiredSessions.push(session);
-    }
-  }
-
-  if (expiredSessions.length > 0) {
-    await Promise.allSettled(
-      expiredSessions.map((session) => revokeUserToken(session)),
-    );
+  if (expired.length > 0) {
+    await Promise.allSettled(expired.map((session) => revokeUserToken(session)));
   }
 
   for (const [key, entry] of authAttempts.entries()) {

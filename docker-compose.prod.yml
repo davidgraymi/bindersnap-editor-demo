@@ -90,11 +90,14 @@ services:
       - BINDERSNAP_GITEA_TOKEN_SCOPES=${BINDERSNAP_GITEA_TOKEN_SCOPES:-write:user,write:repository,write:issue}
       - BINDERSNAP_REQUIRE_HTTPS=true
       - BINDERSNAP_AUTH_RATE_LIMIT_ENABLED=true
+      - BINDERSNAP_SESSIONS_DB_PATH=/var/lib/bindersnap/sessions.db
     volumes:
       - .:/app:ro
+      - api-data:/var/lib/bindersnap
 
 volumes:
   gitea-data:
+  api-data:
 
 networks:
   default:
