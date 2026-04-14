@@ -95,6 +95,24 @@ services:
       - .:/app:ro
       - api-data:/var/lib/bindersnap
 
+  litestream:
+    image: litestream/litestream:0.3
+    container_name: bindersnap-litestream-prod
+    restart: unless-stopped
+    depends_on:
+      gitea:
+        condition: service_healthy
+      api:
+        condition: service_started
+    command: ["replicate"]
+    volumes:
+      - gitea-data:/data/gitea:ro
+      - api-data:/data/api:ro
+      - ./litestream.yml:/etc/litestream.yml:ro
+    environment:
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - LITESTREAM_S3_BUCKET=${LITESTREAM_S3_BUCKET:?set in .env.prod}
+
 volumes:
   gitea-data:
   api-data:

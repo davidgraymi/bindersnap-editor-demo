@@ -1,0 +1,22 @@
+# Litestream replication configuration
+# Replicates Gitea and API SQLite databases to S3
+#
+# This config uses AWS IMDSv2 (EC2 instance profile) for authentication — no access keys needed.
+# Ensure the EC2 instance has the litestream_s3 IAM policy attached (see infra/backups/main.tf).
+# Litestream expands ${VAR} references at runtime, so docker-compose.prod.yml
+# must pass LITESTREAM_S3_BUCKET and AWS_REGION into this container.
+
+dbs:
+  - path: /data/gitea/gitea.db
+    replicas:
+      - type: s3
+        bucket: ${LITESTREAM_S3_BUCKET}
+        path: gitea
+        region: ${AWS_REGION}
+
+  - path: /data/api/sessions.db
+    replicas:
+      - type: s3
+        bucket: ${LITESTREAM_S3_BUCKET}
+        path: api
+        region: ${AWS_REGION}
