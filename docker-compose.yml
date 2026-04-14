@@ -90,11 +90,13 @@ services:
       - BINDERSNAP_AUTH_RATE_LIMIT_ENABLED=${BINDERSNAP_AUTH_RATE_LIMIT_ENABLED:-true}
       - BINDERSNAP_AUTH_RATE_LIMIT_WINDOW_MS=${BINDERSNAP_AUTH_RATE_LIMIT_WINDOW_MS:-600000}
       - BINDERSNAP_AUTH_RATE_LIMIT_MAX=${BINDERSNAP_AUTH_RATE_LIMIT_MAX:-20}
+      - BINDERSNAP_SESSIONS_DB_PATH=/var/lib/bindersnap/sessions.db
     ports:
       - "${API_PORT:-8787}:${API_PORT:-8787}"
     volumes:
       - .:/app
       - app-node-modules:/app/node_modules
+      - api-data:/var/lib/bindersnap
 
   app:
     build:
@@ -134,6 +136,7 @@ services:
 volumes:
   gitea-data:
   app-node-modules:
+  api-data:
 
 networks:
   default:
