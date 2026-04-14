@@ -86,20 +86,32 @@ bun run up
 
 See [`tests/README.md`](tests/README.md) for full workflow details.
 
+## Production Secrets
+
+Production no longer relies on a repo-side `.env.prod`. The EC2 instance writes
+`/opt/bindersnap/.env.prod` at boot by reading `/bindersnap/prod/*` from SSM
+Parameter Store through `infra/compute/user-data.sh`.
+
+Use [`.env.prod.example`](.env.prod.example)
+as the schema for the generated file only. The committed example keeps
+placeholders for the SSM-backed values and documents the non-secret runtime
+overrides that can still be passed at deploy time.
+
 ## Production Backups
 
 `docker-compose.prod.yml` includes a `litestream` sidecar that continuously
 replicates the Gitea SQLite database and the API session database to S3. Before
-starting the production stack, set `LITESTREAM_S3_BUCKET` in `.env.prod` and
-leave `AWS_REGION` aligned with the bucket region.
+starting the production stack, ensure the SSM-backed generated env file at
+`/opt/bindersnap/.env.prod` includes `LITESTREAM_S3_BUCKET`, and leave
+`AWS_REGION` aligned with the bucket region.
 
 To restore from S3 during an incident:
 
 ```bash
-docker compose -f docker-compose.prod.yml --env-file .env.prod down
+docker compose -f docker-compose.prod.yml --env-file /opt/bindersnap/.env.prod down
 export LITESTREAM_S3_BUCKET=bindersnap-litestream-123456789012
 ./scripts/restore.sh gitea
-docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+docker compose -f docker-compose.prod.yml --env-file /opt/bindersnap/.env.prod up -d
 ```
 
 Use `./scripts/restore.sh api` to restore the API session store instead. The
@@ -115,14 +127,18 @@ source bind mount. Build and publish happens in
 - `ghcr.io/davidgraymi/bindersnap-api:${GITHUB_SHA}`
 - `ghcr.io/davidgraymi/bindersnap-api:latest`
 
-Production hosts pull the image selected by `API_TAG` in `.env.prod`.
+Production hosts pull the image selected by `API_TAG` in
+`/opt/bindersnap/.env.prod`.
+On the EC2 host that value normally lives in `/opt/bindersnap/.env.prod`, which
+is generated from SSM at boot and can be regenerated for secret rotation.
 
 To deploy the currently selected API tag:
 
 ```bash
-docker compose -f docker-compose.prod.yml --env-file .env.prod pull api
-docker compose -f docker-compose.prod.yml --env-file .env.prod up -d api
+docker compose -f docker-compose.prod.yml --env-file /opt/bindersnap/.env.prod pull api
+docker compose -f docker-compose.prod.yml --env-file /opt/bindersnap/.env.prod up -d api
 ```
 
-To roll back, set `API_TAG` to a previous commit SHA in `.env.prod`, then run
-the same `pull` and `up -d api` commands again.
+To roll back, set `API_TAG` to a previous commit SHA in
+`/opt/bindersnap/.env.prod`, then run the same `pull` and `up -d api` commands
+again.
