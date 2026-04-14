@@ -64,6 +64,9 @@ This is the complete environment variable reference used by repo code, scripts, 
 | `BINDERSNAP_AUTH_RATE_LIMIT_ENABLED`   | `true`                                    | `services/api/server.ts`, compose                                        | Enables login/signup rate limiting by client IP.                                                        |
 | `BINDERSNAP_AUTH_RATE_LIMIT_WINDOW_MS` | `600000`                                  | `services/api/server.ts`, compose                                        | Rate-limit window duration in milliseconds.                                                             |
 | `BINDERSNAP_AUTH_RATE_LIMIT_MAX`       | `20`                                      | `services/api/server.ts`, compose                                        | Max login/signup attempts per IP+action per window.                                                     |
+| `BINDERSNAP_SESSIONS_DB_PATH`          | `/var/lib/bindersnap/sessions.db`         | `services/api/sessions.ts`, prod compose                                 | Persistent SQLite path for API-backed sessions.                                                         |
+| `AWS_REGION`                           | `us-east-1`                               | `docker-compose.prod.yml`, `litestream.yml`, Terraform backups module    | AWS region used by the Litestream container and backup infrastructure.                                  |
+| `LITESTREAM_S3_BUCKET`                 | none                                      | `docker-compose.prod.yml`, `litestream.yml`, `scripts/restore.sh`        | Required S3 bucket for continuous SQLite replication and restores.                                      |
 | `PLAYWRIGHT_BASE_URL`                  | `http://localhost:${APP_PORT}`            | Playwright config, integration script                                    | Base URL for integration browser tests.                                                                 |
 | `VITE_GITEA_TOKEN`                     | none                                      | smoke/integration tests                                                  | Optional pre-existing token for direct Gitea API assertions.                                            |
 | `BUN_PUBLIC_HOCUSPOCUS_URL`            | `ws://localhost:1234`                     | compose                                                                  | Frontend websocket URL wiring for collaboration features.                                               |
@@ -81,3 +84,23 @@ bun run up
 ```
 
 See [`tests/README.md`](tests/README.md) for full workflow details.
+
+## Production Backups
+
+`docker-compose.prod.yml` includes a `litestream` sidecar that continuously
+replicates the Gitea SQLite database and the API session database to S3. Before
+starting the production stack, set `LITESTREAM_S3_BUCKET` in `.env.prod` and
+leave `AWS_REGION` aligned with the bucket region.
+
+To restore from S3 during an incident:
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.prod down
+export LITESTREAM_S3_BUCKET=bindersnap-litestream-123456789012
+./scripts/restore.sh gitea
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+```
+
+Use `./scripts/restore.sh api` to restore the API session store instead. The
+script assumes the production Docker volumes are mounted at `/data/...`, so run
+it from the production app host or an equivalent recovery environment.
