@@ -100,41 +100,10 @@ These are settled, non-negotiable decisions. Do not reopen them. Do not work
 around them. If a task seems to require violating one of these, stop and create
 a `human-needed` issue instead.
 
-### The app is a pure SPA. There is no BFF.
+### The app is a BFF.
 
 The real app (`apps/app/`) is a static single-page application. It communicates
-directly with the Gitea API using the user's PKCE OAuth2 bearer token. There is
-no backend-for-frontend, no session server, no API proxy, and no middleware
-layer between the browser and Gitea.
-
-**If you find yourself:**
-
-- Writing an Express, Bun, or Hono HTTP server for the app
-- Adding a `services/api/` directory
-- Storing Gitea tokens in server-side sessions or cookies
-- Proxying Gitea API calls through any server
-
-**Stop. You are building the wrong thing.**
-
-The only permitted backend services in this repo are:
-
-- `services/hocuspocus/` — Yjs WebSocket server for real-time collaboration (editor path only)
-- A future Pandoc conversion service (backlogged, not MVP — see issue #73)
-- A future Stripe webhook handler (see issue #75)
-
-### Authentication is PKCE OAuth2. The browser holds the token.
-
-Auth flow: browser → Gitea OAuth2 authorize → PKCE code exchange → bearer token
-stored in memory or `sessionStorage`. The token is attached to every Gitea API
-request as `Authorization: Bearer <token>`. No cookies. No server-side sessions.
-
-The `apps/app/auth/` directory owns this flow. `packages/gitea-client/` consumes
-the token. Nothing else touches auth.
-
-The security model is deliberate: PKCE without a client secret is the correct
-pattern for a public SPA client. The token-in-browser threat model is equivalent
-to cookie/session token risk and is acceptable given short token lifetimes and
-tight Gitea scopes.
+with the API (`services/api`) which communicates with Gitea.
 
 ### All data lives in Gitea. No secondary database.
 
@@ -471,21 +440,10 @@ When generating new pages, components, or templates:
 
 ---
 
-## GitHub Agent Workflow Policy (Required)
+## GitHub Agent Workflow Policy
 
 This repository uses a strict MCP-first workflow for all GitHub API actions.
 Agents must follow this policy exactly.
-
-### Required default
-
-For GitHub operations, use GitHub MCP tools first:
-
-- Read issues/PRs: `issue_read`, `pull_request_read`, `list_issues`,
-  `list_pull_requests`
-- Create branches/files/PRs: `create_branch`, `create_or_update_file`,
-  `create_pull_request`
-- Update PRs/comments/reviews: `update_pull_request`, `add_issue_comment`,
-  `pull_request_review_write`
 
 ### Allowed fallback
 
@@ -504,18 +462,6 @@ When fallback is used, document:
 
 - Use local `git` for working tree operations (edit, stage, commit, diff)
 - Use MCP for GitHub API operations (issue, branch, PR, comments, reviews)
-
-### PR evidence is mandatory
-
-Every PR must include workflow evidence:
-
-- Issue read method used
-- Branch creation method used
-- Commit SHA
-- PR creation method used
-- Any fallback used and why
-
-Do not merge PRs that omit workflow evidence or contain unexplained fallback.
 
 ## Production Security Rules
 
