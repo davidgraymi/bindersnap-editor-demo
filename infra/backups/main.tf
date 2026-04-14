@@ -41,6 +41,24 @@ variable "project" {
   default     = "bindersnap"
 }
 
+variable "gitea_data_volume_id" {
+  description = "Existing gitea-data EBS volume ID to tag for the daily DLM policy"
+  type        = string
+  default     = null
+}
+
+variable "daily_backup_tag_key" {
+  description = "Tag key used to opt EBS volumes into the daily DLM policy"
+  type        = string
+  default     = "Backup"
+}
+
+variable "daily_backup_tag_value" {
+  description = "Tag value used to opt EBS volumes into the daily DLM policy"
+  type        = string
+  default     = "daily"
+}
+
 variable "ec2_instance_role_name" {
   description = "Existing EC2 IAM role name to attach the Litestream S3 policy to"
   type        = string
