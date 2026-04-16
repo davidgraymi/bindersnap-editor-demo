@@ -74,8 +74,19 @@ const giteaUrl =
   process.env.BUN_PUBLIC_GITEA_URL ??
   process.env.VITE_GITEA_URL ??
   "http://localhost:3000";
+const giteaAdminUsername = process.env.GITEA_ADMIN_USER?.trim() ?? "";
+const giteaAdminPassword = process.env.GITEA_ADMIN_PASS?.trim() ?? "";
 const giteaServiceToken =
   process.env.BINDERSNAP_GITEA_SERVICE_TOKEN?.trim() ?? "";
+const isProduction = process.env.NODE_ENV === "production";
+
+if (isProduction && !giteaServiceToken) {
+  console.error(
+    "FATAL: BINDERSNAP_GITEA_SERVICE_TOKEN is not set in production",
+  );
+  process.exit(1);
+}
+
 const emailDomain =
   process.env.BINDERSNAP_USER_EMAIL_DOMAIN ?? "users.bindersnap.local";
 const sessionCookieName =
@@ -195,6 +206,27 @@ function buildGiteaServiceHeaders(
     Authorization: buildTokenAuthHeader(giteaServiceToken),
     ...extraHeaders,
   };
+}
+
+function buildGiteaPrivilegedHeaders(
+  extraHeaders?: HeadersInit,
+): HeadersInit | null {
+  const serviceHeaders = buildGiteaServiceHeaders(extraHeaders);
+  if (serviceHeaders) {
+    return serviceHeaders;
+  }
+
+  if (!isProduction && giteaAdminUsername && giteaAdminPassword) {
+    return {
+      Authorization: buildBasicAuthHeader(
+        giteaAdminUsername,
+        giteaAdminPassword,
+      ),
+      ...extraHeaders,
+    };
+  }
+
+  return null;
 }
 
 function requestOrigin(req: Request): string | null {
@@ -941,7 +973,7 @@ function looksLikeEmailAddress(value: string): boolean {
 }
 
 async function findUsernameByEmail(email: string): Promise<LoginResolution> {
-  const serviceHeaders = buildGiteaServiceHeaders({
+  const serviceHeaders = buildGiteaPrivilegedHeaders({
     Accept: "application/json",
   });
   if (!serviceHeaders) {
@@ -1160,7 +1192,7 @@ async function revokeUserToken(session: SessionRecord): Promise<void> {
     return;
   }
 
-  const serviceHeaders = buildGiteaServiceHeaders({
+  const serviceHeaders = buildGiteaPrivilegedHeaders({
     Accept: "application/json",
   });
   if (!serviceHeaders) {
@@ -1180,14 +1212,14 @@ async function createGiteaUser(
 ): Promise<
   { status: 502; error: string } | { status: number; error: string } | "created"
 > {
-  const serviceHeaders = buildGiteaServiceHeaders({
+  const serviceHeaders = buildGiteaPrivilegedHeaders({
     "Content-Type": "application/json",
     Accept: "application/json",
   });
   if (!serviceHeaders) {
     return {
       status: 502,
-      error: "Gitea service token is not configured.",
+      error: "Gitea service credentials are not configured.",
     };
   }
 
