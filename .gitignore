@@ -51,3 +51,4 @@ conf/app.prod.ini
 
 # Terraform
 /infra/backups/.terraform
+/infra/secrets/.terraform

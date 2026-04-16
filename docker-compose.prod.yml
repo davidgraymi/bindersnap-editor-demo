@@ -1,10 +1,9 @@
 # Bindersnap production stack (EC2 deployment)
-# Run: docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+# Run on the EC2 host: docker compose -f docker-compose.prod.yml --env-file /opt/bindersnap/.env.prod up -d
 #
-# Prerequisites:
-#   1. Copy .env.prod.example to .env.prod and fill in real values
-#   2. Generate secrets: openssl rand -base64 32
-#   3. Never commit .env.prod (it is in .gitignore)
+# The /opt/bindersnap/.env.prod file is generated at boot from
+# /bindersnap/prod/* in SSM Parameter Store by infra/compute/user-data.sh.
+# For local dry runs, point --env-file at a copy of .env.prod.example.
 #
 # This file is standalone — it does NOT extend docker-compose.yml.
 # The dev compose must never be used for production.
@@ -108,7 +107,7 @@ services:
       - ./litestream.yml:/etc/litestream.yml:ro
     environment:
       - AWS_REGION=${AWS_REGION:-us-east-1}
-      - LITESTREAM_S3_BUCKET=${LITESTREAM_S3_BUCKET:?set in .env.prod}
+      - LITESTREAM_S3_BUCKET=${LITESTREAM_S3_BUCKET:?set in the generated env file}
 
 volumes:
   gitea-data:
