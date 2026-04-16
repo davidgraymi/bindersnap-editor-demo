@@ -2230,7 +2230,9 @@ async function cleanupExpiredSessions(): Promise<void> {
   const expired = sessionStore.reap(now);
 
   if (expired.length > 0) {
-    await Promise.allSettled(expired.map((session) => revokeUserToken(session)));
+    await Promise.allSettled(
+      expired.map((session) => revokeUserToken(session)),
+    );
   }
 
   for (const [key, entry] of authAttempts.entries()) {

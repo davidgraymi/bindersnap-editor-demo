@@ -81,16 +81,15 @@ export class SessionStore {
   }
 
   delete(id: string): void {
-    this.db
-      .query<void, [string]>("DELETE FROM sessions WHERE id = ?")
-      .run(id);
+    this.db.query<void, [string]>("DELETE FROM sessions WHERE id = ?").run(id);
   }
 
   reap(now: number): SessionRecord[] {
     const rows = this.db
-      .query<SessionRow, [number]>(
-        "SELECT * FROM sessions WHERE expires_at <= ?",
-      )
+      .query<
+        SessionRow,
+        [number]
+      >("SELECT * FROM sessions WHERE expires_at <= ?")
       .all(now);
 
     if (rows.length > 0) {
