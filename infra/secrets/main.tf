@@ -42,19 +42,6 @@ variable "ec2_instance_role_name" {
   default     = null
 }
 
-variable "gitea_admin_user" {
-  description = "Gitea admin username for first-boot setup"
-  type        = string
-  default     = "gitea-admin"
-}
-
-variable "gitea_admin_pass" {
-  description = "Gitea admin password for first-boot setup"
-  type        = string
-  sensitive   = true
-  default     = "CHANGE_ME_USE_openssl_rand_base64_20"
-}
-
 variable "gitea_secret_key" {
   description = "Gitea SECRET_KEY value"
   type        = string
@@ -67,6 +54,13 @@ variable "gitea_internal_token" {
   type        = string
   sensitive   = true
   default     = "CHANGE_ME_USE_openssl_rand_base64_32"
+}
+
+variable "gitea_service_token" {
+  description = "Dedicated sysadmin service-account token used by the API for signup and token lifecycle operations"
+  type        = string
+  sensitive   = true
+  default     = "BOOTSTRAP_WITH_scripts/bootstrap-gitea-service-account.ts"
 }
 
 variable "bindersnap_user_email_domain" {
@@ -87,10 +81,9 @@ locals {
   parameter_path = trimsuffix(var.ssm_parameter_path, "/")
 
   parameters = {
-    gitea_admin_user             = var.gitea_admin_user
-    gitea_admin_pass             = var.gitea_admin_pass
     gitea_secret_key             = var.gitea_secret_key
     gitea_internal_token         = var.gitea_internal_token
+    gitea_service_token          = var.gitea_service_token
     bindersnap_user_email_domain = var.bindersnap_user_email_domain
     litestream_s3_bucket         = var.litestream_s3_bucket
   }

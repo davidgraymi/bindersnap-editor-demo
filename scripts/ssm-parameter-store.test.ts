@@ -6,7 +6,7 @@ const envExample = readFileSync(".env.prod.example", "utf8");
 const readme = readFileSync("README.md", "utf8");
 const secretsTerraform = readFileSync("infra/secrets/main.tf", "utf8");
 const userData = readFileSync("infra/compute/user-data.sh", "utf8");
-const giteaAdminPassKey = ["GITEA", "ADMIN", "PASS"].join("_");
+const giteaServiceTokenKey = ["GITEA", "SERVICE", "TOKEN"].join("_");
 const giteaSecretKeyKey = ["GITEA", "SECRET", "KEY"].join("_");
 const giteaInternalTokenKey = ["GITEA", "INTERNAL", "TOKEN"].join("_");
 
@@ -16,10 +16,9 @@ describe("SSM Parameter Store production wiring", () => {
     expect(secretsTerraform).toContain('default     = "/bindersnap/prod"');
     expect(secretsTerraform).toContain('resource "aws_ssm_parameter" "prod"');
     expect(secretsTerraform).toContain('type   = "SecureString"');
-    expect(secretsTerraform).toContain("gitea_admin_user");
-    expect(secretsTerraform).toContain("gitea_admin_pass");
     expect(secretsTerraform).toContain("gitea_secret_key");
     expect(secretsTerraform).toContain("gitea_internal_token");
+    expect(secretsTerraform).toContain("gitea_service_token");
     expect(secretsTerraform).toContain("bindersnap_user_email_domain");
     expect(secretsTerraform).toContain("litestream_s3_bucket");
   });
@@ -49,15 +48,18 @@ describe("SSM Parameter Store production wiring", () => {
 
   test("documents the generated env schema and no longer instructs a checked-in prod env workflow", () => {
     expect(envExample).toContain(
-      `${giteaAdminPassKey}=CHANGE_ME_USE_openssl_rand_base64_20`,
-    );
-    expect(envExample).toContain(
       `${giteaSecretKeyKey}=CHANGE_ME_USE_openssl_rand_base64_32`,
     );
     expect(envExample).toContain(
       `${giteaInternalTokenKey}=CHANGE_ME_USE_openssl_rand_base64_32`,
     );
+    expect(envExample).toContain(
+      `${giteaServiceTokenKey}=BOOTSTRAP_WITH_scripts/bootstrap-gitea-service-account.ts`,
+    );
     expect(envExample).toContain("LITESTREAM_S3_BUCKET=bindersnap-litestream-");
+    expect(composeFile).toContain(
+      "BINDERSNAP_GITEA_SERVICE_TOKEN=${GITEA_SERVICE_TOKEN:?set in the generated env file}",
+    );
     expect(composeFile).toContain("/opt/bindersnap/.env.prod");
     expect(composeFile).not.toContain("Copy .env.prod.example to .env.prod");
     expect(readme).toContain("/opt/bindersnap/.env.prod");
