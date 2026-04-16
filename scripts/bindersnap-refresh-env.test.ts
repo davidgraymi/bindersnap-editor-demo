@@ -21,8 +21,8 @@ if (!helperMatch) {
 }
 
 const refreshHelper = helperMatch[1];
-const giteaAdminPassKey = ["GITEA", "ADMIN", "PASS"].join("_");
 const giteaInternalTokenKey = ["GITEA", "INTERNAL", "TOKEN"].join("_");
+const giteaServiceTokenKey = ["GITEA", "SERVICE", "TOKEN"].join("_");
 const giteaSecretKeyKey = ["GITEA", "SECRET", "KEY"].join("_");
 
 function createFixtureWorkspace(
@@ -106,8 +106,8 @@ describe("bindersnap-refresh-env helper", () => {
         Value: "secret-value",
       },
       {
-        Name: "/bindersnap/prod/gitea_admin_pass",
-        Value: "password-value",
+        Name: "/bindersnap/prod/gitea_service_token",
+        Value: "service-token-value",
       },
       {
         Name: "/bindersnap/prod/bindersnap_user_email_domain",
@@ -126,8 +126,8 @@ describe("bindersnap-refresh-env helper", () => {
       expect(readFileSync(fixture.envFile, "utf8")).toBe(
         [
           "BINDERSNAP_USER_EMAIL_DOMAIN=users.bindersnap.com",
-          `${giteaAdminPassKey}=password-value`,
           `${giteaSecretKeyKey}=secret-value`,
+          `${giteaServiceTokenKey}=service-token-value`,
           "",
         ].join("\n"),
       );

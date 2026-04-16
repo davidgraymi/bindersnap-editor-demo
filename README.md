@@ -37,8 +37,8 @@ This is the complete environment variable reference used by repo code, scripts, 
 | `GITEA_INTERNAL_URL`                   | `http://localhost:3000`                   | `services/api/server.ts`, compose                                        | Upstream Gitea URL used by the API service.                                                             |
 | `BUN_PUBLIC_GITEA_URL`                 | `http://localhost:3000`                   | `services/api/server.ts`, compose                                        | Optional Gitea URL fallback source for API service config.                                              |
 | `VITE_GITEA_URL`                       | `http://localhost:3000`                   | `services/api/server.ts`, smoke tests, integration tests                 | Gitea URL for test clients and optional API fallback source.                                            |
-| `GITEA_ADMIN_USER`                     | `alice`                                   | `services/api/server.ts`, seed/tests                                     | Admin username for signup/token revocation and seed/test setup.                                         |
-| `GITEA_ADMIN_PASS`                     | `bindersnap-dev`                          | `services/api/server.ts`, seed/tests                                     | Admin password for signup/token revocation and seed/test setup.                                         |
+| `GITEA_ADMIN_USER`                     | `alice`                                   | seed/tests, bootstrap script                                             | Break-glass admin username for local seeding and one-time service-account bootstrap.                    |
+| `GITEA_ADMIN_PASS`                     | `bindersnap-dev`                          | seed/tests, bootstrap script                                             | Break-glass admin password for local seeding and one-time service-account bootstrap.                    |
 | `GITEA_BOB_USER`                       | `bob`                                     | `tests/seed.ts`                                                          | Seed collaborator username override.                                                                    |
 | `GITEA_BOB_PASS`                       | `bindersnap-dev`                          | `tests/seed.ts`                                                          | Seed collaborator password override.                                                                    |
 | `GITEA_URL`                            | `http://localhost:3000`                   | `tests/seed.ts`                                                          | Seed script base URL for Gitea API.                                                                     |
@@ -57,6 +57,7 @@ This is the complete environment variable reference used by repo code, scripts, 
 | `BINDERSNAP_APP_ORIGIN`                | `http://localhost:${APP_PORT}`            | `services/api/server.ts`, compose                                        | Primary allowed browser origin for auth/session API requests.                                           |
 | `BINDERSNAP_ALLOWED_ORIGINS`           | none                                      | `services/api/server.ts`                                                 | Comma-separated override for multiple allowed origins.                                                  |
 | `BINDERSNAP_USER_EMAIL_DOMAIN`         | `users.bindersnap.local`                  | `services/api/server.ts`                                                 | Domain used when creating signup email addresses in Gitea.                                              |
+| `BINDERSNAP_GITEA_SERVICE_TOKEN`       | none                                      | `services/api/server.ts`, prod compose                                   | Dedicated Gitea service-account token used by the API for signup, email lookup, and token cleanup.      |
 | `BINDERSNAP_SESSION_COOKIE_NAME`       | `bindersnap_session`                      | `services/api/server.ts`                                                 | Session cookie name used by API auth.                                                                   |
 | `BINDERSNAP_SESSION_TTL_MS`            | `604800000`                               | `services/api/server.ts`                                                 | Session expiry duration in milliseconds.                                                                |
 | `BINDERSNAP_GITEA_TOKEN_SCOPES`        | `write:user,write:repository,write:issue` | `services/api/server.ts`, compose                                        | Optional extra scopes for session-minted upstream Gitea tokens; required write scopes are always added. |
@@ -65,6 +66,7 @@ This is the complete environment variable reference used by repo code, scripts, 
 | `BINDERSNAP_AUTH_RATE_LIMIT_WINDOW_MS` | `600000`                                  | `services/api/server.ts`, compose                                        | Rate-limit window duration in milliseconds.                                                             |
 | `BINDERSNAP_AUTH_RATE_LIMIT_MAX`       | `20`                                      | `services/api/server.ts`, compose                                        | Max login/signup attempts per IP+action per window.                                                     |
 | `BINDERSNAP_SESSIONS_DB_PATH`          | `/var/lib/bindersnap/sessions.db`         | `services/api/sessions.ts`, prod compose                                 | Persistent SQLite path for API-backed sessions.                                                         |
+| `GITEA_SERVICE_TOKEN`                  | none                                      | `docker-compose.prod.yml`, `.env.prod.example`, bootstrap script         | SSM-backed source value that prod compose maps into `BINDERSNAP_GITEA_SERVICE_TOKEN` for the API.       |
 | `API_TAG`                              | `latest`                                  | `docker-compose.prod.yml`, GitHub Actions deploys                        | API image tag to pull from GHCR; pin to a prior commit SHA for rollback.                                |
 | `AWS_REGION`                           | `us-east-1`                               | `docker-compose.prod.yml`, `litestream.yml`, Terraform backups module    | AWS region used by the Litestream container and backup infrastructure.                                  |
 | `LITESTREAM_S3_BUCKET`                 | none                                      | `docker-compose.prod.yml`, `litestream.yml`, `scripts/restore.sh`        | Required S3 bucket for continuous SQLite replication and restores.                                      |
@@ -96,6 +98,19 @@ Use [`.env.prod.example`](.env.prod.example)
 as the schema for the generated file only. The committed example keeps
 placeholders for the SSM-backed values and documents the non-secret runtime
 overrides that can still be passed at deploy time.
+
+The production API now expects `GITEA_SERVICE_TOKEN` in that generated env file.
+Create or rotate it with:
+
+```bash
+bun scripts/bootstrap-gitea-service-account.ts
+```
+
+The bootstrap script uses `GITEA_ADMIN_USER` and `GITEA_ADMIN_PASS` only long
+enough to ensure the `bindersnap-service` account exists, grant admin, mint a
+`write:admin` PAT, and write it to `/bindersnap/prod/gitea_service_token`.
+Those admin credentials should remain break-glass only and stay out of the
+steady-state SSM contract after bootstrap.
 
 ## Production Backups
 

@@ -16,8 +16,7 @@ The browser only receives a Bindersnap session cookie. Gitea access tokens stay 
 
 - `API_PORT` or `PORT`: API listen port. Default `8787`.
 - `GITEA_INTERNAL_URL`: Internal Gitea URL used by the API. Default `http://localhost:3000`.
-- `GITEA_ADMIN_USER`: Admin username used for signup and token revocation.
-- `GITEA_ADMIN_PASS`: Admin password used for signup and token revocation.
+- `BINDERSNAP_GITEA_SERVICE_TOKEN`: Dedicated Gitea service-account token used for signup, email lookup during login, and token revocation fallback.
 - `BINDERSNAP_APP_ORIGIN`: Single allowed SPA origin for CORS. Default `http://localhost:${APP_PORT:-5173}`.
 - `BINDERSNAP_ALLOWED_ORIGINS`: Optional comma-separated override for multiple allowed origins.
 - `BINDERSNAP_USER_EMAIL_DOMAIN`: Placeholder signup email domain. Default `users.bindersnap.local`.
@@ -46,4 +45,5 @@ bun run serve:api
 - Sessions are stored in memory, so restarting the API signs every user out.
 - The API keeps per-session Gitea tokens in process memory.
 - Tokens are revoked on logout, on user re-login (old session replacement), and during expiration cleanup.
+- The API no longer uses break-glass admin credentials at runtime. Production signup/admin flows depend on the dedicated `bindersnap-service` token provisioned by `scripts/bootstrap-gitea-service-account.ts`.
 - This is intentionally small for startup speed. Move sessions to Redis or a database before running multiple API instances.

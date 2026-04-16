@@ -74,8 +74,8 @@ const giteaUrl =
   process.env.BUN_PUBLIC_GITEA_URL ??
   process.env.VITE_GITEA_URL ??
   "http://localhost:3000";
-const adminUsername = process.env.GITEA_ADMIN_USER ?? "";
-const adminPassword = process.env.GITEA_ADMIN_PASS ?? "";
+const giteaServiceToken =
+  process.env.BINDERSNAP_GITEA_SERVICE_TOKEN?.trim() ?? "";
 const emailDomain =
   process.env.BINDERSNAP_USER_EMAIL_DOMAIN ?? "users.bindersnap.local";
 const sessionCookieName =
@@ -182,6 +182,19 @@ function buildBasicAuthHeader(username: string, password: string): string {
 
 function buildTokenAuthHeader(token: string): string {
   return `token ${token}`;
+}
+
+function buildGiteaServiceHeaders(
+  extraHeaders?: HeadersInit,
+): HeadersInit | null {
+  if (!giteaServiceToken) {
+    return null;
+  }
+
+  return {
+    Authorization: buildTokenAuthHeader(giteaServiceToken),
+    ...extraHeaders,
+  };
 }
 
 function requestOrigin(req: Request): string | null {
@@ -928,7 +941,10 @@ function looksLikeEmailAddress(value: string): boolean {
 }
 
 async function findUsernameByEmail(email: string): Promise<LoginResolution> {
-  if (!adminUsername || !adminPassword) {
+  const serviceHeaders = buildGiteaServiceHeaders({
+    Accept: "application/json",
+  });
+  if (!serviceHeaders) {
     return {
       kind: "unavailable",
       status: 503,
@@ -949,10 +965,7 @@ async function findUsernameByEmail(email: string): Promise<LoginResolution> {
       `/api/v1/admin/emails/search?q=${encodeURIComponent(email)}&page=${page}&limit=${pageSize}`,
       {
         method: "GET",
-        headers: {
-          Authorization: buildBasicAuthHeader(adminUsername, adminPassword),
-          Accept: "application/json",
-        },
+        headers: serviceHeaders,
       },
     ).catch(() => null);
 
@@ -1147,17 +1160,16 @@ async function revokeUserToken(session: SessionRecord): Promise<void> {
     return;
   }
 
-  // Fallback to admin credentials when available.
-  if (!adminUsername || !adminPassword) {
+  const serviceHeaders = buildGiteaServiceHeaders({
+    Accept: "application/json",
+  });
+  if (!serviceHeaders) {
     return;
   }
 
   await giteaFetch(path, {
     method: "DELETE",
-    headers: {
-      Authorization: buildBasicAuthHeader(adminUsername, adminPassword),
-      Accept: "application/json",
-    },
+    headers: serviceHeaders,
   }).catch(() => undefined);
 }
 
@@ -1168,20 +1180,20 @@ async function createGiteaUser(
 ): Promise<
   { status: 502; error: string } | { status: number; error: string } | "created"
 > {
-  if (!adminUsername || !adminPassword) {
+  const serviceHeaders = buildGiteaServiceHeaders({
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  });
+  if (!serviceHeaders) {
     return {
       status: 502,
-      error: "Gitea admin credentials are not configured.",
+      error: "Gitea service token is not configured.",
     };
   }
 
   const response = await giteaFetch("/api/v1/admin/users", {
     method: "POST",
-    headers: {
-      Authorization: buildBasicAuthHeader(adminUsername, adminPassword),
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
+    headers: serviceHeaders,
     body: JSON.stringify({
       username,
       password,

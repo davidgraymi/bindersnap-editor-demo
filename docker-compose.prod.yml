@@ -58,8 +58,8 @@ services:
       - GITEA__openid__ENABLE_OPENID_SIGNUP=false
       - GITEA__oauth2__ENABLE=false
       # --- Admin credentials (first-boot only) ---
-      - GITEA_ADMIN_USER=${GITEA_ADMIN_USER}
-      - GITEA_ADMIN_PASS=${GITEA_ADMIN_PASS}
+      - GITEA_ADMIN_USER=${GITEA_ADMIN_USER:-}
+      - GITEA_ADMIN_PASS=${GITEA_ADMIN_PASS:-}
     volumes:
       - gitea-data:/data
     healthcheck:
@@ -80,8 +80,7 @@ services:
       - API_PORT=8787
       - PORT=8787
       - GITEA_INTERNAL_URL=http://gitea:3000
-      - GITEA_ADMIN_USER=${GITEA_ADMIN_USER}
-      - GITEA_ADMIN_PASS=${GITEA_ADMIN_PASS}
+      - BINDERSNAP_GITEA_SERVICE_TOKEN=${GITEA_SERVICE_TOKEN:?set in the generated env file}
       - BINDERSNAP_APP_ORIGIN=https://app.bindersnap.com
       - BINDERSNAP_USER_EMAIL_DOMAIN=${BINDERSNAP_USER_EMAIL_DOMAIN:-users.bindersnap.com}
       - BINDERSNAP_GITEA_TOKEN_SCOPES=${BINDERSNAP_GITEA_TOKEN_SCOPES:-write:user,write:repository,write:issue}
