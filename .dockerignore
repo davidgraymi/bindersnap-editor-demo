@@ -1,0 +1,12 @@
+**
+!package.json
+!bun.lock
+!Dockerfile
+!packages/
+!packages/gitea-client/
+!packages/gitea-client/**
+!services/
+!services/api/
+!services/api/**
+!services/hocuspocus/
+!services/hocuspocus/**
