@@ -25,7 +25,9 @@ const giteaAdminPassKey = ["GITEA", "ADMIN", "PASS"].join("_");
 const giteaInternalTokenKey = ["GITEA", "INTERNAL", "TOKEN"].join("_");
 const giteaSecretKeyKey = ["GITEA", "SECRET", "KEY"].join("_");
 
-function createFixtureWorkspace(parameters: Array<{ Name: string; Value: string }>) {
+function createFixtureWorkspace(
+  parameters: Array<{ Name: string; Value: string }>,
+) {
   const workspace = mkdtempSync(join(tmpdir(), "bindersnap-refresh-env-"));
   const appDir = join(workspace, "app");
   const envFile = join(appDir, ".env.prod");

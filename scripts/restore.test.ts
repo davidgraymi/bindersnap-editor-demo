@@ -98,6 +98,8 @@ describe("restore.sh", () => {
     const exitCode = await proc.exited;
     const stdout = await new Response(proc.stdout).text();
     expect(exitCode).toBe(1);
-    expect(stdout).toContain("LITESTREAM_S3_BUCKET environment variable is not set");
+    expect(stdout).toContain(
+      "LITESTREAM_S3_BUCKET environment variable is not set",
+    );
   });
 });
