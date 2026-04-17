@@ -50,5 +50,4 @@ conf/app.prod.ini
 /test-results/
 
 # Terraform
-/infra/backups/.terraform
-/infra/secrets/.terraform
+**/.terraform
