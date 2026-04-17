@@ -1,0 +1,294 @@
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "*"
+  workflow_dispatch:
+    inputs:
+      api_tag:
+        description: "Optional API image tag to deploy instead of the current commit SHA"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  BUN_VERSION: "1.3.12"
+  AWS_REGION: ${{ vars.AWS_REGION != '' && vars.AWS_REGION || 'us-east-1' }}
+  DEPLOY_ROLE_ARN: ${{ vars.BINDERSNAP_DEPLOY_ROLE_ARN }}
+  SPA_BUCKET: ${{ vars.BINDERSNAP_SPA_BUCKET }}
+  CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.BINDERSNAP_CLOUDFRONT_DISTRIBUTION_ID }}
+  DEPLOY_TARGET_TAG_KEY: ${{ vars.BINDERSNAP_DEPLOY_TARGET_TAG_KEY != '' && vars.BINDERSNAP_DEPLOY_TARGET_TAG_KEY || 'Project' }}
+  DEPLOY_TARGET_TAG_VALUE: ${{ vars.BINDERSNAP_DEPLOY_TARGET_TAG_VALUE != '' && vars.BINDERSNAP_DEPLOY_TARGET_TAG_VALUE || 'bindersnap' }}
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Restore Bun cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-${{ env.BUN_VERSION }}-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run test suite
+        run: bun run test
+
+  build-api:
+    name: Build API Image
+    needs: test
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build-api.yml
+
+  build-spa:
+    name: Build SPA
+    needs: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Restore Bun cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-${{ env.BUN_VERSION }}-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build app bundle
+        env:
+          BUN_PUBLIC_API_BASE_URL: https://api.bindersnap.com
+        run: bun run build:app
+
+      - name: Upload SPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-dist
+          path: dist/app
+          if-no-files-found: error
+
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-24.04
+    if: startsWith(github.ref, 'refs/tags/')
+    needs:
+      - build-api
+      - build-spa
+    timeout-minutes: 30
+
+    steps:
+      - name: Resolve deploy inputs
+        id: deploy-inputs
+        env:
+          MANUAL_API_TAG: ${{ github.event.inputs.api_tag || '' }}
+        run: |
+          set -euo pipefail
+
+          api_tag="${MANUAL_API_TAG:-}"
+          if [ -z "${api_tag}" ]; then
+            api_tag="${GITHUB_SHA}"
+          fi
+
+          echo "api_tag=${api_tag}" >> "${GITHUB_OUTPUT}"
+
+      - name: Validate deploy configuration
+        run: |
+          set -euo pipefail
+
+          missing=0
+          for var_name in DEPLOY_ROLE_ARN SPA_BUCKET CLOUDFRONT_DISTRIBUTION_ID AWS_REGION DEPLOY_TARGET_TAG_KEY DEPLOY_TARGET_TAG_VALUE; do
+            value="${!var_name:-}"
+            if [ -z "${value}" ]; then
+              echo "::error title=Missing workflow configuration::${var_name} is not set"
+              missing=1
+            fi
+          done
+
+          if [ "${missing}" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Download SPA artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: app-dist
+          path: dist/app
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ env.DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: bindersnap-deploy-${{ github.run_id }}
+
+      - name: Upload hashed assets to S3
+        run: |
+          set -euo pipefail
+
+          aws s3 sync dist/app "s3://${SPA_BUCKET}/" \
+            --delete \
+            --exclude "index.html" \
+            --cache-control "public,max-age=31536000,immutable"
+
+      - name: Upload index.html to S3
+        run: |
+          set -euo pipefail
+
+          aws s3 cp dist/app/index.html "s3://${SPA_BUCKET}/index.html" \
+            --cache-control "no-cache,no-store,must-revalidate" \
+            --content-type "text/html; charset=utf-8"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          set -euo pipefail
+
+          aws cloudfront create-invalidation \
+            --distribution-id "${CLOUDFRONT_DISTRIBUTION_ID}" \
+            --paths "/" "/index.html"
+
+      - name: Deploy API over SSM
+        env:
+          API_TAG_TO_DEPLOY: ${{ steps.deploy-inputs.outputs.api_tag }}
+        run: |
+          set -euo pipefail
+
+          python3 <<'PY' > /tmp/bindersnap-ssm-commands.json
+          import json
+          import os
+
+          api_tag = os.environ["API_TAG_TO_DEPLOY"]
+          commands = [
+              "set -euo pipefail",
+              "cd /opt/bindersnap",
+              "python3 - <<'PY2'\nfrom pathlib import Path\napi_tag = "
+              + repr(api_tag)
+              + "\npath = Path('/opt/bindersnap/.env.prod')\nlines = path.read_text().splitlines()\nupdated = False\nnew_lines = []\nfor line in lines:\n    if line.startswith('API_TAG='):\n        new_lines.append(f'API_TAG={api_tag}')\n        updated = True\n    else:\n        new_lines.append(line)\nif not updated:\n    new_lines.append(f'API_TAG={api_tag}')\npath.write_text('\\n'.join(new_lines) + '\\n')\nprint(f'Persisted API_TAG={api_tag}')\nPY2",
+              "docker compose --env-file /opt/bindersnap/.env.prod -f docker-compose.prod.yml pull api",
+              "docker compose --env-file /opt/bindersnap/.env.prod -f docker-compose.prod.yml up -d api",
+              "docker compose --env-file /opt/bindersnap/.env.prod -f docker-compose.prod.yml ps api",
+          ]
+
+          print(json.dumps({"commands": commands}))
+          PY
+
+          command_id="$(
+            aws ssm send-command \
+              --document-name AWS-RunShellScript \
+              --targets "Key=tag:${DEPLOY_TARGET_TAG_KEY},Values=${DEPLOY_TARGET_TAG_VALUE}" \
+              --comment "Bindersnap deploy ${GITHUB_SHA}" \
+              --parameters file:///tmp/bindersnap-ssm-commands.json \
+              --max-concurrency 1 \
+              --max-errors 0 \
+              --timeout-seconds 600 \
+              --query 'Command.CommandId' \
+              --output text
+          )"
+
+          echo "Started SSM command ${command_id}"
+
+          instance_id=""
+          for _ in $(seq 1 30); do
+            instance_id="$(
+              aws ssm list-command-invocations \
+                --command-id "${command_id}" \
+                --details \
+                --query 'CommandInvocations[0].InstanceId' \
+                --output text 2>/dev/null || true
+            )"
+
+            if [ -n "${instance_id}" ] && [ "${instance_id}" != "None" ]; then
+              break
+            fi
+
+            sleep 5
+          done
+
+          if [ -z "${instance_id}" ] || [ "${instance_id}" = "None" ]; then
+            echo "::error title=SSM target not found::No managed instance matched tag ${DEPLOY_TARGET_TAG_KEY}=${DEPLOY_TARGET_TAG_VALUE}"
+            exit 1
+          fi
+
+          echo "SSM target instance: ${instance_id}"
+
+          aws ssm wait command-executed \
+            --command-id "${command_id}" \
+            --instance-id "${instance_id}" || true
+
+          invocation_json="$(
+            aws ssm get-command-invocation \
+              --command-id "${command_id}" \
+              --instance-id "${instance_id}" \
+              --output json
+          )"
+
+          INVOCATION_JSON="${invocation_json}" python3 <<'PY'
+          import json
+          import os
+
+          payload = json.loads(os.environ["INVOCATION_JSON"])
+          print(f"SSM status: {payload.get('Status')}")
+          print(f"SSM status details: {payload.get('StatusDetails')}")
+
+          stdout = payload.get("StandardOutputContent", "").strip()
+          stderr = payload.get("StandardErrorContent", "").strip()
+
+          if stdout:
+              print("\n--- stdout ---")
+              print(stdout)
+
+          if stderr:
+              print("\n--- stderr ---")
+              print(stderr)
+          PY
+
+          status="$(
+            INVOCATION_JSON="${invocation_json}" python3 <<'PY'
+            import json
+            import os
+
+            print(json.loads(os.environ["INVOCATION_JSON"]).get("Status", "Unknown"))
+            PY
+          )"
+
+          if [ "${status}" != "Success" ]; then
+            echo "::error title=SSM deploy failed::Run Command finished with status ${status}"
+            exit 1
+          fi

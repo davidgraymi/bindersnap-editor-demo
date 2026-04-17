@@ -157,3 +157,7 @@ docker compose -f docker-compose.prod.yml --env-file /opt/bindersnap/.env.prod u
 To roll back, set `API_TAG` to a previous commit SHA in
 `/opt/bindersnap/.env.prod`, then run the same `pull` and `up -d api` commands
 again.
+
+The end-to-end production deploy workflow, required GitHub variables, and the
+GitHub Actions rollback path are documented in
+[`docs/ops/deploy.md`](docs/ops/deploy.md).
