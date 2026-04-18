@@ -277,7 +277,7 @@ test.describe("signup flow", () => {
     await submitSignupForm(page);
 
     await expect(page.getByText("Passwords do not match.")).toBeVisible();
-    await expect(page).toHaveURL(/\/login$/);
+    await expect(page).toHaveURL(/\/signup$/);
     expect(signupRequestCount).toBe(0);
   });
 

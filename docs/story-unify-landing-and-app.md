@@ -10,13 +10,13 @@
 
 Bindersnap currently has two separate frontend applications:
 
-| | Landing (`apps/landing/`) | App (`apps/app/`) |
-|---|---|---|
-| Deployed to | GitHub Pages | S3 (planned, not yet live) |
-| Domain | `bindersnap.com` | `app.bindersnap.com` |
-| Auth | None | Cookie-based session via API |
-| Build | Bun bundler → `dist/landing/` | Bun bundler → `dist/app/` |
-| Router | None (static HTML + vanilla JS) | Custom History API router in `App.tsx` |
+|             | Landing (`apps/landing/`)       | App (`apps/app/`)                      |
+| ----------- | ------------------------------- | -------------------------------------- |
+| Deployed to | GitHub Pages                    | S3 (planned, not yet live)             |
+| Domain      | `bindersnap.com`                | `app.bindersnap.com`                   |
+| Auth        | None                            | Cookie-based session via API           |
+| Build       | Bun bundler → `dist/landing/`   | Bun bundler → `dist/app/`              |
+| Router      | None (static HTML + vanilla JS) | Custom History API router in `App.tsx` |
 
 We want to merge these into a single SPA deployed to GitHub Pages at `bindersnap.com`. This eliminates the S3/CloudFront dependency, the `app.` subdomain, and the separate deploy pipeline.
 
@@ -69,6 +69,7 @@ Rationale:
 4. This approach means the raw HTML is the landing page by default — if JS fails to load, the user still sees marketing content. Progressive enhancement.
 
 **Key files:**
+
 - `apps/app/index.html` — merge landing markup in
 - `apps/app/landing-inline.ts` — vanilla JS for landing interactivity
 - `apps/app/App.tsx` — add landing/app routing at the top level
@@ -79,6 +80,7 @@ Rationale:
 **Goal:** `/` resolves to either landing or workspace based on auth state.
 
 1. Add a new route variant to `AppRoute`:
+
    ```typescript
    | { kind: "home" }
    ```
@@ -86,6 +88,7 @@ Rationale:
 2. Update `getRoute()`: the path `/` returns `{ kind: "home" }` instead of `{ kind: "workspace" }`.
 
 3. In the main render logic, `home` resolves based on auth state:
+
    ```typescript
    case "home":
      return user ? <Workspace /> : <LandingPage />;
@@ -128,6 +131,7 @@ Currently, the session check is `GET /auth/me` with `credentials: "include"`. Th
 4. Add a post-build step: `cp dist/index.html dist/404.html`. This is the GitHub Pages SPA routing trick — any path that doesn't match a file serves `404.html`, which bootstraps the React app and the client-side router takes over.
 
 5. GitHub Actions deploy workflow:
+
    ```yaml
    - run: bun run build
    - run: cp dist/index.html dist/404.html
