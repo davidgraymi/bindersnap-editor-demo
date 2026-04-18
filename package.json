@@ -36,8 +36,8 @@
     "test:integration": "bunx playwright test --config=playwright.config.ts",
     "test:unit": "bun test",
     "up": "docker compose up --build",
-    "tf:bootstrap": "bash infra/bootstrap.sh",
     "tf:apply": "bash infra/apply-all.sh",
+    "tf:bootstrap": "bash infra/bootstrap.sh",
     "tf:plan": "bash infra/apply-all.sh plan",
     "version": "auto-changelog -p && git add CHANGELOG.md"
   },
