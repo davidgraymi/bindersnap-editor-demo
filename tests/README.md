@@ -4,11 +4,11 @@ Everything needed to run the **full Bindersnap target architecture locally** for
 
 ## What this spins up
 
-| Service        | URL                                  | Purpose                                    |
-| -------------- | ------------------------------------ | ------------------------------------------ |
-| Gitea          | `http://localhost:3000`              | Git backend, auth source, document storage |
-| Hocuspocus     | `ws://localhost:1234`                | Real-time collaboration WebSocket server   |
-| Bindersnap app | `http://localhost:${APP_PORT:-5173}` | The real app (`apps/app/`) with hot reload |
+| Service        | URL                                  | Purpose                                       |
+| -------------- | ------------------------------------ | --------------------------------------------- |
+| Gitea          | `http://localhost:3000`              | Git backend, auth source, document storage    |
+| Hocuspocus     | `ws://localhost:1234`                | Real-time collaboration WebSocket server      |
+| Bindersnap app | `http://localhost:${APP_PORT:-5173}` | The unified SPA (`apps/app/`) with hot reload |
 
 ## Running integration tests
 
@@ -45,9 +45,8 @@ APP_PORT=4000 bun run test:integration
 Unit tests live alongside source as `*.test.ts` and use `bun:test`. No Docker required.
 
 ```bash
-bun run test          # all unit tests (app + landing + editor + gitea-client + utils)
-bun run test:app      # apps/app + packages/gitea-client
-bun run test:landing  # apps/landing + packages/editor + packages/utils
+bun test apps/app packages/gitea-client packages/editor packages/utils
+bun test services/api scripts infra/backups
 ```
 
 ## Seeded data
@@ -96,11 +95,10 @@ tests/
 
 ### Why there is no api-auth.pw.ts
 
-The project architecture is a pure SPA — `apps/app/` communicates directly with
-Gitea via a bearer token held in `sessionStorage`. There is no BFF, no proxy, and
-no session-cookie endpoint. A credential-auth API test file would test a surface
-that does not exist in this architecture and was removed to avoid misleading
-contributors. See `AGENTS.md` architecture decision #1.
+The product app now authenticates through `services/api` with an `HttpOnly`
+session cookie, but the end-to-end auth path is already exercised through the
+main Playwright flows. A separate browser-only auth suite would duplicate the
+same surface without adding much signal.
 
 ## This is not production
 

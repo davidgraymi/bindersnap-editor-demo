@@ -5,7 +5,7 @@ import { sanitizeHtml, sanitizeProseMirrorJson } from "./sanitizer";
 
 const { window } = new JSDOM("<!doctype html><html><body></body></html>");
 
-Object.assign(globalThis, {
+for (const [key, value] of Object.entries({
   window,
   document: window.document,
   Node: window.Node,
@@ -19,7 +19,12 @@ Object.assign(globalThis, {
   DOMParser: window.DOMParser,
   NodeFilter: window.NodeFilter,
   MutationObserver: window.MutationObserver,
-});
+})) {
+  Object.defineProperty(globalThis, key, {
+    configurable: true,
+    value,
+  });
+}
 
 describe("sanitizeHtml", () => {
   test("strips script tags entirely", () => {

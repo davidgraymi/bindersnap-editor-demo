@@ -11,7 +11,7 @@ import type { ApprovalState } from "../../../gitea-client/pullRequests";
 const { window } = new JSDOM("<!doctype html><html><body></body></html>");
 
 beforeAll(() => {
-  Object.assign(globalThis, {
+  for (const [key, value] of Object.entries({
     window,
     document: window.document,
     navigator: window.navigator,
@@ -31,7 +31,12 @@ beforeAll(() => {
     cancelAnimationFrame: (handle: number) => clearTimeout(handle),
     innerHeight: 900,
     innerWidth: 1440,
-  });
+  })) {
+    Object.defineProperty(globalThis, key, {
+      configurable: true,
+      value,
+    });
+  }
 });
 
 const stateClassName: Record<ApprovalState, string> = {

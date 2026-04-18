@@ -1,4 +1,4 @@
-import type { AppRoute } from "../App";
+import type { AppRoute } from "../routes";
 import { ActivityLogPage } from "./ActivityLogPage";
 import { DocumentDetail } from "./DocumentDetail";
 import { FileVaultWorkspace } from "./FileVaultWorkspace";

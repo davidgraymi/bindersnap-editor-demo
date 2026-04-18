@@ -7,7 +7,10 @@ body,
   height: 100%;
 }
 
-body {
+body[data-app-view="app"],
+body[data-app-view="login"],
+body[data-app-view="loading"],
+body[data-app-view="callback"] {
   margin: 0;
   background:
     radial-gradient(circle at top left, var(--bs-coral-dim), transparent 30%),
@@ -20,7 +23,10 @@ body {
   color: var(--bs-text-primary);
 }
 
-[data-theme="dark"] body {
+[data-theme="dark"] body[data-app-view="app"],
+[data-theme="dark"] body[data-app-view="login"],
+[data-theme="dark"] body[data-app-view="loading"],
+[data-theme="dark"] body[data-app-view="callback"] {
   background:
     radial-gradient(circle at top left, var(--bs-coral-glow), transparent 30%),
     var(--bs-page-bg);
@@ -101,6 +107,20 @@ input {
 
 .app-submit {
   width: 100%;
+}
+
+.app-check-row {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-3);
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-sm);
+}
+
+.app-check-input {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--brand-coral);
 }
 
 .app-inline-error {

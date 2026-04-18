@@ -1,8 +1,6 @@
 # Copy to terraform.tfvars and fill in real values.
 
-github_owner               = "your-github-org"
-spa_bucket_name            = "bindersnap-spa"
-cloudfront_distribution_id = "E1234567890ABC"  # from: cd ../spa && terraform output distribution_id
-# aws_region               = "us-east-1"
-# github_repository        = "bindersnap-editor-demo"
-# github_branch            = "main"
+github_owner = "your-github-org"
+# aws_region = "us-east-1"
+# github_repository = "bindersnap-editor-demo"
+# github_branch = "main"
