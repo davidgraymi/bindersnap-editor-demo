@@ -1,6 +1,6 @@
 {
   "name": "bindersnap-editor-demo",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "private": true,
   "type": "module",
   "scripts": {
@@ -36,6 +36,9 @@
     "test:integration": "bunx playwright test --config=playwright.config.ts",
     "test:unit": "bun test",
     "up": "docker compose up --build",
+    "tf:apply": "bash infra/apply-all.sh",
+    "tf:bootstrap": "bash infra/bootstrap.sh",
+    "tf:plan": "bash infra/apply-all.sh plan",
     "version": "auto-changelog -p && git add CHANGELOG.md"
   },
   "dependencies": {

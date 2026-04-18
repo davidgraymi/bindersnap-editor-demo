@@ -6,6 +6,10 @@ terraform {
       version = "~> 5.0"
     }
   }
+
+  backend "s3" {
+    key = "monitoring/terraform.tfstate"
+  }
 }
 
 provider "aws" {
@@ -105,6 +109,59 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high_warning" {
   insufficient_data_actions = []
 
   tags = local.common_tags
+}
+
+# Disk usage alarm — requires CloudWatch agent emitting to Bindersnap namespace.
+# Triggers when any monitored mount (/, /data) exceeds 85% for 10 minutes.
+resource "aws_cloudwatch_metric_alarm" "disk_high" {
+  alarm_name          = "${var.project}-instance-disk-high"
+  alarm_description   = "Alert when disk usage exceeds 85% on any mount for 10+ minutes"
+  namespace           = "Bindersnap"
+  metric_name         = "disk_used_percent"
+  statistic           = "Maximum"
+  period              = 300
+  evaluation_periods  = 2
+  threshold           = 85
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+
+  dimensions = {
+    InstanceId = var.instance_id
+  }
+
+  tags = local.common_tags
+}
+
+# Memory usage alarm — bonus, since CW agent is already installed.
+resource "aws_cloudwatch_metric_alarm" "mem_high" {
+  alarm_name          = "${var.project}-instance-mem-high"
+  alarm_description   = "Alert when memory usage exceeds 90% for 10+ minutes"
+  namespace           = "Bindersnap"
+  metric_name         = "mem_used_percent"
+  statistic           = "Average"
+  period              = 300
+  evaluation_periods  = 2
+  threshold           = 90
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+
+  dimensions = {
+    InstanceId = var.instance_id
+  }
+
+  tags = local.common_tags
+}
+
+output "disk_high_alarm_name" {
+  description = "CloudWatch alarm name for disk usage"
+  value       = aws_cloudwatch_metric_alarm.disk_high.alarm_name
+}
+
+output "mem_high_alarm_name" {
+  description = "CloudWatch alarm name for memory usage"
+  value       = aws_cloudwatch_metric_alarm.mem_high.alarm_name
 }
 
 output "alerts_topic_arn" {

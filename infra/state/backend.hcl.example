@@ -1,0 +1,14 @@
+# Partial backend config for all Bindersnap Terraform modules.
+#
+# Copy this file to backend.hcl and fill in the values from:
+#   cd infra/state && terraform output
+#
+# Then init each module with:
+#   terraform init -backend-config=../state/backend.hcl
+#
+# Each module sets its own `key` in its backend block (e.g. "backups/terraform.tfstate").
+
+bucket         = "bindersnap-tfstate-REPLACE_WITH_ACCOUNT_ID"
+region         = "us-east-1"
+dynamodb_table = "bindersnap-tfstate-lock"
+encrypt        = true

@@ -51,3 +51,8 @@ conf/app.prod.ini
 
 # Terraform
 **/.terraform
+**/tfplan.out
+*.tfstate
+*.tfstate.backup
+terraform.tfvars
+infra/state/backend.hcl
