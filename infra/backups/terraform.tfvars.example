@@ -1,0 +1,6 @@
+# Copy to terraform.tfvars and fill in real values.
+
+aws_account_id       = "123456789012"
+aws_region           = "us-east-1"
+# gitea_data_volume_id = "vol-0123456789abcdef0"  # from: cd ../compute && terraform output data_volume_id
+# ec2_instance_role_name = "bindersnap-prod-instance"  # from: cd ../compute && terraform output instance_role_name

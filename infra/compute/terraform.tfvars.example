@@ -1,0 +1,11 @@
+# Copy to terraform.tfvars and fill in real values.
+# terraform.tfvars is gitignored — never commit it.
+
+aws_region          = "us-east-1"
+instance_type       = "t4g.small"
+data_volume_size_gb = 20
+# ami_id            = null          # null = auto-discover latest AL2023 ARM64
+# key_pair_name     = "my-key"      # optional, prefer SSM Session Manager
+# vpc_id            = null          # null = default VPC
+# subnet_id         = null          # null = first default subnet
+# allowed_ssh_cidrs = ["1.2.3.4/32"]

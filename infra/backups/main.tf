@@ -18,6 +18,12 @@ terraform {
       version = "~> 5.0"
     }
   }
+
+  backend "s3" {
+    key = "backups/terraform.tfstate"
+    # Remaining config (bucket, region, dynamodb_table, encrypt) loaded from:
+    #   terraform init -backend-config=../state/backend.hcl
+  }
 }
 
 provider "aws" {

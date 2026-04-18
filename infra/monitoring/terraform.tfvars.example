@@ -1,0 +1,5 @@
+# Copy to terraform.tfvars and fill in real values.
+
+instance_id = "i-0123456789abcdef0"  # from: cd ../compute && terraform output instance_id
+alert_email = "alerts@bindersnap.com"
+# aws_region = "us-east-1"
