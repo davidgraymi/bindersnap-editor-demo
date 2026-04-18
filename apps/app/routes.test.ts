@@ -5,6 +5,8 @@ import { asShellRoute, getRoute, routeToPath } from "./routes";
 test("getRoute maps the SPA home route to the landing/app home kind", () => {
   expect(getRoute("/")).toEqual({ kind: "home" });
   expect(getRoute("/trailing///")).toEqual({ kind: "home" });
+  expect(getRoute("/login")).toEqual({ kind: "login" });
+  expect(getRoute("/signup")).toEqual({ kind: "signup" });
 });
 
 test("getRoute preserves document detail routes", () => {
@@ -26,6 +28,8 @@ test("getRoute preserves document detail routes", () => {
 test("routeToPath keeps home and workspace on the root URL", () => {
   expect(routeToPath({ kind: "home" })).toBe("/");
   expect(routeToPath({ kind: "workspace" })).toBe("/");
+  expect(routeToPath({ kind: "login" })).toBe("/login");
+  expect(routeToPath({ kind: "signup" })).toBe("/signup");
   expect(routeToPath({ kind: "inbox" })).toBe("/inbox");
 });
 

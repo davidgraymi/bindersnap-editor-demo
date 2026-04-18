@@ -1,6 +1,7 @@
 export type AppRoute =
   | { kind: "home" }
   | { kind: "login" }
+  | { kind: "signup" }
   | { kind: "callback" }
   | { kind: "workspace" }
   | { kind: "inbox" }
@@ -33,6 +34,10 @@ export function getRoute(pathname: string): AppRoute {
 
   if (normalizedPath === "/login") {
     return { kind: "login" };
+  }
+
+  if (normalizedPath === "/signup") {
+    return { kind: "signup" };
   }
 
   if (normalizedPath === "/inbox") {
@@ -72,6 +77,8 @@ export function routeToPath(route: AppRoute): string {
   switch (route.kind) {
     case "login":
       return "/login";
+    case "signup":
+      return "/signup";
     case "callback":
       return "/auth/callback";
     case "document":

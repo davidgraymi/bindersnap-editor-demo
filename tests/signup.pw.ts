@@ -21,8 +21,8 @@ function buildUniqueSignupCredentials() {
 }
 
 async function openSignupForm(page: Page): Promise<void> {
-  await page.goto("/login");
-  await page.getByRole("button", { name: "Sign up" }).click();
+  await page.goto("/signup");
+  await expect(page).toHaveURL(/\/signup$/);
   await expect(
     page.getByRole("heading", {
       name: "Create your Bindersnap workspace.",
@@ -179,7 +179,7 @@ test.describe("signup flow", () => {
     await page.locator("#hero-email").fill(email);
     await page.locator("#hero-form button").click();
 
-    await expect(page).toHaveURL(/\/login\?mode=signup/);
+    await expect(page).toHaveURL(/\/signup\?email=/);
     expect(new URL(page.url()).searchParams.get("email")).toBe(email);
     await expect(
       page.getByRole("heading", {

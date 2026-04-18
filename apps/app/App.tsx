@@ -25,7 +25,7 @@ import {
   routeToPath,
   type AppRoute,
 } from "./routes";
-import { resolveAuthIntent } from "./authIntent";
+import { resolveSignupPrefill } from "./authIntent";
 
 type AuthView = "loading" | "callback" | "landing" | "login" | "app";
 type AuthMode = "signin" | "signup";
@@ -36,6 +36,8 @@ interface SessionUser {
 }
 
 interface LoginPageProps {
+  mode: AuthMode;
+  prefilledEmail?: string;
   callbackError: string | null;
   onLogin: (
     identifier: string,
@@ -55,15 +57,16 @@ function navigateTo(route: AppRoute, replace = false): void {
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
-function LoginPage({ callbackError, onLogin, onSignup }: LoginPageProps) {
-  const initialAuthIntent = useMemo(
-    () => resolveAuthIntent(window.location.search),
-    [],
-  );
-  const [mode, setMode] = useState<AuthMode>(initialAuthIntent.mode);
+function LoginPage({
+  mode,
+  prefilledEmail = "",
+  callbackError,
+  onLogin,
+  onSignup,
+}: LoginPageProps) {
   const [username, setUsername] = useState("");
   const [identifier, setIdentifier] = useState(
-    initialAuthIntent.mode === "signup" ? initialAuthIntent.email : "",
+    mode === "signup" ? prefilledEmail : "",
   );
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -260,7 +263,7 @@ function LoginPage({ callbackError, onLogin, onSignup }: LoginPageProps) {
               className="app-login-switch-button"
               type="button"
               onClick={() => {
-                setMode(mode === "signin" ? "signup" : "signin");
+                navigateTo({ kind: mode === "signin" ? "signup" : "login" });
                 setError(callbackError);
               }}
             >
@@ -338,7 +341,7 @@ export function App() {
       return;
     }
 
-    if (user && route.kind === "login") {
+    if (user && (route.kind === "login" || route.kind === "signup")) {
       navigateTo({ kind: "home" }, true);
       return;
     }
@@ -412,8 +415,17 @@ export function App() {
   }
 
   if (view === "login") {
+    const authMode: AuthMode = route.kind === "signup" ? "signup" : "signin";
+    const prefilledEmail =
+      route.kind === "signup"
+        ? resolveSignupPrefill(window.location.search).email
+        : "";
+
     return (
       <LoginPage
+        key={`${authMode}:${prefilledEmail}`}
+        mode={authMode}
+        prefilledEmail={prefilledEmail}
         callbackError={callbackError}
         onLogin={async (identifier, password, rememberMe) => {
           clearToken();

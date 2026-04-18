@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { resolveAuthIntent } from "./authIntent";
+import { resolveSignupPrefill } from "./authIntent";
 import { resolveGiteaTokenScopes } from "./giteaTokenScopes";
 
 test("resolveGiteaTokenScopes includes all required write scopes by default", () => {
@@ -32,18 +32,14 @@ test("resolveGiteaTokenScopes de-duplicates repeated scopes", () => {
   );
 });
 
-test("resolveAuthIntent defaults the login screen to sign in", () => {
-  expect(resolveAuthIntent("")).toEqual({
-    mode: "signin",
+test("resolveSignupPrefill defaults to an empty email", () => {
+  expect(resolveSignupPrefill("")).toEqual({
     email: "",
   });
 });
 
-test("resolveAuthIntent opens signup mode and prefills the landing email", () => {
-  expect(resolveAuthIntent("?mode=signup&email=team%40bindersnap.com")).toEqual(
-    {
-      mode: "signup",
-      email: "team@bindersnap.com",
-    },
-  );
+test("resolveSignupPrefill reads the landing email from the query string", () => {
+  expect(resolveSignupPrefill("?email=team%40bindersnap.com")).toEqual({
+    email: "team@bindersnap.com",
+  });
 });

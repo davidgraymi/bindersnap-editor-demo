@@ -55,14 +55,15 @@ export function toggleTheme(doc: Document = document): string {
 }
 
 export function buildSignupUrl(email: string | null | undefined): string {
-  const params = new URLSearchParams({ mode: "signup" });
+  const params = new URLSearchParams();
   const normalizedEmail = email?.trim() ?? "";
 
   if (normalizedEmail) {
     params.set("email", normalizedEmail);
   }
 
-  return `/login?${params.toString()}`;
+  const query = params.toString();
+  return query ? `/signup?${query}` : "/signup";
 }
 
 export function routeLandingSignup(
