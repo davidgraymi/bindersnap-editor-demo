@@ -1,19 +1,18 @@
 import {
-  DEFAULT_WAITLIST_COUNT,
-  bindWaitlistEnterKeys,
-  handleWaitlistSignup,
+  bindSignupEnterKeys,
   hideLandingContent,
   installScrollReveal,
   restoreTheme,
+  routeLandingSignup,
   shouldShowLanding,
   showLandingContent,
   toggleTheme,
-  type WaitlistSource,
+  type SignupSource,
 } from "./landing";
 
 declare global {
   interface Window {
-    signup?: (source: WaitlistSource) => void;
+    signup?: (source: SignupSource) => void;
     toggleTheme?: () => void;
     __bindersnapLandingDemoPromise?: Promise<void>;
   }
@@ -31,17 +30,15 @@ if (shouldShowLanding(window.location.pathname)) {
 
 installScrollReveal();
 
-let waitlistCount = DEFAULT_WAITLIST_COUNT;
-
 window.toggleTheme = () => {
   toggleTheme();
 };
 
-window.signup = (source: WaitlistSource) => {
-  waitlistCount = handleWaitlistSignup(document, source, waitlistCount);
+window.signup = (source: SignupSource) => {
+  routeLandingSignup(document, source);
 };
 
-bindWaitlistEnterKeys(document, (source) => {
+bindSignupEnterKeys(document, (source) => {
   window.signup?.(source);
 });
 

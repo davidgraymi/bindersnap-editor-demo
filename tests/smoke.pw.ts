@@ -201,7 +201,7 @@ test.describe("app shell routes", () => {
       page.getByRole("button", { name: "Load Editor" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("link", { name: "Join the Waitlist" }).first(),
+      page.getByRole("link", { name: "Sign Up" }).first(),
     ).toBeVisible();
   });
 
@@ -222,8 +222,11 @@ test.describe("app shell routes", () => {
     await page.goto(`/docs/${OWNER}/${REPO}`);
 
     await expect(page).toHaveURL(new RegExp(`/docs/${OWNER}/${REPO}$`));
+    await expect(page.locator("nav[aria-label='Breadcrumb']")).toBeVisible();
     await expect(
-      page.locator("nav[aria-label='Breadcrumb']", { hasText: REPO }),
+      page.locator("nav[aria-label='Breadcrumb'] button", {
+        hasText: "Documents",
+      }),
     ).toBeVisible();
   });
 });

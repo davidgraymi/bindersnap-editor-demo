@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 
+import { resolveAuthIntent } from "./authIntent";
 import { resolveGiteaTokenScopes } from "./giteaTokenScopes";
 
 test("resolveGiteaTokenScopes includes all required write scopes by default", () => {
@@ -28,5 +29,21 @@ test("resolveGiteaTokenScopes de-duplicates repeated scopes", () => {
   expect(scopes.filter((scope) => scope === "write:user")).toHaveLength(1);
   expect(scopes.filter((scope) => scope === "write:repository")).toHaveLength(
     1,
+  );
+});
+
+test("resolveAuthIntent defaults the login screen to sign in", () => {
+  expect(resolveAuthIntent("")).toEqual({
+    mode: "signin",
+    email: "",
+  });
+});
+
+test("resolveAuthIntent opens signup mode and prefills the landing email", () => {
+  expect(resolveAuthIntent("?mode=signup&email=team%40bindersnap.com")).toEqual(
+    {
+      mode: "signup",
+      email: "team@bindersnap.com",
+    },
   );
 });

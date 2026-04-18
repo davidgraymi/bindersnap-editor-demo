@@ -25,6 +25,7 @@ import {
   routeToPath,
   type AppRoute,
 } from "./routes";
+import { resolveAuthIntent } from "./authIntent";
 
 type AuthView = "loading" | "callback" | "landing" | "login" | "app";
 type AuthMode = "signin" | "signup";
@@ -55,9 +56,15 @@ function navigateTo(route: AppRoute, replace = false): void {
 }
 
 function LoginPage({ callbackError, onLogin, onSignup }: LoginPageProps) {
-  const [mode, setMode] = useState<AuthMode>("signin");
+  const initialAuthIntent = useMemo(
+    () => resolveAuthIntent(window.location.search),
+    [],
+  );
+  const [mode, setMode] = useState<AuthMode>(initialAuthIntent.mode);
   const [username, setUsername] = useState("");
-  const [identifier, setIdentifier] = useState("");
+  const [identifier, setIdentifier] = useState(
+    initialAuthIntent.mode === "signup" ? initialAuthIntent.email : "",
+  );
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(true);

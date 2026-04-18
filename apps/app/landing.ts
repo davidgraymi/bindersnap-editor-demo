@@ -1,7 +1,6 @@
 import { isHomePath } from "./routes";
 
-export const DEFAULT_WAITLIST_COUNT = 247;
-export type WaitlistSource = "hero" | "cta";
+export type SignupSource = "hero" | "cta";
 
 function getStorage(): Storage | null {
   try {
@@ -55,56 +54,40 @@ export function toggleTheme(doc: Document = document): string {
   return nextTheme;
 }
 
-export function setWaitlistCount(doc: Document, count: number): number {
-  doc.getElementById("waitlist-count")!.textContent = String(count);
-  doc.getElementById("nav-count")!.textContent = `${count} on the waitlist`;
-  return count;
+export function buildSignupUrl(email: string | null | undefined): string {
+  const params = new URLSearchParams({ mode: "signup" });
+  const normalizedEmail = email?.trim() ?? "";
+
+  if (normalizedEmail) {
+    params.set("email", normalizedEmail);
+  }
+
+  return `/login?${params.toString()}`;
 }
 
-export function handleWaitlistSignup(
+export function routeLandingSignup(
   doc: Document,
-  source: WaitlistSource,
-  count: number,
-): number {
+  source: SignupSource,
+  navigate: (url: string) => void = (url) => {
+    window.location.assign(url);
+  },
+): string {
   const input = doc.getElementById(
     `${source}-email`,
   ) as HTMLInputElement | null;
-  if (!input) {
-    return count;
-  }
-
-  const email = input.value.trim();
-  if (!email || !email.includes("@")) {
-    input.style.outline = "2px solid rgba(232,93,38,0.6)";
-    input.focus();
-    window.setTimeout(() => {
-      input.style.outline = "";
-    }, 1500);
-    return count;
-  }
-
-  doc.getElementById(
-    source === "hero" ? "hero-form" : "cta-form",
-  )!.style.display = "none";
-  doc.getElementById(
-    source === "hero" ? "hero-success" : "cta-success",
-  )!.style.display = "flex";
-
-  for (const hint of doc.querySelectorAll(".form-hint, .cta-hint")) {
-    (hint as HTMLElement).style.display = "none";
-  }
-
-  return setWaitlistCount(doc, count + 1);
+  const signupUrl = buildSignupUrl(input?.value);
+  navigate(signupUrl);
+  return signupUrl;
 }
 
-export function bindWaitlistEnterKeys(
+export function bindSignupEnterKeys(
   doc: Document,
-  submit: (source: WaitlistSource) => void,
+  submit: (source: SignupSource) => void,
 ): void {
   for (const id of ["hero-email", "cta-email"]) {
     doc.getElementById(id)?.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
-        submit(id.replace("-email", "") as WaitlistSource);
+        submit(id.replace("-email", "") as SignupSource);
       }
     });
   }

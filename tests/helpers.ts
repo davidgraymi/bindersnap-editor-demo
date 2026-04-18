@@ -6,6 +6,7 @@
  * utilities that multiple *.pw.ts files need.
  */
 
+import { randomUUID } from "crypto";
 import { expect, type Page } from "@playwright/test";
 import { createGiteaClient } from "../packages/gitea-client/client";
 import {
@@ -168,7 +169,7 @@ export function makeClient() {
  * distinct user (e.g., approving alice's own PR — Gitea disallows self-review).
  */
 export async function createBobClient() {
-  const tokenName = `bindersnap-test-bob-${Date.now()}`;
+  const tokenName = `bindersnap-test-bob-${randomUUID()}`;
   const credentials = Buffer.from(
     `${GITEA_BOB_USER}:${GITEA_BOB_PASS}`,
   ).toString("base64");
@@ -259,15 +260,17 @@ export async function signInAsAlice(page: Page): Promise<void> {
     .isVisible({ timeout: 1_000 })
     .catch(() => false);
   if (hasSignOut) {
-    await page.getByRole("button", { name: "Sign out" }).click();
-    await page.waitForURL(/\/login$/, { timeout: 5_000 });
+    await signOutCurrentUser(page);
   } else {
     // Clear session storage so the app stops redirecting on /login.
     await page.evaluate(() => sessionStorage.clear());
-    await page.goto("/login");
-    await page.waitForURL(/\/login$/, { timeout: 5_000 });
   }
 
+  await page.goto("/login");
+  await page.waitForURL(/\/login$/, { timeout: 5_000 });
+  await expect(page.getByLabel("Username or Email")).toBeVisible({
+    timeout: 10_000,
+  });
   await page.getByLabel("Username or Email").fill(GITEA_ADMIN_USER);
   await page.getByLabel("Password", { exact: true }).fill(GITEA_ADMIN_PASS);
   await page.getByRole("button", { name: "Open workspace" }).click();
@@ -300,21 +303,33 @@ export async function signInAsBob(page: Page): Promise<void> {
     .isVisible({ timeout: 1_000 })
     .catch(() => false);
   if (hasSignOut) {
-    await page.getByRole("button", { name: "Sign out" }).click();
-    await page.waitForURL(/\/login$/, { timeout: 5_000 });
+    await signOutCurrentUser(page);
   } else {
     // Clear session storage so the app stops redirecting on /login.
     await page.evaluate(() => sessionStorage.clear());
-    await page.goto("/login");
-    await page.waitForURL(/\/login$/, { timeout: 5_000 });
   }
 
+  await page.goto("/login");
+  await page.waitForURL(/\/login$/, { timeout: 5_000 });
+  await expect(page.getByLabel("Username or Email")).toBeVisible({
+    timeout: 10_000,
+  });
   await page.getByLabel("Username or Email").fill(GITEA_BOB_USER);
   await page.getByLabel("Password", { exact: true }).fill(GITEA_BOB_PASS);
   await page.getByRole("button", { name: "Open workspace" }).click();
   await expect(
     page.locator(".app-user-badge", { hasText: GITEA_BOB_USER }),
   ).toBeVisible({ timeout: 60_000 });
+}
+
+export async function signOutCurrentUser(page: Page): Promise<void> {
+  const button = page.getByRole("button", { name: "Sign out" });
+  await expect(button).toBeVisible({ timeout: 5_000 });
+  await button.click({ force: true });
+  await page.waitForURL(/\/$/, { timeout: 5_000 });
+  await expect(
+    page.getByRole("heading", { name: /Your approval process/i }),
+  ).toBeVisible({ timeout: 10_000 });
 }
 
 /**

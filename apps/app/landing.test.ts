@@ -2,9 +2,10 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { JSDOM } from "jsdom";
 
 import {
-  DEFAULT_WAITLIST_COUNT,
-  handleWaitlistSignup,
+  bindSignupEnterKeys,
+  buildSignupUrl,
   hideLandingContent,
+  routeLandingSignup,
   shouldShowLanding,
   showLandingContent,
 } from "./landing";
@@ -16,12 +17,8 @@ function installDom() {
   const dom = new JSDOM(
     `
       <div id="landing-content"></div>
-      <span id="waitlist-count">${DEFAULT_WAITLIST_COUNT}</span>
-      <span id="nav-count">${DEFAULT_WAITLIST_COUNT} on the waitlist</span>
-      <div id="hero-form"></div>
-      <div id="hero-success" style="display:none"></div>
-      <div class="form-hint"></div>
       <input id="hero-email" value="team@bindersnap.com" />
+      <input id="cta-email" value="" />
     `,
     { url: "https://bindersnap.com/" },
   );
@@ -68,22 +65,40 @@ test("landing visibility helpers toggle the pre-rendered shell", () => {
   expect(landingContent?.hasAttribute("aria-hidden")).toBe(false);
 });
 
-test("waitlist signup updates the rendered counters", () => {
+test("buildSignupUrl opens signup mode and preserves a typed email", () => {
+  expect(buildSignupUrl(" team@bindersnap.com ")).toBe(
+    "/login?mode=signup&email=team%40bindersnap.com",
+  );
+  expect(buildSignupUrl("")).toBe("/login?mode=signup");
+});
+
+test("landing signup routes to the signup page with the typed email", () => {
   installDom();
+  const navigations: string[] = [];
 
-  const nextCount = handleWaitlistSignup(
-    document,
-    "hero",
-    DEFAULT_WAITLIST_COUNT,
-  );
+  const targetUrl = routeLandingSignup(document, "hero", (url) => {
+    navigations.push(url);
+  });
 
-  expect(nextCount).toBe(DEFAULT_WAITLIST_COUNT + 1);
-  expect(document.getElementById("waitlist-count")?.textContent).toBe("248");
-  expect(document.getElementById("nav-count")?.textContent).toBe(
-    "248 on the waitlist",
-  );
-  expect(document.getElementById("hero-form")?.style.display).toBe("none");
-  expect(document.getElementById("hero-success")?.style.display).toBe("flex");
+  expect(targetUrl).toBe("/login?mode=signup&email=team%40bindersnap.com");
+  expect(navigations).toEqual([targetUrl]);
+});
+
+test("pressing Enter in a landing email field routes to signup", () => {
+  installDom();
+  const submittedSources: string[] = [];
+
+  bindSignupEnterKeys(document, (source) => {
+    submittedSources.push(source);
+  });
+
+  document
+    .getElementById("cta-email")
+    ?.dispatchEvent(
+      new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+    );
+
+  expect(submittedSources).toEqual(["cta"]);
 });
 
 test("only the root pathname should show the landing shell", () => {

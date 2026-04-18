@@ -30,6 +30,7 @@ import {
   openNewDocumentModal,
   openCollaboratorsTab,
   resolveAndStoreToken,
+  signOutCurrentUser,
   signInAsAlice,
   signInAsBob,
   waitForNoPendingReviews,
@@ -119,8 +120,7 @@ test.describe("Merge conflict resolution on publish", () => {
       page.locator(".collaborator-row", { hasText: GITEA_BOB_USER }),
     ).toBeVisible({ timeout: 15_000 });
 
-    await page.getByRole("button", { name: "Sign out" }).click();
-    await expect(page).toHaveURL(/\/login$/);
+    await signOutCurrentUser(page);
 
     // Switch to Bob to approve v1
     await signInAsBob(page);

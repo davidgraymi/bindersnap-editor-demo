@@ -82,7 +82,7 @@
           </a>
           <div class="nav-badge">
             <div class="nav-badge-dot"></div>
-            <span id="nav-count">247 on the waitlist</span>
+            <span id="nav-count">247 teams signed up</span>
           </div>
           <div class="nav-right">
             <button
@@ -120,7 +120,8 @@
                 <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
               </svg>
             </button>
-            <a href="#waitlist" class="nav-cta-link">Join the Waitlist</a>
+            <a href="/login" class="nav-login-link">Sign In</a>
+            <a href="/login?mode=signup" class="nav-cta-link">Sign Up</a>
           </div>
         </div>
       </nav>
@@ -156,8 +157,7 @@
                 <span>JL</span><span>MR</span><span>SK</span>
               </div>
               <p class="waitlist-text">
-                <strong id="waitlist-count">247</strong> professionals already
-                waiting
+                <strong id="waitlist-count">247</strong> teams already signed up
               </p>
             </div>
 
@@ -169,8 +169,8 @@
                   placeholder="your@company.com"
                   autocomplete="email"
                 />
-                <button onclick="signup('hero')">
-                  Get Early Access &rarr;
+                <button type="button" onclick="signup('hero')">
+                  Sign Up Free &rarr;
                 </button>
               </div>
               <p class="form-hint">
@@ -183,8 +183,7 @@
                   <circle cx="6" cy="6" r="5" />
                   <path d="M6 4v2.5l1.5 1" />
                 </svg>
-                Free to join &middot; No credit card &middot; First when we
-                launch
+                Free to join &middot; No credit card &middot; Start in minutes
               </p>
               <div class="hero-success" id="hero-success">
                 <div class="success-ring">
@@ -697,13 +696,13 @@
         </section>
 
         <!-- FINAL CTA -->
-        <section class="section-cta" id="waitlist">
+        <section class="section-cta" id="signup">
           <div class="cta-inner reveal">
-            <div class="cta-tag">Join the Waitlist</div>
+            <div class="cta-tag">Sign Up</div>
             <h2>Kill the email chain.<br /><em>Finally.</em></h2>
             <p>
-              Join the professionals who are done fighting their document tools.
-              Be first when Bindersnap launches.
+              Sign up and bring a clean approval trail into the documents your
+              team already runs every day.
             </p>
             <div class="cta-form-wrap" id="cta-area">
               <div class="cta-email-row" id="cta-form">
@@ -713,10 +712,12 @@
                   placeholder="your@company.com"
                   autocomplete="email"
                 />
-                <button onclick="signup('cta')">Join the Waitlist</button>
+                <button type="button" onclick="signup('cta')">
+                  Sign Up Free
+                </button>
               </div>
               <p class="cta-hint">
-                No spam &middot; No commitment &middot; Just first access
+                Free to join &middot; No credit card &middot; Start in minutes
               </p>
               <div class="cta-success" id="cta-success">
                 <div class="cta-success-ring">
@@ -773,7 +774,7 @@
             Document management is
             <strong>broken for teams that care about accountability.</strong
             ><br />
-            We're fixing it. Join the waitlist and be first to know.
+            We're fixing it. Sign up and keep every approval trail clean.
           </p>
           <div class="footer-rule"></div>
           <div class="footer-bottom">

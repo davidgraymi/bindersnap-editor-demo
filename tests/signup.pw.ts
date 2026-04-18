@@ -9,6 +9,8 @@
 
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
+import { signOutCurrentUser } from "./helpers";
+
 function buildUniqueSignupCredentials() {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   return {
@@ -123,7 +125,8 @@ async function signUpAndReturnToLogin(
     `${screenshotPrefix}-workspace-after-signup`,
   );
 
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await signOutCurrentUser(page);
+  await page.goto("/login");
   await expect(page).toHaveURL(/\/login$/);
   await expect(
     page.getByRole("heading", { name: "Step into the clean version." }),
@@ -167,6 +170,25 @@ async function logInWithIdentifier(
 }
 
 test.describe("signup flow", () => {
+  test("landing signup carries the typed email into the signup form", async ({
+    page,
+  }) => {
+    const email = `landing-${Date.now()}@users.bindersnap.local`;
+
+    await page.goto("/");
+    await page.locator("#hero-email").fill(email);
+    await page.locator("#hero-form button").click();
+
+    await expect(page).toHaveURL(/\/login\?mode=signup/);
+    expect(new URL(page.url()).searchParams.get("email")).toBe(email);
+    await expect(
+      page.getByRole("heading", {
+        name: "Create your Bindersnap workspace.",
+      }),
+    ).toBeVisible();
+    await expect(page.getByLabel("Email")).toHaveValue(email);
+  });
+
   test("creates an account, signs out, and logs back in with a username", async ({
     page,
   }, testInfo) => {
@@ -271,7 +293,8 @@ test.describe("signup flow", () => {
     await submitSignupForm(page);
 
     await expect(page).toHaveURL(/\/$/);
-    await page.getByRole("button", { name: "Sign out" }).click();
+    await signOutCurrentUser(page);
+    await page.goto("/login");
     await expect(page).toHaveURL(/\/login$/);
 
     await openSignupForm(page);
