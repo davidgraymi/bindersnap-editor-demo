@@ -12,7 +12,13 @@
         "measurement": ["used_percent"],
         "metrics_collection_interval": 300,
         "resources": ["/", "/data"],
-        "ignore_file_system_types": ["sysfs", "devtmpfs", "tmpfs", "squashfs", "overlay"]
+        "ignore_file_system_types": [
+          "sysfs",
+          "devtmpfs",
+          "tmpfs",
+          "squashfs",
+          "overlay"
+        ]
       },
       "mem": {
         "measurement": ["mem_used_percent"],
