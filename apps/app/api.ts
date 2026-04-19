@@ -188,6 +188,7 @@ async function sendAuthRequest(
   username: string | null,
   email: string,
   password: string,
+  rememberMe?: boolean,
 ): Promise<SessionAuthState> {
   const payload = await requestJson<unknown>(
     path,
@@ -197,7 +198,7 @@ async function sendAuthRequest(
         "Content-Type": "application/json",
         Accept: "application/json",
       },
-      body: JSON.stringify({ username, email, password }),
+      body: JSON.stringify({ username, email, password, rememberMe }),
     },
     "Unable to complete authentication right now.",
   );
@@ -229,6 +230,7 @@ function buildMultipartForm(
 export async function login(
   identifier: string,
   password: string,
+  rememberMe = true,
 ): Promise<SessionAuthState> {
   const trimmed = identifier.trim();
   return sendAuthRequest(
@@ -236,6 +238,7 @@ export async function login(
     trimmed.includes("@") ? null : trimmed,
     trimmed.includes("@") ? trimmed : "",
     password,
+    rememberMe,
   );
 }
 

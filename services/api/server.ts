@@ -91,6 +91,7 @@ const emailDomain =
   process.env.BINDERSNAP_USER_EMAIL_DOMAIN ?? "users.bindersnap.local";
 const sessionCookieName =
   process.env.BINDERSNAP_SESSION_COOKIE_NAME ?? "bindersnap_session";
+export type SessionCookieSameSite = "Strict" | "Lax" | "None";
 const REQUIRED_GITEA_TOKEN_SCOPES = [
   "write:user",
   "write:repository",
@@ -111,9 +112,13 @@ function resolveGiteaTokenScopes(scopesRaw?: string): string[] {
 const tokenScopes = resolveGiteaTokenScopes(
   process.env.BINDERSNAP_GITEA_TOKEN_SCOPES,
 );
-const sessionTtlMs = Number.parseInt(
-  process.env.BINDERSNAP_SESSION_TTL_MS ?? `${7 * 24 * 60 * 60 * 1000}`,
-  10,
+const sessionTtlMs = parsePositiveInt(
+  process.env.BINDERSNAP_SESSION_TTL_MS,
+  7 * 24 * 60 * 60 * 1000,
+);
+const rememberedSessionTtlMs = parsePositiveInt(
+  process.env.BINDERSNAP_REMEMBER_ME_SESSION_TTL_MS,
+  30 * 24 * 60 * 60 * 1000,
 );
 const enforceHttps = parseBoolean(
   process.env.BINDERSNAP_REQUIRE_HTTPS,
@@ -142,15 +147,71 @@ const configuredAllowedOrigins = (
   .filter((origin) => origin !== "");
 
 const authAttempts = new Map<string, { count: number; resetAt: number }>();
-const sessionTtl =
-  Number.isFinite(sessionTtlMs) && sessionTtlMs > 0
-    ? sessionTtlMs
-    : 7 * 24 * 60 * 60 * 1000;
+const sessionCookieDomain = resolveCookieDomain(
+  process.env.BINDERSNAP_SESSION_COOKIE_DOMAIN,
+);
+const sessionCookieSameSite = resolveCookieSameSite(
+  process.env.BINDERSNAP_SESSION_COOKIE_SAME_SITE,
+);
 const allowedOrigins = new Set(
   configuredAllowedOrigins
     .map(normalizeOrigin)
     .filter((origin): origin is string => Boolean(origin)),
 );
+
+function resolveCookieDomain(value: string | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (trimmed === "") {
+    return null;
+  }
+
+  return /^\.?[a-z0-9.-]+$/i.test(trimmed) ? trimmed : null;
+}
+
+export function resolveCookieSameSite(
+  value: string | undefined,
+  fallback: SessionCookieSameSite = "Lax",
+): SessionCookieSameSite {
+  const normalized = value?.trim().toLowerCase();
+  switch (normalized) {
+    case "strict":
+      return "Strict";
+    case "none":
+      return "None";
+    case "lax":
+      return "Lax";
+    default:
+      return fallback;
+  }
+}
+
+export interface SessionLifetime {
+  sessionExpiresAt: number;
+  cookieExpiresAt?: number;
+}
+
+export function buildSessionLifetime(
+  rememberMe: boolean,
+  now = Date.now(),
+  options?: {
+    sessionTtlMs?: number;
+    rememberedSessionTtlMs?: number;
+  },
+): SessionLifetime {
+  const standardTtlMs = options?.sessionTtlMs ?? sessionTtlMs;
+  const persistentTtlMs =
+    options?.rememberedSessionTtlMs ?? rememberedSessionTtlMs;
+  const ttlMs = rememberMe ? persistentTtlMs : standardTtlMs;
+  const expiresAt = now + ttlMs;
+
+  return rememberMe
+    ? { sessionExpiresAt: expiresAt, cookieExpiresAt: expiresAt }
+    : { sessionExpiresAt: expiresAt };
+}
 
 function normalizeOrigin(origin: string | null | undefined): string | null {
   if (!origin) {
@@ -365,33 +426,46 @@ function enforceStateChangingOrigin(
   return null;
 }
 
-function serializeCookie(
+export function serializeSessionCookie(
   req: Request,
   value: string,
-  expiresAt?: number,
+  options?: {
+    expiresAt?: number;
+    sameSite?: SessionCookieSameSite;
+    domain?: string | null;
+  },
 ): string {
+  const sameSite = options?.sameSite ?? sessionCookieSameSite;
+  const domain = options?.domain ?? sessionCookieDomain;
   const parts = [
     `${sessionCookieName}=${value}`,
     "Path=/",
     "HttpOnly",
-    "SameSite=Lax",
+    `SameSite=${sameSite}`,
   ];
+
+  if (domain) {
+    parts.push(`Domain=${domain}`);
+  }
 
   if (!isLocalRequest(req)) {
     parts.push("Secure");
   }
 
-  if (expiresAt !== undefined) {
-    const maxAge = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
+  if (options?.expiresAt !== undefined) {
+    const maxAge = Math.max(
+      0,
+      Math.floor((options.expiresAt - Date.now()) / 1000),
+    );
     parts.push(`Max-Age=${maxAge}`);
-    parts.push(`Expires=${new Date(expiresAt).toUTCString()}`);
+    parts.push(`Expires=${new Date(options.expiresAt).toUTCString()}`);
   }
 
   return parts.join("; ");
 }
 
 function clearSessionCookie(req: Request): string {
-  return serializeCookie(req, "", 0);
+  return serializeSessionCookie(req, "", { expiresAt: 0 });
 }
 
 function parseCookies(req: Request): Map<string, string> {
@@ -1103,6 +1177,7 @@ async function createAuthenticatedSession(
   password: string,
   req: Request,
   baseHeaders: Headers,
+  rememberMe = true,
 ): Promise<Response> {
   const tokenName = `bindersnap-session-${randomUUID()}`;
   const token = await createUserToken(username, password, tokenName).catch(
@@ -1112,9 +1187,17 @@ async function createAuthenticatedSession(
     return json(502, { error: "Unable to sign in." }, baseHeaders);
   }
 
-  const session = createSession(username, token, tokenName);
+  const lifetime = buildSessionLifetime(rememberMe);
+  const session = createSession(
+    username,
+    token,
+    tokenName,
+    lifetime.sessionExpiresAt,
+  );
   const headers = mergeHeaders(baseHeaders, {
-    "Set-Cookie": serializeCookie(req, session.id, session.expiresAt),
+    "Set-Cookie": serializeSessionCookie(req, session.id, {
+      expiresAt: lifetime.cookieExpiresAt,
+    }),
   });
 
   return json(
@@ -1134,6 +1217,7 @@ async function createLoginSession(
   password: string,
   req: Request,
   baseHeaders: Headers,
+  rememberMe = true,
 ): Promise<Response> {
   const loginName = await verifyUserCredentials(username, password).catch(
     () => null,
@@ -1142,7 +1226,13 @@ async function createLoginSession(
     return json(401, { error: "Invalid username or password." }, baseHeaders);
   }
 
-  return createAuthenticatedSession(loginName, password, req, baseHeaders);
+  return createAuthenticatedSession(
+    loginName,
+    password,
+    req,
+    baseHeaders,
+    rememberMe,
+  );
 }
 
 async function createUserToken(
@@ -1263,6 +1353,7 @@ function createSession(
   username: string,
   giteaToken: string,
   giteaTokenName: string,
+  expiresAt: number,
 ): SessionRecord {
   const now = Date.now();
   const session: SessionRecord = {
@@ -1271,7 +1362,7 @@ function createSession(
     giteaToken,
     giteaTokenName,
     createdAt: now,
-    expiresAt: now + sessionTtl,
+    expiresAt,
   };
 
   sessionStore.put(session);
@@ -1354,6 +1445,7 @@ async function handleLogin(
     email?: unknown;
     identifier?: unknown;
     password?: unknown;
+    rememberMe?: unknown;
   }>(req);
   const username =
     typeof payload?.username === "string" ? payload.username.trim() : "";
@@ -1365,6 +1457,8 @@ async function handleLogin(
   const emailCandidate = email || identifier;
   const password =
     typeof payload?.password === "string" ? payload.password : "";
+  const rememberMe =
+    typeof payload?.rememberMe === "boolean" ? payload.rememberMe : true;
 
   if (!identifier || !password) {
     return json(
@@ -1396,6 +1490,7 @@ async function handleLogin(
     password,
     req,
     baseHeaders,
+    rememberMe,
   );
   if (response.ok) {
     resetAuthRateLimit(req, "login");
@@ -2286,159 +2381,168 @@ async function cleanupExpiredSessions(): Promise<void> {
   }
 }
 
-setInterval(() => {
-  void cleanupExpiredSessions();
-}, 60_000);
+function startCleanupTimer(): ReturnType<typeof setInterval> {
+  return setInterval(() => {
+    void cleanupExpiredSessions();
+  }, 60_000);
+}
 
-const server = Bun.serve({
-  port: apiPort,
-  idleTimeout: 30,
-  async fetch(req) {
-    const { pathname } = new URL(req.url);
-    const baseHeaders = corsHeaders(req);
-    const transportError = enforceTransportSecurity(req, baseHeaders);
-    if (transportError) {
-      return transportError;
-    }
+export function createApiServer() {
+  return Bun.serve({
+    port: apiPort,
+    idleTimeout: 30,
+    async fetch(req) {
+      const { pathname } = new URL(req.url);
+      const baseHeaders = corsHeaders(req);
+      const transportError = enforceTransportSecurity(req, baseHeaders);
+      if (transportError) {
+        return transportError;
+      }
 
-    const originError = enforceStateChangingOrigin(req, baseHeaders);
-    if (originError) {
-      return originError;
-    }
+      const originError = enforceStateChangingOrigin(req, baseHeaders);
+      if (originError) {
+        return originError;
+      }
 
-    if (req.method === "OPTIONS") {
-      return new Response(null, {
-        status: 204,
-        headers: baseHeaders,
-      });
-    }
+      if (req.method === "OPTIONS") {
+        return new Response(null, {
+          status: 204,
+          headers: baseHeaders,
+        });
+      }
 
-    if (pathname === "/auth/signup" && req.method === "POST") {
-      return handleSignup(req, baseHeaders);
-    }
+      if (pathname === "/auth/signup" && req.method === "POST") {
+        return handleSignup(req, baseHeaders);
+      }
 
-    if (pathname === "/auth/login" && req.method === "POST") {
-      return handleLogin(req, baseHeaders);
-    }
+      if (pathname === "/auth/login" && req.method === "POST") {
+        return handleLogin(req, baseHeaders);
+      }
 
-    if (pathname === "/auth/logout" && req.method === "POST") {
-      return handleLogout(req, baseHeaders);
-    }
+      if (pathname === "/auth/logout" && req.method === "POST") {
+        return handleLogout(req, baseHeaders);
+      }
 
-    if (pathname === "/auth/me" && req.method === "GET") {
-      return handleAuthMe(req, baseHeaders);
-    }
+      if (pathname === "/auth/me" && req.method === "GET") {
+        return handleAuthMe(req, baseHeaders);
+      }
 
-    if (pathname === "/api/app/documents" && req.method === "GET") {
-      return handleDocuments(req, baseHeaders);
-    }
+      if (pathname === "/api/app/documents" && req.method === "GET") {
+        return handleDocuments(req, baseHeaders);
+      }
 
-    if (pathname === "/api/app/documents" && req.method === "POST") {
-      return handleCreateDocument(req, baseHeaders);
-    }
+      if (pathname === "/api/app/documents" && req.method === "POST") {
+        return handleCreateDocument(req, baseHeaders);
+      }
 
-    if (pathname === "/api/app/users/search" && req.method === "GET") {
-      return handleSearchUsersRoute(req, baseHeaders);
-    }
+      if (pathname === "/api/app/users/search" && req.method === "GET") {
+        return handleSearchUsersRoute(req, baseHeaders);
+      }
 
-    const reviewMatch = pathname.match(
-      /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/reviews$/,
-    );
-    if (reviewMatch && req.method === "POST") {
-      return handleDocumentReview(
-        req,
-        baseHeaders,
-        decodePathParam(reviewMatch[1] ?? ""),
-        decodePathParam(reviewMatch[2] ?? ""),
-        Number.parseInt(reviewMatch[3] ?? "", 10),
+      const reviewMatch = pathname.match(
+        /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/reviews$/,
       );
-    }
+      if (reviewMatch && req.method === "POST") {
+        return handleDocumentReview(
+          req,
+          baseHeaders,
+          decodePathParam(reviewMatch[1] ?? ""),
+          decodePathParam(reviewMatch[2] ?? ""),
+          Number.parseInt(reviewMatch[3] ?? "", 10),
+        );
+      }
 
-    const publishMatch = pathname.match(
-      /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/publish$/,
-    );
-    if (publishMatch && req.method === "POST") {
-      return handleDocumentPublish(
-        req,
-        baseHeaders,
-        decodePathParam(publishMatch[1] ?? ""),
-        decodePathParam(publishMatch[2] ?? ""),
-        Number.parseInt(publishMatch[3] ?? "", 10),
+      const publishMatch = pathname.match(
+        /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/publish$/,
       );
-    }
+      if (publishMatch && req.method === "POST") {
+        return handleDocumentPublish(
+          req,
+          baseHeaders,
+          decodePathParam(publishMatch[1] ?? ""),
+          decodePathParam(publishMatch[2] ?? ""),
+          Number.parseInt(publishMatch[3] ?? "", 10),
+        );
+      }
 
-    const downloadMatch = pathname.match(
-      /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/download$/,
-    );
-    if (downloadMatch && req.method === "GET") {
-      return handleDocumentDownload(
-        req,
-        baseHeaders,
-        decodePathParam(downloadMatch[1] ?? ""),
-        decodePathParam(downloadMatch[2] ?? ""),
+      const downloadMatch = pathname.match(
+        /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/download$/,
       );
-    }
+      if (downloadMatch && req.method === "GET") {
+        return handleDocumentDownload(
+          req,
+          baseHeaders,
+          decodePathParam(downloadMatch[1] ?? ""),
+          decodePathParam(downloadMatch[2] ?? ""),
+        );
+      }
 
-    const versionsMatch = pathname.match(
-      /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/versions$/,
-    );
-    if (versionsMatch && req.method === "POST") {
-      return handleDocumentVersions(
-        req,
-        baseHeaders,
-        decodePathParam(versionsMatch[1] ?? ""),
-        decodePathParam(versionsMatch[2] ?? ""),
+      const versionsMatch = pathname.match(
+        /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/versions$/,
       );
-    }
+      if (versionsMatch && req.method === "POST") {
+        return handleDocumentVersions(
+          req,
+          baseHeaders,
+          decodePathParam(versionsMatch[1] ?? ""),
+          decodePathParam(versionsMatch[2] ?? ""),
+        );
+      }
 
-    const collaboratorsActionMatch = pathname.match(
-      /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/collaborators\/([^/]+)$/,
-    );
-    if (collaboratorsActionMatch && req.method === "PUT") {
-      return handleAddCollaborator(
-        req,
-        baseHeaders,
-        decodePathParam(collaboratorsActionMatch[1] ?? ""),
-        decodePathParam(collaboratorsActionMatch[2] ?? ""),
-        decodePathParam(collaboratorsActionMatch[3] ?? ""),
+      const collaboratorsActionMatch = pathname.match(
+        /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/collaborators\/([^/]+)$/,
       );
-    }
-    if (collaboratorsActionMatch && req.method === "DELETE") {
-      return handleDeleteCollaborator(
-        req,
-        baseHeaders,
-        decodePathParam(collaboratorsActionMatch[1] ?? ""),
-        decodePathParam(collaboratorsActionMatch[2] ?? ""),
-        decodePathParam(collaboratorsActionMatch[3] ?? ""),
+      if (collaboratorsActionMatch && req.method === "PUT") {
+        return handleAddCollaborator(
+          req,
+          baseHeaders,
+          decodePathParam(collaboratorsActionMatch[1] ?? ""),
+          decodePathParam(collaboratorsActionMatch[2] ?? ""),
+          decodePathParam(collaboratorsActionMatch[3] ?? ""),
+        );
+      }
+      if (collaboratorsActionMatch && req.method === "DELETE") {
+        return handleDeleteCollaborator(
+          req,
+          baseHeaders,
+          decodePathParam(collaboratorsActionMatch[1] ?? ""),
+          decodePathParam(collaboratorsActionMatch[2] ?? ""),
+          decodePathParam(collaboratorsActionMatch[3] ?? ""),
+        );
+      }
+
+      const collaboratorsMatch = pathname.match(
+        /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/collaborators$/,
       );
-    }
+      if (collaboratorsMatch && req.method === "GET") {
+        return handleDocumentCollaborators(
+          req,
+          baseHeaders,
+          decodePathParam(collaboratorsMatch[1] ?? ""),
+          decodePathParam(collaboratorsMatch[2] ?? ""),
+        );
+      }
 
-    const collaboratorsMatch = pathname.match(
-      /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/collaborators$/,
-    );
-    if (collaboratorsMatch && req.method === "GET") {
-      return handleDocumentCollaborators(
-        req,
-        baseHeaders,
-        decodePathParam(collaboratorsMatch[1] ?? ""),
-        decodePathParam(collaboratorsMatch[2] ?? ""),
+      const documentMatch = pathname.match(
+        /^\/api\/app\/documents\/([^/]+)\/([^/]+)$/,
       );
-    }
+      if (documentMatch && req.method === "GET") {
+        return handleDocumentDetail(
+          req,
+          baseHeaders,
+          decodePathParam(documentMatch[1] ?? ""),
+          decodePathParam(documentMatch[2] ?? ""),
+        );
+      }
 
-    const documentMatch = pathname.match(
-      /^\/api\/app\/documents\/([^/]+)\/([^/]+)$/,
-    );
-    if (documentMatch && req.method === "GET") {
-      return handleDocumentDetail(
-        req,
-        baseHeaders,
-        decodePathParam(documentMatch[1] ?? ""),
-        decodePathParam(documentMatch[2] ?? ""),
-      );
-    }
+      return json(404, { error: "Not found." }, baseHeaders);
+    },
+  });
+}
 
-    return json(404, { error: "Not found." }, baseHeaders);
-  },
-});
+export const server = import.meta.main ? createApiServer() : null;
 
-console.log(`Bindersnap API listening on http://localhost:${server.port}`);
+if (import.meta.main && server) {
+  startCleanupTimer();
+  console.log(`Bindersnap API listening on http://localhost:${server.port}`);
+}

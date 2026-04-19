@@ -51,16 +51,6 @@ variable "deploy_role_name" {
   default     = "bindersnap-deploy"
 }
 
-variable "spa_bucket_name" {
-  description = "S3 bucket that stores the production SPA build"
-  type        = string
-}
-
-variable "cloudfront_distribution_id" {
-  description = "CloudFront distribution ID that fronts the production SPA bucket"
-  type        = string
-}
-
 variable "ssm_document_name" {
   description = "SSM document used by the deploy workflow"
   type        = string
@@ -136,47 +126,6 @@ resource "aws_iam_role" "deploy" {
 }
 
 data "aws_iam_policy_document" "deploy" {
-  statement {
-    sid    = "SyncSpaBucket"
-    effect = "Allow"
-
-    actions = [
-      "s3:ListBucket",
-    ]
-
-    resources = [
-      "arn:${data.aws_partition.current.partition}:s3:::${var.spa_bucket_name}",
-    ]
-  }
-
-  statement {
-    sid    = "ManageSpaObjects"
-    effect = "Allow"
-
-    actions = [
-      "s3:GetObject",
-      "s3:PutObject",
-      "s3:DeleteObject",
-    ]
-
-    resources = [
-      "arn:${data.aws_partition.current.partition}:s3:::${var.spa_bucket_name}/*",
-    ]
-  }
-
-  statement {
-    sid    = "InvalidateSpaDistribution"
-    effect = "Allow"
-
-    actions = [
-      "cloudfront:CreateInvalidation",
-    ]
-
-    resources = [
-      "arn:${data.aws_partition.current.partition}:cloudfront::${data.aws_caller_identity.current.account_id}:distribution/${var.cloudfront_distribution_id}",
-    ]
-  }
-
   statement {
     sid    = "RunDeployDocument"
     effect = "Allow"

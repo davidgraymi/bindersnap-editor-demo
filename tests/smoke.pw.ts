@@ -23,6 +23,7 @@ import {
   REPO,
   resolveAndStoreToken,
   SEEDED_BRANCH,
+  signInAsAlice,
 } from "./helpers";
 
 import { seedDevStack } from "./seed";
@@ -188,47 +189,44 @@ test.describe("Gitea dev stack health", () => {
 // ---------------------------------------------------------------------------
 
 test.describe("app shell routes", () => {
-  test("/ route either shows the workspace heading or redirects to the login page", async ({
+  test("/ shows the pre-rendered landing page to unauthenticated users", async ({
     page,
   }) => {
     await page.goto("/");
-
-    const appHeading = page.getByRole("heading", {
-      name: "alice/quarterly-report",
-    });
-    const loginHeading = page.getByRole("heading", {
-      name: "Step into the clean version.",
-    });
-
-    // Wait until one of the two states is resolved.
-    await expect
-      .poll(
-        async () => {
-          if (await appHeading.isVisible().catch(() => false)) {
-            return "app";
-          }
-          if (await loginHeading.isVisible().catch(() => false)) {
-            return "login";
-          }
-          return "pending";
-        },
-        { timeout: 10_000 },
-      )
-      .not.toBe("pending");
-
-    if (await appHeading.isVisible().catch(() => false)) {
-      // Already authenticated — nothing more to check.
-      return;
-    }
-
-    // Unauthenticated path: verify the login form is present.
-    await expect(page).toHaveURL(/\/login$/);
-    await expect(loginHeading).toBeVisible();
-    await expect(page.getByLabel("Username or Email")).toBeVisible();
-    await expect(page.getByLabel("Password", { exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/\/$/);
     await expect(
-      page.getByRole("button", { name: "Open workspace" }),
+      page.getByRole("heading", { name: /Your approval process/i }),
     ).toBeVisible();
-    await expect(page.getByRole("button", { name: "Sign up" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Load Editor" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Sign Up" }).first(),
+    ).toBeVisible();
+  });
+
+  test("authenticated users still land in the workspace at /", async ({
+    page,
+  }) => {
+    await signInAsAlice(page);
+    await page.goto("/");
+
+    await expect(
+      page.locator(".app-user-badge", { hasText: GITEA_ADMIN_USER }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Documents" })).toBeVisible();
+  });
+
+  test("deep links still resolve inside the SPA shell", async ({ page }) => {
+    await signInAsAlice(page);
+    await page.goto(`/docs/${OWNER}/${REPO}`);
+
+    await expect(page).toHaveURL(new RegExp(`/docs/${OWNER}/${REPO}$`));
+    await expect(page.locator("nav[aria-label='Breadcrumb']")).toBeVisible();
+    await expect(
+      page.locator("nav[aria-label='Breadcrumb'] button", {
+        hasText: "Documents",
+      }),
+    ).toBeVisible();
   });
 });

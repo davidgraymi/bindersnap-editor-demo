@@ -79,7 +79,7 @@ body::after {
    NAVIGATION
 ───────────────────────────────────── */
 
-nav {
+#landing-content nav {
   position: fixed;
   top: 0;
   left: 0;
@@ -184,8 +184,28 @@ nav {
     transform var(--brand-transition-fast);
 }
 
-.nav-cta-link:hover {
+.nav-cta-link:hover,
+.nav-cta-link:focus-visible {
   opacity: 0.85;
+  transform: translateY(-1px);
+}
+
+.nav-login-link {
+  color: var(--bs-text-secondary);
+  font-family: var(--brand-font-mono);
+  font-size: 12px;
+  letter-spacing: var(--brand-tracking-wide);
+  text-decoration: none;
+  text-transform: uppercase;
+  padding: 9px 14px;
+  transition:
+    color var(--brand-transition-base),
+    transform var(--brand-transition-fast);
+}
+
+.nav-login-link:hover,
+.nav-login-link:focus-visible {
+  color: var(--bs-text-primary);
   transform: translateY(-1px);
 }
 
@@ -1672,9 +1692,10 @@ footer {
 }
 
 @media (max-width: 768px) {
-  nav {
+  #landing-content nav {
     height: auto;
   }
+  .nav-login-link,
   .nav-cta-link {
     padding: 8px 16px;
     font-size: 12px;
@@ -1777,6 +1798,7 @@ footer {
   .nav-inner {
     align-items: flex-start;
   }
+  .nav-login-link,
   .nav-cta-link {
     width: 100%;
     text-align: center;

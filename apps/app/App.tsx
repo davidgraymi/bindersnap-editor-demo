@@ -9,6 +9,7 @@ import {
 import "./app.css";
 
 import { AppShell } from "./components/AppShell";
+import { LandingPage } from "./components/LandingPage";
 import {
   clearToken,
   fetchSessionUser,
@@ -17,20 +18,16 @@ import {
   signup,
   storeToken,
 } from "./api";
+import {
+  asShellRoute,
+  getRoute,
+  isProtectedAppRoute,
+  routeToPath,
+  type AppRoute,
+} from "./routes";
+import { resolveSignupPrefill } from "./authIntent";
 
-export type AppRoute =
-  | { kind: "login" }
-  | { kind: "callback" }
-  | { kind: "workspace" }
-  | { kind: "inbox" }
-  | { kind: "activity" }
-  | {
-      kind: "document";
-      owner: string;
-      repo: string;
-      tab: "overview" | "collaborators";
-    };
-type AuthView = "loading" | "callback" | "login" | "app";
+type AuthView = "loading" | "callback" | "landing" | "login" | "app";
 type AuthMode = "signin" | "signup";
 
 interface SessionUser {
@@ -39,8 +36,14 @@ interface SessionUser {
 }
 
 interface LoginPageProps {
+  mode: AuthMode;
+  prefilledEmail?: string;
   callbackError: string | null;
-  onLogin: (identifier: string, password: string) => Promise<void>;
+  onLogin: (
+    identifier: string,
+    password: string,
+    rememberMe: boolean,
+  ) => Promise<void>;
   onSignup: (
     username: string,
     email: string,
@@ -48,90 +51,26 @@ interface LoginPageProps {
   ) => Promise<void>;
 }
 
-function getRoute(pathname: string): AppRoute {
-  const normalizedPath =
-    pathname !== "/" ? pathname.replace(/\/+$/, "") : pathname;
-
-  if (normalizedPath === "/auth/callback") {
-    return { kind: "callback" };
-  }
-
-  if (normalizedPath === "/login") {
-    return { kind: "login" };
-  }
-
-  if (normalizedPath === "/inbox") {
-    return { kind: "inbox" };
-  }
-
-  if (normalizedPath === "/activity") {
-    return { kind: "activity" };
-  }
-
-  const collaboratorsMatch = normalizedPath.match(
-    /^\/docs\/([^/]+)\/([^/]+)\/collaborators$/,
-  );
-  if (collaboratorsMatch) {
-    return {
-      kind: "document",
-      owner: collaboratorsMatch[1]!,
-      repo: collaboratorsMatch[2]!,
-      tab: "collaborators",
-    };
-  }
-
-  const docMatch = normalizedPath.match(/^\/docs\/([^/]+)\/([^/]+)$/);
-  if (docMatch) {
-    return {
-      kind: "document",
-      owner: docMatch[1]!,
-      repo: docMatch[2]!,
-      tab: "overview",
-    };
-  }
-
-  return { kind: "workspace" };
-}
-
 function navigateTo(route: AppRoute, replace = false): void {
-  let path: string;
-
-  switch (route.kind) {
-    case "login":
-      path = "/login";
-      break;
-    case "callback":
-      path = "/auth/callback";
-      break;
-    case "document":
-      path =
-        route.tab === "collaborators"
-          ? `/docs/${route.owner}/${route.repo}/collaborators`
-          : `/docs/${route.owner}/${route.repo}`;
-      break;
-    case "inbox":
-      path = "/inbox";
-      break;
-    case "activity":
-      path = "/activity";
-      break;
-    case "workspace":
-    default:
-      path = "/";
-      break;
-  }
-
   const method = replace ? "replaceState" : "pushState";
-  window.history[method]({}, "", path);
+  window.history[method]({}, "", routeToPath(route));
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
-function LoginPage({ callbackError, onLogin, onSignup }: LoginPageProps) {
-  const [mode, setMode] = useState<AuthMode>("signin");
+function LoginPage({
+  mode,
+  prefilledEmail = "",
+  callbackError,
+  onLogin,
+  onSignup,
+}: LoginPageProps) {
   const [username, setUsername] = useState("");
-  const [identifier, setIdentifier] = useState("");
+  const [identifier, setIdentifier] = useState(
+    mode === "signup" ? prefilledEmail : "",
+  );
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(callbackError);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -172,7 +111,7 @@ function LoginPage({ callbackError, onLogin, onSignup }: LoginPageProps) {
 
     try {
       if (mode === "signin") {
-        await onLogin(normalizedIdentifier, password);
+        await onLogin(normalizedIdentifier, password, rememberMe);
       } else {
         await onSignup(normalizedUsername, normalizedIdentifier, password);
       }
@@ -287,6 +226,18 @@ function LoginPage({ callbackError, onLogin, onSignup }: LoginPageProps) {
               </label>
             ) : null}
 
+            {mode === "signin" ? (
+              <label className="app-check-row">
+                <input
+                  className="app-check-input"
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(event) => setRememberMe(event.target.checked)}
+                />
+                <span>Keep me signed in for 30 days</span>
+              </label>
+            ) : null}
+
             <button
               className="bs-btn bs-btn-primary app-submit"
               type="submit"
@@ -312,7 +263,7 @@ function LoginPage({ callbackError, onLogin, onSignup }: LoginPageProps) {
               className="app-login-switch-button"
               type="button"
               onClick={() => {
-                setMode(mode === "signin" ? "signup" : "signin");
+                navigateTo({ kind: mode === "signin" ? "signup" : "login" });
                 setError(callbackError);
               }}
             >
@@ -344,6 +295,8 @@ export function App() {
       const nextSession = await fetchSessionUser();
       if (nextSession?.token) {
         storeToken(nextSession.token);
+      } else {
+        clearToken();
       }
       setUser(nextSession?.user ?? null);
       setCallbackError(null);
@@ -388,18 +341,12 @@ export function App() {
       return;
     }
 
-    const isAppRoute =
-      route.kind === "workspace" ||
-      route.kind === "document" ||
-      route.kind === "inbox" ||
-      route.kind === "activity";
-
-    if (user && !isAppRoute) {
-      navigateTo({ kind: "workspace" }, true);
+    if (user && (route.kind === "login" || route.kind === "signup")) {
+      navigateTo({ kind: "home" }, true);
       return;
     }
 
-    if (!user && isAppRoute) {
+    if (!user && isProtectedAppRoute(route)) {
       navigateTo({ kind: "login" }, true);
     }
   }, [isCheckingSession, route, user]);
@@ -420,12 +367,24 @@ export function App() {
       return "callback";
     }
 
+    if (route.kind === "home") {
+      return user ? "app" : "landing";
+    }
+
     if (isCheckingSession) {
       return "loading";
     }
 
     return user ? "app" : "login";
   }, [isCheckingSession, route, user]);
+
+  useEffect(() => {
+    document.body.setAttribute("data-app-view", view);
+
+    return () => {
+      document.body.removeAttribute("data-app-view");
+    };
+  }, [view]);
 
   if (view === "callback") {
     return (
@@ -456,12 +415,25 @@ export function App() {
   }
 
   if (view === "login") {
+    const authMode: AuthMode = route.kind === "signup" ? "signup" : "signin";
+    const prefilledEmail =
+      route.kind === "signup"
+        ? resolveSignupPrefill(window.location.search).email
+        : "";
+
     return (
       <LoginPage
+        key={`${authMode}:${prefilledEmail}`}
+        mode={authMode}
+        prefilledEmail={prefilledEmail}
         callbackError={callbackError}
-        onLogin={async (identifier, password) => {
+        onLogin={async (identifier, password, rememberMe) => {
           clearToken();
-          const authenticatedSession = await login(identifier, password);
+          const authenticatedSession = await login(
+            identifier,
+            password,
+            rememberMe,
+          );
           if (authenticatedSession.token) {
             storeToken(authenticatedSession.token);
           }
@@ -478,7 +450,7 @@ export function App() {
               "Sign-in completed, but the session could not be verified.",
             );
           }
-          navigateTo({ kind: "workspace" }, true);
+          navigateTo({ kind: "home" }, true);
         }}
         onSignup={async (username, email, password) => {
           clearToken();
@@ -499,24 +471,28 @@ export function App() {
               "Account created, but the session could not be verified.",
             );
           }
-          navigateTo({ kind: "workspace" }, true);
+          navigateTo({ kind: "home" }, true);
         }}
       />
     );
+  }
+
+  if (view === "landing") {
+    return <LandingPage />;
   }
 
   return (
     <div className="app-root">
       <AppShell
         user={user}
-        route={route}
+        route={asShellRoute(route)}
         onNavigate={navigateTo}
         onSignOut={async () => {
           await logoutSession();
           clearToken();
           setUser(null);
           setCallbackError(null);
-          navigateTo({ kind: "login" }, true);
+          navigateTo({ kind: "home" }, true);
         }}
       />
     </div>

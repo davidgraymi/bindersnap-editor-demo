@@ -40,8 +40,7 @@ async function signUp(
     password: string;
   },
 ): Promise<void> {
-  await page.goto("/login");
-  await page.getByRole("button", { name: "Sign up" }).click();
+  await page.goto("/signup");
   await expect(
     page.getByRole("heading", {
       name: "Create your Bindersnap workspace.",

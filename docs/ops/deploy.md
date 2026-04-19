@@ -1,29 +1,50 @@
 # Production Deploys
 
-`git push origin main` is the production deploy path for the private app stack.
-The workflow lives in [`../../.github/workflows/deploy.yml`](../../.github/workflows/deploy.yml) and assumes the AWS role provisioned by [`../../infra/ci/oidc.tf`](../../infra/ci/oidc.tf).
+Production now has two deploy surfaces:
 
-## What The Pipeline Does
+1. [`../../.github/workflows/pages.yml`](../../.github/workflows/pages.yml) publishes the unified SPA to GitHub Pages at `https://bindersnap.com`.
+2. [`../../.github/workflows/deploy.yml`](../../.github/workflows/deploy.yml) builds and deploys the API image over AWS OIDC + SSM.
 
-1. Runs `bun run test`.
-2. Builds and publishes `ghcr.io/davidgraymi/bindersnap-api:${GITHUB_SHA}`.
-3. Builds `dist/app` with `BUN_PUBLIC_API_BASE_URL=https://api.bindersnap.com`.
-4. Uploads the SPA bundle to S3 and invalidates CloudFront for `/` and `/index.html`.
-5. Uses SSM Run Command to:
+Only the API workflow assumes the AWS role provisioned by [`../../infra/ci/oidc.tf`](../../infra/ci/oidc.tf).
+
+## GitHub Pages SPA
+
+Pushes to `main` build `apps/app/index.html` directly into `dist/`, then the workflow:
+
+1. injects `BUN_PUBLIC_API_BASE_URL=https://api.bindersnap.com`
+2. copies `dist/index.html` to `dist/404.html` for the GitHub Pages SPA fallback
+3. writes `dist/CNAME` with `bindersnap.com`
+4. uploads `dist/` as the Pages artifact
+
+The published app is the single SPA:
+
+- `/` shows the landing experience for signed-out users
+- `/`, `/docs/*`, `/inbox`, and `/activity` all hydrate from the same bundle
+- deep links rely on the `404.html` fallback, not S3 or CloudFront rewrites
+
+Repository settings must point GitHub Pages at `GitHub Actions`, and the custom domain must be `bindersnap.com`.
+
+## API Deploy Workflow
+
+The API workflow keeps the AWS-backed deploy path for `services/api`.
+
+What it does:
+
+1. runs the API and ops unit suites
+2. builds and publishes `ghcr.io/davidgraymi/bindersnap-api:${GITHUB_SHA}`
+3. on tag pushes or manual dispatch, uses SSM Run Command to:
    - update `API_TAG` in `/opt/bindersnap/.env.prod`
    - pull the pinned API image
    - restart the API with `docker-compose.prod.yml`
-   - print the container status back into the workflow logs
+   - print container status back into the workflow logs
 
 The workflow does not use SSH and does not require long-lived AWS keys in GitHub.
 
 ## GitHub Configuration
 
-Set these repository-level variables before enabling the workflow:
+Required repository variable:
 
 - `BINDERSNAP_DEPLOY_ROLE_ARN`: IAM role ARN output by `infra/ci/oidc.tf`
-- `BINDERSNAP_SPA_BUCKET`: production S3 bucket for the app bundle
-- `BINDERSNAP_CLOUDFRONT_DISTRIBUTION_ID`: CloudFront distribution fronting `app.bindersnap.com`
 
 Optional variables:
 
@@ -31,7 +52,7 @@ Optional variables:
 - `BINDERSNAP_DEPLOY_TARGET_TAG_KEY`: defaults to `Project`
 - `BINDERSNAP_DEPLOY_TARGET_TAG_VALUE`: defaults to `bindersnap`
 
-Do not add a GitHub Environment to the deploy job unless you also change the IAM trust policy. GitHub switches the OIDC `sub` claim from a branch form to an environment form when an environment is attached.
+Do not add a GitHub Environment to the API deploy job unless you also change the IAM trust policy. GitHub switches the OIDC `sub` claim from a branch form to an environment form when an environment is attached.
 
 ## EC2 Prerequisites
 
@@ -47,14 +68,14 @@ The SSM command uses the same production compose contract documented in [`../../
 
 ## Rollback
 
-The rollback path is a manual rerun of the deploy workflow:
+The rollback path is a manual run of the API deploy workflow:
 
 1. Open the `Deploy Production` workflow in GitHub Actions.
 2. Choose `Run workflow`.
 3. Set `api_tag` to a previously published commit SHA.
 4. Run the workflow.
 
-That rerun updates `API_TAG` in `/opt/bindersnap/.env.prod`, pulls the older image, and restarts only the API service.
+That dispatch updates `API_TAG` in `/opt/bindersnap/.env.prod`, pulls the older image, and restarts only the API service.
 
 If GitHub Actions is unavailable, the manual fallback on the instance is:
 
@@ -87,8 +108,8 @@ docker compose --env-file /opt/bindersnap/.env.prod -f docker-compose.prod.yml u
 
 ## Validation Checklist
 
-- A push to `main` completes in under five minutes.
-- A forced test failure prevents the `deploy` job from running.
-- The workflow log prints SSM stdout and stderr from the remote deploy command.
-- A visible SPA change is live at `https://app.bindersnap.com` after the workflow completes.
+- A push to `main` publishes the SPA to GitHub Pages from `dist/`.
+- `dist/404.html` matches `dist/index.html` so deep links load the SPA shell.
+- A forced test failure prevents the API deploy job from running.
+- The API workflow log prints SSM stdout and stderr from the remote deploy command.
 - A manual `api_tag` rollback returns the API to the selected SHA.

@@ -56,10 +56,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - target: app
-            command: bun run test:app
-          - target: landing
-            command: bun run test:landing
+          - target: app-and-shared
+            command: bun test apps/app packages/gitea-client packages/editor packages/utils
+          - target: ops
+            command: bun test services/api scripts infra/backups
 
     steps:
       - name: Checkout
@@ -109,8 +109,19 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Build applications
-        run: bun run build
+      - name: Build unified SPA
+        env:
+          BUN_PUBLIC_API_BASE_URL: https://api.bindersnap.com
+        run: |
+          rm -rf dist
+          bun build ./apps/app/index.html \
+            --outdir=dist \
+            --target=browser \
+            --minify \
+            --splitting \
+            --define:process.env.NODE_ENV='\"production\"' \
+            --env='BUN_PUBLIC_*'
+          cp dist/index.html dist/404.html
 
   integration:
     name: Integration tests

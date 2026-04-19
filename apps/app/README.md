@@ -1,23 +1,25 @@
-# `apps/app/` — Product SPA
+# `apps/app/` — Unified Bindersnap SPA
 
-This is the authenticated Bindersnap product app.
+This is the single Bindersnap frontend deployed to GitHub Pages.
+The landing page is pre-rendered into `index.html`, and React swaps to the
+workspace shell when a valid session is present.
 
 ## Runtime model
 
 - Browser UI authenticates with `username` + `password` against `services/api`.
-- API sets an `HttpOnly` session cookie.
-- Browser never stores or receives upstream Gitea access tokens.
+- API sets an `HttpOnly` session cookie and serves the app-facing endpoints.
 - App data calls go through API routes (for example `/api/app/documents`).
 
 ## Entry points
 
-- `index.html`: HTML entry for the product app.
-- `App.tsx`: Route/auth gate (`/app`, `/login`, `/auth/callback` shell handling).
-- `components/AppShell.tsx`: Authenticated app shell and workspace data fetch.
+- `index.html`: Pre-rendered landing shell plus the React mount root.
+- `App.tsx`: Route/auth gate for `/`, `/login`, `/docs/*`, `/inbox`, and `/activity`.
+- `components/LandingPage.tsx`: Controls the static landing shell visibility.
+- `components/AppShell.tsx`: Authenticated workspace shell and data fetch.
 
 ## Local dev
 
-Run app + API together:
+Run the unified SPA + API together:
 
 ```bash
 bun run dev:api
@@ -32,5 +34,5 @@ bun run up
 
 ## Deployment note
 
-`apps/app` is a private product app target. Keep it separate from the public
-landing deployment target (`apps/landing`).
+`bun run build` emits a single `dist/` artifact for GitHub Pages and copies
+`dist/index.html` to `dist/404.html` so deep links resolve back into the SPA.

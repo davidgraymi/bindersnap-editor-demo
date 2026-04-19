@@ -9,6 +9,8 @@
 
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
+import { signOutCurrentUser } from "./helpers";
+
 function buildUniqueSignupCredentials() {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   return {
@@ -19,8 +21,8 @@ function buildUniqueSignupCredentials() {
 }
 
 async function openSignupForm(page: Page): Promise<void> {
-  await page.goto("/login");
-  await page.getByRole("button", { name: "Sign up" }).click();
+  await page.goto("/signup");
+  await expect(page).toHaveURL(/\/signup$/);
   await expect(
     page.getByRole("heading", {
       name: "Create your Bindersnap workspace.",
@@ -55,10 +57,19 @@ async function fillLoginForm(
   credentials: {
     identifier: string;
     password: string;
+    rememberMe?: boolean;
   },
 ): Promise<void> {
   await page.getByLabel("Username or Email").fill(credentials.identifier);
   await page.getByLabel("Password", { exact: true }).fill(credentials.password);
+
+  const rememberMeToggle = page.getByRole("checkbox", {
+    name: "Keep me signed in for 30 days",
+  });
+  const shouldRemember = credentials.rememberMe ?? true;
+  if ((await rememberMeToggle.isChecked()) !== shouldRemember) {
+    await rememberMeToggle.click();
+  }
 }
 
 async function submitLoginForm(page: Page): Promise<void> {
@@ -114,7 +125,8 @@ async function signUpAndReturnToLogin(
     `${screenshotPrefix}-workspace-after-signup`,
   );
 
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await signOutCurrentUser(page);
+  await page.goto("/login");
   await expect(page).toHaveURL(/\/login$/);
   await expect(
     page.getByRole("heading", { name: "Step into the clean version." }),
@@ -158,6 +170,25 @@ async function logInWithIdentifier(
 }
 
 test.describe("signup flow", () => {
+  test("landing signup carries the typed email into the signup form", async ({
+    page,
+  }) => {
+    const email = `landing-${Date.now()}@users.bindersnap.local`;
+
+    await page.goto("/");
+    await page.locator("#hero-email").fill(email);
+    await page.locator("#hero-form button").click();
+
+    await expect(page).toHaveURL(/\/signup\?email=/);
+    expect(new URL(page.url()).searchParams.get("email")).toBe(email);
+    await expect(
+      page.getByRole("heading", {
+        name: "Create your Bindersnap workspace.",
+      }),
+    ).toBeVisible();
+    await expect(page.getByLabel("Email")).toHaveValue(email);
+  });
+
   test("creates an account, signs out, and logs back in with a username", async ({
     page,
   }, testInfo) => {
@@ -174,6 +205,7 @@ test.describe("signup flow", () => {
       {
         username: credentials.username,
         password: credentials.password,
+        rememberMe: true,
       },
       "username-auth",
       credentials.username,
@@ -196,8 +228,31 @@ test.describe("signup flow", () => {
       {
         email: credentials.email,
         password: credentials.password,
+        rememberMe: true,
       },
       "email-auth",
+      credentials.username,
+    );
+  });
+
+  test("allows sign-in without remember me", async ({ page }, testInfo) => {
+    const credentials = buildUniqueSignupCredentials();
+
+    await signUpAndReturnToLogin(page, testInfo, credentials, "session-auth");
+    await logInWithIdentifier(
+      page,
+      testInfo,
+      {
+        identifier: credentials.username,
+        password: credentials.password,
+        rememberMe: false,
+      },
+      {
+        username: credentials.username,
+        password: credentials.password,
+        rememberMe: false,
+      },
+      "session-auth",
       credentials.username,
     );
   });
@@ -222,7 +277,7 @@ test.describe("signup flow", () => {
     await submitSignupForm(page);
 
     await expect(page.getByText("Passwords do not match.")).toBeVisible();
-    await expect(page).toHaveURL(/\/login$/);
+    await expect(page).toHaveURL(/\/signup$/);
     expect(signupRequestCount).toBe(0);
   });
 
@@ -238,7 +293,8 @@ test.describe("signup flow", () => {
     await submitSignupForm(page);
 
     await expect(page).toHaveURL(/\/$/);
-    await page.getByRole("button", { name: "Sign out" }).click();
+    await signOutCurrentUser(page);
+    await page.goto("/login");
     await expect(page).toHaveURL(/\/login$/);
 
     await openSignupForm(page);

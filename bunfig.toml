@@ -3,7 +3,7 @@ env = "BUN_PUBLIC_*"
 
 # ─── Unit test configuration ─────────────────────────────────────────────────
 # Applied whenever `bun test` is invoked, including the scoped commands
-# `bun run test:app` and `bun run test:landing`.
+# `bun run test:app` and `bun run test:ops`.
 #
 # Integration/E2E tests run through Playwright (`bun run test:integration`)
 # and are intentionally not covered here.
