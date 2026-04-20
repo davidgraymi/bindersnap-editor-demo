@@ -17,20 +17,33 @@ import type {
 } from "../../packages/gitea-client/uploads";
 import { validateUploadFile as validateUploadFileWithClient } from "../../packages/gitea-client/uploads";
 
-type ImportMetaEnv = Record<string, string | undefined>;
-
-const appEnv = (import.meta as ImportMeta & { env?: ImportMetaEnv }).env;
 const isLocalHost =
   window.location.hostname === "localhost" ||
   window.location.hostname === "127.0.0.1";
+
+// Production builds: `bun build --env='BUN_PUBLIC_*'` replaces process.env.*
+// with literal strings. Dev mode (Bun HMR): process is undefined in the
+// browser, so we fall back to import.meta.env which Bun populates at runtime.
+const _hasProcess = typeof process !== "undefined";
+type ImportMetaEnv = Record<string, string | undefined>;
+const _env = (import.meta as ImportMeta & { env?: ImportMetaEnv }).env;
+
+const configuredApiBaseUrl: string | undefined =
+  (_hasProcess ? process.env.BUN_PUBLIC_API_BASE_URL : undefined) ??
+  (_hasProcess ? process.env.BUN_PUBLIC_API_URL : undefined) ??
+  (_hasProcess ? process.env.VITE_API_URL : undefined) ??
+  _env?.BUN_PUBLIC_API_BASE_URL ??
+  _env?.BUN_PUBLIC_API_URL ??
+  _env?.VITE_API_URL;
 const devDefaultApiBaseUrl = `${window.location.protocol}//${window.location.hostname}:${
-  appEnv?.BUN_PUBLIC_API_PORT ?? appEnv?.API_PORT ?? "8787"
+  (_hasProcess ? process.env.BUN_PUBLIC_API_PORT : undefined) ??
+  (_hasProcess ? process.env.API_PORT : undefined) ??
+  _env?.BUN_PUBLIC_API_PORT ??
+  _env?.API_PORT ??
+  "8787"
 }`;
 const API_BASE_URL = (
-  appEnv?.BUN_PUBLIC_API_BASE_URL ??
-  appEnv?.BUN_PUBLIC_API_URL ??
-  appEnv?.VITE_API_URL ??
-  (isLocalHost ? devDefaultApiBaseUrl : "")
+  configuredApiBaseUrl ?? (isLocalHost ? devDefaultApiBaseUrl : "")
 ).replace(/\/$/, "");
 
 export interface SessionUser {
