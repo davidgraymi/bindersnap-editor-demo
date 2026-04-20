@@ -17,19 +17,18 @@ import type {
 } from "../../packages/gitea-client/uploads";
 import { validateUploadFile as validateUploadFileWithClient } from "../../packages/gitea-client/uploads";
 
-type ImportMetaEnv = Record<string, string | undefined>;
-
-const appEnv = (import.meta as ImportMeta & { env?: ImportMetaEnv }).env;
 const isLocalHost =
   window.location.hostname === "localhost" ||
   window.location.hostname === "127.0.0.1";
+const configuredApiBaseUrl =
+  process.env.BUN_PUBLIC_API_BASE_URL ??
+  process.env.BUN_PUBLIC_API_URL ??
+  process.env.VITE_API_URL;
 const devDefaultApiBaseUrl = `${window.location.protocol}//${window.location.hostname}:${
-  appEnv?.BUN_PUBLIC_API_PORT ?? appEnv?.API_PORT ?? "8787"
+  process.env.BUN_PUBLIC_API_PORT ?? process.env.API_PORT ?? "8787"
 }`;
 const API_BASE_URL = (
-  appEnv?.BUN_PUBLIC_API_BASE_URL ??
-  appEnv?.BUN_PUBLIC_API_URL ??
-  appEnv?.VITE_API_URL ??
+  configuredApiBaseUrl ??
   (isLocalHost ? devDefaultApiBaseUrl : "")
 ).replace(/\/$/, "");
 
