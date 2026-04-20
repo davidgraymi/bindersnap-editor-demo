@@ -93,7 +93,7 @@ See [`tests/README.md`](tests/README.md) for full workflow details.
 
 Production no longer relies on a repo-side `.env.prod`. The EC2 instance writes
 `/opt/bindersnap/.env.prod` at boot by reading `/bindersnap/prod/*` from SSM
-Parameter Store through `infra/compute/user-data.sh`.
+Parameter Store through `infra/compute/user-data.sh.tftpl`.
 
 Use [`.env.prod.example`](.env.prod.example)
 as the schema for the generated file only. The committed example keeps

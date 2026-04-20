@@ -11,7 +11,10 @@ import {
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-const userData = readFileSync("infra/compute/user-data.sh", "utf8");
+const userData = readFileSync("infra/compute/user-data.sh.tftpl", "utf8").replaceAll(
+  "$${",
+  "${",
+);
 const helperMatch = userData.match(
   /cat >\/usr\/local\/bin\/bindersnap-refresh-env <<'SCRIPT'\n([\s\S]*?)\nSCRIPT/,
 );

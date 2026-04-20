@@ -60,11 +60,12 @@ The target instance must already satisfy these conditions:
 
 - It is managed by AWS Systems Manager.
 - It matches the deploy target tag used by the workflow.
-- `/opt/bindersnap` contains the checked-out repo and `docker-compose.prod.yml`.
-- `/opt/bindersnap/.env.prod` exists.
-- The host can pull `ghcr.io/davidgraymi/bindersnap-api`.
+- `/opt/bindersnap` contains `docker-compose.prod.yml`, `Caddyfile.prod`, and `litestream.yml` (written by `user-data.sh.tftpl` at first boot — no git clone needed).
+- `/opt/bindersnap/.env.prod` exists (generated from SSM Parameter Store by the `bindersnap-refresh-env` systemd service at boot).
+- Docker and the Compose plugin are installed (handled by `user-data.sh.tftpl`).
+- The host can pull `ghcr.io/davidgraymi/bindersnap-api` (if the package is private, add `ghcr_token` and optionally `ghcr_user` to the SSM parameters under `/bindersnap/prod/`).
 
-The SSM command uses the same production compose contract documented in [`../../README.md`](../../README.md) and established by [`../../infra/compute/user-data.sh`](../../infra/compute/user-data.sh).
+The SSM command uses the same production compose contract documented in [`../../README.md`](../../README.md) and established by [`../../infra/compute/user-data.sh.tftpl`](../../infra/compute/user-data.sh.tftpl).
 
 ## Rollback
 

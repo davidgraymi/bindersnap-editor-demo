@@ -88,6 +88,10 @@ resource "aws_iam_openid_connect_provider" "github_actions" {
     "sts.amazonaws.com",
   ]
 
+  # AWS validates GitHub's OIDC cert chain directly (since July 2023) and
+  # ignores this value, but the Terraform provider requires the attribute.
+  thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
+
   tags = local.common_tags
 }
 

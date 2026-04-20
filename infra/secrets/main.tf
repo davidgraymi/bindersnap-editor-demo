@@ -92,7 +92,8 @@ locals {
     litestream_s3_bucket         = var.litestream_s3_bucket
   }
 
-  parameter_arn_prefix = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${local.parameter_path}/*"
+  parameter_arn_base   = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${local.parameter_path}"
+  parameter_arn_prefix = "${local.parameter_arn_base}/*"
 }
 
 resource "aws_kms_key" "ssm" {
@@ -135,6 +136,7 @@ data "aws_iam_policy_document" "instance_ssm_access" {
     ]
 
     resources = [
+      local.parameter_arn_base,
       local.parameter_arn_prefix,
     ]
   }

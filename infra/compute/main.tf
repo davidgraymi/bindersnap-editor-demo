@@ -51,7 +51,7 @@ variable "environment" {
 }
 
 variable "instance_type" {
-  description = "EC2 instance type (ARM recommended: t4g.small for MVP, t4g.medium for growth)"
+  description = "EC2 instance type (ARM recommended: t4g.small for MVP, t4g.medium for growth). Root volume is 30 GB (AL2023 ARM64 snapshot minimum)."
   type        = string
   default     = "t4g.small"
 }
@@ -143,6 +143,10 @@ data "aws_subnets" "default" {
     name   = "default-for-az"
     values = ["true"]
   }
+}
+
+data "aws_subnet" "selected" {
+  id = var.subnet_id != null ? var.subnet_id : data.aws_subnets.default.ids[0]
 }
 
 locals {
@@ -254,7 +258,7 @@ resource "aws_eip" "app" {
 # Retained on destroy to protect Gitea data.
 
 resource "aws_ebs_volume" "data" {
-  availability_zone = data.aws_subnets.default.ids[0] != "" ? "${var.aws_region}a" : "${var.aws_region}a"
+  availability_zone = data.aws_subnet.selected.availability_zone
   size              = var.data_volume_size_gb
   type              = "gp3"
   encrypted         = true
@@ -279,7 +283,12 @@ resource "aws_instance" "app" {
   iam_instance_profile   = aws_iam_instance_profile.instance.name
   key_name               = var.key_pair_name
 
-  user_data                   = file("${path.module}/user-data.sh")
+  user_data_base64 = base64gzip(templatefile("${path.module}/user-data.sh.tftpl", {
+    compose_b64        = base64encode(file("${path.root}/../../docker-compose.prod.yml"))
+    caddyfile_b64      = base64encode(file("${path.root}/../../Caddyfile.prod"))
+    litestream_b64     = base64encode(file("${path.root}/../../litestream.yml"))
+    ssm_parameter_path = var.ssm_parameter_path
+  }))
   user_data_replace_on_change = false
 
   metadata_options {
@@ -288,7 +297,7 @@ resource "aws_instance" "app" {
   }
 
   root_block_device {
-    volume_size = 20
+    volume_size = 30
     volume_type = "gp3"
     encrypted   = true
   }
@@ -296,7 +305,7 @@ resource "aws_instance" "app" {
   tags = merge(local.common_tags, { Name = "${var.project}-app" })
 
   lifecycle {
-    ignore_changes = [ami, user_data] # Prevent accidental rebuilds on AMI rotation
+    ignore_changes = [ami, user_data, user_data_base64] # Prevent accidental rebuilds on AMI rotation
   }
 }
 
