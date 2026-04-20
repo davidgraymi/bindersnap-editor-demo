@@ -64,6 +64,18 @@ test("production build inlines the configured API base URL origin", () => {
   expect(emittedJs).toContain(expectedOrigin);
 });
 
+test("production build assigns API base URL unconditionally (no ternary guard)", () => {
+  const jsFiles = collectJavaScriptFiles(outDir);
+  const emittedJs = jsFiles.map((file) => readFileSync(file, "utf8")).join("\n");
+
+  // The URL must appear as a direct assignment, not gated by a runtime check
+  // like `hasProcess ? "https://api.bindersnap.com" : void 0`
+  expect(emittedJs).toContain(expectedOrigin);
+  expect(emittedJs).not.toMatch(
+    /\?\s*["']https:\/\/api\.bindersnap\.com["']\s*:\s*void 0/,
+  );
+});
+
 afterAll(() => {
   rmSync(tempDir, { recursive: true, force: true });
 });
