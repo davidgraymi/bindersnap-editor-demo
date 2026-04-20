@@ -58,7 +58,9 @@ test("production build inlines the configured API base URL origin", () => {
   const jsFiles = collectJavaScriptFiles(outDir);
   expect(jsFiles.length).toBeGreaterThan(0);
 
-  const emittedJs = jsFiles.map((file) => readFileSync(file, "utf8")).join("\n");
+  const emittedJs = jsFiles
+    .map((file) => readFileSync(file, "utf8"))
+    .join("\n");
   expect(emittedJs).toContain(expectedOrigin);
 });
 
