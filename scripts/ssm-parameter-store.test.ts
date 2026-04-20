@@ -5,7 +5,10 @@ const composeFile = readFileSync("docker-compose.prod.yml", "utf8");
 const envExample = readFileSync(".env.prod.example", "utf8");
 const readme = readFileSync("README.md", "utf8");
 const secretsTerraform = readFileSync("infra/secrets/main.tf", "utf8");
-const userData = readFileSync("infra/compute/user-data.sh", "utf8");
+const userData = readFileSync(
+  "infra/compute/user-data.sh.tftpl",
+  "utf8",
+).replaceAll("$${", "${");
 const giteaServiceTokenKey = ["GITEA", "SERVICE", "TOKEN"].join("_");
 const giteaSecretKeyKey = ["GITEA", "SECRET", "KEY"].join("_");
 const giteaInternalTokenKey = ["GITEA", "INTERNAL", "TOKEN"].join("_");
@@ -27,7 +30,9 @@ describe("SSM Parameter Store production wiring", () => {
     expect(secretsTerraform).toContain("ssm:GetParametersByPath");
     expect(secretsTerraform).toContain("kms:Decrypt");
     expect(secretsTerraform).toContain("kms:DescribeKey");
-    expect(secretsTerraform).toContain("parameter${local.parameter_path}/*");
+    expect(secretsTerraform).toContain('parameter${local.parameter_path}"');
+    expect(secretsTerraform).toContain("local.parameter_arn_base,");
+    expect(secretsTerraform).toContain("local.parameter_arn_prefix,");
     expect(secretsTerraform).toContain("kms:EncryptionContext:PARAMETER_ARN");
     expect(secretsTerraform).toContain('variable "ec2_instance_role_name"');
     expect(secretsTerraform).not.toContain('resources = ["*"]');

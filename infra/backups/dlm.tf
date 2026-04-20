@@ -1,7 +1,3 @@
-resource "aws_iam_service_linked_role" "dlm" {
-  aws_service_name = "dlm.amazonaws.com"
-}
-
 resource "aws_ec2_tag" "gitea_data_backup" {
   count = var.gitea_data_volume_id == null ? 0 : 1
 
@@ -20,7 +16,7 @@ resource "aws_ec2_tag" "gitea_data_project" {
 
 resource "aws_dlm_lifecycle_policy" "daily_ebs_snapshots" {
   description        = "Daily EBS snapshots for the Bindersnap data volume"
-  execution_role_arn = aws_iam_service_linked_role.dlm.arn
+  execution_role_arn = "arn:aws:iam::${var.aws_account_id}:role/AWSDataLifecycleManagerDefaultRole"
   state              = "ENABLED"
 
   depends_on = [

@@ -1,0 +1,307 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_DIR="$${APP_DIR:-/opt/bindersnap}"
+ENV_FILE="$${ENV_FILE:-$${APP_DIR}/.env.prod}"
+DEFAULT_PARAMETER_PATH='${ssm_parameter_path}'
+PARAMETER_PATH="$${SSM_PARAMETER_PATH:-$${DEFAULT_PARAMETER_PATH}}"
+COMPOSE_FILE="$${COMPOSE_FILE:-docker-compose.prod.yml}"
+
+install -d -m 0755 "$${APP_DIR}"
+
+# ---------- Install Docker + Compose plugin (AL2023) ----------
+
+dnf install -y awscli docker xfsprogs
+systemctl enable --now docker
+
+COMPOSE_ARCH="$(uname -m)"
+COMPOSE_VERSION="v2.37.3"
+mkdir -p /usr/local/lib/docker/cli-plugins
+curl -fsSL \
+  "https://github.com/docker/compose/releases/download/$${COMPOSE_VERSION}/docker-compose-linux-$${COMPOSE_ARCH}" \
+  -o /usr/local/lib/docker/cli-plugins/docker-compose
+chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+# ---------- Format and mount EBS data volume ----------
+# The data EBS volume is attached by Terraform. On Nitro instances (t4g)
+# it appears as /dev/nvme1n1. We format with an XFS label on first boot
+# and mount by label on every boot.
+
+DATA_LABEL="bsnap-data"
+DATA_MOUNT="/data"
+
+# Wait for the data volume device to appear (Terraform attaches it, but
+# it may take a moment after the instance starts).
+for _ in $(seq 1 30); do
+  DATA_DEVICE=""
+  for dev in /dev/nvme?n1; do
+    [ -b "$dev" ] || continue
+    # Skip the root device
+    ROOT_DISK=$(lsblk -ndo PKNAME "$(findmnt -n -o SOURCE /)" 2>/dev/null || true)
+    DEV_NAME=$(basename "$dev")
+    [ "$DEV_NAME" = "$ROOT_DISK" ] && continue
+    DATA_DEVICE="$dev"
+    break
+  done
+  [ -n "$${DATA_DEVICE:-}" ] && break
+  sleep 2
+done
+
+if [ -n "$${DATA_DEVICE:-}" ]; then
+  # Format if not already formatted
+  if ! blkid "$DATA_DEVICE" > /dev/null 2>&1; then
+    mkfs.xfs -L "$DATA_LABEL" "$DATA_DEVICE"
+  fi
+
+  mkdir -p "$DATA_MOUNT"
+  # Mount by label (idempotent across reboots)
+  if ! mountpoint -q "$DATA_MOUNT"; then
+    mount LABEL="$DATA_LABEL" "$DATA_MOUNT"
+  fi
+
+  # Persist in fstab for reboots
+  if ! grep -q "$DATA_LABEL" /etc/fstab; then
+    echo "LABEL=$DATA_LABEL $DATA_MOUNT xfs defaults,nofail 0 2" >> /etc/fstab
+  fi
+
+  # Point Docker's data-root at the data volume so all named volumes
+  # (gitea-data, api-data, caddy-data) live on the persistent EBS.
+  mkdir -p "$DATA_MOUNT/docker"
+  mkdir -p /etc/docker
+  install -m 0644 /dev/stdin /etc/docker/daemon.json <<'DOCKER_CONF'
+{ "data-root": "/data/docker" }
+DOCKER_CONF
+  systemctl restart docker
+else
+  echo "WARNING: EBS data volume not found — Docker will use root volume" >&2
+fi
+
+# ---------- Write config files (injected by Terraform at plan time) ----------
+
+echo '${compose_b64}' | base64 -d > "$${APP_DIR}/docker-compose.prod.yml"
+chmod 0644 "$${APP_DIR}/docker-compose.prod.yml"
+
+echo '${caddyfile_b64}' | base64 -d > "$${APP_DIR}/Caddyfile.prod"
+chmod 0644 "$${APP_DIR}/Caddyfile.prod"
+
+echo '${litestream_b64}' | base64 -d > "$${APP_DIR}/litestream.yml"
+chmod 0644 "$${APP_DIR}/litestream.yml"
+
+# ---------- CloudWatch Agent (disk + memory metrics) ----------
+
+if ! command -v amazon-cloudwatch-agent-ctl &>/dev/null; then
+  yum install -y amazon-cloudwatch-agent 2>/dev/null || dnf install -y amazon-cloudwatch-agent 2>/dev/null || true
+fi
+
+if command -v amazon-cloudwatch-agent-ctl &>/dev/null; then
+  install -m 0644 /dev/stdin /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<'CW_CONFIG'
+{
+  "agent": { "metrics_collection_interval": 300 },
+  "metrics": {
+    "namespace": "Bindersnap",
+    "append_dimensions": { "InstanceId": "$${aws:InstanceId}" },
+    "metrics_collected": {
+      "disk": {
+        "measurement": ["used_percent"],
+        "metrics_collection_interval": 300,
+        "resources": ["/", "/data"],
+        "ignore_file_system_types": ["sysfs", "devtmpfs", "tmpfs", "squashfs", "overlay"]
+      },
+      "mem": {
+        "measurement": ["mem_used_percent"],
+        "metrics_collection_interval": 300
+      }
+    }
+  }
+}
+CW_CONFIG
+  amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 \
+    -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+fi
+
+# ---------- Env refresh script (SSM → .env.prod) ----------
+
+cat >/usr/local/bin/bindersnap-refresh-env <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_DIR="$${APP_DIR:-/opt/bindersnap}"
+ENV_FILE="$${ENV_FILE:-$${APP_DIR}/.env.prod}"
+PARAMETER_PATH="$${SSM_PARAMETER_PATH:-/bindersnap/prod}"
+TMP_FILE="$(mktemp "$${ENV_FILE}.XXXXXX")"
+JSON_FILE="$(mktemp "$${ENV_FILE}.json.XXXXXX")"
+
+cleanup() {
+  rm -f "$${TMP_FILE}" "$${JSON_FILE}"
+}
+
+trap cleanup EXIT
+umask 077
+
+aws ssm get-parameters-by-path \
+  --path "$${PARAMETER_PATH}" \
+  --recursive \
+  --with-decryption \
+  --output json \
+  >"$${JSON_FILE}"
+
+python3 -c '
+import json
+import sys
+
+prefix = sys.argv[1].rstrip("/")
+payload = json.load(sys.stdin)
+parameters = sorted(payload.get("Parameters", []), key=lambda item: item["Name"])
+
+if not parameters:
+    raise SystemExit(f"No SSM parameters found under {prefix}")
+
+for item in parameters:
+    name = item["Name"]
+    if not name.startswith(prefix + "/"):
+        continue
+    value = item["Value"]
+    if "\n" in value:
+        raise SystemExit(f"{name} contains a newline and cannot be written to a Docker env file")
+    env_name = name.rsplit("/", 1)[-1].replace("-", "_").upper()
+    print(f"{env_name}={value}")
+' "$${PARAMETER_PATH}" <"$${JSON_FILE}" >"$${TMP_FILE}"
+
+install -d -m 0755 "$${APP_DIR}"
+install -m 0600 "$${TMP_FILE}" "$${ENV_FILE}"
+chmod 600 "$${ENV_FILE}"
+if [ "$(id -u)" -eq 0 ]; then
+  chown root:root "$${ENV_FILE}"
+fi
+SCRIPT
+
+chmod 0755 /usr/local/bin/bindersnap-refresh-env
+
+# ---------- GHCR authentication (optional) ----------
+# If the .env.prod contains a GHCR_TOKEN, log in so Docker can pull
+# the private API image. The token is stored as an SSM parameter
+# and lands in .env.prod via the refresh script above.
+
+cat >/usr/local/bin/bindersnap-ghcr-login <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+
+ENV_FILE="$${ENV_FILE:-/opt/bindersnap/.env.prod}"
+
+if [ ! -f "$${ENV_FILE}" ]; then
+  echo "No env file yet — skipping GHCR login"
+  exit 0
+fi
+
+GHCR_TOKEN="$(grep '^GHCR_TOKEN=' "$${ENV_FILE}" | cut -d= -f2- || true)"
+GHCR_USER="$(grep '^GHCR_USER=' "$${ENV_FILE}" | cut -d= -f2- || true)"
+
+if [ -z "$${GHCR_TOKEN}" ]; then
+  echo "No GHCR_TOKEN in env file — assuming public images"
+  exit 0
+fi
+
+echo "$${GHCR_TOKEN}" | docker login ghcr.io \
+  -u "$${GHCR_USER:-davidgraymi}" --password-stdin
+SCRIPT
+
+chmod 0755 /usr/local/bin/bindersnap-ghcr-login
+
+# ---------- Systemd units ----------
+
+cat >/etc/systemd/system/bindersnap-refresh-env.service <<SERVICE
+[Unit]
+Description=Refresh Bindersnap env file from SSM Parameter Store
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=APP_DIR=$${APP_DIR}
+Environment=ENV_FILE=$${ENV_FILE}
+Environment=SSM_PARAMETER_PATH=$${PARAMETER_PATH}
+ExecStart=/usr/local/bin/bindersnap-refresh-env
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
+# Timer: re-fetch secrets every 6 hours and restart compose if the env file changed.
+# Catches rotated secrets without a reboot. Also triggerable manually:
+#   systemctl start bindersnap-refresh-and-restart.service
+cat >/etc/systemd/system/bindersnap-refresh-and-restart.service <<SERVICE
+[Unit]
+Description=Refresh SSM secrets and restart Bindersnap if env changed
+After=network-online.target docker.service
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=APP_DIR=$${APP_DIR}
+Environment=ENV_FILE=$${ENV_FILE}
+Environment=SSM_PARAMETER_PATH=$${PARAMETER_PATH}
+ExecStart=/bin/bash -c '\
+  BEFORE=\$(sha256sum "\$${ENV_FILE}" 2>/dev/null || echo "none"); \
+  /usr/local/bin/bindersnap-refresh-env; \
+  AFTER=\$(sha256sum "\$${ENV_FILE}"); \
+  if [ "\$BEFORE" != "\$AFTER" ]; then \
+    echo "Env file changed — restarting compose stack"; \
+    cd $${APP_DIR} && docker compose --env-file $${ENV_FILE} -f $${COMPOSE_FILE} up -d; \
+  else \
+    echo "Env file unchanged — no restart needed"; \
+  fi'
+SERVICE
+
+cat >/etc/systemd/system/bindersnap-refresh-and-restart.timer <<TIMER
+[Unit]
+Description=Periodic SSM secret refresh for Bindersnap
+
+[Timer]
+OnCalendar=*-*-* 00/6:00:00
+RandomizedDelaySec=300
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+TIMER
+
+cat >/etc/systemd/system/bindersnap-ghcr-login.service <<SERVICE
+[Unit]
+Description=Log in to GHCR if a token is available
+After=network-online.target docker.service bindersnap-refresh-env.service
+Requires=docker.service
+Wants=bindersnap-refresh-env.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/bindersnap-ghcr-login
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
+cat >/etc/systemd/system/bindersnap-compose.service <<SERVICE
+[Unit]
+Description=Start the Bindersnap production Docker Compose stack
+ConditionPathExists=$${APP_DIR}/$${COMPOSE_FILE}
+After=network-online.target docker.service bindersnap-refresh-env.service bindersnap-ghcr-login.service
+Requires=docker.service bindersnap-refresh-env.service
+Wants=network-online.target bindersnap-ghcr-login.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=$${APP_DIR}
+ExecStart=/bin/sh -lc 'docker compose --env-file $${ENV_FILE} -f $${COMPOSE_FILE} up -d'
+ExecReload=/bin/sh -lc 'docker compose --env-file $${ENV_FILE} -f $${COMPOSE_FILE} up -d'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
+systemctl daemon-reload
+systemctl enable --now bindersnap-refresh-env.service
+systemctl enable --now bindersnap-ghcr-login.service
+systemctl enable --now bindersnap-compose.service
+systemctl enable --now bindersnap-refresh-and-restart.timer

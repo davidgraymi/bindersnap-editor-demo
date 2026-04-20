@@ -2,7 +2,7 @@
 # Run on the EC2 host: docker compose -f docker-compose.prod.yml --env-file /opt/bindersnap/.env.prod up -d
 #
 # The /opt/bindersnap/.env.prod file is generated at boot from
-# /bindersnap/prod/* in SSM Parameter Store by infra/compute/user-data.sh.
+# /bindersnap/prod/* in SSM Parameter Store by infra/compute/user-data.sh.tftpl.
 # For local dry runs, point --env-file at a copy of .env.prod.example.
 #
 # This file is standalone — it does NOT extend docker-compose.yml.
@@ -93,6 +93,24 @@ services:
     volumes:
       - api-data:/var/lib/bindersnap
 
+  caddy:
+    image: caddy:2-alpine
+    container_name: bindersnap-caddy-prod
+    restart: unless-stopped
+    depends_on:
+      gitea:
+        condition: service_healthy
+      api:
+        condition: service_started
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile.prod:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
   litestream:
     image: litestream/litestream:0.3
     container_name: bindersnap-litestream-prod
@@ -114,6 +132,8 @@ services:
 volumes:
   gitea-data:
   api-data:
+  caddy-data:
+  caddy-config:
 
 networks:
   default:
