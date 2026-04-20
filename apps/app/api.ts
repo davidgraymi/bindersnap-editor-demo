@@ -17,42 +17,14 @@ import type {
 } from "../../packages/gitea-client/uploads";
 import { validateUploadFile as validateUploadFileWithClient } from "../../packages/gitea-client/uploads";
 
-const isLocalHost =
-  window.location.hostname === "localhost" ||
-  window.location.hostname === "127.0.0.1";
-
-// Production builds: `bun build --env='BUN_PUBLIC_*'` replaces
-// process.env.BUN_PUBLIC_* references with literal strings at compile time.
-// These references MUST appear bare (not behind a runtime guard) so the
-// bundler can statically substitute them. At runtime in the browser `process`
-// is undefined, but that's fine — the bundler already replaced the expression
-// with the string literal before the code ever executes.
-//
-// Dev mode (Bun HMR): process.env is available at runtime, so the same
-// references work without substitution. import.meta.env is a secondary
-// fallback for Vite-style setups.
-type ImportMetaEnv = Record<string, string | undefined>;
-const _env = (import.meta as ImportMeta & { env?: ImportMetaEnv }).env;
-
-// eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- intentional: empty string is falsy
-const configuredApiBaseUrl: string | undefined =
-  process.env.BUN_PUBLIC_API_BASE_URL ||
-  process.env.BUN_PUBLIC_API_URL ||
-  process.env.VITE_API_URL ||
-  _env?.BUN_PUBLIC_API_BASE_URL ||
-  _env?.BUN_PUBLIC_API_URL ||
-  _env?.VITE_API_URL ||
-  undefined;
-const devDefaultApiBaseUrl = `${window.location.protocol}//${window.location.hostname}:${
-  process.env.BUN_PUBLIC_API_PORT ||
-  process.env.API_PORT ||
-  _env?.BUN_PUBLIC_API_PORT ||
-  _env?.API_PORT ||
-  "8787"
-}`;
-const API_BASE_URL = (
-  configuredApiBaseUrl ?? (isLocalHost ? devDefaultApiBaseUrl : "")
-).replace(/\/$/, "");
+// Bun's bundler (`bun build --env='BUN_PUBLIC_*'`) replaces
+// process.env.BUN_PUBLIC_API_BASE_URL with a literal string at compile time.
+// - GitHub Pages build: BUN_PUBLIC_API_BASE_URL=https://api.bindersnap.com
+// - Local dev stack:    BUN_PUBLIC_API_BASE_URL=http://localhost:8787
+const API_BASE_URL = (process.env.BUN_PUBLIC_API_BASE_URL ?? "").replace(
+  /\/$/,
+  "",
+);
 
 export interface SessionUser {
   username: string;
