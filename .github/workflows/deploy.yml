@@ -190,9 +190,13 @@ jobs:
           INVOCATION_JSON="${invocation_json}" python3 <<'PY'
           import json
           import os
+          import sys
+          from pathlib import Path
 
           payload = json.loads(os.environ["INVOCATION_JSON"])
-          print(f"SSM status: {payload.get('Status')}")
+          status = payload.get("Status", "Unknown")
+
+          print(f"SSM status: {status}")
           print(f"SSM status details: {payload.get('StatusDetails')}")
 
           stdout = payload.get("StandardOutputContent", "").strip()
@@ -205,18 +209,12 @@ jobs:
           if stderr:
               print("\n--- stderr ---")
               print(stderr)
+
+          github_output = os.environ.get("GITHUB_OUTPUT", "")
+          if github_output:
+              Path(github_output).open("a").write(f"ssm_status={status}\n")
+
+          if status != "Success":
+              print(f"::error title=SSM deploy failed::Run Command finished with status {status}")
+              sys.exit(1)
           PY
-
-          status="$(
-            INVOCATION_JSON="${invocation_json}" python3 <<'PY'
-            import json
-            import os
-
-            print(json.loads(os.environ["INVOCATION_JSON"]).get("Status", "Unknown"))
-            PY
-          )"
-
-          if [ "${status}" != "Success" ]; then
-            echo "::error title=SSM deploy failed::Run Command finished with status ${status}"
-            exit 1
-          fi
