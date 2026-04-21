@@ -101,7 +101,26 @@ placeholders for the SSM-backed values and documents the non-secret runtime
 overrides that can still be passed at deploy time.
 
 The production API now expects `GITEA_SERVICE_TOKEN` in that generated env file.
-Create or rotate it with:
+During a fresh Terraform-backed deploy, the EC2 first-boot sequence now
+detects the placeholder value, starts Gitea with the first-boot admin
+credentials from SSM, runs `scripts/bootstrap-gitea-service-account.ts` in a
+throwaway Bun container, writes the real token back to
+`/bindersnap/prod/gitea_service_token`, refreshes `/opt/bindersnap/.env.prod`,
+and only then starts the API.
+
+To support that flow, set these secrets in `infra/secrets/terraform.tfvars`
+before `infra/apply-all.sh apply`:
+
+```hcl
+gitea_admin_user = "gitea-admin"
+gitea_admin_pass = "REPLACE_WITH_OPENSSL_OUTPUT"
+```
+
+`infra/apply-all.sh apply` now also dispatches the same bootstrap over AWS SSM
+to the current prod instance after the secrets module is applied, so existing
+instances pick up the service token without needing an EC2 rebuild.
+
+Manual create or rotation is still available with:
 
 ```bash
 bun scripts/bootstrap-gitea-service-account.ts
@@ -110,8 +129,9 @@ bun scripts/bootstrap-gitea-service-account.ts
 The bootstrap script uses `GITEA_ADMIN_USER` and `GITEA_ADMIN_PASS` only long
 enough to ensure the `bindersnap-service` account exists, grant admin, mint a
 `write:admin` PAT, and write it to `/bindersnap/prod/gitea_service_token`.
-Those admin credentials should remain break-glass only and stay out of the
-steady-state SSM contract after bootstrap.
+After the token is real, the env refresh script stops writing those admin
+credentials into `/opt/bindersnap/.env.prod`, so the steady-state compose stack
+does not keep them in its runtime env file.
 
 ## Production Backups
 

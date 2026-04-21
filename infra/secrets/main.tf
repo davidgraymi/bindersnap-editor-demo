@@ -67,6 +67,20 @@ variable "gitea_service_token" {
   default     = "BOOTSTRAP_WITH_scripts/bootstrap-gitea-service-account.ts"
 }
 
+variable "gitea_admin_user" {
+  description = "First-boot Gitea admin username used to bootstrap the bindersnap-service account"
+  type        = string
+  sensitive   = true
+  default     = "gitea-admin"
+}
+
+variable "gitea_admin_pass" {
+  description = "First-boot Gitea admin password used to bootstrap the bindersnap-service account"
+  type        = string
+  sensitive   = true
+  default     = "CHANGE_ME_USE_openssl_rand_base64_20"
+}
+
 variable "bindersnap_user_email_domain" {
   description = "Placeholder email domain used when creating signup email addresses in Gitea"
   type        = string
@@ -88,12 +102,15 @@ locals {
     gitea_secret_key             = var.gitea_secret_key
     gitea_internal_token         = var.gitea_internal_token
     gitea_service_token          = var.gitea_service_token
+    gitea_admin_user             = var.gitea_admin_user
+    gitea_admin_pass             = var.gitea_admin_pass
     bindersnap_user_email_domain = var.bindersnap_user_email_domain
     litestream_s3_bucket         = var.litestream_s3_bucket
   }
 
-  parameter_arn_base   = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${local.parameter_path}"
-  parameter_arn_prefix = "${local.parameter_arn_base}/*"
+  parameter_arn_base         = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${local.parameter_path}"
+  parameter_arn_prefix       = "${local.parameter_arn_base}/*"
+  service_token_parameter_arn = "${local.parameter_arn_base}/gitea_service_token"
 }
 
 resource "aws_kms_key" "ssm" {
@@ -142,6 +159,19 @@ data "aws_iam_policy_document" "instance_ssm_access" {
   }
 
   statement {
+    sid    = "WriteBindersnapServiceTokenParameter"
+    effect = "Allow"
+
+    actions = [
+      "ssm:PutParameter",
+    ]
+
+    resources = [
+      local.service_token_parameter_arn,
+    ]
+  }
+
+  statement {
     sid    = "DecryptBindersnapProdParameters"
     effect = "Allow"
 
@@ -166,11 +196,39 @@ data "aws_iam_policy_document" "instance_ssm_access" {
       values   = [local.parameter_arn_prefix]
     }
   }
+
+  statement {
+    sid    = "EncryptBindersnapServiceTokenParameter"
+    effect = "Allow"
+
+    actions = [
+      "kms:Encrypt",
+      "kms:GenerateDataKey",
+      "kms:GenerateDataKeyWithoutPlaintext",
+      "kms:DescribeKey",
+    ]
+
+    resources = [
+      aws_kms_key.ssm.arn,
+    ]
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["ssm.${var.aws_region}.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:EncryptionContext:PARAMETER_ARN"
+      values   = [local.service_token_parameter_arn]
+    }
+  }
 }
 
 resource "aws_iam_policy" "instance_ssm_access" {
-  name        = "${var.project}-${var.environment}-ssm-read"
-  description = "Read-only access to the Bindersnap production Parameter Store path"
+  name        = "${var.project}-${var.environment}-ssm-access"
+  description = "Read access to the Bindersnap production Parameter Store path plus service-token bootstrap writes"
   policy      = data.aws_iam_policy_document.instance_ssm_access.json
 
   tags = {
@@ -191,7 +249,7 @@ output "ssm_parameter_path" {
 }
 
 output "instance_ssm_access_policy_arn" {
-  description = "IAM policy ARN granting the EC2 role read access to the production SSM path"
+  description = "IAM policy ARN granting the EC2 role production SSM access plus service-token bootstrap writes"
   value       = aws_iam_policy.instance_ssm_access.arn
 }
 
