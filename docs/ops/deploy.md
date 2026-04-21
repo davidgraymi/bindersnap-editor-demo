@@ -52,6 +52,8 @@ Optional variables:
 - `BINDERSNAP_DEPLOY_TARGET_TAG_KEY`: defaults to `Project`
 - `BINDERSNAP_DEPLOY_TARGET_TAG_VALUE`: defaults to `bindersnap`
 
+The IAM trust policy allows two OIDC subject patterns: `refs/heads/main` (for pushes and manual dispatches from main) and `refs/tags/*` (for tag-triggered deploys). Both are managed by `infra/ci/oidc.tf`.
+
 Do not add a GitHub Environment to the API deploy job unless you also change the IAM trust policy. GitHub switches the OIDC `sub` claim from a branch form to an environment form when an environment is attached.
 
 ## EC2 Prerequisites

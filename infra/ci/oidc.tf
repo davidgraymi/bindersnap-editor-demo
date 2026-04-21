@@ -74,7 +74,10 @@ data "aws_caller_identity" "current" {}
 data "aws_partition" "current" {}
 
 locals {
-  github_sub = "repo:${var.github_owner}/${var.github_repository}:ref:refs/heads/${var.github_branch}"
+  github_subs = [
+    "repo:${var.github_owner}/${var.github_repository}:ref:refs/heads/${var.github_branch}",
+    "repo:${var.github_owner}/${var.github_repository}:ref:refs/tags/*",
+  ]
 
   common_tags = {
     Project = var.project
@@ -115,9 +118,9 @@ data "aws_iam_policy_document" "deploy_trust" {
     }
 
     condition {
-      test     = "StringEquals"
+      test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = [local.github_sub]
+      values   = local.github_subs
     }
   }
 }
@@ -200,7 +203,7 @@ output "deploy_role_arn" {
   value       = aws_iam_role.deploy.arn
 }
 
-output "deploy_role_subject" {
-  description = "GitHub OIDC subject allowed to assume the deploy role"
-  value       = local.github_sub
+output "deploy_role_subjects" {
+  description = "GitHub OIDC subjects allowed to assume the deploy role"
+  value       = local.github_subs
 }
