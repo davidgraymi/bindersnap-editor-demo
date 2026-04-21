@@ -62,6 +62,8 @@ The target instance must already satisfy these conditions:
 - It matches the deploy target tag used by the workflow.
 - `/opt/bindersnap` contains `docker-compose.prod.yml`, `Caddyfile.prod`, and `litestream.yml` (written by `user-data.sh.tftpl` at first boot — no git clone needed).
 - `/opt/bindersnap/.env.prod` exists (generated from SSM Parameter Store by the `bindersnap-refresh-env` systemd service at boot).
+- `infra/secrets/terraform.tfvars` provided `gitea_admin_user` and `gitea_admin_pass` so the first boot can mint `/bindersnap/prod/gitea_service_token` automatically before the API starts.
+- `infra/apply-all.sh apply` can reach the instance through AWS Systems Manager so it can run the bootstrap flow remotely on existing instances after the secrets module updates.
 - Docker and the Compose plugin are installed (handled by `user-data.sh.tftpl`).
 - The host can pull `ghcr.io/davidgraymi/bindersnap-api` (if the package is private, add `ghcr_token` and optionally `ghcr_user` to the SSM parameters under `/bindersnap/prod/`).
 

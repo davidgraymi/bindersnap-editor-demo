@@ -87,6 +87,10 @@ chmod 0644 "$${APP_DIR}/Caddyfile.prod"
 echo '${litestream_b64}' | base64 -d > "$${APP_DIR}/litestream.yml"
 chmod 0644 "$${APP_DIR}/litestream.yml"
 
+install -d -m 0755 "$${APP_DIR}/scripts"
+echo '${bootstrap_script_b64}' | base64 -d > "$${APP_DIR}/scripts/bootstrap-gitea-service-account.ts"
+chmod 0644 "$${APP_DIR}/scripts/bootstrap-gitea-service-account.ts"
+
 # ---------- CloudWatch Agent (disk + memory metrics) ----------
 
 if ! command -v amazon-cloudwatch-agent-ctl &>/dev/null; then
@@ -130,6 +134,7 @@ ENV_FILE="$${ENV_FILE:-$${APP_DIR}/.env.prod}"
 PARAMETER_PATH="$${SSM_PARAMETER_PATH:-/bindersnap/prod}"
 TMP_FILE="$(mktemp "$${ENV_FILE}.XXXXXX")"
 JSON_FILE="$(mktemp "$${ENV_FILE}.json.XXXXXX")"
+BOOTSTRAP_TOKEN_PLACEHOLDER="BOOTSTRAP_WITH_scripts/bootstrap-gitea-service-account.ts"
 
 cleanup() {
   rm -f "$${TMP_FILE}" "$${JSON_FILE}"
@@ -150,11 +155,19 @@ import json
 import sys
 
 prefix = sys.argv[1].rstrip("/")
+bootstrap_placeholder = sys.argv[2]
 payload = json.load(sys.stdin)
 parameters = sorted(payload.get("Parameters", []), key=lambda item: item["Name"])
 
 if not parameters:
     raise SystemExit(f"No SSM parameters found under {prefix}")
+
+token_value = None
+for item in parameters:
+    name = item["Name"]
+    if name == f"{prefix}/gitea_service_token":
+        token_value = item["Value"]
+        break
 
 for item in parameters:
     name = item["Name"]
@@ -164,8 +177,14 @@ for item in parameters:
     if "\n" in value:
         raise SystemExit(f"{name} contains a newline and cannot be written to a Docker env file")
     env_name = name.rsplit("/", 1)[-1].replace("-", "_").upper()
+    if (
+        token_value
+        and token_value != bootstrap_placeholder
+        and env_name in {"GITEA_ADMIN_USER", "GITEA_ADMIN_PASS"}
+    ):
+        continue
     print(f"{env_name}={value}")
-' "$${PARAMETER_PATH}" <"$${JSON_FILE}" >"$${TMP_FILE}"
+' "$${PARAMETER_PATH}" "$${BOOTSTRAP_TOKEN_PLACEHOLDER}" <"$${JSON_FILE}" >"$${TMP_FILE}"
 
 install -d -m 0755 "$${APP_DIR}"
 install -m 0600 "$${TMP_FILE}" "$${ENV_FILE}"
@@ -207,6 +226,111 @@ SCRIPT
 
 chmod 0755 /usr/local/bin/bindersnap-ghcr-login
 
+# ---------- Gitea service-token bootstrap ----------
+
+cat >/usr/local/bin/bindersnap-bootstrap-gitea <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_DIR="$${APP_DIR:-/opt/bindersnap}"
+ENV_FILE="$${ENV_FILE:-$${APP_DIR}/.env.prod}"
+COMPOSE_FILE="$${COMPOSE_FILE:-docker-compose.prod.yml}"
+PARAMETER_PATH="$${SSM_PARAMETER_PATH:-/bindersnap/prod}"
+AWS_REGION="$${AWS_REGION:-us-east-1}"
+BOOTSTRAP_TOKEN_PLACEHOLDER="BOOTSTRAP_WITH_scripts/bootstrap-gitea-service-account.ts"
+GITEA_CONTAINER_NAME="$${GITEA_CONTAINER_NAME:-bindersnap-gitea-prod}"
+COMPOSE_NETWORK="$${COMPOSE_NETWORK:-bindersnap-prod}"
+GITEA_CONFIG="$${GITEA_CONFIG:-/data/gitea/conf/app.ini}"
+GITEA_EXEC_USER="$${GITEA_EXEC_USER:-1000:1000}"
+
+if [ ! -f "$${ENV_FILE}" ]; then
+  echo "Env file $${ENV_FILE} not found"
+  exit 1
+fi
+
+SERVICE_TOKEN="$(grep '^GITEA_SERVICE_TOKEN=' "$${ENV_FILE}" | cut -d= -f2- || true)"
+if [ -z "$${SERVICE_TOKEN}" ]; then
+  echo "No GITEA_SERVICE_TOKEN in $${ENV_FILE}"
+  exit 1
+fi
+
+if [ "$${SERVICE_TOKEN}" != "$${BOOTSTRAP_TOKEN_PLACEHOLDER}" ]; then
+  echo "Gitea service token already bootstrapped"
+  exit 0
+fi
+
+set -a
+. "$${ENV_FILE}"
+set +a
+
+if [ -z "$${GITEA_ADMIN_USER:-}" ] || [ -z "$${GITEA_ADMIN_PASS:-}" ]; then
+  echo "GITEA_ADMIN_USER and GITEA_ADMIN_PASS are required while the service token is still a bootstrap placeholder"
+  exit 1
+fi
+
+cd "$${APP_DIR}"
+docker compose --env-file "$${ENV_FILE}" -f "$${COMPOSE_FILE}" up -d gitea
+
+for _ in $(seq 1 60); do
+  STATUS="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$${GITEA_CONTAINER_NAME}" 2>/dev/null || true)"
+  if [ "$${STATUS}" = "healthy" ]; then
+    break
+  fi
+  sleep 5
+done
+
+STATUS="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$${GITEA_CONTAINER_NAME}" 2>/dev/null || true)"
+if [ "$${STATUS}" != "healthy" ]; then
+  echo "Gitea did not become ready in time"
+  exit 1
+fi
+
+GITEA_ADMIN_EMAIL="$${GITEA_ADMIN_EMAIL:-$${GITEA_ADMIN_USER}@$${BINDERSNAP_USER_EMAIL_DOMAIN:-users.bindersnap.com}}"
+if ! docker exec --user "$${GITEA_EXEC_USER}" "$${GITEA_CONTAINER_NAME}" \
+  gitea --config "$${GITEA_CONFIG}" admin user create \
+    --username "$${GITEA_ADMIN_USER}" \
+    --password "$${GITEA_ADMIN_PASS}" \
+    --email "$${GITEA_ADMIN_EMAIL}" \
+    --admin \
+    --must-change-password=false; then
+  docker exec --user "$${GITEA_EXEC_USER}" "$${GITEA_CONTAINER_NAME}" \
+    gitea --config "$${GITEA_CONFIG}" admin user change-password \
+      --username "$${GITEA_ADMIN_USER}" \
+      --password "$${GITEA_ADMIN_PASS}" \
+      --must-change-password=false
+fi
+
+docker run --rm \
+  --network "$${COMPOSE_NETWORK}" \
+  -e GITEA_ADMIN_USER \
+  -e GITEA_ADMIN_PASS \
+  -e GITEA_INTERNAL_URL="http://gitea:3000" \
+  -e BINDERSNAP_USER_EMAIL_DOMAIN="$${BINDERSNAP_USER_EMAIL_DOMAIN:-users.bindersnap.com}" \
+  -v "$${APP_DIR}:/workspace" \
+  -w /workspace \
+  oven/bun:1 \
+  bun scripts/bootstrap-gitea-service-account.ts mint-token > "$${APP_DIR}/.gitea-service-token.tmp"
+
+SERVICE_TOKEN="$(tr -d '\r\n' < "$${APP_DIR}/.gitea-service-token.tmp")"
+rm -f "$${APP_DIR}/.gitea-service-token.tmp"
+
+if [ -z "$${SERVICE_TOKEN}" ]; then
+  echo "mint-token returned an empty token"
+  exit 1
+fi
+
+aws ssm put-parameter \
+  --name "$${PARAMETER_PATH}/gitea_service_token" \
+  --type SecureString \
+  --value "$${SERVICE_TOKEN}" \
+  --overwrite \
+  --region "$${AWS_REGION}"
+
+/usr/local/bin/bindersnap-refresh-env
+SCRIPT
+
+chmod 0755 /usr/local/bin/bindersnap-bootstrap-gitea
+
 # ---------- Systemd units ----------
 
 cat >/etc/systemd/system/bindersnap-refresh-env.service <<SERVICE
@@ -244,6 +368,7 @@ Environment=SSM_PARAMETER_PATH=$${PARAMETER_PATH}
 ExecStart=/bin/bash -c '\
   BEFORE=\$(sha256sum "\$${ENV_FILE}" 2>/dev/null || echo "none"); \
   /usr/local/bin/bindersnap-refresh-env; \
+  /usr/local/bin/bindersnap-bootstrap-gitea; \
   AFTER=\$(sha256sum "\$${ENV_FILE}"); \
   if [ "\$BEFORE" != "\$AFTER" ]; then \
     echo "Env file changed — restarting compose stack"; \
@@ -281,12 +406,32 @@ ExecStart=/usr/local/bin/bindersnap-ghcr-login
 WantedBy=multi-user.target
 SERVICE
 
+cat >/etc/systemd/system/bindersnap-bootstrap-gitea.service <<SERVICE
+[Unit]
+Description=Bootstrap the Bindersnap Gitea service token on first boot
+ConditionPathExists=$${ENV_FILE}
+After=network-online.target docker.service bindersnap-refresh-env.service
+Requires=docker.service bindersnap-refresh-env.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=APP_DIR=$${APP_DIR}
+Environment=ENV_FILE=$${ENV_FILE}
+Environment=COMPOSE_FILE=$${COMPOSE_FILE}
+Environment=SSM_PARAMETER_PATH=$${PARAMETER_PATH}
+ExecStart=/usr/local/bin/bindersnap-bootstrap-gitea
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
 cat >/etc/systemd/system/bindersnap-compose.service <<SERVICE
 [Unit]
 Description=Start the Bindersnap production Docker Compose stack
 ConditionPathExists=$${APP_DIR}/$${COMPOSE_FILE}
-After=network-online.target docker.service bindersnap-refresh-env.service bindersnap-ghcr-login.service
-Requires=docker.service bindersnap-refresh-env.service
+After=network-online.target docker.service bindersnap-refresh-env.service bindersnap-ghcr-login.service bindersnap-bootstrap-gitea.service
+Requires=docker.service bindersnap-refresh-env.service bindersnap-bootstrap-gitea.service
 Wants=network-online.target bindersnap-ghcr-login.service
 
 [Service]
@@ -303,5 +448,6 @@ SERVICE
 systemctl daemon-reload
 systemctl enable --now bindersnap-refresh-env.service
 systemctl enable --now bindersnap-ghcr-login.service
+systemctl enable --now bindersnap-bootstrap-gitea.service
 systemctl enable --now bindersnap-compose.service
 systemctl enable --now bindersnap-refresh-and-restart.timer

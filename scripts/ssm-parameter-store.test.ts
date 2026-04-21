@@ -22,17 +22,23 @@ describe("SSM Parameter Store production wiring", () => {
     expect(secretsTerraform).toContain("gitea_secret_key");
     expect(secretsTerraform).toContain("gitea_internal_token");
     expect(secretsTerraform).toContain("gitea_service_token");
+    expect(secretsTerraform).toContain("gitea_admin_user");
+    expect(secretsTerraform).toContain("gitea_admin_pass");
     expect(secretsTerraform).toContain("bindersnap_user_email_domain");
     expect(secretsTerraform).toContain("litestream_s3_bucket");
   });
 
   test("limits the instance role to the production SSM path and KMS key", () => {
     expect(secretsTerraform).toContain("ssm:GetParametersByPath");
+    expect(secretsTerraform).toContain("ssm:PutParameter");
     expect(secretsTerraform).toContain("kms:Decrypt");
+    expect(secretsTerraform).toContain("kms:Encrypt");
+    expect(secretsTerraform).toContain("kms:GenerateDataKey");
     expect(secretsTerraform).toContain("kms:DescribeKey");
     expect(secretsTerraform).toContain('parameter${local.parameter_path}"');
     expect(secretsTerraform).toContain("local.parameter_arn_base,");
     expect(secretsTerraform).toContain("local.parameter_arn_prefix,");
+    expect(secretsTerraform).toContain("local.service_token_parameter_arn");
     expect(secretsTerraform).toContain("kms:EncryptionContext:PARAMETER_ARN");
     expect(secretsTerraform).toContain('variable "ec2_instance_role_name"');
     expect(secretsTerraform).not.toContain('resources = ["*"]');
@@ -45,6 +51,21 @@ describe("SSM Parameter Store production wiring", () => {
     expect(userData).toContain("chmod 600");
     expect(userData).toContain("chown root:root");
     expect(userData).toContain("bindersnap-refresh-env.service");
+    expect(userData).toContain("bindersnap-bootstrap-gitea.service");
+    expect(userData).toContain(
+      "BOOTSTRAP_WITH_scripts/bootstrap-gitea-service-account.ts",
+    );
+    expect(userData).toContain(
+      'docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d gitea',
+    );
+    expect(userData).toContain("gitea --config");
+    expect(userData).toContain('docker exec --user "${GITEA_EXEC_USER}"');
+    expect(userData).toContain("admin user create");
+    expect(userData).toContain("admin user change-password");
+    expect(userData).toContain(
+      "bun scripts/bootstrap-gitea-service-account.ts mint-token",
+    );
+    expect(userData).toContain("aws ssm put-parameter");
     expect(userData).toContain("bindersnap-compose.service");
     expect(userData).toContain(
       "docker compose --env-file ${ENV_FILE} -f ${COMPOSE_FILE} up -d",
@@ -60,6 +81,10 @@ describe("SSM Parameter Store production wiring", () => {
     );
     expect(envExample).toContain(
       `${giteaServiceTokenKey}=BOOTSTRAP_WITH_scripts/bootstrap-gitea-service-account.ts`,
+    );
+    expect(envExample).toContain("# GITEA_ADMIN_USER=gitea-admin");
+    expect(envExample).toContain(
+      "# GITEA_ADMIN_PASS=SET_MANUALLY_FOR_INITIAL_GITEA_BOOTSTRAP_ONLY",
     );
     expect(envExample).toContain("LITESTREAM_S3_BUCKET=bindersnap-litestream-");
     expect(composeFile).toContain(

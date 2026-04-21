@@ -284,10 +284,11 @@ resource "aws_instance" "app" {
   key_name               = var.key_pair_name
 
   user_data_base64 = base64gzip(templatefile("${path.module}/user-data.sh.tftpl", {
-    compose_b64        = base64encode(file("${path.root}/../../docker-compose.prod.yml"))
-    caddyfile_b64      = base64encode(file("${path.root}/../../Caddyfile.prod"))
-    litestream_b64     = base64encode(file("${path.root}/../../litestream.yml"))
-    ssm_parameter_path = var.ssm_parameter_path
+    compose_b64          = base64encode(file("${path.root}/../../docker-compose.prod.yml"))
+    caddyfile_b64        = base64encode(file("${path.root}/../../Caddyfile.prod"))
+    litestream_b64       = base64encode(file("${path.root}/../../litestream.yml"))
+    bootstrap_script_b64 = base64encode(file("${path.root}/../../scripts/bootstrap-gitea-service-account.ts"))
+    ssm_parameter_path   = var.ssm_parameter_path
   }))
   user_data_replace_on_change = false
 

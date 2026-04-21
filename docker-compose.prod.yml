@@ -79,6 +79,7 @@ services:
     environment:
       - API_PORT=8787
       - PORT=8787
+      - NODE_ENV=production
       - GITEA_INTERNAL_URL=http://gitea:3000
       - BINDERSNAP_GITEA_SERVICE_TOKEN=${GITEA_SERVICE_TOKEN:?set in the generated env file}
       - BINDERSNAP_APP_ORIGIN=https://bindersnap.com

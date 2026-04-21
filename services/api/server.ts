@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 
+import { logger } from "./logger";
 import { sessionStore, type SessionRecord } from "./sessions";
 import {
   createGiteaClient,
@@ -81,8 +82,9 @@ const giteaServiceToken =
 const isProduction = process.env.NODE_ENV === "production";
 
 if (isProduction && !giteaServiceToken) {
-  console.error(
+  logger.error(
     "FATAL: BINDERSNAP_GITEA_SERVICE_TOKEN is not set in production",
+    { env: "production" },
   );
   process.exit(1);
 }
@@ -403,6 +405,13 @@ function enforceTransportSecurity(
     return null;
   }
 
+  logger.warn("Transport security rejected: HTTPS required", {
+    method: req.method,
+    path: new URL(req.url).pathname,
+    protocol: requestProtocol(req),
+    clientIp: requestClientIp(req),
+  });
+
   return json(400, { error: "HTTPS is required." }, baseHeaders);
 }
 
@@ -420,6 +429,15 @@ function enforceStateChangingOrigin(
 
   const sourceOrigin = requestSourceOrigin(req);
   if (!isAllowedOrigin(sourceOrigin)) {
+    logger.warn(
+      "CORS rejected: origin not allowed for state-changing request",
+      {
+        method: req.method,
+        path: new URL(req.url).pathname,
+        origin: sourceOrigin,
+        clientIp: requestClientIp(req),
+      },
+    );
     return json(403, { error: "Cross-site request blocked." }, baseHeaders);
   }
 
@@ -998,16 +1016,31 @@ function responseFromError(
   fallback: string,
 ): Response {
   if (err instanceof GiteaApiError) {
-    return json(err.status, { error: err.message || fallback }, baseHeaders);
+    const status = err.status;
+    if (status >= 500) {
+      logger.error("Gitea API error (5xx)", {
+        status,
+        message: err.message || fallback,
+        errorType: "GiteaApiError",
+      });
+    } else {
+      logger.warn("Gitea API error (4xx)", {
+        status,
+        message: err.message || fallback,
+        errorType: "GiteaApiError",
+      });
+    }
+    return json(status, { error: err.message || fallback }, baseHeaders);
   }
 
-  return json(
-    500,
-    {
-      error: err instanceof Error && err.message ? err.message : fallback,
-    },
-    baseHeaders,
-  );
+  const message = err instanceof Error && err.message ? err.message : fallback;
+  logger.error("Unhandled route exception", {
+    message,
+    errorType: err instanceof Error ? err.constructor.name : typeof err,
+    stack: err instanceof Error ? err.stack : undefined,
+  });
+
+  return json(500, { error: message }, baseHeaders);
 }
 
 async function verifyUserCredentials(
@@ -1378,8 +1411,20 @@ async function handleSignup(
   req: Request,
   baseHeaders: Headers,
 ): Promise<Response> {
+  const clientIp = requestClientIp(req);
   const rateLimit = consumeAuthRateLimit(req, "signup");
+
+  logger.debug("Auth rate limit check (signup)", {
+    clientIp,
+    limited: rateLimit.limited,
+    retryAfterSeconds: rateLimit.retryAfterSeconds,
+  });
+
   if (rateLimit.limited) {
+    logger.warn("Rate limit hit on signup", {
+      clientIp,
+      retryAfterSeconds: rateLimit.retryAfterSeconds,
+    });
     return json(
       429,
       { error: "Too many signup attempts. Please try again shortly." },
@@ -1408,10 +1453,22 @@ async function handleSignup(
     );
   }
 
+  logger.debug("Attempting Gitea user creation", { username, clientIp });
+
   const created = await createGiteaUser(username, email, password);
   if (created !== "created") {
+    logger.warn("Gitea user creation failed during signup", {
+      username,
+      status: created.status,
+      error: created.error,
+    });
     return json(created.status, { error: created.error }, baseHeaders);
   }
+
+  logger.debug("Gitea user created; establishing session", {
+    username,
+    clientIp,
+  });
 
   const response = await createLoginSession(
     username,
@@ -1421,6 +1478,7 @@ async function handleSignup(
   );
   if (response.ok) {
     resetAuthRateLimit(req, "signup");
+    logger.debug("Session created after signup", { username, clientIp });
   }
   return response;
 }
@@ -1429,8 +1487,20 @@ async function handleLogin(
   req: Request,
   baseHeaders: Headers,
 ): Promise<Response> {
+  const clientIp = requestClientIp(req);
   const rateLimit = consumeAuthRateLimit(req, "login");
+
+  logger.debug("Auth rate limit check (login)", {
+    clientIp,
+    limited: rateLimit.limited,
+    retryAfterSeconds: rateLimit.retryAfterSeconds,
+  });
+
   if (rateLimit.limited) {
+    logger.warn("Rate limit hit on login", {
+      clientIp,
+      retryAfterSeconds: rateLimit.retryAfterSeconds,
+    });
     return json(
       429,
       { error: "Too many login attempts. Please try again shortly." },
@@ -1468,22 +1538,42 @@ async function handleLogin(
     );
   }
 
+  logger.debug("Credential verification attempt", {
+    // Log the identifier type (email or username) but never the value itself
+    identifierType: looksLikeEmailAddress(identifier) ? "email" : "username",
+    rememberMe,
+    clientIp,
+  });
+
   const resolution = await resolveLoginUsername(
     identifier,
     emailCandidate,
     password,
   );
+
   if (resolution.kind === "unavailable") {
+    logger.warn("Login resolution unavailable", {
+      status: resolution.status,
+      error: resolution.error,
+      clientIp,
+    });
     return json(resolution.status, { error: resolution.error }, baseHeaders);
   }
 
   if (resolution.kind !== "authenticated") {
+    logger.debug("Login credential verification failed", { clientIp });
     return json(
       401,
       { error: "Invalid username, email, or password." },
       baseHeaders,
     );
   }
+
+  logger.debug("Credentials verified; establishing session", {
+    username: resolution.username,
+    rememberMe,
+    clientIp,
+  });
 
   const response = await createAuthenticatedSession(
     resolution.username,
@@ -1494,6 +1584,10 @@ async function handleLogin(
   );
   if (response.ok) {
     resetAuthRateLimit(req, "login");
+    logger.debug("Session created after login", {
+      username: resolution.username,
+      clientIp,
+    });
   }
   return response;
 }
@@ -1504,8 +1598,16 @@ async function handleLogout(
 ): Promise<Response> {
   const session = getSessionFromRequest(req);
   if (session) {
+    logger.debug("Revoking session on logout", {
+      username: session.username,
+      clientIp: requestClientIp(req),
+    });
     sessionStore.delete(session.id);
     await revokeUserToken(session);
+  } else {
+    logger.debug("Logout called with no active session", {
+      clientIp: requestClientIp(req),
+    });
   }
 
   const headers = mergeHeaders(baseHeaders, {
@@ -1521,8 +1623,16 @@ async function handleAuthMe(
 ): Promise<Response> {
   const session = getSessionFromRequest(req);
   if (!session) {
+    logger.debug("Auth/me: no valid session found", {
+      clientIp: requestClientIp(req),
+    });
     return json(401, { error: "Unauthorized." }, baseHeaders);
   }
+
+  logger.debug("Auth/me: session resolved", {
+    username: session.username,
+    clientIp: requestClientIp(req),
+  });
 
   return json(
     200,
@@ -1575,14 +1685,20 @@ async function handleDocuments(
             error: null,
           };
         } catch (err) {
+          const errorMessage =
+            err instanceof Error
+              ? err.message
+              : "Unable to load document details.";
+          logger.error("Failed to load details for repo", {
+            repo: repo.name,
+            owner: repo.owner?.login,
+            message: errorMessage,
+          });
           return {
             repo: normalizeWorkspaceRepoSummary(repo),
             latestTag: null,
             pendingPRs: [] as PullRequestWithApprovalState[],
-            error:
-              err instanceof Error
-                ? err.message
-                : "Unable to load document details.",
+            error: errorMessage,
           };
         }
       }),
@@ -2163,16 +2279,18 @@ async function handleDocumentDownload(
     );
 
     if (!response.ok) {
-      return json(
-        response.status,
-        {
-          error: await readGiteaErrorMessage(
-            response,
-            "Unable to download document.",
-          ),
-        },
-        baseHeaders,
+      const errorMessage = await readGiteaErrorMessage(
+        response,
+        "Unable to download document.",
       );
+      logger.error("Gitea fetch failure on document download", {
+        status: response.status,
+        owner,
+        repo,
+        ref,
+        message: errorMessage,
+      });
+      return json(response.status, { error: errorMessage }, baseHeaders);
     }
 
     return new Response(response.body, {
@@ -2392,150 +2510,181 @@ export function createApiServer() {
     port: apiPort,
     idleTimeout: 30,
     async fetch(req) {
+      const startMs = Date.now();
       const { pathname } = new URL(req.url);
+      const method = req.method;
+      const origin = requestOrigin(req);
+      const clientIp = requestClientIp(req);
+
+      logger.info("Incoming request", {
+        method,
+        path: pathname,
+        origin,
+        clientIp,
+      });
+
       const baseHeaders = corsHeaders(req);
       const transportError = enforceTransportSecurity(req, baseHeaders);
       if (transportError) {
+        const durationMs = Date.now() - startMs;
+        logger.info("Response sent", {
+          method,
+          path: pathname,
+          status: transportError.status,
+          durationMs,
+        });
         return transportError;
       }
 
       const originError = enforceStateChangingOrigin(req, baseHeaders);
       if (originError) {
+        const durationMs = Date.now() - startMs;
+        logger.info("Response sent", {
+          method,
+          path: pathname,
+          status: originError.status,
+          durationMs,
+        });
         return originError;
       }
 
-      if (req.method === "OPTIONS") {
+      if (method === "OPTIONS") {
+        const durationMs = Date.now() - startMs;
+        logger.info("Response sent", {
+          method,
+          path: pathname,
+          status: 204,
+          durationMs,
+        });
         return new Response(null, {
           status: 204,
           headers: baseHeaders,
         });
       }
 
-      if (pathname === "/auth/signup" && req.method === "POST") {
-        return handleSignup(req, baseHeaders);
-      }
+      let response: Response;
 
-      if (pathname === "/auth/login" && req.method === "POST") {
-        return handleLogin(req, baseHeaders);
-      }
-
-      if (pathname === "/auth/logout" && req.method === "POST") {
-        return handleLogout(req, baseHeaders);
-      }
-
-      if (pathname === "/auth/me" && req.method === "GET") {
-        return handleAuthMe(req, baseHeaders);
-      }
-
-      if (pathname === "/api/app/documents" && req.method === "GET") {
-        return handleDocuments(req, baseHeaders);
-      }
-
-      if (pathname === "/api/app/documents" && req.method === "POST") {
-        return handleCreateDocument(req, baseHeaders);
-      }
-
-      if (pathname === "/api/app/users/search" && req.method === "GET") {
-        return handleSearchUsersRoute(req, baseHeaders);
-      }
-
-      const reviewMatch = pathname.match(
-        /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/reviews$/,
-      );
-      if (reviewMatch && req.method === "POST") {
-        return handleDocumentReview(
-          req,
-          baseHeaders,
-          decodePathParam(reviewMatch[1] ?? ""),
-          decodePathParam(reviewMatch[2] ?? ""),
-          Number.parseInt(reviewMatch[3] ?? "", 10),
+      if (pathname === "/auth/signup" && method === "POST") {
+        response = await handleSignup(req, baseHeaders);
+      } else if (pathname === "/auth/login" && method === "POST") {
+        response = await handleLogin(req, baseHeaders);
+      } else if (pathname === "/auth/logout" && method === "POST") {
+        response = await handleLogout(req, baseHeaders);
+      } else if (pathname === "/auth/me" && method === "GET") {
+        response = await handleAuthMe(req, baseHeaders);
+      } else if (pathname === "/api/app/documents" && method === "GET") {
+        response = await handleDocuments(req, baseHeaders);
+      } else if (pathname === "/api/app/documents" && method === "POST") {
+        response = await handleCreateDocument(req, baseHeaders);
+      } else if (pathname === "/api/app/users/search" && method === "GET") {
+        response = await handleSearchUsersRoute(req, baseHeaders);
+      } else {
+        const reviewMatch = pathname.match(
+          /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/reviews$/,
         );
+        const publishMatch = pathname.match(
+          /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/publish$/,
+        );
+        const downloadMatch = pathname.match(
+          /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/download$/,
+        );
+        const versionsMatch = pathname.match(
+          /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/versions$/,
+        );
+        const collaboratorsActionMatch = pathname.match(
+          /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/collaborators\/([^/]+)$/,
+        );
+        const collaboratorsMatch = pathname.match(
+          /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/collaborators$/,
+        );
+        const documentMatch = pathname.match(
+          /^\/api\/app\/documents\/([^/]+)\/([^/]+)$/,
+        );
+
+        if (reviewMatch && method === "POST") {
+          response = await handleDocumentReview(
+            req,
+            baseHeaders,
+            decodePathParam(reviewMatch[1] ?? ""),
+            decodePathParam(reviewMatch[2] ?? ""),
+            Number.parseInt(reviewMatch[3] ?? "", 10),
+          );
+        } else if (publishMatch && method === "POST") {
+          response = await handleDocumentPublish(
+            req,
+            baseHeaders,
+            decodePathParam(publishMatch[1] ?? ""),
+            decodePathParam(publishMatch[2] ?? ""),
+            Number.parseInt(publishMatch[3] ?? "", 10),
+          );
+        } else if (downloadMatch && method === "GET") {
+          response = await handleDocumentDownload(
+            req,
+            baseHeaders,
+            decodePathParam(downloadMatch[1] ?? ""),
+            decodePathParam(downloadMatch[2] ?? ""),
+          );
+        } else if (versionsMatch && method === "POST") {
+          response = await handleDocumentVersions(
+            req,
+            baseHeaders,
+            decodePathParam(versionsMatch[1] ?? ""),
+            decodePathParam(versionsMatch[2] ?? ""),
+          );
+        } else if (collaboratorsActionMatch && method === "PUT") {
+          response = await handleAddCollaborator(
+            req,
+            baseHeaders,
+            decodePathParam(collaboratorsActionMatch[1] ?? ""),
+            decodePathParam(collaboratorsActionMatch[2] ?? ""),
+            decodePathParam(collaboratorsActionMatch[3] ?? ""),
+          );
+        } else if (collaboratorsActionMatch && method === "DELETE") {
+          response = await handleDeleteCollaborator(
+            req,
+            baseHeaders,
+            decodePathParam(collaboratorsActionMatch[1] ?? ""),
+            decodePathParam(collaboratorsActionMatch[2] ?? ""),
+            decodePathParam(collaboratorsActionMatch[3] ?? ""),
+          );
+        } else if (collaboratorsMatch && method === "GET") {
+          response = await handleDocumentCollaborators(
+            req,
+            baseHeaders,
+            decodePathParam(collaboratorsMatch[1] ?? ""),
+            decodePathParam(collaboratorsMatch[2] ?? ""),
+          );
+        } else if (documentMatch && method === "GET") {
+          response = await handleDocumentDetail(
+            req,
+            baseHeaders,
+            decodePathParam(documentMatch[1] ?? ""),
+            decodePathParam(documentMatch[2] ?? ""),
+          );
+        } else {
+          response = json(404, { error: "Not found." }, baseHeaders);
+        }
       }
 
-      const publishMatch = pathname.match(
-        /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/publish$/,
-      );
-      if (publishMatch && req.method === "POST") {
-        return handleDocumentPublish(
-          req,
-          baseHeaders,
-          decodePathParam(publishMatch[1] ?? ""),
-          decodePathParam(publishMatch[2] ?? ""),
-          Number.parseInt(publishMatch[3] ?? "", 10),
-        );
+      const durationMs = Date.now() - startMs;
+      const status = response.status;
+      if (status >= 500) {
+        logger.error("Response sent with 5xx status", {
+          method,
+          path: pathname,
+          status,
+          durationMs,
+        });
+      } else {
+        logger.info("Response sent", {
+          method,
+          path: pathname,
+          status,
+          durationMs,
+        });
       }
 
-      const downloadMatch = pathname.match(
-        /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/download$/,
-      );
-      if (downloadMatch && req.method === "GET") {
-        return handleDocumentDownload(
-          req,
-          baseHeaders,
-          decodePathParam(downloadMatch[1] ?? ""),
-          decodePathParam(downloadMatch[2] ?? ""),
-        );
-      }
-
-      const versionsMatch = pathname.match(
-        /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/versions$/,
-      );
-      if (versionsMatch && req.method === "POST") {
-        return handleDocumentVersions(
-          req,
-          baseHeaders,
-          decodePathParam(versionsMatch[1] ?? ""),
-          decodePathParam(versionsMatch[2] ?? ""),
-        );
-      }
-
-      const collaboratorsActionMatch = pathname.match(
-        /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/collaborators\/([^/]+)$/,
-      );
-      if (collaboratorsActionMatch && req.method === "PUT") {
-        return handleAddCollaborator(
-          req,
-          baseHeaders,
-          decodePathParam(collaboratorsActionMatch[1] ?? ""),
-          decodePathParam(collaboratorsActionMatch[2] ?? ""),
-          decodePathParam(collaboratorsActionMatch[3] ?? ""),
-        );
-      }
-      if (collaboratorsActionMatch && req.method === "DELETE") {
-        return handleDeleteCollaborator(
-          req,
-          baseHeaders,
-          decodePathParam(collaboratorsActionMatch[1] ?? ""),
-          decodePathParam(collaboratorsActionMatch[2] ?? ""),
-          decodePathParam(collaboratorsActionMatch[3] ?? ""),
-        );
-      }
-
-      const collaboratorsMatch = pathname.match(
-        /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/collaborators$/,
-      );
-      if (collaboratorsMatch && req.method === "GET") {
-        return handleDocumentCollaborators(
-          req,
-          baseHeaders,
-          decodePathParam(collaboratorsMatch[1] ?? ""),
-          decodePathParam(collaboratorsMatch[2] ?? ""),
-        );
-      }
-
-      const documentMatch = pathname.match(
-        /^\/api\/app\/documents\/([^/]+)\/([^/]+)$/,
-      );
-      if (documentMatch && req.method === "GET") {
-        return handleDocumentDetail(
-          req,
-          baseHeaders,
-          decodePathParam(documentMatch[1] ?? ""),
-          decodePathParam(documentMatch[2] ?? ""),
-        );
-      }
-
-      return json(404, { error: "Not found." }, baseHeaders);
+      return response;
     },
   });
 }
@@ -2544,5 +2693,9 @@ export const server = import.meta.main ? createApiServer() : null;
 
 if (import.meta.main && server) {
   startCleanupTimer();
-  console.log(`Bindersnap API listening on http://localhost:${server.port}`);
+  logger.info("Bindersnap API listening", {
+    url: `http://localhost:${server.port}`,
+    port: server.port,
+    env: process.env.NODE_ENV ?? "development",
+  });
 }
