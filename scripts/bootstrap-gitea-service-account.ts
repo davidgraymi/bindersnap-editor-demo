@@ -63,7 +63,9 @@ export function resolveSsmParameterName(parameterPathRaw?: string): string {
 }
 
 function resolveParameterPath(parameterPathRaw?: string): string {
-  return parameterPathRaw?.trim().replace(/\/+$/, "") || DEFAULT_SSM_PARAMETER_PATH;
+  return (
+    parameterPathRaw?.trim().replace(/\/+$/, "") || DEFAULT_SSM_PARAMETER_PATH
+  );
 }
 
 function parameterNameToEnvName(parameterName: string): string {
@@ -167,16 +169,16 @@ export function buildRemoteBootstrapCommands(
     'TMP_ENV="$(mktemp "$ENV_FILE.XXXXXX")"',
     'TMP_JSON="$(mktemp "$ENV_FILE.json.XXXXXX")"',
     'cleanup() { rm -f "$TMP_ENV" "$TMP_JSON"; }',
-    'trap cleanup EXIT',
+    "trap cleanup EXIT",
     'aws ssm get-parameters-by-path --path "$PARAMETER_PATH" --recursive --with-decryption --output json > "$TMP_JSON"',
     'docker run --rm -i -v "$APP_DIR:/workspace" -w /workspace oven/bun:1 bun scripts/bootstrap-gitea-service-account.ts render-env --parameter-path "$PARAMETER_PATH" < "$TMP_JSON" > "$TMP_ENV"',
     'install -m 0600 "$TMP_ENV" "$ENV_FILE"',
-    'SERVICE_TOKEN=$(grep \'^GITEA_SERVICE_TOKEN=\' "$ENV_FILE" | cut -d= -f2- || true)',
+    "SERVICE_TOKEN=$(grep '^GITEA_SERVICE_TOKEN=' \"$ENV_FILE\" | cut -d= -f2- || true)",
     'if [ -z "$SERVICE_TOKEN" ]; then echo "GITEA_SERVICE_TOKEN is missing from $ENV_FILE"; exit 1; fi',
     'if [ "$SERVICE_TOKEN" != "$BOOTSTRAP_TOKEN_PLACEHOLDER" ]; then echo "Gitea service token already bootstrapped"; exit 0; fi',
-    'set -a',
+    "set -a",
     '. "$ENV_FILE"',
-    'set +a',
+    "set +a",
     'if [ -z "${GITEA_ADMIN_USER:-}" ] || [ -z "${GITEA_ADMIN_PASS:-}" ]; then echo "GITEA_ADMIN_USER and GITEA_ADMIN_PASS are required while the service token is still a bootstrap placeholder"; exit 1; fi',
     'cd "$APP_DIR"',
     'docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d gitea',
@@ -471,9 +473,12 @@ async function main(): Promise<void> {
   }
 
   if (command === "mint-token") {
-    const token = await ensureServiceUserAndRotateToken(resolveBootstrapConfig(), {
-      log: false,
-    });
+    const token = await ensureServiceUserAndRotateToken(
+      resolveBootstrapConfig(),
+      {
+        log: false,
+      },
+    );
     process.stdout.write(`${token}\n`);
     return;
   }

@@ -429,12 +429,15 @@ function enforceStateChangingOrigin(
 
   const sourceOrigin = requestSourceOrigin(req);
   if (!isAllowedOrigin(sourceOrigin)) {
-    logger.warn("CORS rejected: origin not allowed for state-changing request", {
-      method: req.method,
-      path: new URL(req.url).pathname,
-      origin: sourceOrigin,
-      clientIp: requestClientIp(req),
-    });
+    logger.warn(
+      "CORS rejected: origin not allowed for state-changing request",
+      {
+        method: req.method,
+        path: new URL(req.url).pathname,
+        origin: sourceOrigin,
+        clientIp: requestClientIp(req),
+      },
+    );
     return json(403, { error: "Cross-site request blocked." }, baseHeaders);
   }
 
@@ -1030,8 +1033,7 @@ function responseFromError(
     return json(status, { error: err.message || fallback }, baseHeaders);
   }
 
-  const message =
-    err instanceof Error && err.message ? err.message : fallback;
+  const message = err instanceof Error && err.message ? err.message : fallback;
   logger.error("Unhandled route exception", {
     message,
     errorType: err instanceof Error ? err.constructor.name : typeof err,
@@ -2514,7 +2516,12 @@ export function createApiServer() {
       const origin = requestOrigin(req);
       const clientIp = requestClientIp(req);
 
-      logger.info("Incoming request", { method, path: pathname, origin, clientIp });
+      logger.info("Incoming request", {
+        method,
+        path: pathname,
+        origin,
+        clientIp,
+      });
 
       const baseHeaders = corsHeaders(req);
       const transportError = enforceTransportSecurity(req, baseHeaders);
@@ -2669,7 +2676,12 @@ export function createApiServer() {
           durationMs,
         });
       } else {
-        logger.info("Response sent", { method, path: pathname, status, durationMs });
+        logger.info("Response sent", {
+          method,
+          path: pathname,
+          status,
+          durationMs,
+        });
       }
 
       return response;

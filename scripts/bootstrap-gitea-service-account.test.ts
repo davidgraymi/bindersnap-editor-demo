@@ -132,9 +132,9 @@ describe("bootstrap-gitea-service-account", () => {
     expect(commands.some((command) => command.includes("python3 -c"))).toBe(
       false,
     );
-    expect(
-      commands.some((command) => command.includes("render-env")),
-    ).toBe(true);
+    expect(commands.some((command) => command.includes("render-env"))).toBe(
+      true,
+    );
     expect(
       commands.some((command) =>
         command.includes("bun scripts/bootstrap-gitea-service-account.ts"),
@@ -143,9 +143,9 @@ describe("bootstrap-gitea-service-account", () => {
     expect(
       commands.some((command) => command.includes("docker exec --user")),
     ).toBe(true);
-    expect(
-      commands.some((command) => command.includes("mint-token")),
-    ).toBe(true);
+    expect(commands.some((command) => command.includes("mint-token"))).toBe(
+      true,
+    );
     expect(
       commands.some((command) => command.includes("aws ssm put-parameter")),
     ).toBe(true);
