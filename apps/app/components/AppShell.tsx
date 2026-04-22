@@ -53,7 +53,12 @@ export function AppShell({
       {/* ── TOP NAV ── */}
       <header className="app-topnav">
         {/* Logo / page title */}
-        <div className="app-topnav-logo">
+        <button
+          type="button"
+          className="app-topnav-logo"
+          onClick={() => onNavigate({ kind: "workspace" })}
+          aria-label="Go to Dashboard"
+        >
           <div className="app-topnav-logo-mark" aria-hidden="true">
             <svg width="14" height="14" viewBox="0 0 18 18" fill="none">
               <rect
@@ -81,7 +86,7 @@ export function AppShell({
           {isDocumentRoute
             ? `${route.owner} / ${route.repo}`
             : "Dashboard"}
-        </div>
+        </button>
 
         <>
           {/* Search */}
