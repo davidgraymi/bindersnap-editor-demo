@@ -52,7 +52,7 @@ export function AppShell({
     <div className="app-shell">
       {/* ── TOP NAV ── */}
       <header className="app-topnav">
-        {/* Logo */}
+        {/* Logo / page title */}
         <div className="app-topnav-logo">
           <div className="app-topnav-logo-mark" aria-hidden="true">
             <svg width="14" height="14" viewBox="0 0 18 18" fill="none">
@@ -78,32 +78,13 @@ export function AppShell({
               />
             </svg>
           </div>
-          Bindersnap
+          {isDocumentRoute
+            ? `${route.owner} / ${route.repo}`
+            : "Dashboard"}
         </div>
 
-        {isDocumentRoute ? (
-          /* Breadcrumb in document route */
-          <nav className="app-topbar-breadcrumb" aria-label="Breadcrumb">
-            <button
-              className="app-breadcrumb-back"
-              type="button"
-              onClick={() => onNavigate({ kind: "workspace" })}
-            >
-              Documents
-            </button>
-            <span className="app-breadcrumb-sep" aria-hidden="true">
-              ›
-            </span>
-            <span className="app-breadcrumb-current">
-              {route.repo
-                .split("-")
-                .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-                .join(" ")}
-            </span>
-          </nav>
-        ) : (
-          <>
-            {/* Search */}
+        <>
+          {/* Search */}
             <div className="app-nav-search" role="search">
               <svg
                 className="app-nav-search-icon"
@@ -211,7 +192,6 @@ export function AppShell({
               </button>
             </nav>
           </>
-        )}
 
         <div className="app-topnav-spacer" />
 
