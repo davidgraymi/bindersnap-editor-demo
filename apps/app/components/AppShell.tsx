@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { AppRoute } from "../routes";
 import { ActivityLogPage } from "./ActivityLogPage";
 import { DocumentDetail } from "./DocumentDetail";
@@ -47,6 +48,8 @@ export function AppShell({
 
   const displayName = user?.fullName ?? user?.username ?? "";
   const initials = displayName ? getInitials(displayName) : "?";
+
+  const [profileOpen, setProfileOpen] = useState(false);
 
   return (
     <div className="app-shell">
@@ -253,21 +256,43 @@ export function AppShell({
             </svg>
           </button>
 
-          {/* User profile: avatar + sign out */}
-          <div
-            className="app-topnav-avatar"
-            title={displayName || user?.username}
-            aria-label={`User: ${displayName || user?.username}`}
-          >
-            {initials}
+          {/* User profile: avatar with dropdown */}
+          <div className="app-topnav-profile">
+            <button
+              type="button"
+              className="app-topnav-avatar"
+              title={displayName || user?.username}
+              aria-label={`User: ${displayName || user?.username}`}
+              aria-expanded={profileOpen}
+              aria-haspopup="menu"
+              onClick={() => setProfileOpen((o) => !o)}
+            >
+              {initials}
+            </button>
+
+            {profileOpen && (
+              <>
+                <div
+                  className="app-profile-backdrop"
+                  onClick={() => setProfileOpen(false)}
+                  aria-hidden="true"
+                />
+                <div className="app-profile-menu" role="menu">
+                  <button
+                    type="button"
+                    className="app-profile-menu-item"
+                    role="menuitem"
+                    onClick={() => {
+                      setProfileOpen(false);
+                      void onSignOut();
+                    }}
+                  >
+                    Sign out
+                  </button>
+                </div>
+              </>
+            )}
           </div>
-          <button
-            className="bs-btn bs-btn-dark"
-            type="button"
-            onClick={() => void onSignOut()}
-          >
-            Sign out
-          </button>
         </div>
       </header>
 

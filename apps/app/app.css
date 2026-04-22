@@ -1578,6 +1578,11 @@ input {
   z-index: var(--brand-z-nav);
   width: 100%;
   box-sizing: border-box;
+  /* Clip any children that overflow so the avatar can never escape the
+     right edge. Without this, the positioned+z-index stacking context
+     on .app-topnav lets its overflow paint past .app-shell's own
+     overflow:hidden boundary. */
+  overflow: hidden;
 }
 
 /* Override old topbar constraints */
@@ -1593,12 +1598,11 @@ input {
 .app-topnav-logo {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--brand-space-2);
   font-family: var(--brand-font-sans);
   font-size: 15px;
   font-weight: var(--brand-weight-semibold);
   color: var(--bs-text-primary);
-  margin-right: var(--brand-space-3);
   white-space: nowrap;
   text-decoration: none;
   flex-shrink: 0;
@@ -1658,9 +1662,9 @@ input {
 }
 
 .app-nav-search {
-  flex: 0 0 260px;
+  flex: 0 1 260px;
+  min-width: 0;
   position: relative;
-  margin-right: var(--brand-space-1);
 }
 
 .app-nav-search-input {
@@ -1771,6 +1775,12 @@ input {
   display: flex;
   align-items: center;
   gap: var(--brand-space-2);
+  /* Allow this group to shrink when the viewport narrows so the avatar
+     is never pushed beyond the nav's own right edge. Without min-width:0
+     a flex item refuses to shrink below its content size, and with all
+     children being flex-shrink:0 the right side over-extends. */
+  min-width: 0;
+  flex-shrink: 1;
 }
 
 .app-topnav-new-btn {
@@ -1799,7 +1809,6 @@ input {
   width: 1px;
   height: 18px;
   background: var(--bs-rule);
-  margin: 0 var(--brand-space-1);
   flex-shrink: 0;
 }
 
@@ -1859,6 +1868,55 @@ input {
 
 .app-topnav-avatar:hover {
   border-color: var(--brand-coral);
+}
+
+/* ── PROFILE DROPDOWN ────────────────────────────────────────── */
+
+.app-topnav-profile {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.app-profile-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+}
+
+.app-profile-menu {
+  /* Fixed positioning so the menu escapes the overflow:hidden clip on
+     .app-topnav without needing JS anchor calculations. The nav is
+     always 52px tall, so top:52px places the menu flush below the bar,
+     and right matches the nav's own horizontal padding. */
+  position: fixed;
+  top: 52px;
+  right: var(--brand-space-4);
+  min-width: 140px;
+  background: var(--bs-surface-1);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  box-shadow: var(--brand-shadow-lg);
+  z-index: 100;
+  padding: var(--brand-space-1) 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-profile-menu-item {
+  width: 100%;
+  padding: var(--brand-space-2) var(--brand-space-3);
+  background: transparent;
+  border: none;
+  text-align: left;
+  font-size: 13px;
+  font-family: var(--brand-font-ui);
+  color: var(--bs-text-primary);
+  cursor: pointer;
+  transition: background var(--brand-transition-base);
+}
+
+.app-profile-menu-item:hover {
+  background: var(--bs-surface-2);
 }
 
 /* ── NEW BODY WRAP — sidebar + main ─────────────────────────── */
@@ -2611,8 +2669,29 @@ input {
     grid-template-columns: repeat(2, 1fr);
   }
 
+  /* Collapse text nav links — only icon buttons + search remain */
+  .app-topnav-right .app-topnav-link {
+    display: none;
+  }
+
+  /* New Document: icon-only square */
+  .app-topnav-new-btn {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    justify-content: center;
+    font-size: 0;
+    gap: 0;
+  }
+
+  .app-topnav-new-btn svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+  }
+
   .app-nav-search {
-    flex: 0 0 180px;
+    flex: 0 1 180px;
   }
 }
 
@@ -2623,6 +2702,10 @@ input {
 
   .dash-inner {
     padding: var(--brand-space-5);
+  }
+
+  .app-nav-search {
+    flex: 0 1 140px;
   }
 }
 
@@ -2636,7 +2719,7 @@ input {
   }
 
   .app-nav-search {
-    flex: 1 1 auto;
+    display: none;
   }
 
   .dash-page-header {
