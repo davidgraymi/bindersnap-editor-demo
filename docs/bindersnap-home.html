@@ -1,1197 +1,2125 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en" data-theme="light">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Bindersnap — Home</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;1,500&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <style>
-    /* ── TOKENS ─────────────────────────────────────────── */
-    :root {
-      --bg:          #F5F0E8;
-      --bg-2:        #EDE7DA;
-      --bg-3:        #E4DCCC;
-      --surface:     #FFFFFF;
-      --surface-2:   #FAF8F4;
-      --border:      rgba(0,0,0,0.08);
-      --border-med:  rgba(0,0,0,0.13);
-      --text:        #1A1714;
-      --text-2:      #4A4440;
-      --text-3:      #857E78;
-      --accent:      #E85D26;
-      --accent-dim:  rgba(232,93,38,0.10);
-      --accent-dark: #C44C1B;
-      --green:       #1A7F4E;
-      --green-bg:    rgba(26,127,78,0.08);
-      --amber:       #B45309;
-      --amber-bg:    rgba(180,83,9,0.08);
-      --blue:        #1D4ED8;
-      --blue-bg:     rgba(29,78,216,0.08);
-      --nav-h:       52px;
-      --sidebar-w:   220px;
-      --radius:      6px;
-      --shadow:      0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.05);
-      --shadow-md:   0 4px 12px rgba(0,0,0,0.08);
-    }
-    [data-theme="dark"] {
-      --bg:          #111009;
-      --bg-2:        #1A1814;
-      --bg-3:        #221F1A;
-      --surface:     #1E1C17;
-      --surface-2:   #242118;
-      --border:      rgba(255,255,255,0.07);
-      --border-med:  rgba(255,255,255,0.12);
-      --text:        #F0EAE0;
-      --text-2:      #B5ADA3;
-      --text-3:      #6E6760;
-      --accent:      #F06A30;
-      --accent-dim:  rgba(240,106,48,0.12);
-      --accent-dark: #D95A22;
-      --green:       #34D27A;
-      --green-bg:    rgba(52,210,122,0.10);
-      --amber:       #F59E0B;
-      --amber-bg:    rgba(245,158,11,0.10);
-      --blue:        #60A5FA;
-      --blue-bg:     rgba(96,165,250,0.10);
-      --shadow:      0 1px 3px rgba(0,0,0,0.3);
-      --shadow-md:   0 4px 16px rgba(0,0,0,0.4);
-    }
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bindersnap — Home</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;1,500&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* ── TOKENS ─────────────────────────────────────────── */
+      :root {
+        --bg: #f5f0e8;
+        --bg-2: #ede7da;
+        --bg-3: #e4dccc;
+        --surface: #ffffff;
+        --surface-2: #faf8f4;
+        --border: rgba(0, 0, 0, 0.08);
+        --border-med: rgba(0, 0, 0, 0.13);
+        --text: #1a1714;
+        --text-2: #4a4440;
+        --text-3: #857e78;
+        --accent: #e85d26;
+        --accent-dim: rgba(232, 93, 38, 0.1);
+        --accent-dark: #c44c1b;
+        --green: #1a7f4e;
+        --green-bg: rgba(26, 127, 78, 0.08);
+        --amber: #b45309;
+        --amber-bg: rgba(180, 83, 9, 0.08);
+        --blue: #1d4ed8;
+        --blue-bg: rgba(29, 78, 216, 0.08);
+        --nav-h: 52px;
+        --sidebar-w: 220px;
+        --radius: 6px;
+        --shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.05);
+        --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+      }
+      [data-theme="dark"] {
+        --bg: #111009;
+        --bg-2: #1a1814;
+        --bg-3: #221f1a;
+        --surface: #1e1c17;
+        --surface-2: #242118;
+        --border: rgba(255, 255, 255, 0.07);
+        --border-med: rgba(255, 255, 255, 0.12);
+        --text: #f0eae0;
+        --text-2: #b5ada3;
+        --text-3: #6e6760;
+        --accent: #f06a30;
+        --accent-dim: rgba(240, 106, 48, 0.12);
+        --accent-dark: #d95a22;
+        --green: #34d27a;
+        --green-bg: rgba(52, 210, 122, 0.1);
+        --amber: #f59e0b;
+        --amber-bg: rgba(245, 158, 11, 0.1);
+        --blue: #60a5fa;
+        --blue-bg: rgba(96, 165, 250, 0.1);
+        --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+        --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+      }
 
-    /* ── RESET ──────────────────────────────────────────── */
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; }
-    body {
-      font-family: 'Geist', sans-serif;
-      font-size: 14px;
-      line-height: 1.5;
-      color: var(--text);
-      background: var(--bg);
-      -webkit-font-smoothing: antialiased;
-    }
-    a { color: inherit; text-decoration: none; }
-    button { cursor: pointer; font-family: inherit; border: none; background: none; }
-    input { font-family: inherit; }
-    svg { display: block; flex-shrink: 0; }
+      /* ── RESET ──────────────────────────────────────────── */
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        font-family: "Geist", sans-serif;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--text);
+        background: var(--bg);
+        -webkit-font-smoothing: antialiased;
+      }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+      button {
+        cursor: pointer;
+        font-family: inherit;
+        border: none;
+        background: none;
+      }
+      input {
+        font-family: inherit;
+      }
+      svg {
+        display: block;
+        flex-shrink: 0;
+      }
 
-    /* ── LAYOUT ──────────────────────────────────────────── */
-    .app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+      /* ── LAYOUT ──────────────────────────────────────────── */
+      .app {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        overflow: hidden;
+      }
 
-    /* ── TOP NAV ─────────────────────────────────────────── */
-    .top-nav {
-      height: var(--nav-h);
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      padding: 0 16px;
-      gap: 0;
-      flex-shrink: 0;
-      position: relative;
-      z-index: 100;
-    }
+      /* ── TOP NAV ─────────────────────────────────────────── */
+      .top-nav {
+        height: var(--nav-h);
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+        gap: 0;
+        flex-shrink: 0;
+        position: relative;
+        z-index: 100;
+      }
 
-    /* Logo */
-    .nav-logo {
-      display: flex; align-items: center; gap: 7px;
-      font-family: 'Geist', sans-serif;
-      font-size: 15px; font-weight: 600;
-      color: var(--text);
-      margin-right: 12px;
-      white-space: nowrap;
-    }
-    .nav-logo-mark {
-      width: 24px; height: 24px;
-      background: var(--accent);
-      border-radius: 5px;
-      display: flex; align-items: center; justify-content: center;
-    }
+      /* Logo */
+      .nav-logo {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-family: "Geist", sans-serif;
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--text);
+        margin-right: 12px;
+        white-space: nowrap;
+      }
+      .nav-logo-mark {
+        width: 24px;
+        height: 24px;
+        background: var(--accent);
+        border-radius: 5px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
 
-    /* Search */
-    .nav-search {
-      flex: 0 0 260px;
-      position: relative;
-      margin-right: 4px;
-    }
-    .nav-search input {
-      width: 100%;
-      height: 30px;
-      background: var(--bg-2);
-      border: 1px solid var(--border-med);
-      border-radius: var(--radius);
-      padding: 0 10px 0 32px;
-      font-size: 13px;
-      color: var(--text);
-      outline: none;
-      transition: border-color 0.15s, background 0.15s;
-    }
-    .nav-search input::placeholder { color: var(--text-3); }
-    .nav-search input:focus {
-      border-color: var(--accent);
-      background: var(--surface);
-    }
-    .nav-search-icon {
-      position: absolute; left: 9px; top: 50%;
-      transform: translateY(-50%);
-      color: var(--text-3);
-    }
-    .nav-search-kbd {
-      position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
-      font-family: 'Geist Mono', monospace;
-      font-size: 10px; color: var(--text-3);
-      background: var(--bg-3); border: 1px solid var(--border-med);
-      border-radius: 3px; padding: 1px 4px;
-      pointer-events: none;
-    }
+      /* Search */
+      .nav-search {
+        flex: 0 0 260px;
+        position: relative;
+        margin-right: 4px;
+      }
+      .nav-search input {
+        width: 100%;
+        height: 30px;
+        background: var(--bg-2);
+        border: 1px solid var(--border-med);
+        border-radius: var(--radius);
+        padding: 0 10px 0 32px;
+        font-size: 13px;
+        color: var(--text);
+        outline: none;
+        transition:
+          border-color 0.15s,
+          background 0.15s;
+      }
+      .nav-search input::placeholder {
+        color: var(--text-3);
+      }
+      .nav-search input:focus {
+        border-color: var(--accent);
+        background: var(--surface);
+      }
+      .nav-search-icon {
+        position: absolute;
+        left: 9px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--text-3);
+      }
+      .nav-search-kbd {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-family: "Geist Mono", monospace;
+        font-size: 10px;
+        color: var(--text-3);
+        background: var(--bg-3);
+        border: 1px solid var(--border-med);
+        border-radius: 3px;
+        padding: 1px 4px;
+        pointer-events: none;
+      }
 
-    /* Nav links */
-    .nav-links {
-      display: flex; align-items: center; gap: 2px;
-      margin-left: 4px;
-    }
-    .nav-link {
-      display: flex; align-items: center; gap: 6px;
-      padding: 0 10px; height: 30px;
-      font-size: 13px; font-weight: 500;
-      color: var(--text-2);
-      border-radius: var(--radius);
-      transition: color 0.12s, background 0.12s;
-      white-space: nowrap;
-    }
-    .nav-link:hover { color: var(--text); background: var(--bg-2); }
-    .nav-link.active { color: var(--text); background: var(--bg-2); }
-    .nav-link svg { opacity: 0.6; }
-    .nav-link:hover svg, .nav-link.active svg { opacity: 1; }
+      /* Nav links */
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        margin-left: 4px;
+      }
+      .nav-link {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 10px;
+        height: 30px;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-2);
+        border-radius: var(--radius);
+        transition:
+          color 0.12s,
+          background 0.12s;
+        white-space: nowrap;
+      }
+      .nav-link:hover {
+        color: var(--text);
+        background: var(--bg-2);
+      }
+      .nav-link.active {
+        color: var(--text);
+        background: var(--bg-2);
+      }
+      .nav-link svg {
+        opacity: 0.6;
+      }
+      .nav-link:hover svg,
+      .nav-link.active svg {
+        opacity: 1;
+      }
 
-    /* Nav badge */
-    .nav-badge {
-      display: inline-flex; align-items: center; justify-content: center;
-      min-width: 18px; height: 18px; padding: 0 5px;
-      background: var(--bg-3); border-radius: 99px;
-      font-size: 11px; font-weight: 600; color: var(--text-2);
-      margin-left: 4px;
-    }
+      /* Nav badge */
+      .nav-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 5px;
+        background: var(--bg-3);
+        border-radius: 99px;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-2);
+        margin-left: 4px;
+      }
 
-    /* Spacer */
-    .nav-spacer { flex: 1; }
+      /* Spacer */
+      .nav-spacer {
+        flex: 1;
+      }
 
-    /* Nav right */
-    .nav-right { display: flex; align-items: center; gap: 8px; }
-    .nav-new-btn {
-      display: flex; align-items: center; gap: 5px;
-      height: 30px; padding: 0 12px;
-      background: var(--accent);
-      color: #fff; font-size: 13px; font-weight: 500;
-      border-radius: var(--radius);
-      transition: background 0.12s;
-      white-space: nowrap;
-    }
-    .nav-new-btn:hover { background: var(--accent-dark); }
+      /* Nav right */
+      .nav-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .nav-new-btn {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        height: 30px;
+        padding: 0 12px;
+        background: var(--accent);
+        color: #fff;
+        font-size: 13px;
+        font-weight: 500;
+        border-radius: var(--radius);
+        transition: background 0.12s;
+        white-space: nowrap;
+      }
+      .nav-new-btn:hover {
+        background: var(--accent-dark);
+      }
 
-    .nav-icon-btn {
-      width: 30px; height: 30px;
-      display: flex; align-items: center; justify-content: center;
-      border-radius: var(--radius); color: var(--text-2);
-      transition: color 0.12s, background 0.12s;
-    }
-    .nav-icon-btn:hover { color: var(--text); background: var(--bg-2); }
+      .nav-icon-btn {
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius);
+        color: var(--text-2);
+        transition:
+          color 0.12s,
+          background 0.12s;
+      }
+      .nav-icon-btn:hover {
+        color: var(--text);
+        background: var(--bg-2);
+      }
 
-    .nav-avatar {
-      width: 28px; height: 28px; border-radius: 50%;
-      background: var(--accent-dim);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 11px; font-weight: 600; color: var(--accent);
-      cursor: pointer;
-      border: 1.5px solid transparent;
-      transition: border-color 0.12s;
-    }
-    .nav-avatar:hover { border-color: var(--accent); }
+      .nav-avatar {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: var(--accent-dim);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--accent);
+        cursor: pointer;
+        border: 1.5px solid transparent;
+        transition: border-color 0.12s;
+      }
+      .nav-avatar:hover {
+        border-color: var(--accent);
+      }
 
-    /* ── BODY SPLIT ──────────────────────────────────────── */
-    .body-wrap {
-      display: flex;
-      flex: 1;
-      overflow: hidden;
-    }
+      /* ── BODY SPLIT ──────────────────────────────────────── */
+      .body-wrap {
+        display: flex;
+        flex: 1;
+        overflow: hidden;
+      }
 
-    /* ── SIDEBAR ─────────────────────────────────────────── */
-    .sidebar {
-      width: var(--sidebar-w);
-      flex-shrink: 0;
-      background: var(--surface);
-      border-right: 1px solid var(--border);
-      display: flex; flex-direction: column;
-      overflow-y: auto;
-      overflow-x: hidden;
-    }
-    .sidebar::-webkit-scrollbar { width: 0; }
+      /* ── SIDEBAR ─────────────────────────────────────────── */
+      .sidebar {
+        width: var(--sidebar-w);
+        flex-shrink: 0;
+        background: var(--surface);
+        border-right: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+        overflow-x: hidden;
+      }
+      .sidebar::-webkit-scrollbar {
+        width: 0;
+      }
 
-    .sidebar-section { padding: 12px 8px 4px; }
-    .sidebar-section + .sidebar-section { border-top: 1px solid var(--border); padding-top: 12px; }
+      .sidebar-section {
+        padding: 12px 8px 4px;
+      }
+      .sidebar-section + .sidebar-section {
+        border-top: 1px solid var(--border);
+        padding-top: 12px;
+      }
 
-    .sidebar-label {
-      font-size: 11px; font-weight: 600;
-      text-transform: uppercase; letter-spacing: 0.06em;
-      color: var(--text-3);
-      padding: 0 8px; margin-bottom: 4px;
-    }
+      .sidebar-label {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-3);
+        padding: 0 8px;
+        margin-bottom: 4px;
+      }
 
-    .sidebar-item {
-      display: flex; align-items: center; gap: 8px;
-      padding: 0 8px; height: 32px; border-radius: var(--radius);
-      font-size: 13px; color: var(--text-2);
-      transition: color 0.12s, background 0.12s;
-      cursor: pointer;
-    }
-    .sidebar-item:hover { color: var(--text); background: var(--bg-2); }
-    .sidebar-item.active {
-      color: var(--text); background: var(--bg-2);
-      font-weight: 500;
-    }
-    .sidebar-item svg { opacity: 0.55; flex-shrink: 0; }
-    .sidebar-item:hover svg, .sidebar-item.active svg { opacity: 1; }
+      .sidebar-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 8px;
+        height: 32px;
+        border-radius: var(--radius);
+        font-size: 13px;
+        color: var(--text-2);
+        transition:
+          color 0.12s,
+          background 0.12s;
+        cursor: pointer;
+      }
+      .sidebar-item:hover {
+        color: var(--text);
+        background: var(--bg-2);
+      }
+      .sidebar-item.active {
+        color: var(--text);
+        background: var(--bg-2);
+        font-weight: 500;
+      }
+      .sidebar-item svg {
+        opacity: 0.55;
+        flex-shrink: 0;
+      }
+      .sidebar-item:hover svg,
+      .sidebar-item.active svg {
+        opacity: 1;
+      }
 
-    .sidebar-item-count {
-      margin-left: auto;
-      font-size: 11px; color: var(--text-3);
-      font-family: 'Geist Mono', monospace;
-    }
+      .sidebar-item-count {
+        margin-left: auto;
+        font-size: 11px;
+        color: var(--text-3);
+        font-family: "Geist Mono", monospace;
+      }
 
-    .sidebar-spacer { flex: 1; }
+      .sidebar-spacer {
+        flex: 1;
+      }
 
-    .sidebar-user {
-      padding: 12px 16px;
-      border-top: 1px solid var(--border);
-      display: flex; align-items: center; gap: 10px;
-      font-size: 13px;
-    }
-    .sidebar-user-avatar {
-      width: 28px; height: 28px; border-radius: 50%;
-      background: var(--accent-dim);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 11px; font-weight: 600; color: var(--accent);
-      flex-shrink: 0;
-    }
-    .sidebar-user-name { font-weight: 500; color: var(--text); line-height: 1.2; }
-    .sidebar-user-role { font-size: 11px; color: var(--text-3); }
+      .sidebar-user {
+        padding: 12px 16px;
+        border-top: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 13px;
+      }
+      .sidebar-user-avatar {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: var(--accent-dim);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--accent);
+        flex-shrink: 0;
+      }
+      .sidebar-user-name {
+        font-weight: 500;
+        color: var(--text);
+        line-height: 1.2;
+      }
+      .sidebar-user-role {
+        font-size: 11px;
+        color: var(--text-3);
+      }
 
-    /* ── MAIN CONTENT ────────────────────────────────────── */
-    .main {
-      flex: 1;
-      overflow-y: auto;
-      overflow-x: hidden;
-      background: var(--bg);
-    }
-    .main::-webkit-scrollbar { width: 6px; }
-    .main::-webkit-scrollbar-track { background: transparent; }
-    .main::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 3px; }
+      /* ── MAIN CONTENT ────────────────────────────────────── */
+      .main {
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+        background: var(--bg);
+      }
+      .main::-webkit-scrollbar {
+        width: 6px;
+      }
+      .main::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .main::-webkit-scrollbar-thumb {
+        background: var(--bg-3);
+        border-radius: 3px;
+      }
 
-    .main-inner {
-      max-width: 1040px;
-      margin: 0 auto;
-      padding: 28px 28px 48px;
-    }
+      .main-inner {
+        max-width: 1040px;
+        margin: 0 auto;
+        padding: 28px 28px 48px;
+      }
 
-    /* ── PAGE HEADER ─────────────────────────────────────── */
-    .page-header {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 24px;
-    }
-    .page-header-left h1 {
-      font-family: 'Lora', serif;
-      font-size: 20px; font-weight: 600;
-      color: var(--text); line-height: 1.2;
-    }
-    .page-header-left p {
-      font-size: 13px; color: var(--text-3); margin-top: 2px;
-    }
-    .page-header-right { display: flex; gap: 8px; }
-    .btn {
-      display: inline-flex; align-items: center; gap: 6px;
-      height: 32px; padding: 0 12px;
-      border-radius: var(--radius);
-      font-size: 13px; font-weight: 500;
-      transition: background 0.12s, color 0.12s, border-color 0.12s;
-      cursor: pointer;
-    }
-    .btn-primary {
-      background: var(--accent); color: #fff; border: 1px solid transparent;
-    }
-    .btn-primary:hover { background: var(--accent-dark); }
-    .btn-secondary {
-      background: var(--surface); color: var(--text-2);
-      border: 1px solid var(--border-med);
-    }
-    .btn-secondary:hover { color: var(--text); background: var(--bg-2); border-color: var(--border-med); }
+      /* ── PAGE HEADER ─────────────────────────────────────── */
+      .page-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 24px;
+      }
+      .page-header-left h1 {
+        font-family: "Lora", serif;
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--text);
+        line-height: 1.2;
+      }
+      .page-header-left p {
+        font-size: 13px;
+        color: var(--text-3);
+        margin-top: 2px;
+      }
+      .page-header-right {
+        display: flex;
+        gap: 8px;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 32px;
+        padding: 0 12px;
+        border-radius: var(--radius);
+        font-size: 13px;
+        font-weight: 500;
+        transition:
+          background 0.12s,
+          color 0.12s,
+          border-color 0.12s;
+        cursor: pointer;
+      }
+      .btn-primary {
+        background: var(--accent);
+        color: #fff;
+        border: 1px solid transparent;
+      }
+      .btn-primary:hover {
+        background: var(--accent-dark);
+      }
+      .btn-secondary {
+        background: var(--surface);
+        color: var(--text-2);
+        border: 1px solid var(--border-med);
+      }
+      .btn-secondary:hover {
+        color: var(--text);
+        background: var(--bg-2);
+        border-color: var(--border-med);
+      }
 
-    /* ── SUMMARY STATS ───────────────────────────────────── */
-    .stats-row {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
-      margin-bottom: 28px;
-    }
-    .stat-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 16px 18px;
-      display: flex; flex-direction: column; gap: 6px;
-    }
-    .stat-label {
-      font-size: 12px; font-weight: 500;
-      color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em;
-    }
-    .stat-value {
-      font-family: 'Lora', serif;
-      font-size: 26px; font-weight: 600;
-      color: var(--text); line-height: 1;
-    }
-    .stat-sub {
-      font-size: 12px; color: var(--text-3);
-      display: flex; align-items: center; gap: 4px;
-    }
-    .stat-sub.positive { color: var(--green); }
-    .stat-sub.warning { color: var(--amber); }
+      /* ── SUMMARY STATS ───────────────────────────────────── */
+      .stats-row {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        margin-bottom: 28px;
+      }
+      .stat-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 16px 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .stat-label {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--text-3);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .stat-value {
+        font-family: "Lora", serif;
+        font-size: 26px;
+        font-weight: 600;
+        color: var(--text);
+        line-height: 1;
+      }
+      .stat-sub {
+        font-size: 12px;
+        color: var(--text-3);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .stat-sub.positive {
+        color: var(--green);
+      }
+      .stat-sub.warning {
+        color: var(--amber);
+      }
 
-    /* ── TWO-COL ─────────────────────────────────────────── */
-    .two-col {
-      display: grid;
-      grid-template-columns: 1fr 360px;
-      gap: 20px;
-      align-items: start;
-    }
+      /* ── TWO-COL ─────────────────────────────────────────── */
+      .two-col {
+        display: grid;
+        grid-template-columns: 1fr 360px;
+        gap: 20px;
+        align-items: start;
+      }
 
-    /* ── SECTION BLOCK ───────────────────────────────────── */
-    .section-block {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      overflow: hidden;
-      margin-bottom: 20px;
-    }
-    .section-block:last-child { margin-bottom: 0; }
+      /* ── SECTION BLOCK ───────────────────────────────────── */
+      .section-block {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        overflow: hidden;
+        margin-bottom: 20px;
+      }
+      .section-block:last-child {
+        margin-bottom: 0;
+      }
 
-    .section-head {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--border);
-    }
-    .section-head-left {
-      display: flex; align-items: center; gap: 8px;
-    }
-    .section-title {
-      font-size: 13px; font-weight: 600;
-      color: var(--text);
-    }
-    .section-count {
-      font-size: 11px; color: var(--text-3);
-      font-family: 'Geist Mono', monospace;
-    }
-    .section-link {
-      font-size: 12px; color: var(--text-3);
-      transition: color 0.12s;
-      display: flex; align-items: center; gap: 3px;
-    }
-    .section-link:hover { color: var(--accent); }
+      .section-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border);
+      }
+      .section-head-left {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .section-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text);
+      }
+      .section-count {
+        font-size: 11px;
+        color: var(--text-3);
+        font-family: "Geist Mono", monospace;
+      }
+      .section-link {
+        font-size: 12px;
+        color: var(--text-3);
+        transition: color 0.12s;
+        display: flex;
+        align-items: center;
+        gap: 3px;
+      }
+      .section-link:hover {
+        color: var(--accent);
+      }
 
-    /* ── DOC LIST ────────────────────────────────────────── */
-    .doc-item {
-      display: flex; align-items: center;
-      padding: 10px 16px;
-      border-bottom: 1px solid var(--border);
-      gap: 12px;
-      transition: background 0.1s;
-      cursor: pointer;
-    }
-    .doc-item:last-child { border-bottom: none; }
-    .doc-item:hover { background: var(--surface-2); }
+      /* ── DOC LIST ────────────────────────────────────────── */
+      .doc-item {
+        display: flex;
+        align-items: center;
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--border);
+        gap: 12px;
+        transition: background 0.1s;
+        cursor: pointer;
+      }
+      .doc-item:last-child {
+        border-bottom: none;
+      }
+      .doc-item:hover {
+        background: var(--surface-2);
+      }
 
-    .doc-icon {
-      width: 32px; height: 32px; border-radius: 5px;
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-    }
-    .doc-icon.word { background: rgba(37,99,235,0.08); color: #2563EB; }
-    .doc-icon.native { background: var(--accent-dim); color: var(--accent); }
+      .doc-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 5px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+      .doc-icon.word {
+        background: rgba(37, 99, 235, 0.08);
+        color: #2563eb;
+      }
+      .doc-icon.native {
+        background: var(--accent-dim);
+        color: var(--accent);
+      }
 
-    .doc-info { flex: 1; min-width: 0; }
-    .doc-name {
-      font-size: 13px; font-weight: 500;
-      color: var(--text);
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .doc-meta {
-      font-size: 12px; color: var(--text-3);
-      display: flex; align-items: center; gap: 8px; margin-top: 1px;
-    }
-    .doc-meta-dot {
-      width: 3px; height: 3px; border-radius: 50%;
-      background: var(--border-med); flex-shrink: 0;
-    }
+      .doc-info {
+        flex: 1;
+        min-width: 0;
+      }
+      .doc-name {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .doc-meta {
+        font-size: 12px;
+        color: var(--text-3);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 1px;
+      }
+      .doc-meta-dot {
+        width: 3px;
+        height: 3px;
+        border-radius: 50%;
+        background: var(--border-med);
+        flex-shrink: 0;
+      }
 
-    .doc-badge {
-      flex-shrink: 0;
-      display: inline-flex; align-items: center; gap: 4px;
-      height: 20px; padding: 0 7px;
-      border-radius: 99px;
-      font-size: 11px; font-weight: 500;
-    }
-    .badge-review   { background: var(--amber-bg); color: var(--amber); }
-    .badge-approved { background: var(--green-bg);  color: var(--green); }
-    .badge-draft    { background: var(--bg-3); color: var(--text-3); }
-    .badge-changes  { background: var(--blue-bg); color: var(--blue); }
+      .doc-badge {
+        flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        height: 20px;
+        padding: 0 7px;
+        border-radius: 99px;
+        font-size: 11px;
+        font-weight: 500;
+      }
+      .badge-review {
+        background: var(--amber-bg);
+        color: var(--amber);
+      }
+      .badge-approved {
+        background: var(--green-bg);
+        color: var(--green);
+      }
+      .badge-draft {
+        background: var(--bg-3);
+        color: var(--text-3);
+      }
+      .badge-changes {
+        background: var(--blue-bg);
+        color: var(--blue);
+      }
 
-    .doc-badge-dot {
-      width: 5px; height: 5px; border-radius: 50%;
-      background: currentColor;
-    }
+      .doc-badge-dot {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: currentColor;
+      }
 
-    /* ── CHANGE REQUEST LIST ─────────────────────────────── */
-    .cr-item {
-      display: flex; align-items: flex-start;
-      padding: 10px 16px;
-      border-bottom: 1px solid var(--border);
-      gap: 10px;
-      cursor: pointer;
-      transition: background 0.1s;
-    }
-    .cr-item:last-child { border-bottom: none; }
-    .cr-item:hover { background: var(--surface-2); }
+      /* ── CHANGE REQUEST LIST ─────────────────────────────── */
+      .cr-item {
+        display: flex;
+        align-items: flex-start;
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--border);
+        gap: 10px;
+        cursor: pointer;
+        transition: background 0.1s;
+      }
+      .cr-item:last-child {
+        border-bottom: none;
+      }
+      .cr-item:hover {
+        background: var(--surface-2);
+      }
 
-    .cr-icon {
-      width: 20px; height: 20px; margin-top: 1px;
-      flex-shrink: 0;
-    }
-    .cr-icon.open { color: var(--green); }
-    .cr-icon.merged { color: var(--blue); }
-    .cr-icon.closed { color: var(--text-3); }
+      .cr-icon {
+        width: 20px;
+        height: 20px;
+        margin-top: 1px;
+        flex-shrink: 0;
+      }
+      .cr-icon.open {
+        color: var(--green);
+      }
+      .cr-icon.merged {
+        color: var(--blue);
+      }
+      .cr-icon.closed {
+        color: var(--text-3);
+      }
 
-    .cr-info { flex: 1; min-width: 0; }
-    .cr-title {
-      font-size: 13px; font-weight: 500; color: var(--text);
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .cr-meta {
-      font-size: 12px; color: var(--text-3);
-      margin-top: 2px;
-    }
-    .cr-reviewer {
-      margin-left: auto; flex-shrink: 0;
-      display: flex; align-items: center;
-    }
-    .cr-avatar {
-      width: 20px; height: 20px; border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 9px; font-weight: 600;
-      border: 1.5px solid var(--surface);
-      margin-left: -6px;
-    }
-    .cr-avatar:first-child { margin-left: 0; }
+      .cr-info {
+        flex: 1;
+        min-width: 0;
+      }
+      .cr-title {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .cr-meta {
+        font-size: 12px;
+        color: var(--text-3);
+        margin-top: 2px;
+      }
+      .cr-reviewer {
+        margin-left: auto;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+      }
+      .cr-avatar {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 9px;
+        font-weight: 600;
+        border: 1.5px solid var(--surface);
+        margin-left: -6px;
+      }
+      .cr-avatar:first-child {
+        margin-left: 0;
+      }
 
-    /* ── ACTIVITY FEED ───────────────────────────────────── */
-    .activity-item {
-      display: flex; align-items: flex-start; gap: 10px;
-      padding: 10px 16px;
-      border-bottom: 1px solid var(--border);
-    }
-    .activity-item:last-child { border-bottom: none; }
+      /* ── ACTIVITY FEED ───────────────────────────────────── */
+      .activity-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--border);
+      }
+      .activity-item:last-child {
+        border-bottom: none;
+      }
 
-    .activity-avatar {
-      width: 26px; height: 26px; border-radius: 50%;
-      flex-shrink: 0; margin-top: 1px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 10px; font-weight: 600;
-    }
+      .activity-avatar {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        margin-top: 1px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: 600;
+      }
 
-    .activity-body { flex: 1; min-width: 0; }
-    .activity-text { font-size: 13px; color: var(--text-2); line-height: 1.4; }
-    .activity-text strong { color: var(--text); font-weight: 500; }
-    .activity-text a { color: var(--accent); }
-    .activity-time { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+      .activity-body {
+        flex: 1;
+        min-width: 0;
+      }
+      .activity-text {
+        font-size: 13px;
+        color: var(--text-2);
+        line-height: 1.4;
+      }
+      .activity-text strong {
+        color: var(--text);
+        font-weight: 500;
+      }
+      .activity-text a {
+        color: var(--accent);
+      }
+      .activity-time {
+        font-size: 11px;
+        color: var(--text-3);
+        margin-top: 2px;
+      }
 
-    /* ── QUICK ACTIONS ───────────────────────────────────── */
-    .quick-actions {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
-      padding: 12px 12px;
-    }
-    .qa-btn {
-      display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
-      padding: 12px;
-      background: var(--surface-2);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      cursor: pointer;
-      transition: background 0.12s, border-color 0.12s;
-      text-align: left;
-    }
-    .qa-btn:hover { background: var(--bg-2); border-color: var(--border-med); }
-    .qa-btn-icon { color: var(--text-3); margin-bottom: 2px; }
-    .qa-btn-label { font-size: 12px; font-weight: 500; color: var(--text); }
-    .qa-btn-sub { font-size: 11px; color: var(--text-3); }
+      /* ── QUICK ACTIONS ───────────────────────────────────── */
+      .quick-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        padding: 12px 12px;
+      }
+      .qa-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+        padding: 12px;
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        cursor: pointer;
+        transition:
+          background 0.12s,
+          border-color 0.12s;
+        text-align: left;
+      }
+      .qa-btn:hover {
+        background: var(--bg-2);
+        border-color: var(--border-med);
+      }
+      .qa-btn-icon {
+        color: var(--text-3);
+        margin-bottom: 2px;
+      }
+      .qa-btn-label {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--text);
+      }
+      .qa-btn-sub {
+        font-size: 11px;
+        color: var(--text-3);
+      }
 
-    /* ── THEME TOGGLE ────────────────────────────────────── */
-    .theme-toggle {
-      width: 30px; height: 30px;
-      display: flex; align-items: center; justify-content: center;
-      border-radius: var(--radius); color: var(--text-2);
-      transition: color 0.12s, background 0.12s;
-    }
-    .theme-toggle:hover { color: var(--text); background: var(--bg-2); }
-    [data-theme="light"] .icon-sun  { display: none; }
-    [data-theme="dark"]  .icon-moon { display: none; }
+      /* ── THEME TOGGLE ────────────────────────────────────── */
+      .theme-toggle {
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius);
+        color: var(--text-2);
+        transition:
+          color 0.12s,
+          background 0.12s;
+      }
+      .theme-toggle:hover {
+        color: var(--text);
+        background: var(--bg-2);
+      }
+      [data-theme="light"] .icon-sun {
+        display: none;
+      }
+      [data-theme="dark"] .icon-moon {
+        display: none;
+      }
 
-    /* ── WORKSPACE BADGE ─────────────────────────────────── */
-    .workspace-pill {
-      display: flex; align-items: center; gap: 6px;
-      padding: 0 10px; height: 30px;
-      background: var(--bg-2);
-      border: 1px solid var(--border-med);
-      border-radius: var(--radius);
-      font-size: 13px; font-weight: 500; color: var(--text-2);
-      cursor: pointer;
-      transition: background 0.12s, color 0.12s;
-    }
-    .workspace-pill:hover { background: var(--bg-3); color: var(--text); }
-    .workspace-dot {
-      width: 6px; height: 6px; border-radius: 50%;
-      background: var(--green);
-    }
+      /* ── WORKSPACE BADGE ─────────────────────────────────── */
+      .workspace-pill {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 10px;
+        height: 30px;
+        background: var(--bg-2);
+        border: 1px solid var(--border-med);
+        border-radius: var(--radius);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-2);
+        cursor: pointer;
+        transition:
+          background 0.12s,
+          color 0.12s;
+      }
+      .workspace-pill:hover {
+        background: var(--bg-3);
+        color: var(--text);
+      }
+      .workspace-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--green);
+      }
 
-    /* ── DIVIDER ─────────────────────────────────────────── */
-    .divider-v {
-      width: 1px; height: 18px;
-      background: var(--border-med);
-      margin: 0 4px;
-    }
+      /* ── DIVIDER ─────────────────────────────────────────── */
+      .divider-v {
+        width: 1px;
+        height: 18px;
+        background: var(--border-med);
+        margin: 0 4px;
+      }
 
-    /* ── EMPTY STATE ─────────────────────────────────────── */
-    .empty {
-      padding: 24px 16px;
-      text-align: center;
-      color: var(--text-3);
-      font-size: 13px;
-    }
+      /* ── EMPTY STATE ─────────────────────────────────────── */
+      .empty {
+        padding: 24px 16px;
+        text-align: center;
+        color: var(--text-3);
+        font-size: 13px;
+      }
 
-    /* ── SCROLL SHADOW on nav ────────────────────────────── */
-    .main { scroll-behavior: smooth; }
-  </style>
-</head>
-<body>
-<div class="app">
+      /* ── SCROLL SHADOW on nav ────────────────────────────── */
+      .main {
+        scroll-behavior: smooth;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <!-- ── TOP NAV ─── -->
+      <nav class="top-nav">
+        <!-- Logo -->
+        <a class="nav-logo" href="#">
+          <div class="nav-logo-mark">
+            <svg width="14" height="14" viewBox="0 0 18 18" fill="none">
+              <rect
+                x="2"
+                y="1"
+                width="9"
+                height="13"
+                rx="1.5"
+                stroke="white"
+                stroke-width="1.5"
+                fill="none"
+              />
+              <rect
+                x="6"
+                y="4"
+                width="9"
+                height="13"
+                rx="1.5"
+                stroke="white"
+                stroke-width="1.5"
+                fill="none"
+              />
+            </svg>
+          </div>
+          Bindersnap
+        </a>
 
-  <!-- ── TOP NAV ─── -->
-  <nav class="top-nav">
+        <!-- Workspace switcher -->
+        <div class="workspace-pill" style="margin-right: 10px">
+          <div class="workspace-dot"></div>
+          Meridian Legal Group
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+          >
+            <path d="M4 6l4 4 4-4" />
+          </svg>
+        </div>
 
-    <!-- Logo -->
-    <a class="nav-logo" href="#">
-      <div class="nav-logo-mark">
-        <svg width="14" height="14" viewBox="0 0 18 18" fill="none">
-          <rect x="2" y="1" width="9" height="13" rx="1.5" stroke="white" stroke-width="1.5" fill="none"/>
-          <rect x="6" y="4" width="9" height="13" rx="1.5" stroke="white" stroke-width="1.5" fill="none"/>
-        </svg>
+        <!-- Search -->
+        <div class="nav-search">
+          <svg
+            class="nav-search-icon"
+            width="14"
+            height="14"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+          >
+            <circle cx="6.5" cy="6.5" r="4.5" />
+            <path d="M10 10l3 3" />
+          </svg>
+          <input
+            type="text"
+            placeholder="Search documents, changes…"
+            id="nav-search-input"
+          />
+          <span class="nav-search-kbd">/</span>
+        </div>
+
+        <!-- Nav links -->
+        <div class="nav-links">
+          <a class="nav-link active" href="#">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+            >
+              <rect x="2" y="2" width="5" height="5" rx="1" />
+              <rect x="9" y="2" width="5" height="5" rx="1" />
+              <rect x="2" y="9" width="5" height="5" rx="1" />
+              <rect x="9" y="9" width="5" height="5" rx="1" />
+            </svg>
+            Overview
+          </a>
+          <a class="nav-link" href="#">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+            >
+              <path d="M3 4h10M3 8h10M3 12h6" />
+            </svg>
+            Documents
+            <span class="nav-badge">24</span>
+          </a>
+          <a class="nav-link" href="#">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+            >
+              <circle cx="8" cy="8" r="3" />
+              <path d="M5 5L2 2M11 5l3-3M5 11l-3 3M11 11l3 3" />
+            </svg>
+            Changes
+            <span class="nav-badge">7</span>
+          </a>
+          <a class="nav-link" href="#">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+            >
+              <path d="M12 13v-1a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v1" />
+              <circle cx="7" cy="5" r="3" />
+              <path d="M14 13v-1a4 4 0 0 0-2-3.5" />
+            </svg>
+            People
+          </a>
+        </div>
+
+        <div class="nav-spacer"></div>
+
+        <!-- Right side -->
+        <div class="nav-right">
+          <!-- New document -->
+          <button class="nav-new-btn" onclick="alert('New document flow')">
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M8 3v10M3 8h10" />
+            </svg>
+            New Document
+          </button>
+
+          <div class="divider-v"></div>
+
+          <!-- Notifications -->
+          <button
+            class="nav-icon-btn"
+            title="Notifications"
+            style="position: relative"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+            >
+              <path d="M8 1.5a5 5 0 0 1 5 5v2.5l1 2H2l1-2V6.5a5 5 0 0 1 5-5z" />
+              <path d="M6.5 13a1.5 1.5 0 0 0 3 0" />
+            </svg>
+            <span
+              style="
+                position: absolute;
+                top: 4px;
+                right: 4px;
+                width: 7px;
+                height: 7px;
+                border-radius: 50%;
+                background: var(--accent);
+                border: 1.5px solid var(--surface);
+              "
+            ></span>
+          </button>
+
+          <!-- Theme toggle -->
+          <button
+            class="theme-toggle"
+            onclick="toggleTheme()"
+            title="Toggle theme"
+          >
+            <svg
+              class="icon-moon"
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+            </svg>
+            <svg
+              class="icon-sun"
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <circle cx="12" cy="12" r="5" />
+              <line x1="12" y1="1" x2="12" y2="3" />
+              <line x1="12" y1="21" x2="12" y2="23" />
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+              <line x1="1" y1="12" x2="3" y2="12" />
+              <line x1="21" y1="12" x2="23" y2="12" />
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+            </svg>
+          </button>
+
+          <!-- Avatar -->
+          <div class="nav-avatar" title="Sarah Chen">SC</div>
+        </div>
+      </nav>
+
+      <!-- ── BODY ─── -->
+      <div class="body-wrap">
+        <!-- ── SIDEBAR ─── -->
+        <aside class="sidebar">
+          <div class="sidebar-section">
+            <div class="sidebar-label">Navigation</div>
+            <div class="sidebar-item active">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              >
+                <rect x="2" y="2" width="5" height="5" rx="1" />
+                <rect x="9" y="2" width="5" height="5" rx="1" />
+                <rect x="2" y="9" width="5" height="5" rx="1" />
+                <rect x="9" y="9" width="5" height="5" rx="1" />
+              </svg>
+              Overview
+            </div>
+            <div class="sidebar-item">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              >
+                <path d="M3 2h7l3 3v9H3V2z" />
+                <path d="M10 2v3h3" />
+              </svg>
+              All Documents
+              <span class="sidebar-item-count">24</span>
+            </div>
+            <div class="sidebar-item">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              >
+                <circle cx="8" cy="8" r="3" />
+                <path d="M5 5L2 2M11 5l3-3M5 11l-3 3M11 11l3 3" />
+              </svg>
+              Change Requests
+              <span class="sidebar-item-count">7</span>
+            </div>
+            <div class="sidebar-item">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              >
+                <path
+                  d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 14s-1 0-1-1 1-4 7-4 7 3 7 4-1 1-1 1H2z"
+                />
+              </svg>
+              People
+              <span class="sidebar-item-count">11</span>
+            </div>
+            <div class="sidebar-item">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              >
+                <path d="M8 1l2 5h5l-4 3 1.5 5L8 11l-4.5 3L5 9 1 6h5z" />
+              </svg>
+              Audit Log
+            </div>
+          </div>
+
+          <div class="sidebar-section">
+            <div class="sidebar-label">Workspaces</div>
+            <div class="sidebar-item">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              >
+                <rect x="2" y="3" width="12" height="10" rx="1.5" />
+                <path d="M2 6h12" />
+              </svg>
+              Contracts
+              <span class="sidebar-item-count">9</span>
+            </div>
+            <div class="sidebar-item">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              >
+                <rect x="2" y="3" width="12" height="10" rx="1.5" />
+                <path d="M2 6h12" />
+              </svg>
+              HR Policies
+              <span class="sidebar-item-count">6</span>
+            </div>
+            <div class="sidebar-item">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              >
+                <rect x="2" y="3" width="12" height="10" rx="1.5" />
+                <path d="M2 6h12" />
+              </svg>
+              Compliance
+              <span class="sidebar-item-count">4</span>
+            </div>
+            <div class="sidebar-item" style="color: var(--text-3)">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              >
+                <path d="M8 3v10M3 8h10" />
+              </svg>
+              New workspace…
+            </div>
+          </div>
+
+          <div class="sidebar-spacer"></div>
+
+          <div class="sidebar-section">
+            <div class="sidebar-item">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              >
+                <circle cx="8" cy="8" r="6" />
+                <path d="M8 5v3l2 1" />
+              </svg>
+              Settings
+            </div>
+          </div>
+
+          <div class="sidebar-user">
+            <div class="sidebar-user-avatar">SC</div>
+            <div>
+              <div class="sidebar-user-name">Sarah Chen</div>
+              <div class="sidebar-user-role">Compliance Lead</div>
+            </div>
+          </div>
+        </aside>
+
+        <!-- ── MAIN ─── -->
+        <main class="main">
+          <div class="main-inner">
+            <!-- Page header -->
+            <div class="page-header">
+              <div class="page-header-left">
+                <h1>Good morning, Sarah</h1>
+                <p>Tuesday, April 21, 2026 &middot; Meridian Legal Group</p>
+              </div>
+              <div class="page-header-right">
+                <button class="btn btn-secondary">
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                  >
+                    <path d="M8 2v9M4 7l4 4 4-4" />
+                    <path d="M2 13h12" />
+                  </svg>
+                  Import .docx
+                </button>
+                <button class="btn btn-primary">
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M8 3v10M3 8h10" />
+                  </svg>
+                  New Document
+                </button>
+              </div>
+            </div>
+
+            <!-- Stats row -->
+            <div class="stats-row">
+              <div class="stat-card">
+                <div class="stat-label">Awaiting Review</div>
+                <div class="stat-value">4</div>
+                <div class="stat-sub warning">
+                  <svg
+                    width="11"
+                    height="11"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                  >
+                    <circle cx="8" cy="8" r="6" />
+                    <path d="M8 5v3l1.5 1" />
+                  </svg>
+                  2 past due
+                </div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Approved This Month</div>
+                <div class="stat-value">11</div>
+                <div class="stat-sub positive">
+                  <svg
+                    width="11"
+                    height="11"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="M3 9l3 3 7-7" />
+                  </svg>
+                  +3 vs last month
+                </div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Open Change Requests</div>
+                <div class="stat-value">7</div>
+                <div class="stat-sub">across 5 documents</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Active Contributors</div>
+                <div class="stat-value">11</div>
+                <div class="stat-sub">this workspace</div>
+              </div>
+            </div>
+
+            <!-- Two-column layout -->
+            <div class="two-col">
+              <!-- Left column -->
+              <div>
+                <!-- Recently updated documents -->
+                <div class="section-block">
+                  <div class="section-head">
+                    <div class="section-head-left">
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        style="color: var(--text-3)"
+                      >
+                        <path d="M3 2h7l3 3v9H3V2z" />
+                        <path d="M10 2v3h3" />
+                      </svg>
+                      <span class="section-title">Recent Documents</span>
+                      <span class="section-count">24 total</span>
+                    </div>
+                    <a class="section-link" href="#">
+                      View all
+                      <svg
+                        width="11"
+                        height="11"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                      >
+                        <path d="M6 4l4 4-4 4" />
+                      </svg>
+                    </a>
+                  </div>
+
+                  <!-- Doc rows -->
+                  <div class="doc-item">
+                    <div class="doc-icon word">
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                      >
+                        <path
+                          d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm-1 7V3.5L18.5 9H13z"
+                        />
+                      </svg>
+                    </div>
+                    <div class="doc-info">
+                      <div class="doc-name">
+                        Q2 Vendor Services Agreement — Apex Partners
+                      </div>
+                      <div class="doc-meta">
+                        <span>Contracts</span>
+                        <span class="doc-meta-dot"></span>
+                        <span>Updated 2h ago by Marcus R.</span>
+                      </div>
+                    </div>
+                    <span class="doc-badge badge-review">
+                      <span class="doc-badge-dot"></span>
+                      In Review
+                    </span>
+                  </div>
+
+                  <div class="doc-item">
+                    <div class="doc-icon native">
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 18 18"
+                        fill="none"
+                      >
+                        <rect
+                          x="2"
+                          y="1"
+                          width="9"
+                          height="13"
+                          rx="1.5"
+                          stroke="currentColor"
+                          stroke-width="1.5"
+                          fill="none"
+                        />
+                        <rect
+                          x="6"
+                          y="4"
+                          width="9"
+                          height="13"
+                          rx="1.5"
+                          stroke="currentColor"
+                          stroke-width="1.5"
+                          fill="none"
+                        />
+                      </svg>
+                    </div>
+                    <div class="doc-info">
+                      <div class="doc-name">
+                        Employee Handbook — Remote Work Policy Update
+                      </div>
+                      <div class="doc-meta">
+                        <span>HR Policies</span>
+                        <span class="doc-meta-dot"></span>
+                        <span>Updated yesterday by Priya K.</span>
+                      </div>
+                    </div>
+                    <span class="doc-badge badge-review">
+                      <span class="doc-badge-dot"></span>
+                      In Review
+                    </span>
+                  </div>
+
+                  <div class="doc-item">
+                    <div class="doc-icon word">
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                      >
+                        <path
+                          d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm-1 7V3.5L18.5 9H13z"
+                        />
+                      </svg>
+                    </div>
+                    <div class="doc-info">
+                      <div class="doc-name">
+                        HIPAA Business Associate Agreement — Northside Clinic
+                      </div>
+                      <div class="doc-meta">
+                        <span>Compliance</span>
+                        <span class="doc-meta-dot"></span>
+                        <span>Approved Apr 18 by Sarah C.</span>
+                      </div>
+                    </div>
+                    <span class="doc-badge badge-approved">
+                      <span class="doc-badge-dot"></span>
+                      Approved
+                    </span>
+                  </div>
+
+                  <div class="doc-item">
+                    <div class="doc-icon native">
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 18 18"
+                        fill="none"
+                      >
+                        <rect
+                          x="2"
+                          y="1"
+                          width="9"
+                          height="13"
+                          rx="1.5"
+                          stroke="currentColor"
+                          stroke-width="1.5"
+                          fill="none"
+                        />
+                        <rect
+                          x="6"
+                          y="4"
+                          width="9"
+                          height="13"
+                          rx="1.5"
+                          stroke="currentColor"
+                          stroke-width="1.5"
+                          fill="none"
+                        />
+                      </svg>
+                    </div>
+                    <div class="doc-info">
+                      <div class="doc-name">
+                        NDA Template — Standard Form v4
+                      </div>
+                      <div class="doc-meta">
+                        <span>Contracts</span>
+                        <span class="doc-meta-dot"></span>
+                        <span>Updated Apr 17 by James W.</span>
+                      </div>
+                    </div>
+                    <span class="doc-badge badge-changes">
+                      <span class="doc-badge-dot"></span>
+                      Changes Requested
+                    </span>
+                  </div>
+
+                  <div class="doc-item">
+                    <div class="doc-icon native">
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 18 18"
+                        fill="none"
+                      >
+                        <rect
+                          x="2"
+                          y="1"
+                          width="9"
+                          height="13"
+                          rx="1.5"
+                          stroke="currentColor"
+                          stroke-width="1.5"
+                          fill="none"
+                        />
+                        <rect
+                          x="6"
+                          y="4"
+                          width="9"
+                          height="13"
+                          rx="1.5"
+                          stroke="currentColor"
+                          stroke-width="1.5"
+                          fill="none"
+                        />
+                      </svg>
+                    </div>
+                    <div class="doc-info">
+                      <div class="doc-name">Data Retention Policy 2026</div>
+                      <div class="doc-meta">
+                        <span>Compliance</span>
+                        <span class="doc-meta-dot"></span>
+                        <span>Created Apr 15 by Sarah C.</span>
+                      </div>
+                    </div>
+                    <span class="doc-badge badge-draft">Draft</span>
+                  </div>
+                </div>
+
+                <!-- Open change requests -->
+                <div class="section-block">
+                  <div class="section-head">
+                    <div class="section-head-left">
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        style="color: var(--text-3)"
+                      >
+                        <circle cx="8" cy="8" r="3" />
+                        <path d="M5 5L2 2M11 5l3-3M5 11l-3 3M11 11l3 3" />
+                      </svg>
+                      <span class="section-title">Open Change Requests</span>
+                      <span class="section-count">7 open</span>
+                    </div>
+                    <a class="section-link" href="#">
+                      View all
+                      <svg
+                        width="11"
+                        height="11"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                      >
+                        <path d="M6 4l4 4-4 4" />
+                      </svg>
+                    </a>
+                  </div>
+
+                  <div class="cr-item">
+                    <svg
+                      class="cr-icon open"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                    >
+                      <circle cx="8" cy="8" r="5.5" />
+                      <circle
+                        cx="8"
+                        cy="8"
+                        r="2"
+                        fill="currentColor"
+                        stroke="none"
+                      />
+                    </svg>
+                    <div class="cr-info">
+                      <div class="cr-title">
+                        Revise liability cap clause — Section 8.2
+                      </div>
+                      <div class="cr-meta">
+                        Q2 Vendor Services Agreement &middot; opened 3h ago by
+                        Marcus R.
+                      </div>
+                    </div>
+                    <div class="cr-reviewer">
+                      <div
+                        class="cr-avatar"
+                        style="
+                          background: var(--accent-dim);
+                          color: var(--accent);
+                        "
+                      >
+                        SC
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="cr-item">
+                    <svg
+                      class="cr-icon open"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                    >
+                      <circle cx="8" cy="8" r="5.5" />
+                      <circle
+                        cx="8"
+                        cy="8"
+                        r="2"
+                        fill="currentColor"
+                        stroke="none"
+                      />
+                    </svg>
+                    <div class="cr-info">
+                      <div class="cr-title">
+                        Update remote work eligibility criteria
+                      </div>
+                      <div class="cr-meta">
+                        Employee Handbook &middot; opened yesterday by Priya K.
+                      </div>
+                    </div>
+                    <div class="cr-reviewer">
+                      <div
+                        class="cr-avatar"
+                        style="
+                          background: rgba(29, 78, 216, 0.1);
+                          color: #1d4ed8;
+                        "
+                      >
+                        JW
+                      </div>
+                      <div
+                        class="cr-avatar"
+                        style="
+                          background: var(--accent-dim);
+                          color: var(--accent);
+                        "
+                      >
+                        SC
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="cr-item">
+                    <svg
+                      class="cr-icon open"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                    >
+                      <circle cx="8" cy="8" r="5.5" />
+                      <circle
+                        cx="8"
+                        cy="8"
+                        r="2"
+                        fill="currentColor"
+                        stroke="none"
+                      />
+                    </svg>
+                    <div class="cr-info">
+                      <div class="cr-title">Add data sub-processor exhibit</div>
+                      <div class="cr-meta">
+                        NDA Template v4 &middot; opened Apr 19 by Sarah C.
+                      </div>
+                    </div>
+                    <div class="cr-reviewer">
+                      <div
+                        class="cr-avatar"
+                        style="background: var(--green-bg); color: var(--green)"
+                      >
+                        MR
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="cr-item">
+                    <svg
+                      class="cr-icon open"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                    >
+                      <circle cx="8" cy="8" r="5.5" />
+                      <circle
+                        cx="8"
+                        cy="8"
+                        r="2"
+                        fill="currentColor"
+                        stroke="none"
+                      />
+                    </svg>
+                    <div class="cr-info">
+                      <div class="cr-title">
+                        Clarify 90-day notice period language
+                      </div>
+                      <div class="cr-meta">
+                        Q2 Vendor Services Agreement &middot; opened Apr 18 by
+                        James W.
+                      </div>
+                    </div>
+                    <div class="cr-reviewer">
+                      <div
+                        class="cr-avatar"
+                        style="
+                          background: var(--accent-dim);
+                          color: var(--accent);
+                        "
+                      >
+                        SC
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Right column -->
+              <div>
+                <!-- Quick actions -->
+                <div class="section-block" style="margin-bottom: 20px">
+                  <div class="section-head">
+                    <div class="section-head-left">
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        style="color: var(--text-3)"
+                      >
+                        <path d="M13 3L7 9M3 9l1-5 5-1M8 12l4 1-1-4" />
+                      </svg>
+                      <span class="section-title">Quick Actions</span>
+                    </div>
+                  </div>
+                  <div class="quick-actions">
+                    <button class="qa-btn">
+                      <svg
+                        class="qa-btn-icon"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                      >
+                        <path d="M8 3v10M3 8h10" />
+                      </svg>
+                      <span class="qa-btn-label">New Document</span>
+                      <span class="qa-btn-sub">Start from scratch</span>
+                    </button>
+                    <button class="qa-btn">
+                      <svg
+                        class="qa-btn-icon"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                      >
+                        <path d="M8 2v9M4 7l4 4 4-4" />
+                        <path d="M2 13h12" />
+                      </svg>
+                      <span class="qa-btn-label">Import Word</span>
+                      <span class="qa-btn-sub">Upload .docx file</span>
+                    </button>
+                    <button class="qa-btn">
+                      <svg
+                        class="qa-btn-icon"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                      >
+                        <path
+                          d="M8 1l2 5h5l-4 3 1.5 5L8 11l-4.5 3L5 9 1 6h5z"
+                        />
+                      </svg>
+                      <span class="qa-btn-label">Export Audit Log</span>
+                      <span class="qa-btn-sub">Download CSV / PDF</span>
+                    </button>
+                    <button class="qa-btn">
+                      <svg
+                        class="qa-btn-icon"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                      >
+                        <path
+                          d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 14s-1 0-1-1 1-4 7-4 7 3 7 4-1 1-1 1H2z"
+                        />
+                        <path d="M13 7v4M11 9h4" />
+                      </svg>
+                      <span class="qa-btn-label">Invite People</span>
+                      <span class="qa-btn-sub">Add team members</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Activity feed -->
+                <div class="section-block">
+                  <div class="section-head">
+                    <div class="section-head-left">
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        style="color: var(--text-3)"
+                      >
+                        <path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5z" />
+                        <circle cx="8" cy="8" r="2" />
+                      </svg>
+                      <span class="section-title">Activity</span>
+                    </div>
+                    <a class="section-link" href="#">All</a>
+                  </div>
+
+                  <div class="activity-item">
+                    <div
+                      class="activity-avatar"
+                      style="background: rgba(29, 78, 216, 0.1); color: #1d4ed8"
+                    >
+                      JW
+                    </div>
+                    <div class="activity-body">
+                      <div class="activity-text">
+                        <strong>James W.</strong> approved
+                        <a href="#">HIPAA BAA — Northside Clinic</a>
+                      </div>
+                      <div class="activity-time">2 hours ago</div>
+                    </div>
+                  </div>
+
+                  <div class="activity-item">
+                    <div
+                      class="activity-avatar"
+                      style="background: rgba(180, 83, 9, 0.1); color: #b45309"
+                    >
+                      MR
+                    </div>
+                    <div class="activity-body">
+                      <div class="activity-text">
+                        <strong>Marcus R.</strong> opened a change request on
+                        <a href="#">Q2 Vendor Agreement</a>
+                      </div>
+                      <div class="activity-time">3 hours ago</div>
+                    </div>
+                  </div>
+
+                  <div class="activity-item">
+                    <div
+                      class="activity-avatar"
+                      style="
+                        background: var(--accent-dim);
+                        color: var(--accent);
+                      "
+                    >
+                      SC
+                    </div>
+                    <div class="activity-body">
+                      <div class="activity-text">
+                        <strong>You</strong> requested review on
+                        <a href="#">NDA Template v4</a>
+                      </div>
+                      <div class="activity-time">Yesterday at 4:12 PM</div>
+                    </div>
+                  </div>
+
+                  <div class="activity-item">
+                    <div
+                      class="activity-avatar"
+                      style="background: var(--green-bg); color: var(--green)"
+                    >
+                      PK
+                    </div>
+                    <div class="activity-body">
+                      <div class="activity-text">
+                        <strong>Priya K.</strong> edited
+                        <a href="#">Employee Handbook</a> — 3 sections updated
+                      </div>
+                      <div class="activity-time">Yesterday at 2:48 PM</div>
+                    </div>
+                  </div>
+
+                  <div class="activity-item">
+                    <div
+                      class="activity-avatar"
+                      style="background: rgba(29, 78, 216, 0.1); color: #1d4ed8"
+                    >
+                      JW
+                    </div>
+                    <div class="activity-body">
+                      <div class="activity-text">
+                        <strong>James W.</strong> requested changes on
+                        <a href="#">NDA Template v4</a>
+                      </div>
+                      <div class="activity-time">Apr 19 at 9:03 AM</div>
+                    </div>
+                  </div>
+
+                  <div class="activity-item">
+                    <div
+                      class="activity-avatar"
+                      style="
+                        background: var(--accent-dim);
+                        color: var(--accent);
+                      "
+                    >
+                      SC
+                    </div>
+                    <div class="activity-body">
+                      <div class="activity-text">
+                        <strong>You</strong> imported
+                        <a href="#">Q2 Vendor Services Agreement</a> from Word
+                      </div>
+                      <div class="activity-time">Apr 18 at 11:20 AM</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
       </div>
-      Bindersnap
-    </a>
-
-    <!-- Workspace switcher -->
-    <div class="workspace-pill" style="margin-right: 10px;">
-      <div class="workspace-dot"></div>
-      Meridian Legal Group
-      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6l4 4 4-4"/></svg>
     </div>
 
-    <!-- Search -->
-    <div class="nav-search">
-      <svg class="nav-search-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-        <circle cx="6.5" cy="6.5" r="4.5"/><path d="M10 10l3 3"/>
-      </svg>
-      <input type="text" placeholder="Search documents, changes…" id="nav-search-input" />
-      <span class="nav-search-kbd">/</span>
-    </div>
+    <script>
+      // Theme toggle
+      function toggleTheme() {
+        const html = document.documentElement;
+        const next =
+          html.getAttribute("data-theme") === "light" ? "dark" : "light";
+        html.setAttribute("data-theme", next);
+        localStorage.setItem("bs-theme", next);
+      }
 
-    <!-- Nav links -->
-    <div class="nav-links">
-      <a class="nav-link active" href="#">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-          <rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/>
-          <rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/>
-        </svg>
-        Overview
-      </a>
-      <a class="nav-link" href="#">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M3 4h10M3 8h10M3 12h6"/>
-        </svg>
-        Documents
-        <span class="nav-badge">24</span>
-      </a>
-      <a class="nav-link" href="#">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-          <circle cx="8" cy="8" r="3"/><path d="M5 5L2 2M11 5l3-3M5 11l-3 3M11 11l3 3"/>
-        </svg>
-        Changes
-        <span class="nav-badge">7</span>
-      </a>
-      <a class="nav-link" href="#">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M12 13v-1a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v1"/><circle cx="7" cy="5" r="3"/>
-          <path d="M14 13v-1a4 4 0 0 0-2-3.5"/>
-        </svg>
-        People
-      </a>
-    </div>
+      // Restore theme
+      (function () {
+        const saved = localStorage.getItem("bs-theme");
+        const sys = window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light";
+        document.documentElement.setAttribute("data-theme", saved || sys);
+      })();
 
-    <div class="nav-spacer"></div>
+      // Keyboard shortcut: / focuses search
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "/" && document.activeElement.tagName !== "INPUT") {
+          e.preventDefault();
+          document.getElementById("nav-search-input").focus();
+        }
+      });
 
-    <!-- Right side -->
-    <div class="nav-right">
-      <!-- New document -->
-      <button class="nav-new-btn" onclick="alert('New document flow')">
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M8 3v10M3 8h10"/>
-        </svg>
-        New Document
-      </button>
-
-      <div class="divider-v"></div>
-
-      <!-- Notifications -->
-      <button class="nav-icon-btn" title="Notifications" style="position:relative">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M8 1.5a5 5 0 0 1 5 5v2.5l1 2H2l1-2V6.5a5 5 0 0 1 5-5z"/>
-          <path d="M6.5 13a1.5 1.5 0 0 0 3 0"/>
-        </svg>
-        <span style="position:absolute;top:4px;right:4px;width:7px;height:7px;border-radius:50%;background:var(--accent);border:1.5px solid var(--surface);"></span>
-      </button>
-
-      <!-- Theme toggle -->
-      <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
-        <svg class="icon-moon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-        </svg>
-        <svg class="icon-sun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="5"/>
-          <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
-          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-          <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
-          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-        </svg>
-      </button>
-
-      <!-- Avatar -->
-      <div class="nav-avatar" title="Sarah Chen">SC</div>
-    </div>
-  </nav>
-
-  <!-- ── BODY ─── -->
-  <div class="body-wrap">
-
-    <!-- ── SIDEBAR ─── -->
-    <aside class="sidebar">
-
-      <div class="sidebar-section">
-        <div class="sidebar-label">Navigation</div>
-        <div class="sidebar-item active">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-            <rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/>
-            <rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/>
-          </svg>
-          Overview
-        </div>
-        <div class="sidebar-item">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M3 2h7l3 3v9H3V2z"/><path d="M10 2v3h3"/>
-          </svg>
-          All Documents
-          <span class="sidebar-item-count">24</span>
-        </div>
-        <div class="sidebar-item">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-            <circle cx="8" cy="8" r="3"/><path d="M5 5L2 2M11 5l3-3M5 11l-3 3M11 11l3 3"/>
-          </svg>
-          Change Requests
-          <span class="sidebar-item-count">7</span>
-        </div>
-        <div class="sidebar-item">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 14s-1 0-1-1 1-4 7-4 7 3 7 4-1 1-1 1H2z"/>
-          </svg>
-          People
-          <span class="sidebar-item-count">11</span>
-        </div>
-        <div class="sidebar-item">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M8 1l2 5h5l-4 3 1.5 5L8 11l-4.5 3L5 9 1 6h5z"/>
-          </svg>
-          Audit Log
-        </div>
-      </div>
-
-      <div class="sidebar-section">
-        <div class="sidebar-label">Workspaces</div>
-        <div class="sidebar-item">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-            <rect x="2" y="3" width="12" height="10" rx="1.5"/>
-            <path d="M2 6h12"/>
-          </svg>
-          Contracts
-          <span class="sidebar-item-count">9</span>
-        </div>
-        <div class="sidebar-item">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-            <rect x="2" y="3" width="12" height="10" rx="1.5"/>
-            <path d="M2 6h12"/>
-          </svg>
-          HR Policies
-          <span class="sidebar-item-count">6</span>
-        </div>
-        <div class="sidebar-item">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-            <rect x="2" y="3" width="12" height="10" rx="1.5"/>
-            <path d="M2 6h12"/>
-          </svg>
-          Compliance
-          <span class="sidebar-item-count">4</span>
-        </div>
-        <div class="sidebar-item" style="color: var(--text-3);">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M8 3v10M3 8h10"/>
-          </svg>
-          New workspace…
-        </div>
-      </div>
-
-      <div class="sidebar-spacer"></div>
-
-      <div class="sidebar-section">
-        <div class="sidebar-item">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-            <circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 1"/>
-          </svg>
-          Settings
-        </div>
-      </div>
-
-      <div class="sidebar-user">
-        <div class="sidebar-user-avatar">SC</div>
-        <div>
-          <div class="sidebar-user-name">Sarah Chen</div>
-          <div class="sidebar-user-role">Compliance Lead</div>
-        </div>
-      </div>
-    </aside>
-
-    <!-- ── MAIN ─── -->
-    <main class="main">
-      <div class="main-inner">
-
-        <!-- Page header -->
-        <div class="page-header">
-          <div class="page-header-left">
-            <h1>Good morning, Sarah</h1>
-            <p>Tuesday, April 21, 2026 &middot; Meridian Legal Group</p>
-          </div>
-          <div class="page-header-right">
-            <button class="btn btn-secondary">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                <path d="M8 2v9M4 7l4 4 4-4"/><path d="M2 13h12"/>
-              </svg>
-              Import .docx
-            </button>
-            <button class="btn btn-primary">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M8 3v10M3 8h10"/>
-              </svg>
-              New Document
-            </button>
-          </div>
-        </div>
-
-        <!-- Stats row -->
-        <div class="stats-row">
-          <div class="stat-card">
-            <div class="stat-label">Awaiting Review</div>
-            <div class="stat-value">4</div>
-            <div class="stat-sub warning">
-              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
-                <circle cx="8" cy="8" r="6"/><path d="M8 5v3l1.5 1"/>
-              </svg>
-              2 past due
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Approved This Month</div>
-            <div class="stat-value">11</div>
-            <div class="stat-sub positive">
-              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M3 9l3 3 7-7"/>
-              </svg>
-              +3 vs last month
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Open Change Requests</div>
-            <div class="stat-value">7</div>
-            <div class="stat-sub">across 5 documents</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Active Contributors</div>
-            <div class="stat-value">11</div>
-            <div class="stat-sub">this workspace</div>
-          </div>
-        </div>
-
-        <!-- Two-column layout -->
-        <div class="two-col">
-
-          <!-- Left column -->
-          <div>
-
-            <!-- Recently updated documents -->
-            <div class="section-block">
-              <div class="section-head">
-                <div class="section-head-left">
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--text-3)">
-                    <path d="M3 2h7l3 3v9H3V2z"/><path d="M10 2v3h3"/>
-                  </svg>
-                  <span class="section-title">Recent Documents</span>
-                  <span class="section-count">24 total</span>
-                </div>
-                <a class="section-link" href="#">
-                  View all
-                  <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 4l4 4-4 4"/></svg>
-                </a>
-              </div>
-
-              <!-- Doc rows -->
-              <div class="doc-item">
-                <div class="doc-icon word">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm-1 7V3.5L18.5 9H13z"/>
-                  </svg>
-                </div>
-                <div class="doc-info">
-                  <div class="doc-name">Q2 Vendor Services Agreement — Apex Partners</div>
-                  <div class="doc-meta">
-                    <span>Contracts</span>
-                    <span class="doc-meta-dot"></span>
-                    <span>Updated 2h ago by Marcus R.</span>
-                  </div>
-                </div>
-                <span class="doc-badge badge-review">
-                  <span class="doc-badge-dot"></span>
-                  In Review
-                </span>
-              </div>
-
-              <div class="doc-item">
-                <div class="doc-icon native">
-                  <svg width="14" height="14" viewBox="0 0 18 18" fill="none">
-                    <rect x="2" y="1" width="9" height="13" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
-                    <rect x="6" y="4" width="9" height="13" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
-                  </svg>
-                </div>
-                <div class="doc-info">
-                  <div class="doc-name">Employee Handbook — Remote Work Policy Update</div>
-                  <div class="doc-meta">
-                    <span>HR Policies</span>
-                    <span class="doc-meta-dot"></span>
-                    <span>Updated yesterday by Priya K.</span>
-                  </div>
-                </div>
-                <span class="doc-badge badge-review">
-                  <span class="doc-badge-dot"></span>
-                  In Review
-                </span>
-              </div>
-
-              <div class="doc-item">
-                <div class="doc-icon word">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm-1 7V3.5L18.5 9H13z"/>
-                  </svg>
-                </div>
-                <div class="doc-info">
-                  <div class="doc-name">HIPAA Business Associate Agreement — Northside Clinic</div>
-                  <div class="doc-meta">
-                    <span>Compliance</span>
-                    <span class="doc-meta-dot"></span>
-                    <span>Approved Apr 18 by Sarah C.</span>
-                  </div>
-                </div>
-                <span class="doc-badge badge-approved">
-                  <span class="doc-badge-dot"></span>
-                  Approved
-                </span>
-              </div>
-
-              <div class="doc-item">
-                <div class="doc-icon native">
-                  <svg width="14" height="14" viewBox="0 0 18 18" fill="none">
-                    <rect x="2" y="1" width="9" height="13" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
-                    <rect x="6" y="4" width="9" height="13" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
-                  </svg>
-                </div>
-                <div class="doc-info">
-                  <div class="doc-name">NDA Template — Standard Form v4</div>
-                  <div class="doc-meta">
-                    <span>Contracts</span>
-                    <span class="doc-meta-dot"></span>
-                    <span>Updated Apr 17 by James W.</span>
-                  </div>
-                </div>
-                <span class="doc-badge badge-changes">
-                  <span class="doc-badge-dot"></span>
-                  Changes Requested
-                </span>
-              </div>
-
-              <div class="doc-item">
-                <div class="doc-icon native">
-                  <svg width="14" height="14" viewBox="0 0 18 18" fill="none">
-                    <rect x="2" y="1" width="9" height="13" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
-                    <rect x="6" y="4" width="9" height="13" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
-                  </svg>
-                </div>
-                <div class="doc-info">
-                  <div class="doc-name">Data Retention Policy 2026</div>
-                  <div class="doc-meta">
-                    <span>Compliance</span>
-                    <span class="doc-meta-dot"></span>
-                    <span>Created Apr 15 by Sarah C.</span>
-                  </div>
-                </div>
-                <span class="doc-badge badge-draft">Draft</span>
-              </div>
-            </div>
-
-            <!-- Open change requests -->
-            <div class="section-block">
-              <div class="section-head">
-                <div class="section-head-left">
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--text-3)">
-                    <circle cx="8" cy="8" r="3"/><path d="M5 5L2 2M11 5l3-3M5 11l-3 3M11 11l3 3"/>
-                  </svg>
-                  <span class="section-title">Open Change Requests</span>
-                  <span class="section-count">7 open</span>
-                </div>
-                <a class="section-link" href="#">
-                  View all
-                  <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 4l4 4-4 4"/></svg>
-                </a>
-              </div>
-
-              <div class="cr-item">
-                <svg class="cr-icon open" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                  <circle cx="8" cy="8" r="5.5"/>
-                  <circle cx="8" cy="8" r="2" fill="currentColor" stroke="none"/>
-                </svg>
-                <div class="cr-info">
-                  <div class="cr-title">Revise liability cap clause — Section 8.2</div>
-                  <div class="cr-meta">Q2 Vendor Services Agreement &middot; opened 3h ago by Marcus R.</div>
-                </div>
-                <div class="cr-reviewer">
-                  <div class="cr-avatar" style="background:var(--accent-dim);color:var(--accent);">SC</div>
-                </div>
-              </div>
-
-              <div class="cr-item">
-                <svg class="cr-icon open" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                  <circle cx="8" cy="8" r="5.5"/>
-                  <circle cx="8" cy="8" r="2" fill="currentColor" stroke="none"/>
-                </svg>
-                <div class="cr-info">
-                  <div class="cr-title">Update remote work eligibility criteria</div>
-                  <div class="cr-meta">Employee Handbook &middot; opened yesterday by Priya K.</div>
-                </div>
-                <div class="cr-reviewer">
-                  <div class="cr-avatar" style="background:rgba(29,78,216,0.1);color:#1D4ED8;">JW</div>
-                  <div class="cr-avatar" style="background:var(--accent-dim);color:var(--accent);">SC</div>
-                </div>
-              </div>
-
-              <div class="cr-item">
-                <svg class="cr-icon open" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                  <circle cx="8" cy="8" r="5.5"/>
-                  <circle cx="8" cy="8" r="2" fill="currentColor" stroke="none"/>
-                </svg>
-                <div class="cr-info">
-                  <div class="cr-title">Add data sub-processor exhibit</div>
-                  <div class="cr-meta">NDA Template v4 &middot; opened Apr 19 by Sarah C.</div>
-                </div>
-                <div class="cr-reviewer">
-                  <div class="cr-avatar" style="background:var(--green-bg);color:var(--green);">MR</div>
-                </div>
-              </div>
-
-              <div class="cr-item">
-                <svg class="cr-icon open" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                  <circle cx="8" cy="8" r="5.5"/>
-                  <circle cx="8" cy="8" r="2" fill="currentColor" stroke="none"/>
-                </svg>
-                <div class="cr-info">
-                  <div class="cr-title">Clarify 90-day notice period language</div>
-                  <div class="cr-meta">Q2 Vendor Services Agreement &middot; opened Apr 18 by James W.</div>
-                </div>
-                <div class="cr-reviewer">
-                  <div class="cr-avatar" style="background:var(--accent-dim);color:var(--accent);">SC</div>
-                </div>
-              </div>
-            </div>
-
-          </div>
-
-          <!-- Right column -->
-          <div>
-
-            <!-- Quick actions -->
-            <div class="section-block" style="margin-bottom: 20px;">
-              <div class="section-head">
-                <div class="section-head-left">
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--text-3)">
-                    <path d="M13 3L7 9M3 9l1-5 5-1M8 12l4 1-1-4"/>
-                  </svg>
-                  <span class="section-title">Quick Actions</span>
-                </div>
-              </div>
-              <div class="quick-actions">
-                <button class="qa-btn">
-                  <svg class="qa-btn-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <path d="M8 3v10M3 8h10"/>
-                  </svg>
-                  <span class="qa-btn-label">New Document</span>
-                  <span class="qa-btn-sub">Start from scratch</span>
-                </button>
-                <button class="qa-btn">
-                  <svg class="qa-btn-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <path d="M8 2v9M4 7l4 4 4-4"/><path d="M2 13h12"/>
-                  </svg>
-                  <span class="qa-btn-label">Import Word</span>
-                  <span class="qa-btn-sub">Upload .docx file</span>
-                </button>
-                <button class="qa-btn">
-                  <svg class="qa-btn-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <path d="M8 1l2 5h5l-4 3 1.5 5L8 11l-4.5 3L5 9 1 6h5z"/>
-                  </svg>
-                  <span class="qa-btn-label">Export Audit Log</span>
-                  <span class="qa-btn-sub">Download CSV / PDF</span>
-                </button>
-                <button class="qa-btn">
-                  <svg class="qa-btn-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 14s-1 0-1-1 1-4 7-4 7 3 7 4-1 1-1 1H2z"/>
-                    <path d="M13 7v4M11 9h4"/>
-                  </svg>
-                  <span class="qa-btn-label">Invite People</span>
-                  <span class="qa-btn-sub">Add team members</span>
-                </button>
-              </div>
-            </div>
-
-            <!-- Activity feed -->
-            <div class="section-block">
-              <div class="section-head">
-                <div class="section-head-left">
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--text-3)">
-                    <path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5z"/>
-                    <circle cx="8" cy="8" r="2"/>
-                  </svg>
-                  <span class="section-title">Activity</span>
-                </div>
-                <a class="section-link" href="#">All</a>
-              </div>
-
-              <div class="activity-item">
-                <div class="activity-avatar" style="background:rgba(29,78,216,0.1);color:#1D4ED8;">JW</div>
-                <div class="activity-body">
-                  <div class="activity-text"><strong>James W.</strong> approved <a href="#">HIPAA BAA — Northside Clinic</a></div>
-                  <div class="activity-time">2 hours ago</div>
-                </div>
-              </div>
-
-              <div class="activity-item">
-                <div class="activity-avatar" style="background:rgba(180,83,9,0.1);color:#B45309;">MR</div>
-                <div class="activity-body">
-                  <div class="activity-text"><strong>Marcus R.</strong> opened a change request on <a href="#">Q2 Vendor Agreement</a></div>
-                  <div class="activity-time">3 hours ago</div>
-                </div>
-              </div>
-
-              <div class="activity-item">
-                <div class="activity-avatar" style="background:var(--accent-dim);color:var(--accent);">SC</div>
-                <div class="activity-body">
-                  <div class="activity-text"><strong>You</strong> requested review on <a href="#">NDA Template v4</a></div>
-                  <div class="activity-time">Yesterday at 4:12 PM</div>
-                </div>
-              </div>
-
-              <div class="activity-item">
-                <div class="activity-avatar" style="background:var(--green-bg);color:var(--green);">PK</div>
-                <div class="activity-body">
-                  <div class="activity-text"><strong>Priya K.</strong> edited <a href="#">Employee Handbook</a> — 3 sections updated</div>
-                  <div class="activity-time">Yesterday at 2:48 PM</div>
-                </div>
-              </div>
-
-              <div class="activity-item">
-                <div class="activity-avatar" style="background:rgba(29,78,216,0.1);color:#1D4ED8;">JW</div>
-                <div class="activity-body">
-                  <div class="activity-text"><strong>James W.</strong> requested changes on <a href="#">NDA Template v4</a></div>
-                  <div class="activity-time">Apr 19 at 9:03 AM</div>
-                </div>
-              </div>
-
-              <div class="activity-item">
-                <div class="activity-avatar" style="background:var(--accent-dim);color:var(--accent);">SC</div>
-                <div class="activity-body">
-                  <div class="activity-text"><strong>You</strong> imported <a href="#">Q2 Vendor Services Agreement</a> from Word</div>
-                  <div class="activity-time">Apr 18 at 11:20 AM</div>
-                </div>
-              </div>
-            </div>
-
-          </div>
-        </div>
-
-      </div>
-    </main>
-  </div>
-</div>
-
-<script>
-  // Theme toggle
-  function toggleTheme() {
-    const html = document.documentElement;
-    const next = html.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
-    html.setAttribute('data-theme', next);
-    localStorage.setItem('bs-theme', next);
-  }
-
-  // Restore theme
-  (function() {
-    const saved = localStorage.getItem('bs-theme');
-    const sys = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    document.documentElement.setAttribute('data-theme', saved || sys);
-  })();
-
-  // Keyboard shortcut: / focuses search
-  document.addEventListener('keydown', e => {
-    if (e.key === '/' && document.activeElement.tagName !== 'INPUT') {
-      e.preventDefault();
-      document.getElementById('nav-search-input').focus();
-    }
-  });
-
-  // Nav link active state
-  document.querySelectorAll('.nav-link, .sidebar-item').forEach(el => {
-    el.addEventListener('click', function() {
-      const group = this.closest('.nav-links, .sidebar-section');
-      if (!group) return;
-      group.querySelectorAll('.nav-link, .sidebar-item').forEach(x => x.classList.remove('active'));
-      this.classList.add('active');
-    });
-  });
-</script>
-</body>
+      // Nav link active state
+      document.querySelectorAll(".nav-link, .sidebar-item").forEach((el) => {
+        el.addEventListener("click", function () {
+          const group = this.closest(".nav-links, .sidebar-section");
+          if (!group) return;
+          group
+            .querySelectorAll(".nav-link, .sidebar-item")
+            .forEach((x) => x.classList.remove("active"));
+          this.classList.add("active");
+        });
+      });
+    </script>
+  </body>
 </html>

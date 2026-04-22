@@ -200,8 +200,7 @@ export function FileVaultWorkspace({
   const awaitingReview = documents.filter((d) =>
     d.pendingPRs.some(
       (pr) =>
-        pr.approvalState === "in_review" &&
-        pr.user?.login !== currentUsername,
+        pr.approvalState === "in_review" && pr.user?.login !== currentUsername,
     ),
   ).length;
 
@@ -221,9 +220,7 @@ export function FileVaultWorkspace({
       .filter((l): l is string => Boolean(l)),
   ).size;
 
-  const docsWithPRCount = new Set(
-    allPendingPRs.map((pr) => pr.docName),
-  ).size;
+  const docsWithPRCount = new Set(allPendingPRs.map((pr) => pr.docName)).size;
 
   // Sort docs by most recently updated
   const sortedDocs = [...documents].sort(
@@ -294,9 +291,7 @@ export function FileVaultWorkspace({
             <h1>
               {getGreeting()}, {getDisplayFirstName(currentUsername)}
             </h1>
-            <p>
-              {getTodayLabel()} · Bindersnap Workspace
-            </p>
+            <p>{getTodayLabel()} · Bindersnap Workspace</p>
           </div>
           <div className="dash-page-header-right">
             <button
@@ -379,12 +374,9 @@ export function FileVaultWorkspace({
       <div className="dash-page-header">
         <div className="dash-page-header-left">
           <h1>
-            {getGreeting()},{" "}
-            {getDisplayFirstName(currentUsername)}
+            {getGreeting()}, {getDisplayFirstName(currentUsername)}
           </h1>
-          <p>
-            {getTodayLabel()} · Bindersnap Workspace
-          </p>
+          <p>{getTodayLabel()} · Bindersnap Workspace</p>
         </div>
         <div className="dash-page-header-right">
           <button
@@ -432,7 +424,10 @@ export function FileVaultWorkspace({
         <div className="dash-stat-card">
           <div className="dash-stat-label">Awaiting Review</div>
           {isLoadingDocuments ? (
-            <div className="vault-skeleton-line vault-skeleton-line--short" style={{ height: "2rem", marginTop: 4 }} />
+            <div
+              className="vault-skeleton-line vault-skeleton-line--short"
+              style={{ height: "2rem", marginTop: 4 }}
+            />
           ) : (
             <div className="dash-stat-value">{awaitingReview}</div>
           )}
@@ -460,7 +455,10 @@ export function FileVaultWorkspace({
         <div className="dash-stat-card">
           <div className="dash-stat-label">Approved This Month</div>
           {isLoadingDocuments ? (
-            <div className="vault-skeleton-line vault-skeleton-line--short" style={{ height: "2rem", marginTop: 4 }} />
+            <div
+              className="vault-skeleton-line vault-skeleton-line--short"
+              style={{ height: "2rem", marginTop: 4 }}
+            />
           ) : (
             <div className="dash-stat-value">{approvedThisMonth}</div>
           )}
@@ -483,7 +481,10 @@ export function FileVaultWorkspace({
         <div className="dash-stat-card">
           <div className="dash-stat-label">Open Change Requests</div>
           {isLoadingDocuments ? (
-            <div className="vault-skeleton-line vault-skeleton-line--short" style={{ height: "2rem", marginTop: 4 }} />
+            <div
+              className="vault-skeleton-line vault-skeleton-line--short"
+              style={{ height: "2rem", marginTop: 4 }}
+            />
           ) : (
             <div className="dash-stat-value">{openChangeRequests}</div>
           )}
@@ -495,7 +496,10 @@ export function FileVaultWorkspace({
         <div className="dash-stat-card">
           <div className="dash-stat-label">Active Contributors</div>
           {isLoadingDocuments ? (
-            <div className="vault-skeleton-line vault-skeleton-line--short" style={{ height: "2rem", marginTop: 4 }} />
+            <div
+              className="vault-skeleton-line vault-skeleton-line--short"
+              style={{ height: "2rem", marginTop: 4 }}
+            />
           ) : (
             <div className="dash-stat-value">{activeContributors}</div>
           )}
@@ -561,7 +565,8 @@ export function FileVaultWorkspace({
                 const firstPR = doc.pendingPRs[0];
                 const submitter = firstPR?.user?.login ?? doc.repo.owner.login;
                 const updatedTime = formatRelativeTime(doc.repo.updated_at);
-                const isNative = doc.latestTag != null || doc.pendingPRs.length > 0;
+                const isNative =
+                  doc.latestTag != null || doc.pendingPRs.length > 0;
 
                 return (
                   <div
@@ -640,10 +645,7 @@ export function FileVaultWorkspace({
                     </div>
 
                     <span className={getStatusBadgeClass(status)}>
-                      <span
-                        className="dash-badge-dot"
-                        aria-hidden="true"
-                      />
+                      <span className="dash-badge-dot" aria-hidden="true" />
                       {getStatusLabel(status)}
                     </span>
                   </div>
@@ -710,7 +712,10 @@ export function FileVaultWorkspace({
                     key={pr.id}
                     className="dash-cr-item"
                     onClick={() =>
-                      onSelectDocument(pr.doc.repo.owner.login, pr.doc.repo.name)
+                      onSelectDocument(
+                        pr.doc.repo.owner.login,
+                        pr.doc.repo.name,
+                      )
                     }
                     role="button"
                     tabIndex={0}
@@ -748,11 +753,15 @@ export function FileVaultWorkspace({
                       <div className="dash-cr-title">{pr.title}</div>
                       <div className="dash-cr-meta">
                         {formatDocumentName(pr.docName)} · opened{" "}
-                        {formatRelativeTime(pr.created_at ?? "")} by {submitterLogin}
+                        {formatRelativeTime(pr.created_at ?? "")} by{" "}
+                        {submitterLogin}
                       </div>
                     </div>
 
-                    <div className="dash-cr-reviewer" aria-label={`Reviewer: ${submitterLogin}`}>
+                    <div
+                      className="dash-cr-reviewer"
+                      aria-label={`Reviewer: ${submitterLogin}`}
+                    >
                       <div
                         className="dash-cr-avatar"
                         style={{
@@ -773,7 +782,10 @@ export function FileVaultWorkspace({
         {/* Right column */}
         <div className="dash-right-col">
           {/* Quick Actions */}
-          <div className="dash-section-block" style={{ marginBottom: "var(--brand-space-5)" }}>
+          <div
+            className="dash-section-block"
+            style={{ marginBottom: "var(--brand-space-5)" }}
+          >
             <div className="dash-section-head">
               <div className="dash-section-head-left">
                 <svg
@@ -932,8 +944,7 @@ export function FileVaultWorkspace({
                     </div>
                     <div className="dash-activity-body">
                       <div className="dash-activity-text">
-                        <strong>{displayLogin}</strong>{" "}
-                        {entry.action}{" "}
+                        <strong>{displayLogin}</strong> {entry.action}{" "}
                         <button
                           type="button"
                           onClick={() =>
