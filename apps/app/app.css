@@ -1620,7 +1620,7 @@ input {
   cursor: pointer;
   border: none;
   padding: 0;
-  transition: background var(--brand-transition-fast);
+  transition: none;
 }
 
 .app-topnav-logo-mark:hover {
@@ -1640,9 +1640,7 @@ input {
   font-weight: var(--brand-weight-medium);
   color: var(--bs-text-secondary);
   cursor: pointer;
-  transition:
-    background var(--brand-transition-base),
-    color var(--brand-transition-base);
+  transition: none;
   margin-right: var(--brand-space-3);
   white-space: nowrap;
   flex-shrink: 0;
@@ -1677,9 +1675,7 @@ input {
   font-size: 13px;
   color: var(--bs-text-primary);
   outline: none;
-  transition:
-    border-color var(--brand-transition-base),
-    background var(--brand-transition-base);
+  transition: none;
 }
 
 .app-nav-search-input::placeholder {
@@ -1735,9 +1731,7 @@ input {
   border: none;
   background: transparent;
   cursor: pointer;
-  transition:
-    color var(--brand-transition-base),
-    background var(--brand-transition-base);
+  transition: none;
   white-space: nowrap;
   text-decoration: none;
 }
@@ -1796,7 +1790,7 @@ input {
   border-radius: var(--brand-radius-md);
   border: none;
   cursor: pointer;
-  transition: background var(--brand-transition-base);
+  transition: none;
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -1823,9 +1817,7 @@ input {
   background: transparent;
   color: var(--bs-text-secondary);
   cursor: pointer;
-  transition:
-    color var(--brand-transition-base),
-    background var(--brand-transition-base);
+  transition: none;
   position: relative;
   flex-shrink: 0;
 }
@@ -1833,19 +1825,6 @@ input {
 .app-topnav-icon-btn:hover {
   color: var(--bs-text-primary);
   background: var(--bs-surface-2);
-}
-
-/* Resize the theme toggle to match the new compact nav */
-.app-topnav .bs-theme-toggle {
-  width: 30px;
-  height: 30px;
-  border: none;
-  background: transparent;
-}
-
-.app-topnav .bs-theme-toggle:hover {
-  background: var(--bs-surface-2);
-  border: none;
 }
 
 .app-topnav-avatar {
@@ -1861,7 +1840,7 @@ input {
   color: var(--brand-coral);
   cursor: pointer;
   border: 1.5px solid transparent;
-  transition: border-color var(--brand-transition-base);
+  transition: none;
   flex-shrink: 0;
   font-family: var(--brand-font-mono);
 }
@@ -1886,37 +1865,158 @@ input {
 .app-profile-menu {
   /* Fixed positioning so the menu escapes the overflow:hidden clip on
      .app-topnav without needing JS anchor calculations. The nav is
-     always 52px tall, so top:52px places the menu flush below the bar,
-     and right matches the nav's own horizontal padding. */
+     always 52px tall; nudging it upward lets the panel overlap the
+     nav slightly so it reads as a floating surface. */
   position: fixed;
-  top: 52px;
+  top: calc(52px - var(--brand-space-3));
   right: var(--brand-space-4);
-  min-width: 140px;
+  width: min(280px, calc(100vw - var(--brand-space-8)));
   background: var(--bs-surface-1);
   border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-md);
-  box-shadow: var(--brand-shadow-lg);
+  border-radius: var(--brand-radius-xl);
+  box-shadow: var(--bs-shadow-xl);
   z-index: 100;
-  padding: var(--brand-space-1) 0;
+  padding: var(--brand-space-2);
+  display: grid;
+  gap: var(--brand-space-2);
+}
+
+.app-profile-menu-header {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: var(--brand-space-3);
+  padding: var(--brand-space-2);
+  padding-bottom: var(--brand-space-3);
+  border-bottom: 1px solid var(--bs-rule);
+}
+
+.app-profile-menu-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-3);
+  min-width: 0;
+}
+
+.app-profile-menu-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-coral-dim);
+  color: var(--brand-coral);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-xs);
+  font-weight: var(--brand-weight-semibold);
+  border: 1px solid rgba(232, 93, 38, 0.14);
+}
+
+.app-profile-menu-copy {
+  min-width: 0;
+}
+
+.app-profile-menu-copy p {
+  margin: 0;
+}
+
+.app-profile-menu-handle {
+  color: var(--bs-text-primary);
+  font-size: 15px;
+  font-weight: var(--brand-weight-semibold);
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-profile-menu-section {
+  display: grid;
+  gap: var(--brand-space-1);
+}
+
+.app-profile-menu-section + .app-profile-menu-section {
+  padding-top: var(--brand-space-3);
+  border-top: 1px solid var(--bs-rule);
 }
 
 .app-profile-menu-item {
   width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
   padding: var(--brand-space-2) var(--brand-space-3);
   background: transparent;
   border: none;
+  border-radius: var(--brand-radius-md);
   text-align: left;
-  font-size: 13px;
-  font-family: var(--brand-font-ui);
+  font-family: var(--brand-font-sans);
   color: var(--bs-text-primary);
   cursor: pointer;
-  transition: background var(--brand-transition-base);
+  transition:
+    background var(--brand-transition-base),
+    color var(--brand-transition-base);
 }
 
 .app-profile-menu-item:hover {
   background: var(--bs-surface-2);
+}
+
+.app-profile-menu-item--active {
+  background: var(--bs-surface-2);
+}
+
+.app-profile-menu-item--disabled {
+  color: var(--bs-text-faint);
+  cursor: default;
+}
+
+.app-profile-menu-item--disabled:hover {
+  background: transparent;
+}
+
+.app-profile-menu-item--disabled .app-profile-menu-icon {
+  color: var(--bs-text-faint);
+  background: transparent;
+}
+
+.app-profile-menu-item--disabled .app-profile-menu-label {
+  color: var(--bs-text-faint);
+}
+
+.app-profile-menu-item--danger:hover {
+  background: var(--bs-surface-2);
+}
+
+.app-profile-menu-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--bs-text-secondary);
+  flex-shrink: 0;
+}
+
+.app-profile-menu-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.app-profile-menu-label {
+  display: block;
+  color: var(--bs-text-primary);
+  font-size: 14px;
+  font-weight: var(--brand-weight-medium);
+  line-height: 1.25;
+}
+
+@media (max-width: 640px) {
+  .app-profile-menu {
+    right: var(--brand-space-2);
+    width: min(280px, calc(100vw - var(--brand-space-4)));
+  }
 }
 
 /* ── NEW BODY WRAP — sidebar + main ─────────────────────────── */

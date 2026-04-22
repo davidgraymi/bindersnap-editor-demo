@@ -36,6 +36,78 @@ function getInitials(name: string): string {
   return trimmed.slice(0, 2).toUpperCase();
 }
 
+function renderProfileMenuIcon(icon: string) {
+  switch (icon) {
+    case "profile":
+      return (
+        <svg
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          aria-hidden="true"
+        >
+          <circle cx="8" cy="5.25" r="2.25" />
+          <path d="M3.5 13.25a4.5 4.5 0 0 1 9 0" />
+        </svg>
+      );
+    case "documents":
+      return (
+        <svg
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          aria-hidden="true"
+        >
+          <path d="M4.25 2.75h4.5l3 3v7.5H4.25z" />
+          <path d="M8.75 2.75v3h3" />
+        </svg>
+      );
+    case "settings":
+      return (
+        <svg
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          aria-hidden="true"
+        >
+          <circle cx="8" cy="8" r="2.25" />
+          <path d="M8 2.5v1.25M8 12.25v1.25M12.25 8h1.25M2.5 8h1.25M11.9 4.1l-.9.9M5 11l-.9.9M11.9 11.9l-.9-.9M5 5l-.9-.9" />
+        </svg>
+      );
+    case "appearance":
+      return (
+        <svg
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          aria-hidden="true"
+        >
+          <path d="M8 2.25a5.75 5.75 0 1 0 5.75 5.75A4.75 4.75 0 0 1 8 2.25Z" />
+        </svg>
+      );
+    case "signout":
+      return (
+        <svg
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          aria-hidden="true"
+        >
+          <path d="M6 2.75H4.5A1.75 1.75 0 0 0 2.75 4.5v7A1.75 1.75 0 0 0 4.5 13.25H6" />
+          <path d="M8.5 5.25 11.5 8l-3 2.75" />
+          <path d="M11.5 8h-6" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
+
 export function AppShell({
   user,
   route,
@@ -47,6 +119,7 @@ export function AppShell({
   const isInbox = route.kind === "inbox";
 
   const displayName = user?.fullName ?? user?.username ?? "";
+  const username = user?.username ?? displayName;
   const initials = displayName ? getInitials(displayName) : "?";
 
   const [profileOpen, setProfileOpen] = useState(false);
@@ -87,9 +160,7 @@ export function AppShell({
             </svg>
           </button>
           <span>
-            {isDocumentRoute
-              ? `${route.owner} / ${route.repo}`
-              : "Dashboard"}
+            {isDocumentRoute ? `${route.owner} / ${route.repo}` : "Dashboard"}
           </span>
         </div>
 
@@ -120,7 +191,9 @@ export function AppShell({
                 placeholder="Search documents, changes…"
                 aria-label="Search documents and changes"
               />
-              <span className="app-nav-search-kbd" aria-hidden="true">/</span>
+              <span className="app-nav-search-kbd" aria-hidden="true">
+                /
+              </span>
             </div>
           ) : null}
 
@@ -216,46 +289,6 @@ export function AppShell({
             </svg>
           </button>
 
-          {/* Theme toggle */}
-          <button
-            className="bs-theme-toggle app-topnav-icon-btn"
-            type="button"
-            onClick={toggleTheme}
-            aria-label="Toggle dark mode"
-            title="Toggle dark / light mode"
-          >
-            <svg
-              className="bs-icon-moon"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              aria-hidden="true"
-            >
-              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-            </svg>
-            <svg
-              className="bs-icon-sun"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              aria-hidden="true"
-            >
-              <circle cx="12" cy="12" r="5" />
-              <line x1="12" y1="1" x2="12" y2="3" />
-              <line x1="12" y1="21" x2="12" y2="23" />
-              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-              <line x1="1" y1="12" x2="3" y2="12" />
-              <line x1="21" y1="12" x2="23" y2="12" />
-              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-            </svg>
-          </button>
-
           {/* User profile: avatar with dropdown */}
           <div className="app-topnav-profile">
             <button
@@ -277,18 +310,104 @@ export function AppShell({
                   onClick={() => setProfileOpen(false)}
                   aria-hidden="true"
                 />
-                <div className="app-profile-menu" role="menu">
-                  <button
-                    type="button"
-                    className="app-profile-menu-item"
-                    role="menuitem"
-                    onClick={() => {
-                      setProfileOpen(false);
-                      void onSignOut();
-                    }}
+                <div
+                  className="app-profile-menu"
+                  role="menu"
+                  aria-label="Account menu"
+                >
+                  <div className="app-profile-menu-header">
+                    <div className="app-profile-menu-identity">
+                      <div
+                        className="app-profile-menu-avatar"
+                        aria-hidden="true"
+                      >
+                        {initials}
+                      </div>
+                      <div className="app-profile-menu-copy">
+                        <p className="app-profile-menu-handle">{username}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    className="app-profile-menu-section"
+                    role="group"
+                    aria-label="Navigation"
                   >
-                    Sign out
-                  </button>
+                    <button
+                      type="button"
+                      className="app-profile-menu-item app-profile-menu-item--disabled"
+                      role="menuitem"
+                      aria-disabled="true"
+                      disabled
+                    >
+                      <span className="app-profile-menu-icon">
+                        {renderProfileMenuIcon("profile")}
+                      </span>
+                      <span className="app-profile-menu-label">Profile</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`app-profile-menu-item${isWorkspace ? " app-profile-menu-item--active" : ""}`}
+                      role="menuitem"
+                      onClick={() => {
+                        setProfileOpen(false);
+                        onNavigate({ kind: "workspace" });
+                      }}
+                    >
+                      <span className="app-profile-menu-icon">
+                        {renderProfileMenuIcon("documents")}
+                      </span>
+                      <span className="app-profile-menu-label">Documents</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="app-profile-menu-item app-profile-menu-item--disabled"
+                      role="menuitem"
+                      aria-disabled="true"
+                      disabled
+                    >
+                      <span className="app-profile-menu-icon">
+                        {renderProfileMenuIcon("settings")}
+                      </span>
+                      <span className="app-profile-menu-label">Settings</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="app-profile-menu-item"
+                      role="menuitem"
+                      onClick={() => {
+                        toggleTheme();
+                        setProfileOpen(false);
+                      }}
+                    >
+                      <span className="app-profile-menu-icon">
+                        {renderProfileMenuIcon("appearance")}
+                      </span>
+                      <span className="app-profile-menu-label">Appearance</span>
+                    </button>
+                  </div>
+
+                  <div
+                    className="app-profile-menu-section"
+                    role="group"
+                    aria-label="Session"
+                  >
+                    <button
+                      type="button"
+                      className="app-profile-menu-item app-profile-menu-item--danger"
+                      role="menuitem"
+                      onClick={() => {
+                        setProfileOpen(false);
+                        void onSignOut();
+                      }}
+                    >
+                      <span className="app-profile-menu-icon">
+                        {renderProfileMenuIcon("signout")}
+                      </span>
+                      <span className="app-profile-menu-label">Sign out</span>
+                    </button>
+                  </div>
                 </div>
               </>
             )}
