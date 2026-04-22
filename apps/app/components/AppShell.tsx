@@ -103,23 +103,6 @@ export function AppShell({
           </nav>
         ) : (
           <>
-            {/* Workspace pill */}
-            <div className="app-workspace-pill" aria-label="Current workspace">
-              <div className="app-workspace-dot" aria-hidden="true" />
-              Bindersnap Workspace
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                aria-hidden="true"
-              >
-                <path d="M4 6l4 4 4-4" />
-              </svg>
-            </div>
-
             {/* Search */}
             <div className="app-nav-search" role="search">
               <svg
