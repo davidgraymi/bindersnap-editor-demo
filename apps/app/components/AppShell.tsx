@@ -90,8 +90,13 @@ export function AppShell({
           </span>
         </div>
 
-        <>
+        {/* Spacer — pushes all right-side items to the far right */}
+        <div className="app-topnav-spacer" />
+
+        {/* Right side — order: search, create doc, change requests, documents, notifications, profile */}
+        <div className="app-topnav-right">
           {/* Search */}
+          {!isDocumentRoute ? (
             <div className="app-nav-search" role="search">
               <svg
                 className="app-nav-search-icon"
@@ -112,128 +117,81 @@ export function AppShell({
                 placeholder="Search documents, changes…"
                 aria-label="Search documents and changes"
               />
-              <span className="app-nav-search-kbd" aria-hidden="true">
-                /
-              </span>
+              <span className="app-nav-search-kbd" aria-hidden="true">/</span>
             </div>
-
-            {/* Nav links */}
-            <nav className="app-topnav-links" aria-label="Main navigation">
-              <button
-                type="button"
-                className={`app-topnav-link${isWorkspace ? " app-topnav-link--active" : ""}`}
-                onClick={() => onNavigate({ kind: "workspace" })}
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  aria-hidden="true"
-                >
-                  <rect x="2" y="2" width="5" height="5" rx="1" />
-                  <rect x="9" y="2" width="5" height="5" rx="1" />
-                  <rect x="2" y="9" width="5" height="5" rx="1" />
-                  <rect x="9" y="9" width="5" height="5" rx="1" />
-                </svg>
-                Overview
-              </button>
-              <button
-                type="button"
-                className="app-topnav-link"
-                onClick={() => onNavigate({ kind: "workspace" })}
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  aria-hidden="true"
-                >
-                  <path d="M3 4h10M3 8h10M3 12h6" />
-                </svg>
-                Documents
-              </button>
-              <button
-                type="button"
-                className={`app-topnav-link${isInbox ? " app-topnav-link--active" : ""}`}
-                onClick={() => onNavigate({ kind: "inbox" })}
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  aria-hidden="true"
-                >
-                  <circle cx="8" cy="8" r="3" />
-                  <path d="M5 5L2 2M11 5l3-3M5 11l-3 3M11 11l3 3" />
-                </svg>
-                Changes
-              </button>
-              <button
-                type="button"
-                className="app-topnav-link"
-                onClick={() => undefined}
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  aria-hidden="true"
-                >
-                  <path d="M12 13v-1a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v1" />
-                  <circle cx="7" cy="5" r="3" />
-                  <path d="M14 13v-1a4 4 0 0 0-2-3.5" />
-                </svg>
-                People
-              </button>
-            </nav>
-          </>
-
-        <div className="app-topnav-spacer" />
-
-        {/* Right side actions */}
-        <div className="app-topnav-right">
-          {/* New Document button — only on non-document routes */}
-          {!isDocumentRoute ? (
-            <>
-              <button
-                className="app-topnav-new-btn"
-                type="button"
-                id="topnav-new-doc-btn"
-                onClick={() => {
-                  // trigger the modal inside FileVaultWorkspace via a custom event
-                  document.dispatchEvent(
-                    new CustomEvent("bs:open-create-modal"),
-                  );
-                }}
-              >
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  aria-hidden="true"
-                >
-                  <path d="M8 3v10M3 8h10" />
-                </svg>
-                New Document
-              </button>
-              <div className="app-topnav-divider" aria-hidden="true" />
-            </>
           ) : null}
+
+          {/* Create document */}
+          {!isDocumentRoute ? (
+            <button
+              className="app-topnav-new-btn"
+              type="button"
+              id="topnav-new-doc-btn"
+              onClick={() => {
+                document.dispatchEvent(new CustomEvent("bs:open-create-modal"));
+              }}
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                aria-hidden="true"
+              >
+                <path d="M8 3v10M3 8h10" />
+              </svg>
+              New Document
+            </button>
+          ) : null}
+
+          {/* Change Requests */}
+          {!isDocumentRoute ? (
+            <button
+              type="button"
+              className={`app-topnav-link${isInbox ? " app-topnav-link--active" : ""}`}
+              onClick={() => onNavigate({ kind: "inbox" })}
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                aria-hidden="true"
+              >
+                <circle cx="8" cy="8" r="3" />
+                <path d="M5 5L2 2M11 5l3-3M5 11l-3 3M11 11l3 3" />
+              </svg>
+              Changes
+            </button>
+          ) : null}
+
+          {/* Documents */}
+          {!isDocumentRoute ? (
+            <button
+              type="button"
+              className={`app-topnav-link${isWorkspace ? " app-topnav-link--active" : ""}`}
+              onClick={() => onNavigate({ kind: "workspace" })}
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                aria-hidden="true"
+              >
+                <path d="M3 4h10M3 8h10M3 12h6" />
+              </svg>
+              Documents
+            </button>
+          ) : null}
+
+          <div className="app-topnav-divider" aria-hidden="true" />
 
           {/* Notifications */}
           <button
@@ -295,7 +253,7 @@ export function AppShell({
             </svg>
           </button>
 
-          {/* Avatar */}
+          {/* User profile: avatar + sign out */}
           <div
             className="app-topnav-avatar"
             title={displayName || user?.username}
@@ -303,10 +261,6 @@ export function AppShell({
           >
             {initials}
           </div>
-
-          <div className="app-topnav-divider" aria-hidden="true" />
-
-          {/* Sign out */}
           <button
             className="bs-btn bs-btn-dark"
             type="button"
