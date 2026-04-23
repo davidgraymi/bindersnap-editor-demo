@@ -212,7 +212,9 @@ test.describe("app shell routes", () => {
     await page.goto("/");
 
     await expect(
-      page.locator(`.app-topnav-avatar[aria-label="User: ${GITEA_ADMIN_USER}"]`),
+      page.locator(
+        `.app-topnav-avatar[aria-label="User: ${GITEA_ADMIN_USER}"]`,
+      ),
     ).toBeVisible();
     await expect(page.getByRole("button", { name: "Documents" })).toBeVisible();
   });

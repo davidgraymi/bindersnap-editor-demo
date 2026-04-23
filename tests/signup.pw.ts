@@ -117,7 +117,9 @@ async function signUpAndReturnToLogin(
 
   await expect(page).toHaveURL(/\/$/);
   await expect(
-    page.locator(`.app-topnav-avatar[aria-label="User: ${credentials.username}"]`),
+    page.locator(
+      `.app-topnav-avatar[aria-label="User: ${credentials.username}"]`,
+    ),
   ).toBeVisible();
   await attachScreenshot(
     page,

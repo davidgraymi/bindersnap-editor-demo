@@ -57,7 +57,9 @@ async function signUp(
 
   await expect(page).toHaveURL(/\/$/);
   await expect(
-    page.locator(`.app-topnav-avatar[aria-label="User: ${credentials.username}"]`),
+    page.locator(
+      `.app-topnav-avatar[aria-label="User: ${credentials.username}"]`,
+    ),
   ).toBeVisible();
 }
 
@@ -132,19 +134,13 @@ async function addReadCollaborator(page: Page, login: string): Promise<void> {
 
 async function reopenDocumentFromWorkspace(page: Page): Promise<void> {
   // New UI uses .app-topnav-link instead of breadcrumb navigation
-  await page
-    .locator(".app-topnav-link", { hasText: "Documents" })
-    .click();
-  await expect(
-    page.getByRole("heading", { name: "Documents" }),
-  ).toBeVisible({
+  await page.locator(".app-topnav-link", { hasText: "Documents" }).click();
+  await expect(page.getByRole("heading", { name: "Documents" })).toBeVisible({
     timeout: 10_000,
   });
 
   await page.reload();
-  await expect(
-    page.getByRole("heading", { name: "Documents" }),
-  ).toBeVisible({
+  await expect(page.getByRole("heading", { name: "Documents" })).toBeVisible({
     timeout: 10_000,
   });
 

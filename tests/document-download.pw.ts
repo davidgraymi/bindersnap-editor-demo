@@ -87,7 +87,9 @@ test.describe("Document download", () => {
     await page.getByRole("button", { name: "Create Document" }).click();
 
     // Wait for navigation to document detail
-    await expect(page.locator(".vault-detail")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(".vault-detail")).toBeVisible({
+      timeout: 10_000,
+    });
 
     // Verify the document is in the unpublished state with 1 pending approval
     await expect(
@@ -169,9 +171,7 @@ test.describe("Document download", () => {
       .click();
 
     await waitForNoPendingReviews(page, cardSearchText);
-    await page
-      .locator(".app-topnav-link", { hasText: "Documents" })
-      .click();
+    await page.locator(".app-topnav-link", { hasText: "Documents" }).click();
     await navigateToDocument(page, cardSearchText);
 
     // The page should now report Version 1 as the current published version
@@ -296,9 +296,7 @@ test.describe("Document download", () => {
       .click();
 
     await waitForNoPendingReviews(page, cardSearchText);
-    await page
-      .locator(".app-topnav-link", { hasText: "Documents" })
-      .click();
+    await page.locator(".app-topnav-link", { hasText: "Documents" }).click();
     await navigateToDocument(page, cardSearchText);
 
     // Version 2 should now be the current published version

@@ -88,7 +88,9 @@ test.describe("UI document version upload flow", () => {
     await page.getByRole("button", { name: "Create Document" }).click();
 
     // Wait for navigation to document detail
-    await expect(page.locator(".vault-detail")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(".vault-detail")).toBeVisible({
+      timeout: 10_000,
+    });
 
     await expect(
       page.getByRole("heading", { name: /No approved version yet/i }),
@@ -169,9 +171,7 @@ test.describe("UI document version upload flow", () => {
       .click();
 
     await waitForNoPendingReviews(page, cardSearchText);
-    await page
-      .locator(".app-topnav-link", { hasText: "Documents" })
-      .click();
+    await page.locator(".app-topnav-link", { hasText: "Documents" }).click();
     await navigateToDocument(page, cardSearchText);
 
     // Should now show Version 1
@@ -278,9 +278,7 @@ test.describe("UI document version upload flow", () => {
       .click();
 
     await waitForNoPendingReviews(page, cardSearchText);
-    await page
-      .locator(".app-topnav-link", { hasText: "Documents" })
-      .click();
+    await page.locator(".app-topnav-link", { hasText: "Documents" }).click();
     await navigateToDocument(page, cardSearchText);
 
     // Should now show Version 2 as current
