@@ -4,6 +4,7 @@ export type AppRoute =
   | { kind: "signup" }
   | { kind: "callback" }
   | { kind: "workspace" }
+  | { kind: "documents" }
   | { kind: "inbox" }
   | { kind: "activity" }
   | {
@@ -38,6 +39,10 @@ export function getRoute(pathname: string): AppRoute {
 
   if (normalizedPath === "/signup") {
     return { kind: "signup" };
+  }
+
+  if (normalizedPath === "/documents") {
+    return { kind: "documents" };
   }
 
   if (normalizedPath === "/inbox") {
@@ -85,6 +90,8 @@ export function routeToPath(route: AppRoute): string {
       return route.tab === "collaborators"
         ? `/docs/${route.owner}/${route.repo}/collaborators`
         : `/docs/${route.owner}/${route.repo}`;
+    case "documents":
+      return "/documents";
     case "inbox":
       return "/inbox";
     case "activity":
@@ -99,6 +106,7 @@ export function routeToPath(route: AppRoute): string {
 export function isProtectedAppRoute(route: AppRoute): boolean {
   return (
     route.kind === "workspace" ||
+    route.kind === "documents" ||
     route.kind === "document" ||
     route.kind === "inbox" ||
     route.kind === "activity"

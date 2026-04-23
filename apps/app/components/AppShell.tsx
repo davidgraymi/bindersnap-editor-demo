@@ -14,6 +14,7 @@ import type { AppRoute } from "../routes";
 import { ActivityLogPage } from "./ActivityLogPage";
 import { BindersnapLogoMark } from "./BindersnapLogoMark";
 import { DocumentDetail } from "./DocumentDetail";
+import { DocumentsPage } from "./DocumentsPage";
 import { FileVaultWorkspace } from "./FileVaultWorkspace";
 import { InboxPage } from "./InboxPage";
 
@@ -73,6 +74,7 @@ export function AppShell({
 }: AppShellProps) {
   const isDocumentRoute = route.kind === "document";
   const isWorkspace = route.kind === "workspace";
+  const isDocuments = route.kind === "documents";
   const isInbox = route.kind === "inbox";
 
   const displayName = user?.fullName ?? user?.username ?? "";
@@ -162,8 +164,8 @@ export function AppShell({
           {!isDocumentRoute ? (
             <button
               type="button"
-              className={`app-topnav-link${isWorkspace ? " app-topnav-link--active" : ""}`}
-              onClick={() => onNavigate({ kind: "workspace" })}
+              className={`app-topnav-link${isDocuments ? " app-topnav-link--active" : ""}`}
+              onClick={() => onNavigate({ kind: "documents" })}
             >
               <FileText size={14} strokeWidth={1.5} aria-hidden="true" />
               Documents
@@ -240,11 +242,11 @@ export function AppShell({
                     </button>
                     <button
                       type="button"
-                      className={`app-profile-menu-item${isWorkspace ? " app-profile-menu-item--active" : ""}`}
+                      className={`app-profile-menu-item${isDocuments ? " app-profile-menu-item--active" : ""}`}
                       role="menuitem"
                       onClick={() => {
                         setProfileOpen(false);
-                        onNavigate({ kind: "workspace" });
+                        onNavigate({ kind: "documents" });
                       }}
                     >
                       <span className="app-profile-menu-icon">
@@ -327,6 +329,21 @@ export function AppShell({
                   })
                 }
                 onBack={() => onNavigate({ kind: "workspace" })}
+              />
+            ) : route.kind === "documents" ? (
+              <DocumentsPage
+                currentUsername={user?.username ?? ""}
+                onSelectDocument={(owner, repo) =>
+                  onNavigate({
+                    kind: "document",
+                    owner,
+                    repo,
+                    tab: "overview",
+                  })
+                }
+                onNewDocument={() => {
+                  document.dispatchEvent(new CustomEvent("bs:open-create-modal"));
+                }}
               />
             ) : route.kind === "inbox" ? (
               <InboxPage
