@@ -8,76 +8,116 @@ must follow when generating or modifying any code, copy, or assets.
 
 ## Repo Architecture — Read This First
 
-This is a monorepo containing **two frontend applications**, **shared packages**,
+This is a monorepo containing **one frontend application**, **shared packages**,
 **backend services**, and **infrastructure code**. Understanding which directory
 serves which purpose is essential before making any changes.
 
 ```
 bindersnap-editor-demo/
 │
-├── apps/                       ← Deployable frontend applications
-│   ├── landing/                ← LANDING PAGE (published to GitHub Pages)
-│   │   ├── index.html          ← Landing page HTML entry
-│   │   ├── App.tsx             ← Landing page root component
-│   │   └── frontend.tsx        ← React entry point
-│   │
-│   └── app/                    ← REAL APP (never published publicly)
-│       ├── index.html          ← App HTML entry
-│       ├── App.tsx             ← App root (auth + routing)
-│       ├── auth/               ← PKCE OAuth2 flow
-│       └── components/         ← App shell components
-|
-├── infra/                      ← Infrastructure as code (placeholder)
-│   ├── aws/                    ← Terraform/Pulumi for S3, CloudFront, Fargate
-│   └── railway/                ← Gitea provisioning config
+├── apps/
+│   └── app/                        ← UNIFIED SPA (deployed to GitHub Pages)
+│       ├── index.html              ← Pre-rendered landing shell + React mount root
+│       ├── App.tsx                 ← Auth gate + routing
+│       ├── api.ts                  ← All browser-to-API calls (BFF client)
+│       ├── routes.ts               ← Client-side route definitions
+│       └── components/             ← App shell, landing page, document UI
 │
-├── packages/                   ← Shared internal libraries
-│   ├── editor/                 ← Tiptap editor component (shared by both apps)
-│   │   └── README.md           ← Read before editing
-│   ├── gitea-client/           ← All Gitea API interaction
-│   │   └── README.md           ← Read before editing
-│   ├── ui-tokens/              ← CSS design tokens, fonts, icons
-│   └── utils/                  ← Shared utilities (sanitizer, etc.)
+├── infra/                          ← Infrastructure as code
+│   ├── compute/                    ← EC2 Terraform for API host
+│   ├── backups/                    ← DLM snapshot policy
+│   ├── ci/                         ← GitHub Actions OIDC role
+│   ├── secrets/                    ← AWS Secrets Manager
+│   ├── state/                      ← Terraform remote state
+│   └── monitoring/                 ← CloudWatch / alerting
 │
-├── services/                   ← Deployable backend services
-│   └── hocuspocus/             ← Yjs WebSocket collaboration server
-│       ├── server.ts           ← Hocuspocus server entry
+├── packages/                       ← Shared internal libraries
+│   ├── editor/                     ← Tiptap editor component (shared by landing + app)
+│   │   └── README.md               ← Read before editing
+│   ├── gitea-client/               ← All Gitea API interaction
+│   │   └── README.md               ← Read before editing
+│   ├── ui-tokens/                  ← CSS design tokens, fonts, icons
+│   └── utils/                      ← Shared utilities (sanitizer, etc.)
+│
+├── services/                       ← Deployable backend services
+│   ├── api/                        ← Auth + data BFF (Bun, port 8787)
+│   │   ├── server.ts               ← HTTP server entry point
+│   │   ├── sessions.ts             ← SQLite session store
+│   │   └── README.md               ← API env vars and routes
+│   └── hocuspocus/                 ← Yjs WebSocket collaboration server
+│       ├── server.ts               ← Hocuspocus server entry
 │       └── Dockerfile
 │
-├── tests/                      ← Integration tests
-│   └── data/                   ← Files used to seed services (e.g. documents)
+├── tests/                          ← Integration tests (Playwright)
+│   └── data/                       ← Seed files for local stack
 │
-├── server.ts                   ← Bun dev/prod server (serves both apps)
-├── scripts/                    ← Build and utility scripts
-├── docs/                       ← Brand and social media assets
-├── .github/workflows/          ← CI/CD pipelines
-├── .claude/                    ← Claude agent definitions
-├── AGENTS.md                   ← This file
-├── docker-compose.yml          ← Gitea + Hocuspocus + app
-└── Dockerfile                  ← Dev-only Dockerfile for the app container
+├── scripts/                        ← Build and utility scripts
+│   └── bootstrap-gitea-service-account.ts  ← Provisions the service account token
+│
+├── server.ts                       ← Bun dev/prod server (serves the SPA)
+├── docs/                           ← Brand assets and ADRs
+├── .github/workflows/              ← CI/CD pipelines (pages.yml, deploy.yml)
+├── .claude/                        ← Claude agent definitions
+├── AGENTS.md                       ← This file
+├── docker-compose.yml              ← Local dev stack (Gitea + Hocuspocus + app)
+└── Dockerfile                      ← Dev-only Dockerfile for the app container
 ```
 
-### The two applications
+### The unified SPA
 
-|                      | Landing Page              | Real App                            |
-| -------------------- | ------------------------- | ----------------------------------- |
-| **Entry point**      | `apps/landing/index.html` | `apps/app/index.html`               |
-| **Published**        | GitHub Pages (`/`)        | Never — local + private deploy only |
-| **Auth required**    | No                        | Yes (Gitea token)                   |
-| **Gitea dependency** | No                        | Yes                                 |
-| **Demo editor**      | Read-only snapshot        | Fully wired                         |
+`apps/app/` is a single deployable frontend. It pre-renders a static landing shell
+into `index.html`; React swaps to the workspace shell when a valid session is
+present. There is no separate `apps/landing/` directory.
+
+Routes:
+
+- `/` — landing page (unauthenticated) or workspace home (authenticated)
+- `/login`, `/signup` — credential forms
+- `/documents` — document list
+- `/docs/:owner/:repo` — document detail and review
+- `/docs/:owner/:repo/collaborators` — collaborator management
+- `/inbox`, `/activity` — notifications and audit log
 
 ### The shared editor
 
-`packages/editor/` is imported by **both** applications. The editor is backend-agnostic
-by design — it receives a `giteaClient` prop when wired to the real app, and
-operates in read-only demo mode when that prop is absent. Never import from
-`packages/gitea-client/` directly inside `packages/editor/`.
+`packages/editor/` is imported by the SPA. The editor is backend-agnostic by
+design — it receives a `giteaClient` prop when wired to the real app, and runs
+in read-only demo mode when that prop is absent. **Never import from
+`packages/gitea-client/` directly inside `packages/editor/`.**
+
+If you change anything in `packages/editor/` that affects visual appearance, note it
+in your PR description. The landing page demo embed is a static snapshot and must
+be manually updated by running `bun run sync-demo`.
+
+### The BFF (`services/api`)
+
+All browser-to-data calls go through the BFF. The browser never contacts Gitea
+directly.
+
+- `POST /auth/signup` — create Gitea account + session
+- `POST /auth/login` — authenticate + set `HttpOnly` session cookie
+- `POST /auth/logout` — revoke session + Gitea token
+- `GET /auth/me` — return current session user + a Gitea token for the client
+- `GET /api/app/documents` — list workspace repos with PR state
+- `POST /api/app/documents` — create repo + upload initial file
+- `GET /api/app/documents/:owner/:repo` — document detail
+- `POST /api/app/documents/:owner/:repo/versions` — upload new version
+- `POST /api/app/documents/:owner/:repo/pull-requests/:n/reviews` — submit review
+- `POST /api/app/documents/:owner/:repo/pull-requests/:n/publish` — merge + tag
+- `GET /api/app/documents/:owner/:repo/download` — proxy file download
+- `GET/PUT/DELETE /api/app/documents/:owner/:repo/collaborators/:user` — manage access
+- `GET /api/app/users/search` — user search
+
+Per-session Gitea tokens are stored server-side in a SQLite session store
+(`services/api/sessions.ts`). The browser holds only the `bindersnap_session`
+`HttpOnly` cookie. After login, `/auth/me` also returns the token to the client
+for storage in `sessionStorage` as a runtime cache — but the session cookie is
+the source of truth.
 
 ### The integration testing stack
 
-`docker-compose.yml` runs Gitea + Hocuspocus locally. `docker compose up`
-seeds demo users and documents automatically. Use this to:
+`docker-compose.yml` runs Gitea + Hocuspocus locally. `docker compose up` seeds
+demo users and documents automatically. Use this to:
 
 - Verify Gitea service implementations against a real API
 - Run integration tests (`bun run test:integration`)
@@ -85,12 +125,17 @@ seeds demo users and documents automatically. Use this to:
 
 See `tests/README.md` for full usage.
 
-### When editor UI changes
+### Deployment
 
-If you change anything in `packages/editor/` that affects visual appearance, note it
-in your PR description. The landing page demo embed is a static snapshot and
-must be manually updated by running `bun run sync-demo`. Do not silently change
-the editor UI without flagging this in the PR.
+| Component  | Host           | How deployed                         |
+| ---------- | -------------- | ------------------------------------ |
+| SPA        | GitHub Pages   | `pages.yml` on push to `main`        |
+| API        | EC2 via Docker | `deploy.yml` via AWS SSM on tag push |
+| Gitea      | Same EC2 host  | `docker-compose.prod.yml`            |
+| Hocuspocus | Same EC2 host  | `docker-compose.prod.yml`            |
+
+The SPA is built with `BUN_PUBLIC_API_BASE_URL=https://api.bindersnap.com`
+baked in at compile time. Locally, this is `http://localhost:8787`.
 
 ---
 
@@ -100,47 +145,52 @@ These are settled, non-negotiable decisions. Do not reopen them. Do not work
 around them. If a task seems to require violating one of these, stop and create
 a `human-needed` issue instead.
 
-### The app is a BFF.
+### The BFF owns auth; Gitea tokens never reach the browser as cookies.
 
-The real app (`apps/app/`) is a static single-page application. It communicates
-with the API (`services/api`) which communicates with Gitea.
+`services/api` handles login and signup. It mints a per-user Gitea token at
+login time, stores it in its SQLite session store, and sets an `HttpOnly`
+`bindersnap_session` cookie on the browser. The Gitea token is also returned in
+the login/me response body so the SPA can cache it in `sessionStorage` for
+`gitea-client` calls, but the primary auth path is always the session cookie.
+No bearer tokens in cookies. No Gitea credentials in `localStorage`.
 
 ### All data lives in Gitea. No secondary database.
 
 Documents, versions, approvals, comments, and audit trail are all stored as
 first-class Gitea primitives: repos, branches, commits, pull requests, reviews,
 tags, and issue comments. There is no app-managed database, no metadata JSON
-file, and no shadow state outside of Gitea.
+file, and no shadow state outside of Gitea. The only exception is the BFF's
+SQLite session store, which holds only session → Gitea token mappings.
 
 The consequence: reading app state means calling the Gitea API. This is
 intentional. Do not introduce a local cache, a Postgres instance, or any
 persistence layer that duplicates Gitea state.
 
-### File uploads go direct: FileReader → base64 → Gitea contents API.
+### File uploads flow browser → BFF → Gitea.
 
-The upload flow for the file vault is entirely browser-side:
+The upload flow for the file vault:
 
 1. User selects file
-2. SPA reads it via `FileReader` as base64
-3. SPA calls `POST /api/v1/repos/{owner}/{repo}/contents/{path}` with the
-   base64 content directly
-4. SPA creates the PR
+2. SPA validates client-side (size ≤ 25 MiB; any extension allowed)
+3. SPA sends multipart form to BFF (`POST /api/app/documents` or `.../versions`)
+4. BFF reads the file as base64, commits to Gitea contents API, opens PR
 
-There is no multipart upload endpoint. There is no server that receives the file
-first. File type and size validation happen client-side before any API call.
+There is no multipart endpoint that bypasses the BFF. The BFF is always the
+server that writes to Gitea. File type and size validation happen client-side
+before any API call.
 
-See `docs/adr/0001-external-file-workflow.md` for the full upload/review/publish
-contract. **That ADR is law for the file vault workflow.**
+See `docs/adr/0001-external-file-workflow-contract.md` for the full
+upload/review/publish contract. **That ADR is law for the file vault workflow.**
 
 ### The MVP is a document repository, not an editor.
 
-The file vault workflow (issues #101–#105) does not use the inline editor. Users
-upload files authored externally (Word, Excel, PDF). Bindersnap provides version
-control and approvals on top of those files via Gitea PR primitives.
+The file vault workflow does not use the inline editor. Users upload files
+authored externally (Word, Excel, PDF). Bindersnap provides version control and
+approvals on top of those files via Gitea PR primitives.
 
-The inline editor (`packages/editor/`, issues #71–#72) is a parallel workflow
-for documents authored inside Bindersnap. These two workflows are independent.
-Do not conflate them.
+The inline editor (`packages/editor/`) is a parallel workflow for documents
+authored inside Bindersnap. These two workflows are independent. Do not
+conflate them.
 
 ---
 
@@ -211,7 +261,7 @@ reference these before writing any styles or generating any visual assets:
 - **CSS tokens:** [`packages/ui-tokens/css/bindersnap-tokens.css`](packages/ui-tokens/css/bindersnap-tokens.css)
 - **Social media & brand cheat sheet:** [`docs/bindersnap-social-cheatsheet.html`](docs/bindersnap-social-cheatsheet.html)
 
-### [`src/assets/css/bindersnap-tokens.css`](src/assets/css/bindersnap-tokens.css)
+### `packages/ui-tokens/css/bindersnap-tokens.css`
 
 This is the single source of truth for all visual values. Import it once at the
 root of your stylesheet. **Never hardcode hex values or pixel sizes in component
@@ -255,18 +305,6 @@ The file also includes pre-built utility classes for common patterns:
 `.bs-input`, `.bs-email-row`, `.bs-eyebrow`, `.bs-pill`, `.bs-file-chip`,
 `.bs-reveal` / `.bs-in` (scroll reveal).
 
-### [`docs/bindersnap-social-cheatsheet.html`](docs/bindersnap-social-cheatsheet.html)
-
-A printable one-page reference for social media assets. Contains:
-
-- Exact pixel dimensions for LinkedIn, Twitter/X, Instagram, and Product Hunt
-- Color swatches with hex values
-- Copy do's and don'ts with real examples
-- Typography quick reference
-
-Open this in a browser and use "Print / Save PDF" to export. Reference it when
-generating any social media templates, og:image tags, or marketing assets.
-
 ---
 
 ## Typography Rules
@@ -287,7 +325,7 @@ use Geist for a main headline.
 
 ## Color Usage Rules
 
-Reference [`src/assets/css/bindersnap-tokens.css`](src/assets/css/bindersnap-tokens.css) for all values.
+Reference `packages/ui-tokens/css/bindersnap-tokens.css` for all values.
 
 **Coral (`--color-coral`, `#E85D26`):**
 Used for CTAs, the top-border reveal on hover cards, section eyebrow labels,
@@ -428,7 +466,7 @@ product, not a plugin.**
 
 When generating new pages, components, or templates:
 
-1. Import `src/assets/css/bindersnap-tokens.css` before any other stylesheet
+1. Import `packages/ui-tokens/css/bindersnap-tokens.css` before any other stylesheet
 2. Use `--color-*`, `--font-*`, `--space-*`, `--radius-*`, `--shadow-*`
    variables throughout — zero hardcoded values
 3. Check `docs/bindersnap-social-cheatsheet.html` for exact dimensions before
@@ -445,6 +483,13 @@ When generating new pages, components, or templates:
 This repository uses a strict MCP-first workflow for all GitHub API actions.
 Agents must follow this policy exactly.
 
+### Tool mapping
+
+- Read: `issue_read`, `pull_request_read`, `list_issues`, `list_pull_requests`
+- Write: `create_branch`, `create_or_update_file`, `create_pull_request`, `update_pull_request`, `add_issue_comment`, `pull_request_review_write`
+
+Every PR must include workflow evidence (issue read method, branch creation method, commit SHA, PR creation method, any fallbacks used).
+
 ### Allowed fallback
 
 `gh` CLI is fallback-only. Use it only if:
@@ -452,25 +497,24 @@ Agents must follow this policy exactly.
 - The required MCP tool is unavailable, or
 - The MCP call fails for a non-user-actionable reason
 
-When fallback is used, document:
-
-- The MCP tool name
-- The exact failure message
-- The `gh` command used as fallback
+When fallback is used, document the MCP tool name, the exact failure message, and the `gh` command used as fallback.
 
 ### Git ownership split
 
 - Use local `git` for working tree operations (edit, stage, commit, diff)
 - Use MCP for GitHub API operations (issue, branch, PR, comments, reviews)
 
+---
+
 ## Production Security Rules
 
 These apply to any changes touching `docker-compose.prod.yml`, `Caddyfile.prod`, or EC2 deployment:
 
-1. **Never hardcode credentials.** All secrets (`GITEA_ADMIN_PASS`, `GITEA_SECRET_KEY`, etc.) must come from environment variables, loaded from `.env.prod` on the server. `.env.prod` is in `.gitignore` and must never be committed.
+1. **Never hardcode credentials.** All secrets (`GITEA_ADMIN_PASS`, `GITEA_SECRET_KEY`, `BINDERSNAP_GITEA_SERVICE_TOKEN`, etc.) must come from environment variables, loaded from `.env.prod` on the server. `.env.prod` is in `.gitignore` and must never be committed.
 2. **Registration is disabled in prod.** `GITEA__service__DISABLE_REGISTRATION=true` is non-negotiable for production. Dev compose may differ.
 3. **`INSTALL_LOCK=true` in prod.** Prevents Gitea setup wizard from re-running after first boot.
 4. **Rotate credentials on first deploy.** Generate with `openssl rand -base64 20` for passwords and `openssl rand -base64 32` for secret keys.
+5. **Service account token is required in prod.** `BINDERSNAP_GITEA_SERVICE_TOKEN` must be set; the API exits at startup if it is missing in production.
 
 ---
 
