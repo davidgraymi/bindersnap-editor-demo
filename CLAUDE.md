@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-**Read `AGENTS.md` before making any changes.** It contains non-negotiable architecture decisions, design system rules, and the GitHub workflow policy. This file summarizes what you need to get started quickly.
+**Read `AGENTS.md` before making any changes.** It contains design system rules, GitHub workflow policy, and product context.
 
 ---
 
@@ -11,21 +11,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 All commands use **Bun** as the runtime and package manager.
 
 ```bash
-# Development
-bun run dev           # Start app (hot reload)
-bun run dev:landing   # Start landing page
-bun run dev:api       # Start API service
+# Development (run both together for local dev)
+bun run dev:app       # Start SPA (hot reload, port 5173)
+bun run dev:api       # Start API service (hot reload, port 8787)
 
 # Build
-bun run build         # Build landing + app
-bun run build:app     # Build app only
-bun run build:landing # Build landing only
+bun run build         # Build SPA to dist/
 
 # Tests
-bun run test          # Run all unit tests
-bun run test:app      # Test app + gitea-client
-bun run test:landing  # Test landing + editor + utils
+bun run test          # Run all unit tests (test:app + test:ops)
+bun run test:app      # Test apps/app, packages/gitea-client, packages/editor, packages/utils
+bun run test:ops      # Test services/api, scripts, infra/backups
 bun run test:integration  # Playwright tests (requires: bun run up)
+
+# Run a single test file
+bun test path/to/file.test.ts
+
+# Code formatting
+bun run format        # Format all source files with Prettier
+bun run format:check  # Check formatting without writing
 
 # Local dev stack (Docker Compose: Gitea + Hocuspocus + app)
 bun run up            # Start full local stack
@@ -38,18 +42,13 @@ Test files live alongside source as `*.test.ts`. There is no separate linter scr
 
 ## Architecture
 
-This is a **Bun monorepo** containing two SPAs, shared packages, and backend services.
+This is a **Bun monorepo** with one unified SPA, shared packages, and backend services.
 
-### Two Applications
+### One Application
 
-|           | `apps/landing/` | `apps/app/`  |
-| --------- | --------------- | ------------ |
-| Published | GitHub Pages    | Never public |
-| Auth      | None            | PKCE OAuth2  |
-| Gitea     | No              | Yes          |
-| Editor    | Read-only demo  | Fully wired  |
+`apps/app/` is the single deployable frontend — published to GitHub Pages. It pre-renders a static landing shell into `index.html`; React swaps to the workspace shell when a valid session is present.
 
-### Packages (shared by both apps)
+### Packages (shared)
 
 - `packages/editor/` — Tiptap 3 + ProseMirror editor. Backend-agnostic: receives a `giteaClient` prop for real use, runs demo mode without it. **Never import `gitea-client` inside `editor/`.**
 - `packages/gitea-client/` — All Gitea API calls (auth, documents, PRs). Stateless service modules.
@@ -58,8 +57,9 @@ This is a **Bun monorepo** containing two SPAs, shared packages, and backend ser
 
 ### Services
 
+- `services/api/` — Lightweight BFF (Bun). Owns auth (login/signup/logout/me), session cookies, and Gitea token custody. App data calls go through `/api/app/*` routes.
 - `services/hocuspocus/` — Yjs WebSocket server for real-time collaboration.
-- `server.ts` — Bun dev/prod server that routes both apps.
+- `server.ts` — Bun dev/prod server that serves the SPA.
 
 ### Path aliases (tsconfig)
 
@@ -71,15 +71,15 @@ This is a **Bun monorepo** containing two SPAs, shared packages, and backend ser
 
 These are settled. Do not reopen them. If a task seems to require violating one, open a `human-needed` issue instead.
 
-1. **Pure SPA — no BFF.** `apps/app/` communicates directly with Gitea via bearer token. No Express/Bun/Hono proxy. The only permitted backend services are `services/hocuspocus/` and future Pandoc/Stripe services (backlogged).
+1. **BFF owns auth; Gitea tokens stay server-side.** `services/api` handles login/signup and stores per-session Gitea tokens in its SQLite session store. The browser only receives an `HttpOnly` session cookie — never a raw Gitea token. No bearer tokens in `sessionStorage` or `localStorage`.
 
-2. **PKCE OAuth2 — browser holds the token.** Token lives in `sessionStorage`. No cookies. No server-side sessions. `apps/app/auth/` owns the flow; `packages/gitea-client/` consumes the token.
+2. **Gitea is the only datastore.** Documents, approvals, and audit trail are Gitea repos/commits/PRs/reviews. No Postgres, no cache, no shadow state beyond the API's session store.
 
-3. **Gitea is the only datastore.** Documents, approvals, and audit trail are Gitea repos/commits/PRs/reviews. No Postgres, no cache, no shadow state.
+3. **File uploads are browser-direct.** `FileReader → base64 → Gitea contents API`. No server receives the file. See `docs/adr/0001-external-file-workflow.md` — that ADR is law for the file vault workflow.
 
-4. **File uploads are browser-direct.** `FileReader → base64 → Gitea contents API`. No server receives the file. See `docs/adr/0001-external-file-workflow.md` — that ADR is law for the file vault workflow.
+4. **Two independent workflows.** File vault (external uploads, issues #101–#105) and inline editor (issues #71–#72) are separate. Do not conflate them.
 
-5. **Two independent workflows.** File vault (external uploads, issues #101–#105) and inline editor (issues #71–#72) are separate. Do not conflate them.
+5. **When editor UI changes, flag it.** If you change `packages/editor/` visuals, note it in your PR — the landing demo embed is a static snapshot requiring a manual `bun run sync-demo` update.
 
 ---
 
@@ -87,7 +87,7 @@ These are settled. Do not reopen them. If a task seems to require violating one,
 
 All visual values come from `packages/ui-tokens/css/bindersnap-tokens.css`. **Never hardcode hex values or pixel sizes.** Use `--color-*`, `--font-*`, `--space-*`, `--radius-*`, `--shadow-*` variables.
 
-Key rules from `AGENTS.md`:
+Key rules:
 
 - Background is always `var(--color-paper)` (`#FAFAF7`), never `#fff`
 - Coral (`--color-coral`) is used for exactly **one** primary action per section
