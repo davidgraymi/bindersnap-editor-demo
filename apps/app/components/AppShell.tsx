@@ -16,7 +16,7 @@ import { BindersnapLogoMark } from "./BindersnapLogoMark";
 import { CreateDocumentModal } from "./CreateDocumentModal";
 import { DocumentDetail } from "./DocumentDetail";
 import { DocumentsPage } from "./DocumentsPage";
-import { FileVaultWorkspace } from "./FileVaultWorkspace";
+import { HomePage } from "./HomePage";
 import { InboxPage } from "./InboxPage";
 
 interface AppShellProps {
@@ -393,7 +393,7 @@ export function AppShell({
             ) : route.kind === "activity" ? (
               <ActivityLogPage />
             ) : (
-              <FileVaultWorkspace
+              <HomePage
                 currentUsername={currentUsername}
                 onSelectDocument={(owner, repo) =>
                   onNavigate({

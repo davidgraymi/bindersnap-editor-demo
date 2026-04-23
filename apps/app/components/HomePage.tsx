@@ -16,7 +16,7 @@ import {
 import { getWorkspaceDocuments, type WorkspaceDocumentSummary } from "../api";
 import { BindersnapLogoMark } from "./BindersnapLogoMark";
 
-interface FileVaultWorkspaceProps {
+interface HomePageProps {
   currentUsername: string;
   onSelectDocument: (owner: string, repo: string) => void;
   onNewDocument: () => void;
@@ -170,11 +170,11 @@ function SkeletonRows({ count }: { count: number }) {
 
 // ── Component ────────────────────────────────────────────────
 
-export function FileVaultWorkspace({
+export function HomePage({
   currentUsername,
   onSelectDocument,
   onNewDocument,
-}: FileVaultWorkspaceProps) {
+}: HomePageProps) {
   const [documents, setDocuments] = useState<WorkspaceDocumentSummary[]>([]);
   const [isLoadingDocuments, setIsLoadingDocuments] = useState(true);
   const [error, setError] = useState<string | null>(null);
