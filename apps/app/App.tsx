@@ -71,7 +71,6 @@ function LoginPage({
   );
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(callbackError);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -112,7 +111,7 @@ function LoginPage({
 
     try {
       if (mode === "signin") {
-        await onLogin(normalizedIdentifier, password, rememberMe);
+        await onLogin(normalizedIdentifier, password, true);
       } else {
         await onSignup(normalizedUsername, normalizedIdentifier, password);
       }
@@ -205,18 +204,6 @@ function LoginPage({
                   placeholder="Confirm your password"
                   autoComplete="new-password"
                 />
-              </label>
-            ) : null}
-
-            {mode === "signin" ? (
-              <label className="app-check-row">
-                <input
-                  className="app-check-input"
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(event) => setRememberMe(event.target.checked)}
-                />
-                <span>Keep me signed in for 30 days</span>
               </label>
             ) : null}
 
