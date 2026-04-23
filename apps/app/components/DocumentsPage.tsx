@@ -17,7 +17,12 @@ interface DocumentsPageProps {
 }
 
 type SortOption = "updated" | "name" | "status";
-type FilterStatus = "all" | "draft" | "in_review" | "approved" | "changes_requested";
+type FilterStatus =
+  | "all"
+  | "draft"
+  | "in_review"
+  | "approved"
+  | "changes_requested";
 
 function formatRelativeTime(timestamp: string): string {
   if (!timestamp) return "Unknown";
@@ -33,11 +38,13 @@ function formatRelativeTime(timestamp: string): string {
     const weeks = Math.floor(days / 7);
     const months = Math.floor(days / 30);
 
-    if (months > 0) return `Updated ${months} month${months > 1 ? "s" : ""} ago`;
+    if (months > 0)
+      return `Updated ${months} month${months > 1 ? "s" : ""} ago`;
     if (weeks > 0) return `Updated ${weeks} week${weeks > 1 ? "s" : ""} ago`;
     if (days > 0) return `Updated ${days} day${days > 1 ? "s" : ""} ago`;
     if (hours > 0) return `Updated ${hours} hour${hours > 1 ? "s" : ""} ago`;
-    if (minutes > 0) return `Updated ${minutes} minute${minutes > 1 ? "s" : ""} ago`;
+    if (minutes > 0)
+      return `Updated ${minutes} minute${minutes > 1 ? "s" : ""} ago`;
     return "Updated just now";
   } catch {
     return "Unknown";
@@ -65,36 +72,59 @@ function getDocStatus(
   return "draft";
 }
 
-function getStatusLabel(status: "in_review" | "approved" | "changes_requested" | "draft"): string {
+function getStatusLabel(
+  status: "in_review" | "approved" | "changes_requested" | "draft",
+): string {
   switch (status) {
-    case "in_review": return "In Review";
-    case "approved": return "Approved";
-    case "changes_requested": return "Changes Requested";
-    case "draft": return "Draft";
+    case "in_review":
+      return "In Review";
+    case "approved":
+      return "Approved";
+    case "changes_requested":
+      return "Changes Requested";
+    case "draft":
+      return "Draft";
   }
 }
 
-function getStatusClass(status: "in_review" | "approved" | "changes_requested" | "draft"): string {
+function getStatusClass(
+  status: "in_review" | "approved" | "changes_requested" | "draft",
+): string {
   switch (status) {
-    case "in_review": return "docs-status-badge docs-status-badge--review";
-    case "approved": return "docs-status-badge docs-status-badge--approved";
-    case "changes_requested": return "docs-status-badge docs-status-badge--changes";
-    case "draft": return "docs-status-badge docs-status-badge--draft";
+    case "in_review":
+      return "docs-status-badge docs-status-badge--review";
+    case "approved":
+      return "docs-status-badge docs-status-badge--approved";
+    case "changes_requested":
+      return "docs-status-badge docs-status-badge--changes";
+    case "draft":
+      return "docs-status-badge docs-status-badge--draft";
   }
 }
 
-function sortDocs(docs: WorkspaceDocumentSummary[], sort: SortOption): WorkspaceDocumentSummary[] {
+function sortDocs(
+  docs: WorkspaceDocumentSummary[],
+  sort: SortOption,
+): WorkspaceDocumentSummary[] {
   return [...docs].sort((a, b) => {
     switch (sort) {
       case "name":
         return a.repo.name.localeCompare(b.repo.name);
       case "status": {
-        const order = { approved: 0, in_review: 1, changes_requested: 2, draft: 3 };
+        const order = {
+          approved: 0,
+          in_review: 1,
+          changes_requested: 2,
+          draft: 3,
+        };
         return order[getDocStatus(a)] - order[getDocStatus(b)];
       }
       case "updated":
       default:
-        return new Date(b.repo.updated_at).getTime() - new Date(a.repo.updated_at).getTime();
+        return (
+          new Date(b.repo.updated_at).getTime() -
+          new Date(a.repo.updated_at).getTime()
+        );
     }
   });
 }
@@ -125,12 +155,16 @@ export function DocumentsPage({
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Unable to load documents.");
+          setError(
+            err instanceof Error ? err.message : "Unable to load documents.",
+          );
           setLoading(false);
         }
       });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const filtered = sortDocs(
@@ -151,7 +185,9 @@ export function DocumentsPage({
     draft: documents.filter((d) => getDocStatus(d) === "draft").length,
     in_review: documents.filter((d) => getDocStatus(d) === "in_review").length,
     approved: documents.filter((d) => getDocStatus(d) === "approved").length,
-    changes_requested: documents.filter((d) => getDocStatus(d) === "changes_requested").length,
+    changes_requested: documents.filter(
+      (d) => getDocStatus(d) === "changes_requested",
+    ).length,
   };
 
   return (
@@ -161,7 +197,9 @@ export function DocumentsPage({
         <div className="docs-page-header-left">
           <span className="bs-eyebrow">Documents</span>
           <h1 className="docs-page-title">
-            {currentUsername ? `${currentUsername}'s Documents` : "My Documents"}
+            {currentUsername
+              ? `${currentUsername}'s Documents`
+              : "My Documents"}
           </h1>
         </div>
         <div className="docs-page-header-right">
@@ -178,18 +216,30 @@ export function DocumentsPage({
 
       {/* ── STATUS FILTER TABS ── */}
       <div className="docs-filter-bar">
-        {(["all", "draft", "in_review", "approved", "changes_requested"] as FilterStatus[]).map((f) => (
+        {(
+          [
+            "all",
+            "draft",
+            "in_review",
+            "approved",
+            "changes_requested",
+          ] as FilterStatus[]
+        ).map((f) => (
           <button
             key={f}
             type="button"
             className={`docs-filter-tab${filterStatus === f ? " docs-filter-tab--active" : ""}`}
             onClick={() => setFilterStatus(f)}
           >
-            {f === "all" ? "All" :
-             f === "draft" ? "Draft" :
-             f === "in_review" ? "In Review" :
-             f === "approved" ? "Approved" :
-             "Changes Requested"}
+            {f === "all"
+              ? "All"
+              : f === "draft"
+                ? "Draft"
+                : f === "in_review"
+                  ? "In Review"
+                  : f === "approved"
+                    ? "Approved"
+                    : "Changes Requested"}
             <span className="docs-filter-count">{counts[f]}</span>
           </button>
         ))}
@@ -198,7 +248,12 @@ export function DocumentsPage({
       {/* ── SEARCH + SORT TOOLBAR ── */}
       <div className="docs-toolbar">
         <div className="docs-toolbar-search">
-          <Search size={14} strokeWidth={1.5} className="docs-toolbar-search-icon" aria-hidden="true" />
+          <Search
+            size={14}
+            strokeWidth={1.5}
+            className="docs-toolbar-search-icon"
+            aria-hidden="true"
+          />
           <input
             type="text"
             className="docs-toolbar-search-input"
@@ -247,13 +302,18 @@ export function DocumentsPage({
           </div>
           {search || filterStatus !== "all" ? (
             <>
-              <p className="docs-empty-title">No documents match your filters.</p>
+              <p className="docs-empty-title">
+                No documents match your filters.
+              </p>
               <p className="docs-empty-sub">
                 Try a different search or{" "}
                 <button
                   type="button"
                   className="docs-empty-reset"
-                  onClick={() => { setSearch(""); setFilterStatus("all"); }}
+                  onClick={() => {
+                    setSearch("");
+                    setFilterStatus("all");
+                  }}
                 >
                   clear all filters
                 </button>
@@ -263,8 +323,14 @@ export function DocumentsPage({
           ) : (
             <>
               <p className="docs-empty-title">No documents yet.</p>
-              <p className="docs-empty-sub">Create your first document to get started.</p>
-              <button type="button" className="docs-btn-primary" onClick={onNewDocument}>
+              <p className="docs-empty-sub">
+                Create your first document to get started.
+              </p>
+              <button
+                type="button"
+                className="docs-btn-primary"
+                onClick={onNewDocument}
+              >
                 <Plus size={14} strokeWidth={2} aria-hidden="true" />
                 New Document
               </button>
@@ -302,7 +368,9 @@ export function DocumentsPage({
                   </div>
 
                   {doc.repo.description && (
-                    <p className="docs-list-item-description">{doc.repo.description}</p>
+                    <p className="docs-list-item-description">
+                      {doc.repo.description}
+                    </p>
                   )}
 
                   <div className="docs-list-item-meta">
@@ -312,7 +380,11 @@ export function DocumentsPage({
                     </span>
                     {openPRs > 0 && (
                       <span className="docs-list-item-prs">
-                        <GitPullRequest size={12} strokeWidth={1.5} aria-hidden="true" />
+                        <GitPullRequest
+                          size={12}
+                          strokeWidth={1.5}
+                          aria-hidden="true"
+                        />
                         {openPRs} open {openPRs === 1 ? "request" : "requests"}
                       </span>
                     )}
@@ -333,7 +405,8 @@ export function DocumentsPage({
 
       {!loading && !error && filtered.length > 0 && (
         <p className="docs-result-count">
-          Showing {filtered.length} of {documents.length} document{documents.length !== 1 ? "s" : ""}
+          Showing {filtered.length} of {documents.length} document
+          {documents.length !== 1 ? "s" : ""}
         </p>
       )}
     </div>

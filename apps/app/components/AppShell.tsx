@@ -342,7 +342,9 @@ export function AppShell({
                   })
                 }
                 onNewDocument={() => {
-                  document.dispatchEvent(new CustomEvent("bs:open-create-modal"));
+                  document.dispatchEvent(
+                    new CustomEvent("bs:open-create-modal"),
+                  );
                 }}
               />
             ) : route.kind === "inbox" ? (
