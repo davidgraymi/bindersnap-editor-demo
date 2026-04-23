@@ -2,6 +2,8 @@ import { randomUUID } from "crypto";
 
 import { logger } from "./logger";
 import { sessionStore, type SessionRecord } from "./sessions";
+import { subscriptionStore, hasActiveSubscription } from "./subscriptions";
+import { verifyStripeSignature } from "./stripe/webhook";
 import {
   createGiteaClient,
   GiteaApiError,
@@ -86,6 +88,24 @@ if (isProduction && !giteaServiceToken) {
     "FATAL: BINDERSNAP_GITEA_SERVICE_TOKEN is not set in production",
     { env: "production" },
   );
+  process.exit(1);
+}
+
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY?.trim() ?? "";
+const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim() ?? "";
+const stripePriceId = process.env.STRIPE_PRICE_ID?.trim() ?? "";
+
+const defaultStripeAppOrigin = "http://localhost:5173";
+const appOrigin = (
+  process.env.BINDERSNAP_APP_ORIGIN ??
+  process.env.BINDERSNAP_ALLOWED_ORIGINS?.split(",")[0] ??
+  defaultStripeAppOrigin
+).trim();
+
+if (isProduction && !stripeSecretKey) {
+  logger.error("FATAL: STRIPE_SECRET_KEY is not set in production", {
+    env: "production",
+  });
   process.exit(1);
 }
 
@@ -645,6 +665,32 @@ function requireSession(
   }
 
   return { session, client: createSessionGiteaClient(session) };
+}
+
+function requireSubscription(
+  req: Request,
+  baseHeaders: Headers,
+): { session: SessionRecord; client: GiteaClient } | Response {
+  const auth = requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  if (!hasActiveSubscription(auth.session.username)) {
+    return json(402, { error: "Subscription required." }, baseHeaders);
+  }
+  return auth;
+}
+
+async function stripeFetch(
+  path: string,
+  body?: URLSearchParams,
+): Promise<Response> {
+  return fetch(`https://api.stripe.com${path}`, {
+    method: body ? "POST" : "GET",
+    headers: {
+      Authorization: `Bearer ${stripeSecretKey}`,
+      ...(body ? { "Content-Type": "application/x-www-form-urlencoded" } : {}),
+    },
+    body,
+  });
 }
 
 function parsePositiveIntInput(
@@ -1650,7 +1696,7 @@ async function handleDocuments(
   req: Request,
   baseHeaders: Headers,
 ): Promise<Response> {
-  const auth = requireSession(req, baseHeaders);
+  const auth = requireSubscription(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -1718,7 +1764,7 @@ async function handleCreateDocument(
   req: Request,
   baseHeaders: Headers,
 ): Promise<Response> {
-  const auth = requireSession(req, baseHeaders);
+  const auth = requireSubscription(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -1875,7 +1921,7 @@ async function handleDocumentDetail(
   owner: string,
   repo: string,
 ): Promise<Response> {
-  const auth = requireSession(req, baseHeaders);
+  const auth = requireSubscription(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -1970,7 +2016,7 @@ async function handleDocumentVersions(
   owner: string,
   repo: string,
 ): Promise<Response> {
-  const auth = requireSession(req, baseHeaders);
+  const auth = requireSubscription(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -2112,7 +2158,7 @@ async function handleDocumentReview(
   repo: string,
   prNumber: number,
 ): Promise<Response> {
-  const auth = requireSession(req, baseHeaders);
+  const auth = requireSubscription(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -2171,7 +2217,7 @@ async function handleDocumentPublish(
   repo: string,
   prNumber: number,
 ): Promise<Response> {
-  const auth = requireSession(req, baseHeaders);
+  const auth = requireSubscription(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -2230,7 +2276,7 @@ async function handleDocumentDownload(
   owner: string,
   repo: string,
 ): Promise<Response> {
-  const auth = requireSession(req, baseHeaders);
+  const auth = requireSubscription(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -2308,7 +2354,7 @@ async function handleDocumentCollaborators(
   owner: string,
   repo: string,
 ): Promise<Response> {
-  const auth = requireSession(req, baseHeaders);
+  const auth = requireSubscription(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -2351,7 +2397,7 @@ async function handleSearchUsersRoute(
   req: Request,
   baseHeaders: Headers,
 ): Promise<Response> {
-  const auth = requireSession(req, baseHeaders);
+  const auth = requireSubscription(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -2387,7 +2433,7 @@ async function handleAddCollaborator(
   repo: string,
   login: string,
 ): Promise<Response> {
-  const auth = requireSession(req, baseHeaders);
+  const auth = requireSubscription(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -2457,7 +2503,7 @@ async function handleDeleteCollaborator(
   repo: string,
   login: string,
 ): Promise<Response> {
-  const auth = requireSession(req, baseHeaders);
+  const auth = requireSubscription(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -2480,6 +2526,211 @@ async function handleDeleteCollaborator(
       "Unable to remove collaborator.",
     );
   }
+}
+
+async function handleStripeWebhook(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const rawBody = await req.text();
+  const sigHeader = req.headers.get("stripe-signature") ?? "";
+
+  if (stripeWebhookSecret) {
+    const valid = await verifyStripeSignature(
+      rawBody,
+      sigHeader,
+      stripeWebhookSecret,
+    );
+    if (!valid) {
+      logger.warn("Stripe webhook signature verification failed");
+      return json(400, { error: "Invalid signature." }, baseHeaders);
+    }
+  } else {
+    logger.warn(
+      "STRIPE_WEBHOOK_SECRET not set — skipping signature verification (dev only)",
+    );
+  }
+
+  let event: Record<string, unknown>;
+  try {
+    event = JSON.parse(rawBody) as Record<string, unknown>;
+  } catch {
+    return json(400, { error: "Invalid JSON." }, baseHeaders);
+  }
+
+  const type = event.type as string | undefined;
+  const data = (event.data as Record<string, unknown> | undefined)?.object as
+    | Record<string, unknown>
+    | undefined;
+
+  logger.info("Stripe webhook received", { type });
+
+  if (type === "checkout.session.completed" && data) {
+    const username = data.client_reference_id as string | undefined;
+    const customerId = data.customer as string | undefined;
+    const subscriptionId = data.subscription as string | undefined;
+
+    if (username && customerId && subscriptionId) {
+      const subResp = await stripeFetch(`/v1/subscriptions/${subscriptionId}`);
+      if (subResp.ok) {
+        const sub = (await subResp.json()) as Record<string, unknown>;
+        subscriptionStore.upsert({
+          username,
+          stripeCustomerId: customerId,
+          stripeSubscriptionId: subscriptionId,
+          status: (sub.status as string) ?? "active",
+          currentPeriodEnd:
+            typeof sub.current_period_end === "number"
+              ? sub.current_period_end
+              : null,
+          updatedAt: Date.now(),
+        });
+        logger.info("Subscription activated", { username, status: sub.status });
+      } else {
+        subscriptionStore.upsert({
+          username,
+          stripeCustomerId: customerId,
+          stripeSubscriptionId: subscriptionId,
+          status: "active",
+          currentPeriodEnd: null,
+          updatedAt: Date.now(),
+        });
+        logger.warn(
+          "Could not fetch subscription details from Stripe; defaulting to active",
+          { username },
+        );
+      }
+    }
+  } else if (
+    (type === "customer.subscription.updated" ||
+      type === "customer.subscription.deleted") &&
+    data
+  ) {
+    const customerId = data.customer as string | undefined;
+    const subscriptionId = data.id as string | undefined;
+    if (customerId) {
+      const record = subscriptionStore.getByCustomerId(customerId);
+      if (record) {
+        subscriptionStore.upsert({
+          ...record,
+          stripeSubscriptionId: subscriptionId ?? record.stripeSubscriptionId,
+          status:
+            (data.status as string) ??
+            (type === "customer.subscription.deleted"
+              ? "canceled"
+              : record.status),
+          currentPeriodEnd:
+            typeof data.current_period_end === "number"
+              ? data.current_period_end
+              : record.currentPeriodEnd,
+          updatedAt: Date.now(),
+        });
+        logger.info("Subscription updated", {
+          customer: customerId,
+          status: data.status,
+        });
+      }
+    }
+  }
+
+  return json(200, { received: true }, baseHeaders);
+}
+
+async function handleBillingStatus(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const record = subscriptionStore.getByUsername(auth.session.username);
+  return json(
+    200,
+    {
+      status: record?.status ?? null,
+      currentPeriodEnd: record?.currentPeriodEnd ?? null,
+    },
+    baseHeaders,
+  );
+}
+
+async function handleBillingCheckout(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  if (!stripeSecretKey || !stripePriceId) {
+    return json(503, { error: "Billing not configured." }, baseHeaders);
+  }
+
+  const body = new URLSearchParams({
+    mode: "subscription",
+    "line_items[0][price]": stripePriceId,
+    "line_items[0][quantity]": "1",
+    client_reference_id: auth.session.username,
+    success_url: `${appOrigin}/billing?checkout=success`,
+    cancel_url: `${appOrigin}/billing`,
+  });
+
+  const resp = await stripeFetch("/v1/checkout/sessions", body);
+  if (!resp.ok) {
+    const err = (await resp.json().catch(() => null)) as Record<
+      string,
+      unknown
+    > | null;
+    logger.error("Stripe checkout session creation failed", {
+      status: resp.status,
+      error: err,
+    });
+    return json(
+      502,
+      { error: "Unable to create checkout session." },
+      baseHeaders,
+    );
+  }
+
+  const session = (await resp.json()) as Record<string, unknown>;
+  return json(200, { url: session.url }, baseHeaders);
+}
+
+async function handleBillingPortal(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const record = subscriptionStore.getByUsername(auth.session.username);
+  if (!record) {
+    return json(404, { error: "No subscription found." }, baseHeaders);
+  }
+
+  if (!stripeSecretKey) {
+    return json(503, { error: "Billing not configured." }, baseHeaders);
+  }
+
+  const body = new URLSearchParams({
+    customer: record.stripeCustomerId,
+    return_url: `${appOrigin}/billing`,
+  });
+
+  const resp = await stripeFetch("/v1/billing_portal/sessions", body);
+  if (!resp.ok) {
+    const err = (await resp.json().catch(() => null)) as Record<
+      string,
+      unknown
+    > | null;
+    logger.error("Stripe portal session creation failed", {
+      status: resp.status,
+      error: err,
+    });
+    return json(502, { error: "Unable to open billing portal." }, baseHeaders);
+  }
+
+  const session = (await resp.json()) as Record<string, unknown>;
+  return json(200, { url: session.url }, baseHeaders);
 }
 
 async function cleanupExpiredSessions(): Promise<void> {
@@ -2536,6 +2787,18 @@ export function createApiServer() {
         return transportError;
       }
 
+      if (pathname === "/stripe/webhook" && method === "POST") {
+        const response = await handleStripeWebhook(req, baseHeaders);
+        const durationMs = Date.now() - startMs;
+        logger.info("Response sent", {
+          method,
+          path: pathname,
+          status: response.status,
+          durationMs,
+        });
+        return response;
+      }
+
       const originError = enforceStateChangingOrigin(req, baseHeaders);
       if (originError) {
         const durationMs = Date.now() - startMs;
@@ -2578,6 +2841,15 @@ export function createApiServer() {
         response = await handleCreateDocument(req, baseHeaders);
       } else if (pathname === "/api/app/users/search" && method === "GET") {
         response = await handleSearchUsersRoute(req, baseHeaders);
+      } else if (pathname === "/api/app/billing/status" && method === "GET") {
+        response = await handleBillingStatus(req, baseHeaders);
+      } else if (
+        pathname === "/api/app/billing/checkout" &&
+        method === "POST"
+      ) {
+        response = await handleBillingCheckout(req, baseHeaders);
+      } else if (pathname === "/api/app/billing/portal" && method === "POST") {
+        response = await handleBillingPortal(req, baseHeaders);
       } else {
         const reviewMatch = pathname.match(
           /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/reviews$/,
