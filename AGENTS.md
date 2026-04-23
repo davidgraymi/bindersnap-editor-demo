@@ -70,6 +70,7 @@ into `index.html`; React swaps to the workspace shell when a valid session is
 present. There is no separate `apps/landing/` directory.
 
 Routes:
+
 - `/` — landing page (unauthenticated) or workspace home (authenticated)
 - `/login`, `/signup` — credential forms
 - `/documents` — document list
@@ -126,12 +127,12 @@ See `tests/README.md` for full usage.
 
 ### Deployment
 
-| Component | Host            | How deployed                         |
-| --------- | --------------- | ------------------------------------ |
-| SPA       | GitHub Pages    | `pages.yml` on push to `main`        |
-| API       | EC2 via Docker  | `deploy.yml` via AWS SSM on tag push |
-| Gitea     | Same EC2 host   | `docker-compose.prod.yml`            |
-| Hocuspocus| Same EC2 host   | `docker-compose.prod.yml`            |
+| Component  | Host           | How deployed                         |
+| ---------- | -------------- | ------------------------------------ |
+| SPA        | GitHub Pages   | `pages.yml` on push to `main`        |
+| API        | EC2 via Docker | `deploy.yml` via AWS SSM on tag push |
+| Gitea      | Same EC2 host  | `docker-compose.prod.yml`            |
+| Hocuspocus | Same EC2 host  | `docker-compose.prod.yml`            |
 
 The SPA is built with `BUN_PUBLIC_API_BASE_URL=https://api.bindersnap.com`
 baked in at compile time. Locally, this is `http://localhost:8787`.
