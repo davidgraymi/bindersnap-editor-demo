@@ -113,9 +113,7 @@ async function stripeFetch(
     method: body ? "POST" : "GET",
     headers: {
       Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
-      ...(body
-        ? { "Content-Type": "application/x-www-form-urlencoded" }
-        : {}),
+      ...(body ? { "Content-Type": "application/x-www-form-urlencoded" } : {}),
     },
     body,
   });
@@ -227,9 +225,7 @@ async function signUpUser(credentials: {
 
   if (!response.ok) {
     const body = await response.text().catch(() => "(no body)");
-    throw new Error(
-      `Signup failed (${response.status}): ${body}`,
-    );
+    throw new Error(`Signup failed (${response.status}): ${body}`);
   }
 
   const setCookie = response.headers.get("set-cookie") ?? "";

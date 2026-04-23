@@ -157,6 +157,12 @@ const authRateLimitEnabled = parseBoolean(
   process.env.BINDERSNAP_AUTH_RATE_LIMIT_ENABLED,
   true,
 );
+const bypassSubscriptionForUsers = new Set(
+  (process.env.BINDERSNAP_FREE_USERS ?? "")
+    .split(",")
+    .map((u) => u.trim())
+    .filter((u) => u !== ""),
+);
 const authRateLimitWindowMs = parsePositiveInt(
   process.env.BINDERSNAP_AUTH_RATE_LIMIT_WINDOW_MS,
   10 * 60 * 1000,
@@ -680,7 +686,10 @@ function requireSubscription(
 ): { session: SessionRecord; client: GiteaClient } | Response {
   const auth = requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
-  if (!hasActiveSubscription(auth.session.username)) {
+  if (
+    !bypassSubscriptionForUsers.has(auth.session.username) &&
+    !hasActiveSubscription(auth.session.username)
+  ) {
     return json(402, { error: "Subscription required." }, baseHeaders);
   }
   return auth;
@@ -2695,6 +2704,30 @@ async function handleBillingCheckout(
   return json(200, { url: session.url }, baseHeaders);
 }
 
+async function handleDevGrantSubscription(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  if (isProduction) {
+    return json(404, { error: "Not found." }, baseHeaders);
+  }
+
+  const auth = requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { username } = auth.session;
+  subscriptionStore.upsert({
+    username,
+    stripeCustomerId: `cus_dev_${username}`,
+    stripeSubscriptionId: `sub_dev_${username}`,
+    status: "active",
+    currentPeriodEnd: Math.floor(Date.now() / 1000) + 365 * 24 * 60 * 60,
+    updatedAt: Date.now(),
+  });
+
+  return json(200, { ok: true, username }, baseHeaders);
+}
+
 async function handleBillingPortal(
   req: Request,
   baseHeaders: Headers,
@@ -2850,6 +2883,11 @@ export function createApiServer() {
         response = await handleBillingCheckout(req, baseHeaders);
       } else if (pathname === "/api/app/billing/portal" && method === "POST") {
         response = await handleBillingPortal(req, baseHeaders);
+      } else if (
+        pathname === "/api/dev/grant-subscription" &&
+        method === "POST"
+      ) {
+        response = await handleDevGrantSubscription(req, baseHeaders);
       } else {
         const reviewMatch = pathname.match(
           /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/reviews$/,

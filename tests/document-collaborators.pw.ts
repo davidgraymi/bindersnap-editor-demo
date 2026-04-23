@@ -12,6 +12,9 @@
 
 import { expect, test, type Page } from "@playwright/test";
 
+const API_BASE_URL =
+  process.env.BUN_PUBLIC_API_BASE_URL ?? "http://localhost:8787";
+
 function buildUniqueCollaboratorTestData() {
   const suffix = `${Date.now().toString(36)}-${Math.random()
     .toString(36)
@@ -61,6 +64,21 @@ async function signUp(
       `.app-topnav-avatar[aria-label="User: ${credentials.username}"]`,
     ),
   ).toBeVisible();
+}
+
+async function grantDevSubscription(page: Page): Promise<void> {
+  await page.evaluate(async (apiUrl) => {
+    const resp = await fetch(`${apiUrl}/api/dev/grant-subscription`, {
+      method: "POST",
+      credentials: "include",
+    });
+    if (!resp.ok) {
+      const body = await resp.json().catch(() => ({ error: resp.status }));
+      throw new Error(
+        `Grant subscription failed: ${(body as { error: unknown }).error}`,
+      );
+    }
+  }, API_BASE_URL);
 }
 
 async function createDocument(page: Page, fileName: string): Promise<void> {
@@ -174,6 +192,7 @@ test.describe("document collaborator management", () => {
     const credentials = buildUniqueCollaboratorTestData();
 
     await signUp(page, credentials);
+    await grantDevSubscription(page);
     await createDocument(page, credentials.fileName);
     await openCollaboratorsTab(page);
 
