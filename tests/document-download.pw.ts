@@ -86,12 +86,8 @@ test.describe("Document download", () => {
     // Submit the create form
     await page.getByRole("button", { name: "Create Document" }).click();
 
-    // Wait for navigation to document detail — new UI uses breadcrumb navigation
-    await expect(
-      page.locator("nav[aria-label='Breadcrumb'] button", {
-        hasText: "Documents",
-      }),
-    ).toBeVisible({ timeout: 10_000 });
+    // Wait for navigation to document detail
+    await expect(page.locator(".vault-detail")).toBeVisible({ timeout: 10_000 });
 
     // Verify the document is in the unpublished state with 1 pending approval
     await expect(
@@ -174,7 +170,7 @@ test.describe("Document download", () => {
 
     await waitForNoPendingReviews(page, cardSearchText);
     await page
-      .locator("nav[aria-label='Breadcrumb'] button", { hasText: "Documents" })
+      .locator(".app-topnav-link", { hasText: "Documents" })
       .click();
     await navigateToDocument(page, cardSearchText);
 
@@ -301,7 +297,7 @@ test.describe("Document download", () => {
 
     await waitForNoPendingReviews(page, cardSearchText);
     await page
-      .locator("nav[aria-label='Breadcrumb'] button", { hasText: "Documents" })
+      .locator(".app-topnav-link", { hasText: "Documents" })
       .click();
     await navigateToDocument(page, cardSearchText);
 

@@ -87,12 +87,8 @@ test.describe("UI document version upload flow", () => {
     // Create the document
     await page.getByRole("button", { name: "Create Document" }).click();
 
-    // Wait for navigation to document detail — new UI uses breadcrumb navigation
-    await expect(
-      page.locator("nav[aria-label='Breadcrumb'] button", {
-        hasText: "Documents",
-      }),
-    ).toBeVisible({ timeout: 10_000 });
+    // Wait for navigation to document detail
+    await expect(page.locator(".vault-detail")).toBeVisible({ timeout: 10_000 });
 
     await expect(
       page.getByRole("heading", { name: /No approved version yet/i }),
@@ -174,7 +170,7 @@ test.describe("UI document version upload flow", () => {
 
     await waitForNoPendingReviews(page, cardSearchText);
     await page
-      .locator("nav[aria-label='Breadcrumb'] button", { hasText: "Documents" })
+      .locator(".app-topnav-link", { hasText: "Documents" })
       .click();
     await navigateToDocument(page, cardSearchText);
 
@@ -283,7 +279,7 @@ test.describe("UI document version upload flow", () => {
 
     await waitForNoPendingReviews(page, cardSearchText);
     await page
-      .locator("nav[aria-label='Breadcrumb'] button", { hasText: "Documents" })
+      .locator(".app-topnav-link", { hasText: "Documents" })
       .click();
     await navigateToDocument(page, cardSearchText);
 

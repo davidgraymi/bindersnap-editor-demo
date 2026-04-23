@@ -117,7 +117,7 @@ async function signUpAndReturnToLogin(
 
   await expect(page).toHaveURL(/\/$/);
   await expect(
-    page.locator(".app-user-badge", { hasText: credentials.username }),
+    page.locator(`.app-topnav-avatar[aria-label="User: ${credentials.username}"]`),
   ).toBeVisible();
   await attachScreenshot(
     page,
@@ -159,9 +159,9 @@ async function logInWithIdentifier(
 
   await expect(page).toHaveURL(/\/$/);
   await expect(
-    page.locator(".app-user-badge", { hasText: expectedUsername }),
+    page.locator(`.app-topnav-avatar[aria-label="User: ${expectedUsername}"]`),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+  await expect(page.locator(".app-topnav-avatar")).toBeVisible();
   await attachScreenshot(
     page,
     testInfo,
