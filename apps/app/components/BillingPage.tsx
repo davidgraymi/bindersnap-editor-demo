@@ -176,19 +176,6 @@ export function BillingPage({
           <div className="bs-eyebrow">Bindersnap Pro</div>
           <h1>Start your subscription</h1>
           <p style={{ color: "var(--bs-text-muted)" }}>$100 / month</p>
-          <ul
-            style={{
-              listStyle: "none",
-              display: "grid",
-              gap: "var(--brand-space-2)",
-              color: "var(--bs-text-secondary)",
-              fontSize: "var(--brand-text-sm)",
-            }}
-          >
-            <li>Document management</li>
-            <li>Version control</li>
-            <li>Real-time collaboration</li>
-          </ul>
           <button
             className="bs-btn bs-btn-primary"
             type="button"
