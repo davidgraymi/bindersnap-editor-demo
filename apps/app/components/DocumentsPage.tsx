@@ -170,18 +170,20 @@ export function DocumentsPage({
   const filtered = sortDocs(
     documents.filter((doc) => {
       const status = getDocStatus(doc);
+      const description = doc.repo.description ?? "";
       const matchesSearch =
         !search ||
         doc.repo.name.toLowerCase().includes(search.toLowerCase()) ||
-        doc.repo.description.toLowerCase().includes(search.toLowerCase());
+        description.toLowerCase().includes(search.toLowerCase());
       const matchesStatus = filterStatus === "all" || status === filterStatus;
       return matchesSearch && matchesStatus;
     }),
     sort,
   );
 
+  const totalDocuments = documents.length;
   const counts = {
-    all: documents.length,
+    all: totalDocuments,
     draft: documents.filter((d) => getDocStatus(d) === "draft").length,
     in_review: documents.filter((d) => getDocStatus(d) === "in_review").length,
     approved: documents.filter((d) => getDocStatus(d) === "approved").length,
@@ -189,18 +191,23 @@ export function DocumentsPage({
       (d) => getDocStatus(d) === "changes_requested",
     ).length,
   };
+  const totalResults = filtered.length;
+  const reviewQueueCount = counts.in_review + counts.changes_requested;
+  const pageSubtitle = loading
+    ? "Loading your workspace library."
+    : totalDocuments > 0
+      ? `Browse ${totalDocuments} document${totalDocuments === 1 ? "" : "s"}, keep tabs on ${reviewQueueCount} active review${reviewQueueCount === 1 ? "" : "s"}, and jump straight into the latest approved version.`
+      : currentUsername
+        ? `${currentUsername}'s workspace is ready for its first document.`
+        : "Your workspace is ready for its first document.";
 
   return (
-    <div className="docs-page">
-      {/* ── PAGE HEADER ── */}
+    <div className="docs-page app-page-shell">
       <div className="docs-page-header">
         <div className="docs-page-header-left">
-          <span className="bs-eyebrow">Documents</span>
-          <h1 className="docs-page-title">
-            {currentUsername
-              ? `${currentUsername}'s Documents`
-              : "My Documents"}
-          </h1>
+          <span className="bs-eyebrow">Workspace Library</span>
+          <h1 className="docs-page-title">Documents</h1>
+          <p className="docs-page-subtitle">{pageSubtitle}</p>
         </div>
         <div className="docs-page-header-right">
           <button
@@ -214,71 +221,70 @@ export function DocumentsPage({
         </div>
       </div>
 
-      {/* ── STATUS FILTER TABS ── */}
-      <div className="docs-filter-bar">
-        {(
-          [
-            "all",
-            "draft",
-            "in_review",
-            "approved",
-            "changes_requested",
-          ] as FilterStatus[]
-        ).map((f) => (
-          <button
-            key={f}
-            type="button"
-            className={`docs-filter-tab${filterStatus === f ? " docs-filter-tab--active" : ""}`}
-            onClick={() => setFilterStatus(f)}
-          >
-            {f === "all"
-              ? "All"
-              : f === "draft"
-                ? "Draft"
-                : f === "in_review"
-                  ? "In Review"
-                  : f === "approved"
-                    ? "Approved"
-                    : "Changes Requested"}
-            <span className="docs-filter-count">{counts[f]}</span>
-          </button>
-        ))}
+      <div className="docs-controls-card">
+        <div className="docs-filter-bar">
+          {(
+            [
+              "all",
+              "draft",
+              "in_review",
+              "approved",
+              "changes_requested",
+            ] as FilterStatus[]
+          ).map((f) => (
+            <button
+              key={f}
+              type="button"
+              className={`docs-filter-tab${filterStatus === f ? " docs-filter-tab--active" : ""}`}
+              onClick={() => setFilterStatus(f)}
+            >
+              {f === "all"
+                ? "All"
+                : f === "draft"
+                  ? "Draft"
+                  : f === "in_review"
+                    ? "In Review"
+                    : f === "approved"
+                      ? "Approved"
+                      : "Changes Requested"}
+              <span className="docs-filter-count">{counts[f]}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="docs-toolbar">
+          <div className="docs-toolbar-search">
+            <Search
+              size={14}
+              strokeWidth={1.5}
+              className="docs-toolbar-search-icon"
+              aria-hidden="true"
+            />
+            <input
+              type="text"
+              className="docs-toolbar-search-input"
+              placeholder="Find a document..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              aria-label="Search documents"
+            />
+          </div>
+          <div className="docs-toolbar-right">
+            <span className="docs-toolbar-label">Sort</span>
+            <select
+              className="docs-toolbar-select"
+              value={sort}
+              onChange={(e) => setSort(e.target.value as SortOption)}
+              aria-label="Sort documents"
+            >
+              <option value="updated">Last updated</option>
+              <option value="name">Name</option>
+              <option value="status">Status</option>
+            </select>
+          </div>
+        </div>
       </div>
 
-      {/* ── SEARCH + SORT TOOLBAR ── */}
-      <div className="docs-toolbar">
-        <div className="docs-toolbar-search">
-          <Search
-            size={14}
-            strokeWidth={1.5}
-            className="docs-toolbar-search-icon"
-            aria-hidden="true"
-          />
-          <input
-            type="text"
-            className="docs-toolbar-search-input"
-            placeholder="Find a document..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            aria-label="Search documents"
-          />
-        </div>
-        <div className="docs-toolbar-right">
-          <span className="docs-toolbar-label">Sort:</span>
-          <select
-            className="docs-toolbar-select"
-            value={sort}
-            onChange={(e) => setSort(e.target.value as SortOption)}
-            aria-label="Sort documents"
-          >
-            <option value="updated">Last updated</option>
-            <option value="name">Name</option>
-            <option value="status">Status</option>
-          </select>
-        </div>
-      </div>
-
-      {/* ── DOCUMENT LIST ── */}
       {loading ? (
         <div className="docs-list">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -405,8 +411,8 @@ export function DocumentsPage({
 
       {!loading && !error && filtered.length > 0 && (
         <p className="docs-result-count">
-          Showing {filtered.length} of {documents.length} document
-          {documents.length !== 1 ? "s" : ""}
+          Showing {totalResults} of {totalDocuments} document
+          {totalDocuments !== 1 ? "s" : ""}
         </p>
       )}
     </div>

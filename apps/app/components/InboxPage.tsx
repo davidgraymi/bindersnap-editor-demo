@@ -38,6 +38,8 @@ export function InboxPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const pageHeading = "Inbox";
+
   useEffect(() => {
     let cancelled = false;
 
@@ -67,18 +69,34 @@ export function InboxPage({
 
   if (loading) {
     return (
-      <div className="inbox-page">
-        <div className="bs-eyebrow">Inbox</div>
-        <p className="inbox-loading">Loading your inbox...</p>
+      <div className="inbox-page app-page-shell">
+        <div className="inbox-header">
+          <div className="bs-eyebrow">Review Queue</div>
+          <h1 className="inbox-heading">{pageHeading}</h1>
+          <p className="inbox-subtitle">
+            Loading the change requests and approvals that need attention.
+          </p>
+        </div>
+        <div className="bs-card inbox-feedback-panel">
+          <p className="inbox-loading">Loading your inbox...</p>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="inbox-page">
-        <div className="bs-eyebrow">Inbox</div>
-        <p className="inbox-error">{error}</p>
+      <div className="inbox-page app-page-shell">
+        <div className="inbox-header">
+          <div className="bs-eyebrow">Review Queue</div>
+          <h1 className="inbox-heading">{pageHeading}</h1>
+          <p className="inbox-subtitle">
+            The workspace queue could not be loaded right now.
+          </p>
+        </div>
+        <div className="bs-card inbox-feedback-panel">
+          <p className="inbox-error">{error}</p>
+        </div>
       </div>
     );
   }
@@ -141,18 +159,46 @@ export function InboxPage({
     needsReview.length === 0 &&
     waitingOnOthers.length === 0 &&
     recentlyApprovedSlice.length === 0;
+  const headerSubtitle = allClear
+    ? "Nothing is stuck in review. Your approval queue is clear."
+    : totalAttention > 0
+      ? `${totalAttention} document${totalAttention === 1 ? "" : "s"} need attention across review and approval.`
+      : "Recent approvals are ready to reference.";
 
   return (
-    <div className="inbox-page">
+    <div className="inbox-page app-page-shell">
       <div className="inbox-header">
-        <div className="bs-eyebrow">Inbox</div>
-        <h1 className="inbox-heading">
-          {allClear
-            ? "All clear"
-            : totalAttention > 0
-              ? `Your attention is needed on ${totalAttention} ${totalAttention === 1 ? "document" : "documents"}.`
-              : "Nothing urgent right now."}
-        </h1>
+        <div className="bs-eyebrow">Review Queue</div>
+        <h1 className="inbox-heading">{pageHeading}</h1>
+        <p className="inbox-subtitle">{headerSubtitle}</p>
+      </div>
+
+      <div className="inbox-summary-grid" aria-label="Inbox summary">
+        <div className="inbox-summary-card">
+          <span className="inbox-summary-label">Needs Your Review</span>
+          <strong className="inbox-summary-value">{needsReview.length}</strong>
+          <span className="inbox-summary-sub">
+            Change requests opened by teammates
+          </span>
+        </div>
+        <div className="inbox-summary-card">
+          <span className="inbox-summary-label">Waiting on Others</span>
+          <strong className="inbox-summary-value">
+            {waitingOnOthers.length}
+          </strong>
+          <span className="inbox-summary-sub">
+            Your submissions still in review
+          </span>
+        </div>
+        <div className="inbox-summary-card">
+          <span className="inbox-summary-label">Recently Approved</span>
+          <strong className="inbox-summary-value">
+            {recentlyApprovedSlice.length}
+          </strong>
+          <span className="inbox-summary-sub">
+            Official versions available now
+          </span>
+        </div>
       </div>
 
       {allClear ? (
@@ -164,9 +210,12 @@ export function InboxPage({
       ) : (
         <div className="inbox-sections">
           {needsReview.length > 0 ? (
-            <section className="inbox-section">
-              <div className="inbox-section-rule">
+            <section className="bs-card inbox-section">
+              <div className="inbox-section-head">
                 <span className="inbox-section-label">Needs Your Review</span>
+                <span className="inbox-section-count">
+                  {needsReview.length}
+                </span>
               </div>
               <div className="inbox-section-items">
                 {needsReview.map(({ doc, prCreatedAt, prSubmitter }) => (
@@ -210,9 +259,12 @@ export function InboxPage({
           ) : null}
 
           {waitingOnOthers.length > 0 ? (
-            <section className="inbox-section">
-              <div className="inbox-section-rule">
+            <section className="bs-card inbox-section">
+              <div className="inbox-section-head">
                 <span className="inbox-section-label">Waiting on Others</span>
+                <span className="inbox-section-count">
+                  {waitingOnOthers.length}
+                </span>
               </div>
               <div className="inbox-section-items">
                 {waitingOnOthers.map(({ doc, prCreatedAt }) => (
@@ -246,9 +298,12 @@ export function InboxPage({
           ) : null}
 
           {recentlyApprovedSlice.length > 0 ? (
-            <section className="inbox-section">
-              <div className="inbox-section-rule">
+            <section className="bs-card inbox-section">
+              <div className="inbox-section-head">
                 <span className="inbox-section-label">Recently Approved</span>
+                <span className="inbox-section-count">
+                  {recentlyApprovedSlice.length}
+                </span>
               </div>
               <div className="inbox-section-items">
                 {recentlyApprovedSlice.map((doc) => (

@@ -266,8 +266,16 @@ export function DocumentDetail({
     void loadDocumentData();
   }, [loadDocumentData]);
 
+  const documentName = formatDocumentName(repo);
   const latestTag = tags.length > 0 ? tags[0] : null;
   const nextVersion = (latestTag?.version ?? 0) + 1;
+  const pendingApprovalsLabel =
+    openPRs.length > 0
+      ? `${openPRs.length} pending approval${openPRs.length === 1 ? "" : "s"}`
+      : "No pending approvals";
+  const documentStatusLabel = latestTag
+    ? `Official version v${latestTag.version} approved ${formatDate(latestTag.created)}`
+    : "No official version yet";
 
   function getPRActionState(pullNumber: number): PRActionState {
     return prActionStates[pullNumber] ?? DEFAULT_PR_ACTION_STATE;
@@ -382,7 +390,7 @@ export function DocumentDetail({
 
   if (isLoading) {
     return (
-      <div className="vault-detail">
+      <div className="vault-detail app-page-shell">
         <div className="bs-card vault-empty-state">
           <div className="bs-eyebrow">Loading</div>
           <h2>Loading document details…</h2>
@@ -394,7 +402,7 @@ export function DocumentDetail({
 
   if (error) {
     return (
-      <div className="vault-detail">
+      <div className="vault-detail app-page-shell">
         <div className="bs-card vault-error-state">
           <div className="bs-eyebrow">Error</div>
           <h2>Unable to load document</h2>
@@ -412,9 +420,18 @@ export function DocumentDetail({
   }
 
   return (
-    <div className="vault-detail">
-      <section className="vault-section">
-        <h1>{formatDocumentName(repo)}</h1>
+    <div className="vault-detail app-page-shell">
+      <section className="vault-section document-detail-header">
+        <div className="document-detail-header-main">
+          <div className="bs-eyebrow">Document</div>
+          <div className="document-detail-heading">
+            <h1>{documentName}</h1>
+            <p className="document-detail-subtitle">{documentStatusLabel}</p>
+            <p className="vault-repo-path">
+              {owner}/{repo} · {pendingApprovalsLabel}
+            </p>
+          </div>
+        </div>
         <div
           className="document-detail-nav"
           role="tablist"
@@ -442,11 +459,13 @@ export function DocumentDetail({
       </section>
 
       {activeView === "collaborators" ? (
-        <DocumentCollaborators
-          owner={owner}
-          repo={repo}
-          currentUsername={uploaderSlug}
-        />
+        <div className="document-detail-tab-panel document-detail-tab-panel--collaborators">
+          <DocumentCollaborators
+            owner={owner}
+            repo={repo}
+            currentUsername={uploaderSlug}
+          />
+        </div>
       ) : (
         <>
           <div className="vault-overview-grid">
@@ -571,7 +590,7 @@ export function DocumentDetail({
                                 <div className="vault-pr-confirm">
                                   <p className="vault-pr-confirm-heading">
                                     Approve version {nextVersion} of{" "}
-                                    {formatDocumentName(repo)}?
+                                    {documentName}?
                                   </p>
                                   <p className="vault-pr-confirm-sub">
                                     This approval will be recorded with your

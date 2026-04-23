@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
   Bell,
   FileText,
@@ -13,6 +13,7 @@ import {
 import type { AppRoute } from "../routes";
 import { ActivityLogPage } from "./ActivityLogPage";
 import { BindersnapLogoMark } from "./BindersnapLogoMark";
+import { CreateDocumentModal } from "./CreateDocumentModal";
 import { DocumentDetail } from "./DocumentDetail";
 import { DocumentsPage } from "./DocumentsPage";
 import { FileVaultWorkspace } from "./FileVaultWorkspace";
@@ -26,6 +27,34 @@ interface AppShellProps {
   route: AppRoute;
   onNavigate: (route: AppRoute, replace?: boolean) => void;
   onSignOut: () => void | Promise<void>;
+}
+
+function formatDocumentName(repoName: string): string {
+  return repoName
+    .split("-")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function getTopnavTitle(route: AppRoute): ReactNode {
+  switch (route.kind) {
+    case "workspace":
+      return "Home";
+    case "documents":
+      return "Documents";
+    case "inbox":
+      return "Inbox";
+    case "activity":
+      return "Activity";
+    case "document":
+      return (
+        <>
+          {route.owner} / <strong>{formatDocumentName(route.repo)}</strong>
+        </>
+      );
+    default:
+      return "Bindersnap";
+  }
 }
 
 function toggleTheme() {
@@ -72,16 +101,32 @@ export function AppShell({
   onNavigate,
   onSignOut,
 }: AppShellProps) {
-  const isDocumentRoute = route.kind === "document";
   const isWorkspace = route.kind === "workspace";
-  const isDocuments = route.kind === "documents";
+  const isDocuments = route.kind === "documents" || route.kind === "document";
   const isInbox = route.kind === "inbox";
+  const topnavTitle = getTopnavTitle(route);
 
   const displayName = user?.fullName ?? user?.username ?? "";
   const username = user?.username ?? displayName;
+  const currentUsername = user?.username ?? "";
   const initials = displayName ? getInitials(displayName) : "?";
 
   const [profileOpen, setProfileOpen] = useState(false);
+  const [showCreateDocumentModal, setShowCreateDocumentModal] = useState(false);
+
+  const openCreateDocumentModal = useCallback(() => {
+    setShowCreateDocumentModal(true);
+  }, []);
+
+  useEffect(() => {
+    document.addEventListener("bs:open-create-modal", openCreateDocumentModal);
+    return () => {
+      document.removeEventListener(
+        "bs:open-create-modal",
+        openCreateDocumentModal,
+      );
+    };
+  }, [openCreateDocumentModal]);
 
   return (
     <div className="app-shell">
@@ -102,9 +147,7 @@ export function AppShell({
               aria-hidden="true"
             />
           </button>
-          <span>
-            {isDocumentRoute ? `${route.owner} / ${route.repo}` : "Dashboard"}
-          </span>
+          <span>{topnavTitle}</span>
         </div>
 
         {/* Spacer — pushes all right-side items to the far right */}
@@ -113,64 +156,54 @@ export function AppShell({
         {/* Right side — order: search, create doc, change requests, documents, notifications, profile */}
         <div className="app-topnav-right">
           {/* Search */}
-          {!isDocumentRoute ? (
-            <div className="app-nav-search" role="search">
-              <Search
-                className="app-nav-search-icon"
-                aria-hidden="true"
-                size={14}
-                strokeWidth={1.5}
-              />
-              <input
-                className="app-nav-search-input"
-                type="text"
-                placeholder="Type / to search"
-                aria-label="Type / to search"
-              />
-              <span className="app-nav-search-kbd" aria-hidden="true">
-                /
-              </span>
-            </div>
-          ) : null}
+          <div className="app-nav-search" role="search">
+            <Search
+              className="app-nav-search-icon"
+              aria-hidden="true"
+              size={14}
+              strokeWidth={1.5}
+            />
+            <input
+              className="app-nav-search-input"
+              type="text"
+              placeholder="Type / to search"
+              aria-label="Type / to search"
+            />
+            <span className="app-nav-search-kbd" aria-hidden="true">
+              /
+            </span>
+          </div>
 
           {/* Create document */}
-          {!isDocumentRoute ? (
-            <button
-              className="app-topnav-new-btn"
-              type="button"
-              id="topnav-new-doc-btn"
-              onClick={() => {
-                document.dispatchEvent(new CustomEvent("bs:open-create-modal"));
-              }}
-            >
-              <Plus size={12} strokeWidth={2} aria-hidden="true" />
-              New Document
-            </button>
-          ) : null}
+          <button
+            className="app-topnav-new-btn"
+            type="button"
+            id="topnav-new-doc-btn"
+            onClick={openCreateDocumentModal}
+          >
+            <Plus size={12} strokeWidth={2} aria-hidden="true" />
+            New Document
+          </button>
 
           {/* Change Requests */}
-          {!isDocumentRoute ? (
-            <button
-              type="button"
-              className={`app-topnav-link${isInbox ? " app-topnav-link--active" : ""}`}
-              onClick={() => onNavigate({ kind: "inbox" })}
-            >
-              <GitPullRequest size={14} strokeWidth={1.5} aria-hidden="true" />
-              Changes
-            </button>
-          ) : null}
+          <button
+            type="button"
+            className={`app-topnav-link${isInbox ? " app-topnav-link--active" : ""}`}
+            onClick={() => onNavigate({ kind: "inbox" })}
+          >
+            <GitPullRequest size={14} strokeWidth={1.5} aria-hidden="true" />
+            Changes
+          </button>
 
           {/* Documents */}
-          {!isDocumentRoute ? (
-            <button
-              type="button"
-              className={`app-topnav-link${isDocuments ? " app-topnav-link--active" : ""}`}
-              onClick={() => onNavigate({ kind: "documents" })}
-            >
-              <FileText size={14} strokeWidth={1.5} aria-hidden="true" />
-              Documents
-            </button>
-          ) : null}
+          <button
+            type="button"
+            className={`app-topnav-link${isDocuments ? " app-topnav-link--active" : ""}`}
+            onClick={() => onNavigate({ kind: "documents" })}
+          >
+            <FileText size={14} strokeWidth={1.5} aria-hidden="true" />
+            Documents
+          </button>
 
           <div className="app-topnav-divider" aria-hidden="true" />
 
@@ -313,7 +346,9 @@ export function AppShell({
       <div className="app-body-wrap">
         {/* Main content area */}
         <div className="app-main-area">
-          <main className="app-main">
+          <main
+            className={`app-main${isWorkspace ? " app-main--workspace" : " app-main--page"}`}
+          >
             {route.kind === "document" ? (
               <DocumentDetail
                 owner={route.owner}
@@ -332,7 +367,7 @@ export function AppShell({
               />
             ) : route.kind === "documents" ? (
               <DocumentsPage
-                currentUsername={user?.username ?? ""}
+                currentUsername={currentUsername}
                 onSelectDocument={(owner, repo) =>
                   onNavigate({
                     kind: "document",
@@ -341,15 +376,11 @@ export function AppShell({
                     tab: "overview",
                   })
                 }
-                onNewDocument={() => {
-                  document.dispatchEvent(
-                    new CustomEvent("bs:open-create-modal"),
-                  );
-                }}
+                onNewDocument={openCreateDocumentModal}
               />
             ) : route.kind === "inbox" ? (
               <InboxPage
-                currentUsername={user?.username ?? ""}
+                currentUsername={currentUsername}
                 onSelectDocument={(owner, repo) =>
                   onNavigate({
                     kind: "document",
@@ -363,7 +394,7 @@ export function AppShell({
               <ActivityLogPage />
             ) : (
               <FileVaultWorkspace
-                currentUsername={user?.username ?? ""}
+                currentUsername={currentUsername}
                 onSelectDocument={(owner, repo) =>
                   onNavigate({
                     kind: "document",
@@ -372,11 +403,28 @@ export function AppShell({
                     tab: "overview",
                   })
                 }
+                onNewDocument={openCreateDocumentModal}
               />
             )}
           </main>
         </div>
       </div>
+
+      {showCreateDocumentModal ? (
+        <CreateDocumentModal
+          owner={currentUsername}
+          onClose={() => setShowCreateDocumentModal(false)}
+          onSuccess={(owner, repo) => {
+            setShowCreateDocumentModal(false);
+            onNavigate({
+              kind: "document",
+              owner,
+              repo,
+              tab: "overview",
+            });
+          }}
+        />
+      ) : null}
     </div>
   );
 }

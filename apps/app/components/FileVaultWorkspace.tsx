@@ -15,11 +15,11 @@ import {
 
 import { getWorkspaceDocuments, type WorkspaceDocumentSummary } from "../api";
 import { BindersnapLogoMark } from "./BindersnapLogoMark";
-import { CreateDocumentModal } from "./CreateDocumentModal";
 
 interface FileVaultWorkspaceProps {
   currentUsername: string;
   onSelectDocument: (owner: string, repo: string) => void;
+  onNewDocument: () => void;
 }
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -173,11 +173,11 @@ function SkeletonRows({ count }: { count: number }) {
 export function FileVaultWorkspace({
   currentUsername,
   onSelectDocument,
+  onNewDocument,
 }: FileVaultWorkspaceProps) {
   const [documents, setDocuments] = useState<WorkspaceDocumentSummary[]>([]);
   const [isLoadingDocuments, setIsLoadingDocuments] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showCreateDocumentModal, setShowCreateDocumentModal] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const loadDocuments = useCallback(async () => {
@@ -201,13 +201,6 @@ export function FileVaultWorkspace({
   useEffect(() => {
     void loadDocuments();
   }, [loadDocuments]);
-
-  // Listen for topnav "New Document" button
-  useEffect(() => {
-    const handler = () => setShowCreateDocumentModal(true);
-    document.addEventListener("bs:open-create-modal", handler);
-    return () => document.removeEventListener("bs:open-create-modal", handler);
-  }, []);
 
   // ── Derived stats ──────────────────────────────────────────
 
@@ -311,7 +304,7 @@ export function FileVaultWorkspace({
             <button
               type="button"
               className="dash-btn dash-btn-primary"
-              onClick={() => setShowCreateDocumentModal(true)}
+              onClick={onNewDocument}
             >
               <Plus size={13} strokeWidth={2} aria-hidden="true" />
               New Document
@@ -329,24 +322,12 @@ export function FileVaultWorkspace({
             <button
               className="bs-btn bs-btn-primary"
               type="button"
-              onClick={() => setShowCreateDocumentModal(true)}
+              onClick={onNewDocument}
             >
               New Document
             </button>
           </div>
         </div>
-
-        {showCreateDocumentModal ? (
-          <CreateDocumentModal
-            owner={currentUsername}
-            onClose={() => setShowCreateDocumentModal(false)}
-            onSuccess={(owner, repo) => {
-              setShowCreateDocumentModal(false);
-              void loadDocuments();
-              onSelectDocument(owner, repo);
-            }}
-          />
-        ) : null}
       </div>
     );
   }
@@ -394,7 +375,7 @@ export function FileVaultWorkspace({
           <button
             type="button"
             className="dash-btn dash-btn-primary"
-            onClick={() => setShowCreateDocumentModal(true)}
+            onClick={onNewDocument}
           >
             <Plus size={13} strokeWidth={2} aria-hidden="true" />
             New Document
@@ -684,7 +665,7 @@ export function FileVaultWorkspace({
               <button
                 type="button"
                 className="dash-qa-btn"
-                onClick={() => setShowCreateDocumentModal(true)}
+                onClick={onNewDocument}
               >
                 <Plus
                   className="dash-qa-icon"
@@ -806,19 +787,6 @@ export function FileVaultWorkspace({
           </div>
         </div>
       </div>
-
-      {/* Create Document Modal */}
-      {showCreateDocumentModal ? (
-        <CreateDocumentModal
-          owner={currentUsername}
-          onClose={() => setShowCreateDocumentModal(false)}
-          onSuccess={(owner, repo) => {
-            setShowCreateDocumentModal(false);
-            void loadDocuments();
-            onSelectDocument(owner, repo);
-          }}
-        />
-      ) : null}
     </div>
   );
 }

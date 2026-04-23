@@ -481,3 +481,12 @@ export async function openNewDocumentModal(page: Page): Promise<void> {
     page.getByRole("heading", { name: "Create workspace document" }),
   ).toBeVisible();
 }
+
+export async function openTopnavNewDocumentModal(page: Page): Promise<void> {
+  const button = page.locator("#topnav-new-doc-btn");
+  await expect(button).toBeVisible();
+  await button.click();
+  await expect(
+    page.getByRole("heading", { name: "Create workspace document" }),
+  ).toBeVisible();
+}
