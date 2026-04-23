@@ -78,12 +78,10 @@ test.describe("Merge conflict resolution on publish", () => {
     );
     await page.getByRole("button", { name: "Create Document" }).click();
 
-    // New UI uses breadcrumb navigation instead of a back button
-    await expect(
-      page.locator("nav[aria-label='Breadcrumb'] button", {
-        hasText: "Documents",
-      }),
-    ).toBeVisible({ timeout: 10_000 });
+    // Wait for document detail page
+    await expect(page.locator(".vault-detail")).toBeVisible({
+      timeout: 10_000,
+    });
     await expect(
       page.getByRole("heading", { name: /No approved version yet/i }),
     ).toBeVisible();
@@ -160,9 +158,7 @@ test.describe("Merge conflict resolution on publish", () => {
       .getByRole("button", { name: "Publish as Official Version", exact: true })
       .click();
     await waitForNoPendingReviews(page, cardSearchText);
-    await page
-      .locator("nav[aria-label='Breadcrumb'] button", { hasText: "Documents" })
-      .click();
+    await page.locator(".app-topnav-link", { hasText: "Documents" }).click();
     await navigateToDocument(page, cardSearchText);
 
     await expect(page.getByRole("heading", { name: "Version 1" })).toBeVisible({

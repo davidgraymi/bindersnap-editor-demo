@@ -249,14 +249,14 @@ export async function signInAsAlice(page: Page): Promise<void> {
 
   // Fast check — already the right user?
   const isAlice = await page
-    .locator(".app-user-badge", { hasText: GITEA_ADMIN_USER })
+    .locator(`.app-topnav-avatar[aria-label="User: ${GITEA_ADMIN_USER}"]`)
     .isVisible({ timeout: 3_000 })
     .catch(() => false);
   if (isAlice) return;
 
-  // A different session may be active; sign out first if the button is present.
+  // A different session may be active; sign out first if the avatar is present.
   const hasSignOut = await page
-    .getByRole("button", { name: "Sign out" })
+    .locator(".app-topnav-avatar")
     .isVisible({ timeout: 1_000 })
     .catch(() => false);
   if (hasSignOut) {
@@ -275,7 +275,7 @@ export async function signInAsAlice(page: Page): Promise<void> {
   await page.getByLabel("Password", { exact: true }).fill(GITEA_ADMIN_PASS);
   await page.getByRole("button", { name: "Open workspace" }).click();
   await expect(
-    page.locator(".app-user-badge", { hasText: GITEA_ADMIN_USER }),
+    page.locator(`.app-topnav-avatar[aria-label="User: ${GITEA_ADMIN_USER}"]`),
   ).toBeVisible({ timeout: 60_000 });
 }
 
@@ -292,14 +292,14 @@ export async function signInAsBob(page: Page): Promise<void> {
 
   // Fast check — already the right user?
   const isBob = await page
-    .locator(".app-user-badge", { hasText: GITEA_BOB_USER })
+    .locator(`.app-topnav-avatar[aria-label="User: ${GITEA_BOB_USER}"]`)
     .isVisible({ timeout: 3_000 })
     .catch(() => false);
   if (isBob) return;
 
-  // A different session may be active; sign out first if the button is present.
+  // A different session may be active; sign out first if the avatar is present.
   const hasSignOut = await page
-    .getByRole("button", { name: "Sign out" })
+    .locator(".app-topnav-avatar")
     .isVisible({ timeout: 1_000 })
     .catch(() => false);
   if (hasSignOut) {
@@ -318,12 +318,20 @@ export async function signInAsBob(page: Page): Promise<void> {
   await page.getByLabel("Password", { exact: true }).fill(GITEA_BOB_PASS);
   await page.getByRole("button", { name: "Open workspace" }).click();
   await expect(
-    page.locator(".app-user-badge", { hasText: GITEA_BOB_USER }),
+    page.locator(`.app-topnav-avatar[aria-label="User: ${GITEA_BOB_USER}"]`),
   ).toBeVisible({ timeout: 60_000 });
 }
 
 export async function signOutCurrentUser(page: Page): Promise<void> {
-  const button = page.getByRole("button", { name: "Sign out" });
+  // Sign out is inside a dropdown — open the avatar menu first.
+  const avatar = page.locator(".app-topnav-avatar");
+  await expect(avatar).toBeVisible({ timeout: 5_000 });
+  await avatar.click({ force: true });
+  // The sign-out item has role="menuitem" in the profile dropdown
+  const button = page.locator(
+    ".app-profile-menu-item--danger, [role='menuitem']",
+    { hasText: "Sign out" },
+  );
   await expect(button).toBeVisible({ timeout: 5_000 });
   await button.click({ force: true });
   await page.waitForURL(/\/$/, { timeout: 5_000 });
@@ -333,27 +341,37 @@ export async function signOutCurrentUser(page: Page): Promise<void> {
 }
 
 /**
- * Navigate from the workspace to a document detail page by clicking the
- * `.vault-doc-card` that contains `docName`, then wait for the back button.
+ * Navigate from any app page to a document detail page.
+ *
+ * Navigates to the Documents list page first, then clicks the row whose
+ * text matches `docName`. Waits for `.vault-detail` to confirm arrival.
  *
  * Stability fix: waits for DOM content to be loaded before clicking so the
- * card is fully rendered. We intentionally avoid networkidle because the live
+ * list is fully rendered. We intentionally avoid networkidle because the live
  * collaboration socket can keep the page busy indefinitely.
  */
 export async function navigateToDocument(
   page: Page,
   docName: string,
 ): Promise<void> {
+  // Navigate to Documents page to get the full list
+  const docsLink = page.locator(".app-topnav-link", { hasText: "Documents" });
+  const isDocsLinkVisible = await docsLink
+    .isVisible({ timeout: 3_000 })
+    .catch(() => false);
+  if (isDocsLinkVisible) {
+    await docsLink.click();
+  }
   await page.waitForLoadState("domcontentloaded");
-  const card = page.locator(".vault-doc-card", { hasText: docName });
+  // DocumentsPage uses .docs-list-item; fallback to .dash-doc-item on HomePage
+  const card = page
+    .locator(".docs-list-item, .dash-doc-item")
+    .filter({ hasText: docName })
+    .first();
   await expect(card).toBeVisible({ timeout: 10_000 });
   await card.click({ force: true });
-  // New UI uses breadcrumb navigation instead of a back button.
-  await expect(
-    page.locator("nav[aria-label='Breadcrumb'] button", {
-      hasText: "Documents",
-    }),
-  ).toBeVisible({ timeout: 10_000 });
+  // Confirm we reached the document detail page
+  await expect(page.locator(".vault-detail")).toBeVisible({ timeout: 10_000 });
 }
 
 export async function waitForNoPendingReviews(
@@ -368,8 +386,8 @@ export async function waitForNoPendingReviews(
   const noPendingHeading = page.getByRole("heading", {
     name: "No pending approvals",
   });
-  // New UI breadcrumb "Documents" button replaces the old "← Back to workspace" button
-  const breadcrumbBack = page.locator("nav[aria-label='Breadcrumb'] button", {
+  // New UI "Documents" link in topnav replaces the old breadcrumb back button
+  const breadcrumbBack = page.locator(".app-topnav-link", {
     hasText: "Documents",
   });
 
@@ -473,10 +491,18 @@ export function expectedPrefilledDocumentName(fileName: string): string {
 }
 
 export async function openNewDocumentModal(page: Page): Promise<void> {
+  const button = page.locator("#topnav-new-doc-btn");
+  await expect(button).toBeVisible();
+  await button.click();
   await expect(
-    page.getByRole("button", { name: "New Document" }),
+    page.getByRole("heading", { name: "Create workspace document" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "New Document" }).first().click();
+}
+
+export async function openTopnavNewDocumentModal(page: Page): Promise<void> {
+  const button = page.locator("#topnav-new-doc-btn");
+  await expect(button).toBeVisible();
+  await button.click();
   await expect(
     page.getByRole("heading", { name: "Create workspace document" }),
   ).toBeVisible();

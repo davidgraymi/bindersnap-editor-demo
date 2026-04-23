@@ -212,7 +212,9 @@ test.describe("app shell routes", () => {
     await page.goto("/");
 
     await expect(
-      page.locator(".app-user-badge", { hasText: GITEA_ADMIN_USER }),
+      page.locator(
+        `.app-topnav-avatar[aria-label="User: ${GITEA_ADMIN_USER}"]`,
+      ),
     ).toBeVisible();
     await expect(page.getByRole("button", { name: "Documents" })).toBeVisible();
   });
@@ -222,11 +224,9 @@ test.describe("app shell routes", () => {
     await page.goto(`/docs/${OWNER}/${REPO}`);
 
     await expect(page).toHaveURL(new RegExp(`/docs/${OWNER}/${REPO}$`));
-    await expect(page.locator("nav[aria-label='Breadcrumb']")).toBeVisible();
+    await expect(page.locator(".vault-detail")).toBeVisible();
     await expect(
-      page.locator("nav[aria-label='Breadcrumb'] button", {
-        hasText: "Documents",
-      }),
+      page.locator(".app-topnav-link", { hasText: "Documents" }),
     ).toBeVisible();
   });
 });

@@ -41,12 +41,10 @@ test.describe("UI document creation flow", () => {
 
     await page.getByRole("button", { name: "Create Document" }).click();
 
-    // New UI uses breadcrumb navigation instead of a back button
-    await expect(
-      page.locator("nav[aria-label='Breadcrumb'] button", {
-        hasText: "Documents",
-      }),
-    ).toBeVisible({ timeout: 10_000 });
+    // New UI shows .vault-detail when the document detail page has loaded
+    await expect(page.locator(".vault-detail")).toBeVisible({
+      timeout: 10_000,
+    });
     await expect(
       page.getByRole("heading", { name: /No approved version yet/i }),
     ).toBeVisible();

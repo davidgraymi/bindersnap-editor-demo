@@ -57,19 +57,10 @@ async function fillLoginForm(
   credentials: {
     identifier: string;
     password: string;
-    rememberMe?: boolean;
   },
 ): Promise<void> {
   await page.getByLabel("Username or Email").fill(credentials.identifier);
   await page.getByLabel("Password", { exact: true }).fill(credentials.password);
-
-  const rememberMeToggle = page.getByRole("checkbox", {
-    name: "Keep me signed in for 30 days",
-  });
-  const shouldRemember = credentials.rememberMe ?? true;
-  if ((await rememberMeToggle.isChecked()) !== shouldRemember) {
-    await rememberMeToggle.click();
-  }
 }
 
 async function submitLoginForm(page: Page): Promise<void> {
@@ -117,7 +108,9 @@ async function signUpAndReturnToLogin(
 
   await expect(page).toHaveURL(/\/$/);
   await expect(
-    page.locator(".app-user-badge", { hasText: credentials.username }),
+    page.locator(
+      `.app-topnav-avatar[aria-label="User: ${credentials.username}"]`,
+    ),
   ).toBeVisible();
   await attachScreenshot(
     page,
@@ -159,9 +152,9 @@ async function logInWithIdentifier(
 
   await expect(page).toHaveURL(/\/$/);
   await expect(
-    page.locator(".app-user-badge", { hasText: expectedUsername }),
+    page.locator(`.app-topnav-avatar[aria-label="User: ${expectedUsername}"]`),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+  await expect(page.locator(".app-topnav-avatar")).toBeVisible();
   await attachScreenshot(
     page,
     testInfo,
@@ -231,28 +224,6 @@ test.describe("signup flow", () => {
         rememberMe: true,
       },
       "email-auth",
-      credentials.username,
-    );
-  });
-
-  test("allows sign-in without remember me", async ({ page }, testInfo) => {
-    const credentials = buildUniqueSignupCredentials();
-
-    await signUpAndReturnToLogin(page, testInfo, credentials, "session-auth");
-    await logInWithIdentifier(
-      page,
-      testInfo,
-      {
-        identifier: credentials.username,
-        password: credentials.password,
-        rememberMe: false,
-      },
-      {
-        username: credentials.username,
-        password: credentials.password,
-        rememberMe: false,
-      },
-      "session-auth",
       credentials.username,
     );
   });

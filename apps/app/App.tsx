@@ -9,6 +9,7 @@ import {
 import "./app.css";
 
 import { AppShell } from "./components/AppShell";
+import { BindersnapLogoMark } from "./components/BindersnapLogoMark";
 import { LandingPage } from "./components/LandingPage";
 import {
   clearToken,
@@ -70,7 +71,6 @@ function LoginPage({
   );
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(callbackError);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -111,7 +111,7 @@ function LoginPage({
 
     try {
       if (mode === "signin") {
-        await onLogin(normalizedIdentifier, password, rememberMe);
+        await onLogin(normalizedIdentifier, password, true);
       } else {
         await onSignup(normalizedUsername, normalizedIdentifier, password);
       }
@@ -133,26 +133,7 @@ function LoginPage({
       <div className="app-login-wrap">
         <div className="app-login-logo">
           <div className="app-login-logo-mark" aria-hidden="true">
-            <svg viewBox="0 0 18 18" fill="none" width="24" height="24">
-              <rect
-                x="2"
-                y="1"
-                width="9"
-                height="13"
-                rx="1.5"
-                stroke="currentColor"
-                strokeWidth="1.4"
-              />
-              <rect
-                x="6"
-                y="4"
-                width="9"
-                height="13"
-                rx="1.5"
-                stroke="currentColor"
-                strokeWidth="1.4"
-              />
-            </svg>
+            <BindersnapLogoMark width={24} height={24} />
           </div>
           <span className="app-login-logo-text">Bindersnap</span>
         </div>
@@ -223,18 +204,6 @@ function LoginPage({
                   placeholder="Confirm your password"
                   autoComplete="new-password"
                 />
-              </label>
-            ) : null}
-
-            {mode === "signin" ? (
-              <label className="app-check-row">
-                <input
-                  className="app-check-input"
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(event) => setRememberMe(event.target.checked)}
-                />
-                <span>Keep me signed in for 30 days</span>
               </label>
             ) : null}
 
