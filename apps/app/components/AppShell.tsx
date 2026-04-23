@@ -1,6 +1,18 @@
 import { useState } from "react";
+import {
+  Bell,
+  FileText,
+  GitPullRequest,
+  LogOut,
+  Moon,
+  Plus,
+  Search,
+  Settings,
+  User,
+} from "lucide-react";
 import type { AppRoute } from "../routes";
 import { ActivityLogPage } from "./ActivityLogPage";
+import { BindersnapLogoMark } from "./BindersnapLogoMark";
 import { DocumentDetail } from "./DocumentDetail";
 import { FileVaultWorkspace } from "./FileVaultWorkspace";
 import { InboxPage } from "./InboxPage";
@@ -39,70 +51,15 @@ function getInitials(name: string): string {
 function renderProfileMenuIcon(icon: string) {
   switch (icon) {
     case "profile":
-      return (
-        <svg
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          aria-hidden="true"
-        >
-          <circle cx="8" cy="5.25" r="2.25" />
-          <path d="M3.5 13.25a4.5 4.5 0 0 1 9 0" />
-        </svg>
-      );
+      return <User size={16} strokeWidth={1.5} aria-hidden="true" />;
     case "documents":
-      return (
-        <svg
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          aria-hidden="true"
-        >
-          <path d="M4.25 2.75h4.5l3 3v7.5H4.25z" />
-          <path d="M8.75 2.75v3h3" />
-        </svg>
-      );
+      return <FileText size={16} strokeWidth={1.5} aria-hidden="true" />;
     case "settings":
-      return (
-        <svg
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          aria-hidden="true"
-        >
-          <circle cx="8" cy="8" r="2.25" />
-          <path d="M8 2.5v1.25M8 12.25v1.25M12.25 8h1.25M2.5 8h1.25M11.9 4.1l-.9.9M5 11l-.9.9M11.9 11.9l-.9-.9M5 5l-.9-.9" />
-        </svg>
-      );
+      return <Settings size={16} strokeWidth={1.5} aria-hidden="true" />;
     case "appearance":
-      return (
-        <svg
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          aria-hidden="true"
-        >
-          <path d="M8 2.25a5.75 5.75 0 1 0 5.75 5.75A4.75 4.75 0 0 1 8 2.25Z" />
-        </svg>
-      );
+      return <Moon size={16} strokeWidth={1.5} aria-hidden="true" />;
     case "signout":
-      return (
-        <svg
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          aria-hidden="true"
-        >
-          <path d="M6 2.75H4.5A1.75 1.75 0 0 0 2.75 4.5v7A1.75 1.75 0 0 0 4.5 13.25H6" />
-          <path d="M8.5 5.25 11.5 8l-3 2.75" />
-          <path d="M11.5 8h-6" />
-        </svg>
-      );
+      return <LogOut size={16} strokeWidth={1.5} aria-hidden="true" />;
     default:
       return null;
   }
@@ -136,28 +93,12 @@ export function AppShell({
             onClick={() => onNavigate({ kind: "workspace" })}
             aria-label="Go to Dashboard"
           >
-            <svg width="14" height="14" viewBox="0 0 18 18" fill="none">
-              <rect
-                x="2"
-                y="1"
-                width="9"
-                height="13"
-                rx="1.5"
-                stroke="white"
-                strokeWidth="1.5"
-                fill="none"
-              />
-              <rect
-                x="6"
-                y="4"
-                width="9"
-                height="13"
-                rx="1.5"
-                stroke="white"
-                strokeWidth="1.5"
-                fill="none"
-              />
-            </svg>
+            <BindersnapLogoMark
+              width={14}
+              height={14}
+              style={{ color: "white" }}
+              aria-hidden="true"
+            />
           </button>
           <span>
             {isDocumentRoute ? `${route.owner} / ${route.repo}` : "Dashboard"}
@@ -172,24 +113,17 @@ export function AppShell({
           {/* Search */}
           {!isDocumentRoute ? (
             <div className="app-nav-search" role="search">
-              <svg
+              <Search
                 className="app-nav-search-icon"
-                width="14"
-                height="14"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
                 aria-hidden="true"
-              >
-                <circle cx="6.5" cy="6.5" r="4.5" />
-                <path d="M10 10l3 3" />
-              </svg>
+                size={14}
+                strokeWidth={1.5}
+              />
               <input
                 className="app-nav-search-input"
                 type="text"
-                placeholder="Search documents, changes…"
-                aria-label="Search documents and changes"
+                placeholder="Type / to search"
+                aria-label="Type / to search"
               />
               <span className="app-nav-search-kbd" aria-hidden="true">
                 /
@@ -207,17 +141,7 @@ export function AppShell({
                 document.dispatchEvent(new CustomEvent("bs:open-create-modal"));
               }}
             >
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                aria-hidden="true"
-              >
-                <path d="M8 3v10M3 8h10" />
-              </svg>
+              <Plus size={12} strokeWidth={2} aria-hidden="true" />
               New Document
             </button>
           ) : null}
@@ -229,18 +153,7 @@ export function AppShell({
               className={`app-topnav-link${isInbox ? " app-topnav-link--active" : ""}`}
               onClick={() => onNavigate({ kind: "inbox" })}
             >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                aria-hidden="true"
-              >
-                <circle cx="8" cy="8" r="3" />
-                <path d="M5 5L2 2M11 5l3-3M5 11l-3 3M11 11l3 3" />
-              </svg>
+              <GitPullRequest size={14} strokeWidth={1.5} aria-hidden="true" />
               Changes
             </button>
           ) : null}
@@ -252,17 +165,7 @@ export function AppShell({
               className={`app-topnav-link${isWorkspace ? " app-topnav-link--active" : ""}`}
               onClick={() => onNavigate({ kind: "workspace" })}
             >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                aria-hidden="true"
-              >
-                <path d="M3 4h10M3 8h10M3 12h6" />
-              </svg>
+              <FileText size={14} strokeWidth={1.5} aria-hidden="true" />
               Documents
             </button>
           ) : null}
@@ -275,18 +178,7 @@ export function AppShell({
             type="button"
             aria-label="Notifications"
           >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              aria-hidden="true"
-            >
-              <path d="M8 1.5a5 5 0 0 1 5 5v2.5l1 2H2l1-2V6.5a5 5 0 0 1 5-5z" />
-              <path d="M6.5 13a1.5 1.5 0 0 0 3 0" />
-            </svg>
+            <Bell size={16} strokeWidth={1.5} aria-hidden="true" />
           </button>
 
           {/* User profile: avatar with dropdown */}

@@ -9,6 +9,8 @@ import {
   toggleTheme,
   type SignupSource,
 } from "./landing";
+import { mountLandingIcons } from "./landing-icons";
+import logoMarkSpriteUrl from "../../packages/ui-tokens/img/logo-mark.svg";
 
 declare global {
   interface Window {
@@ -21,6 +23,12 @@ declare global {
 const landingContent = document.getElementById("landing-content");
 
 restoreTheme();
+for (const logoUse of document.querySelectorAll<SVGUseElement>(
+  "[data-bindersnap-logo-mark] use",
+)) {
+  logoUse.setAttribute("href", `${logoMarkSpriteUrl}#bindersnap-logo-mark`);
+}
+mountLandingIcons();
 
 if (shouldShowLanding(window.location.pathname)) {
   showLandingContent(landingContent);

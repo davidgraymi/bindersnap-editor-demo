@@ -61,6 +61,11 @@ body::after {
   margin-right: var(--brand-space-2);
 }
 
+.landing-lucide-icon {
+  display: inline-flex;
+  line-height: 0;
+}
+
 /* Icon show/hide — mirrors .bs-theme-toggle from tokens */
 .icon-sun {
   display: none;

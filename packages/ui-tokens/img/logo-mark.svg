@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18" fill="none">
+  <defs>
+    <symbol id="bindersnap-logo-mark" viewBox="0 0 18 18" fill="none">
+      <rect
+        x="2"
+        y="1"
+        width="9"
+        height="13"
+        rx="1.5"
+        stroke="currentColor"
+        stroke-width="1.5"
+      />
+      <rect
+        x="6"
+        y="4"
+        width="9"
+        height="13"
+        rx="1.5"
+        stroke="currentColor"
+        stroke-width="1.5"
+      />
+    </symbol>
+  </defs>
+  <use href="#bindersnap-logo-mark" />
+</svg>

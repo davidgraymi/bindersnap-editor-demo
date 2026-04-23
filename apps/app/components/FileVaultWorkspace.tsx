@@ -1,6 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  Activity,
+  Check,
+  ChevronRight,
+  Clock3,
+  Download,
+  FileText,
+  GitPullRequest,
+  Plus,
+  Star,
+  Users,
+  Zap,
+} from "lucide-react";
 
 import { getWorkspaceDocuments, type WorkspaceDocumentSummary } from "../api";
+import { BindersnapLogoMark } from "./BindersnapLogoMark";
 import { CreateDocumentModal } from "./CreateDocumentModal";
 
 interface FileVaultWorkspaceProps {
@@ -299,17 +313,7 @@ export function FileVaultWorkspace({
               className="dash-btn dash-btn-primary"
               onClick={() => setShowCreateDocumentModal(true)}
             >
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                aria-hidden="true"
-              >
-                <path d="M8 3v10M3 8h10" />
-              </svg>
+              <Plus size={13} strokeWidth={2} aria-hidden="true" />
               New Document
             </button>
           </div>
@@ -384,18 +388,7 @@ export function FileVaultWorkspace({
             className="dash-btn dash-btn-secondary"
             aria-label="Import a Word document (coming soon)"
           >
-            <svg
-              width="13"
-              height="13"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              aria-hidden="true"
-            >
-              <path d="M8 2v9M4 7l4 4 4-4" />
-              <path d="M2 13h12" />
-            </svg>
+            <Download size={13} strokeWidth={1.5} aria-hidden="true" />
             Import .docx
           </button>
           <button
@@ -403,17 +396,7 @@ export function FileVaultWorkspace({
             className="dash-btn dash-btn-primary"
             onClick={() => setShowCreateDocumentModal(true)}
           >
-            <svg
-              width="13"
-              height="13"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              aria-hidden="true"
-            >
-              <path d="M8 3v10M3 8h10" />
-            </svg>
+            <Plus size={13} strokeWidth={2} aria-hidden="true" />
             New Document
           </button>
         </div>
@@ -433,18 +416,7 @@ export function FileVaultWorkspace({
           )}
           {awaitingReview > 0 ? (
             <div className="dash-stat-sub dash-stat-sub--warning">
-              <svg
-                width="11"
-                height="11"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                aria-hidden="true"
-              >
-                <circle cx="8" cy="8" r="6" />
-                <path d="M8 5v3l1.5 1" />
-              </svg>
+              <Clock3 size={11} strokeWidth={1.8} aria-hidden="true" />
               {awaitingReview} past due
             </div>
           ) : (
@@ -463,17 +435,7 @@ export function FileVaultWorkspace({
             <div className="dash-stat-value">{approvedThisMonth}</div>
           )}
           <div className="dash-stat-sub dash-stat-sub--positive">
-            <svg
-              width="11"
-              height="11"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              aria-hidden="true"
-            >
-              <path d="M3 9l3 3 7-7" />
-            </svg>
+            <Check size={11} strokeWidth={2} aria-hidden="true" />
             Up to date
           </div>
         </div>
@@ -515,19 +477,12 @@ export function FileVaultWorkspace({
           <div className="dash-section-block">
             <div className="dash-section-head">
               <div className="dash-section-head-left">
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
+                <FileText
+                  size={14}
+                  strokeWidth={1.5}
                   style={{ color: "var(--bs-text-faint)" }}
                   aria-hidden="true"
-                >
-                  <path d="M3 2h7l3 3v9H3V2z" />
-                  <path d="M10 2v3h3" />
-                </svg>
+                />
                 <span className="dash-section-title">Recent Documents</span>
                 {!isLoadingDocuments ? (
                   <span className="dash-section-count">
@@ -541,17 +496,7 @@ export function FileVaultWorkspace({
                 onClick={() => undefined}
               >
                 View all
-                <svg
-                  width="11"
-                  height="11"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  aria-hidden="true"
-                >
-                  <path d="M6 4l4 4-4 4" />
-                </svg>
+                <ChevronRight size={11} strokeWidth={1.5} aria-hidden="true" />
               </button>
             </div>
 
@@ -589,42 +534,9 @@ export function FileVaultWorkspace({
                       aria-hidden="true"
                     >
                       {isNative ? (
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 18 18"
-                          fill="none"
-                        >
-                          <rect
-                            x="2"
-                            y="1"
-                            width="9"
-                            height="13"
-                            rx="1.5"
-                            stroke="currentColor"
-                            strokeWidth="1.5"
-                            fill="none"
-                          />
-                          <rect
-                            x="6"
-                            y="4"
-                            width="9"
-                            height="13"
-                            rx="1.5"
-                            stroke="currentColor"
-                            strokeWidth="1.5"
-                            fill="none"
-                          />
-                        </svg>
+                        <BindersnapLogoMark width={14} height={14} />
                       ) : (
-                        <svg
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="currentColor"
-                        >
-                          <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm-1 7V3.5L18.5 9H13z" />
-                        </svg>
+                        <FileText size={16} strokeWidth={1.75} />
                       )}
                     </div>
 
@@ -658,19 +570,12 @@ export function FileVaultWorkspace({
           <div className="dash-section-block">
             <div className="dash-section-head">
               <div className="dash-section-head-left">
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
+                <GitPullRequest
+                  size={14}
+                  strokeWidth={1.5}
                   style={{ color: "var(--bs-text-faint)" }}
                   aria-hidden="true"
-                >
-                  <circle cx="8" cy="8" r="3" />
-                  <path d="M5 5L2 2M11 5l3-3M5 11l-3 3M11 11l3 3" />
-                </svg>
+                />
                 <span className="dash-section-title">Open Change Requests</span>
                 {!isLoadingDocuments ? (
                   <span className="dash-section-count">
@@ -684,17 +589,7 @@ export function FileVaultWorkspace({
                 onClick={() => undefined}
               >
                 View all
-                <svg
-                  width="11"
-                  height="11"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  aria-hidden="true"
-                >
-                  <path d="M6 4l4 4-4 4" />
-                </svg>
+                <ChevronRight size={11} strokeWidth={1.5} aria-hidden="true" />
               </button>
             </div>
 
@@ -729,25 +624,12 @@ export function FileVaultWorkspace({
                       }
                     }}
                   >
-                    <svg
+                    <GitPullRequest
                       className="dash-cr-icon dash-cr-icon--open"
-                      width="16"
-                      height="16"
-                      viewBox="0 0 16 16"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
+                      size={16}
+                      strokeWidth={1.5}
                       aria-label="Open"
-                    >
-                      <circle cx="8" cy="8" r="5.5" />
-                      <circle
-                        cx="8"
-                        cy="8"
-                        r="2"
-                        fill="currentColor"
-                        stroke="none"
-                      />
-                    </svg>
+                    />
 
                     <div className="dash-cr-info">
                       <div className="dash-cr-title">{pr.title}</div>
@@ -788,18 +670,12 @@ export function FileVaultWorkspace({
           >
             <div className="dash-section-head">
               <div className="dash-section-head-left">
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
+                <Zap
+                  size={14}
+                  strokeWidth={1.5}
                   style={{ color: "var(--bs-text-faint)" }}
                   aria-hidden="true"
-                >
-                  <path d="M13 3L7 9M3 9l1-5 5-1M8 12l4 1-1-4" />
-                </svg>
+                />
                 <span className="dash-section-title">Quick Actions</span>
               </div>
             </div>
@@ -810,18 +686,12 @@ export function FileVaultWorkspace({
                 className="dash-qa-btn"
                 onClick={() => setShowCreateDocumentModal(true)}
               >
-                <svg
+                <Plus
                   className="dash-qa-icon"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
+                  size={16}
+                  strokeWidth={1.5}
                   aria-hidden="true"
-                >
-                  <path d="M8 3v10M3 8h10" />
-                </svg>
+                />
                 <span className="dash-qa-label">New Document</span>
                 <span className="dash-qa-sub">Start from scratch</span>
               </button>
@@ -831,19 +701,12 @@ export function FileVaultWorkspace({
                 className="dash-qa-btn"
                 aria-label="Import Word document (coming soon)"
               >
-                <svg
+                <Download
                   className="dash-qa-icon"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
+                  size={16}
+                  strokeWidth={1.5}
                   aria-hidden="true"
-                >
-                  <path d="M8 2v9M4 7l4 4 4-4" />
-                  <path d="M2 13h12" />
-                </svg>
+                />
                 <span className="dash-qa-label">Import Word</span>
                 <span className="dash-qa-sub">Upload .docx file</span>
               </button>
@@ -853,18 +716,12 @@ export function FileVaultWorkspace({
                 className="dash-qa-btn"
                 aria-label="Export audit log (coming soon)"
               >
-                <svg
+                <Star
                   className="dash-qa-icon"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
+                  size={16}
+                  strokeWidth={1.5}
                   aria-hidden="true"
-                >
-                  <path d="M8 1l2 5h5l-4 3 1.5 5L8 11l-4.5 3L5 9 1 6h5z" />
-                </svg>
+                />
                 <span className="dash-qa-label">Export Audit Log</span>
                 <span className="dash-qa-sub">Download CSV / PDF</span>
               </button>
@@ -874,19 +731,12 @@ export function FileVaultWorkspace({
                 className="dash-qa-btn"
                 aria-label="Invite people (coming soon)"
               >
-                <svg
+                <Users
                   className="dash-qa-icon"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
+                  size={16}
+                  strokeWidth={1.5}
                   aria-hidden="true"
-                >
-                  <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 14s-1 0-1-1 1-4 7-4 7 3 7 4-1 1-1 1H2z" />
-                  <path d="M13 7v4M11 9h4" />
-                </svg>
+                />
                 <span className="dash-qa-label">Invite People</span>
                 <span className="dash-qa-sub">Add team members</span>
               </button>
@@ -897,19 +747,12 @@ export function FileVaultWorkspace({
           <div className="dash-section-block">
             <div className="dash-section-head">
               <div className="dash-section-head-left">
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
+                <Activity
+                  size={14}
+                  strokeWidth={1.5}
                   style={{ color: "var(--bs-text-faint)" }}
                   aria-hidden="true"
-                >
-                  <path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5z" />
-                  <circle cx="8" cy="8" r="2" />
-                </svg>
+                />
                 <span className="dash-section-title">Activity</span>
               </div>
               <button

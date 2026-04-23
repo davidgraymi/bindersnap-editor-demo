@@ -1566,7 +1566,7 @@ input {
 /* ── NEW TOP NAV ─────────────────────────────────────────────── */
 
 .app-topnav {
-  height: 52px;
+  height: 64px;
   background: var(--bs-surface-1);
   border-bottom: 1px solid var(--bs-rule);
   display: flex;

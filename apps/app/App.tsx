@@ -9,6 +9,7 @@ import {
 import "./app.css";
 
 import { AppShell } from "./components/AppShell";
+import { BindersnapLogoMark } from "./components/BindersnapLogoMark";
 import { LandingPage } from "./components/LandingPage";
 import {
   clearToken,
@@ -133,26 +134,7 @@ function LoginPage({
       <div className="app-login-wrap">
         <div className="app-login-logo">
           <div className="app-login-logo-mark" aria-hidden="true">
-            <svg viewBox="0 0 18 18" fill="none" width="24" height="24">
-              <rect
-                x="2"
-                y="1"
-                width="9"
-                height="13"
-                rx="1.5"
-                stroke="currentColor"
-                strokeWidth="1.4"
-              />
-              <rect
-                x="6"
-                y="4"
-                width="9"
-                height="13"
-                rx="1.5"
-                stroke="currentColor"
-                strokeWidth="1.4"
-              />
-            </svg>
+            <BindersnapLogoMark width={24} height={24} />
           </div>
           <span className="app-login-logo-text">Bindersnap</span>
         </div>
