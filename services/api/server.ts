@@ -109,6 +109,13 @@ if (isProduction && !stripeSecretKey) {
   process.exit(1);
 }
 
+if (isProduction && !stripeWebhookSecret) {
+  logger.error("FATAL: STRIPE_WEBHOOK_SECRET is not set in production", {
+    env: "production",
+  });
+  process.exit(1);
+}
+
 const emailDomain =
   process.env.BINDERSNAP_USER_EMAIL_DOMAIN ?? "users.bindersnap.local";
 const sessionCookieName =
@@ -2587,18 +2594,11 @@ async function handleStripeWebhook(
         });
         logger.info("Subscription activated", { username, status: sub.status });
       } else {
-        subscriptionStore.upsert({
-          username,
-          stripeCustomerId: customerId,
-          stripeSubscriptionId: subscriptionId,
-          status: "active",
-          currentPeriodEnd: null,
-          updatedAt: Date.now(),
-        });
-        logger.warn(
-          "Could not fetch subscription details from Stripe; defaulting to active",
-          { username },
+        logger.error(
+          "Could not fetch subscription details from Stripe; not granting access",
+          { username, subscriptionId },
         );
+        // Do NOT upsert — let Stripe retry the webhook when it can be verified.
       }
     }
   } else if (
