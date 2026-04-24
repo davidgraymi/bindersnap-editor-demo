@@ -16,15 +16,7 @@ import type {
   UploadValidationResult,
 } from "../../packages/gitea-client/uploads";
 import { validateUploadFile as validateUploadFileWithClient } from "../../packages/gitea-client/uploads";
-
-// Bun's bundler (`bun build --env='BUN_PUBLIC_*'`) replaces
-// process.env.BUN_PUBLIC_API_BASE_URL with a literal string at compile time.
-// - GitHub Pages build: BUN_PUBLIC_API_BASE_URL=https://api.bindersnap.com
-// - Local dev stack:    BUN_PUBLIC_API_BASE_URL=http://localhost:8787
-const API_BASE_URL = (process.env.BUN_PUBLIC_API_BASE_URL ?? "").replace(
-  /\/$/,
-  "",
-);
+import { apiBaseUrl } from "./config";
 
 export interface SessionUser {
   username: string;
@@ -75,7 +67,7 @@ export interface SearchUsersPayload {
 }
 
 function resolveApiUrl(path: string): string {
-  return API_BASE_URL ? `${API_BASE_URL}${path}` : path;
+  return apiBaseUrl ? `${apiBaseUrl}${path}` : path;
 }
 
 function readErrorMessage(payload: unknown, fallback: string): string {
