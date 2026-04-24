@@ -414,7 +414,9 @@ export async function waitForNoPendingReviews(
       await publishButton.click();
     }
 
-    const publishingButton = page.getByRole("button", { name: "Publishing\u2026" });
+    const publishingButton = page.getByRole("button", {
+      name: "Publishing\u2026",
+    });
     const publishStarted = await publishingButton
       .isVisible({ timeout: 3_000 })
       .catch(() => false);
