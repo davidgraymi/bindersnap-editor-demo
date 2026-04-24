@@ -127,6 +127,9 @@ jobs:
     name: Integration tests
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    env:
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+      STRIPE_PRICE_ID: ${{ secrets.STRIPE_TEST_PRICE_ID }}
 
     steps:
       - name: Checkout
@@ -161,6 +164,27 @@ jobs:
 
       - name: Install Playwright Chromium
         run: bunx playwright install --with-deps chromium
+
+      - name: Install Stripe CLI
+        if: ${{ env.STRIPE_SECRET_KEY != '' && env.STRIPE_PRICE_ID != '' }}
+        run: |
+          curl -s https://packages.stripe.dev/api/security/keypair/stripe-cli-gpg/public \
+            | gpg --dearmor \
+            | sudo tee /usr/share/keyrings/stripe.gpg > /dev/null
+          echo "deb [signed-by=/usr/share/keyrings/stripe.gpg] https://packages.stripe.dev/stripe-cli-debian-local stable main" \
+            | sudo tee /etc/apt/sources.list.d/stripe.list
+          sudo apt update
+          sudo apt install --yes stripe
+          stripe version
+
+      - name: Report Stripe billing test mode
+        run: |
+          if [[ -n "${STRIPE_SECRET_KEY}" && -n "${STRIPE_PRICE_ID}" ]]; then
+            echo "Stripe billing integration tests enabled."
+          else
+            echo "Stripe billing integration tests disabled."
+            echo "Set GitHub Actions secrets STRIPE_TEST_SECRET_KEY and STRIPE_TEST_PRICE_ID to enable them in CI."
+          fi
 
       - name: Run integration tests
         run: bun run test:integration

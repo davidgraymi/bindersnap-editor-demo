@@ -60,6 +60,19 @@ manually outside Playwright, for example with `bun run up`.
 The `tests/stripe-subscription.pw.ts` suite reads the same Stripe values and
 skips Stripe-specific assertions when they are unset.
 
+### Stripe billing in CI
+
+The Playwright integration job in `.github/workflows/pr-verify.yml` enables
+Stripe billing coverage only when these GitHub Actions secrets are set:
+
+- `STRIPE_TEST_SECRET_KEY`
+- `STRIPE_TEST_PRICE_ID`
+
+When both are present, the workflow installs the Stripe CLI, `globalSetup`
+starts `stripe listen`, and the runtime webhook signing secret is generated on
+the fly. Do not store `STRIPE_WEBHOOK_SECRET` in CI — the test runtime creates
+it for each run before `docker compose up`.
+
 ## Running unit tests
 
 Unit tests live alongside source as `*.test.ts` and use `bun:test`. No Docker required.

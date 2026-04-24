@@ -87,7 +87,7 @@ export async function ensureStripeWebhookSecret(
   const stripeCheck = spawnSync("stripe", ["version"], { stdio: "ignore" });
   if (stripeCheck.status !== 0) {
     throw new Error(
-      "Stripe CLI not found. Install it to run Stripe integration tests.",
+      "Stripe CLI not found. Install it before running Stripe integration tests, or unset STRIPE_SECRET_KEY / STRIPE_PRICE_ID so Stripe-specific suites self-skip.",
     );
   }
 

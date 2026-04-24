@@ -53,6 +53,7 @@ function loadEnvFile(): void {
 const APP_PORT = process.env.APP_PORT ?? "5173";
 const API_PORT = process.env.API_PORT ?? "8787";
 const APP_BASE_URL = `http://localhost:${APP_PORT}`;
+const API_READY_URL = `http://localhost:${API_PORT}/auth/me`;
 const STRIPE_WEBHOOK_FORWARD_URL = `http://localhost:${API_PORT}/stripe/webhook`;
 
 function log(message: string): void {
@@ -119,11 +120,12 @@ async function waitForUrl(
   url: string,
   attempts: number,
   delayMs: number,
+  isReady: (response: Response) => boolean = (response) => response.ok,
 ): Promise<void> {
   for (let i = 0; i < attempts; i++) {
     try {
       const response = await fetch(url);
-      if (response.ok) {
+      if (isReady(response)) {
         return;
       }
     } catch {
@@ -197,6 +199,14 @@ export default async function globalSetup(): Promise<void> {
       collectFailedServiceLogs(composeEnv);
       throw new Error("docker compose up failed — see output above.");
     }
+
+    log(`Waiting for API at ${API_READY_URL} ...`);
+    await waitForUrl(
+      API_READY_URL,
+      60,
+      2000,
+      (response) => response.status < 500,
+    );
 
     log(`Waiting for app at ${APP_BASE_URL} ...`);
     await waitForUrl(APP_BASE_URL, 60, 2000);
