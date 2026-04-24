@@ -287,21 +287,39 @@ async function completeHostedStripeCheckout(
     { required: true },
   );
 
-  // The Card radio is visually hidden under a custom overlay (no accessible name,
-  // so getByRole doesn't match). Force-click by ID to expand the card form.
-  // Falls back silently if the payment method selector isn't shown.
-  await page
+  // The Card radio is visually hidden under a custom overlay in older Stripe
+  // Checkout. Force-click by ID to expand the card form.
+  const oldAccordionOpened = await page
     .locator("#payment-method-accordion-item-title-card")
-    .click({ force: true, timeout: 5_000 })
-    .catch(() => {
-      // No payment method accordion — card fields are already visible.
-    });
+    .click({ force: true, timeout: 3_000 })
+    .then(() => true)
+    .catch(() => false);
+
+  if (!oldAccordionOpened) {
+    // Newer Stripe Checkout renders a payment-method list where clicking the
+    // Card radio selects it, and clicking the "Pay with card" button reveals
+    // the card number / expiry / CVC fields.
+    // The radio may be covered by a custom overlay, so force-click it.
+    await page
+      .getByRole("radio", { name: /card/i })
+      .click({ force: true, timeout: 3_000 })
+      .catch(() => {});
+    // Use the first *visible* match so we don't accidentally trigger a hidden
+    // accordion toggle that Stripe also renders with aria-label "Pay with card".
+    await page
+      .getByRole("button", { name: /pay with card/i })
+      .filter({ visible: true })
+      .first()
+      .click({ timeout: 5_000 })
+      .catch(() => {});
+  }
 
   // Wait for the card number field to appear after the accordion opens.
   await page
-    .waitForSelector('#cardNumber, input[autocomplete="cc-number"]', {
-      timeout: 10_000,
-    })
+    .waitForSelector(
+      '#cardNumber, input[autocomplete="cc-number"], input[name="cardNumber"]',
+      { timeout: 10_000 },
+    )
     .catch(() => {});
 
   // Stripe Link ("Save my information for faster checkout") is checked by
