@@ -71,7 +71,6 @@ import {
   type PullRequestWithApprovalState,
 } from "../../packages/gitea-client/pullRequests";
 
-
 const authAttempts = new Map<string, { count: number; resetAt: number }>();
 
 export { resolveCookieSameSite, type SessionCookieSameSite };

@@ -154,7 +154,9 @@ export function resolveCookieSameSite(
   }
 }
 
-export function normalizeOrigin(origin: string | null | undefined): string | null {
+export function normalizeOrigin(
+  origin: string | null | undefined,
+): string | null {
   if (!origin) {
     return null;
   }
