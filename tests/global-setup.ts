@@ -14,7 +14,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -26,6 +26,30 @@ import {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
 const COMPOSE_FILE = resolve(ROOT, "docker-compose.yml");
+
+/**
+ * Load the root .env file into process.env, skipping keys that are already
+ * set. This is a safety net for when playwright is invoked directly (e.g.
+ * `bunx playwright test`) rather than via `bun run test:integration`, since
+ * bunx does not auto-load .env the way `bun run` does.
+ */
+function loadEnvFile(): void {
+  const envPath = resolve(ROOT, ".env");
+  if (!existsSync(envPath)) return;
+  const lines = readFileSync(envPath, "utf8").split("\n");
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eqIdx = trimmed.indexOf("=");
+    if (eqIdx === -1) continue;
+    const key = trimmed.slice(0, eqIdx).trim();
+    const value = trimmed.slice(eqIdx + 1).trim();
+    if (key && !(key in process.env)) {
+      process.env[key] = value;
+    }
+  }
+}
+
 const APP_PORT = process.env.APP_PORT ?? "5173";
 const API_PORT = process.env.API_PORT ?? "8787";
 const APP_BASE_URL = `http://localhost:${APP_PORT}`;
@@ -113,6 +137,10 @@ async function waitForUrl(
 }
 
 export default async function globalSetup(): Promise<void> {
+  // Load .env before anything else — safety net for direct `bunx playwright
+  // test` invocations that bypass `bun run` and its automatic .env loading.
+  loadEnvFile();
+
   if (process.env.SKIP_STACK !== "1" && !existsSync(COMPOSE_FILE)) {
     throw new Error(`docker-compose.yml not found at: ${COMPOSE_FILE}`);
   }
@@ -126,18 +154,21 @@ export default async function globalSetup(): Promise<void> {
     }
   }
 
-  const stripeRuntime = await ensureStripeWebhookSecret({
+  await ensureStripeWebhookSecret({
     env: process.env,
     forwardTo: STRIPE_WEBHOOK_FORWARD_URL,
     log,
   });
 
-  if (stripeRuntime.listenerError) {
-    log(`Stripe runtime: ${stripeRuntime.listenerError}`);
-  }
-
   if (process.env.SKIP_STACK === "1") {
     log("SKIP_STACK=1 — assuming stack is already running.");
+    if (process.env.STRIPE_WEBHOOK_SECRET) {
+      log(
+        "Stripe listener started. Note: the running API must have been started with the same " +
+          "STRIPE_WEBHOOK_SECRET for signature-verification tests to pass. " +
+          "Set STRIPE_WEBHOOK_SECRET in .env before `bun run up` to satisfy that requirement.",
+      );
+    }
     return;
   }
 
@@ -171,7 +202,9 @@ export default async function globalSetup(): Promise<void> {
     await waitForUrl(APP_BASE_URL, 60, 2000);
     log("Stack is ready.");
   } catch (error) {
-    await stopStripeWebhookSecretRuntime({ log }).catch(() => undefined);
+    try {
+      stopStripeWebhookSecretRuntime({ log });
+    } catch {}
     throw error;
   }
 }

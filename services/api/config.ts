@@ -1,6 +1,7 @@
 export type LogLevel = "debug" | "info" | "warn" | "error";
 export type SessionCookieSameSite = "Strict" | "Lax" | "None";
 
+// The complete configuration of the API server.
 export interface ApiConfig {
   nodeEnv: string;
   isProduction: boolean;
@@ -52,6 +53,7 @@ type DerivedConfigKeys =
 
 type StaticConfigDefaults = Omit<ApiConfig, DerivedConfigKeys>;
 
+// The default configuration of a subset of ApiConfig values.
 const DEFAULT_CONFIG = {
   apiPort: 8787,
   appPort: 5173,
@@ -75,6 +77,7 @@ const DEFAULT_CONFIG = {
   sessionsDbPath: "/var/lib/bindersnap/sessions.db",
 } satisfies StaticConfigDefaults;
 
+// Values that must be set in the environment in production. Not specifying these will lead to program termination.
 const REQUIRED_PRODUCTION_CONFIG = {
   BINDERSNAP_GITEA_SERVICE_TOKEN: "giteaServiceToken",
   STRIPE_SECRET_KEY: "stripeSecretKey",

@@ -181,15 +181,17 @@ async function logInWithIdentifier(
   const loginRequest = await loginRequestPromise;
   expect(loginRequest.postDataJSON()).toMatchObject(expectedPayload);
 
-  await expectBillingPage(page);
+  // The user already has an active subscription from the prior dev grant in
+  // signUpAndReturnToLogin, so they land directly in the workspace on re-login.
   await attachScreenshot(
     page,
     testInfo,
-    `${screenshotPrefix}-billing-after-login`,
+    `${screenshotPrefix}-workspace-after-login`,
   );
 
-  await grantDevSubscriptionAndOpenWorkspace(page, expectedUsername);
-  await expect(page.locator(".app-topnav-avatar")).toBeVisible();
+  await expect(
+    page.locator(`.app-topnav-avatar[aria-label="User: ${expectedUsername}"]`),
+  ).toBeVisible({ timeout: 60_000 });
 }
 
 test.describe("signup flow", () => {

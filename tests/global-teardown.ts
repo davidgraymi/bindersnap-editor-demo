@@ -12,10 +12,7 @@ import { spawnSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import {
-  clearStripeRuntimeState,
-  readStripeRuntimeState,
-} from "./stripe-runtime";
+import { stopStripeWebhookSecretRuntime } from "./stripe-runtime";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
@@ -27,35 +24,13 @@ function log(message: string): void {
   process.stdout.write(`[global-teardown] ${message}\n`);
 }
 
-function stopStripeListenerIfNeeded(): void {
-  const runtimeState = readStripeRuntimeState();
-  const listenerPid = runtimeState.listenerPid;
-
-  if (!listenerPid) {
-    clearStripeRuntimeState();
-    return;
-  }
-
-  try {
-    process.kill(-listenerPid, "SIGTERM");
-  } catch {
-    try {
-      process.kill(listenerPid, "SIGTERM");
-    } catch {
-      // Best-effort cleanup only.
-    }
-  }
-
-  clearStripeRuntimeState();
-}
-
 export default async function globalTeardown(): Promise<void> {
   if (process.env.SKIP_STACK === "1") {
     log("SKIP_STACK=1 — leaving stack running.");
     return;
   }
 
-  stopStripeListenerIfNeeded();
+  stopStripeWebhookSecretRuntime({ log });
   log("Tearing down integration stack...");
   const result = spawnSync(
     "docker",

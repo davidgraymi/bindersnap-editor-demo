@@ -2418,10 +2418,14 @@ async function handleStripeWebhook(
           stripeCustomerId: customerId,
           stripeSubscriptionId: subscriptionId,
           status: (sub.status as string) ?? "active",
+          // Stripe omits current_period_end for trialing subscriptions in
+          // newer API versions; fall back to trial_end (same value).
           currentPeriodEnd:
             typeof sub.current_period_end === "number"
               ? sub.current_period_end
-              : null,
+              : typeof sub.trial_end === "number"
+                ? sub.trial_end
+                : null,
           updatedAt: Date.now(),
         });
         logger.info("Subscription activated", { username, status: sub.status });
@@ -2475,7 +2479,13 @@ async function handleBillingStatus(
   const auth = requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
 
-  const record = subscriptionStore.getByUsername(auth.session.username);
+  const { username } = auth.session;
+
+  if (config.bypassSubscriptionForUsers.includes(username)) {
+    return json(200, { status: "active", currentPeriodEnd: null }, baseHeaders);
+  }
+
+  const record = subscriptionStore.getByUsername(username);
   return json(
     200,
     {

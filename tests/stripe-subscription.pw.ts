@@ -154,28 +154,20 @@ async function createTestCustomerAndSubscription(username: string): Promise<{
   );
   const customerId = customer.id as string;
 
-  // Test payment method (4242 never declines in test mode)
-  const pm = await stripeFetch(
-    "/v1/payment_methods",
-    new URLSearchParams({
-      type: "card",
-      "card[number]": "4242424242424242",
-      "card[exp_month]": "12",
-      "card[exp_year]": "2030",
-      "card[cvc]": "123",
-    }),
-  );
-  const pmId = pm.id as string;
-
-  await stripeFetch(
-    `/v1/payment_methods/${pmId}/attach`,
+  // Use Stripe's pre-built test payment method token — raw card numbers are
+  // rejected by the API unless the account has special access enabled.
+  // Attaching pm_card_visa clones it into a new PM with a fresh ID; capture
+  // that ID from the attach response to use as the customer's default.
+  const attachedPm = await stripeFetch(
+    "/v1/payment_methods/pm_card_visa/attach",
     new URLSearchParams({ customer: customerId }),
   );
+  const attachedPmId = attachedPm.id as string;
 
   await stripeFetch(
     `/v1/customers/${customerId}`,
     new URLSearchParams({
-      "invoice_settings[default_payment_method]": pmId,
+      "invoice_settings[default_payment_method]": attachedPmId,
     }),
   );
 
@@ -189,10 +181,18 @@ async function createTestCustomerAndSubscription(username: string): Promise<{
     }),
   );
 
+  // Stripe's newer API omits current_period_end for trialing subscriptions;
+  // trial_end carries the same timestamp in that case.
+  const currentPeriodEnd = (
+    typeof subscription.current_period_end === "number"
+      ? subscription.current_period_end
+      : subscription.trial_end
+  ) as number;
+
   return {
     customerId,
     subscriptionId: subscription.id as string,
-    currentPeriodEnd: subscription.current_period_end as number,
+    currentPeriodEnd,
   };
 }
 
@@ -279,43 +279,84 @@ async function completeHostedStripeCheckout(
 ): Promise<void> {
   await page.waitForURL(/checkout\.stripe\.com/, { timeout: 30_000 });
 
+  // Email field is type="text" with autocomplete="email" on Stripe Hosted Checkout.
   await fillVisibleInputAcrossFrames(
     page,
-    ['input[type="email"]', 'input[autocomplete="email"]'],
+    ['input[autocomplete="email"]', 'input[type="email"]', "#email"],
     email,
     { required: true },
   );
+
+  // The Card radio is visually hidden under a custom overlay (no accessible name,
+  // so getByRole doesn't match). Force-click by ID to expand the card form.
+  // Falls back silently if the payment method selector isn't shown.
+  await page
+    .locator("#payment-method-accordion-item-title-card")
+    .click({ force: true, timeout: 5_000 })
+    .catch(() => {
+      // No payment method accordion — card fields are already visible.
+    });
+
+  // Wait for the card number field to appear after the accordion opens.
+  await page
+    .waitForSelector('#cardNumber, input[autocomplete="cc-number"]', {
+      timeout: 10_000,
+    })
+    .catch(() => {});
+
+  // Stripe Link ("Save my information for faster checkout") is checked by
+  // default and shows a required phone number field that blocks submission.
+  // Uncheck it to keep the flow simple.
+  await page
+    .locator("#enableStripePass")
+    .uncheck({ timeout: 3_000 })
+    .catch(() => {});
+
+  // All card fields render in the main frame (no Stripe.js iframes on
+  // checkout.stripe.com since Stripe owns the whole origin).
   await fillVisibleInputAcrossFrames(
     page,
-    ['input[autocomplete="cc-name"]'],
+    ["#billingName", 'input[autocomplete="cc-name"]'],
     "Bindersnap Test",
   );
   await fillVisibleInputAcrossFrames(
     page,
-    ['input[autocomplete="cc-number"]', 'input[name="cardNumber"]'],
+    [
+      "#cardNumber",
+      'input[autocomplete="cc-number"]',
+      'input[name="cardNumber"]',
+    ],
     "4242424242424242",
     { required: true },
   );
   await fillVisibleInputAcrossFrames(
     page,
-    ['input[autocomplete="cc-exp"]', 'input[name="cardExpiry"]'],
+    ["#cardExpiry", 'input[autocomplete="cc-exp"]', 'input[name="cardExpiry"]'],
     "1234",
     { required: true },
   );
   await fillVisibleInputAcrossFrames(
     page,
-    ['input[autocomplete="cc-csc"]', 'input[name="cardCvc"]'],
+    ["#cardCvc", 'input[autocomplete="cc-csc"]', 'input[name="cardCvc"]'],
     "123",
     { required: true },
   );
   await fillVisibleInputAcrossFrames(
     page,
-    ['input[autocomplete="postal-code"]'],
+    [
+      "#billingPostalCode",
+      'input[autocomplete="billing postal-code"]',
+      'input[autocomplete="postal-code"]',
+    ],
     "60601",
   );
 
+  // The Stripe Checkout page also has an accordion toggle button with
+  // aria-label="Pay with card" which matches /pay/i but is hidden.
+  // Use data-testid for the real submit button; fall back to the Subscribe text.
   const submitButton = page
-    .getByRole("button", { name: /subscribe|start trial|pay/i })
+    .locator('[data-testid="hosted-payment-submit-button"]')
+    .or(page.getByRole("button", { name: /subscribe|start[\s-]trial/i }))
     .first();
   await expect(submitButton).toBeVisible({ timeout: 15_000 });
   await submitButton.click();
