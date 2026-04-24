@@ -261,6 +261,11 @@ export async function signInAsAlice(page: Page): Promise<void> {
     .catch(() => false);
   if (hasSignOut) {
     await signOutCurrentUser(page);
+    // logoutSession() swallows errors, so the session cookie may still be
+    // present if the API call failed. Clear it at the browser level so that
+    // the full-page reload triggered by page.goto("/login") below does NOT
+    // re-discover a valid session and redirect back to the workspace.
+    await page.context().clearCookies();
   } else {
     // Clear session storage so the app stops redirecting on /login.
     await page.evaluate(() => sessionStorage.clear());
@@ -304,6 +309,11 @@ export async function signInAsBob(page: Page): Promise<void> {
     .catch(() => false);
   if (hasSignOut) {
     await signOutCurrentUser(page);
+    // logoutSession() swallows errors, so the session cookie may still be
+    // present if the API call failed. Clear it at the browser level so that
+    // the full-page reload triggered by page.goto("/login") below does NOT
+    // re-discover a valid session and redirect back to the workspace.
+    await page.context().clearCookies();
   } else {
     // Clear session storage so the app stops redirecting on /login.
     await page.evaluate(() => sessionStorage.clear());
@@ -404,7 +414,7 @@ export async function waitForNoPendingReviews(
       await publishButton.click();
     }
 
-    const publishingButton = page.getByRole("button", { name: "Publishing…" });
+    const publishingButton = page.getByRole("button", { name: "Publishing\u2026" });
     const publishStarted = await publishingButton
       .isVisible({ timeout: 3_000 })
       .catch(() => false);
