@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 
+import { config, type SessionCookieSameSite } from "./config";
 import { logger } from "./logger";
 import { sessionStore, type SessionRecord } from "./sessions";
 import { subscriptionStore, hasActiveSubscription } from "./subscriptions";
@@ -44,185 +45,7 @@ import {
   type PullRequestWithApprovalState,
 } from "../../packages/gitea-client/pullRequests";
 
-function parseBoolean(value: string | undefined, fallback: boolean): boolean {
-  if (value === undefined) {
-    return fallback;
-  }
-
-  const normalized = value.trim().toLowerCase();
-  if (["1", "true", "yes", "on"].includes(normalized)) {
-    return true;
-  }
-
-  if (["0", "false", "no", "off"].includes(normalized)) {
-    return false;
-  }
-
-  return fallback;
-}
-
-function parsePositiveInt(value: string | undefined, fallback: number): number {
-  const parsed = Number.parseInt(value ?? "", 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-const apiPortValue = Number.parseInt(
-  process.env.API_PORT ?? process.env.PORT ?? "8787",
-  10,
-);
-const apiPort =
-  Number.isFinite(apiPortValue) && apiPortValue > 0 ? apiPortValue : 8787;
-const giteaUrl =
-  process.env.GITEA_INTERNAL_URL ??
-  process.env.BUN_PUBLIC_GITEA_URL ??
-  process.env.VITE_GITEA_URL ??
-  "http://localhost:3000";
-const giteaAdminUsername = process.env.GITEA_ADMIN_USER?.trim() ?? "";
-const giteaAdminPassword = process.env.GITEA_ADMIN_PASS?.trim() ?? "";
-const giteaServiceToken =
-  process.env.BINDERSNAP_GITEA_SERVICE_TOKEN?.trim() ?? "";
-const isProduction = process.env.NODE_ENV === "production";
-
-if (isProduction && !giteaServiceToken) {
-  logger.error(
-    "FATAL: BINDERSNAP_GITEA_SERVICE_TOKEN is not set in production",
-    { env: "production" },
-  );
-  process.exit(1);
-}
-
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY?.trim() ?? "";
-const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim() ?? "";
-const stripePriceId = process.env.STRIPE_PRICE_ID?.trim() ?? "";
-
-const defaultStripeAppOrigin = "http://localhost:5173";
-const appOrigin = (
-  process.env.BINDERSNAP_APP_ORIGIN ??
-  process.env.BINDERSNAP_ALLOWED_ORIGINS?.split(",")[0] ??
-  defaultStripeAppOrigin
-).trim();
-
-if (isProduction && !stripeSecretKey) {
-  logger.error("FATAL: STRIPE_SECRET_KEY is not set in production", {
-    env: "production",
-  });
-  process.exit(1);
-}
-
-if (isProduction && !stripeWebhookSecret) {
-  logger.error("FATAL: STRIPE_WEBHOOK_SECRET is not set in production", {
-    env: "production",
-  });
-  process.exit(1);
-}
-
-const emailDomain =
-  process.env.BINDERSNAP_USER_EMAIL_DOMAIN ?? "users.bindersnap.local";
-const sessionCookieName =
-  process.env.BINDERSNAP_SESSION_COOKIE_NAME ?? "bindersnap_session";
-export type SessionCookieSameSite = "Strict" | "Lax" | "None";
-const REQUIRED_GITEA_TOKEN_SCOPES = [
-  "write:user",
-  "write:repository",
-  "write:issue",
-] as const;
-
-function resolveGiteaTokenScopes(scopesRaw?: string): string[] {
-  const configuredScopes = (scopesRaw ?? "")
-    .split(",")
-    .map((scope) => scope.trim())
-    .filter((scope) => scope !== "");
-
-  return Array.from(
-    new Set<string>([...configuredScopes, ...REQUIRED_GITEA_TOKEN_SCOPES]),
-  );
-}
-
-const tokenScopes = resolveGiteaTokenScopes(
-  process.env.BINDERSNAP_GITEA_TOKEN_SCOPES,
-);
-const sessionTtlMs = parsePositiveInt(
-  process.env.BINDERSNAP_SESSION_TTL_MS,
-  7 * 24 * 60 * 60 * 1000,
-);
-const rememberedSessionTtlMs = parsePositiveInt(
-  process.env.BINDERSNAP_REMEMBER_ME_SESSION_TTL_MS,
-  30 * 24 * 60 * 60 * 1000,
-);
-const enforceHttps = parseBoolean(
-  process.env.BINDERSNAP_REQUIRE_HTTPS,
-  process.env.NODE_ENV === "production",
-);
-const authRateLimitEnabled = parseBoolean(
-  process.env.BINDERSNAP_AUTH_RATE_LIMIT_ENABLED,
-  true,
-);
-const bypassSubscriptionForUsers = new Set(
-  (process.env.BINDERSNAP_FREE_USERS ?? "")
-    .split(",")
-    .map((u) => u.trim())
-    .filter((u) => u !== ""),
-);
-const authRateLimitWindowMs = parsePositiveInt(
-  process.env.BINDERSNAP_AUTH_RATE_LIMIT_WINDOW_MS,
-  10 * 60 * 1000,
-);
-const authRateLimitMax = parsePositiveInt(
-  process.env.BINDERSNAP_AUTH_RATE_LIMIT_MAX,
-  20,
-);
-const defaultAppOrigin = `http://localhost:${process.env.APP_PORT ?? "5173"}`;
-const configuredAllowedOrigins = (
-  process.env.BINDERSNAP_ALLOWED_ORIGINS ??
-  process.env.BINDERSNAP_APP_ORIGIN ??
-  defaultAppOrigin
-)
-  .split(",")
-  .map((origin) => origin.trim())
-  .filter((origin) => origin !== "");
-
 const authAttempts = new Map<string, { count: number; resetAt: number }>();
-const sessionCookieDomain = resolveCookieDomain(
-  process.env.BINDERSNAP_SESSION_COOKIE_DOMAIN,
-);
-const sessionCookieSameSite = resolveCookieSameSite(
-  process.env.BINDERSNAP_SESSION_COOKIE_SAME_SITE,
-);
-const allowedOrigins = new Set(
-  configuredAllowedOrigins
-    .map(normalizeOrigin)
-    .filter((origin): origin is string => Boolean(origin)),
-);
-
-function resolveCookieDomain(value: string | undefined): string | null {
-  if (!value) {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  if (trimmed === "") {
-    return null;
-  }
-
-  return /^\.?[a-z0-9.-]+$/i.test(trimmed) ? trimmed : null;
-}
-
-export function resolveCookieSameSite(
-  value: string | undefined,
-  fallback: SessionCookieSameSite = "Lax",
-): SessionCookieSameSite {
-  const normalized = value?.trim().toLowerCase();
-  switch (normalized) {
-    case "strict":
-      return "Strict";
-    case "none":
-      return "None";
-    case "lax":
-      return "Lax";
-    default:
-      return fallback;
-  }
-}
 
 export interface SessionLifetime {
   sessionExpiresAt: number;
@@ -237,9 +60,9 @@ export function buildSessionLifetime(
     rememberedSessionTtlMs?: number;
   },
 ): SessionLifetime {
-  const standardTtlMs = options?.sessionTtlMs ?? sessionTtlMs;
+  const standardTtlMs = options?.sessionTtlMs ?? config.sessionTtlMs;
   const persistentTtlMs =
-    options?.rememberedSessionTtlMs ?? rememberedSessionTtlMs;
+    options?.rememberedSessionTtlMs ?? config.rememberedSessionTtlMs;
   const ttlMs = rememberMe ? persistentTtlMs : standardTtlMs;
   const expiresAt = now + ttlMs;
 
@@ -294,12 +117,12 @@ function buildTokenAuthHeader(token: string): string {
 function buildGiteaServiceHeaders(
   extraHeaders?: HeadersInit,
 ): HeadersInit | null {
-  if (!giteaServiceToken) {
+  if (!config.giteaServiceToken) {
     return null;
   }
 
   return {
-    Authorization: buildTokenAuthHeader(giteaServiceToken),
+    Authorization: buildTokenAuthHeader(config.giteaServiceToken),
     ...extraHeaders,
   };
 }
@@ -312,11 +135,15 @@ function buildGiteaPrivilegedHeaders(
     return serviceHeaders;
   }
 
-  if (!isProduction && giteaAdminUsername && giteaAdminPassword) {
+  if (
+    !config.isProduction &&
+    config.giteaAdminUsername &&
+    config.giteaAdminPassword
+  ) {
     return {
       Authorization: buildBasicAuthHeader(
-        giteaAdminUsername,
-        giteaAdminPassword,
+        config.giteaAdminUsername,
+        config.giteaAdminPassword,
       ),
       ...extraHeaders,
     };
@@ -383,15 +210,12 @@ function isAllowedOrigin(origin: string | null): boolean {
     return false;
   }
 
-  if (allowedOrigins.has(origin)) {
+  if (config.configuredAllowedOrigins.has(origin)) {
     return true;
   }
 
   // Local dev fallback: allow loopback browser origins unless explicitly locked down.
-  if (
-    !process.env.BINDERSNAP_ALLOWED_ORIGINS &&
-    !process.env.BINDERSNAP_APP_ORIGIN
-  ) {
+  if (!config.hasExplicitBrowserOrigins) {
     return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
   }
 
@@ -430,7 +254,7 @@ function enforceTransportSecurity(
   req: Request,
   baseHeaders: Headers,
 ): Response | null {
-  if (!enforceHttps || isLocalRequest(req)) {
+  if (!config.enforceHttps || isLocalRequest(req)) {
     return null;
   }
 
@@ -482,21 +306,17 @@ export function serializeSessionCookie(
   value: string,
   options?: {
     expiresAt?: number;
-    sameSite?: SessionCookieSameSite;
-    domain?: string | null;
   },
 ): string {
-  const sameSite = options?.sameSite ?? sessionCookieSameSite;
-  const domain = options?.domain ?? sessionCookieDomain;
   const parts = [
-    `${sessionCookieName}=${value}`,
+    `${config.sessionCookieName}=${value}`,
     "Path=/",
     "HttpOnly",
-    `SameSite=${sameSite}`,
+    `SameSite=${config.sessionCookieSameSite}`,
   ];
 
-  if (domain) {
-    parts.push(`Domain=${domain}`);
+  if (config.sessionCookieDomain) {
+    parts.push(`Domain=${config.sessionCookieDomain}`);
   }
 
   if (!isLocalRequest(req)) {
@@ -533,7 +353,7 @@ function parseCookies(req: Request): Map<string, string> {
 }
 
 function getSessionFromRequest(req: Request): SessionRecord | null {
-  const sessionId = parseCookies(req).get(sessionCookieName);
+  const sessionId = parseCookies(req).get(config.sessionCookieName);
   if (!sessionId) return null;
 
   const session = sessionStore.get(sessionId);
@@ -552,7 +372,7 @@ function consumeAuthRateLimit(
   req: Request,
   action: "login" | "signup",
 ): { limited: boolean; retryAfterSeconds: number } {
-  if (!authRateLimitEnabled) {
+  if (!config.authRateLimitEnabled) {
     return { limited: false, retryAfterSeconds: 0 };
   }
 
@@ -563,7 +383,7 @@ function consumeAuthRateLimit(
   if (!existing || existing.resetAt <= now) {
     authAttempts.set(key, {
       count: 1,
-      resetAt: now + authRateLimitWindowMs,
+      resetAt: now + config.authRateLimitWindowMs,
     });
     return { limited: false, retryAfterSeconds: 0 };
   }
@@ -571,7 +391,7 @@ function consumeAuthRateLimit(
   existing.count += 1;
   authAttempts.set(key, existing);
 
-  if (existing.count > authRateLimitMax) {
+  if (existing.count > config.authRateLimitMax) {
     const retryAfterSeconds = Math.max(
       1,
       Math.ceil((existing.resetAt - now) / 1000),
@@ -583,7 +403,7 @@ function consumeAuthRateLimit(
 }
 
 function resetAuthRateLimit(req: Request, action: "login" | "signup"): void {
-  if (!authRateLimitEnabled) {
+  if (!config.authRateLimitEnabled) {
     return;
   }
 
@@ -600,7 +420,7 @@ async function readJson<T>(req: Request): Promise<T | null> {
 }
 
 async function giteaFetch(path: string, init?: RequestInit): Promise<Response> {
-  return fetch(new URL(path, giteaUrl), init);
+  return fetch(new URL(path, config.giteaUrl), init);
 }
 
 async function readResponsePayload(response: Response): Promise<unknown> {
@@ -665,7 +485,7 @@ async function readGiteaErrorMessage(
 }
 
 function createSessionGiteaClient(session: SessionRecord): GiteaClient {
-  return createGiteaClient(giteaUrl, session.giteaToken);
+  return createGiteaClient(config.giteaUrl, session.giteaToken);
 }
 
 function requireSession(
@@ -687,7 +507,7 @@ function requireSubscription(
   const auth = requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
   if (
-    !bypassSubscriptionForUsers.has(auth.session.username) &&
+    !config.bypassSubscriptionForUsers.includes(auth.session.username) &&
     !hasActiveSubscription(auth.session.username)
   ) {
     return json(402, { error: "Subscription required." }, baseHeaders);
@@ -702,7 +522,7 @@ async function stripeFetch(
   return fetch(`https://api.stripe.com${path}`, {
     method: body ? "POST" : "GET",
     headers: {
-      Authorization: `Bearer ${stripeSecretKey}`,
+      Authorization: `Bearer ${config.stripeSecretKey}`,
       ...(body ? { "Content-Type": "application/x-www-form-urlencoded" } : {}),
     },
     body,
@@ -1346,7 +1166,10 @@ async function createUserToken(
       },
       body: JSON.stringify({
         name: tokenName,
-        scopes: tokenScopes.length > 0 ? tokenScopes : ["read:repository"],
+        scopes:
+          config.tokenScopes.length > 0
+            ? config.tokenScopes
+            : ["read:repository"],
       }),
     },
   );
@@ -2551,11 +2374,11 @@ async function handleStripeWebhook(
   const rawBody = await req.text();
   const sigHeader = req.headers.get("stripe-signature") ?? "";
 
-  if (stripeWebhookSecret) {
+  if (config.stripeWebhookSecret) {
     const valid = await verifyStripeSignature(
       rawBody,
       sigHeader,
-      stripeWebhookSecret,
+      config.stripeWebhookSecret,
     );
     if (!valid) {
       logger.warn("Stripe webhook signature verification failed");
@@ -2670,17 +2493,17 @@ async function handleBillingCheckout(
   const auth = requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
 
-  if (!stripeSecretKey || !stripePriceId) {
+  if (!config.stripeSecretKey || !config.stripePriceId) {
     return json(503, { error: "Billing not configured." }, baseHeaders);
   }
 
   const body = new URLSearchParams({
     mode: "subscription",
-    "line_items[0][price]": stripePriceId,
+    "line_items[0][price]": config.stripePriceId,
     "line_items[0][quantity]": "1",
     client_reference_id: auth.session.username,
-    success_url: `${appOrigin}/billing?checkout=success`,
-    cancel_url: `${appOrigin}/billing`,
+    success_url: `${config.appOrigin}/billing?checkout=success`,
+    cancel_url: `${config.appOrigin}/billing`,
   });
 
   const resp = await stripeFetch("/v1/checkout/sessions", body);
@@ -2708,7 +2531,7 @@ async function handleDevGrantSubscription(
   req: Request,
   baseHeaders: Headers,
 ): Promise<Response> {
-  if (isProduction) {
+  if (config.isProduction) {
     return json(404, { error: "Not found." }, baseHeaders);
   }
 
@@ -2740,13 +2563,13 @@ async function handleBillingPortal(
     return json(404, { error: "No subscription found." }, baseHeaders);
   }
 
-  if (!stripeSecretKey) {
+  if (!config.stripeSecretKey) {
     return json(503, { error: "Billing not configured." }, baseHeaders);
   }
 
   const body = new URLSearchParams({
     customer: record.stripeCustomerId,
-    return_url: `${appOrigin}/billing`,
+    return_url: `${config.appOrigin}/billing`,
   });
 
   const resp = await stripeFetch("/v1/billing_portal/sessions", body);
@@ -2791,7 +2614,7 @@ function startCleanupTimer(): ReturnType<typeof setInterval> {
 
 export function createApiServer() {
   return Bun.serve({
-    port: apiPort,
+    port: config.apiPort,
     idleTimeout: 30,
     async fetch(req) {
       const startMs = Date.now();
@@ -3006,6 +2829,6 @@ if (import.meta.main && server) {
   logger.info("Bindersnap API listening", {
     url: `http://localhost:${server.port}`,
     port: server.port,
-    env: process.env.NODE_ENV ?? "development",
+    env: config.nodeEnv,
   });
 }

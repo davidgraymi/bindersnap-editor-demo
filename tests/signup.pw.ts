@@ -11,6 +11,9 @@ import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
 import { signOutCurrentUser } from "./helpers";
 
+const API_BASE_URL =
+  process.env.BUN_PUBLIC_API_BASE_URL ?? "http://localhost:8787";
+
 function buildUniqueSignupCredentials() {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   return {
@@ -78,6 +81,38 @@ async function attachScreenshot(
   });
 }
 
+async function expectBillingPage(page: Page): Promise<void> {
+  await expect(page).toHaveURL(/\/billing$/);
+  await expect(
+    page.getByRole("heading", { name: "Start your subscription" }),
+  ).toBeVisible();
+}
+
+async function grantDevSubscriptionAndOpenWorkspace(
+  page: Page,
+  username: string,
+): Promise<void> {
+  await page.evaluate(async (apiUrl) => {
+    const response = await fetch(`${apiUrl}/api/dev/grant-subscription`, {
+      method: "POST",
+      credentials: "include",
+    });
+    if (!response.ok) {
+      const payload = await response
+        .json()
+        .catch(() => ({ error: response.status }));
+      throw new Error(
+        `Grant subscription failed: ${(payload as { error?: unknown }).error ?? response.status}`,
+      );
+    }
+  }, API_BASE_URL);
+
+  await page.goto("/");
+  await expect(
+    page.locator(`.app-topnav-avatar[aria-label="User: ${username}"]`),
+  ).toBeVisible();
+}
+
 async function signUpAndReturnToLogin(
   page: Page,
   testInfo: TestInfo,
@@ -106,18 +141,14 @@ async function signUpAndReturnToLogin(
     password: credentials.password,
   });
 
-  await expect(page).toHaveURL(/\/$/);
-  await expect(
-    page.locator(
-      `.app-topnav-avatar[aria-label="User: ${credentials.username}"]`,
-    ),
-  ).toBeVisible();
+  await expectBillingPage(page);
   await attachScreenshot(
     page,
     testInfo,
-    `${screenshotPrefix}-workspace-after-signup`,
+    `${screenshotPrefix}-billing-after-signup`,
   );
 
+  await grantDevSubscriptionAndOpenWorkspace(page, credentials.username);
   await signOutCurrentUser(page);
   await page.goto("/login");
   await expect(page).toHaveURL(/\/login$/);
@@ -150,16 +181,15 @@ async function logInWithIdentifier(
   const loginRequest = await loginRequestPromise;
   expect(loginRequest.postDataJSON()).toMatchObject(expectedPayload);
 
-  await expect(page).toHaveURL(/\/$/);
-  await expect(
-    page.locator(`.app-topnav-avatar[aria-label="User: ${expectedUsername}"]`),
-  ).toBeVisible();
-  await expect(page.locator(".app-topnav-avatar")).toBeVisible();
+  await expectBillingPage(page);
   await attachScreenshot(
     page,
     testInfo,
-    `${screenshotPrefix}-workspace-after-login`,
+    `${screenshotPrefix}-billing-after-login`,
   );
+
+  await grantDevSubscriptionAndOpenWorkspace(page, expectedUsername);
+  await expect(page.locator(".app-topnav-avatar")).toBeVisible();
 }
 
 test.describe("signup flow", () => {
@@ -263,7 +293,8 @@ test.describe("signup flow", () => {
     await fillSignupForm(page, firstAccount);
     await submitSignupForm(page);
 
-    await expect(page).toHaveURL(/\/$/);
+    await expectBillingPage(page);
+    await grantDevSubscriptionAndOpenWorkspace(page, firstAccount.username);
     await signOutCurrentUser(page);
     await page.goto("/login");
     await expect(page).toHaveURL(/\/login$/);

@@ -58,15 +58,16 @@ async function signUp(
     .fill(credentials.password);
   await page.getByRole("button", { name: "Create account" }).click();
 
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/billing$/);
   await expect(
-    page.locator(
-      `.app-topnav-avatar[aria-label="User: ${credentials.username}"]`,
-    ),
+    page.getByRole("heading", { name: "Start your subscription" }),
   ).toBeVisible();
 }
 
-async function grantDevSubscription(page: Page): Promise<void> {
+async function grantDevSubscription(
+  page: Page,
+  username: string,
+): Promise<void> {
   await page.evaluate(async (apiUrl) => {
     const resp = await fetch(`${apiUrl}/api/dev/grant-subscription`, {
       method: "POST",
@@ -79,6 +80,11 @@ async function grantDevSubscription(page: Page): Promise<void> {
       );
     }
   }, API_BASE_URL);
+
+  await page.goto("/");
+  await expect(
+    page.locator(`.app-topnav-avatar[aria-label="User: ${username}"]`),
+  ).toBeVisible();
 }
 
 async function createDocument(page: Page, fileName: string): Promise<void> {
@@ -192,7 +198,7 @@ test.describe("document collaborator management", () => {
     const credentials = buildUniqueCollaboratorTestData();
 
     await signUp(page, credentials);
-    await grantDevSubscription(page);
+    await grantDevSubscription(page, credentials.username);
     await createDocument(page, credentials.fileName);
     await openCollaboratorsTab(page);
 

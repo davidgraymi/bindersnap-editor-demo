@@ -1,7 +1,16 @@
 import { expect, test } from "bun:test";
 
+import { resolveSubscriptionStatus } from "./App";
 import { resolveSignupPrefill } from "./authIntent";
 import { resolveGiteaTokenScopes } from "./giteaTokenScopes";
+
+test("resolveSubscriptionStatus treats missing or inactive billing records as unpaid", () => {
+  expect(resolveSubscriptionStatus("active")).toBe("active");
+  expect(resolveSubscriptionStatus("trialing")).toBe("active");
+  expect(resolveSubscriptionStatus(null)).toBe("none");
+  expect(resolveSubscriptionStatus("past_due")).toBe("none");
+  expect(resolveSubscriptionStatus("canceled")).toBe("none");
+});
 
 test("resolveGiteaTokenScopes includes all required write scopes by default", () => {
   expect(resolveGiteaTokenScopes()).toEqual([

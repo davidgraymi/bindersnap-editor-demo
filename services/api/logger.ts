@@ -11,7 +11,7 @@
  * Default: "info" in production (NODE_ENV=production), "debug" otherwise.
  */
 
-export type LogLevel = "debug" | "info" | "warn" | "error";
+import { config, type LogLevel } from "./config";
 
 const LEVEL_RANK: Record<LogLevel, number> = {
   debug: 0,
@@ -20,16 +20,7 @@ const LEVEL_RANK: Record<LogLevel, number> = {
   error: 3,
 };
 
-function resolveActiveLevel(): LogLevel {
-  const raw = process.env.LOG_LEVEL?.trim().toLowerCase();
-  if (raw === "debug" || raw === "info" || raw === "warn" || raw === "error") {
-    return raw;
-  }
-  return process.env.NODE_ENV === "production" ? "info" : "debug";
-}
-
-const activeLevel: LogLevel = resolveActiveLevel();
-const activeLevelRank: number = LEVEL_RANK[activeLevel];
+const activeLevelRank: number = LEVEL_RANK[config.logLevel];
 
 export type LogMeta = Record<string, unknown>;
 

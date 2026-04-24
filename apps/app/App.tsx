@@ -68,6 +68,12 @@ function navigateTo(route: AppRoute, replace = false): void {
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
+export function resolveSubscriptionStatus(
+  status: string | null,
+): "active" | "none" {
+  return status === "active" || status === "trialing" ? "active" : "none";
+}
+
 function LoginPage({
   mode,
   prefilledEmail = "",
@@ -288,13 +294,7 @@ export function App() {
         setSubscriptionStatus("loading");
         try {
           const billing = await fetchBillingStatus();
-          if (billing.status === "active" || billing.status === "trialing") {
-            setSubscriptionStatus("active");
-          } else if (billing.status !== null) {
-            setSubscriptionStatus("none");
-          } else {
-            setSubscriptionStatus(null);
-          }
+          setSubscriptionStatus(resolveSubscriptionStatus(billing.status));
           setCurrentPeriodEnd(billing.currentPeriodEnd);
         } catch {
           setSubscriptionStatus(null);

@@ -19,6 +19,9 @@ The browser only receives a Bindersnap session cookie. Gitea access tokens stay 
 - `BINDERSNAP_GITEA_SERVICE_TOKEN`: Dedicated Gitea service-account token used for signup, email lookup during login, and token revocation fallback.
 - `BINDERSNAP_APP_ORIGIN`: Single allowed SPA origin for CORS. Default `http://localhost:${APP_PORT:-5173}`. Production should be `https://bindersnap.com`.
 - `BINDERSNAP_ALLOWED_ORIGINS`: Optional comma-separated override for multiple allowed origins.
+- `STRIPE_SECRET_KEY`: Stripe secret key used to create Checkout and Customer Portal sessions.
+- `STRIPE_WEBHOOK_SECRET`: Stripe webhook signing secret used to verify `/stripe/webhook`.
+- `STRIPE_PRICE_ID`: Stripe price ID used when the API creates Checkout subscription sessions.
 - `BINDERSNAP_USER_EMAIL_DOMAIN`: Placeholder signup email domain. Default `users.bindersnap.local`.
 - `BINDERSNAP_SESSION_COOKIE_NAME`: Session cookie name. Default `bindersnap_session`.
 - `BINDERSNAP_SESSION_TTL_MS`: Server-side expiry for non-remembered sessions. Default `604800000` (7 days).
@@ -30,6 +33,9 @@ The browser only receives a Bindersnap session cookie. Gitea access tokens stay 
 - `BINDERSNAP_AUTH_RATE_LIMIT_ENABLED`: Enable auth endpoint rate limiting. Default `true`.
 - `BINDERSNAP_AUTH_RATE_LIMIT_WINDOW_MS`: Rate-limit window for `/auth/login` and `/auth/signup`. Default `600000` (10 minutes).
 - `BINDERSNAP_AUTH_RATE_LIMIT_MAX`: Max auth attempts per IP per action per window. Default `20`.
+- `BINDERSNAP_FREE_USERS`: Optional comma-separated usernames that bypass subscription enforcement in non-production environments.
+- `BINDERSNAP_SESSIONS_DB_PATH`: SQLite path shared by the session and subscription stores. Default `/var/lib/bindersnap/sessions.db`.
+- `LOG_LEVEL`: Logger verbosity. One of `debug`, `info`, `warn`, `error`. Defaults to `info` in production and `debug` otherwise.
 
 ## Local usage
 

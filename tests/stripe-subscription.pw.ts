@@ -22,7 +22,8 @@
  *   SKIP_STACK=1 bun run test:integration -- tests/stripe-subscription.pw.ts
  */
 
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
+import { resolveStripeWebhookSecret } from "./stripe-runtime";
 
 // ---------------------------------------------------------------------------
 // Environment
@@ -36,7 +37,7 @@ const APP_ORIGIN =
   `http://localhost:${process.env.APP_PORT ?? "5173"}`;
 
 const STRIPE_SECRET_KEY = (process.env.STRIPE_SECRET_KEY ?? "").trim();
-const STRIPE_WEBHOOK_SECRET = (process.env.STRIPE_WEBHOOK_SECRET ?? "").trim();
+const STRIPE_WEBHOOK_SECRET = resolveStripeWebhookSecret();
 const STRIPE_PRICE_ID = (process.env.STRIPE_PRICE_ID ?? "").trim();
 
 const stripeKeySet = STRIPE_SECRET_KEY.startsWith("sk_test_");
@@ -201,6 +202,123 @@ async function cancelTestSubscription(subscriptionId: string): Promise<void> {
     `/v1/subscriptions/${subscriptionId}/cancel`,
     new URLSearchParams(),
   ).catch(() => undefined);
+}
+
+async function cancelSubscriptionsForEmail(email: string): Promise<void> {
+  const customers = await stripeFetch(
+    `/v1/customers?email=${encodeURIComponent(email)}&limit=10`,
+  ).catch(() => null);
+  const customerRows = Array.isArray(customers?.data)
+    ? (customers.data as Array<Record<string, unknown>>)
+    : [];
+
+  for (const customer of customerRows) {
+    if (typeof customer.id !== "string" || customer.id.trim() === "") {
+      continue;
+    }
+
+    const subscriptions = await stripeFetch(
+      `/v1/subscriptions?customer=${encodeURIComponent(customer.id)}&status=all&limit=10`,
+    ).catch(() => null);
+    const subscriptionRows = Array.isArray(subscriptions?.data)
+      ? (subscriptions.data as Array<Record<string, unknown>>)
+      : [];
+
+    for (const subscription of subscriptionRows) {
+      if (
+        typeof subscription.id !== "string" ||
+        subscription.id.trim() === "" ||
+        subscription.status === "canceled"
+      ) {
+        continue;
+      }
+
+      await cancelTestSubscription(subscription.id);
+    }
+  }
+}
+
+async function fillVisibleInputAcrossFrames(
+  page: Page,
+  selectors: string[],
+  value: string,
+  options: { required?: boolean; timeoutMs?: number } = {},
+): Promise<boolean> {
+  const startedAt = Date.now();
+  const timeoutMs = options.timeoutMs ?? 15_000;
+
+  while (Date.now() - startedAt < timeoutMs) {
+    for (const frame of page.frames()) {
+      for (const selector of selectors) {
+        const field = frame.locator(selector).first();
+        const visible = await field.isVisible().catch(() => false);
+        if (!visible) {
+          continue;
+        }
+
+        await field.fill(value);
+        return true;
+      }
+    }
+
+    await page.waitForTimeout(250);
+  }
+
+  if (options.required) {
+    throw new Error(
+      `Could not find a visible Stripe field for selectors: ${selectors.join(", ")}`,
+    );
+  }
+
+  return false;
+}
+
+async function completeHostedStripeCheckout(
+  page: Page,
+  email: string,
+): Promise<void> {
+  await page.waitForURL(/checkout\.stripe\.com/, { timeout: 30_000 });
+
+  await fillVisibleInputAcrossFrames(
+    page,
+    ['input[type="email"]', 'input[autocomplete="email"]'],
+    email,
+    { required: true },
+  );
+  await fillVisibleInputAcrossFrames(
+    page,
+    ['input[autocomplete="cc-name"]'],
+    "Bindersnap Test",
+  );
+  await fillVisibleInputAcrossFrames(
+    page,
+    ['input[autocomplete="cc-number"]', 'input[name="cardNumber"]'],
+    "4242424242424242",
+    { required: true },
+  );
+  await fillVisibleInputAcrossFrames(
+    page,
+    ['input[autocomplete="cc-exp"]', 'input[name="cardExpiry"]'],
+    "1234",
+    { required: true },
+  );
+  await fillVisibleInputAcrossFrames(
+    page,
+    ['input[autocomplete="cc-csc"]', 'input[name="cardCvc"]'],
+    "123",
+    { required: true },
+  );
+  await fillVisibleInputAcrossFrames(
+    page,
+    ['input[autocomplete="postal-code"]'],
+    "60601",
+  );
+
+  const submitButton = page
+    .getByRole("button", { name: /subscribe|start trial|pay/i })
+    .first();
+  await expect(submitButton).toBeVisible({ timeout: 15_000 });
+  await submitButton.click();
 }
 
 // ---------------------------------------------------------------------------
@@ -488,5 +606,53 @@ test.describe("Stripe subscription lifecycle", () => {
     const body = (await response.json()) as { url?: string };
     expect(typeof body.url).toBe("string");
     expect(body.url).toMatch(/^https:\/\/checkout\.stripe\.com\//);
+  });
+
+  test("hosted Stripe Checkout redirects back and unlocks the workspace", async ({
+    page,
+  }) => {
+    test.skip(!stripeFullyConfigured, "Stripe test credentials not configured");
+    test.setTimeout(120_000);
+
+    const credentials = uniqueCredentials();
+
+    try {
+      await page.goto("/signup");
+      await page.getByLabel("Username").fill(credentials.username);
+      await page.getByLabel("Email").fill(credentials.email);
+      await page
+        .getByLabel("Password", { exact: true })
+        .fill(credentials.password);
+      await page
+        .getByLabel("Confirm Password", { exact: true })
+        .fill(credentials.password);
+      await page.getByRole("button", { name: "Create account" }).click();
+
+      await expect(page).toHaveURL(/\/billing$/, { timeout: 20_000 });
+      await expect(
+        page.getByRole("heading", { name: "Start your subscription" }),
+      ).toBeVisible();
+
+      await page.getByRole("button", { name: "Subscribe now" }).click();
+      await completeHostedStripeCheckout(page, credentials.email);
+
+      await expect(page).toHaveURL(/\/billing\?checkout=success/, {
+        timeout: 60_000,
+      });
+      await expect(
+        page.getByRole("heading", {
+          name: "Payment received — activating your workspace…",
+        }),
+      ).toBeVisible({ timeout: 20_000 });
+
+      await expect(page).toHaveURL(/\/$/, { timeout: 30_000 });
+      await expect(
+        page.locator(
+          `.app-topnav-avatar[aria-label="User: ${credentials.username}"]`,
+        ),
+      ).toBeVisible({ timeout: 30_000 });
+    } finally {
+      await cancelSubscriptionsForEmail(credentials.email);
+    }
   });
 });
