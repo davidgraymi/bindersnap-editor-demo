@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 
 import { config, type SessionCookieSameSite } from "./config";
+import { assertSchemaCurrent } from "./db/schema-status";
 import { logger } from "./logger";
 import { sessionStore, type SessionRecord } from "./sessions";
 import { subscriptionStore, hasActiveSubscription } from "./subscriptions";
@@ -2832,13 +2833,23 @@ export function createApiServer() {
   });
 }
 
-export const server = import.meta.main ? createApiServer() : null;
+export let server: ReturnType<typeof createApiServer> | null = null;
 
-if (import.meta.main && server) {
-  startCleanupTimer();
-  logger.info("Bindersnap API listening", {
-    url: `http://localhost:${server.port}`,
-    port: server.port,
-    env: config.nodeEnv,
-  });
+if (import.meta.main) {
+  try {
+    assertSchemaCurrent();
+    server = createApiServer();
+    startCleanupTimer();
+    logger.info("Bindersnap API listening", {
+      url: `http://localhost:${server.port}`,
+      port: server.port,
+      env: config.nodeEnv,
+    });
+  } catch (error) {
+    logger.error("API startup aborted: database schema is out of date", {
+      dbPath: config.sessionsDbPath,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    process.exit(1);
+  }
 }

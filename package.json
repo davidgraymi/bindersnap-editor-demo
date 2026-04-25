@@ -6,6 +6,9 @@
   "scripts": {
     "build": "bun run clean && bun build ./apps/app/index.html --outdir=dist --target=browser --minify --splitting --define:process.env.NODE_ENV='\"production\"' --env='BUN_PUBLIC_*' && cp dist/index.html dist/404.html",
     "clean": "rm -rf dist",
+    "db:generate": "bunx drizzle-kit generate",
+    "db:migrate": "bun run services/api/db/migrate.ts",
+    "db:studio": "bunx drizzle-kit studio",
     "debug": "bun run debug:app",
     "debug:app": "bun --inspect --hot server.ts",
     "debug:api": "bun --inspect --hot services/api/server.ts",
@@ -56,6 +59,7 @@
     "auto-changelog": "^2.5.0",
     "diff": "^8.0.4",
     "dompurify": "^3.4.1",
+    "drizzle-orm": "^0.45.2",
     "lucide-react": "^0.574.0",
     "openapi-fetch": "^0.17.0",
     "react": "^19.2.5",
@@ -70,6 +74,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@types/uuid": "^11.0.0",
+    "drizzle-kit": "^0.31.10",
     "jsdom": "^29.0.2",
     "openapi-typescript": "^7.13.0",
     "prettier": "^3.8.3"

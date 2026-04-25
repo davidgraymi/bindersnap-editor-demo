@@ -1,8 +1,11 @@
 import { describe, test, expect, beforeEach } from "bun:test";
+import { createMigratedTestDbPath } from "./db/test-helpers";
 import { SessionStore, type SessionRecord } from "./sessions";
 
-function makeStore(): SessionStore {
-  return new SessionStore(":memory:");
+async function makeStore(): Promise<SessionStore> {
+  return new SessionStore(
+    await createMigratedTestDbPath("bindersnap-session-store-"),
+  );
 }
 
 function makeSession(overrides: Partial<SessionRecord> = {}): SessionRecord {
@@ -21,8 +24,8 @@ function makeSession(overrides: Partial<SessionRecord> = {}): SessionRecord {
 describe("SessionStore", () => {
   let store: SessionStore;
 
-  beforeEach(() => {
-    store = makeStore();
+  beforeEach(async () => {
+    store = await makeStore();
   });
 
   test("put then get returns the session", () => {

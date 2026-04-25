@@ -69,6 +69,35 @@ services:
       retries: 12
       start_period: 30s
 
+  api-migrate:
+    image: ghcr.io/davidgraymi/bindersnap-api:${API_TAG:-latest}
+    container_name: bindersnap-api-migrate-prod
+    restart: "no"
+    depends_on:
+      gitea:
+        condition: service_healthy
+    command: ["bun", "run", "db:migrate"]
+    environment:
+      - API_PORT=8787
+      - PORT=8787
+      - NODE_ENV=production
+      - GITEA_INTERNAL_URL=http://gitea:3000
+      - BINDERSNAP_GITEA_SERVICE_TOKEN=${GITEA_SERVICE_TOKEN:?set in the generated env file}
+      - BINDERSNAP_APP_ORIGIN=https://bindersnap.com
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:?set in the generated env file}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:?set in the generated env file}
+      - STRIPE_PRICE_ID=${STRIPE_PRICE_ID:?set in the generated env file}
+      - BINDERSNAP_REMEMBER_ME_SESSION_TTL_MS=${BINDERSNAP_REMEMBER_ME_SESSION_TTL_MS:-2592000000}
+      - BINDERSNAP_SESSION_COOKIE_DOMAIN=${BINDERSNAP_SESSION_COOKIE_DOMAIN:-.bindersnap.com}
+      - BINDERSNAP_SESSION_COOKIE_SAME_SITE=${BINDERSNAP_SESSION_COOKIE_SAME_SITE:-Lax}
+      - BINDERSNAP_USER_EMAIL_DOMAIN=${BINDERSNAP_USER_EMAIL_DOMAIN:-users.bindersnap.com}
+      - BINDERSNAP_GITEA_TOKEN_SCOPES=${BINDERSNAP_GITEA_TOKEN_SCOPES:-write:user,write:repository,write:issue}
+      - BINDERSNAP_REQUIRE_HTTPS=true
+      - BINDERSNAP_AUTH_RATE_LIMIT_ENABLED=true
+      - BINDERSNAP_SESSIONS_DB_PATH=/var/lib/bindersnap/sessions.db
+    volumes:
+      - api-data:/var/lib/bindersnap
+
   api:
     image: ghcr.io/davidgraymi/bindersnap-api:${API_TAG:-latest}
     container_name: bindersnap-api-prod
@@ -76,6 +105,8 @@ services:
     depends_on:
       gitea:
         condition: service_healthy
+      api-migrate:
+        condition: service_completed_successfully
     environment:
       - API_PORT=8787
       - PORT=8787

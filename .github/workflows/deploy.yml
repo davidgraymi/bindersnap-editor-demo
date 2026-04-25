@@ -126,11 +126,18 @@ jobs:
           commands = [
               "set -euo pipefail",
               "cd /opt/bindersnap",
+              "API_TAG="
+              + api_tag
+              + " docker compose --env-file /opt/bindersnap/.env.prod -f docker-compose.prod.yml pull api",
+              "API_TAG="
+              + api_tag
+              + " docker compose --env-file /opt/bindersnap/.env.prod -f docker-compose.prod.yml run --rm --no-deps api bun run db:migrate",
+              "API_TAG="
+              + api_tag
+              + " docker compose --env-file /opt/bindersnap/.env.prod -f docker-compose.prod.yml up -d api",
               "python3 - <<'PY2'\nfrom pathlib import Path\napi_tag = "
               + repr(api_tag)
               + "\npath = Path('/opt/bindersnap/.env.prod')\nlines = path.read_text().splitlines()\nupdated = False\nnew_lines = []\nfor line in lines:\n    if line.startswith('API_TAG='):\n        new_lines.append(f'API_TAG={api_tag}')\n        updated = True\n    else:\n        new_lines.append(line)\nif not updated:\n    new_lines.append(f'API_TAG={api_tag}')\npath.write_text('\\n'.join(new_lines) + '\\n')\nprint(f'Persisted API_TAG={api_tag}')\nPY2",
-              "docker compose --env-file /opt/bindersnap/.env.prod -f docker-compose.prod.yml pull api",
-              "docker compose --env-file /opt/bindersnap/.env.prod -f docker-compose.prod.yml up -d api",
               "docker compose --env-file /opt/bindersnap/.env.prod -f docker-compose.prod.yml ps api",
           ]
 

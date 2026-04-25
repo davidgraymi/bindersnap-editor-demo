@@ -71,15 +71,17 @@ This is a **Bun monorepo** with one unified SPA, shared packages, and backend se
 
 These are settled. Do not reopen them. If a task seems to require violating one, open a `human-needed` issue instead.
 
-1. **BFF owns auth; Gitea tokens stay server-side.** `services/api` handles login/signup and stores per-session Gitea tokens in its SQLite session store. The browser only receives an `HttpOnly` session cookie — never a raw Gitea token. No bearer tokens in `sessionStorage` or `localStorage`.
+1. **BFF owns auth; Gitea tokens stay under API control.** `services/api` handles login/signup and stores per-session Gitea tokens in its SQLite session store. The `bindersnap_session` `HttpOnly` cookie is the source of truth; `/auth/me` may return a runtime token cache for `gitea-client`, but no credentials belong in cookies beyond the session cookie or in `localStorage`.
 
 2. **Gitea is the only datastore.** Documents, approvals, and audit trail are Gitea repos/commits/PRs/reviews. No Postgres, no cache, no shadow state beyond the API's session store.
 
-3. **File uploads are browser-direct.** `FileReader → base64 → Gitea contents API`. No server receives the file. See `docs/adr/0001-external-file-workflow.md` — that ADR is law for the file vault workflow.
+3. **Schema migrations run before app boot.** Apply schema changes with `bun run db:migrate` / `services/api/db/migrate.ts` as a separate CLI step before any API instance starts. App code must not auto-migrate or run DDL at startup. See `docs/adr/0002-drizzle-orm-and-migration-strategy.md`.
 
-4. **Two independent workflows.** File vault (external uploads, issues #101–#105) and inline editor (issues #71–#72) are separate. Do not conflate them.
+4. **File uploads flow browser -> BFF -> Gitea.** The SPA validates the file, sends multipart form data to the API, and the API writes the blob to Gitea. See `docs/adr/0001-external-file-workflow-contract.md` and `docs/adr/0002-drizzle-orm-and-migration-strategy.md`.
 
-5. **When editor UI changes, flag it.** If you change `packages/editor/` visuals, note it in your PR — the landing demo embed is a static snapshot requiring a manual `bun run sync-demo` update.
+5. **Two independent workflows.** File vault (external uploads, issues #101–#105) and inline editor (issues #71–#72) are separate. Do not conflate them.
+
+6. **When editor UI changes, flag it.** If you change `packages/editor/` visuals, note it in your PR — the landing demo embed is a static snapshot requiring a manual `bun run sync-demo` update.
 
 ---
 

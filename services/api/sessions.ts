@@ -1,5 +1,7 @@
-import { Database } from "bun:sqlite";
+import { eq, lte } from "drizzle-orm";
 import { config } from "./config";
+import { createDb } from "./db/client";
+import { sessions } from "./db/schema";
 
 export interface SessionRecord {
   id: string;
@@ -10,93 +12,46 @@ export interface SessionRecord {
   expiresAt: number;
 }
 
-interface SessionRow {
-  id: string;
-  username: string;
-  gitea_token: string;
-  gitea_token_name: string;
-  created_at: number;
-  expires_at: number;
-}
-
-function rowToRecord(row: SessionRow): SessionRecord {
-  return {
-    id: row.id,
-    username: row.username,
-    giteaToken: row.gitea_token,
-    giteaTokenName: row.gitea_token_name,
-    createdAt: row.created_at,
-    expiresAt: row.expires_at,
-  };
-}
-
 export class SessionStore {
-  private db: Database;
+  private db: ReturnType<typeof createDb>;
 
   constructor(path: string = config.sessionsDbPath) {
-    this.db = new Database(path);
-    this.db.exec("PRAGMA journal_mode=WAL");
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS sessions (
-        id TEXT PRIMARY KEY,
-        username TEXT NOT NULL,
-        gitea_token TEXT NOT NULL,
-        gitea_token_name TEXT NOT NULL,
-        created_at INTEGER NOT NULL,
-        expires_at INTEGER NOT NULL
-      );
-      CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
-    `);
+    this.db = createDb(path);
   }
 
   get(id: string): SessionRecord | null {
-    const row = this.db
-      .query<SessionRow, [string]>("SELECT * FROM sessions WHERE id = ?")
-      .get(id);
-    return row ? rowToRecord(row) : null;
+    return (
+      this.db.select().from(sessions).where(eq(sessions.id, id)).get() ?? null
+    );
   }
 
   put(session: SessionRecord): void {
     this.db
-      .query<void, [string, string, string, string, number, number]>(
-        `INSERT INTO sessions (id, username, gitea_token, gitea_token_name, created_at, expires_at)
-         VALUES (?, ?, ?, ?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET
-           username = excluded.username,
-           gitea_token = excluded.gitea_token,
-           gitea_token_name = excluded.gitea_token_name,
-           created_at = excluded.created_at,
-           expires_at = excluded.expires_at`,
-      )
-      .run(
-        session.id,
-        session.username,
-        session.giteaToken,
-        session.giteaTokenName,
-        session.createdAt,
-        session.expiresAt,
-      );
+      .insert(sessions)
+      .values(session)
+      .onConflictDoUpdate({
+        target: sessions.id,
+        set: session,
+      })
+      .run();
   }
 
   delete(id: string): void {
-    this.db.query<void, [string]>("DELETE FROM sessions WHERE id = ?").run(id);
+    this.db.delete(sessions).where(eq(sessions.id, id)).run();
   }
 
   reap(now: number): SessionRecord[] {
-    const rows = this.db
-      .query<
-        SessionRow,
-        [number]
-      >("SELECT * FROM sessions WHERE expires_at <= ?")
-      .all(now);
+    const expiredSessions = this.db
+      .select()
+      .from(sessions)
+      .where(lte(sessions.expiresAt, now))
+      .all();
 
-    if (rows.length > 0) {
-      this.db
-        .query<void, [number]>("DELETE FROM sessions WHERE expires_at <= ?")
-        .run(now);
+    if (expiredSessions.length > 0) {
+      this.db.delete(sessions).where(lte(sessions.expiresAt, now)).run();
     }
 
-    return rows.map(rowToRecord);
+    return expiredSessions;
   }
 }
 

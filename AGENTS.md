@@ -117,7 +117,8 @@ the source of truth.
 ### The integration testing stack
 
 `docker-compose.yml` runs Gitea + Hocuspocus locally. `docker compose up` seeds
-demo users and documents automatically. Use this to:
+demo users and documents automatically, runs a one-shot `api-migrate` service,
+then starts the API. Use this to:
 
 - Verify Gitea service implementations against a real API
 - Run integration tests (`bun run test:integration`)
@@ -166,6 +167,14 @@ The consequence: reading app state means calling the Gitea API. This is
 intentional. Do not introduce a local cache, a Postgres instance, or any
 persistence layer that duplicates Gitea state.
 
+### Schema migrations run before app boot.
+
+`services/api` schema migrations are applied by a separate CLI step before any
+API instance starts. Use `bun run db:migrate` / `services/api/db/migrate.ts`
+from Docker Compose, CI, or deploy automation. App code must not call
+`migrate()` or run DDL at startup. See
+`docs/adr/0002-drizzle-orm-and-migration-strategy.md`.
+
 ### File uploads flow browser → BFF → Gitea.
 
 The upload flow for the file vault:
@@ -181,6 +190,8 @@ before any API call.
 
 See `docs/adr/0001-external-file-workflow-contract.md` for the full
 upload/review/publish contract. **That ADR is law for the file vault workflow.**
+Migration policy lives in
+`docs/adr/0002-drizzle-orm-and-migration-strategy.md`.
 
 ### The MVP is a document repository, not an editor.
 

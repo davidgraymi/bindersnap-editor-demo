@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1777153311099,
+      "tag": "0000_opposite_maggott",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1777153331616,
+      "tag": "0001_colorful_otto_octavius",
+      "breakpoints": true
+    }
+  ]
+}
