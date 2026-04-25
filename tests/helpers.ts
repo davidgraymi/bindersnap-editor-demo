@@ -38,6 +38,9 @@ export const APP_BASE_URL =
   process.env.PLAYWRIGHT_BASE_URL ??
   `http://localhost:${process.env.APP_PORT ?? "5173"}`;
 
+export const API_BASE_URL =
+  process.env.BUN_PUBLIC_API_BASE_URL ?? "http://localhost:8787";
+
 // ---------------------------------------------------------------------------
 // Seeded fixture identifiers
 //
@@ -234,6 +237,43 @@ export async function pollUntil(
 // Browser UI helpers (Playwright)
 // ---------------------------------------------------------------------------
 
+async function clearBrowserAuthState(page: Page): Promise<void> {
+  await page.evaluate(async (apiBaseUrl) => {
+    await fetch(`${apiBaseUrl}/auth/logout`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        Accept: "application/json",
+      },
+    }).catch(() => undefined);
+
+    sessionStorage.clear();
+  }, API_BASE_URL);
+
+  await page.context().clearCookies();
+
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(async (apiBaseUrl) => {
+          const response = await fetch(`${apiBaseUrl}/auth/me`, {
+            method: "GET",
+            credentials: "include",
+            headers: {
+              Accept: "application/json",
+            },
+          }).catch(() => null);
+
+          return response?.status ?? 0;
+        }, API_BASE_URL),
+      {
+        timeout: 10_000,
+        message: "expected the workspace session to be fully cleared",
+      },
+    )
+    .toBe(401);
+}
+
 /**
  * Sign in as Alice (GITEA_ADMIN_USER) via the login page.
  * Skips the login flow if the workspace already shows "Signed in as <alice>".
@@ -261,14 +301,8 @@ export async function signInAsAlice(page: Page): Promise<void> {
     .catch(() => false);
   if (hasSignOut) {
     await signOutCurrentUser(page);
-    // logoutSession() swallows errors, so the session cookie may still be
-    // present if the API call failed. Clear it at the browser level so that
-    // the full-page reload triggered by page.goto("/login") below does NOT
-    // re-discover a valid session and redirect back to the workspace.
-    await page.context().clearCookies();
   } else {
-    // Clear session storage so the app stops redirecting on /login.
-    await page.evaluate(() => sessionStorage.clear());
+    await clearBrowserAuthState(page);
   }
 
   await page.goto("/login");
@@ -309,14 +343,8 @@ export async function signInAsBob(page: Page): Promise<void> {
     .catch(() => false);
   if (hasSignOut) {
     await signOutCurrentUser(page);
-    // logoutSession() swallows errors, so the session cookie may still be
-    // present if the API call failed. Clear it at the browser level so that
-    // the full-page reload triggered by page.goto("/login") below does NOT
-    // re-discover a valid session and redirect back to the workspace.
-    await page.context().clearCookies();
   } else {
-    // Clear session storage so the app stops redirecting on /login.
-    await page.evaluate(() => sessionStorage.clear());
+    await clearBrowserAuthState(page);
   }
 
   await page.goto("/login");
@@ -348,6 +376,7 @@ export async function signOutCurrentUser(page: Page): Promise<void> {
   await expect(
     page.getByRole("heading", { name: /Your approval process/i }),
   ).toBeVisible({ timeout: 10_000 });
+  await clearBrowserAuthState(page);
 }
 
 /**
