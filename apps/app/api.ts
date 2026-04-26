@@ -522,3 +522,49 @@ export function validateUploadFile(file: File): UploadValidationResult {
 export { clearStoredToken as clearToken, storeStoredToken as storeToken };
 
 export type { InitialDocumentUploadResult, UploadResult };
+
+export async function fetchBillingStatus(): Promise<{
+  status: string | null;
+  currentPeriodEnd: number | null;
+}> {
+  const response = await fetch(resolveApiUrl("/api/app/billing/status"), {
+    credentials: "include",
+    headers: { Accept: "application/json" },
+  });
+  if (response.status === 401 || response.status === 404) {
+    return { status: null, currentPeriodEnd: null };
+  }
+  const payload = (await response.json().catch(() => null)) as Record<
+    string,
+    unknown
+  > | null;
+  return {
+    status: typeof payload?.status === "string" ? payload.status : null,
+    currentPeriodEnd:
+      typeof payload?.currentPeriodEnd === "number"
+        ? payload.currentPeriodEnd
+        : null,
+  };
+}
+
+export async function createCheckoutSession(): Promise<{ url: string }> {
+  return requestJson<{ url: string }>(
+    "/api/app/billing/checkout",
+    {
+      method: "POST",
+      headers: { Accept: "application/json" },
+    },
+    "Unable to start checkout.",
+  );
+}
+
+export async function createPortalSession(): Promise<{ url: string }> {
+  return requestJson<{ url: string }>(
+    "/api/app/billing/portal",
+    {
+      method: "POST",
+      headers: { Accept: "application/json" },
+    },
+    "Unable to open billing portal.",
+  );
+}

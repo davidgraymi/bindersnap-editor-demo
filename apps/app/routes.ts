@@ -7,6 +7,7 @@ export type AppRoute =
   | { kind: "documents" }
   | { kind: "inbox" }
   | { kind: "activity" }
+  | { kind: "billing" }
   | {
       kind: "document";
       owner: string;
@@ -53,6 +54,10 @@ export function getRoute(pathname: string): AppRoute {
     return { kind: "activity" };
   }
 
+  if (normalizedPath === "/billing") {
+    return { kind: "billing" };
+  }
+
   const collaboratorsMatch = normalizedPath.match(
     /^\/docs\/([^/]+)\/([^/]+)\/collaborators$/,
   );
@@ -96,6 +101,8 @@ export function routeToPath(route: AppRoute): string {
       return "/inbox";
     case "activity":
       return "/activity";
+    case "billing":
+      return "/billing";
     case "home":
     case "workspace":
     default:

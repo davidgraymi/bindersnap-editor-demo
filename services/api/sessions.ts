@@ -1,7 +1,5 @@
 import { Database } from "bun:sqlite";
-
-const DB_PATH =
-  process.env.BINDERSNAP_SESSIONS_DB_PATH ?? "/var/lib/bindersnap/sessions.db";
+import { config } from "./config";
 
 export interface SessionRecord {
   id: string;
@@ -35,7 +33,7 @@ function rowToRecord(row: SessionRow): SessionRecord {
 export class SessionStore {
   private db: Database;
 
-  constructor(path: string = DB_PATH) {
+  constructor(path: string = config.sessionsDbPath) {
     this.db = new Database(path);
     this.db.exec("PRAGMA journal_mode=WAL");
     this.db.exec(`

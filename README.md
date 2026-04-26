@@ -15,8 +15,20 @@ Monorepo with one unified frontend app and supporting services:
 
 ```bash
 bun install
+cp tests/.env.example .env
 bun run up
 ```
+
+If you want to exercise the Stripe billing flow locally, fill in these values in
+`.env` before starting the stack:
+
+- `STRIPE_SECRET_KEY=sk_test_...`
+- `STRIPE_PRICE_ID=price_...` for the subscription price you want to test
+
+`bun run test:integration` now starts the Stripe CLI listener automatically for
+hosted Checkout coverage when those Stripe test values are present. You only
+need to set `STRIPE_WEBHOOK_SECRET` yourself when you want to exercise the
+billing flow outside Playwright, for example with a manual `bun run up` session.
 
 ## Environment Variables
 
@@ -67,6 +79,9 @@ This is the complete environment variable reference used by repo code, scripts, 
 | `BINDERSNAP_AUTH_RATE_LIMIT_WINDOW_MS`  | `600000`                                  | `services/api/server.ts`, compose                                        | Rate-limit window duration in milliseconds.                                                                  |
 | `BINDERSNAP_AUTH_RATE_LIMIT_MAX`        | `20`                                      | `services/api/server.ts`, compose                                        | Max login/signup attempts per IP+action per window.                                                          |
 | `BINDERSNAP_SESSIONS_DB_PATH`           | `/var/lib/bindersnap/sessions.db`         | `services/api/sessions.ts`, prod compose                                 | Persistent SQLite path for API-backed sessions.                                                              |
+| `STRIPE_SECRET_KEY`                     | none                                      | `services/api/server.ts`, compose, Stripe checkout tests                 | Stripe test-mode secret key used by the API to create checkout and billing portal sessions.                  |
+| `STRIPE_WEBHOOK_SECRET`                 | none                                      | `services/api/server.ts`, compose, Stripe checkout tests                 | Webhook signing secret used to verify `stripe/webhook` events in local dev and tests.                        |
+| `STRIPE_PRICE_ID`                       | none                                      | `services/api/server.ts`, compose, Stripe checkout tests                 | Subscription price ID used when the API creates Stripe Checkout Sessions.                                    |
 | `GITEA_SERVICE_TOKEN`                   | none                                      | `docker-compose.prod.yml`, `.env.prod.example`, bootstrap script         | SSM-backed source value that prod compose maps into `BINDERSNAP_GITEA_SERVICE_TOKEN` for the API.            |
 | `API_TAG`                               | `latest`                                  | `docker-compose.prod.yml`, GitHub Actions deploys                        | API image tag to pull from GHCR; pin to a prior commit SHA for rollback.                                     |
 | `AWS_REGION`                            | `us-east-1`                               | `docker-compose.prod.yml`, `litestream.yml`, Terraform backups module    | AWS region used by the Litestream container and backup infrastructure.                                       |
