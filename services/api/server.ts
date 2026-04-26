@@ -412,9 +412,10 @@ function resetAuthRateLimit(req: Request, action: "login" | "signup"): void {
   authAttempts.delete(key);
 }
 
-function consumeCheckoutRateLimit(
-  username: string,
-): { limited: boolean; retryAfterSeconds: number } {
+function consumeCheckoutRateLimit(username: string): {
+  limited: boolean;
+  retryAfterSeconds: number;
+} {
   const key = `checkout:${username}`;
   const now = Date.now();
   const windowMs = 10 * 60 * 1000;

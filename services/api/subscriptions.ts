@@ -125,7 +125,10 @@ export function hasActiveSubscription(username: string): boolean {
   // This is defense-in-depth against missed/failed webhook delivery.
   if (record.currentPeriodEnd !== null) {
     const bufferSeconds = 3 * 24 * 60 * 60;
-    if (record.currentPeriodEnd + bufferSeconds < Math.floor(Date.now() / 1000)) {
+    if (
+      record.currentPeriodEnd + bufferSeconds <
+      Math.floor(Date.now() / 1000)
+    ) {
       return false;
     }
   }
