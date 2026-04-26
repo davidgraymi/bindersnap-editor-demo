@@ -24,7 +24,7 @@ function buildUniqueSignupCredentials() {
 }
 
 async function openSignupForm(page: Page): Promise<void> {
-  await page.goto("/signup");
+  await page.goto("/signup", { waitUntil: "domcontentloaded" });
   await expect(page).toHaveURL(/\/signup$/);
   await expect(
     page.getByRole("heading", {
@@ -107,7 +107,7 @@ async function grantDevSubscriptionAndOpenWorkspace(
     }
   }, API_BASE_URL);
 
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await expect(
     page.locator(`.app-topnav-avatar[aria-label="User: ${username}"]`),
   ).toBeVisible();
@@ -150,7 +150,7 @@ async function signUpAndReturnToLogin(
 
   await grantDevSubscriptionAndOpenWorkspace(page, credentials.username);
   await signOutCurrentUser(page);
-  await page.goto("/login");
+  await page.goto("/login", { waitUntil: "domcontentloaded" });
   await expect(page).toHaveURL(/\/login$/);
   await expect(
     page.getByRole("heading", { name: "Step into the clean version." }),

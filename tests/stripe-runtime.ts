@@ -101,7 +101,7 @@ export async function ensureStripeWebhookSecret(
       "--api-key",
       secretKey,
       "--events",
-      "checkout.session.completed,customer.subscription.updated,customer.subscription.deleted",
+      "checkout.session.completed,customer.subscription.updated,customer.subscription.deleted,invoice.payment_failed,invoice.payment_succeeded",
       "--forward-to",
       forwardTo,
     ],

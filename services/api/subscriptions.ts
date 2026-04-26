@@ -119,5 +119,15 @@ export const subscriptionStore = new LazySubscriptionStore();
 
 export function hasActiveSubscription(username: string): boolean {
   const record = subscriptionStore.getByUsername(username);
-  return record?.status === "active" || record?.status === "trialing";
+  if (!record) return false;
+  if (record.status !== "active" && record.status !== "trialing") return false;
+  // If currentPeriodEnd is known and more than 3 days past, treat as expired.
+  // This is defense-in-depth against missed/failed webhook delivery.
+  if (record.currentPeriodEnd !== null) {
+    const bufferSeconds = 3 * 24 * 60 * 60;
+    if (record.currentPeriodEnd + bufferSeconds < Math.floor(Date.now() / 1000)) {
+      return false;
+    }
+  }
+  return true;
 }

@@ -46,6 +46,7 @@ import {
 } from "../../packages/gitea-client/pullRequests";
 
 const authAttempts = new Map<string, { count: number; resetAt: number }>();
+const checkoutAttempts = new Map<string, { count: number; resetAt: number }>();
 
 export interface SessionLifetime {
   sessionExpiresAt: number;
@@ -411,6 +412,34 @@ function resetAuthRateLimit(req: Request, action: "login" | "signup"): void {
   authAttempts.delete(key);
 }
 
+function consumeCheckoutRateLimit(
+  username: string,
+): { limited: boolean; retryAfterSeconds: number } {
+  const key = `checkout:${username}`;
+  const now = Date.now();
+  const windowMs = 10 * 60 * 1000;
+  const max = 5;
+  const existing = checkoutAttempts.get(key);
+
+  if (!existing || existing.resetAt <= now) {
+    checkoutAttempts.set(key, { count: 1, resetAt: now + windowMs });
+    return { limited: false, retryAfterSeconds: 0 };
+  }
+
+  existing.count += 1;
+  checkoutAttempts.set(key, existing);
+
+  if (existing.count > max) {
+    const retryAfterSeconds = Math.max(
+      1,
+      Math.ceil((existing.resetAt - now) / 1000),
+    );
+    return { limited: true, retryAfterSeconds };
+  }
+
+  return { limited: false, retryAfterSeconds: 0 };
+}
+
 async function readJson<T>(req: Request): Promise<T | null> {
   try {
     return (await req.json()) as T;
@@ -506,10 +535,14 @@ function requireSubscription(
 ): { session: SessionRecord; client: GiteaClient } | Response {
   const auth = requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
-  if (
-    !config.bypassSubscriptionForUsers.includes(auth.session.username) &&
-    !hasActiveSubscription(auth.session.username)
-  ) {
+  if (config.bypassSubscriptionForUsers.includes(auth.session.username)) {
+    logger.info("Subscription requirement bypassed for user", {
+      username: auth.session.username,
+      path: new URL(req.url).pathname,
+    });
+    return auth;
+  }
+  if (!hasActiveSubscription(auth.session.username)) {
     return json(402, { error: "Subscription required." }, baseHeaders);
   }
   return auth;
@@ -518,12 +551,15 @@ function requireSubscription(
 async function stripeFetch(
   path: string,
   body?: URLSearchParams,
+  extraHeaders?: Record<string, string>,
 ): Promise<Response> {
   return fetch(`https://api.stripe.com${path}`, {
     method: body ? "POST" : "GET",
     headers: {
       Authorization: `Bearer ${config.stripeSecretKey}`,
+      "Stripe-Version": "2024-06-20",
       ...(body ? { "Content-Type": "application/x-www-form-urlencoded" } : {}),
+      ...extraHeaders,
     },
     body,
   });
@@ -2386,8 +2422,9 @@ async function handleStripeWebhook(
     }
   } else {
     logger.warn(
-      "STRIPE_WEBHOOK_SECRET not set — skipping signature verification (dev only)",
+      "Stripe webhook received but STRIPE_WEBHOOK_SECRET is not configured — rejecting",
     );
+    return json(400, { error: "Webhook secret not configured." }, baseHeaders);
   }
 
   let event: Record<string, unknown>;
@@ -2431,10 +2468,15 @@ async function handleStripeWebhook(
         logger.info("Subscription activated", { username, status: sub.status });
       } else {
         logger.error(
-          "Could not fetch subscription details from Stripe; not granting access",
-          { username, subscriptionId },
+          "Could not fetch subscription details from Stripe — returning 500 so Stripe retries",
+          { username, subscriptionId, stripeStatus: subResp.status },
         );
-        // Do NOT upsert — let Stripe retry the webhook when it can be verified.
+        // Return 500 so Stripe retries delivery (a 200 would suppress retries).
+        return json(
+          500,
+          { error: "Failed to verify subscription; will retry." },
+          baseHeaders,
+        );
       }
     }
   } else if (
@@ -2465,6 +2507,37 @@ async function handleStripeWebhook(
           customer: customerId,
           status: data.status,
         });
+      }
+    }
+  } else if (type === "invoice.payment_failed" && data) {
+    const customerId = data.customer as string | undefined;
+    if (customerId) {
+      const record = subscriptionStore.getByCustomerId(customerId);
+      if (record && record.status !== "canceled") {
+        subscriptionStore.upsert({
+          ...record,
+          status: "past_due",
+          updatedAt: Date.now(),
+        });
+        logger.info("Subscription marked past_due on invoice.payment_failed", {
+          customer: customerId,
+        });
+      }
+    }
+  } else if (type === "invoice.payment_succeeded" && data) {
+    const customerId = data.customer as string | undefined;
+    if (customerId) {
+      const record = subscriptionStore.getByCustomerId(customerId);
+      if (record && record.status === "past_due") {
+        subscriptionStore.upsert({
+          ...record,
+          status: "active",
+          updatedAt: Date.now(),
+        });
+        logger.info(
+          "Subscription restored to active on invoice.payment_succeeded",
+          { customer: customerId },
+        );
       }
     }
   }
@@ -2503,6 +2576,17 @@ async function handleBillingCheckout(
   const auth = requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
 
+  const checkoutRateLimit = consumeCheckoutRateLimit(auth.session.username);
+  if (checkoutRateLimit.limited) {
+    return json(
+      429,
+      { error: "Too many checkout attempts. Please try again shortly." },
+      mergeHeaders(baseHeaders, {
+        "Retry-After": String(checkoutRateLimit.retryAfterSeconds),
+      }),
+    );
+  }
+
   if (!config.stripeSecretKey || !config.stripePriceId) {
     return json(503, { error: "Billing not configured." }, baseHeaders);
   }
@@ -2516,7 +2600,10 @@ async function handleBillingCheckout(
     cancel_url: `${config.appOrigin}/billing`,
   });
 
-  const resp = await stripeFetch("/v1/checkout/sessions", body);
+  const checkoutIdempotencyKey = `checkout-${auth.session.username}-${Math.floor(Date.now() / 60000)}`;
+  const resp = await stripeFetch("/v1/checkout/sessions", body, {
+    "Idempotency-Key": checkoutIdempotencyKey,
+  });
   if (!resp.ok) {
     const err = (await resp.json().catch(() => null)) as Record<
       string,
@@ -2541,7 +2628,7 @@ async function handleDevGrantSubscription(
   req: Request,
   baseHeaders: Headers,
 ): Promise<Response> {
-  if (config.isProduction) {
+  if (config.isProduction || !config.devFeaturesEnabled) {
     return json(404, { error: "Not found." }, baseHeaders);
   }
 
@@ -2582,7 +2669,10 @@ async function handleBillingPortal(
     return_url: `${config.appOrigin}/billing`,
   });
 
-  const resp = await stripeFetch("/v1/billing_portal/sessions", body);
+  const portalIdempotencyKey = `portal-${auth.session.username}-${Math.floor(Date.now() / 60000)}`;
+  const resp = await stripeFetch("/v1/billing_portal/sessions", body, {
+    "Idempotency-Key": portalIdempotencyKey,
+  });
   if (!resp.ok) {
     const err = (await resp.json().catch(() => null)) as Record<
       string,
@@ -2612,6 +2702,12 @@ async function cleanupExpiredSessions(): Promise<void> {
   for (const [key, entry] of authAttempts.entries()) {
     if (entry.resetAt <= now) {
       authAttempts.delete(key);
+    }
+  }
+
+  for (const [key, entry] of checkoutAttempts.entries()) {
+    if (entry.resetAt <= now) {
+      checkoutAttempts.delete(key);
     }
   }
 }
@@ -2841,4 +2937,9 @@ if (import.meta.main && server) {
     port: server.port,
     env: config.nodeEnv,
   });
+  if (config.devFeaturesEnabled) {
+    logger.warn(
+      "BINDERSNAP_DEV_FEATURES is enabled — /api/dev/grant-subscription is live",
+    );
+  }
 }

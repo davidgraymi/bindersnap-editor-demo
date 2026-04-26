@@ -25,6 +25,7 @@ export interface ApiConfig {
   rememberedSessionTtlMs: number;
   enforceHttps: boolean;
   authRateLimitEnabled: boolean;
+  devFeaturesEnabled: boolean;
   bypassSubscriptionForUsers: string[];
   authRateLimitWindowMs: number;
   authRateLimitMax: number;
@@ -82,6 +83,7 @@ const INT_ENV: Record<string, IntSpec> = {
 const BOOL_ENV: Record<string, BoolSpec> = {
   BINDERSNAP_REQUIRE_HTTPS: { default: (isProduction) => isProduction },
   BINDERSNAP_AUTH_RATE_LIMIT_ENABLED: { default: true },
+  BINDERSNAP_DEV_FEATURES: { default: false },
 };
 
 function parseString(
@@ -382,6 +384,11 @@ export function initializeConfig(
     authRateLimitEnabled: parseBoolean(
       resolvedEnv,
       "BINDERSNAP_AUTH_RATE_LIMIT_ENABLED",
+      isProduction,
+    ),
+    devFeaturesEnabled: parseBoolean(
+      resolvedEnv,
+      "BINDERSNAP_DEV_FEATURES",
       isProduction,
     ),
     bypassSubscriptionForUsers: parseString(

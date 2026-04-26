@@ -20,6 +20,7 @@ export function BillingPage({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState(false);
+  const [pollingFailed, setPollingFailed] = useState(false);
   const isMounted = useRef(true);
 
   useEffect(() => {
@@ -33,6 +34,7 @@ export function BillingPage({
     const isCheckoutSuccess =
       window.location.search.includes("checkout=success");
     if (!isCheckoutSuccess) {
+      setPollingFailed(false);
       return;
     }
 
@@ -63,6 +65,7 @@ export function BillingPage({
         setTimeout(() => void poll(), 2000);
       } else if (isMounted.current) {
         setIsPolling(false);
+        setPollingFailed(true);
       }
     };
 
@@ -90,6 +93,37 @@ export function BillingPage({
             >
               Verifying your subscription, this will only take a moment.
             </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (pollingFailed && window.location.search.includes("checkout=success")) {
+    return (
+      <section className="app-login-shell">
+        <div className="app-login-wrap">
+          <div className="app-login-logo">
+            <div className="app-login-logo-mark" aria-hidden="true">
+              <BindersnapLogoMark width={24} height={24} />
+            </div>
+            <span className="app-login-logo-text">Bindersnap</span>
+          </div>
+          <div className="app-login-panel bs-card">
+            <div className="bs-eyebrow">Bindersnap Pro</div>
+            <h1>Activation is taking longer than expected</h1>
+            <p style={{ color: "var(--bs-text-muted)" }}>
+              Your payment was received but workspace activation is taking
+              longer than expected. Please refresh in a moment, or contact
+              support if this persists.
+            </p>
+            <button
+              className="bs-btn bs-btn-primary"
+              type="button"
+              onClick={() => window.location.reload()}
+            >
+              Refresh
+            </button>
           </div>
         </div>
       </section>
