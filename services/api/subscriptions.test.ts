@@ -1,11 +1,53 @@
-import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { SubscriptionStore, hasActiveSubscription } from "./subscriptions";
+import { Database } from "bun:sqlite";
+import { describe, it, expect } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { SubscriptionStore } from "./subscriptions";
 
 // Use an in-memory SQLite DB for tests.
 const TEST_DB = ":memory:";
 
 function makeStore() {
   return new SubscriptionStore(TEST_DB);
+}
+
+function makeTempDbPath() {
+  const dir = mkdtempSync(join(tmpdir(), "bindersnap-subscriptions-"));
+  return {
+    path: join(dir, "sessions.db"),
+    cleanup: () => rmSync(dir, { recursive: true, force: true }),
+  };
+}
+
+function captureStdout<T>(run: () => T): { result: T; output: string } {
+  const writes: string[] = [];
+  const originalWrite = process.stdout.write;
+
+  (process.stdout as { write: typeof process.stdout.write }).write = (
+    chunk: string | Uint8Array,
+    encoding?: BufferEncoding | ((error?: Error | null) => void),
+    callback?: (error?: Error | null) => void,
+  ) => {
+    writes.push(
+      typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8"),
+    );
+
+    if (typeof encoding === "function") {
+      encoding();
+    } else {
+      callback?.();
+    }
+
+    return true;
+  };
+
+  try {
+    return { result: run(), output: writes.join("") };
+  } finally {
+    (process.stdout as { write: typeof process.stdout.write }).write =
+      originalWrite;
+  }
 }
 
 const now = Math.floor(Date.now() / 1000);
@@ -73,9 +115,228 @@ describe("SubscriptionStore", () => {
     expect(record?.status).toBe("canceled");
   });
 
+  it("rebinds a username to a new stripe customer and clears the old customer lookup", () => {
+    const store = makeStore();
+    store.upsert({
+      username: "carol",
+      stripeCustomerId: "cus_old",
+      stripeSubscriptionId: "sub_old",
+      status: "active",
+      currentPeriodEnd: futureEnd,
+      cancelAtPeriodEnd: false,
+      cancelAt: null,
+      updatedAt: 1,
+    });
+
+    store.upsert({
+      username: "carol",
+      stripeCustomerId: "cus_new",
+      stripeSubscriptionId: "sub_new",
+      status: "trialing",
+      currentPeriodEnd: futureEnd + 3600,
+      cancelAtPeriodEnd: true,
+      cancelAt: futureEnd + 3600,
+      updatedAt: 2,
+    });
+
+    expect(store.getByCustomerId("cus_old")).toBeNull();
+
+    const rebound = store.getByCustomerId("cus_new");
+    expect(rebound?.username).toBe("carol");
+    expect(rebound?.stripeSubscriptionId).toBe("sub_new");
+  });
+
+  it("replaces all persisted billing fields on username conflict", () => {
+    const store = makeStore();
+    store.upsert({
+      username: "drew",
+      stripeCustomerId: "cus_drew_1",
+      stripeSubscriptionId: "sub_drew_1",
+      status: "active",
+      currentPeriodEnd: futureEnd,
+      cancelAtPeriodEnd: false,
+      cancelAt: null,
+      updatedAt: 10,
+    });
+
+    store.upsert({
+      username: "drew",
+      stripeCustomerId: "cus_drew_2",
+      stripeSubscriptionId: "sub_drew_2",
+      status: "past_due",
+      currentPeriodEnd: null,
+      cancelAtPeriodEnd: true,
+      cancelAt: futureEnd,
+      updatedAt: 20,
+    });
+
+    const record = store.getByUsername("drew");
+    expect(record).toEqual({
+      username: "drew",
+      stripeCustomerId: "cus_drew_2",
+      stripeSubscriptionId: "sub_drew_2",
+      status: "past_due",
+      currentPeriodEnd: null,
+      cancelAtPeriodEnd: true,
+      cancelAt: futureEnd,
+      updatedAt: 20,
+    });
+  });
+
   it("returns null for unknown username", () => {
     const store = makeStore();
     expect(store.getByUsername("nobody")).toBeNull();
+  });
+
+  it("rejects rebinding an existing Stripe customer to a different username", () => {
+    const store = makeStore();
+    store.upsert({
+      username: "alice",
+      stripeCustomerId: "cus_shared",
+      stripeSubscriptionId: "sub_alice",
+      status: "active",
+      currentPeriodEnd: futureEnd,
+      cancelAtPeriodEnd: false,
+      cancelAt: null,
+      updatedAt: 100,
+    });
+
+    const { output } = captureStdout(() => {
+      expect(() =>
+        store.upsert({
+          username: "bob",
+          stripeCustomerId: "cus_shared",
+          stripeSubscriptionId: "sub_bob",
+          status: "active",
+          currentPeriodEnd: futureEnd,
+          cancelAtPeriodEnd: false,
+          cancelAt: null,
+          updatedAt: 101,
+        }),
+      ).toThrow(/already bound to alice/i);
+    });
+
+    expect(store.getByCustomerId("cus_shared")?.username).toBe("alice");
+    expect(store.getByUsername("bob")).toBeNull();
+    expect(output).toContain("Rejected Stripe customer rebind attempt");
+    expect(output).toContain('"existingUsername":"alice"');
+    expect(output).toContain('"attemptedUsername":"bob"');
+  });
+
+  it("deduplicates legacy customer bindings during migration and recreates the unique index", () => {
+    const tempDb = makeTempDbPath();
+
+    try {
+      const legacyDb = new Database(tempDb.path);
+      legacyDb.exec(`
+        CREATE TABLE subscriptions (
+          username TEXT PRIMARY KEY,
+          stripe_customer_id TEXT NOT NULL,
+          stripe_subscription_id TEXT NOT NULL,
+          status TEXT NOT NULL,
+          current_period_end INTEGER,
+          cancel_at_period_end INTEGER NOT NULL DEFAULT 0,
+          cancel_at INTEGER,
+          updated_at INTEGER NOT NULL
+        );
+        CREATE INDEX idx_subscriptions_customer ON subscriptions(stripe_customer_id);
+      `);
+
+      legacyDb
+        .query<
+          void,
+          [
+            string,
+            string,
+            string,
+            string,
+            number | null,
+            number,
+            number | null,
+            number,
+          ]
+        >(
+          `INSERT INTO subscriptions (username, stripe_customer_id, stripe_subscription_id, status, current_period_end, cancel_at_period_end, cancel_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          "alice",
+          "cus_dup",
+          "sub_old",
+          "past_due",
+          expiredEnd,
+          0,
+          null,
+          100,
+        );
+      legacyDb
+        .query<
+          void,
+          [
+            string,
+            string,
+            string,
+            string,
+            number | null,
+            number,
+            number | null,
+            number,
+          ]
+        >(
+          `INSERT INTO subscriptions (username, stripe_customer_id, stripe_subscription_id, status, current_period_end, cancel_at_period_end, cancel_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          "bob",
+          "cus_dup",
+          "sub_new",
+          "active",
+          futureEnd,
+          1,
+          futureEnd,
+          200,
+        );
+      legacyDb.close();
+
+      const { result: store, output } = captureStdout(
+        () => new SubscriptionStore(tempDb.path),
+      );
+
+      expect(store.getByUsername("alice")).toBeNull();
+      expect(store.getByCustomerId("cus_dup")).toEqual({
+        username: "bob",
+        stripeCustomerId: "cus_dup",
+        stripeSubscriptionId: "sub_new",
+        status: "active",
+        currentPeriodEnd: futureEnd,
+        cancelAtPeriodEnd: true,
+        cancelAt: futureEnd,
+        updatedAt: 200,
+      });
+      expect(output).toContain(
+        "Deduplicating legacy Stripe customer bindings during subscription migration",
+      );
+      expect(output).toContain('"keptUsername":"bob"');
+      expect(output).toContain('"removedUsernames":["alice"]');
+
+      const migratedDb = new Database(tempDb.path, { readonly: true });
+      const indexes = migratedDb
+        .query<
+          { name: string; unique: number },
+          []
+        >("PRAGMA index_list(subscriptions)")
+        .all();
+      migratedDb.close();
+
+      expect(
+        indexes.some(
+          (index) =>
+            index.name === "idx_subscriptions_customer" && index.unique === 1,
+        ),
+      ).toBe(true);
+    } finally {
+      tempDb.cleanup();
+    }
   });
 });
 
