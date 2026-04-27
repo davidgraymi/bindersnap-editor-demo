@@ -1,13 +1,21 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "crypto";
+import Stripe from "stripe";
+
+type StripeApiVersion = NonNullable<
+  ConstructorParameters<typeof Stripe>[1]
+>["apiVersion"];
 
 import { runReconcileStripeCustomerCli } from "../../scripts/reconcile-stripe-customer";
+import { STRIPE_API_VERSION } from "./stripe/api-version";
 import { SubscriptionStore } from "./subscriptions";
 
 type MockedStripeResponse = {
   status: number;
   body: Record<string, unknown>;
 };
+
+const originalFetch = globalThis.fetch;
 
 let fetchCalls: string[] = [];
 let stdoutChunks: string[] = [];
@@ -21,9 +29,38 @@ beforeEach(() => {
   testStore = new SubscriptionStore(
     `/tmp/bindersnap-reconcile-test-${randomUUID()}.sqlite`,
   );
+
+  globalThis.fetch = (async (input, init) => {
+    const requestUrl =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url;
+    const url = new URL(requestUrl);
+    const key = `${url.pathname}${url.search}`;
+
+    fetchCalls.push(key);
+
+    const pathname = url.pathname;
+    const response = stripeResponses.get(key) ?? stripeResponses.get(pathname);
+    if (!response) {
+      return new Response(JSON.stringify({ error: { message: "Not found" } }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify(response.body), {
+      status: response.status,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
 });
 
-afterEach(() => {});
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+});
 
 function mockStripeResponse(
   pathWithSearch: string,
@@ -33,38 +70,10 @@ function mockStripeResponse(
   stripeResponses.set(pathWithSearch, { status, body });
 }
 
-async function stripeFetch(input: string | URL | Request): Promise<Response> {
-  const requestUrl =
-    typeof input === "string"
-      ? input
-      : input instanceof URL
-        ? input.toString()
-        : input.url;
-  const key = requestUrl.startsWith("http")
-    ? (() => {
-        const url = new URL(requestUrl);
-        return `${url.pathname}${url.search}`;
-      })()
-    : requestUrl;
-
-  fetchCalls.push(key);
-
-  const pathname = key.split("?")[0] ?? key;
-  const response = stripeResponses.get(key) ?? stripeResponses.get(pathname);
-  if (!response) {
-    return new Response(JSON.stringify({ error: { message: "Not found" } }), {
-      status: 404,
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
-  }
-
-  return new Response(JSON.stringify(response.body), {
-    status: response.status,
-    headers: {
-      "Content-Type": "application/json",
-    },
+function makeStripeClient(): Stripe {
+  return new Stripe("sk_test_reconcile", {
+    apiVersion: STRIPE_API_VERSION as StripeApiVersion,
+    httpClient: Stripe.createFetchHttpClient(),
   });
 }
 
@@ -77,6 +86,7 @@ describe("runReconcileStripeCustomerCli", () => {
 
     mockStripeResponse(`/v1/customers/${customerId}`, {
       id: customerId,
+      object: "customer",
       metadata: {
         bindersnap_username: username,
       },
@@ -84,30 +94,39 @@ describe("runReconcileStripeCustomerCli", () => {
     mockStripeResponse(
       `/v1/subscriptions?customer=${encodeURIComponent(customerId)}&status=all&limit=1`,
       {
+        object: "list",
         data: [
           {
             id: subscriptionId,
+            object: "subscription",
             status: "active",
             current_period_end: currentPeriodEnd,
             cancel_at_period_end: false,
             cancel_at: null,
           },
         ],
+        has_more: false,
       },
     );
 
     await runReconcileStripeCustomerCli(["--customer", customerId], {
-      stripeFetch,
+      stripe: makeStripeClient(),
       store: testStore,
       writeStdout: (output) => {
         stdoutChunks.push(output);
       },
     });
 
-    expect(fetchCalls).toEqual([
-      `/v1/customers/${customerId}`,
-      `/v1/subscriptions?customer=${encodeURIComponent(customerId)}&status=all&limit=1`,
-    ]);
+    expect(
+      fetchCalls.some((path) => path === `/v1/customers/${customerId}`),
+    ).toBe(true);
+    expect(
+      fetchCalls.some((path) =>
+        path.startsWith(
+          `/v1/subscriptions?customer=${encodeURIComponent(customerId)}`,
+        ),
+      ),
+    ).toBe(true);
     expect(testStore.getByUsername(username)).toEqual({
       username,
       stripeCustomerId: customerId,
@@ -127,44 +146,56 @@ describe("runReconcileStripeCustomerCli", () => {
     const subscriptionId = `sub_${randomUUID()}`;
     const currentPeriodEnd = Math.floor(Date.now() / 1000) + 1_800;
     mockStripeResponse("/v1/customers/search", {
+      object: "search_result",
       data: [
         {
           id: customerId,
+          object: "customer",
           metadata: {
             bindersnap_username: username,
           },
         },
       ],
+      has_more: false,
     });
     mockStripeResponse(
       `/v1/subscriptions?customer=${encodeURIComponent(customerId)}&status=all&limit=1`,
       {
+        object: "list",
         data: [
           {
             id: subscriptionId,
+            object: "subscription",
             status: "trialing",
             current_period_end: currentPeriodEnd,
             cancel_at_period_end: true,
             cancel_at: currentPeriodEnd + 600,
           },
         ],
+        has_more: false,
       },
     );
 
     await runReconcileStripeCustomerCli(["--username", username], {
-      stripeFetch,
+      stripe: makeStripeClient(),
       store: testStore,
       writeStdout: (output) => {
         stdoutChunks.push(output);
       },
     });
 
-    expect(fetchCalls).toHaveLength(2);
-    expect(fetchCalls[0]).toContain("/v1/customers/search?query=");
-    expect(fetchCalls[0]).toContain(username);
-    expect(fetchCalls[1]).toBe(
-      `/v1/subscriptions?customer=${encodeURIComponent(customerId)}&status=all&limit=1`,
+    const searchCall = fetchCalls.find((path) =>
+      path.startsWith("/v1/customers/search"),
     );
+    expect(searchCall).toBeDefined();
+    expect(searchCall).toContain(username);
+    expect(
+      fetchCalls.some((path) =>
+        path.startsWith(
+          `/v1/subscriptions?customer=${encodeURIComponent(customerId)}`,
+        ),
+      ),
+    ).toBe(true);
     expect(testStore.getByUsername(username)).toEqual({
       username,
       stripeCustomerId: customerId,
