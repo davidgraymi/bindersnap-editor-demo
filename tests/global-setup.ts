@@ -19,6 +19,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  DEFAULT_WEBHOOK_TEST_SECRET,
   ensureStripeWebhookSecret,
   stopStripeWebhookSecretRuntime,
 } from "./stripe-runtime";
@@ -26,6 +27,7 @@ import {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
 const COMPOSE_FILE = resolve(ROOT, "docker-compose.yml");
+const COMPOSE_ARGS = ["compose", "-f", COMPOSE_FILE] as const;
 
 /**
  * Load the root .env file into process.env, skipping keys that are already
@@ -52,27 +54,31 @@ function loadEnvFile(): void {
 
 const APP_PORT = process.env.APP_PORT ?? "5173";
 const API_PORT = process.env.API_PORT ?? "8787";
+const API_PROXY_PORT = process.env.API_PROXY_PORT ?? "8788";
 const APP_BASE_URL = `http://localhost:${APP_PORT}`;
 const API_READY_URL = `http://localhost:${API_PORT}/auth/me`;
-const STRIPE_WEBHOOK_FORWARD_URL = `http://localhost:${API_PORT}/stripe/webhook`;
+const API_PROXY_BASE_URL = `http://localhost:${API_PROXY_PORT}`;
+const CADDY_READY_URL = `${API_PROXY_BASE_URL}/auth/me`;
+const STRIPE_WEBHOOK_FORWARD_URL = `${API_PROXY_BASE_URL}/stripe/webhook`;
+const DEFAULT_STRIPE_SECRET_KEY = "sk_test_bindersnap_playwright";
+const DEFAULT_STRIPE_PRICE_ID = "price_bindersnap_playwright";
 
 function log(message: string): void {
   process.stdout.write(`[global-setup] ${message}\n`);
 }
 
 function composeDown(env: NodeJS.ProcessEnv): void {
-  spawnSync(
-    "docker",
-    ["compose", "-f", COMPOSE_FILE, "down", "-v", "--remove-orphans"],
-    { stdio: "ignore", env },
-  );
+  spawnSync("docker", [...COMPOSE_ARGS, "down", "-v", "--remove-orphans"], {
+    stdio: "ignore",
+    env,
+  });
 }
 
 function runComposeCommand(
   args: string[],
   env: NodeJS.ProcessEnv,
 ): ReturnType<typeof spawnSync> {
-  return spawnSync("docker", ["compose", "-f", COMPOSE_FILE, ...args], {
+  return spawnSync("docker", [...COMPOSE_ARGS, ...args], {
     stdio: "pipe",
     encoding: "utf8",
     env,
@@ -147,6 +153,27 @@ export default async function globalSetup(): Promise<void> {
     throw new Error(`docker-compose.yml not found at: ${COMPOSE_FILE}`);
   }
 
+  // Force the integration run through the local proxy so test workers and the
+  // app container share the same ingress path.
+  process.env.BUN_PUBLIC_API_BASE_URL = API_PROXY_BASE_URL;
+  process.env.BUN_PUBLIC_API_URL = API_PROXY_BASE_URL;
+  process.env.VITE_API_URL = API_PROXY_BASE_URL;
+  process.env.WEBHOOK_PROXY_BASE_URL = API_PROXY_BASE_URL;
+
+  const hasConfiguredWebhookSecret =
+    (process.env.STRIPE_WEBHOOK_SECRET ?? "").trim() !== "";
+  const hasStripeListenerInputs =
+    (process.env.STRIPE_SECRET_KEY ?? "").trim() !== "" &&
+    (process.env.STRIPE_PRICE_ID ?? "").trim() !== "";
+
+  if (
+    process.env.SKIP_STACK !== "1" &&
+    !hasConfiguredWebhookSecret &&
+    !hasStripeListenerInputs
+  ) {
+    process.env.STRIPE_WEBHOOK_SECRET = DEFAULT_WEBHOOK_TEST_SECRET;
+  }
+
   if (process.env.SKIP_STACK !== "1") {
     const dockerCheck = spawnSync("docker", ["info"], { stdio: "ignore" });
     if (dockerCheck.status !== 0) {
@@ -157,7 +184,10 @@ export default async function globalSetup(): Promise<void> {
   }
 
   await ensureStripeWebhookSecret({
+    allowFallbackSecret: process.env.SKIP_STACK !== "1",
     env: process.env,
+    // Forward webhooks through the local Caddy proxy so integration runs
+    // exercise the same forwarded-header contract as production.
     forwardTo: STRIPE_WEBHOOK_FORWARD_URL,
     log,
   });
@@ -178,6 +208,10 @@ export default async function globalSetup(): Promise<void> {
     ...process.env,
     APP_PORT,
     API_PORT,
+    API_PROXY_PORT,
+    STRIPE_SECRET_KEY:
+      process.env.STRIPE_SECRET_KEY || DEFAULT_STRIPE_SECRET_KEY,
+    STRIPE_PRICE_ID: process.env.STRIPE_PRICE_ID || DEFAULT_STRIPE_PRICE_ID,
   };
 
   try {
@@ -185,14 +219,10 @@ export default async function globalSetup(): Promise<void> {
     composeDown(composeEnv);
 
     log("Starting integration stack (docker compose up --build -d)...");
-    const up = spawnSync(
-      "docker",
-      ["compose", "-f", COMPOSE_FILE, "up", "--build", "-d"],
-      {
-        stdio: "inherit",
-        env: composeEnv,
-      },
-    );
+    const up = spawnSync("docker", [...COMPOSE_ARGS, "up", "--build", "-d"], {
+      stdio: "inherit",
+      env: composeEnv,
+    });
 
     if (up.status !== 0) {
       log("docker compose up failed. Collecting logs from exited services...");
@@ -203,6 +233,14 @@ export default async function globalSetup(): Promise<void> {
     log(`Waiting for API at ${API_READY_URL} ...`);
     await waitForUrl(
       API_READY_URL,
+      60,
+      2000,
+      (response) => response.status < 500,
+    );
+
+    log(`Waiting for Caddy proxy at ${CADDY_READY_URL} ...`);
+    await waitForUrl(
+      CADDY_READY_URL,
       60,
       2000,
       (response) => response.status < 500,

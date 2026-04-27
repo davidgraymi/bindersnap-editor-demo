@@ -4,11 +4,12 @@ Everything needed to run the **full Bindersnap target architecture locally** for
 
 ## What this spins up
 
-| Service        | URL                                  | Purpose                                       |
-| -------------- | ------------------------------------ | --------------------------------------------- |
-| Gitea          | `http://localhost:3000`              | Git backend, auth source, document storage    |
-| Hocuspocus     | `ws://localhost:1234`                | Real-time collaboration WebSocket server      |
-| Bindersnap app | `http://localhost:${APP_PORT:-5173}` | The unified SPA (`apps/app/`) with hot reload |
+| Service        | URL                                        | Purpose                                              |
+| -------------- | ------------------------------------------ | ---------------------------------------------------- |
+| Gitea          | `http://localhost:3000`                    | Git backend, auth source, document storage           |
+| Hocuspocus     | `ws://localhost:1234`                      | Real-time collaboration WebSocket server             |
+| Caddy          | `http://localhost:${API_PROXY_PORT:-8788}` | Local reverse proxy for production-style API ingress |
+| Bindersnap app | `http://localhost:${APP_PORT:-5173}`       | The unified SPA (`apps/app/`) with hot reload        |
 
 ## Running integration tests
 
@@ -16,10 +17,11 @@ Everything needed to run the **full Bindersnap target architecture locally** for
 bun run test:integration
 ```
 
-No shell scripts. No manual `docker compose up` beforehand. Playwright's `globalSetup`
-starts the full Docker Compose stack, waits for the app to become reachable, then runs
-all `*.pw.ts` test files. `globalTeardown` shuts the stack down when the run finishes,
-whether it passed or failed.
+No shell scripts. No manual `docker compose up` beforehand. Playwright's
+`globalSetup` starts the full Docker Compose stack, including the local Caddy
+proxy in front of the API, waits until the stack is reachable, then runs all
+`*.pw.ts` test files. `globalTeardown` shuts the stack down when the run
+finishes, whether it passed or failed.
 
 First run takes ~60s for Gitea to initialize and images to pull. Subsequent runs are
 faster because Docker caches the images.
@@ -33,6 +35,8 @@ SKIP_STACK=1 bun run test:integration
 ```
 
 `SKIP_STACK=1` tells `globalSetup` and `globalTeardown` to leave the stack alone.
+If you want proxy-path webhook coverage in that mode, make sure the existing
+stack includes the local Caddy service on `http://localhost:${API_PROXY_PORT:-8788}`.
 
 ### Overriding the app port
 
@@ -59,6 +63,11 @@ manually outside Playwright, for example with `bun run up`.
 
 The `tests/stripe-subscription.pw.ts` suite reads the same Stripe values and
 skips Stripe-specific assertions when they are unset.
+
+When Stripe credentials are absent, the test runtime injects a deterministic
+`STRIPE_WEBHOOK_SECRET` into the local stack so the signature-verification and
+`/stripe/webhook`-through-Caddy coverage still runs. The dedicated proxy test
+is `tests/stripe-webhook-caddy.pw.ts`.
 
 ### Stripe billing in CI
 

@@ -13,7 +13,8 @@
 import { expect, test, type Page } from "@playwright/test";
 
 const API_BASE_URL =
-  process.env.BUN_PUBLIC_API_BASE_URL ?? "http://localhost:8787";
+  process.env.BUN_PUBLIC_API_BASE_URL ??
+  `http://localhost:${process.env.API_PROXY_PORT ?? "8788"}`;
 
 function buildUniqueCollaboratorTestData() {
   const suffix = `${Date.now().toString(36)}-${Math.random()

@@ -39,7 +39,8 @@ export const APP_BASE_URL =
   `http://localhost:${process.env.APP_PORT ?? "5173"}`;
 
 export const API_BASE_URL =
-  process.env.BUN_PUBLIC_API_BASE_URL ?? "http://localhost:8787";
+  process.env.BUN_PUBLIC_API_BASE_URL ??
+  `http://localhost:${process.env.API_PROXY_PORT ?? "8788"}`;
 
 // ---------------------------------------------------------------------------
 // Seeded fixture identifiers

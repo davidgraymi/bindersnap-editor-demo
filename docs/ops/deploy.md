@@ -71,6 +71,30 @@ The target instance must already satisfy these conditions:
 
 The SSM command uses the same production compose contract documented in [`../../README.md`](../../README.md) and established by [`../../infra/compute/user-data.sh.tftpl`](../../infra/compute/user-data.sh.tftpl).
 
+## Stripe Webhook Verification
+
+Use this runbook whenever you change `Caddyfile.prod`, Stripe webhook handling,
+or the production API deploy path.
+
+### How to test the webhook end-to-end in staging
+
+1. Confirm the staging Caddy proxy forwards both headers explicitly:
+   `header_up X-Forwarded-Proto {scheme}` and `header_up X-Forwarded-For {remote}`.
+2. Export the staging webhook secret locally:
+   `export STRIPE_WEBHOOK_SECRET=whsec_...`
+3. Build a small test payload and signature, then POST it directly to staging:
+   `BODY='{"id":"evt_staging_manual","object":"event","type":"invoice.payment_failed","created":'$(date +%s)',"livemode":false,"data":{"object":{"id":"in_staging_manual","object":"invoice","customer":"cus_staging_manual"}}}'`
+   `TS=$(date +%s)`
+   `SIG=$(printf '%s' "$TS.$BODY" | openssl dgst -sha256 -hmac "$STRIPE_WEBHOOK_SECRET" | awk '{print $NF}')`
+   `curl --fail-with-body -H "content-type: application/json" -H "stripe-signature: t=$TS,v1=$SIG" --data-binary "$BODY" https://<staging-api-host>/stripe/webhook`
+4. Expect `200` with `{"received":true}` and confirm the staging API logs show
+   `Stripe webhook received`.
+5. If the delivery fails with `400 HTTPS is required.`, treat that as a
+   forwarded-proto regression in the Caddy path before looking at Stripe
+   signature or payload handling.
+6. If the delivery fails with `400 Invalid signature.`, re-check that the
+   staging webhook secret matches the endpoint configured in Stripe.
+
 ## Rollback
 
 The rollback path is a manual run of the API deploy workflow:
@@ -118,3 +142,4 @@ docker compose --env-file /opt/bindersnap/.env.prod -f docker-compose.prod.yml u
 - A forced test failure prevents the API deploy job from running.
 - The API workflow log prints SSM stdout and stderr from the remote deploy command.
 - A manual `api_tag` rollback returns the API to the selected SHA.
+- The integration suite includes `tests/stripe-webhook-caddy.pw.ts`, which posts a signed event through the local Caddy proxy and expects `{"received":true}`.

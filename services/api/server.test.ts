@@ -250,6 +250,10 @@ async function signStripeWebhookBody(
 
 async function makeStripeWebhookRequest(
   event: Record<string, unknown>,
+  options?: {
+    url?: string;
+    headers?: HeadersInit;
+  },
 ): Promise<Request> {
   const rawBody = JSON.stringify(event);
   const timestamp = Math.floor(Date.now() / 1000);
@@ -259,11 +263,12 @@ async function makeStripeWebhookRequest(
     timestamp,
   );
 
-  return new Request("http://localhost/stripe/webhook", {
+  return new Request(options?.url ?? "http://localhost/stripe/webhook", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "stripe-signature": `t=${timestamp},v1=${signature}`,
+      ...options?.headers,
     },
     body: rawBody,
   });
@@ -399,6 +404,92 @@ describe("billing Stripe idempotency", () => {
         portalCalls[1]?.idempotencyKey,
       );
     } finally {
+      server.stop(true);
+    }
+  });
+});
+
+describe("stripe webhook transport security", () => {
+  test("accepts a proxied webhook when x-forwarded-proto is https", async () => {
+    const server = createApiServer();
+    const originalNodeEnv = config.nodeEnv;
+    const originalIsProduction = config.isProduction;
+    const originalEnforceHttps = config.enforceHttps;
+
+    config.nodeEnv = "production";
+    config.isProduction = true;
+    config.enforceHttps = true;
+
+    try {
+      const response = await server.fetch(
+        await makeStripeWebhookRequest(
+          {
+            id: "evt_proxy_https",
+            type: "invoice.payment_failed",
+            created: Math.floor(Date.now() / 1000),
+            data: {
+              object: {
+                id: "in_proxy_https",
+                customer: "cus_proxy_https",
+              },
+            },
+          },
+          {
+            url: "http://api.bindersnap.test/stripe/webhook",
+            headers: {
+              "x-forwarded-proto": "https",
+              "x-forwarded-for": "203.0.113.10",
+            },
+          },
+        ),
+      );
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ received: true });
+    } finally {
+      config.nodeEnv = originalNodeEnv;
+      config.isProduction = originalIsProduction;
+      config.enforceHttps = originalEnforceHttps;
+      server.stop(true);
+    }
+  });
+
+  test("rejects a proxied webhook when x-forwarded-proto is missing", async () => {
+    const server = createApiServer();
+    const originalNodeEnv = config.nodeEnv;
+    const originalIsProduction = config.isProduction;
+    const originalEnforceHttps = config.enforceHttps;
+
+    config.nodeEnv = "production";
+    config.isProduction = true;
+    config.enforceHttps = true;
+
+    try {
+      const response = await server.fetch(
+        await makeStripeWebhookRequest(
+          {
+            id: "evt_proxy_http",
+            type: "invoice.payment_failed",
+            created: Math.floor(Date.now() / 1000),
+            data: {
+              object: {
+                id: "in_proxy_http",
+                customer: "cus_proxy_http",
+              },
+            },
+          },
+          {
+            url: "http://api.bindersnap.test/stripe/webhook",
+          },
+        ),
+      );
+
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: "HTTPS is required." });
+    } finally {
+      config.nodeEnv = originalNodeEnv;
+      config.isProduction = originalIsProduction;
+      config.enforceHttps = originalEnforceHttps;
       server.stop(true);
     }
   });

@@ -86,7 +86,7 @@ services:
       - BINDERSNAP_APP_ORIGIN=http://localhost:${APP_PORT:-5173}
       - BINDERSNAP_USER_EMAIL_DOMAIN=${BINDERSNAP_USER_EMAIL_DOMAIN:-users.bindersnap.local}
       - BINDERSNAP_GITEA_TOKEN_SCOPES=${BINDERSNAP_GITEA_TOKEN_SCOPES:-write:user,write:repository,write:issue}
-      - BINDERSNAP_REQUIRE_HTTPS=${BINDERSNAP_REQUIRE_HTTPS:-false}
+      - BINDERSNAP_REQUIRE_HTTPS=${BINDERSNAP_REQUIRE_HTTPS:-true}
       - BINDERSNAP_AUTH_RATE_LIMIT_ENABLED=${BINDERSNAP_AUTH_RATE_LIMIT_ENABLED:-true}
       - BINDERSNAP_AUTH_RATE_LIMIT_WINDOW_MS=${BINDERSNAP_AUTH_RATE_LIMIT_WINDOW_MS:-600000}
       - BINDERSNAP_AUTH_RATE_LIMIT_MAX=${BINDERSNAP_AUTH_RATE_LIMIT_MAX:-20}
@@ -100,6 +100,19 @@ services:
       - "${API_PORT:-8787}:${API_PORT:-8787}"
     volumes:
       - api-data:/var/lib/bindersnap
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: bindersnap-caddy
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "${API_PROXY_PORT:-8788}:8788"
+    volumes:
+      - ./tests/Caddyfile.integration:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
 
   app:
     build:
@@ -120,9 +133,9 @@ services:
     environment:
       - APP_PORT=${APP_PORT:-5173}
       - PORT=${APP_PORT:-5173}
-      - BUN_PUBLIC_API_BASE_URL=http://localhost:${API_PORT:-8787}
-      - BUN_PUBLIC_API_URL=http://localhost:${API_PORT:-8787}
-      - VITE_API_URL=http://localhost:${API_PORT:-8787}
+      - BUN_PUBLIC_API_BASE_URL=http://localhost:${API_PROXY_PORT:-8788}
+      - BUN_PUBLIC_API_URL=http://localhost:${API_PROXY_PORT:-8788}
+      - VITE_API_URL=http://localhost:${API_PROXY_PORT:-8788}
       - BUN_PUBLIC_GITEA_URL=http://localhost:3000
       - VITE_GITEA_URL=http://localhost:3000
       - BUN_PUBLIC_HOCUSPOCUS_URL=ws://localhost:1234
@@ -140,6 +153,8 @@ volumes:
   gitea-data:
   app-node-modules:
   api-data:
+  caddy-data:
+  caddy-config:
 
 networks:
   default:
