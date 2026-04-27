@@ -4,27 +4,32 @@ import { fetchBillingStatus } from "../api";
 
 interface BillingPageProps {
   subscriptionStatus: "active" | "none" | "loading";
+  hasBillingStatusError: boolean;
   currentPeriodEnd: number | null;
   cancelAtPeriodEnd: boolean;
   cancelAt: number | null;
   onSubscribe: () => Promise<void>;
   onManage: () => Promise<void>;
   onSubscriptionConfirmed: () => void;
+  onRetryBillingStatus: () => Promise<void>;
 }
 
 export function BillingPage({
   subscriptionStatus,
+  hasBillingStatusError,
   currentPeriodEnd,
   cancelAtPeriodEnd,
   cancelAt,
   onSubscribe,
   onManage,
   onSubscriptionConfirmed,
+  onRetryBillingStatus,
 }: BillingPageProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState(false);
   const [pollingFailed, setPollingFailed] = useState(false);
+  const [isRetryingBillingStatus, setIsRetryingBillingStatus] = useState(false);
   const isMounted = useRef(true);
 
   useEffect(() => {
@@ -216,11 +221,61 @@ export function BillingPage({
         <div className="app-login-panel bs-card">
           <div className="bs-eyebrow">Bindersnap Pro</div>
           <h1>Start your subscription</h1>
+          {hasBillingStatusError ? (
+            <div
+              role="status"
+              style={{
+                display: "grid",
+                gap: "var(--brand-space-3)",
+                marginBottom: "var(--brand-space-4)",
+                padding: "var(--brand-space-4)",
+                borderRadius: "var(--brand-radius-lg)",
+                border: "1px solid var(--bs-rule)",
+                background: "var(--bs-surface-2)",
+                color: "var(--bs-text-secondary)",
+              }}
+            >
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "var(--brand-text-sm)",
+                }}
+              >
+                We couldn&apos;t verify your billing status. Please retry before
+                you continue.
+              </p>
+              <div>
+                <button
+                  className="bs-btn bs-btn-secondary"
+                  type="button"
+                  disabled={isRetryingBillingStatus}
+                  onClick={async () => {
+                    setIsRetryingBillingStatus(true);
+                    try {
+                      await onRetryBillingStatus();
+                    } finally {
+                      if (isMounted.current) {
+                        setIsRetryingBillingStatus(false);
+                      }
+                    }
+                  }}
+                >
+                  {isRetryingBillingStatus
+                    ? "Retrying…"
+                    : "Retry billing check"}
+                </button>
+              </div>
+            </div>
+          ) : null}
           <p style={{ color: "var(--bs-text-muted)" }}>$100 / month</p>
           <button
             className="bs-btn bs-btn-primary"
             type="button"
-            disabled={isSubmitting || subscriptionStatus === "loading"}
+            disabled={
+              isSubmitting ||
+              isRetryingBillingStatus ||
+              subscriptionStatus === "loading"
+            }
             onClick={async () => {
               setIsSubmitting(true);
               setError(null);
