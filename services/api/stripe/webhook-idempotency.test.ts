@@ -177,6 +177,8 @@ describe("Webhook out-of-order — past_due-after-active stays active", () => {
       stripeSubscriptionId: "sub_2",
       status: "active",
       currentPeriodEnd: NOW + 30 * 86400,
+      cancelAtPeriodEnd: false,
+      cancelAt: null,
       updatedAt: Date.now(),
     });
     whStore.markProcessed(
@@ -198,5 +200,65 @@ describe("Webhook out-of-order — past_due-after-active stays active", () => {
 
     // State must remain active
     expect(subStore.getByUsername("bob")?.status).toBe("active");
+  });
+});
+
+describe("Webhook cancel_at_period_end — persisted and reflected in record", () => {
+  it("subscription.updated with cancel_at_period_end=true persists fields", () => {
+    const subStore = makeSubStore();
+    const CANCEL_AT = NOW + 30 * 86400;
+
+    subStore.upsert({
+      username: "dana",
+      stripeCustomerId: CUSTOMER,
+      stripeSubscriptionId: "sub_cancel",
+      status: "active",
+      currentPeriodEnd: CANCEL_AT,
+      cancelAtPeriodEnd: false,
+      cancelAt: null,
+      updatedAt: Date.now(),
+    });
+
+    // Simulate webhook handler updating with cancel_at_period_end=true
+    const record = subStore.getByCustomerId(CUSTOMER)!;
+    subStore.upsert({
+      ...record,
+      cancelAtPeriodEnd: true,
+      cancelAt: CANCEL_AT,
+      updatedAt: Date.now(),
+    });
+
+    const updated = subStore.getByUsername("dana");
+    expect(updated?.cancelAtPeriodEnd).toBe(true);
+    expect(updated?.cancelAt).toBe(CANCEL_AT);
+    expect(updated?.status).toBe("active");
+  });
+
+  it("subscription.updated clearing cancel_at_period_end resets fields", () => {
+    const subStore = makeSubStore();
+    const CANCEL_AT = NOW + 30 * 86400;
+
+    subStore.upsert({
+      username: "evan",
+      stripeCustomerId: "cus_evan",
+      stripeSubscriptionId: "sub_evan",
+      status: "active",
+      currentPeriodEnd: CANCEL_AT,
+      cancelAtPeriodEnd: true,
+      cancelAt: CANCEL_AT,
+      updatedAt: Date.now(),
+    });
+
+    const record = subStore.getByCustomerId("cus_evan")!;
+    subStore.upsert({
+      ...record,
+      cancelAtPeriodEnd: false,
+      cancelAt: null,
+      updatedAt: Date.now(),
+    });
+
+    const updated = subStore.getByUsername("evan");
+    expect(updated?.cancelAtPeriodEnd).toBe(false);
+    expect(updated?.cancelAt).toBeNull();
   });
 });

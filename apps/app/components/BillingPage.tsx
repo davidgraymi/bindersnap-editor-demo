@@ -5,6 +5,8 @@ import { fetchBillingStatus } from "../api";
 interface BillingPageProps {
   subscriptionStatus: "active" | "none" | "loading";
   currentPeriodEnd: number | null;
+  cancelAtPeriodEnd: boolean;
+  cancelAt: number | null;
   onSubscribe: () => Promise<void>;
   onManage: () => Promise<void>;
   onSubscriptionConfirmed: () => void;
@@ -13,6 +15,8 @@ interface BillingPageProps {
 export function BillingPage({
   subscriptionStatus,
   currentPeriodEnd,
+  cancelAtPeriodEnd,
+  cancelAt,
   onSubscribe,
   onManage,
   onSubscriptionConfirmed,
@@ -131,8 +135,11 @@ export function BillingPage({
   }
 
   if (subscriptionStatus === "active") {
-    const renewalLabel =
-      currentPeriodEnd !== null
+    const renewalLabel = cancelAtPeriodEnd
+      ? cancelAt !== null
+        ? `Cancels on ${new Date(cancelAt * 1000).toLocaleDateString()}`
+        : "Cancels at end of billing period"
+      : currentPeriodEnd !== null
         ? `Renews on ${new Date(currentPeriodEnd * 1000).toLocaleDateString()}`
         : "Active";
 
