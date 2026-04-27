@@ -1000,6 +1000,46 @@ async function verifyUserCredentials(
     : null;
 }
 
+type GiteaCurrentUserRecord = {
+  email?: unknown;
+};
+
+async function fetchSessionUserEmail(
+  session: SessionRecord,
+): Promise<string | null> {
+  const response = await giteaFetch("/api/v1/user", {
+    method: "GET",
+    headers: {
+      Authorization: buildTokenAuthHeader(session.giteaToken),
+      Accept: "application/json",
+    },
+  }).catch(() => null);
+
+  if (!response) {
+    logger.warn("Unable to reach Gitea for billing email lookup", {
+      username: session.username,
+    });
+    return null;
+  }
+
+  if (!response.ok) {
+    logger.warn("Gitea billing email lookup failed", {
+      username: session.username,
+      status: response.status,
+    });
+    return null;
+  }
+
+  const payload = (await response
+    .json()
+    .catch(() => null)) as GiteaCurrentUserRecord | null;
+  const email =
+    typeof payload?.email === "string"
+      ? payload.email.trim().toLowerCase()
+      : "";
+  return looksLikeEmailAddress(email) ? email : null;
+}
+
 type GiteaEmailRecord = {
   email?: unknown;
   username?: unknown;
@@ -2656,14 +2696,24 @@ async function handleBillingCheckout(
     return json(503, { error: "Billing not configured." }, baseHeaders);
   }
 
+  const existingSubscription = subscriptionStore.getByUsername(
+    auth.session.username,
+  );
+  const userEmail = await fetchSessionUserEmail(auth.session);
   const body = new URLSearchParams({
     mode: "subscription",
     "line_items[0][price]": config.stripePriceId,
     "line_items[0][quantity]": "1",
     client_reference_id: auth.session.username,
+    "metadata[bindersnap_username]": auth.session.username,
     success_url: `${config.appOrigin}/billing?checkout=success`,
     cancel_url: `${config.appOrigin}/billing`,
   });
+  if (existingSubscription?.stripeCustomerId) {
+    body.set("customer", existingSubscription.stripeCustomerId);
+  } else if (userEmail) {
+    body.set("customer_email", userEmail);
+  }
 
   const resp = await stripeFetch("/v1/checkout/sessions", body, {
     "Idempotency-Key": createStripeRequestIdempotencyKey("checkout"),
