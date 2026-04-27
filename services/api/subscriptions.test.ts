@@ -22,6 +22,8 @@ describe("SubscriptionStore", () => {
       stripeSubscriptionId: "sub_1",
       status: "active",
       currentPeriodEnd: futureEnd,
+      cancelAtPeriodEnd: false,
+      cancelAt: null,
       updatedAt: Date.now(),
     });
     const record = store.getByUsername("alice");
@@ -37,6 +39,8 @@ describe("SubscriptionStore", () => {
       stripeSubscriptionId: "sub_2",
       status: "trialing",
       currentPeriodEnd: futureEnd,
+      cancelAtPeriodEnd: false,
+      cancelAt: null,
       updatedAt: Date.now(),
     });
     const record = store.getByCustomerId("cus_2");
@@ -51,6 +55,8 @@ describe("SubscriptionStore", () => {
       stripeSubscriptionId: "sub_3",
       status: "active",
       currentPeriodEnd: futureEnd,
+      cancelAtPeriodEnd: false,
+      cancelAt: null,
       updatedAt: Date.now(),
     });
     store.upsert({
@@ -59,6 +65,8 @@ describe("SubscriptionStore", () => {
       stripeSubscriptionId: "sub_3",
       status: "canceled",
       currentPeriodEnd: null,
+      cancelAtPeriodEnd: false,
+      cancelAt: null,
       updatedAt: Date.now(),
     });
     const record = store.getByUsername("carol");
@@ -90,6 +98,8 @@ describe("hasActiveSubscription — expiry logic", () => {
       stripeSubscriptionId: "sub_u1",
       status: "active",
       currentPeriodEnd: futureEnd,
+      cancelAtPeriodEnd: false,
+      cancelAt: null,
       updatedAt: Date.now(),
     });
     const record = store.getByUsername("u1");
@@ -110,6 +120,8 @@ describe("hasActiveSubscription — expiry logic", () => {
       stripeSubscriptionId: "sub_u2",
       status: "active",
       currentPeriodEnd: expiredEnd,
+      cancelAtPeriodEnd: false,
+      cancelAt: null,
       updatedAt: Date.now(),
     });
     const record = store.getByUsername("u2");
@@ -128,6 +140,8 @@ describe("hasActiveSubscription — expiry logic", () => {
       stripeSubscriptionId: "sub_u3",
       status: "active",
       currentPeriodEnd: recentEnd,
+      cancelAtPeriodEnd: false,
+      cancelAt: null,
       updatedAt: Date.now(),
     });
     const record = store.getByUsername("u3");
@@ -146,6 +160,8 @@ describe("hasActiveSubscription — expiry logic", () => {
       stripeSubscriptionId: "sub_u4",
       status: "active",
       currentPeriodEnd: null,
+      cancelAtPeriodEnd: false,
+      cancelAt: null,
       updatedAt: Date.now(),
     });
     const record = store.getByUsername("u4");
@@ -164,6 +180,8 @@ describe("hasActiveSubscription — expiry logic", () => {
       stripeSubscriptionId: "sub_u5",
       status: "trialing",
       currentPeriodEnd: futureEnd,
+      cancelAtPeriodEnd: false,
+      cancelAt: null,
       updatedAt: Date.now(),
     });
     const record = store.getByUsername("u5");
@@ -183,6 +201,8 @@ describe("hasActiveSubscription — expiry logic", () => {
       stripeSubscriptionId: "sub_u6",
       status: "past_due",
       currentPeriodEnd: futureEnd,
+      cancelAtPeriodEnd: false,
+      cancelAt: null,
       updatedAt: Date.now(),
     });
     const record = store.getByUsername("u6");
@@ -199,6 +219,8 @@ describe("hasActiveSubscription — expiry logic", () => {
       stripeSubscriptionId: "sub_u7",
       status: "canceled",
       currentPeriodEnd: futureEnd,
+      cancelAtPeriodEnd: false,
+      cancelAt: null,
       updatedAt: Date.now(),
     });
     const record = store.getByUsername("u7");
@@ -210,5 +232,69 @@ describe("hasActiveSubscription — expiry logic", () => {
   it("no record → not active", () => {
     const store = makeStore();
     expect(store.getByUsername("nonexistent")).toBeNull();
+  });
+});
+
+describe("SubscriptionStore — cancel_at_period_end", () => {
+  it("persists cancelAtPeriodEnd=true and cancelAt timestamp", () => {
+    const store = makeStore();
+    const cancelTs = futureEnd;
+    store.upsert({
+      username: "v1",
+      stripeCustomerId: "cus_v1",
+      stripeSubscriptionId: "sub_v1",
+      status: "active",
+      currentPeriodEnd: futureEnd,
+      cancelAtPeriodEnd: true,
+      cancelAt: cancelTs,
+      updatedAt: Date.now(),
+    });
+    const record = store.getByUsername("v1");
+    expect(record?.cancelAtPeriodEnd).toBe(true);
+    expect(record?.cancelAt).toBe(cancelTs);
+  });
+
+  it("cancelAtPeriodEnd defaults to false when stored as 0", () => {
+    const store = makeStore();
+    store.upsert({
+      username: "v2",
+      stripeCustomerId: "cus_v2",
+      stripeSubscriptionId: "sub_v2",
+      status: "active",
+      currentPeriodEnd: futureEnd,
+      cancelAtPeriodEnd: false,
+      cancelAt: null,
+      updatedAt: Date.now(),
+    });
+    const record = store.getByUsername("v2");
+    expect(record?.cancelAtPeriodEnd).toBe(false);
+    expect(record?.cancelAt).toBeNull();
+  });
+
+  it("upsert clears cancelAtPeriodEnd when subscription renews", () => {
+    const store = makeStore();
+    store.upsert({
+      username: "v3",
+      stripeCustomerId: "cus_v3",
+      stripeSubscriptionId: "sub_v3",
+      status: "active",
+      currentPeriodEnd: futureEnd,
+      cancelAtPeriodEnd: true,
+      cancelAt: futureEnd,
+      updatedAt: Date.now(),
+    });
+    store.upsert({
+      username: "v3",
+      stripeCustomerId: "cus_v3",
+      stripeSubscriptionId: "sub_v3",
+      status: "active",
+      currentPeriodEnd: futureEnd + 30 * 86400,
+      cancelAtPeriodEnd: false,
+      cancelAt: null,
+      updatedAt: Date.now(),
+    });
+    const record = store.getByUsername("v3");
+    expect(record?.cancelAtPeriodEnd).toBe(false);
+    expect(record?.cancelAt).toBeNull();
   });
 });

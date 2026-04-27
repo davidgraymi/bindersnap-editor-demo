@@ -7,6 +7,8 @@ export interface SubscriptionRecord {
   stripeSubscriptionId: string;
   status: string; // 'active' | 'canceled' | 'past_due' | 'trialing'
   currentPeriodEnd: number | null; // Unix seconds
+  cancelAtPeriodEnd: boolean;
+  cancelAt: number | null; // Unix seconds
   updatedAt: number;
 }
 
@@ -16,6 +18,8 @@ interface SubscriptionRow {
   stripe_subscription_id: string;
   status: string;
   current_period_end: number | null;
+  cancel_at_period_end: number;
+  cancel_at: number | null;
   updated_at: number;
 }
 
@@ -26,6 +30,8 @@ function rowToRecord(row: SubscriptionRow): SubscriptionRecord {
     stripeSubscriptionId: row.stripe_subscription_id,
     status: row.status,
     currentPeriodEnd: row.current_period_end,
+    cancelAtPeriodEnd: row.cancel_at_period_end === 1,
+    cancelAt: row.cancel_at,
     updatedAt: row.updated_at,
   };
 }
@@ -43,6 +49,8 @@ export class SubscriptionStore {
         stripe_subscription_id TEXT NOT NULL,
         status TEXT NOT NULL,
         current_period_end INTEGER,
+        cancel_at_period_end INTEGER NOT NULL DEFAULT 0,
+        cancel_at INTEGER,
         updated_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_subscriptions_customer ON subscriptions(stripe_customer_id);
@@ -71,14 +79,16 @@ export class SubscriptionStore {
 
   upsert(record: SubscriptionRecord): void {
     this.db
-      .query<void, [string, string, string, string, number | null, number]>(
-        `INSERT INTO subscriptions (username, stripe_customer_id, stripe_subscription_id, status, current_period_end, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)
+      .query<void, [string, string, string, string, number | null, number, number | null, number]>(
+        `INSERT INTO subscriptions (username, stripe_customer_id, stripe_subscription_id, status, current_period_end, cancel_at_period_end, cancel_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(username) DO UPDATE SET
            stripe_customer_id = excluded.stripe_customer_id,
            stripe_subscription_id = excluded.stripe_subscription_id,
            status = excluded.status,
            current_period_end = excluded.current_period_end,
+           cancel_at_period_end = excluded.cancel_at_period_end,
+           cancel_at = excluded.cancel_at,
            updated_at = excluded.updated_at`,
       )
       .run(
@@ -87,6 +97,8 @@ export class SubscriptionStore {
         record.stripeSubscriptionId,
         record.status,
         record.currentPeriodEnd,
+        record.cancelAtPeriodEnd ? 1 : 0,
+        record.cancelAt,
         record.updatedAt,
       );
   }

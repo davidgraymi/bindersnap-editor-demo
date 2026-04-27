@@ -2536,6 +2536,9 @@ async function handleStripeWebhook(
               : record.status),
           currentPeriodEnd:
             extractCurrentPeriodEnd(data) ?? record.currentPeriodEnd,
+          cancelAtPeriodEnd: Boolean(data.cancel_at_period_end),
+          cancelAt:
+            typeof data.cancel_at === "number" ? data.cancel_at : null,
           updatedAt: Date.now(),
         });
         logger.info("Subscription updated", {
@@ -2599,7 +2602,11 @@ async function handleBillingStatus(
   const { username } = auth.session;
 
   if (config.bypassSubscriptionForUsers.includes(username)) {
-    return json(200, { status: "active", currentPeriodEnd: null }, baseHeaders);
+    return json(
+      200,
+      { status: "active", currentPeriodEnd: null, cancelAtPeriodEnd: false, cancelAt: null },
+      baseHeaders,
+    );
   }
 
   const record = subscriptionStore.getByUsername(username);
@@ -2608,6 +2615,8 @@ async function handleBillingStatus(
     {
       status: record?.status ?? null,
       currentPeriodEnd: record?.currentPeriodEnd ?? null,
+      cancelAtPeriodEnd: record?.cancelAtPeriodEnd ?? false,
+      cancelAt: record?.cancelAt ?? null,
     },
     baseHeaders,
   );

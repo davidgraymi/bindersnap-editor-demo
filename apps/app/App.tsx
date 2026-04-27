@@ -276,6 +276,8 @@ export function App() {
     "active" | "none" | "loading" | null
   >(null);
   const [currentPeriodEnd, setCurrentPeriodEnd] = useState<number | null>(null);
+  const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(false);
+  const [cancelAt, setCancelAt] = useState<number | null>(null);
 
   const refreshSession = useCallback(async () => {
     setIsCheckingSession(true);
@@ -296,18 +298,24 @@ export function App() {
           const billing = await fetchBillingStatus();
           setSubscriptionStatus(resolveSubscriptionStatus(billing.status));
           setCurrentPeriodEnd(billing.currentPeriodEnd);
+          setCancelAtPeriodEnd(billing.cancelAtPeriodEnd);
+          setCancelAt(billing.cancelAt);
         } catch {
           setSubscriptionStatus(null);
         }
       } else {
         setSubscriptionStatus(null);
         setCurrentPeriodEnd(null);
+        setCancelAtPeriodEnd(false);
+        setCancelAt(null);
       }
       return resolvedUser;
     } catch (sessionError) {
       setUser(null);
       setSubscriptionStatus(null);
       setCurrentPeriodEnd(null);
+      setCancelAtPeriodEnd(false);
+      setCancelAt(null);
       setCallbackError(
         sessionError instanceof Error
           ? sessionError.message
@@ -447,6 +455,8 @@ export function App() {
       <BillingPage
         subscriptionStatus={subscriptionStatus ?? "loading"}
         currentPeriodEnd={currentPeriodEnd}
+        cancelAtPeriodEnd={cancelAtPeriodEnd}
+        cancelAt={cancelAt}
         onSubscribe={async () => {
           const { url } = await createCheckoutSession();
           window.location.href = url;

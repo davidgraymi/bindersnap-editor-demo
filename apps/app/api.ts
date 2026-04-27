@@ -526,13 +526,15 @@ export type { InitialDocumentUploadResult, UploadResult };
 export async function fetchBillingStatus(): Promise<{
   status: string | null;
   currentPeriodEnd: number | null;
+  cancelAtPeriodEnd: boolean;
+  cancelAt: number | null;
 }> {
   const response = await fetch(resolveApiUrl("/api/app/billing/status"), {
     credentials: "include",
     headers: { Accept: "application/json" },
   });
   if (response.status === 401 || response.status === 404) {
-    return { status: null, currentPeriodEnd: null };
+    return { status: null, currentPeriodEnd: null, cancelAtPeriodEnd: false, cancelAt: null };
   }
   const payload = (await response.json().catch(() => null)) as Record<
     string,
@@ -544,6 +546,9 @@ export async function fetchBillingStatus(): Promise<{
       typeof payload?.currentPeriodEnd === "number"
         ? payload.currentPeriodEnd
         : null,
+    cancelAtPeriodEnd: payload?.cancelAtPeriodEnd === true,
+    cancelAt:
+      typeof payload?.cancelAt === "number" ? payload.cancelAt : null,
   };
 }
 
