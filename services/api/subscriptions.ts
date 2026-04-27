@@ -92,6 +92,104 @@ export class SubscriptionStore {
   }
 }
 
+export class WebhookEventStore {
+  private db: Database;
+
+  constructor(path: string = config.sessionsDbPath) {
+    this.db = new Database(path);
+    this.db.exec("PRAGMA journal_mode=WAL");
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS processed_webhook_events (
+        event_id TEXT PRIMARY KEY,
+        event_type TEXT NOT NULL,
+        customer_id TEXT,
+        created_at INTEGER NOT NULL,
+        processed_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS webhook_customer_state (
+        customer_id TEXT PRIMARY KEY,
+        last_event_created_at INTEGER NOT NULL
+      );
+    `);
+  }
+
+  isProcessed(eventId: string): boolean {
+    const row = this.db
+      .query<
+        { event_id: string },
+        [string]
+      >("SELECT event_id FROM processed_webhook_events WHERE event_id = ?")
+      .get(eventId);
+    return row !== null;
+  }
+
+  isOutOfOrder(customerId: string, eventCreated: number): boolean {
+    const row = this.db
+      .query<
+        { last_event_created_at: number },
+        [string]
+      >("SELECT last_event_created_at FROM webhook_customer_state WHERE customer_id = ?")
+      .get(customerId);
+    if (!row) return false;
+    return eventCreated < row.last_event_created_at;
+  }
+
+  markProcessed(
+    eventId: string,
+    eventType: string,
+    customerId: string | null,
+    eventCreated: number,
+  ): void {
+    this.db
+      .query<void, [string, string, string | null, number, number]>(
+        `INSERT OR IGNORE INTO processed_webhook_events (event_id, event_type, customer_id, created_at, processed_at)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run(eventId, eventType, customerId, eventCreated, Date.now());
+
+    if (customerId !== null) {
+      this.db
+        .query<void, [string, number]>(
+          `INSERT INTO webhook_customer_state (customer_id, last_event_created_at)
+           VALUES (?, ?)
+           ON CONFLICT(customer_id) DO UPDATE SET
+             last_event_created_at = MAX(last_event_created_at, excluded.last_event_created_at)`,
+        )
+        .run(customerId, eventCreated);
+    }
+  }
+}
+
+class LazyWebhookEventStore {
+  private _store: WebhookEventStore | null = null;
+
+  private get store(): WebhookEventStore {
+    if (!this._store) {
+      this._store = new WebhookEventStore();
+    }
+    return this._store;
+  }
+
+  isProcessed(eventId: string): boolean {
+    return this.store.isProcessed(eventId);
+  }
+
+  isOutOfOrder(customerId: string, eventCreated: number): boolean {
+    return this.store.isOutOfOrder(customerId, eventCreated);
+  }
+
+  markProcessed(
+    eventId: string,
+    eventType: string,
+    customerId: string | null,
+    eventCreated: number,
+  ): void {
+    this.store.markProcessed(eventId, eventType, customerId, eventCreated);
+  }
+}
+
+export const webhookEventStore = new LazyWebhookEventStore();
+
 class LazySubscriptionStore {
   private _store: SubscriptionStore | null = null;
 

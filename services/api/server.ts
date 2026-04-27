@@ -3,7 +3,11 @@ import { randomUUID } from "crypto";
 import { config, type SessionCookieSameSite } from "./config";
 import { logger } from "./logger";
 import { sessionStore, type SessionRecord } from "./sessions";
-import { subscriptionStore, hasActiveSubscription } from "./subscriptions";
+import {
+  subscriptionStore,
+  hasActiveSubscription,
+  webhookEventStore,
+} from "./subscriptions";
 import { verifyStripeSignature } from "./stripe/webhook";
 import {
   STRIPE_API_VERSION,
@@ -2440,11 +2444,41 @@ async function handleStripeWebhook(
   }
 
   const type = event.type as string | undefined;
+  const eventId = event.id as string | undefined;
+  const eventCreated = event.created as number | undefined;
   const data = (event.data as Record<string, unknown> | undefined)?.object as
     | Record<string, unknown>
     | undefined;
+  const customerId = data?.customer as string | undefined;
 
-  logger.info("Stripe webhook received", { type });
+  logger.info("Stripe webhook received", { type, eventId });
+
+  if (eventId && webhookEventStore.isProcessed(eventId)) {
+    logger.info("Duplicate webhook event — skipping", { eventId, type });
+    return json(200, { received: true }, baseHeaders);
+  }
+
+  if (
+    customerId &&
+    eventCreated !== undefined &&
+    webhookEventStore.isOutOfOrder(customerId, eventCreated)
+  ) {
+    logger.info("Out-of-order webhook event — skipping", {
+      eventId,
+      type,
+      customerId,
+      eventCreated,
+    });
+    if (eventId) {
+      webhookEventStore.markProcessed(
+        eventId,
+        type ?? "unknown",
+        customerId,
+        eventCreated,
+      );
+    }
+    return json(200, { received: true }, baseHeaders);
+  }
 
   if (type === "checkout.session.completed" && data) {
     const username = data.client_reference_id as string | undefined;
@@ -2541,6 +2575,15 @@ async function handleStripeWebhook(
         );
       }
     }
+  }
+
+  if (eventId) {
+    webhookEventStore.markProcessed(
+      eventId,
+      type ?? "unknown",
+      customerId ?? null,
+      eventCreated ?? 0,
+    );
   }
 
   return json(200, { received: true }, baseHeaders);
