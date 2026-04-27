@@ -534,7 +534,12 @@ export async function fetchBillingStatus(): Promise<{
     headers: { Accept: "application/json" },
   });
   if (response.status === 401 || response.status === 404) {
-    return { status: null, currentPeriodEnd: null, cancelAtPeriodEnd: false, cancelAt: null };
+    return {
+      status: null,
+      currentPeriodEnd: null,
+      cancelAtPeriodEnd: false,
+      cancelAt: null,
+    };
   }
   const payload = (await response.json().catch(() => null)) as Record<
     string,
@@ -547,8 +552,7 @@ export async function fetchBillingStatus(): Promise<{
         ? payload.currentPeriodEnd
         : null,
     cancelAtPeriodEnd: payload?.cancelAtPeriodEnd === true,
-    cancelAt:
-      typeof payload?.cancelAt === "number" ? payload.cancelAt : null,
+    cancelAt: typeof payload?.cancelAt === "number" ? payload.cancelAt : null,
   };
 }
 

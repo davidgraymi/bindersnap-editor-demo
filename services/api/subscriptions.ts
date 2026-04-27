@@ -79,7 +79,19 @@ export class SubscriptionStore {
 
   upsert(record: SubscriptionRecord): void {
     this.db
-      .query<void, [string, string, string, string, number | null, number, number | null, number]>(
+      .query<
+        void,
+        [
+          string,
+          string,
+          string,
+          string,
+          number | null,
+          number,
+          number | null,
+          number,
+        ]
+      >(
         `INSERT INTO subscriptions (username, stripe_customer_id, stripe_subscription_id, status, current_period_end, cancel_at_period_end, cancel_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(username) DO UPDATE SET
