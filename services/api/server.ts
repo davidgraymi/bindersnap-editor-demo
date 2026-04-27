@@ -2458,7 +2458,11 @@ async function handleStripeWebhook(
     return json(200, { received: true }, baseHeaders);
   }
 
-  if (customerId && eventCreated !== undefined && webhookEventStore.isOutOfOrder(customerId, eventCreated)) {
+  if (
+    customerId &&
+    eventCreated !== undefined &&
+    webhookEventStore.isOutOfOrder(customerId, eventCreated)
+  ) {
     logger.info("Out-of-order webhook event — skipping", {
       eventId,
       type,

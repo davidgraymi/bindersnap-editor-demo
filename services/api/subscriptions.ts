@@ -115,18 +115,20 @@ export class WebhookEventStore {
 
   isProcessed(eventId: string): boolean {
     const row = this.db
-      .query<{ event_id: string }, [string]>(
-        "SELECT event_id FROM processed_webhook_events WHERE event_id = ?",
-      )
+      .query<
+        { event_id: string },
+        [string]
+      >("SELECT event_id FROM processed_webhook_events WHERE event_id = ?")
       .get(eventId);
     return row !== null;
   }
 
   isOutOfOrder(customerId: string, eventCreated: number): boolean {
     const row = this.db
-      .query<{ last_event_created_at: number }, [string]>(
-        "SELECT last_event_created_at FROM webhook_customer_state WHERE customer_id = ?",
-      )
+      .query<
+        { last_event_created_at: number },
+        [string]
+      >("SELECT last_event_created_at FROM webhook_customer_state WHERE customer_id = ?")
       .get(customerId);
     if (!row) return false;
     return eventCreated < row.last_event_created_at;
@@ -139,10 +141,7 @@ export class WebhookEventStore {
     eventCreated: number,
   ): void {
     this.db
-      .query<
-        void,
-        [string, string, string | null, number, number]
-      >(
+      .query<void, [string, string, string | null, number, number]>(
         `INSERT OR IGNORE INTO processed_webhook_events (event_id, event_type, customer_id, created_at, processed_at)
          VALUES (?, ?, ?, ?, ?)`,
       )
