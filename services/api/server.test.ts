@@ -437,7 +437,9 @@ describe("billing Stripe webhook recovery", () => {
       );
 
       expect(response.status).toBe(200);
-      expect(getFetchCallsByPath(`/v1/customers/${customerId}`)).toHaveLength(1);
+      expect(getFetchCallsByPath(`/v1/customers/${customerId}`)).toHaveLength(
+        1,
+      );
       expect(subscriptionStore.getByUsername(username)).toEqual({
         username,
         stripeCustomerId: customerId,
@@ -486,7 +488,9 @@ describe("billing Stripe webhook recovery", () => {
       );
 
       expect(response.status).toBe(200);
-      expect(getFetchCallsByPath(`/v1/customers/${customerId}`)).toHaveLength(1);
+      expect(getFetchCallsByPath(`/v1/customers/${customerId}`)).toHaveLength(
+        1,
+      );
       expect(subscriptionStore.getByUsername(username)).toEqual({
         username,
         stripeCustomerId: customerId,
@@ -531,7 +535,9 @@ describe("billing Stripe webhook recovery", () => {
       );
 
       expect(response.status).toBe(200);
-      expect(getFetchCallsByPath(`/v1/customers/${customerId}`)).toHaveLength(1);
+      expect(getFetchCallsByPath(`/v1/customers/${customerId}`)).toHaveLength(
+        1,
+      );
       expect(subscriptionStore.getByCustomerId(customerId)).toBeNull();
     } finally {
       server.stop(true);
