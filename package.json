@@ -61,6 +61,7 @@
     "openapi-fetch": "^0.17.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
+    "stripe": "^22.1.0",
     "uuid": "^14.0.0"
   },
   "devDependencies": {

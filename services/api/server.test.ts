@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { config } from "./config";
 import { createApiServer } from "./server";
 import { SessionStore, sessionStore } from "./sessions";
+import { resetStripeClientForTests } from "./stripe/client";
 import {
   SubscriptionStore,
   subscriptionStore,
@@ -41,6 +42,7 @@ beforeEach(() => {
   config.stripeWebhookSecret = "whsec_test_bindersnap";
   config.stripePriceId = "price_test_bindersnap";
   config.sessionsDbPath = `/tmp/bindersnap-server-test-${randomUUID()}.sqlite`;
+  resetStripeClientForTests();
 
   (sessionStore as { _store: SessionStore | null })._store = new SessionStore(
     config.sessionsDbPath,

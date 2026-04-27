@@ -8,11 +8,9 @@ import {
   hasActiveSubscription,
   webhookEventStore,
 } from "./subscriptions";
-import { verifyStripeSignature } from "./stripe/webhook";
-import {
-  STRIPE_API_VERSION,
-  extractCurrentPeriodEnd,
-} from "./stripe/api-version";
+import type Stripe from "stripe";
+import { extractCurrentPeriodEnd } from "./stripe/api-version";
+import { getStripeClient } from "./stripe/client";
 import {
   buildStripeSubscriptionRecord,
   reconcileStripeCustomerByCustomerId,
@@ -559,23 +557,6 @@ function requireSubscription(
     return json(402, { error: "Subscription required." }, baseHeaders);
   }
   return auth;
-}
-
-async function stripeFetch(
-  path: string,
-  body?: URLSearchParams,
-  extraHeaders?: Record<string, string>,
-): Promise<Response> {
-  return fetch(`https://api.stripe.com${path}`, {
-    method: body ? "POST" : "GET",
-    headers: {
-      Authorization: `Bearer ${config.stripeSecretKey}`,
-      "Stripe-Version": STRIPE_API_VERSION,
-      ...(body ? { "Content-Type": "application/x-www-form-urlencoded" } : {}),
-      ...extraHeaders,
-    },
-    body,
-  });
 }
 
 export function createStripeRequestIdempotencyKey(
@@ -2471,36 +2452,32 @@ async function handleStripeWebhook(
   const rawBody = await req.text();
   const sigHeader = req.headers.get("stripe-signature") ?? "";
 
-  if (config.stripeWebhookSecret) {
-    const valid = await verifyStripeSignature(
-      rawBody,
-      sigHeader,
-      config.stripeWebhookSecret,
-    );
-    if (!valid) {
-      logger.warn("Stripe webhook signature verification failed");
-      return json(400, { error: "Invalid signature." }, baseHeaders);
-    }
-  } else {
+  if (!config.stripeWebhookSecret) {
     logger.warn(
       "Stripe webhook received but STRIPE_WEBHOOK_SECRET is not configured — rejecting",
     );
     return json(400, { error: "Webhook secret not configured." }, baseHeaders);
   }
 
-  let event: Record<string, unknown>;
+  const stripe = getStripeClient();
+  let event: Stripe.Event;
   try {
-    event = JSON.parse(rawBody) as Record<string, unknown>;
-  } catch {
-    return json(400, { error: "Invalid JSON." }, baseHeaders);
+    event = await stripe.webhooks.constructEventAsync(
+      rawBody,
+      sigHeader,
+      config.stripeWebhookSecret,
+    );
+  } catch (err) {
+    logger.warn("Stripe webhook signature verification failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return json(400, { error: "Invalid signature." }, baseHeaders);
   }
 
-  const type = event.type as string | undefined;
-  const eventId = event.id as string | undefined;
-  const eventCreated = event.created as number | undefined;
-  const data = (event.data as Record<string, unknown> | undefined)?.object as
-    | Record<string, unknown>
-    | undefined;
+  const type = event.type;
+  const eventId = event.id;
+  const eventCreated = event.created;
+  const data = event.data.object as unknown as Record<string, unknown>;
   const customerId = data?.customer as string | undefined;
 
   logger.info("Stripe webhook received", { type, eventId });
@@ -2538,17 +2515,24 @@ async function handleStripeWebhook(
     const subscriptionId = data.subscription as string | undefined;
 
     if (username && customerId && subscriptionId) {
-      const subResp = await stripeFetch(`/v1/subscriptions/${subscriptionId}`);
-      if (subResp.ok) {
-        const sub = (await subResp.json()) as Record<string, unknown>;
+      try {
+        const sub = await stripe.subscriptions.retrieve(subscriptionId);
         subscriptionStore.upsert(
-          buildStripeSubscriptionRecord(username, customerId, sub),
+          buildStripeSubscriptionRecord(
+            username,
+            customerId,
+            sub as unknown as Record<string, unknown>,
+          ),
         );
         logger.info("Subscription activated", { username, status: sub.status });
-      } else {
+      } catch (err) {
         logger.error(
           "Could not fetch subscription details from Stripe — returning 500 so Stripe retries",
-          { username, subscriptionId, stripeStatus: subResp.status },
+          {
+            username,
+            subscriptionId,
+            error: err instanceof Error ? err.message : String(err),
+          },
         );
         // Return 500 so Stripe retries delivery (a 200 would suppress retries).
         return json(
@@ -2588,7 +2572,7 @@ async function handleStripeWebhook(
         });
       } else {
         const reconciled = await reconcileStripeCustomerByCustomerId(
-          stripeFetch,
+          stripe,
           customerId,
           {
             subscription: data,
@@ -2724,32 +2708,30 @@ async function handleBillingCheckout(
     auth.session.username,
   );
   const userEmail = await fetchSessionUserEmail(auth.session);
-  const body = new URLSearchParams({
+
+  const params: Stripe.Checkout.SessionCreateParams = {
     mode: "subscription",
-    "line_items[0][price]": config.stripePriceId,
-    "line_items[0][quantity]": "1",
+    line_items: [{ price: config.stripePriceId, quantity: 1 }],
     client_reference_id: auth.session.username,
-    "metadata[bindersnap_username]": auth.session.username,
+    metadata: { bindersnap_username: auth.session.username },
     success_url: `${config.appOrigin}/billing?checkout=success`,
     cancel_url: `${config.appOrigin}/billing`,
-  });
+  };
   if (existingSubscription?.stripeCustomerId) {
-    body.set("customer", existingSubscription.stripeCustomerId);
+    params.customer = existingSubscription.stripeCustomerId;
   } else if (userEmail) {
-    body.set("customer_email", userEmail);
+    params.customer_email = userEmail;
   }
 
-  const resp = await stripeFetch("/v1/checkout/sessions", body, {
-    "Idempotency-Key": createStripeRequestIdempotencyKey("checkout"),
-  });
-  if (!resp.ok) {
-    const err = (await resp.json().catch(() => null)) as Record<
-      string,
-      unknown
-    > | null;
+  try {
+    const stripe = getStripeClient();
+    const session = await stripe.checkout.sessions.create(params, {
+      idempotencyKey: createStripeRequestIdempotencyKey("checkout"),
+    });
+    return json(200, { url: session.url }, baseHeaders);
+  } catch (err) {
     logger.error("Stripe checkout session creation failed", {
-      status: resp.status,
-      error: err,
+      error: err instanceof Error ? err.message : String(err),
     });
     return json(
       502,
@@ -2757,9 +2739,6 @@ async function handleBillingCheckout(
       baseHeaders,
     );
   }
-
-  const session = (await resp.json()) as Record<string, unknown>;
-  return json(200, { url: session.url }, baseHeaders);
 }
 
 async function handleDevGrantSubscription(
@@ -2802,28 +2781,22 @@ async function handleBillingPortal(
     return json(503, { error: "Billing not configured." }, baseHeaders);
   }
 
-  const body = new URLSearchParams({
-    customer: record.stripeCustomerId,
-    return_url: `${config.appOrigin}/billing`,
-  });
-
-  const resp = await stripeFetch("/v1/billing_portal/sessions", body, {
-    "Idempotency-Key": createStripeRequestIdempotencyKey("portal"),
-  });
-  if (!resp.ok) {
-    const err = (await resp.json().catch(() => null)) as Record<
-      string,
-      unknown
-    > | null;
+  try {
+    const stripe = getStripeClient();
+    const session = await stripe.billingPortal.sessions.create(
+      {
+        customer: record.stripeCustomerId,
+        return_url: `${config.appOrigin}/billing`,
+      },
+      { idempotencyKey: createStripeRequestIdempotencyKey("portal") },
+    );
+    return json(200, { url: session.url }, baseHeaders);
+  } catch (err) {
     logger.error("Stripe portal session creation failed", {
-      status: resp.status,
-      error: err,
+      error: err instanceof Error ? err.message : String(err),
     });
     return json(502, { error: "Unable to open billing portal." }, baseHeaders);
   }
-
-  const session = (await resp.json()) as Record<string, unknown>;
-  return json(200, { url: session.url }, baseHeaders);
 }
 
 async function cleanupExpiredSessions(): Promise<void> {

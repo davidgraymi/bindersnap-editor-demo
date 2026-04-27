@@ -1,11 +1,11 @@
 #!/usr/bin/env bun
 
-import { config } from "../services/api/config";
-import { STRIPE_API_VERSION } from "../services/api/stripe/api-version";
+import type Stripe from "stripe";
+
+import { getStripeClient } from "../services/api/stripe/client";
 import {
   reconcileStripeCustomerByCustomerId,
   reconcileStripeCustomerByUsername,
-  type StripeFetch,
 } from "../services/api/stripe/reconcile";
 import { subscriptionStore } from "../services/api/subscriptions";
 
@@ -17,7 +17,7 @@ type ReconcileArgs = {
 type ReconcileStripeCustomerStore = Pick<typeof subscriptionStore, "upsert">;
 
 type RunReconcileStripeCustomerCliOptions = {
-  stripeFetch?: StripeFetch;
+  stripe?: Stripe;
   store?: ReconcileStripeCustomerStore;
   writeStdout?: (output: string) => void;
 };
@@ -60,36 +60,16 @@ function parseArgs(argv: string[]): ReconcileArgs {
   return { username, customerId };
 }
 
-async function defaultStripeFetch(
-  path: string,
-  body?: URLSearchParams,
-  extraHeaders?: Record<string, string>,
-): Promise<Response> {
-  return fetch(`https://api.stripe.com${path}`, {
-    method: body ? "POST" : "GET",
-    headers: {
-      Authorization: `Bearer ${config.stripeSecretKey}`,
-      "Stripe-Version": STRIPE_API_VERSION,
-      ...(body ? { "Content-Type": "application/x-www-form-urlencoded" } : {}),
-      ...extraHeaders,
-    },
-    body,
-  });
-}
-
 export async function runReconcileStripeCustomerCli(
   argv = process.argv.slice(2),
   options: RunReconcileStripeCustomerCliOptions = {},
 ): Promise<void> {
-  const stripeFetch = options.stripeFetch ?? defaultStripeFetch;
-  if (!options.stripeFetch && !config.stripeSecretKey) {
-    throw new Error("STRIPE_SECRET_KEY is required.");
-  }
+  const stripe = options.stripe ?? getStripeClient();
 
   const args = parseArgs(argv);
   const result = args.username
-    ? await reconcileStripeCustomerByUsername(stripeFetch, args.username)
-    : await reconcileStripeCustomerByCustomerId(stripeFetch, args.customerId!);
+    ? await reconcileStripeCustomerByUsername(stripe, args.username)
+    : await reconcileStripeCustomerByCustomerId(stripe, args.customerId!);
 
   if (!result) {
     throw new Error(
