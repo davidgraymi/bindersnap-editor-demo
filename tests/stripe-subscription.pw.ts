@@ -22,7 +22,7 @@
  *   SKIP_STACK=1 bun run test:integration -- tests/stripe-subscription.pw.ts
  */
 
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Locator, type Page } from "@playwright/test";
 import { resolveStripeWebhookSecret } from "./stripe-runtime";
 import { STRIPE_API_VERSION } from "../services/api/stripe/api-version";
 
@@ -240,12 +240,11 @@ async function cancelSubscriptionsForEmail(email: string): Promise<void> {
   }
 }
 
-async function fillVisibleInputAcrossFrames(
+async function waitForVisibleInputAcrossFrames(
   page: Page,
   selectors: string[],
-  value: string,
   options: { required?: boolean; timeoutMs?: number } = {},
-): Promise<boolean> {
+): Promise<Locator | null> {
   const startedAt = Date.now();
   const timeoutMs = options.timeoutMs ?? 15_000;
 
@@ -258,8 +257,7 @@ async function fillVisibleInputAcrossFrames(
           continue;
         }
 
-        await field.fill(value);
-        return true;
+        return field;
       }
     }
 
@@ -272,7 +270,22 @@ async function fillVisibleInputAcrossFrames(
     );
   }
 
-  return false;
+  return null;
+}
+
+async function fillVisibleInputAcrossFrames(
+  page: Page,
+  selectors: string[],
+  value: string,
+  options: { required?: boolean; timeoutMs?: number } = {},
+): Promise<boolean> {
+  const field = await waitForVisibleInputAcrossFrames(page, selectors, options);
+  if (!field) {
+    return false;
+  }
+
+  await field.fill(value);
+  return true;
 }
 
 async function completeHostedStripeCheckout(
@@ -282,12 +295,28 @@ async function completeHostedStripeCheckout(
   await page.waitForURL(/checkout\.stripe\.com/, { timeout: 30_000 });
 
   // Email field is type="text" with autocomplete="email" on Stripe Hosted Checkout.
-  await fillVisibleInputAcrossFrames(
+  const emailField = await waitForVisibleInputAcrossFrames(
     page,
     ['input[autocomplete="email"]', 'input[type="email"]', "#email"],
-    email,
     { required: true },
   );
+  if (!emailField) {
+    throw new Error("Stripe Hosted Checkout email field was not rendered");
+  }
+  let prefilledEmail = "";
+  const emailPrefillDeadline = Date.now() + 5_000;
+  while (Date.now() < emailPrefillDeadline) {
+    prefilledEmail = (await emailField.inputValue().catch(() => "")).trim();
+    if (prefilledEmail !== "") {
+      break;
+    }
+    await page.waitForTimeout(250);
+  }
+
+  if (prefilledEmail === "") {
+    await emailField.fill(email);
+  }
+  await expect(emailField).toHaveValue(email);
 
   // The Card radio is visually hidden under a custom overlay in older Stripe
   // Checkout. Force-click by ID to expand the card form.
