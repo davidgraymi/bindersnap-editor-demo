@@ -41,6 +41,11 @@ Do in Stripe Dashboard / CLI:
 2. Enable **Customer Portal**: Dashboard → Settings → Billing → Customer Portal
 3. `stripe listen --forward-to localhost:8787/stripe/webhook --print-secret` → copy **webhook secret** (`whsec_...`)
 4. Note **Secret Key** (`sk_test_...`) and **Publishable Key** (`pk_test_...`)
+5. **Pin the webhook endpoint API version to `2024-06-20` in BOTH test and live mode.**
+   - Dashboard → Developers → Webhooks → (your endpoint) → ⋯ → **Update API version** → select `2024-06-20`.
+   - Repeat for the live-mode endpoint when going to production.
+   - Why: Stripe API versions ≥ `2025-04-30` move `current_period_end` off `Subscription` onto `subscription.items.data[0]`. The webhook payload shape is determined by the **endpoint's** configured version, not by request headers. If the endpoint runs a newer version than the server expects, `currentPeriodEnd` would be missed on every `customer.subscription.updated` and the 3-day expiry guard in `subscriptions.ts` would revoke access from valid paying customers after one billing cycle. The server reads both shapes defensively (see `services/api/stripe/api-version.ts`), but pinning the endpoint keeps the contract explicit.
+   - The pinned version is centralized as `STRIPE_API_VERSION` in `services/api/stripe/api-version.ts`. If you change it, update the dashboard endpoints in the same change.
 
 ---
 
