@@ -71,6 +71,25 @@ The target instance must already satisfy these conditions:
 
 The SSM command uses the same production compose contract documented in [`../../README.md`](../../README.md) and established by [`../../infra/compute/user-data.sh.tftpl`](../../infra/compute/user-data.sh.tftpl).
 
+## Stripe Webhook Verification
+
+Use this runbook whenever you change `Caddyfile.prod`, Stripe webhook handling,
+or the production API deploy path.
+
+### How to test the webhook end-to-end in staging
+
+1. Confirm the staging Caddy proxy forwards both headers explicitly:
+   `header_up X-Forwarded-Proto {scheme}` and `header_up X-Forwarded-For {remote}`.
+2. Fetch the staging webhook signing secret from your secret manager and export it locally:
+   `export STRIPE_WEBHOOK_SECRET=whsec_...`
+3. Point the reusable smoke script at the staging API hostname:
+   `export STRIPE_WEBHOOK_TARGET_URL=https://<staging-api-host>/stripe/webhook`
+4. Run the smoke request through Caddy:
+   `bash scripts/smoke-stripe-webhook.sh`
+5. Expect a `200` response containing `{"received":true}`.
+6. If the request fails with `{"error":"HTTPS is required."}`, treat that as a forwarded-proto regression in the proxy path before looking at Stripe itself.
+7. If the request fails with `{"error":"Invalid signature."}`, re-check that the staging secret matches the endpoint configured in Stripe.
+
 ## Rollback
 
 The rollback path is a manual run of the API deploy workflow:
@@ -118,3 +137,4 @@ docker compose --env-file /opt/bindersnap/.env.prod -f docker-compose.prod.yml u
 - A forced test failure prevents the API deploy job from running.
 - The API workflow log prints SSM stdout and stderr from the remote deploy command.
 - A manual `api_tag` rollback returns the API to the selected SHA.
+- `bun run test:webhook-caddy-smoke` returns `{"received":true}` through the local Caddy smoke stack.

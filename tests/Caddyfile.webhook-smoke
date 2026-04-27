@@ -1,0 +1,8 @@
+https://api.bindersnap.test:8443 {
+	tls internal
+
+	reverse_proxy api:8787 {
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Forwarded-For {remote}
+	}
+}

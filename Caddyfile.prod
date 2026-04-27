@@ -28,5 +28,9 @@ gitea.bindersnap.com {
 api.bindersnap.com {
 	import security_headers
 
-	reverse_proxy api:8787
+	reverse_proxy api:8787 {
+		# The API enforces HTTPS based on forwarded proto after Caddy terminates TLS.
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Forwarded-For {remote}
+	}
 }
