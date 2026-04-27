@@ -574,6 +574,14 @@ async function stripeFetch(
   });
 }
 
+export function createStripeRequestIdempotencyKey(
+  flow: "checkout" | "portal",
+): string {
+  // Stripe's Idempotency-Key dedupes retries of the same logical request;
+  // consumeCheckoutRateLimit separately handles repeat user attempts.
+  return `${flow}-${randomUUID()}`;
+}
+
 function parsePositiveIntInput(
   value: string | number | null | undefined,
   fallback: number,
@@ -2657,9 +2665,8 @@ async function handleBillingCheckout(
     cancel_url: `${config.appOrigin}/billing`,
   });
 
-  const checkoutIdempotencyKey = `checkout-${auth.session.username}-${Math.floor(Date.now() / 60000)}`;
   const resp = await stripeFetch("/v1/checkout/sessions", body, {
-    "Idempotency-Key": checkoutIdempotencyKey,
+    "Idempotency-Key": createStripeRequestIdempotencyKey("checkout"),
   });
   if (!resp.ok) {
     const err = (await resp.json().catch(() => null)) as Record<
@@ -2726,9 +2733,8 @@ async function handleBillingPortal(
     return_url: `${config.appOrigin}/billing`,
   });
 
-  const portalIdempotencyKey = `portal-${auth.session.username}-${Math.floor(Date.now() / 60000)}`;
   const resp = await stripeFetch("/v1/billing_portal/sessions", body, {
-    "Idempotency-Key": portalIdempotencyKey,
+    "Idempotency-Key": createStripeRequestIdempotencyKey("portal"),
   });
   if (!resp.ok) {
     const err = (await resp.json().catch(() => null)) as Record<
