@@ -273,6 +273,33 @@ async function waitForVisibleInputAcrossFrames(
   return null;
 }
 
+async function waitForVisibleTextAcrossFrames(
+  page: Page,
+  text: string,
+  options: { required?: boolean; timeoutMs?: number } = {},
+): Promise<Locator | null> {
+  const startedAt = Date.now();
+  const timeoutMs = options.timeoutMs ?? 15_000;
+
+  while (Date.now() - startedAt < timeoutMs) {
+    for (const frame of page.frames()) {
+      const value = frame.getByText(text, { exact: true }).first();
+      const visible = await value.isVisible().catch(() => false);
+      if (visible) {
+        return value;
+      }
+    }
+
+    await page.waitForTimeout(250);
+  }
+
+  if (options.required) {
+    throw new Error(`Could not find visible text in Stripe Checkout: ${text}`);
+  }
+
+  return null;
+}
+
 async function fillVisibleInputAcrossFrames(
   page: Page,
   selectors: string[],
@@ -294,29 +321,35 @@ async function completeHostedStripeCheckout(
 ): Promise<void> {
   await page.waitForURL(/checkout\.stripe\.com/, { timeout: 30_000 });
 
-  // Email field is type="text" with autocomplete="email" on Stripe Hosted Checkout.
+  // When Checkout receives customer_email or a Customer with a valid email,
+  // Stripe may render the contact email as a locked value instead of an input.
   const emailField = await waitForVisibleInputAcrossFrames(
     page,
     ['input[autocomplete="email"]', 'input[type="email"]', "#email"],
-    { required: true },
+    { timeoutMs: 5_000 },
   );
-  if (!emailField) {
-    throw new Error("Stripe Hosted Checkout email field was not rendered");
-  }
-  let prefilledEmail = "";
-  const emailPrefillDeadline = Date.now() + 5_000;
-  while (Date.now() < emailPrefillDeadline) {
-    prefilledEmail = (await emailField.inputValue().catch(() => "")).trim();
-    if (prefilledEmail !== "") {
-      break;
+  if (emailField) {
+    let prefilledEmail = "";
+    const emailPrefillDeadline = Date.now() + 5_000;
+    while (Date.now() < emailPrefillDeadline) {
+      prefilledEmail = (await emailField.inputValue().catch(() => "")).trim();
+      if (prefilledEmail !== "") {
+        break;
+      }
+      await page.waitForTimeout(250);
     }
-    await page.waitForTimeout(250);
-  }
 
-  if (prefilledEmail === "") {
-    await emailField.fill(email);
+    if (prefilledEmail === "") {
+      await emailField.fill(email);
+    }
+    await expect(emailField).toHaveValue(email);
+  } else {
+    const lockedEmail = await waitForVisibleTextAcrossFrames(page, email, {
+      required: true,
+      timeoutMs: 5_000,
+    });
+    await expect(lockedEmail).toBeVisible();
   }
-  await expect(emailField).toHaveValue(email);
 
   // The Card radio is visually hidden under a custom overlay in older Stripe
   // Checkout. Force-click by ID to expand the card form.
