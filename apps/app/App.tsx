@@ -275,6 +275,7 @@ export function App() {
   const [subscriptionStatus, setSubscriptionStatus] = useState<
     "active" | "none" | "loading" | null
   >(null);
+  const [hasBillingStatusError, setHasBillingStatusError] = useState(false);
   const [currentPeriodEnd, setCurrentPeriodEnd] = useState<number | null>(null);
   const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(false);
   const [cancelAt, setCancelAt] = useState<number | null>(null);
@@ -294,17 +295,24 @@ export function App() {
       setCallbackError(null);
       if (resolvedUser) {
         setSubscriptionStatus("loading");
+        setHasBillingStatusError(false);
         try {
           const billing = await fetchBillingStatus();
           setSubscriptionStatus(resolveSubscriptionStatus(billing.status));
+          setHasBillingStatusError(false);
           setCurrentPeriodEnd(billing.currentPeriodEnd);
           setCancelAtPeriodEnd(billing.cancelAtPeriodEnd);
           setCancelAt(billing.cancelAt);
         } catch {
-          setSubscriptionStatus(null);
+          setSubscriptionStatus("none");
+          setHasBillingStatusError(true);
+          setCurrentPeriodEnd(null);
+          setCancelAtPeriodEnd(false);
+          setCancelAt(null);
         }
       } else {
         setSubscriptionStatus(null);
+        setHasBillingStatusError(false);
         setCurrentPeriodEnd(null);
         setCancelAtPeriodEnd(false);
         setCancelAt(null);
@@ -313,6 +321,7 @@ export function App() {
     } catch (sessionError) {
       setUser(null);
       setSubscriptionStatus(null);
+      setHasBillingStatusError(false);
       setCurrentPeriodEnd(null);
       setCancelAtPeriodEnd(false);
       setCancelAt(null);
@@ -399,6 +408,10 @@ export function App() {
       return "callback";
     }
 
+    if (user && subscriptionStatus === "none") {
+      return "billing";
+    }
+
     if (route.kind === "home") {
       return user ? "app" : "landing";
     }
@@ -412,7 +425,7 @@ export function App() {
     }
 
     return user ? "app" : "login";
-  }, [isCheckingSession, route, user]);
+  }, [isCheckingSession, route, subscriptionStatus, user]);
 
   useEffect(() => {
     document.body.setAttribute("data-app-view", view);
@@ -454,6 +467,7 @@ export function App() {
     return (
       <BillingPage
         subscriptionStatus={subscriptionStatus ?? "loading"}
+        hasBillingStatusError={hasBillingStatusError}
         currentPeriodEnd={currentPeriodEnd}
         cancelAtPeriodEnd={cancelAtPeriodEnd}
         cancelAt={cancelAt}
@@ -467,7 +481,11 @@ export function App() {
         }}
         onSubscriptionConfirmed={() => {
           setSubscriptionStatus("active");
+          setHasBillingStatusError(false);
           navigateTo({ kind: "home" }, true);
+        }}
+        onRetryBillingStatus={async () => {
+          await refreshSession();
         }}
       />
     );
