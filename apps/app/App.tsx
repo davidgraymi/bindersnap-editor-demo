@@ -9,10 +9,14 @@ import {
 import "./app.css";
 
 import { AppShell } from "./components/AppShell";
+import { BillingPage } from "./components/BillingPage";
 import { BindersnapLogoMark } from "./components/BindersnapLogoMark";
 import { LandingPage } from "./components/LandingPage";
 import {
   clearToken,
+  createCheckoutSession,
+  createPortalSession,
+  fetchBillingStatus,
   fetchSessionUser,
   login,
   logoutSession,
@@ -28,7 +32,13 @@ import {
 } from "./routes";
 import { resolveSignupPrefill } from "./authIntent";
 
-type AuthView = "loading" | "callback" | "landing" | "login" | "app";
+type AuthView =
+  | "loading"
+  | "callback"
+  | "landing"
+  | "login"
+  | "billing"
+  | "app";
 type AuthMode = "signin" | "signup";
 
 interface SessionUser {
@@ -56,6 +66,12 @@ function navigateTo(route: AppRoute, replace = false): void {
   const method = replace ? "replaceState" : "pushState";
   window.history[method]({}, "", routeToPath(route));
   window.dispatchEvent(new PopStateEvent("popstate"));
+}
+
+export function resolveSubscriptionStatus(
+  status: string | null,
+): "active" | "none" {
+  return status === "active" || status === "trialing" ? "active" : "none";
 }
 
 function LoginPage({
@@ -256,6 +272,10 @@ export function App() {
     () => route.kind !== "callback",
   );
   const [callbackError, setCallbackError] = useState<string | null>(null);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<
+    "active" | "none" | "loading" | null
+  >(null);
+  const [currentPeriodEnd, setCurrentPeriodEnd] = useState<number | null>(null);
 
   const refreshSession = useCallback(async () => {
     setIsCheckingSession(true);
@@ -267,11 +287,27 @@ export function App() {
       } else {
         clearToken();
       }
-      setUser(nextSession?.user ?? null);
+      const resolvedUser = nextSession?.user ?? null;
+      setUser(resolvedUser);
       setCallbackError(null);
-      return nextSession?.user ?? null;
+      if (resolvedUser) {
+        setSubscriptionStatus("loading");
+        try {
+          const billing = await fetchBillingStatus();
+          setSubscriptionStatus(resolveSubscriptionStatus(billing.status));
+          setCurrentPeriodEnd(billing.currentPeriodEnd);
+        } catch {
+          setSubscriptionStatus(null);
+        }
+      } else {
+        setSubscriptionStatus(null);
+        setCurrentPeriodEnd(null);
+      }
+      return resolvedUser;
     } catch (sessionError) {
       setUser(null);
+      setSubscriptionStatus(null);
+      setCurrentPeriodEnd(null);
       setCallbackError(
         sessionError instanceof Error
           ? sessionError.message
@@ -317,8 +353,27 @@ export function App() {
 
     if (!user && isProtectedAppRoute(route)) {
       navigateTo({ kind: "login" }, true);
+      return;
     }
-  }, [isCheckingSession, route, user]);
+
+    const isCheckoutSuccess =
+      window.location.search.includes("checkout=success");
+
+    if (user && subscriptionStatus === "none" && route.kind !== "billing") {
+      navigateTo({ kind: "billing" }, true);
+      return;
+    }
+
+    if (
+      user &&
+      subscriptionStatus === "active" &&
+      route.kind === "billing" &&
+      !isCheckoutSuccess
+    ) {
+      navigateTo({ kind: "home" }, true);
+      return;
+    }
+  }, [isCheckingSession, route, subscriptionStatus, user]);
 
   useEffect(() => {
     if (route.kind !== "callback") {
@@ -342,6 +397,10 @@ export function App() {
 
     if (isCheckingSession) {
       return "loading";
+    }
+
+    if (route.kind === "billing" && user) {
+      return "billing";
     }
 
     return user ? "app" : "login";
@@ -380,6 +439,27 @@ export function App() {
           </p>
         </div>
       </section>
+    );
+  }
+
+  if (view === "billing") {
+    return (
+      <BillingPage
+        subscriptionStatus={subscriptionStatus ?? "loading"}
+        currentPeriodEnd={currentPeriodEnd}
+        onSubscribe={async () => {
+          const { url } = await createCheckoutSession();
+          window.location.href = url;
+        }}
+        onManage={async () => {
+          const { url } = await createPortalSession();
+          window.location.href = url;
+        }}
+        onSubscriptionConfirmed={() => {
+          setSubscriptionStatus("active");
+          navigateTo({ kind: "home" }, true);
+        }}
+      />
     );
   }
 

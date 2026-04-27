@@ -40,6 +40,39 @@ SKIP_STACK=1 bun run test:integration
 APP_PORT=4000 bun run test:integration
 ```
 
+## Stripe billing flow
+
+The local compose stack can exercise the subscription checkout flow when the
+API container gets real Stripe test credentials from `.env`.
+
+Set these values before `bun run up`:
+
+- `STRIPE_SECRET_KEY=sk_test_...`
+- `STRIPE_PRICE_ID=price_...` for the subscription price you want to test
+
+`bun run test:integration` will start `stripe listen` automatically, capture the
+runtime webhook signing secret, inject it into the API container, and keep the
+listener alive for the duration of the Playwright run.
+
+Set `STRIPE_WEBHOOK_SECRET` yourself only when you are testing the billing flow
+manually outside Playwright, for example with `bun run up`.
+
+The `tests/stripe-subscription.pw.ts` suite reads the same Stripe values and
+skips Stripe-specific assertions when they are unset.
+
+### Stripe billing in CI
+
+The Playwright integration job in `.github/workflows/pr-verify.yml` enables
+Stripe billing coverage only when these GitHub Actions secrets are set:
+
+- `STRIPE_TEST_SECRET_KEY`
+- `STRIPE_TEST_PRICE_ID`
+
+When both are present, the workflow installs the Stripe CLI, `globalSetup`
+starts `stripe listen`, and the runtime webhook signing secret is generated on
+the fly. Do not store `STRIPE_WEBHOOK_SECRET` in CI — the test runtime creates
+it for each run before `docker compose up`.
+
 ## Running unit tests
 
 Unit tests live alongside source as `*.test.ts` and use `bun:test`. No Docker required.
