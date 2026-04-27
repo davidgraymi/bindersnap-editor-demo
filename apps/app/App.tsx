@@ -23,6 +23,7 @@ import {
   signup,
   storeToken,
 } from "./api";
+import { usePaymentRequiredHandler } from "./paymentRequired";
 import {
   asShellRoute,
   getRoute,
@@ -279,6 +280,18 @@ export function App() {
   const [currentPeriodEnd, setCurrentPeriodEnd] = useState<number | null>(null);
   const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(false);
   const [cancelAt, setCancelAt] = useState<number | null>(null);
+  const handlePaymentRequired = useCallback(() => {
+    if (!user) {
+      return;
+    }
+
+    setSubscriptionStatus("none");
+    setHasBillingStatusError(false);
+    setCurrentPeriodEnd(null);
+    setCancelAtPeriodEnd(false);
+    setCancelAt(null);
+    navigateTo({ kind: "billing" }, true);
+  }, [user]);
 
   const refreshSession = useCallback(async () => {
     setIsCheckingSession(true);
@@ -347,6 +360,8 @@ export function App() {
       window.removeEventListener("popstate", handlePopState);
     };
   }, []);
+
+  usePaymentRequiredHandler(handlePaymentRequired);
 
   useEffect(() => {
     if (route.kind === "callback") {

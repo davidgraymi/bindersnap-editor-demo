@@ -323,6 +323,46 @@ test("App redirects signed-in users to billing when the billing status fetch rej
   }
 });
 
+test("App redirects signed-in users to billing when the payment required handler fires", async () => {
+  mockFetchSessionUser.mockImplementation(async () => ({
+    user: { username: "alice", fullName: "Alice Example" },
+    token: "session-token",
+  }));
+  mockFetchBillingStatus.mockImplementation(async () => ({
+    status: "active",
+    currentPeriodEnd: null,
+    cancelAtPeriodEnd: false,
+    cancelAt: null,
+  }));
+
+  const { App } = await import("./App");
+  const { notifyPaymentRequired } = await import("./paymentRequired");
+  const { container, unmount } = mountApp(App);
+
+  try {
+    await waitFor(() => {
+      expect(
+        container.querySelector('[data-testid="app-shell"]'),
+      ).not.toBeNull();
+    });
+
+    notifyPaymentRequired();
+
+    await waitFor(() => {
+      const billingPage = container.querySelector<HTMLElement>(
+        '[data-testid="billing-page"]',
+      );
+
+      expect(window.location.pathname).toBe("/billing");
+      expect(billingPage?.dataset.subscriptionStatus).toBe("none");
+      expect(billingPage?.dataset.hasBillingStatusError).toBe("false");
+      expect(container.querySelector('[data-testid="app-shell"]')).toBeNull();
+    });
+  } finally {
+    unmount();
+  }
+});
+
 test("resolveGiteaTokenScopes includes all required write scopes by default", () => {
   expect(resolveGiteaTokenScopes()).toEqual([
     "write:user",
