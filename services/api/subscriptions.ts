@@ -1,5 +1,6 @@
 import { Database } from "bun:sqlite";
 import { config } from "./config";
+import { logger } from "./logger";
 
 export interface SubscriptionRecord {
   username: string;
@@ -23,6 +24,15 @@ interface SubscriptionRow {
   updated_at: number;
 }
 
+interface DuplicateCustomerRow {
+  stripe_customer_id: string;
+  duplicate_count: number;
+}
+
+interface SubscriptionRowWithRowId extends SubscriptionRow {
+  rowid: number;
+}
+
 function rowToRecord(row: SubscriptionRow): SubscriptionRecord {
   return {
     username: row.username,
@@ -34,6 +44,19 @@ function rowToRecord(row: SubscriptionRow): SubscriptionRecord {
     cancelAt: row.cancel_at,
     updatedAt: row.updated_at,
   };
+}
+
+export class SubscriptionCustomerConflictError extends Error {
+  constructor(
+    customerId: string,
+    existingUsername: string,
+    attemptedUsername: string,
+  ) {
+    super(
+      `Stripe customer ${customerId} is already bound to ${existingUsername}; cannot rebind to ${attemptedUsername}.`,
+    );
+    this.name = "SubscriptionCustomerConflictError";
+  }
 }
 
 export class SubscriptionStore {
@@ -53,8 +76,8 @@ export class SubscriptionStore {
         cancel_at INTEGER,
         updated_at INTEGER NOT NULL
       );
-      CREATE INDEX IF NOT EXISTS idx_subscriptions_customer ON subscriptions(stripe_customer_id);
     `);
+    this.enforceUniqueCustomerBindings();
   }
 
   getByUsername(username: string): SubscriptionRecord | null {
@@ -78,6 +101,27 @@ export class SubscriptionStore {
   }
 
   upsert(record: SubscriptionRecord): void {
+    const existingCustomerRecord = this.getByCustomerId(
+      record.stripeCustomerId,
+    );
+    if (
+      existingCustomerRecord &&
+      existingCustomerRecord.username !== record.username
+    ) {
+      logger.error("Rejected Stripe customer rebind attempt", {
+        stripeCustomerId: record.stripeCustomerId,
+        existingUsername: existingCustomerRecord.username,
+        attemptedUsername: record.username,
+        existingSubscriptionId: existingCustomerRecord.stripeSubscriptionId,
+        attemptedSubscriptionId: record.stripeSubscriptionId,
+      });
+      throw new SubscriptionCustomerConflictError(
+        record.stripeCustomerId,
+        existingCustomerRecord.username,
+        record.username,
+      );
+    }
+
     this.db
       .query<
         void,
@@ -113,6 +157,63 @@ export class SubscriptionStore {
         record.cancelAt,
         record.updatedAt,
       );
+  }
+
+  private enforceUniqueCustomerBindings(): void {
+    this.db.exec("BEGIN IMMEDIATE");
+
+    try {
+      const duplicates = this.db
+        .query<DuplicateCustomerRow, []>(
+          `SELECT stripe_customer_id, COUNT(*) AS duplicate_count
+           FROM subscriptions
+           GROUP BY stripe_customer_id
+           HAVING COUNT(*) > 1`,
+        )
+        .all();
+
+      for (const duplicate of duplicates) {
+        const rows = this.db
+          .query<SubscriptionRowWithRowId, [string]>(
+            `SELECT rowid, *
+             FROM subscriptions
+             WHERE stripe_customer_id = ?
+             ORDER BY updated_at DESC, username ASC`,
+          )
+          .all(duplicate.stripe_customer_id);
+
+        const [keptRow, ...removedRows] = rows;
+        if (!keptRow || removedRows.length === 0) continue;
+
+        logger.error(
+          "Deduplicating legacy Stripe customer bindings during subscription migration",
+          {
+            stripeCustomerId: duplicate.stripe_customer_id,
+            keptUsername: keptRow.username,
+            removedUsernames: removedRows.map((row) => row.username),
+            duplicateCount: duplicate.duplicate_count,
+          },
+        );
+
+        for (const row of removedRows) {
+          this.db
+            .query<
+              void,
+              [string]
+            >("DELETE FROM subscriptions WHERE username = ?")
+            .run(row.username);
+        }
+      }
+
+      this.db.exec("DROP INDEX IF EXISTS idx_subscriptions_customer");
+      this.db.exec(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_subscriptions_customer ON subscriptions(stripe_customer_id)",
+      );
+      this.db.exec("COMMIT");
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
   }
 }
 
