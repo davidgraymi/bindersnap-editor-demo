@@ -11,7 +11,7 @@
  *   STRIPE_WEBHOOK_SECRET=whsec_... Webhook signing secret (from the Stripe
  *                                   Dashboard endpoint or `stripe listen --print-secret`)
  *   STRIPE_PRICE_ID=price_...       The $100/mo price ID
- *   BUN_PUBLIC_API_BASE_URL         API base URL (default: http://localhost:8787)
+ *   BUN_PUBLIC_API_BASE_URL         API base URL (default: http://localhost:8788)
  *   BINDERSNAP_APP_ORIGIN           Allowed CORS origin (default: http://localhost:5173)
  *
  * Tests that require Stripe credentials are individually skipped when they are
@@ -24,6 +24,7 @@
 
 import { test, expect, type Locator, type Page } from "@playwright/test";
 import { resolveStripeWebhookSecret } from "./stripe-runtime";
+import { buildTestStripeEvent, signWebhookBody } from "./stripe-webhook";
 import { STRIPE_API_VERSION } from "../services/api/stripe/api-version";
 
 // ---------------------------------------------------------------------------
@@ -31,7 +32,8 @@ import { STRIPE_API_VERSION } from "../services/api/stripe/api-version";
 // ---------------------------------------------------------------------------
 
 const API_BASE_URL =
-  process.env.BUN_PUBLIC_API_BASE_URL ?? "http://localhost:8787";
+  process.env.BUN_PUBLIC_API_BASE_URL ??
+  `http://localhost:${process.env.API_PROXY_PORT ?? "8788"}`;
 
 const APP_ORIGIN =
   process.env.BINDERSNAP_APP_ORIGIN ??
@@ -50,50 +52,12 @@ const stripeFullyConfigured = stripeKeySet && webhookSecretSet && priceIdSet;
 // Helpers — Stripe API
 // ---------------------------------------------------------------------------
 
-/**
- * Build a valid stripe-signature header value using the same HMAC-SHA256
- * algorithm that services/api/stripe/webhook.ts verifies.
- */
-async function signWebhookBody(body: string, secret: string): Promise<string> {
-  const timestamp = Math.floor(Date.now() / 1000);
-  const encoder = new TextEncoder();
-  const signedPayload = `${timestamp}.${body}`;
-
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-
-  const signatureBuffer = await crypto.subtle.sign(
-    "HMAC",
-    key,
-    encoder.encode(signedPayload),
-  );
-
-  const hex = Array.from(new Uint8Array(signatureBuffer))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-
-  return `t=${timestamp},v1=${hex}`;
-}
-
 /** POST a signed webhook event to the running API. */
 async function postWebhook(
   type: string,
   object: Record<string, unknown>,
 ): Promise<Response> {
-  const event = {
-    id: `evt_test_${Date.now()}`,
-    type,
-    livemode: false,
-    created: Math.floor(Date.now() / 1000),
-    data: { object },
-  };
-
-  const body = JSON.stringify(event);
+  const { body } = buildTestStripeEvent(type, object);
   const sig = await signWebhookBody(body, STRIPE_WEBHOOK_SECRET);
 
   return fetch(`${API_BASE_URL}/stripe/webhook`, {

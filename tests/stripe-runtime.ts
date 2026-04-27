@@ -43,18 +43,18 @@ export function resolveStripeWebhookSecret(): string {
 }
 
 interface EnsureOptions {
+  allowFallbackSecret?: boolean;
   env: NodeJS.ProcessEnv;
   forwardTo: string;
   log: (message: string) => void;
 }
 
+export const DEFAULT_WEBHOOK_TEST_SECRET = "whsec_bindersnap_playwright";
+
 /**
  * Starts `stripe listen` and waits for the webhook signing secret, then writes
  * it to the runtime state file so test workers can read it across process
  * boundaries.
- *
- * No-ops silently when Stripe keys are absent — Stripe tests self-skip via
- * `resolveStripeWebhookSecret()` returning "".
  *
  * If STRIPE_WEBHOOK_SECRET is already set in env, uses it directly (no
  * listener process is spawned — useful for SKIP_STACK=1 runs).
@@ -62,7 +62,7 @@ interface EnsureOptions {
 export async function ensureStripeWebhookSecret(
   options: EnsureOptions,
 ): Promise<void> {
-  const { env, forwardTo, log } = options;
+  const { allowFallbackSecret = false, env, forwardTo, log } = options;
 
   const secretKey = (env.STRIPE_SECRET_KEY ?? "").trim();
   const priceId = (env.STRIPE_PRICE_ID ?? "").trim();
@@ -79,7 +79,18 @@ export async function ensureStripeWebhookSecret(
     return;
   }
 
-  // No Stripe keys — skip silently; Stripe tests will self-skip.
+  // No Stripe keys — use a deterministic local secret so proxy and
+  // signature-verification coverage still runs in every integration pass.
+  if ((!secretKey || !priceId) && allowFallbackSecret) {
+    writeState({ webhookSecret: DEFAULT_WEBHOOK_TEST_SECRET, pid: null });
+    env.STRIPE_WEBHOOK_SECRET = DEFAULT_WEBHOOK_TEST_SECRET;
+    process.env.STRIPE_WEBHOOK_SECRET = DEFAULT_WEBHOOK_TEST_SECRET;
+    log(
+      "No Stripe test credentials configured — using a deterministic webhook secret for local webhook coverage.",
+    );
+    return;
+  }
+
   if (!secretKey || !priceId) {
     return;
   }

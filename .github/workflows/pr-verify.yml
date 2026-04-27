@@ -198,20 +198,3 @@ jobs:
             test-results/playwright-report
             test-results/playwright
           if-no-files-found: ignore
-
-  webhook-smoke:
-    name: Webhook proxy smoke
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Check Docker availability
-        run: docker info
-
-      - name: Run Stripe webhook smoke through Caddy
-        env:
-          STRIPE_WEBHOOK_SECRET: whsec_smoke
-        run: bash scripts/run-local-stripe-webhook-caddy-smoke.sh

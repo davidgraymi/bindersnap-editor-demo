@@ -12,7 +12,8 @@ import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { signOutCurrentUser } from "./helpers";
 
 const API_BASE_URL =
-  process.env.BUN_PUBLIC_API_BASE_URL ?? "http://localhost:8787";
+  process.env.BUN_PUBLIC_API_BASE_URL ??
+  `http://localhost:${process.env.API_PROXY_PORT ?? "8788"}`;
 
 function buildUniqueSignupCredentials() {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;

@@ -26,7 +26,6 @@
     "test": "bun run test:all",
     "test:all": "bun run test:app && bun run test:ops",
     "test:app": "bun test apps/app packages/gitea-client packages/editor packages/utils",
-    "test:webhook-caddy-smoke": "bash scripts/run-local-stripe-webhook-caddy-smoke.sh",
     "test:ops": "bun test services/api scripts infra/backups",
     "test:integration": "bunx playwright test --config=playwright.config.ts",
     "test:unit": "bun test",
