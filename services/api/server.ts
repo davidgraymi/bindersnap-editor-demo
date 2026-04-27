@@ -6,6 +6,10 @@ import { sessionStore, type SessionRecord } from "./sessions";
 import { subscriptionStore, hasActiveSubscription } from "./subscriptions";
 import { verifyStripeSignature } from "./stripe/webhook";
 import {
+  STRIPE_API_VERSION,
+  extractCurrentPeriodEnd,
+} from "./stripe/api-version";
+import {
   createGiteaClient,
   GiteaApiError,
   unwrap,
@@ -558,7 +562,7 @@ async function stripeFetch(
     method: body ? "POST" : "GET",
     headers: {
       Authorization: `Bearer ${config.stripeSecretKey}`,
-      "Stripe-Version": "2024-06-20",
+      "Stripe-Version": STRIPE_API_VERSION,
       ...(body ? { "Content-Type": "application/x-www-form-urlencoded" } : {}),
       ...extraHeaders,
     },
@@ -2456,14 +2460,12 @@ async function handleStripeWebhook(
           stripeCustomerId: customerId,
           stripeSubscriptionId: subscriptionId,
           status: (sub.status as string) ?? "active",
-          // Stripe omits current_period_end for trialing subscriptions in
-          // newer API versions; fall back to trial_end (same value).
+          // Newer API versions (>= 2025-04-30) moved current_period_end onto
+          // items.data[0]; for trialing subscriptions Stripe omits it entirely
+          // and trial_end carries the same timestamp. Try all three.
           currentPeriodEnd:
-            typeof sub.current_period_end === "number"
-              ? sub.current_period_end
-              : typeof sub.trial_end === "number"
-                ? sub.trial_end
-                : null,
+            extractCurrentPeriodEnd(sub) ??
+            (typeof sub.trial_end === "number" ? sub.trial_end : null),
           updatedAt: Date.now(),
         });
         logger.info("Subscription activated", { username, status: sub.status });
@@ -2499,9 +2501,7 @@ async function handleStripeWebhook(
               ? "canceled"
               : record.status),
           currentPeriodEnd:
-            typeof data.current_period_end === "number"
-              ? data.current_period_end
-              : record.currentPeriodEnd,
+            extractCurrentPeriodEnd(data) ?? record.currentPeriodEnd,
           updatedAt: Date.now(),
         });
         logger.info("Subscription updated", {

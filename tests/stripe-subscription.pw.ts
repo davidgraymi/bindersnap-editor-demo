@@ -24,6 +24,7 @@
 
 import { test, expect, type Page } from "@playwright/test";
 import { resolveStripeWebhookSecret } from "./stripe-runtime";
+import { STRIPE_API_VERSION } from "../services/api/stripe/api-version";
 
 // ---------------------------------------------------------------------------
 // Environment
@@ -114,6 +115,7 @@ async function stripeFetch(
     method: body ? "POST" : "GET",
     headers: {
       Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
+      "Stripe-Version": STRIPE_API_VERSION,
       ...(body ? { "Content-Type": "application/x-www-form-urlencoded" } : {}),
     },
     body,
@@ -609,6 +611,58 @@ test.describe("Stripe subscription lifecycle", () => {
       const billing = await getBillingStatus(sessionCookie);
       expect(billing.status).toBe("active");
       expect(billing.currentPeriodEnd).toBe(renewedPeriodEnd);
+      expect(await getDocumentsHttpStatus(sessionCookie)).toBe(200);
+    } finally {
+      await cancelTestSubscription(subscriptionId);
+    }
+  });
+
+  test("customer.subscription.updated honors items[].current_period_end on newer Stripe API shapes", async () => {
+    // Regression for issue #179: Stripe API >= 2025-04-30 omits the top-level
+    // current_period_end and exposes it on items.data[0]. The webhook handler
+    // must read both shapes — otherwise a misconfigured webhook endpoint
+    // version would silently revoke access from valid paying customers after
+    // one billing cycle (the 3-day expiry guard in subscriptions.ts).
+    test.skip(!stripeFullyConfigured, "Stripe test credentials not configured");
+
+    const credentials = uniqueCredentials();
+    const sessionCookie = await signUpUser(credentials);
+    const { customerId, subscriptionId } =
+      await createTestCustomerAndSubscription(credentials.username);
+
+    try {
+      // Activate first via the normal checkout webhook path.
+      await postWebhook("checkout.session.completed", {
+        client_reference_id: credentials.username,
+        customer: customerId,
+        subscription: subscriptionId,
+      });
+      expect(await getDocumentsHttpStatus(sessionCookie)).toBe(200);
+
+      // Send a subscription.updated payload shaped like the new API:
+      // NO top-level current_period_end; only items.data[0].current_period_end.
+      const newShapePeriodEnd =
+        Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60;
+      const updateResp = await postWebhook("customer.subscription.updated", {
+        id: subscriptionId,
+        customer: customerId,
+        status: "active",
+        items: {
+          data: [
+            {
+              id: "si_test_new_shape",
+              current_period_end: newShapePeriodEnd,
+            },
+          ],
+        },
+      });
+      expect(updateResp.ok).toBe(true);
+
+      const billing = await getBillingStatus(sessionCookie);
+      expect(billing.status).toBe("active");
+      // The handler must have picked up the nested period end, not the
+      // (stale) one stored at activation time.
+      expect(billing.currentPeriodEnd).toBe(newShapePeriodEnd);
       expect(await getDocumentsHttpStatus(sessionCookie)).toBe(200);
     } finally {
       await cancelTestSubscription(subscriptionId);
