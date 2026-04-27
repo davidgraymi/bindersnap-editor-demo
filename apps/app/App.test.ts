@@ -97,9 +97,7 @@ let originalHistory: typeof globalThis.history | undefined;
 let originalHTMLElement: typeof globalThis.HTMLElement | undefined;
 let originalElement: typeof globalThis.Element | undefined;
 let originalNode: typeof globalThis.Node | undefined;
-let originalMutationObserver:
-  | typeof globalThis.MutationObserver
-  | undefined;
+let originalMutationObserver: typeof globalThis.MutationObserver | undefined;
 let originalPopStateEvent: typeof globalThis.PopStateEvent | undefined;
 let originalEvent: typeof globalThis.Event | undefined;
 let originalRequestAnimationFrame:
