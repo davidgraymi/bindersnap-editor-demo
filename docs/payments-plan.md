@@ -186,7 +186,8 @@ if (pathname === "/stripe/webhook" && method === "POST") {
 - Verify signature with `verifyStripeSignature(rawBody, req.headers.get("stripe-signature") ?? "", stripeWebhookSecret)`
 - Parse event: `JSON.parse(rawBody)`
 - Handle `checkout.session.completed`: read `client_reference_id` (username), `customer`, `subscription` → fetch `GET /v1/subscriptions/{id}` → upsert record
-- Handle `customer.subscription.updated` / `customer.subscription.deleted`: look up by `customer` → update status
+- Handle `customer.subscription.updated` / `customer.subscription.deleted`: look up by `customer`; if missing locally, fetch the Stripe customer and recover via `metadata.bindersnap_username`, then upsert from the webhook subscription payload
+- Recovery script: `bun run reconcile:stripe-customer -- --username <name>` or `--customer <cus_...>` rebuilds a row directly from Stripe for operator backfills
 
 `handleBillingStatus(req, baseHeaders)` — `GET /api/app/billing/status`:
 

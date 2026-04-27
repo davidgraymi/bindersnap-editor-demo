@@ -49,6 +49,16 @@ Production-style run:
 bun run serve:api
 ```
 
+## Billing recovery
+
+Rebuild a missing subscription row from Stripe when a prior
+`checkout.session.completed` webhook was missed:
+
+```bash
+bun run reconcile:stripe-customer -- --username alice
+bun run reconcile:stripe-customer -- --customer cus_123
+```
+
 ## MVP tradeoffs
 
 - Sessions are stored in a local SQLite database and are not shared across multiple API instances.

@@ -30,6 +30,14 @@ hosted Checkout coverage when those Stripe test values are present. You only
 need to set `STRIPE_WEBHOOK_SECRET` yourself when you want to exercise the
 billing flow outside Playwright, for example with a manual `bun run up` session.
 
+If a Stripe subscription exists but the local subscription row is missing, you
+can rebuild it from Stripe with:
+
+```bash
+bun run reconcile:stripe-customer -- --username alice
+bun run reconcile:stripe-customer -- --customer cus_123
+```
+
 ## Environment Variables
 
 This is the complete environment variable reference used by repo code, scripts, compose wiring, or tests.

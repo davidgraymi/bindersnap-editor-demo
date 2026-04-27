@@ -14,6 +14,10 @@ import {
   extractCurrentPeriodEnd,
 } from "./stripe/api-version";
 import {
+  buildStripeSubscriptionRecord,
+  reconcileStripeCustomerByCustomerId,
+} from "./stripe/reconcile";
+import {
   createGiteaClient,
   GiteaApiError,
   unwrap,
@@ -2537,19 +2541,9 @@ async function handleStripeWebhook(
       const subResp = await stripeFetch(`/v1/subscriptions/${subscriptionId}`);
       if (subResp.ok) {
         const sub = (await subResp.json()) as Record<string, unknown>;
-        subscriptionStore.upsert({
-          username,
-          stripeCustomerId: customerId,
-          stripeSubscriptionId: subscriptionId,
-          status: (sub.status as string) ?? "active",
-          // Newer API versions (>= 2025-04-30) moved current_period_end onto
-          // items.data[0]; for trialing subscriptions Stripe omits it entirely
-          // and trial_end carries the same timestamp. Try all three.
-          currentPeriodEnd:
-            extractCurrentPeriodEnd(sub) ??
-            (typeof sub.trial_end === "number" ? sub.trial_end : null),
-          updatedAt: Date.now(),
-        });
+        subscriptionStore.upsert(
+          buildStripeSubscriptionRecord(username, customerId, sub),
+        );
         logger.info("Subscription activated", { username, status: sub.status });
       } else {
         logger.error(
@@ -2592,6 +2586,36 @@ async function handleStripeWebhook(
           customer: customerId,
           status: data.status,
         });
+      } else {
+        const reconciled = await reconcileStripeCustomerByCustomerId(
+          stripeFetch,
+          customerId,
+          {
+            subscription: data,
+            now: Date.now(),
+          },
+        );
+        if (reconciled) {
+          subscriptionStore.upsert(reconciled.record);
+          logger.info(
+            "Reconciled missing subscription row from Stripe customer metadata",
+            {
+              customer: customerId,
+              username: reconciled.record.username,
+              subscriptionId: reconciled.record.stripeSubscriptionId,
+              eventType: type,
+            },
+          );
+        } else {
+          logger.warn(
+            "Stripe subscription webhook could not reconcile missing local record",
+            {
+              customer: customerId,
+              subscriptionId,
+              eventType: type,
+            },
+          );
+        }
       }
     }
   } else if (type === "invoice.payment_failed" && data) {

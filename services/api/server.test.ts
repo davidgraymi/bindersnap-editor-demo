@@ -4,7 +4,12 @@ import { randomUUID } from "crypto";
 import { config } from "./config";
 import { createApiServer } from "./server";
 import { SessionStore, sessionStore } from "./sessions";
-import { SubscriptionStore, subscriptionStore } from "./subscriptions";
+import {
+  SubscriptionStore,
+  subscriptionStore,
+  WebhookEventStore,
+  webhookEventStore,
+} from "./subscriptions";
 
 type MockedFetchCall = {
   path: string;
@@ -13,18 +18,27 @@ type MockedFetchCall = {
   body: string | null;
 };
 
+type MockedStripeResource = {
+  status: number;
+  body: Record<string, unknown>;
+};
+
 const originalFetch = globalThis.fetch;
 const originalApiPort = config.apiPort;
 const originalStripeSecretKey = config.stripeSecretKey;
+const originalStripeWebhookSecret = config.stripeWebhookSecret;
 const originalStripePriceId = config.stripePriceId;
 const originalSessionsDbPath = config.sessionsDbPath;
 
 let fetchCalls: MockedFetchCall[] = [];
 let userEmailsByToken = new Map<string, string>();
+let stripeSubscriptionsById = new Map<string, MockedStripeResource>();
+let stripeCustomersById = new Map<string, MockedStripeResource>();
 
 beforeEach(() => {
   config.apiPort = 0;
   config.stripeSecretKey = "sk_test_bindersnap";
+  config.stripeWebhookSecret = "whsec_test_bindersnap";
   config.stripePriceId = "price_test_bindersnap";
   config.sessionsDbPath = `/tmp/bindersnap-server-test-${randomUUID()}.sqlite`;
 
@@ -33,9 +47,13 @@ beforeEach(() => {
   );
   (subscriptionStore as { _store: SubscriptionStore | null })._store =
     new SubscriptionStore(config.sessionsDbPath);
+  (webhookEventStore as { _store: WebhookEventStore | null })._store =
+    new WebhookEventStore(config.sessionsDbPath);
 
   fetchCalls = [];
   userEmailsByToken = new Map();
+  stripeSubscriptionsById = new Map();
+  stripeCustomersById = new Map();
   globalThis.fetch = (async (input, init) => {
     const requestUrl =
       typeof input === "string"
@@ -83,6 +101,48 @@ beforeEach(() => {
       });
     }
 
+    if (url.pathname.startsWith("/v1/subscriptions/")) {
+      const subscriptionId = url.pathname.slice("/v1/subscriptions/".length);
+      const subscription = stripeSubscriptionsById.get(subscriptionId);
+
+      if (!subscription) {
+        return new Response(JSON.stringify({ message: "Not found" }), {
+          status: 404,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+      }
+
+      return new Response(JSON.stringify(subscription.body), {
+        status: subscription.status,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+    }
+
+    if (url.pathname.startsWith("/v1/customers/")) {
+      const customerId = url.pathname.slice("/v1/customers/".length);
+      const customer = stripeCustomersById.get(customerId);
+
+      if (!customer) {
+        return new Response(JSON.stringify({ message: "Not found" }), {
+          status: 404,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+      }
+
+      return new Response(JSON.stringify(customer.body), {
+        status: customer.status,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+    }
+
     const responseUrl = url.pathname.includes("billing_portal")
       ? "https://billing.stripe.com/p/session/test_123"
       : "https://checkout.stripe.com/c/pay/test_123";
@@ -100,6 +160,7 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
   config.apiPort = originalApiPort;
   config.stripeSecretKey = originalStripeSecretKey;
+  config.stripeWebhookSecret = originalStripeWebhookSecret;
   config.stripePriceId = originalStripePriceId;
   config.sessionsDbPath = originalSessionsDbPath;
 });
@@ -135,6 +196,22 @@ function getPostedFormBody(call: MockedFetchCall): URLSearchParams {
   return new URLSearchParams(call.body ?? "");
 }
 
+function mockStripeSubscription(
+  id: string,
+  body: Record<string, unknown>,
+  status = 200,
+): void {
+  stripeSubscriptionsById.set(id, { status, body });
+}
+
+function mockStripeCustomer(
+  id: string,
+  body: Record<string, unknown>,
+  status = 200,
+): void {
+  stripeCustomersById.set(id, { status, body });
+}
+
 function makeBillingRequest(pathname: string, sessionId: string): Request {
   return new Request(`http://localhost${pathname}`, {
     method: "POST",
@@ -142,6 +219,51 @@ function makeBillingRequest(pathname: string, sessionId: string): Request {
       Origin: config.appOrigin,
       Cookie: `${config.sessionCookieName}=${sessionId}`,
     },
+  });
+}
+
+async function signStripeWebhookBody(
+  body: string,
+  secret: string,
+  timestamp: number,
+): Promise<string> {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signatureBuffer = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    encoder.encode(`${timestamp}.${body}`),
+  );
+
+  return Array.from(new Uint8Array(signatureBuffer))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function makeStripeWebhookRequest(
+  event: Record<string, unknown>,
+): Promise<Request> {
+  const rawBody = JSON.stringify(event);
+  const timestamp = Math.floor(Date.now() / 1000);
+  const signature = await signStripeWebhookBody(
+    rawBody,
+    config.stripeWebhookSecret,
+    timestamp,
+  );
+
+  return new Request("http://localhost/stripe/webhook", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "stripe-signature": `t=${timestamp},v1=${signature}`,
+    },
+    body: rawBody,
   });
 }
 
@@ -274,6 +396,149 @@ describe("billing Stripe idempotency", () => {
       expect(portalCalls[0]?.idempotencyKey).not.toBe(
         portalCalls[1]?.idempotencyKey,
       );
+    } finally {
+      server.stop(true);
+    }
+  });
+});
+
+describe("billing Stripe webhook recovery", () => {
+  test("customer.subscription.updated recovers a missing subscription row from customer metadata", async () => {
+    const server = createApiServer();
+    const username = `recovery-${randomUUID()}`;
+    const customerId = `cus_${randomUUID()}`;
+    const subscriptionId = `sub_${randomUUID()}`;
+    const currentPeriodEnd = Math.floor(Date.now() / 1000) + 3_600;
+
+    mockStripeCustomer(customerId, {
+      id: customerId,
+      metadata: {
+        bindersnap_username: username,
+      },
+    });
+
+    try {
+      const response = await server.fetch(
+        await makeStripeWebhookRequest({
+          id: `evt_${randomUUID()}`,
+          type: "customer.subscription.updated",
+          created: Math.floor(Date.now() / 1000),
+          data: {
+            object: {
+              id: subscriptionId,
+              customer: customerId,
+              status: "active",
+              current_period_end: currentPeriodEnd,
+              cancel_at_period_end: false,
+              cancel_at: null,
+            },
+          },
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(getFetchCallsByPath(`/v1/customers/${customerId}`)).toHaveLength(
+        1,
+      );
+      expect(subscriptionStore.getByUsername(username)).toEqual({
+        username,
+        stripeCustomerId: customerId,
+        stripeSubscriptionId: subscriptionId,
+        status: "active",
+        currentPeriodEnd,
+        cancelAtPeriodEnd: false,
+        cancelAt: null,
+        updatedAt: expect.any(Number),
+      });
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("customer.subscription.deleted recovers a missing subscription row from customer metadata", async () => {
+    const server = createApiServer();
+    const username = `recovery-deleted-${randomUUID()}`;
+    const customerId = `cus_${randomUUID()}`;
+    const subscriptionId = `sub_${randomUUID()}`;
+    const cancelAt = Math.floor(Date.now() / 1000) + 600;
+
+    mockStripeCustomer(customerId, {
+      id: customerId,
+      metadata: {
+        bindersnap_username: username,
+      },
+    });
+
+    try {
+      const response = await server.fetch(
+        await makeStripeWebhookRequest({
+          id: `evt_${randomUUID()}`,
+          type: "customer.subscription.deleted",
+          created: Math.floor(Date.now() / 1000),
+          data: {
+            object: {
+              id: subscriptionId,
+              customer: customerId,
+              status: "canceled",
+              cancel_at_period_end: true,
+              cancel_at: cancelAt,
+            },
+          },
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(getFetchCallsByPath(`/v1/customers/${customerId}`)).toHaveLength(
+        1,
+      );
+      expect(subscriptionStore.getByUsername(username)).toEqual({
+        username,
+        stripeCustomerId: customerId,
+        stripeSubscriptionId: subscriptionId,
+        status: "canceled",
+        currentPeriodEnd: null,
+        cancelAtPeriodEnd: true,
+        cancelAt,
+        updatedAt: expect.any(Number),
+      });
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("customer.subscription.updated does not recover when customer metadata omits the bindersnap username", async () => {
+    const server = createApiServer();
+    const customerId = `cus_${randomUUID()}`;
+
+    mockStripeCustomer(customerId, {
+      id: customerId,
+      metadata: {},
+    });
+
+    try {
+      const response = await server.fetch(
+        await makeStripeWebhookRequest({
+          id: `evt_${randomUUID()}`,
+          type: "customer.subscription.updated",
+          created: Math.floor(Date.now() / 1000),
+          data: {
+            object: {
+              id: `sub_${randomUUID()}`,
+              customer: customerId,
+              status: "active",
+              current_period_end: Math.floor(Date.now() / 1000) + 1_800,
+              cancel_at_period_end: false,
+              cancel_at: null,
+            },
+          },
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(getFetchCallsByPath(`/v1/customers/${customerId}`)).toHaveLength(
+        1,
+      );
+      expect(subscriptionStore.getByCustomerId(customerId)).toBeNull();
     } finally {
       server.stop(true);
     }
