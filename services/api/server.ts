@@ -2529,6 +2529,10 @@ async function handleStripeWebhook(
         logger.error(
           "Could not fetch subscription details from Stripe — returning 500 so Stripe retries",
           {
+            stripe_webhook_5xx: true,
+            event_id: eventId,
+            event_type: type,
+            customer_id: customerId ?? null,
             username,
             subscriptionId,
             error: err instanceof Error ? err.message : String(err),
@@ -2862,12 +2866,21 @@ export function createApiServer() {
       if (pathname === "/stripe/webhook" && method === "POST") {
         const response = await handleStripeWebhook(req, baseHeaders);
         const durationMs = Date.now() - startMs;
-        logger.info("Response sent", {
-          method,
-          path: pathname,
-          status: response.status,
-          durationMs,
-        });
+        if (response.status >= 500) {
+          logger.error("Response sent with 5xx status", {
+            method,
+            path: pathname,
+            status: response.status,
+            durationMs,
+          });
+        } else {
+          logger.info("Response sent", {
+            method,
+            path: pathname,
+            status: response.status,
+            durationMs,
+          });
+        }
         return response;
       }
 
