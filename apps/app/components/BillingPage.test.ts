@@ -4,7 +4,7 @@ import {
   BACKGROUND_POLL_INTERVAL_MS,
   BACKGROUND_POLL_WINDOW_MS,
   runBackgroundPoll,
-} from "./BillingPage";
+} from "./checkoutPolling";
 
 test("visible polling schedule has 10 entries", () => {
   expect(VISIBLE_POLLING_DELAYS_MS.length).toBe(10);
