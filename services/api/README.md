@@ -33,7 +33,7 @@ The browser only receives a Bindersnap session cookie. Gitea access tokens stay 
 - `BINDERSNAP_AUTH_RATE_LIMIT_ENABLED`: Enable auth endpoint rate limiting. Default `true`.
 - `BINDERSNAP_AUTH_RATE_LIMIT_WINDOW_MS`: Rate-limit window for `/auth/login` and `/auth/signup`. Default `600000` (10 minutes).
 - `BINDERSNAP_AUTH_RATE_LIMIT_MAX`: Max auth attempts per IP per action per window. Default `20`.
-- `BINDERSNAP_FREE_USERS`: Optional comma-separated usernames that bypass subscription enforcement in non-production environments.
+- `BINDERSNAP_PAYWALL_BYPASS_USERS`: Optional comma-separated usernames that bypass subscription enforcement. A warning listing every entry is logged at startup when this list is non-empty. `BINDERSNAP_FREE_USERS` is a deprecated alias kept for one release.
 - `BINDERSNAP_SESSIONS_DB_PATH`: SQLite path shared by the session and subscription stores. Default `/var/lib/bindersnap/sessions.db`.
 - `LOG_LEVEL`: Logger verbosity. One of `debug`, `info`, `warn`, `error`. Defaults to `info` in production and `debug` otherwise.
 

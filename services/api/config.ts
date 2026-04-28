@@ -64,6 +64,7 @@ const STRING_ENV: Record<string, StringSpec> = {
   BINDERSNAP_USER_EMAIL_DOMAIN: { default: "users.bindersnap.local" },
   BINDERSNAP_SESSION_COOKIE_NAME: { default: "bindersnap_session" },
   BINDERSNAP_GITEA_TOKEN_SCOPES: { default: "" },
+  BINDERSNAP_PAYWALL_BYPASS_USERS: { default: "" },
   BINDERSNAP_FREE_USERS: { default: "" },
   BINDERSNAP_SESSION_COOKIE_DOMAIN: { default: "" },
   BINDERSNAP_SESSION_COOKIE_SAME_SITE: { default: "Lax" },
@@ -391,10 +392,9 @@ export function initializeConfig(
       "BINDERSNAP_DEV_FEATURES",
       isProduction,
     ),
-    bypassSubscriptionForUsers: parseString(
-      resolvedEnv,
-      "BINDERSNAP_FREE_USERS",
-      isProduction,
+    bypassSubscriptionForUsers: (
+      parseString(resolvedEnv, "BINDERSNAP_PAYWALL_BYPASS_USERS", isProduction) ||
+      parseString(resolvedEnv, "BINDERSNAP_FREE_USERS", isProduction)
     )
       .split(",")
       .map((username) => username.trim())

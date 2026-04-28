@@ -3065,4 +3065,9 @@ if (import.meta.main && server) {
       "BINDERSNAP_DEV_FEATURES is enabled — /api/dev/grant-subscription is live",
     );
   }
+  if (config.bypassSubscriptionForUsers.length > 0) {
+    logger.warn("Paywall bypass allowlist is active", {
+      users: config.bypassSubscriptionForUsers,
+    });
+  }
 }
