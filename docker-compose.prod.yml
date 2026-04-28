@@ -76,6 +76,13 @@ services:
     depends_on:
       gitea:
         condition: service_healthy
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: /bindersnap/api
+        awslogs-region: "${AWS_REGION:-us-east-1}"
+        awslogs-stream-prefix: api
+        awslogs-create-group: "true"
     environment:
       - API_PORT=8787
       - PORT=8787

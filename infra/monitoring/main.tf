@@ -50,6 +50,12 @@ variable "alert_email" {
   }
 }
 
+variable "api_log_group_name" {
+  description = "CloudWatch Logs log group for the API container (must match docker-compose awslogs-group)"
+  type        = string
+  default     = "/bindersnap/api"
+}
+
 locals {
   alerts_topic_name      = "${var.project}-alerts"
   email_subscription     = var.alert_email != null && trimspace(var.alert_email) != ""
@@ -154,6 +160,49 @@ resource "aws_cloudwatch_metric_alarm" "mem_high" {
   tags = local.common_tags
 }
 
+# API log group — owned here so retention and tags are consistent.
+# The docker-compose awslogs driver will also create it if missing, but
+# Terraform ownership lets us set retention and prevent accidental deletion.
+resource "aws_cloudwatch_log_group" "api" {
+  name              = var.api_log_group_name
+  retention_in_days = 30
+
+  tags = local.common_tags
+}
+
+# Count structured log lines that carry stripe_webhook_5xx=true.
+# The API emits these before every 500 return from the /stripe/webhook handler.
+resource "aws_cloudwatch_log_metric_filter" "stripe_webhook_5xx" {
+  name           = "${var.project}-stripe-webhook-5xx"
+  log_group_name = aws_cloudwatch_log_group.api.name
+  pattern        = "{ $.stripe_webhook_5xx = true }"
+
+  metric_transformation {
+    name          = "StripeWebhook5xxCount"
+    namespace     = "Bindersnap"
+    value         = "1"
+    default_value = "0"
+    unit          = "Count"
+  }
+}
+
+# Alert as soon as a single 5xx is emitted within any 5-minute window.
+resource "aws_cloudwatch_metric_alarm" "stripe_webhook_5xx" {
+  alarm_name          = "${var.project}-stripe-webhook-5xx"
+  alarm_description   = "Alert on any 5xx response from POST /stripe/webhook in a 5-minute window"
+  namespace           = "Bindersnap"
+  metric_name         = "StripeWebhook5xxCount"
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 0
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+
+  tags = local.common_tags
+}
+
 output "disk_high_alarm_name" {
   description = "CloudWatch alarm name for disk usage"
   value       = aws_cloudwatch_metric_alarm.disk_high.alarm_name
@@ -182,4 +231,14 @@ output "cpu_warning_alarm_name" {
 output "alerts_email_subscription_arn" {
   description = "SNS email subscription ARN, if an email address was provided"
   value       = try(aws_sns_topic_subscription.email[0].arn, null)
+}
+
+output "api_log_group_name" {
+  description = "CloudWatch Logs log group for the API container"
+  value       = aws_cloudwatch_log_group.api.name
+}
+
+output "stripe_webhook_5xx_alarm_name" {
+  description = "CloudWatch alarm name for Stripe webhook 5xx responses"
+  value       = aws_cloudwatch_metric_alarm.stripe_webhook_5xx.alarm_name
 }
