@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { BindersnapLogoMark } from "./BindersnapLogoMark";
 import { fetchBillingStatus } from "../api";
+import {
+  VISIBLE_POLLING_DELAYS_MS,
+  BACKGROUND_POLL_INTERVAL_MS,
+  BACKGROUND_POLL_WINDOW_MS,
+  runBackgroundPoll,
+} from "./checkoutPolling";
 
 interface BillingPageProps {
   subscriptionStatus: "active" | "none" | "loading";
@@ -48,37 +54,53 @@ export function BillingPage({
     }
 
     setIsPolling(true);
-    let retries = 0;
-    const maxRetries = 10;
 
-    const poll = async () => {
-      if (!isMounted.current) {
-        return;
-      }
-
-      try {
-        const billing = await fetchBillingStatus();
-        if (billing.status === "active" || billing.status === "trialing") {
-          if (isMounted.current) {
-            setIsPolling(false);
-            onSubscriptionConfirmed();
-          }
+    const runVisiblePolling = async () => {
+      for (let i = 0; i < VISIBLE_POLLING_DELAYS_MS.length; i++) {
+        if (!isMounted.current) {
           return;
         }
-      } catch {
-        // continue polling
+
+        await new Promise((resolve) =>
+          setTimeout(resolve, VISIBLE_POLLING_DELAYS_MS[i]),
+        );
+
+        if (!isMounted.current) {
+          return;
+        }
+
+        try {
+          const billing = await fetchBillingStatus();
+          if (billing.status === "active" || billing.status === "trialing") {
+            if (isMounted.current) {
+              setIsPolling(false);
+              onSubscriptionConfirmed();
+            }
+            return;
+          }
+        } catch {
+          // continue polling
+        }
       }
 
-      retries += 1;
-      if (retries < maxRetries && isMounted.current) {
-        setTimeout(() => void poll(), 2000);
-      } else if (isMounted.current) {
+      if (isMounted.current) {
         setIsPolling(false);
         setPollingFailed(true);
+
+        void runBackgroundPoll(
+          fetchBillingStatus,
+          () => {
+            if (isMounted.current) {
+              onSubscriptionConfirmed();
+            }
+          },
+          BACKGROUND_POLL_INTERVAL_MS,
+          BACKGROUND_POLL_WINDOW_MS,
+        );
       }
     };
 
-    setTimeout(() => void poll(), 2000);
+    void runVisiblePolling();
   }, [onSubscriptionConfirmed]);
 
   if (isPolling) {
@@ -122,17 +144,10 @@ export function BillingPage({
             <div className="bs-eyebrow">Bindersnap Pro</div>
             <h1>Activation is taking longer than expected</h1>
             <p style={{ color: "var(--bs-text-muted)" }}>
-              Your payment was received but workspace activation is taking
-              longer than expected. Please refresh in a moment, or contact
-              support if this persists.
+              Your payment was received. Activation can occasionally take up to
+              5 minutes — we&apos;re still checking in the background and will
+              redirect you automatically when your workspace is ready.
             </p>
-            <button
-              className="bs-btn bs-btn-primary"
-              type="button"
-              onClick={() => window.location.reload()}
-            >
-              Refresh
-            </button>
           </div>
         </div>
       </section>
