@@ -393,8 +393,11 @@ export function initializeConfig(
       isProduction,
     ),
     bypassSubscriptionForUsers: (
-      parseString(resolvedEnv, "BINDERSNAP_PAYWALL_BYPASS_USERS", isProduction) ||
-      parseString(resolvedEnv, "BINDERSNAP_FREE_USERS", isProduction)
+      parseString(
+        resolvedEnv,
+        "BINDERSNAP_PAYWALL_BYPASS_USERS",
+        isProduction,
+      ) || parseString(resolvedEnv, "BINDERSNAP_FREE_USERS", isProduction)
     )
       .split(",")
       .map((username) => username.trim())
