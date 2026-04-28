@@ -34,12 +34,14 @@ Note the `event_type` and `error` fields — these point directly to the cause.
 **Symptom**: `error` field contains a Stripe API error (rate limit, network timeout, invalid API key).
 
 **Check**:
+
 ```
 # On the EC2 host
 docker logs bindersnap-api-prod --since 30m | grep stripe_webhook_5xx
 ```
 
 **Actions**:
+
 - If transient (timeout, 503 from Stripe): wait for Stripe to retry automatically.
 - If `Authentication` error: verify `STRIPE_SECRET_KEY` in SSM (`/bindersnap/prod/stripe_secret_key`) matches the live key in the Stripe dashboard.
 - If `No such subscription` from Stripe: the subscription may have been deleted on the Stripe side. Check Stripe Dashboard → Subscriptions for `subscriptionId` from the log.
@@ -49,6 +51,7 @@ docker logs bindersnap-api-prod --since 30m | grep stripe_webhook_5xx
 **Symptom**: no `error` field, or a JavaScript stack trace.
 
 **Check**: look for log lines immediately before the `stripe_webhook_5xx` entry:
+
 ```
 fields @timestamp, level, message, error
 | filter @timestamp between <start> and <end>
