@@ -26,7 +26,7 @@ Browser                 API (services/api/)          Stripe
   |←------- redirect to /billing?checkout=success -----|
   |                                                      |
   | (poll fetchBillingStatus every 2s, max 10x)         |
-  |                    ←-- POST /stripe/webhook --------|
+  |                    ←-- POST /stripe/webhook ---------|
   |                    upsert subscription record        |
   |                          |                          |
   |-- fetchBillingStatus → { status: 'active' }         |
@@ -451,6 +451,56 @@ STRIPE_PRICE_ID=price_...
 | `apps/app/App.tsx`                    | Modify: subscription state, `billing` view, redirect guards                                                                                    |
 | `tests/.env.example`                  | Modify: add Stripe vars                                                                                                                        |
 | `.env.prod.example`                   | Modify: add Stripe vars                                                                                                                        |
+
+---
+
+## Infrastructure: Rate-Limiting /stripe/webhook at Caddy
+
+`/stripe/webhook` is public and runs HMAC-SHA256 verification on every POST. Without a rate limit, an attacker can flood it with garbage signatures and waste CPU at the API layer.
+
+**Solution (issue #192):** A Caddy rate limit caps requests at **60 req/s per source IP**. Excess requests receive `429 Too Many Requests` before they reach the API.
+
+### How it works
+
+`Caddyfile.prod` adds a `rate_limit` zone scoped to `POST /stripe/webhook` using the `mholt/caddy-ratelimit` module (not in standard Caddy). Standard Caddy does not include rate limiting, so the production stack uses a custom image built with `xcaddy`.
+
+### Custom Caddy image
+
+`Dockerfile.caddy` builds Caddy with the module:
+
+```dockerfile
+FROM caddy:2-builder AS builder
+RUN xcaddy build --with github.com/mholt/caddy-ratelimit
+
+FROM caddy:2-alpine
+COPY --from=builder /usr/bin/caddy /usr/bin/caddy
+```
+
+`docker-compose.prod.yml` replaces `image: caddy:2-alpine` with a `build` block pointing to `Dockerfile.caddy`. No other services are affected.
+
+### Caddyfile rule
+
+```
+rate_limit {
+    zone webhook_per_ip {
+        match {
+            path   /stripe/webhook
+            method POST
+        }
+        key    {remote_host}
+        events 60
+        window 1s
+    }
+}
+```
+
+### Local dev / integration tests
+
+`tests/Caddyfile.integration` is intentionally unchanged — it proxies to the API for Playwright integration tests and does not need rate limiting.
+
+### Why not an IP allowlist?
+
+Stripe does not publish a stable, comprehensive list of webhook-sending IPs and explicitly recommends signature verification over IP filtering. Rate limiting is the correct defense-in-depth layer here.
 
 ---
 

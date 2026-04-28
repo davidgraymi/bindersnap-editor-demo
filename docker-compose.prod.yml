@@ -105,7 +105,9 @@ services:
       - api-data:/var/lib/bindersnap
 
   caddy:
-    image: caddy:2-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.caddy
     container_name: bindersnap-caddy-prod
     restart: unless-stopped
     depends_on:
