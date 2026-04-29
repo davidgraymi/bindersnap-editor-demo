@@ -72,8 +72,16 @@ export async function ensureStripeWebhookSecret(
   rmSync(STATE_PATH, { force: true });
   mkdirSync(RUNTIME_DIR, { recursive: true });
 
-  // Static secret configured — use it directly, no listener needed.
-  if (configuredSecret) {
+  // When real Stripe credentials are available and we are managing the stack
+  // (allowFallbackSecret=true means SKIP_STACK is not set), always start a
+  // fresh Stripe CLI listener. Using a stale configuredSecret (e.g. from a
+  // prior run's process.env) would prevent webhook delivery because the old
+  // CLI session no longer exists.
+  //
+  // The configuredSecret fast-path is only correct for SKIP_STACK=1 runs,
+  // where the user has manually launched `stripe listen` with that exact
+  // secret before calling `bun run test:integration`.
+  if (configuredSecret && (!allowFallbackSecret || !secretKey || !priceId)) {
     writeState({ webhookSecret: configuredSecret, pid: null });
     log("Using configured STRIPE_WEBHOOK_SECRET.");
     return;
