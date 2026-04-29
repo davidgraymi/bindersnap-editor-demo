@@ -561,10 +561,78 @@ function requireSubscription(
 
 export function createStripeRequestIdempotencyKey(
   flow: "checkout" | "portal",
+  clientKey?: string | null,
 ): string {
-  // Stripe's Idempotency-Key dedupes retries of the same logical request;
-  // consumeCheckoutRateLimit separately handles repeat user attempts.
+  // Client-supplied key for true idempotency; falls back to server-generated UUID.
+  // Validates client key: 8-128 chars, alphanumeric + hyphen only.
+  if (clientKey && /^[a-zA-Z0-9-]{8,128}$/.test(clientKey)) {
+    return `${flow}-${clientKey}`;
+  }
   return `${flow}-${randomUUID()}`;
+}
+
+type StripePriceInfo = {
+  amount: number;
+  currency: string;
+  interval: string;
+  formatted: string;
+};
+
+let cachedPriceInfo: StripePriceInfo | null = null;
+let priceInfoCachedAt = 0;
+const PRICE_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+async function fetchStripePriceInfo(): Promise<StripePriceInfo | null> {
+  const now = Date.now();
+  if (cachedPriceInfo && now - priceInfoCachedAt < PRICE_CACHE_TTL_MS) {
+    return cachedPriceInfo;
+  }
+
+  if (!config.stripeSecretKey || !config.stripePriceId) {
+    return null;
+  }
+
+  try {
+    const stripe = getStripeClient();
+    const price = await stripe.prices.retrieve(config.stripePriceId, {
+      expand: ["product"],
+    });
+
+    const amount =
+      typeof price.unit_amount === "number" ? price.unit_amount / 100 : 0;
+    const currency = price.currency.toUpperCase();
+    const interval =
+      price.recurring?.interval ?? (price.type === "one_time" ? "once" : "");
+
+    const formatted = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: price.currency,
+    }).format(amount);
+
+    const intervalDisplay =
+      interval === "month"
+        ? " / month"
+        : interval === "year"
+          ? " / year"
+          : interval === "once"
+            ? ""
+            : ` / ${interval}`;
+
+    cachedPriceInfo = {
+      amount,
+      currency,
+      interval,
+      formatted: `${formatted}${intervalDisplay}`,
+    };
+    priceInfoCachedAt = now;
+
+    return cachedPriceInfo;
+  } catch (err) {
+    logger.warn("Failed to fetch Stripe price info", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
 }
 
 function parsePositiveIntInput(
@@ -2525,6 +2593,25 @@ async function handleStripeWebhook(
           ),
         );
         logger.info("Subscription activated", { username, status: sub.status });
+
+        // Backfill bindersnap_username metadata onto the Stripe Customer.
+        // This ensures future subscription webhooks can reconcile via customer metadata.
+        try {
+          await stripe.customers.update(customerId, {
+            metadata: { bindersnap_username: username },
+          });
+          logger.info("Backfilled customer metadata", { customerId, username });
+        } catch (metadataErr) {
+          // Non-fatal: subscription is already activated; log and continue.
+          logger.warn("Failed to backfill customer metadata", {
+            customerId,
+            username,
+            error:
+              metadataErr instanceof Error
+                ? metadataErr.message
+                : String(metadataErr),
+          });
+        }
       } catch (err) {
         logger.error(
           "Could not fetch subscription details from Stripe — returning 500 so Stripe retries",
@@ -2547,7 +2634,8 @@ async function handleStripeWebhook(
       }
     }
   } else if (
-    (type === "customer.subscription.updated" ||
+    (type === "customer.subscription.created" ||
+      type === "customer.subscription.updated" ||
       type === "customer.subscription.deleted") &&
     data
   ) {
@@ -2660,6 +2748,8 @@ async function handleBillingStatus(
 
   const { username } = auth.session;
 
+  const priceInfo = await fetchStripePriceInfo();
+
   if (config.bypassSubscriptionForUsers.includes(username)) {
     return json(
       200,
@@ -2668,6 +2758,7 @@ async function handleBillingStatus(
         currentPeriodEnd: null,
         cancelAtPeriodEnd: false,
         cancelAt: null,
+        plan: priceInfo,
       },
       baseHeaders,
     );
@@ -2681,6 +2772,7 @@ async function handleBillingStatus(
       currentPeriodEnd: record?.currentPeriodEnd ?? null,
       cancelAtPeriodEnd: record?.cancelAtPeriodEnd ?? false,
       cancelAt: record?.cancelAt ?? null,
+      plan: priceInfo,
     },
     baseHeaders,
   );
@@ -2713,24 +2805,37 @@ async function handleBillingCheckout(
   );
   const userEmail = await fetchSessionUserEmail(auth.session);
 
+  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  const clientIdempotencyKey =
+    typeof body.idempotencyKey === "string" ? body.idempotencyKey : null;
+
   const params: Stripe.Checkout.SessionCreateParams = {
     mode: "subscription",
     line_items: [{ price: config.stripePriceId, quantity: 1 }],
     client_reference_id: auth.session.username,
     metadata: { bindersnap_username: auth.session.username },
+    subscription_data: {
+      metadata: { bindersnap_username: auth.session.username },
+    },
     success_url: `${config.appOrigin}/billing?checkout=success`,
     cancel_url: `${config.appOrigin}/billing`,
   };
   if (existingSubscription?.stripeCustomerId) {
     params.customer = existingSubscription.stripeCustomerId;
-  } else if (userEmail) {
-    params.customer_email = userEmail;
+  } else {
+    params.customer_creation = "always";
+    if (userEmail) {
+      params.customer_email = userEmail;
+    }
   }
 
   try {
     const stripe = getStripeClient();
     const session = await stripe.checkout.sessions.create(params, {
-      idempotencyKey: createStripeRequestIdempotencyKey("checkout"),
+      idempotencyKey: createStripeRequestIdempotencyKey(
+        "checkout",
+        clientIdempotencyKey,
+      ),
     });
     return json(200, { url: session.url }, baseHeaders);
   } catch (err) {
@@ -2785,6 +2890,10 @@ async function handleBillingPortal(
     return json(503, { error: "Billing not configured." }, baseHeaders);
   }
 
+  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  const clientIdempotencyKey =
+    typeof body.idempotencyKey === "string" ? body.idempotencyKey : null;
+
   try {
     const stripe = getStripeClient();
     const session = await stripe.billingPortal.sessions.create(
@@ -2792,7 +2901,12 @@ async function handleBillingPortal(
         customer: record.stripeCustomerId,
         return_url: `${config.appOrigin}/billing`,
       },
-      { idempotencyKey: createStripeRequestIdempotencyKey("portal") },
+      {
+        idempotencyKey: createStripeRequestIdempotencyKey(
+          "portal",
+          clientIdempotencyKey,
+        ),
+      },
     );
     return json(200, { url: session.url }, baseHeaders);
   } catch (err) {

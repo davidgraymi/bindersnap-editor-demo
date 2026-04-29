@@ -280,6 +280,12 @@ export function App() {
   const [currentPeriodEnd, setCurrentPeriodEnd] = useState<number | null>(null);
   const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(false);
   const [cancelAt, setCancelAt] = useState<number | null>(null);
+  const [plan, setPlan] = useState<{
+    amount: number;
+    currency: string;
+    interval: string;
+    formatted: string;
+  } | null>(null);
   const handlePaymentRequired = useCallback(() => {
     if (!user) {
       return;
@@ -316,12 +322,14 @@ export function App() {
           setCurrentPeriodEnd(billing.currentPeriodEnd);
           setCancelAtPeriodEnd(billing.cancelAtPeriodEnd);
           setCancelAt(billing.cancelAt);
+          setPlan(billing.plan);
         } catch {
           setSubscriptionStatus("none");
           setHasBillingStatusError(true);
           setCurrentPeriodEnd(null);
           setCancelAtPeriodEnd(false);
           setCancelAt(null);
+          setPlan(null);
         }
       } else {
         setSubscriptionStatus(null);
@@ -329,6 +337,7 @@ export function App() {
         setCurrentPeriodEnd(null);
         setCancelAtPeriodEnd(false);
         setCancelAt(null);
+        setPlan(null);
       }
       return resolvedUser;
     } catch (sessionError) {
@@ -338,6 +347,7 @@ export function App() {
       setCurrentPeriodEnd(null);
       setCancelAtPeriodEnd(false);
       setCancelAt(null);
+      setPlan(null);
       setCallbackError(
         sessionError instanceof Error
           ? sessionError.message
@@ -486,6 +496,7 @@ export function App() {
         currentPeriodEnd={currentPeriodEnd}
         cancelAtPeriodEnd={cancelAtPeriodEnd}
         cancelAt={cancelAt}
+        plan={plan}
         onSubscribe={async () => {
           const { url } = await createCheckoutSession();
           window.location.href = url;

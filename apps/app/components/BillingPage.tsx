@@ -14,6 +14,12 @@ interface BillingPageProps {
   currentPeriodEnd: number | null;
   cancelAtPeriodEnd: boolean;
   cancelAt: number | null;
+  plan: {
+    amount: number;
+    currency: string;
+    interval: string;
+    formatted: string;
+  } | null;
   onSubscribe: () => Promise<void>;
   onManage: () => Promise<void>;
   onSubscriptionConfirmed: () => void;
@@ -26,6 +32,7 @@ export function BillingPage({
   currentPeriodEnd,
   cancelAtPeriodEnd,
   cancelAt,
+  plan,
   onSubscribe,
   onManage,
   onSubscriptionConfirmed,
@@ -282,7 +289,9 @@ export function BillingPage({
               </div>
             </div>
           ) : null}
-          <p style={{ color: "var(--bs-text-muted)" }}>$100 / month</p>
+          <p style={{ color: "var(--bs-text-muted)" }}>
+            {plan?.formatted ?? "Loading…"}
+          </p>
           <button
             className="bs-btn bs-btn-primary"
             type="button"

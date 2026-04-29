@@ -137,6 +137,22 @@ beforeEach(() => {
         });
       }
 
+      // Handle customer updates (POST = update in Stripe SDK)
+      if (init?.method === "POST" && body) {
+        const updateParams = new URLSearchParams(body);
+        const updatedMetadata: Record<string, string> = {
+          ...((customer.body.metadata ?? {}) as Record<string, string>),
+        };
+        // Parse metadata updates
+        for (const [key, value] of updateParams.entries()) {
+          if (key.startsWith("metadata[") && key.endsWith("]")) {
+            const metaKey = key.slice("metadata[".length, -1);
+            updatedMetadata[metaKey] = value;
+          }
+        }
+        customer.body.metadata = updatedMetadata;
+      }
+
       return new Response(JSON.stringify(customer.body), {
         status: customer.status,
         headers: {
@@ -214,13 +230,19 @@ function mockStripeCustomer(
   stripeCustomersById.set(id, { status, body });
 }
 
-function makeBillingRequest(pathname: string, sessionId: string): Request {
+function makeBillingRequest(
+  pathname: string,
+  sessionId: string,
+  body?: Record<string, unknown>,
+): Request {
   return new Request(`http://localhost${pathname}`, {
     method: "POST",
     headers: {
       Origin: config.appOrigin,
       Cookie: `${config.sessionCookieName}=${sessionId}`,
+      ...(body ? { "Content-Type": "application/json" } : {}),
     },
+    body: body ? JSON.stringify(body) : undefined,
   });
 }
 
@@ -275,7 +297,7 @@ async function makeStripeWebhookRequest(
 }
 
 describe("billing Stripe idempotency", () => {
-  test("checkout sends a unique Stripe Idempotency-Key per attempt", async () => {
+  test("checkout sends a unique Stripe Idempotency-Key per attempt when no client key provided", async () => {
     const server = createApiServer();
     const username = `checkout-${randomUUID()}`;
     const sessionId = seedSession(username);
@@ -301,6 +323,60 @@ describe("billing Stripe idempotency", () => {
       expect(checkoutCalls[0]?.idempotencyKey).not.toBe(
         checkoutCalls[1]?.idempotencyKey,
       );
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("checkout uses client-supplied idempotency key when valid", async () => {
+    const server = createApiServer();
+    const username = `checkout-client-key-${randomUUID()}`;
+    const sessionId = seedSession(username);
+    const clientKey = randomUUID();
+
+    try {
+      const first = await server.fetch(
+        makeBillingRequest("/api/app/billing/checkout", sessionId, {
+          idempotencyKey: clientKey,
+        }),
+      );
+      const second = await server.fetch(
+        makeBillingRequest("/api/app/billing/checkout", sessionId, {
+          idempotencyKey: clientKey,
+        }),
+      );
+
+      expect(first.status).toBe(200);
+      expect(second.status).toBe(200);
+      const checkoutCalls = getFetchCallsByPath("/v1/checkout/sessions");
+      expect(checkoutCalls).toHaveLength(2);
+      expect(checkoutCalls[0]?.idempotencyKey).toBe(`checkout-${clientKey}`);
+      expect(checkoutCalls[1]?.idempotencyKey).toBe(`checkout-${clientKey}`);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("checkout falls back to server-generated key when client key is invalid", async () => {
+    const server = createApiServer();
+    const username = `checkout-invalid-key-${randomUUID()}`;
+    const sessionId = seedSession(username);
+
+    try {
+      const response = await server.fetch(
+        makeBillingRequest("/api/app/billing/checkout", sessionId, {
+          idempotencyKey: "invalid!@#$",
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      const checkoutCalls = getFetchCallsByPath("/v1/checkout/sessions");
+      expect(checkoutCalls).toHaveLength(1);
+      // Should use server-generated UUID, not the invalid client key
+      expect(checkoutCalls[0]?.idempotencyKey).toMatch(
+        /^checkout-[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+      );
+      expect(checkoutCalls[0]?.idempotencyKey).not.toContain("invalid");
     } finally {
       server.stop(true);
     }
@@ -366,7 +442,7 @@ describe("billing Stripe idempotency", () => {
     }
   });
 
-  test("portal sends a unique Stripe Idempotency-Key per attempt", async () => {
+  test("portal sends a unique Stripe Idempotency-Key per attempt when no client key provided", async () => {
     const server = createApiServer();
     const username = `portal-${randomUUID()}`;
     const sessionId = seedSession(username);
@@ -403,6 +479,46 @@ describe("billing Stripe idempotency", () => {
       expect(portalCalls[0]?.idempotencyKey).not.toBe(
         portalCalls[1]?.idempotencyKey,
       );
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("portal uses client-supplied idempotency key when valid", async () => {
+    const server = createApiServer();
+    const username = `portal-client-key-${randomUUID()}`;
+    const sessionId = seedSession(username);
+    const clientKey = randomUUID();
+
+    subscriptionStore.upsert({
+      username,
+      stripeCustomerId: "cus_test_456",
+      stripeSubscriptionId: "sub_test_456",
+      status: "active",
+      currentPeriodEnd: Math.floor(Date.now() / 1000) + 60_000,
+      cancelAtPeriodEnd: false,
+      cancelAt: null,
+      updatedAt: Date.now(),
+    });
+
+    try {
+      const first = await server.fetch(
+        makeBillingRequest("/api/app/billing/portal", sessionId, {
+          idempotencyKey: clientKey,
+        }),
+      );
+      const second = await server.fetch(
+        makeBillingRequest("/api/app/billing/portal", sessionId, {
+          idempotencyKey: clientKey,
+        }),
+      );
+
+      expect(first.status).toBe(200);
+      expect(second.status).toBe(200);
+      const portalCalls = getFetchCallsByPath("/v1/billing_portal/sessions");
+      expect(portalCalls).toHaveLength(2);
+      expect(portalCalls[0]?.idempotencyKey).toBe(`portal-${clientKey}`);
+      expect(portalCalls[1]?.idempotencyKey).toBe(`portal-${clientKey}`);
     } finally {
       server.stop(true);
     }
@@ -592,6 +708,125 @@ describe("billing Stripe webhook recovery", () => {
         currentPeriodEnd: null,
         cancelAtPeriodEnd: true,
         cancelAt,
+        updatedAt: expect.any(Number),
+      });
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("customer.subscription.created recovers a missing subscription row from customer metadata", async () => {
+    const server = createApiServer();
+    const username = `recovery-created-${randomUUID()}`;
+    const customerId = `cus_${randomUUID()}`;
+    const subscriptionId = `sub_${randomUUID()}`;
+    const currentPeriodEnd = Math.floor(Date.now() / 1000) + 3_600;
+
+    mockStripeCustomer(customerId, {
+      id: customerId,
+      metadata: {
+        bindersnap_username: username,
+      },
+    });
+
+    try {
+      const response = await server.fetch(
+        await makeStripeWebhookRequest({
+          id: `evt_${randomUUID()}`,
+          type: "customer.subscription.created",
+          created: Math.floor(Date.now() / 1000),
+          data: {
+            object: {
+              id: subscriptionId,
+              customer: customerId,
+              status: "active",
+              current_period_end: currentPeriodEnd,
+              cancel_at_period_end: false,
+              cancel_at: null,
+            },
+          },
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(getFetchCallsByPath(`/v1/customers/${customerId}`)).toHaveLength(
+        1,
+      );
+      expect(subscriptionStore.getByUsername(username)).toEqual({
+        username,
+        stripeCustomerId: customerId,
+        stripeSubscriptionId: subscriptionId,
+        status: "active",
+        currentPeriodEnd,
+        cancelAtPeriodEnd: false,
+        cancelAt: null,
+        updatedAt: expect.any(Number),
+      });
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("checkout.session.completed backfills bindersnap_username metadata onto Stripe Customer", async () => {
+    const server = createApiServer();
+    const username = `checkout-backfill-${randomUUID()}`;
+    const customerId = `cus_${randomUUID()}`;
+    const subscriptionId = `sub_${randomUUID()}`;
+    const currentPeriodEnd = Math.floor(Date.now() / 1000) + 3_600;
+
+    mockStripeSubscription(subscriptionId, {
+      id: subscriptionId,
+      customer: customerId,
+      status: "active",
+      current_period_end: currentPeriodEnd,
+      cancel_at_period_end: false,
+      cancel_at: null,
+    });
+
+    mockStripeCustomer(customerId, {
+      id: customerId,
+      metadata: {},
+    });
+
+    try {
+      const response = await server.fetch(
+        await makeStripeWebhookRequest({
+          id: `evt_${randomUUID()}`,
+          type: "checkout.session.completed",
+          created: Math.floor(Date.now() / 1000),
+          data: {
+            object: {
+              client_reference_id: username,
+              customer: customerId,
+              subscription: subscriptionId,
+            },
+          },
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(
+        getFetchCallsByPath(`/v1/subscriptions/${subscriptionId}`),
+      ).toHaveLength(1);
+
+      // Verify customer metadata was backfilled
+      const customerUpdateCalls = fetchCalls.filter(
+        (c) => c.path === `/v1/customers/${customerId}` && c.method === "POST",
+      );
+      expect(customerUpdateCalls).toHaveLength(1);
+      const updateBody = new URLSearchParams(
+        customerUpdateCalls[0]!.body ?? "",
+      );
+      expect(updateBody.get("metadata[bindersnap_username]")).toBe(username);
+
+      expect(subscriptionStore.getByUsername(username)).toEqual({
+        username,
+        stripeCustomerId: customerId,
+        stripeSubscriptionId: subscriptionId,
+        status: "active",
+        currentPeriodEnd,
+        cancelAtPeriodEnd: false,
+        cancelAt: null,
         updatedAt: expect.any(Number),
       });
     } finally {
