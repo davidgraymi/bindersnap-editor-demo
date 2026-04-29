@@ -174,6 +174,16 @@ export default async function globalSetup(): Promise<void> {
     process.env.STRIPE_WEBHOOK_SECRET = DEFAULT_WEBHOOK_TEST_SECRET;
   }
 
+  // When managing the full stack AND real Stripe credentials are available,
+  // always clear any stale STRIPE_WEBHOOK_SECRET that may have leaked into
+  // process.env from a prior run. ensureStripeWebhookSecret will start a
+  // fresh `stripe listen` session and inject the correct secret.
+  // This prevents stale secrets from suppressing the CLI listener and causing
+  // webhook delivery to fail in back-to-back test runs.
+  if (process.env.SKIP_STACK !== "1" && hasStripeListenerInputs) {
+    delete process.env.STRIPE_WEBHOOK_SECRET;
+  }
+
   if (process.env.SKIP_STACK !== "1") {
     const dockerCheck = spawnSync("docker", ["info"], { stdio: "ignore" });
     if (dockerCheck.status !== 0) {

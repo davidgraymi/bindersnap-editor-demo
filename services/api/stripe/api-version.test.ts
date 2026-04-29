@@ -3,10 +3,10 @@ import { describe, expect, it } from "bun:test";
 import { STRIPE_API_VERSION, extractCurrentPeriodEnd } from "./api-version";
 
 describe("STRIPE_API_VERSION", () => {
-  it("is pinned to 2024-06-20", () => {
+  it("is pinned to 2025-06-30.basil", () => {
     // If this changes, update the webhook endpoint API version in the Stripe
     // Dashboard (test + live) AND docs/payments-plan.md in the same change.
-    expect(STRIPE_API_VERSION).toBe("2024-06-20");
+    expect(STRIPE_API_VERSION).toBe("2025-06-30.basil");
   });
 });
 

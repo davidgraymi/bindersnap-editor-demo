@@ -544,6 +544,12 @@ export async function fetchBillingStatus(): Promise<{
   currentPeriodEnd: number | null;
   cancelAtPeriodEnd: boolean;
   cancelAt: number | null;
+  plan: {
+    amount: number;
+    currency: string;
+    interval: string;
+    formatted: string;
+  } | null;
 }> {
   const response = await fetchApi("/api/app/billing/status", {
     headers: { Accept: "application/json" },
@@ -554,12 +560,30 @@ export async function fetchBillingStatus(): Promise<{
       currentPeriodEnd: null,
       cancelAtPeriodEnd: false,
       cancelAt: null,
+      plan: null,
     };
   }
   const payload = (await response.json().catch(() => null)) as Record<
     string,
     unknown
   > | null;
+
+  const planData = payload?.plan as Record<string, unknown> | null | undefined;
+  const plan =
+    planData &&
+    typeof planData === "object" &&
+    typeof planData.amount === "number" &&
+    typeof planData.currency === "string" &&
+    typeof planData.interval === "string" &&
+    typeof planData.formatted === "string"
+      ? {
+          amount: planData.amount,
+          currency: planData.currency,
+          interval: planData.interval,
+          formatted: planData.formatted,
+        }
+      : null;
+
   return {
     status: typeof payload?.status === "string" ? payload.status : null,
     currentPeriodEnd:
@@ -568,6 +592,7 @@ export async function fetchBillingStatus(): Promise<{
         : null,
     cancelAtPeriodEnd: payload?.cancelAtPeriodEnd === true,
     cancelAt: typeof payload?.cancelAt === "number" ? payload.cancelAt : null,
+    plan,
   };
 }
 
@@ -576,7 +601,11 @@ export async function createCheckoutSession(): Promise<{ url: string }> {
     "/api/app/billing/checkout",
     {
       method: "POST",
-      headers: { Accept: "application/json" },
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ idempotencyKey: crypto.randomUUID() }),
     },
     "Unable to start checkout.",
   );
@@ -587,7 +616,11 @@ export async function createPortalSession(): Promise<{ url: string }> {
     "/api/app/billing/portal",
     {
       method: "POST",
-      headers: { Accept: "application/json" },
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ idempotencyKey: crypto.randomUUID() }),
     },
     "Unable to open billing portal.",
   );
