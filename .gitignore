@@ -56,3 +56,6 @@ conf/app.prod.ini
 *.tfstate.backup
 terraform.tfvars
 infra/state/backend.hcl
+
+# Docker
+/data/
