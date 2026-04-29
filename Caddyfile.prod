@@ -1,6 +1,9 @@
 # Bindersnap production reverse proxy
 # Caddy handles TLS automatically via Let's Encrypt.
 # Run alongside docker-compose.prod.yml on the same network.
+#
+# Requires caddy-ratelimit module. The caddy service in docker-compose.prod.yml
+# builds from Dockerfile.caddy (xcaddy + github.com/mholt/caddy-ratelimit).
 
 (security_headers) {
 	header {
@@ -27,6 +30,20 @@ gitea.bindersnap.com {
 
 api.bindersnap.com {
 	import security_headers
+
+	# Defend /stripe/webhook against signature-flood DoS.
+	# Excess requests return 429 before reaching HMAC-SHA256 verification in the API.
+	rate_limit {
+		zone webhook_per_ip {
+			match {
+				path   /stripe/webhook
+				method POST
+			}
+			key    {remote_host}
+			events 60
+			window 1s
+		}
+	}
 
 	reverse_proxy api:8787 {
 		# The API enforces HTTPS based on forwarded proto after Caddy terminates TLS.
