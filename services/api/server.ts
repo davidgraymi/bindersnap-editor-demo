@@ -2823,7 +2823,9 @@ async function handleBillingCheckout(
   if (existingSubscription?.stripeCustomerId) {
     params.customer = existingSubscription.stripeCustomerId;
   } else {
-    params.customer_creation = "always";
+    // In `subscription` mode Stripe always creates a Customer automatically;
+    // `customer_creation` is only valid for `payment`/`setup` mode and was
+    // rejected by the Stripe API when upgraded to 2025-06-30.basil.
     if (userEmail) {
       params.customer_email = userEmail;
     }

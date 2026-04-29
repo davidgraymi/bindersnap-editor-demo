@@ -2,16 +2,14 @@
  * Pinned Stripe API version for outbound requests AND for the webhook
  * endpoint configured in the Stripe Dashboard.
  *
- * Why pinned: API versions >= 2025-04-30 moved `current_period_end` and
- * `current_period_start` off `Subscription` and onto
- * `subscription.items.data[0]`. A drift between this constant and the
- * webhook endpoint's configured version would silently revoke access for
- * paying customers after one billing cycle (see issue #179).
+ * We are pinned to the `2025-06-30.basil` shape, where `current_period_end`
+ * lives on `subscription.items.data[0]`. The `extractCurrentPeriodEnd` helper
+ * still reads both old and new shapes defensively for safety.
  *
- * The webhook endpoint API version must be set to this value in both
- * test and live mode — see docs/payments-plan.md.
+ * WARNING: The webhook endpoint API version in the Stripe Dashboard must
+ * match this constant in both test and live mode — see docs/payments-plan.md.
  */
-export const STRIPE_API_VERSION = "2024-06-20";
+export const STRIPE_API_VERSION = "2025-06-30.basil";
 
 /**
  * Read `current_period_end` from a Stripe Subscription (or
