@@ -93,6 +93,24 @@ variable "litestream_s3_bucket" {
   default     = "bindersnap-litestream-REPLACE_WITH_ACCOUNT_ID"
 }
 
+variable "stripe_secret_key" {
+  description = "Stripe live secret key (sk_live_...) used by the API for Checkout Sessions and billing portal"
+  type        = string
+  sensitive   = true
+}
+
+variable "stripe_webhook_secret" {
+  description = "Stripe webhook signing secret (whsec_...) used to verify inbound webhook signatures"
+  type        = string
+  sensitive   = true
+}
+
+variable "stripe_price_id" {
+  description = "Stripe subscription price ID (price_...) used when creating Checkout Sessions"
+  type        = string
+  sensitive   = true
+}
+
 data "aws_caller_identity" "current" {}
 
 locals {
@@ -106,10 +124,13 @@ locals {
     gitea_admin_pass             = var.gitea_admin_pass
     bindersnap_user_email_domain = var.bindersnap_user_email_domain
     litestream_s3_bucket         = var.litestream_s3_bucket
+    stripe_secret_key            = var.stripe_secret_key
+    stripe_webhook_secret        = var.stripe_webhook_secret
+    stripe_price_id              = var.stripe_price_id
   }
 
-  parameter_arn_base         = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${local.parameter_path}"
-  parameter_arn_prefix       = "${local.parameter_arn_base}/*"
+  parameter_arn_base          = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${local.parameter_path}"
+  parameter_arn_prefix        = "${local.parameter_arn_base}/*"
   service_token_parameter_arn = "${local.parameter_arn_base}/gitea_service_token"
 }
 

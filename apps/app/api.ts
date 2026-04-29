@@ -16,11 +16,15 @@ import type {
   UploadValidationResult,
 } from "../../packages/gitea-client/uploads";
 import { validateUploadFile as validateUploadFileWithClient } from "../../packages/gitea-client/uploads";
+import {
+  notifyPaymentRequired,
+  shouldInterceptPaymentRequired,
+} from "./paymentRequired";
 
 // Bun's bundler (`bun build --env='BUN_PUBLIC_*'`) replaces
 // process.env.BUN_PUBLIC_API_BASE_URL with a literal string at compile time.
 // - GitHub Pages build: BUN_PUBLIC_API_BASE_URL=https://api.bindersnap.com
-// - Local dev stack:    BUN_PUBLIC_API_BASE_URL=http://localhost:8787
+// - Local dev stack:    BUN_PUBLIC_API_BASE_URL=http://localhost:8788
 const API_BASE_URL = (process.env.BUN_PUBLIC_API_BASE_URL ?? "").replace(
   /\/$/,
   "",
@@ -158,15 +162,32 @@ function parseSessionAuthState(payload: unknown): SessionAuthState {
   };
 }
 
+function maybeHandlePaymentRequired(path: string, response: Response): void {
+  if (response.status === 402 && shouldInterceptPaymentRequired(path)) {
+    notifyPaymentRequired();
+  }
+}
+
+async function fetchApi(
+  path: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  const response = await fetch(resolveApiUrl(path), {
+    credentials: "include",
+    ...init,
+  });
+
+  maybeHandlePaymentRequired(path, response);
+
+  return response;
+}
+
 async function requestJson<T>(
   path: string,
   init: RequestInit = {},
   fallbackError = "Request failed.",
 ): Promise<T> {
-  const response = await fetch(resolveApiUrl(path), {
-    credentials: "include",
-    ...init,
-  });
+  const response = await fetchApi(path, init);
 
   const payload = (await response.json().catch(() => null)) as unknown;
   if (!response.ok) {
@@ -418,18 +439,13 @@ export async function downloadDocument(
   repo: string,
   ref: string,
 ): Promise<Blob> {
-  const response = await fetch(
-    resolveApiUrl(
-      `/api/app/documents/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/download?ref=${encodeURIComponent(ref)}`,
-    ),
-    {
-      method: "GET",
-      credentials: "include",
-      headers: {
-        Accept: "*/*",
-      },
+  const path = `/api/app/documents/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/download?ref=${encodeURIComponent(ref)}`;
+  const response = await fetchApi(path, {
+    method: "GET",
+    headers: {
+      Accept: "*/*",
     },
-  );
+  });
 
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as unknown;
@@ -522,3 +538,90 @@ export function validateUploadFile(file: File): UploadValidationResult {
 export { clearStoredToken as clearToken, storeStoredToken as storeToken };
 
 export type { InitialDocumentUploadResult, UploadResult };
+
+export async function fetchBillingStatus(): Promise<{
+  status: string | null;
+  currentPeriodEnd: number | null;
+  cancelAtPeriodEnd: boolean;
+  cancelAt: number | null;
+  plan: {
+    amount: number;
+    currency: string;
+    interval: string;
+    formatted: string;
+  } | null;
+}> {
+  const response = await fetchApi("/api/app/billing/status", {
+    headers: { Accept: "application/json" },
+  });
+  if (response.status === 401 || response.status === 404) {
+    return {
+      status: null,
+      currentPeriodEnd: null,
+      cancelAtPeriodEnd: false,
+      cancelAt: null,
+      plan: null,
+    };
+  }
+  const payload = (await response.json().catch(() => null)) as Record<
+    string,
+    unknown
+  > | null;
+
+  const planData = payload?.plan as Record<string, unknown> | null | undefined;
+  const plan =
+    planData &&
+    typeof planData === "object" &&
+    typeof planData.amount === "number" &&
+    typeof planData.currency === "string" &&
+    typeof planData.interval === "string" &&
+    typeof planData.formatted === "string"
+      ? {
+          amount: planData.amount,
+          currency: planData.currency,
+          interval: planData.interval,
+          formatted: planData.formatted,
+        }
+      : null;
+
+  return {
+    status: typeof payload?.status === "string" ? payload.status : null,
+    currentPeriodEnd:
+      typeof payload?.currentPeriodEnd === "number"
+        ? payload.currentPeriodEnd
+        : null,
+    cancelAtPeriodEnd: payload?.cancelAtPeriodEnd === true,
+    cancelAt: typeof payload?.cancelAt === "number" ? payload.cancelAt : null,
+    plan,
+  };
+}
+
+export async function createCheckoutSession(): Promise<{ url: string }> {
+  return requestJson<{ url: string }>(
+    "/api/app/billing/checkout",
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ idempotencyKey: crypto.randomUUID() }),
+    },
+    "Unable to start checkout.",
+  );
+}
+
+export async function createPortalSession(): Promise<{ url: string }> {
+  return requestJson<{ url: string }>(
+    "/api/app/billing/portal",
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ idempotencyKey: crypto.randomUUID() }),
+    },
+    "Unable to open billing portal.",
+  );
+}

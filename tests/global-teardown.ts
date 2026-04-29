@@ -12,10 +12,15 @@ import { spawnSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { stopStripeWebhookSecretRuntime } from "./stripe-runtime";
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
 const COMPOSE_FILE = resolve(ROOT, "docker-compose.yml");
+const COMPOSE_ARGS = ["compose", "-f", COMPOSE_FILE] as const;
 const APP_PORT = process.env.APP_PORT ?? "5173";
+const API_PORT = process.env.API_PORT ?? "8787";
+const API_PROXY_PORT = process.env.API_PROXY_PORT ?? "8788";
 
 function log(message: string): void {
   process.stdout.write(`[global-teardown] ${message}\n`);
@@ -27,18 +32,18 @@ export default async function globalTeardown(): Promise<void> {
     return;
   }
 
+  stopStripeWebhookSecretRuntime({ log });
   log("Tearing down integration stack...");
   const result = spawnSync(
     "docker",
-    ["compose", "-f", COMPOSE_FILE, "down", "-v", "--remove-orphans"],
+    [...COMPOSE_ARGS, "down", "-v", "--remove-orphans"],
     {
       stdio: "inherit",
-      env: { ...process.env, APP_PORT },
+      env: { ...process.env, APP_PORT, API_PORT, API_PROXY_PORT },
     },
   );
 
   if (result.status !== 0) {
-    // Log but don't throw — a teardown failure shouldn't mask test results.
     process.stderr.write(
       "[global-teardown] WARNING: docker compose down exited non-zero.\n",
     );

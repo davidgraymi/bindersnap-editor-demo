@@ -1,7 +1,20 @@
 import { randomUUID } from "crypto";
 
+import { config, type SessionCookieSameSite } from "./config";
 import { logger } from "./logger";
 import { sessionStore, type SessionRecord } from "./sessions";
+import {
+  subscriptionStore,
+  hasActiveSubscription,
+  webhookEventStore,
+} from "./subscriptions";
+import type Stripe from "stripe";
+import { extractCurrentPeriodEnd } from "./stripe/api-version";
+import { getStripeClient } from "./stripe/client";
+import {
+  buildStripeSubscriptionRecord,
+  reconcileStripeCustomerByCustomerId,
+} from "./stripe/reconcile";
 import {
   createGiteaClient,
   GiteaApiError,
@@ -42,154 +55,8 @@ import {
   type PullRequestWithApprovalState,
 } from "../../packages/gitea-client/pullRequests";
 
-function parseBoolean(value: string | undefined, fallback: boolean): boolean {
-  if (value === undefined) {
-    return fallback;
-  }
-
-  const normalized = value.trim().toLowerCase();
-  if (["1", "true", "yes", "on"].includes(normalized)) {
-    return true;
-  }
-
-  if (["0", "false", "no", "off"].includes(normalized)) {
-    return false;
-  }
-
-  return fallback;
-}
-
-function parsePositiveInt(value: string | undefined, fallback: number): number {
-  const parsed = Number.parseInt(value ?? "", 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-const apiPortValue = Number.parseInt(
-  process.env.API_PORT ?? process.env.PORT ?? "8787",
-  10,
-);
-const apiPort =
-  Number.isFinite(apiPortValue) && apiPortValue > 0 ? apiPortValue : 8787;
-const giteaUrl =
-  process.env.GITEA_INTERNAL_URL ??
-  process.env.BUN_PUBLIC_GITEA_URL ??
-  process.env.VITE_GITEA_URL ??
-  "http://localhost:3000";
-const giteaAdminUsername = process.env.GITEA_ADMIN_USER?.trim() ?? "";
-const giteaAdminPassword = process.env.GITEA_ADMIN_PASS?.trim() ?? "";
-const giteaServiceToken =
-  process.env.BINDERSNAP_GITEA_SERVICE_TOKEN?.trim() ?? "";
-const isProduction = process.env.NODE_ENV === "production";
-
-if (isProduction && !giteaServiceToken) {
-  logger.error(
-    "FATAL: BINDERSNAP_GITEA_SERVICE_TOKEN is not set in production",
-    { env: "production" },
-  );
-  process.exit(1);
-}
-
-const emailDomain =
-  process.env.BINDERSNAP_USER_EMAIL_DOMAIN ?? "users.bindersnap.local";
-const sessionCookieName =
-  process.env.BINDERSNAP_SESSION_COOKIE_NAME ?? "bindersnap_session";
-export type SessionCookieSameSite = "Strict" | "Lax" | "None";
-const REQUIRED_GITEA_TOKEN_SCOPES = [
-  "write:user",
-  "write:repository",
-  "write:issue",
-] as const;
-
-function resolveGiteaTokenScopes(scopesRaw?: string): string[] {
-  const configuredScopes = (scopesRaw ?? "")
-    .split(",")
-    .map((scope) => scope.trim())
-    .filter((scope) => scope !== "");
-
-  return Array.from(
-    new Set<string>([...configuredScopes, ...REQUIRED_GITEA_TOKEN_SCOPES]),
-  );
-}
-
-const tokenScopes = resolveGiteaTokenScopes(
-  process.env.BINDERSNAP_GITEA_TOKEN_SCOPES,
-);
-const sessionTtlMs = parsePositiveInt(
-  process.env.BINDERSNAP_SESSION_TTL_MS,
-  7 * 24 * 60 * 60 * 1000,
-);
-const rememberedSessionTtlMs = parsePositiveInt(
-  process.env.BINDERSNAP_REMEMBER_ME_SESSION_TTL_MS,
-  30 * 24 * 60 * 60 * 1000,
-);
-const enforceHttps = parseBoolean(
-  process.env.BINDERSNAP_REQUIRE_HTTPS,
-  process.env.NODE_ENV === "production",
-);
-const authRateLimitEnabled = parseBoolean(
-  process.env.BINDERSNAP_AUTH_RATE_LIMIT_ENABLED,
-  true,
-);
-const authRateLimitWindowMs = parsePositiveInt(
-  process.env.BINDERSNAP_AUTH_RATE_LIMIT_WINDOW_MS,
-  10 * 60 * 1000,
-);
-const authRateLimitMax = parsePositiveInt(
-  process.env.BINDERSNAP_AUTH_RATE_LIMIT_MAX,
-  20,
-);
-const defaultAppOrigin = `http://localhost:${process.env.APP_PORT ?? "5173"}`;
-const configuredAllowedOrigins = (
-  process.env.BINDERSNAP_ALLOWED_ORIGINS ??
-  process.env.BINDERSNAP_APP_ORIGIN ??
-  defaultAppOrigin
-)
-  .split(",")
-  .map((origin) => origin.trim())
-  .filter((origin) => origin !== "");
-
 const authAttempts = new Map<string, { count: number; resetAt: number }>();
-const sessionCookieDomain = resolveCookieDomain(
-  process.env.BINDERSNAP_SESSION_COOKIE_DOMAIN,
-);
-const sessionCookieSameSite = resolveCookieSameSite(
-  process.env.BINDERSNAP_SESSION_COOKIE_SAME_SITE,
-);
-const allowedOrigins = new Set(
-  configuredAllowedOrigins
-    .map(normalizeOrigin)
-    .filter((origin): origin is string => Boolean(origin)),
-);
-
-function resolveCookieDomain(value: string | undefined): string | null {
-  if (!value) {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  if (trimmed === "") {
-    return null;
-  }
-
-  return /^\.?[a-z0-9.-]+$/i.test(trimmed) ? trimmed : null;
-}
-
-export function resolveCookieSameSite(
-  value: string | undefined,
-  fallback: SessionCookieSameSite = "Lax",
-): SessionCookieSameSite {
-  const normalized = value?.trim().toLowerCase();
-  switch (normalized) {
-    case "strict":
-      return "Strict";
-    case "none":
-      return "None";
-    case "lax":
-      return "Lax";
-    default:
-      return fallback;
-  }
-}
+const checkoutAttempts = new Map<string, { count: number; resetAt: number }>();
 
 export interface SessionLifetime {
   sessionExpiresAt: number;
@@ -204,9 +71,9 @@ export function buildSessionLifetime(
     rememberedSessionTtlMs?: number;
   },
 ): SessionLifetime {
-  const standardTtlMs = options?.sessionTtlMs ?? sessionTtlMs;
+  const standardTtlMs = options?.sessionTtlMs ?? config.sessionTtlMs;
   const persistentTtlMs =
-    options?.rememberedSessionTtlMs ?? rememberedSessionTtlMs;
+    options?.rememberedSessionTtlMs ?? config.rememberedSessionTtlMs;
   const ttlMs = rememberMe ? persistentTtlMs : standardTtlMs;
   const expiresAt = now + ttlMs;
 
@@ -261,12 +128,12 @@ function buildTokenAuthHeader(token: string): string {
 function buildGiteaServiceHeaders(
   extraHeaders?: HeadersInit,
 ): HeadersInit | null {
-  if (!giteaServiceToken) {
+  if (!config.giteaServiceToken) {
     return null;
   }
 
   return {
-    Authorization: buildTokenAuthHeader(giteaServiceToken),
+    Authorization: buildTokenAuthHeader(config.giteaServiceToken),
     ...extraHeaders,
   };
 }
@@ -279,11 +146,15 @@ function buildGiteaPrivilegedHeaders(
     return serviceHeaders;
   }
 
-  if (!isProduction && giteaAdminUsername && giteaAdminPassword) {
+  if (
+    !config.isProduction &&
+    config.giteaAdminUsername &&
+    config.giteaAdminPassword
+  ) {
     return {
       Authorization: buildBasicAuthHeader(
-        giteaAdminUsername,
-        giteaAdminPassword,
+        config.giteaAdminUsername,
+        config.giteaAdminPassword,
       ),
       ...extraHeaders,
     };
@@ -350,15 +221,12 @@ function isAllowedOrigin(origin: string | null): boolean {
     return false;
   }
 
-  if (allowedOrigins.has(origin)) {
+  if (config.configuredAllowedOrigins.has(origin)) {
     return true;
   }
 
   // Local dev fallback: allow loopback browser origins unless explicitly locked down.
-  if (
-    !process.env.BINDERSNAP_ALLOWED_ORIGINS &&
-    !process.env.BINDERSNAP_APP_ORIGIN
-  ) {
+  if (!config.hasExplicitBrowserOrigins) {
     return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
   }
 
@@ -397,7 +265,7 @@ function enforceTransportSecurity(
   req: Request,
   baseHeaders: Headers,
 ): Response | null {
-  if (!enforceHttps || isLocalRequest(req)) {
+  if (!config.enforceHttps || isLocalRequest(req)) {
     return null;
   }
 
@@ -449,21 +317,17 @@ export function serializeSessionCookie(
   value: string,
   options?: {
     expiresAt?: number;
-    sameSite?: SessionCookieSameSite;
-    domain?: string | null;
   },
 ): string {
-  const sameSite = options?.sameSite ?? sessionCookieSameSite;
-  const domain = options?.domain ?? sessionCookieDomain;
   const parts = [
-    `${sessionCookieName}=${value}`,
+    `${config.sessionCookieName}=${value}`,
     "Path=/",
     "HttpOnly",
-    `SameSite=${sameSite}`,
+    `SameSite=${config.sessionCookieSameSite}`,
   ];
 
-  if (domain) {
-    parts.push(`Domain=${domain}`);
+  if (config.sessionCookieDomain) {
+    parts.push(`Domain=${config.sessionCookieDomain}`);
   }
 
   if (!isLocalRequest(req)) {
@@ -500,7 +364,7 @@ function parseCookies(req: Request): Map<string, string> {
 }
 
 function getSessionFromRequest(req: Request): SessionRecord | null {
-  const sessionId = parseCookies(req).get(sessionCookieName);
+  const sessionId = parseCookies(req).get(config.sessionCookieName);
   if (!sessionId) return null;
 
   const session = sessionStore.get(sessionId);
@@ -519,7 +383,7 @@ function consumeAuthRateLimit(
   req: Request,
   action: "login" | "signup",
 ): { limited: boolean; retryAfterSeconds: number } {
-  if (!authRateLimitEnabled) {
+  if (!config.authRateLimitEnabled) {
     return { limited: false, retryAfterSeconds: 0 };
   }
 
@@ -530,7 +394,7 @@ function consumeAuthRateLimit(
   if (!existing || existing.resetAt <= now) {
     authAttempts.set(key, {
       count: 1,
-      resetAt: now + authRateLimitWindowMs,
+      resetAt: now + config.authRateLimitWindowMs,
     });
     return { limited: false, retryAfterSeconds: 0 };
   }
@@ -538,7 +402,7 @@ function consumeAuthRateLimit(
   existing.count += 1;
   authAttempts.set(key, existing);
 
-  if (existing.count > authRateLimitMax) {
+  if (existing.count > config.authRateLimitMax) {
     const retryAfterSeconds = Math.max(
       1,
       Math.ceil((existing.resetAt - now) / 1000),
@@ -550,12 +414,41 @@ function consumeAuthRateLimit(
 }
 
 function resetAuthRateLimit(req: Request, action: "login" | "signup"): void {
-  if (!authRateLimitEnabled) {
+  if (!config.authRateLimitEnabled) {
     return;
   }
 
   const key = `${action}:${requestClientIp(req)}`;
   authAttempts.delete(key);
+}
+
+function consumeCheckoutRateLimit(username: string): {
+  limited: boolean;
+  retryAfterSeconds: number;
+} {
+  const key = `checkout:${username}`;
+  const now = Date.now();
+  const windowMs = 10 * 60 * 1000;
+  const max = 5;
+  const existing = checkoutAttempts.get(key);
+
+  if (!existing || existing.resetAt <= now) {
+    checkoutAttempts.set(key, { count: 1, resetAt: now + windowMs });
+    return { limited: false, retryAfterSeconds: 0 };
+  }
+
+  existing.count += 1;
+  checkoutAttempts.set(key, existing);
+
+  if (existing.count > max) {
+    const retryAfterSeconds = Math.max(
+      1,
+      Math.ceil((existing.resetAt - now) / 1000),
+    );
+    return { limited: true, retryAfterSeconds };
+  }
+
+  return { limited: false, retryAfterSeconds: 0 };
 }
 
 async function readJson<T>(req: Request): Promise<T | null> {
@@ -567,7 +460,7 @@ async function readJson<T>(req: Request): Promise<T | null> {
 }
 
 async function giteaFetch(path: string, init?: RequestInit): Promise<Response> {
-  return fetch(new URL(path, giteaUrl), init);
+  return fetch(new URL(path, config.giteaUrl), init);
 }
 
 async function readResponsePayload(response: Response): Promise<unknown> {
@@ -632,7 +525,7 @@ async function readGiteaErrorMessage(
 }
 
 function createSessionGiteaClient(session: SessionRecord): GiteaClient {
-  return createGiteaClient(giteaUrl, session.giteaToken);
+  return createGiteaClient(config.giteaUrl, session.giteaToken);
 }
 
 function requireSession(
@@ -645,6 +538,101 @@ function requireSession(
   }
 
   return { session, client: createSessionGiteaClient(session) };
+}
+
+function requireSubscription(
+  req: Request,
+  baseHeaders: Headers,
+): { session: SessionRecord; client: GiteaClient } | Response {
+  const auth = requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  if (config.bypassSubscriptionForUsers.includes(auth.session.username)) {
+    logger.info("Subscription requirement bypassed for user", {
+      username: auth.session.username,
+      path: new URL(req.url).pathname,
+    });
+    return auth;
+  }
+  if (!hasActiveSubscription(auth.session.username)) {
+    return json(402, { error: "Subscription required." }, baseHeaders);
+  }
+  return auth;
+}
+
+export function createStripeRequestIdempotencyKey(
+  flow: "checkout" | "portal",
+  clientKey?: string | null,
+): string {
+  // Client-supplied key for true idempotency; falls back to server-generated UUID.
+  // Validates client key: 8-128 chars, alphanumeric + hyphen only.
+  if (clientKey && /^[a-zA-Z0-9-]{8,128}$/.test(clientKey)) {
+    return `${flow}-${clientKey}`;
+  }
+  return `${flow}-${randomUUID()}`;
+}
+
+type StripePriceInfo = {
+  amount: number;
+  currency: string;
+  interval: string;
+  formatted: string;
+};
+
+let cachedPriceInfo: StripePriceInfo | null = null;
+let priceInfoCachedAt = 0;
+const PRICE_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+async function fetchStripePriceInfo(): Promise<StripePriceInfo | null> {
+  const now = Date.now();
+  if (cachedPriceInfo && now - priceInfoCachedAt < PRICE_CACHE_TTL_MS) {
+    return cachedPriceInfo;
+  }
+
+  if (!config.stripeSecretKey || !config.stripePriceId) {
+    return null;
+  }
+
+  try {
+    const stripe = getStripeClient();
+    const price = await stripe.prices.retrieve(config.stripePriceId, {
+      expand: ["product"],
+    });
+
+    const amount =
+      typeof price.unit_amount === "number" ? price.unit_amount / 100 : 0;
+    const currency = price.currency.toUpperCase();
+    const interval =
+      price.recurring?.interval ?? (price.type === "one_time" ? "once" : "");
+
+    const formatted = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: price.currency,
+    }).format(amount);
+
+    const intervalDisplay =
+      interval === "month"
+        ? " / month"
+        : interval === "year"
+          ? " / year"
+          : interval === "once"
+            ? ""
+            : ` / ${interval}`;
+
+    cachedPriceInfo = {
+      amount,
+      currency,
+      interval,
+      formatted: `${formatted}${intervalDisplay}`,
+    };
+    priceInfoCachedAt = now;
+
+    return cachedPriceInfo;
+  } catch (err) {
+    logger.warn("Failed to fetch Stripe price info", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
 }
 
 function parsePositiveIntInput(
@@ -1065,6 +1053,46 @@ async function verifyUserCredentials(
     : null;
 }
 
+type GiteaCurrentUserRecord = {
+  email?: unknown;
+};
+
+async function fetchSessionUserEmail(
+  session: SessionRecord,
+): Promise<string | null> {
+  const response = await giteaFetch("/api/v1/user", {
+    method: "GET",
+    headers: {
+      Authorization: buildTokenAuthHeader(session.giteaToken),
+      Accept: "application/json",
+    },
+  }).catch(() => null);
+
+  if (!response) {
+    logger.warn("Unable to reach Gitea for billing email lookup", {
+      username: session.username,
+    });
+    return null;
+  }
+
+  if (!response.ok) {
+    logger.warn("Gitea billing email lookup failed", {
+      username: session.username,
+      status: response.status,
+    });
+    return null;
+  }
+
+  const payload = (await response
+    .json()
+    .catch(() => null)) as GiteaCurrentUserRecord | null;
+  const email =
+    typeof payload?.email === "string"
+      ? payload.email.trim().toLowerCase()
+      : "";
+  return looksLikeEmailAddress(email) ? email : null;
+}
+
 type GiteaEmailRecord = {
   email?: unknown;
   username?: unknown;
@@ -1284,7 +1312,10 @@ async function createUserToken(
       },
       body: JSON.stringify({
         name: tokenName,
-        scopes: tokenScopes.length > 0 ? tokenScopes : ["read:repository"],
+        scopes:
+          config.tokenScopes.length > 0
+            ? config.tokenScopes
+            : ["read:repository"],
       }),
     },
   );
@@ -1650,7 +1681,7 @@ async function handleDocuments(
   req: Request,
   baseHeaders: Headers,
 ): Promise<Response> {
-  const auth = requireSession(req, baseHeaders);
+  const auth = requireSubscription(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -1718,7 +1749,7 @@ async function handleCreateDocument(
   req: Request,
   baseHeaders: Headers,
 ): Promise<Response> {
-  const auth = requireSession(req, baseHeaders);
+  const auth = requireSubscription(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -1875,7 +1906,7 @@ async function handleDocumentDetail(
   owner: string,
   repo: string,
 ): Promise<Response> {
-  const auth = requireSession(req, baseHeaders);
+  const auth = requireSubscription(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -1970,7 +2001,7 @@ async function handleDocumentVersions(
   owner: string,
   repo: string,
 ): Promise<Response> {
-  const auth = requireSession(req, baseHeaders);
+  const auth = requireSubscription(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -2112,7 +2143,7 @@ async function handleDocumentReview(
   repo: string,
   prNumber: number,
 ): Promise<Response> {
-  const auth = requireSession(req, baseHeaders);
+  const auth = requireSubscription(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -2171,7 +2202,7 @@ async function handleDocumentPublish(
   repo: string,
   prNumber: number,
 ): Promise<Response> {
-  const auth = requireSession(req, baseHeaders);
+  const auth = requireSubscription(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -2230,7 +2261,7 @@ async function handleDocumentDownload(
   owner: string,
   repo: string,
 ): Promise<Response> {
-  const auth = requireSession(req, baseHeaders);
+  const auth = requireSubscription(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -2308,7 +2339,7 @@ async function handleDocumentCollaborators(
   owner: string,
   repo: string,
 ): Promise<Response> {
-  const auth = requireSession(req, baseHeaders);
+  const auth = requireSubscription(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -2351,7 +2382,7 @@ async function handleSearchUsersRoute(
   req: Request,
   baseHeaders: Headers,
 ): Promise<Response> {
-  const auth = requireSession(req, baseHeaders);
+  const auth = requireSubscription(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -2387,7 +2418,7 @@ async function handleAddCollaborator(
   repo: string,
   login: string,
 ): Promise<Response> {
-  const auth = requireSession(req, baseHeaders);
+  const auth = requireSubscription(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -2457,7 +2488,7 @@ async function handleDeleteCollaborator(
   repo: string,
   login: string,
 ): Promise<Response> {
-  const auth = requireSession(req, baseHeaders);
+  const auth = requireSubscription(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -2482,6 +2513,412 @@ async function handleDeleteCollaborator(
   }
 }
 
+async function handleStripeWebhook(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const rawBody = await req.text();
+  const sigHeader = req.headers.get("stripe-signature") ?? "";
+
+  if (!config.stripeWebhookSecret) {
+    logger.warn(
+      "Stripe webhook received but STRIPE_WEBHOOK_SECRET is not configured — rejecting",
+    );
+    return json(400, { error: "Webhook secret not configured." }, baseHeaders);
+  }
+
+  const stripe = getStripeClient();
+  let event: Stripe.Event;
+  try {
+    event = await stripe.webhooks.constructEventAsync(
+      rawBody,
+      sigHeader,
+      config.stripeWebhookSecret,
+    );
+  } catch (err) {
+    logger.warn("Stripe webhook signature verification failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return json(400, { error: "Invalid signature." }, baseHeaders);
+  }
+
+  const type = event.type;
+  const eventId = event.id;
+  const eventCreated = event.created;
+  const data = event.data.object as unknown as Record<string, unknown>;
+  const customerId = data?.customer as string | undefined;
+
+  logger.info("Stripe webhook received", { type, eventId });
+
+  if (eventId && webhookEventStore.isProcessed(eventId)) {
+    logger.info("Duplicate webhook event — skipping", { eventId, type });
+    return json(200, { received: true }, baseHeaders);
+  }
+
+  if (
+    customerId &&
+    eventCreated !== undefined &&
+    webhookEventStore.isOutOfOrder(customerId, eventCreated)
+  ) {
+    logger.info("Out-of-order webhook event — skipping", {
+      eventId,
+      type,
+      customerId,
+      eventCreated,
+    });
+    if (eventId) {
+      webhookEventStore.markProcessed(
+        eventId,
+        type ?? "unknown",
+        customerId,
+        eventCreated,
+      );
+    }
+    return json(200, { received: true }, baseHeaders);
+  }
+
+  if (type === "checkout.session.completed" && data) {
+    const username = data.client_reference_id as string | undefined;
+    const customerId = data.customer as string | undefined;
+    const subscriptionId = data.subscription as string | undefined;
+
+    if (username && customerId && subscriptionId) {
+      try {
+        const sub = await stripe.subscriptions.retrieve(subscriptionId);
+        subscriptionStore.upsert(
+          buildStripeSubscriptionRecord(
+            username,
+            customerId,
+            sub as unknown as Record<string, unknown>,
+          ),
+        );
+        logger.info("Subscription activated", { username, status: sub.status });
+
+        // Backfill bindersnap_username metadata onto the Stripe Customer.
+        // This ensures future subscription webhooks can reconcile via customer metadata.
+        try {
+          await stripe.customers.update(customerId, {
+            metadata: { bindersnap_username: username },
+          });
+          logger.info("Backfilled customer metadata", { customerId, username });
+        } catch (metadataErr) {
+          // Non-fatal: subscription is already activated; log and continue.
+          logger.warn("Failed to backfill customer metadata", {
+            customerId,
+            username,
+            error:
+              metadataErr instanceof Error
+                ? metadataErr.message
+                : String(metadataErr),
+          });
+        }
+      } catch (err) {
+        logger.error(
+          "Could not fetch subscription details from Stripe — returning 500 so Stripe retries",
+          {
+            stripe_webhook_5xx: true,
+            event_id: eventId,
+            event_type: type,
+            customer_id: customerId ?? null,
+            username,
+            subscriptionId,
+            error: err instanceof Error ? err.message : String(err),
+          },
+        );
+        // Return 500 so Stripe retries delivery (a 200 would suppress retries).
+        return json(
+          500,
+          { error: "Failed to verify subscription; will retry." },
+          baseHeaders,
+        );
+      }
+    }
+  } else if (
+    (type === "customer.subscription.created" ||
+      type === "customer.subscription.updated" ||
+      type === "customer.subscription.deleted") &&
+    data
+  ) {
+    const customerId = data.customer as string | undefined;
+    const subscriptionId = data.id as string | undefined;
+    if (customerId) {
+      const record = subscriptionStore.getByCustomerId(customerId);
+      if (record) {
+        subscriptionStore.upsert({
+          ...record,
+          stripeSubscriptionId: subscriptionId ?? record.stripeSubscriptionId,
+          status:
+            (data.status as string) ??
+            (type === "customer.subscription.deleted"
+              ? "canceled"
+              : record.status),
+          currentPeriodEnd:
+            extractCurrentPeriodEnd(data) ?? record.currentPeriodEnd,
+          cancelAtPeriodEnd: Boolean(data.cancel_at_period_end),
+          cancelAt: typeof data.cancel_at === "number" ? data.cancel_at : null,
+          updatedAt: Date.now(),
+        });
+        logger.info("Subscription updated", {
+          customer: customerId,
+          status: data.status,
+        });
+      } else {
+        const reconciled = await reconcileStripeCustomerByCustomerId(
+          stripe,
+          customerId,
+          {
+            subscription: data,
+            now: Date.now(),
+          },
+        );
+        if (reconciled) {
+          subscriptionStore.upsert(reconciled.record);
+          logger.info(
+            "Reconciled missing subscription row from Stripe customer metadata",
+            {
+              customer: customerId,
+              username: reconciled.record.username,
+              subscriptionId: reconciled.record.stripeSubscriptionId,
+              eventType: type,
+            },
+          );
+        } else {
+          logger.warn(
+            "Stripe subscription webhook could not reconcile missing local record",
+            {
+              customer: customerId,
+              subscriptionId,
+              eventType: type,
+            },
+          );
+        }
+      }
+    }
+  } else if (type === "invoice.payment_failed" && data) {
+    const customerId = data.customer as string | undefined;
+    if (customerId) {
+      const record = subscriptionStore.getByCustomerId(customerId);
+      if (record && record.status !== "canceled") {
+        subscriptionStore.upsert({
+          ...record,
+          status: "past_due",
+          updatedAt: Date.now(),
+        });
+        logger.info("Subscription marked past_due on invoice.payment_failed", {
+          customer: customerId,
+        });
+      }
+    }
+  } else if (type === "invoice.payment_succeeded" && data) {
+    const customerId = data.customer as string | undefined;
+    if (customerId) {
+      const record = subscriptionStore.getByCustomerId(customerId);
+      if (record && record.status === "past_due") {
+        subscriptionStore.upsert({
+          ...record,
+          status: "active",
+          updatedAt: Date.now(),
+        });
+        logger.info(
+          "Subscription restored to active on invoice.payment_succeeded",
+          { customer: customerId },
+        );
+      }
+    }
+  }
+
+  if (eventId) {
+    webhookEventStore.markProcessed(
+      eventId,
+      type ?? "unknown",
+      customerId ?? null,
+      eventCreated ?? 0,
+    );
+  }
+
+  return json(200, { received: true }, baseHeaders);
+}
+
+async function handleBillingStatus(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { username } = auth.session;
+
+  const priceInfo = await fetchStripePriceInfo();
+
+  if (config.bypassSubscriptionForUsers.includes(username)) {
+    return json(
+      200,
+      {
+        status: "active",
+        currentPeriodEnd: null,
+        cancelAtPeriodEnd: false,
+        cancelAt: null,
+        plan: priceInfo,
+      },
+      baseHeaders,
+    );
+  }
+
+  const record = subscriptionStore.getByUsername(username);
+  return json(
+    200,
+    {
+      status: record?.status ?? null,
+      currentPeriodEnd: record?.currentPeriodEnd ?? null,
+      cancelAtPeriodEnd: record?.cancelAtPeriodEnd ?? false,
+      cancelAt: record?.cancelAt ?? null,
+      plan: priceInfo,
+    },
+    baseHeaders,
+  );
+}
+
+async function handleBillingCheckout(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const checkoutRateLimit = consumeCheckoutRateLimit(auth.session.username);
+  if (checkoutRateLimit.limited) {
+    return json(
+      429,
+      { error: "Too many checkout attempts. Please try again shortly." },
+      mergeHeaders(baseHeaders, {
+        "Retry-After": String(checkoutRateLimit.retryAfterSeconds),
+      }),
+    );
+  }
+
+  if (!config.stripeSecretKey || !config.stripePriceId) {
+    return json(503, { error: "Billing not configured." }, baseHeaders);
+  }
+
+  const existingSubscription = subscriptionStore.getByUsername(
+    auth.session.username,
+  );
+  const userEmail = await fetchSessionUserEmail(auth.session);
+
+  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  const clientIdempotencyKey =
+    typeof body.idempotencyKey === "string" ? body.idempotencyKey : null;
+
+  const params: Stripe.Checkout.SessionCreateParams = {
+    mode: "subscription",
+    line_items: [{ price: config.stripePriceId, quantity: 1 }],
+    client_reference_id: auth.session.username,
+    metadata: { bindersnap_username: auth.session.username },
+    subscription_data: {
+      metadata: { bindersnap_username: auth.session.username },
+    },
+    success_url: `${config.appOrigin}/billing?checkout=success`,
+    cancel_url: `${config.appOrigin}/billing`,
+  };
+  if (existingSubscription?.stripeCustomerId) {
+    params.customer = existingSubscription.stripeCustomerId;
+  } else {
+    // In `subscription` mode Stripe always creates a Customer automatically;
+    // `customer_creation` is only valid for `payment`/`setup` mode and was
+    // rejected by the Stripe API when upgraded to 2025-06-30.basil.
+    if (userEmail) {
+      params.customer_email = userEmail;
+    }
+  }
+
+  try {
+    const stripe = getStripeClient();
+    const session = await stripe.checkout.sessions.create(params, {
+      idempotencyKey: createStripeRequestIdempotencyKey(
+        "checkout",
+        clientIdempotencyKey,
+      ),
+    });
+    return json(200, { url: session.url }, baseHeaders);
+  } catch (err) {
+    logger.error("Stripe checkout session creation failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return json(
+      502,
+      { error: "Unable to create checkout session." },
+      baseHeaders,
+    );
+  }
+}
+
+async function handleDevGrantSubscription(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  if (config.isProduction || !config.devFeaturesEnabled) {
+    return json(404, { error: "Not found." }, baseHeaders);
+  }
+
+  const auth = requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { username } = auth.session;
+  subscriptionStore.upsert({
+    username,
+    stripeCustomerId: `cus_dev_${username}`,
+    stripeSubscriptionId: `sub_dev_${username}`,
+    status: "active",
+    currentPeriodEnd: Math.floor(Date.now() / 1000) + 365 * 24 * 60 * 60,
+    updatedAt: Date.now(),
+  });
+
+  return json(200, { ok: true, username }, baseHeaders);
+}
+
+async function handleBillingPortal(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const record = subscriptionStore.getByUsername(auth.session.username);
+  if (!record) {
+    return json(404, { error: "No subscription found." }, baseHeaders);
+  }
+
+  if (!config.stripeSecretKey) {
+    return json(503, { error: "Billing not configured." }, baseHeaders);
+  }
+
+  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  const clientIdempotencyKey =
+    typeof body.idempotencyKey === "string" ? body.idempotencyKey : null;
+
+  try {
+    const stripe = getStripeClient();
+    const session = await stripe.billingPortal.sessions.create(
+      {
+        customer: record.stripeCustomerId,
+        return_url: `${config.appOrigin}/billing`,
+      },
+      {
+        idempotencyKey: createStripeRequestIdempotencyKey(
+          "portal",
+          clientIdempotencyKey,
+        ),
+      },
+    );
+    return json(200, { url: session.url }, baseHeaders);
+  } catch (err) {
+    logger.error("Stripe portal session creation failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return json(502, { error: "Unable to open billing portal." }, baseHeaders);
+  }
+}
+
 async function cleanupExpiredSessions(): Promise<void> {
   const now = Date.now();
   const expired = sessionStore.reap(now);
@@ -2497,6 +2934,12 @@ async function cleanupExpiredSessions(): Promise<void> {
       authAttempts.delete(key);
     }
   }
+
+  for (const [key, entry] of checkoutAttempts.entries()) {
+    if (entry.resetAt <= now) {
+      checkoutAttempts.delete(key);
+    }
+  }
 }
 
 function startCleanupTimer(): ReturnType<typeof setInterval> {
@@ -2507,7 +2950,7 @@ function startCleanupTimer(): ReturnType<typeof setInterval> {
 
 export function createApiServer() {
   return Bun.serve({
-    port: apiPort,
+    port: config.apiPort,
     idleTimeout: 30,
     async fetch(req) {
       const startMs = Date.now();
@@ -2534,6 +2977,27 @@ export function createApiServer() {
           durationMs,
         });
         return transportError;
+      }
+
+      if (pathname === "/stripe/webhook" && method === "POST") {
+        const response = await handleStripeWebhook(req, baseHeaders);
+        const durationMs = Date.now() - startMs;
+        if (response.status >= 500) {
+          logger.error("Response sent with 5xx status", {
+            method,
+            path: pathname,
+            status: response.status,
+            durationMs,
+          });
+        } else {
+          logger.info("Response sent", {
+            method,
+            path: pathname,
+            status: response.status,
+            durationMs,
+          });
+        }
+        return response;
       }
 
       const originError = enforceStateChangingOrigin(req, baseHeaders);
@@ -2578,6 +3042,20 @@ export function createApiServer() {
         response = await handleCreateDocument(req, baseHeaders);
       } else if (pathname === "/api/app/users/search" && method === "GET") {
         response = await handleSearchUsersRoute(req, baseHeaders);
+      } else if (pathname === "/api/app/billing/status" && method === "GET") {
+        response = await handleBillingStatus(req, baseHeaders);
+      } else if (
+        pathname === "/api/app/billing/checkout" &&
+        method === "POST"
+      ) {
+        response = await handleBillingCheckout(req, baseHeaders);
+      } else if (pathname === "/api/app/billing/portal" && method === "POST") {
+        response = await handleBillingPortal(req, baseHeaders);
+      } else if (
+        pathname === "/api/dev/grant-subscription" &&
+        method === "POST"
+      ) {
+        response = await handleDevGrantSubscription(req, baseHeaders);
       } else {
         const reviewMatch = pathname.match(
           /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/reviews$/,
@@ -2696,6 +3174,16 @@ if (import.meta.main && server) {
   logger.info("Bindersnap API listening", {
     url: `http://localhost:${server.port}`,
     port: server.port,
-    env: process.env.NODE_ENV ?? "development",
+    env: config.nodeEnv,
   });
+  if (config.devFeaturesEnabled) {
+    logger.warn(
+      "BINDERSNAP_DEV_FEATURES is enabled — /api/dev/grant-subscription is live",
+    );
+  }
+  if (config.bypassSubscriptionForUsers.length > 0) {
+    logger.warn("Paywall bypass allowlist is active", {
+      users: config.bypassSubscriptionForUsers,
+    });
+  }
 }

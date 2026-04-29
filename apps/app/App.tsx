@@ -9,16 +9,21 @@ import {
 import "./app.css";
 
 import { AppShell } from "./components/AppShell";
+import { BillingPage } from "./components/BillingPage";
 import { BindersnapLogoMark } from "./components/BindersnapLogoMark";
 import { LandingPage } from "./components/LandingPage";
 import {
   clearToken,
+  createCheckoutSession,
+  createPortalSession,
+  fetchBillingStatus,
   fetchSessionUser,
   login,
   logoutSession,
   signup,
   storeToken,
 } from "./api";
+import { usePaymentRequiredHandler } from "./paymentRequired";
 import {
   asShellRoute,
   getRoute,
@@ -28,7 +33,13 @@ import {
 } from "./routes";
 import { resolveSignupPrefill } from "./authIntent";
 
-type AuthView = "loading" | "callback" | "landing" | "login" | "app";
+type AuthView =
+  | "loading"
+  | "callback"
+  | "landing"
+  | "login"
+  | "billing"
+  | "app";
 type AuthMode = "signin" | "signup";
 
 interface SessionUser {
@@ -56,6 +67,12 @@ function navigateTo(route: AppRoute, replace = false): void {
   const method = replace ? "replaceState" : "pushState";
   window.history[method]({}, "", routeToPath(route));
   window.dispatchEvent(new PopStateEvent("popstate"));
+}
+
+export function resolveSubscriptionStatus(
+  status: string | null,
+): "active" | "none" {
+  return status === "active" || status === "trialing" ? "active" : "none";
 }
 
 function LoginPage({
@@ -256,6 +273,31 @@ export function App() {
     () => route.kind !== "callback",
   );
   const [callbackError, setCallbackError] = useState<string | null>(null);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<
+    "active" | "none" | "loading" | null
+  >(null);
+  const [hasBillingStatusError, setHasBillingStatusError] = useState(false);
+  const [currentPeriodEnd, setCurrentPeriodEnd] = useState<number | null>(null);
+  const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(false);
+  const [cancelAt, setCancelAt] = useState<number | null>(null);
+  const [plan, setPlan] = useState<{
+    amount: number;
+    currency: string;
+    interval: string;
+    formatted: string;
+  } | null>(null);
+  const handlePaymentRequired = useCallback(() => {
+    if (!user) {
+      return;
+    }
+
+    setSubscriptionStatus("none");
+    setHasBillingStatusError(false);
+    setCurrentPeriodEnd(null);
+    setCancelAtPeriodEnd(false);
+    setCancelAt(null);
+    navigateTo({ kind: "billing" }, true);
+  }, [user]);
 
   const refreshSession = useCallback(async () => {
     setIsCheckingSession(true);
@@ -267,11 +309,45 @@ export function App() {
       } else {
         clearToken();
       }
-      setUser(nextSession?.user ?? null);
+      const resolvedUser = nextSession?.user ?? null;
+      setUser(resolvedUser);
       setCallbackError(null);
-      return nextSession?.user ?? null;
+      if (resolvedUser) {
+        setSubscriptionStatus("loading");
+        setHasBillingStatusError(false);
+        try {
+          const billing = await fetchBillingStatus();
+          setSubscriptionStatus(resolveSubscriptionStatus(billing.status));
+          setHasBillingStatusError(false);
+          setCurrentPeriodEnd(billing.currentPeriodEnd);
+          setCancelAtPeriodEnd(billing.cancelAtPeriodEnd);
+          setCancelAt(billing.cancelAt);
+          setPlan(billing.plan);
+        } catch {
+          setSubscriptionStatus("none");
+          setHasBillingStatusError(true);
+          setCurrentPeriodEnd(null);
+          setCancelAtPeriodEnd(false);
+          setCancelAt(null);
+          setPlan(null);
+        }
+      } else {
+        setSubscriptionStatus(null);
+        setHasBillingStatusError(false);
+        setCurrentPeriodEnd(null);
+        setCancelAtPeriodEnd(false);
+        setCancelAt(null);
+        setPlan(null);
+      }
+      return resolvedUser;
     } catch (sessionError) {
       setUser(null);
+      setSubscriptionStatus(null);
+      setHasBillingStatusError(false);
+      setCurrentPeriodEnd(null);
+      setCancelAtPeriodEnd(false);
+      setCancelAt(null);
+      setPlan(null);
       setCallbackError(
         sessionError instanceof Error
           ? sessionError.message
@@ -295,6 +371,8 @@ export function App() {
     };
   }, []);
 
+  usePaymentRequiredHandler(handlePaymentRequired);
+
   useEffect(() => {
     if (route.kind === "callback") {
       setIsCheckingSession(false);
@@ -317,8 +395,27 @@ export function App() {
 
     if (!user && isProtectedAppRoute(route)) {
       navigateTo({ kind: "login" }, true);
+      return;
     }
-  }, [isCheckingSession, route, user]);
+
+    const isCheckoutSuccess =
+      window.location.search.includes("checkout=success");
+
+    if (user && subscriptionStatus === "none" && route.kind !== "billing") {
+      navigateTo({ kind: "billing" }, true);
+      return;
+    }
+
+    if (
+      user &&
+      subscriptionStatus === "active" &&
+      route.kind === "billing" &&
+      !isCheckoutSuccess
+    ) {
+      navigateTo({ kind: "home" }, true);
+      return;
+    }
+  }, [isCheckingSession, route, subscriptionStatus, user]);
 
   useEffect(() => {
     if (route.kind !== "callback") {
@@ -336,6 +433,10 @@ export function App() {
       return "callback";
     }
 
+    if (user && subscriptionStatus === "none") {
+      return "billing";
+    }
+
     if (route.kind === "home") {
       return user ? "app" : "landing";
     }
@@ -344,8 +445,12 @@ export function App() {
       return "loading";
     }
 
+    if (route.kind === "billing" && user) {
+      return "billing";
+    }
+
     return user ? "app" : "login";
-  }, [isCheckingSession, route, user]);
+  }, [isCheckingSession, route, subscriptionStatus, user]);
 
   useEffect(() => {
     document.body.setAttribute("data-app-view", view);
@@ -380,6 +485,35 @@ export function App() {
           </p>
         </div>
       </section>
+    );
+  }
+
+  if (view === "billing") {
+    return (
+      <BillingPage
+        subscriptionStatus={subscriptionStatus ?? "loading"}
+        hasBillingStatusError={hasBillingStatusError}
+        currentPeriodEnd={currentPeriodEnd}
+        cancelAtPeriodEnd={cancelAtPeriodEnd}
+        cancelAt={cancelAt}
+        plan={plan}
+        onSubscribe={async () => {
+          const { url } = await createCheckoutSession();
+          window.location.href = url;
+        }}
+        onManage={async () => {
+          const { url } = await createPortalSession();
+          window.location.href = url;
+        }}
+        onSubscriptionConfirmed={() => {
+          setSubscriptionStatus("active");
+          setHasBillingStatusError(false);
+          navigateTo({ kind: "home" }, true);
+        }}
+        onRetryBillingStatus={async () => {
+          await refreshSession();
+        }}
+      />
     );
   }
 
