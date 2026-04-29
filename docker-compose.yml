@@ -99,7 +99,7 @@ services:
     ports:
       - "${API_PORT:-8787}:${API_PORT:-8787}"
     volumes:
-      - ./data/api:/var/lib/bindersnap
+      - api-data:/var/lib/bindersnap
 
   caddy:
     image: caddy:2-alpine
@@ -111,8 +111,8 @@ services:
       - "${API_PROXY_PORT:-8788}:8788"
     volumes:
       - ./tests/Caddyfile.integration:/etc/caddy/Caddyfile:ro
-      - ./data/caddy:/data
-      - ./data/caddy-config:/config
+      - caddy-data:/data
+      - caddy-config:/config
 
   app:
     build:
@@ -150,7 +150,11 @@ services:
       - app-node-modules:/app/node_modules
 
 volumes:
+  gitea-data:
   app-node-modules:
+  api-data:
+  caddy-data:
+  caddy-config:
 
 networks:
   default:
