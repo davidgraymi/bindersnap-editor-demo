@@ -123,8 +123,8 @@ services:
         condition: service_started
     command: ["replicate"]
     volumes:
-      - gitea-data:/data/gitea:ro
-      - api-data:/data/api:ro
+      - gitea-data:/data/gitea
+      - api-data:/data/api
       - ./litestream.yml:/etc/litestream.yml:ro
     environment:
       - AWS_REGION=${AWS_REGION:-us-east-1}
