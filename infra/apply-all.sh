@@ -30,16 +30,11 @@ tf_init() {
 }
 
 # Read a terraform output. Returns empty string if state has no outputs yet.
+# Trusts terraform's exit code — `output -raw` exits non-zero when missing —
+# and discards stderr so deprecation warnings can't contaminate the value.
 tf_output() {
   local dir="$1" key="$2"
-  local val
-  val="$(terraform -chdir="${SCRIPT_DIR}/${dir}" output -raw "${key}" 2>/dev/null)" || true
-  # Terraform emits ANSI warning text when no outputs exist — detect and discard
-  if [[ -z "$val" || "$val" == *"Warning"* || "$val" == *"No outputs"* ]]; then
-    echo ""
-  else
-    echo "$val"
-  fi
+  terraform -chdir="${SCRIPT_DIR}/${dir}" output -raw "${key}" 2>/dev/null || echo ""
 }
 
 # Returns 0 (true) if the Gitea service token SSM parameter still holds the
