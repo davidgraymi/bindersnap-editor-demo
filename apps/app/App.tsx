@@ -13,6 +13,7 @@ import { BillingPage } from "./components/BillingPage";
 import { BindersnapLogoMark } from "./components/BindersnapLogoMark";
 import { LandingPage } from "./components/LandingPage";
 import {
+  type SessionUser,
   clearToken,
   createCheckoutSession,
   createPortalSession,
@@ -42,11 +43,6 @@ type AuthView =
   | "app";
 type AuthMode = "signin" | "signup";
 
-interface SessionUser {
-  username: string;
-  fullName?: string;
-}
-
 interface LoginPageProps {
   mode: AuthMode;
   prefilledEmail?: string;
@@ -71,7 +67,12 @@ function navigateTo(route: AppRoute, replace = false): void {
 
 export function resolveSubscriptionStatus(
   status: string | null,
+  hasAccess = false,
 ): "active" | "none" {
+  if (hasAccess) {
+    return "active";
+  }
+
   return status === "active" || status === "trialing" ? "active" : "none";
 }
 
@@ -317,7 +318,9 @@ export function App() {
         setHasBillingStatusError(false);
         try {
           const billing = await fetchBillingStatus();
-          setSubscriptionStatus(resolveSubscriptionStatus(billing.status));
+          setSubscriptionStatus(
+            resolveSubscriptionStatus(billing.status, billing.hasAccess),
+          );
           setHasBillingStatusError(false);
           setCurrentPeriodEnd(billing.currentPeriodEnd);
           setCancelAtPeriodEnd(billing.cancelAtPeriodEnd);
@@ -388,6 +391,9 @@ export function App() {
       return;
     }
 
+    const isAdminSubscriptionRoute =
+      route.kind === "adminSubscriptions" && user?.isAdmin;
+
     if (user && (route.kind === "login" || route.kind === "signup")) {
       navigateTo({ kind: "home" }, true);
       return;
@@ -398,10 +404,30 @@ export function App() {
       return;
     }
 
+    if (user && route.kind === "adminSubscriptions" && !user.isAdmin) {
+      navigateTo({ kind: "home" }, true);
+      return;
+    }
+
     const isCheckoutSuccess =
       window.location.search.includes("checkout=success");
 
-    if (user && subscriptionStatus === "none" && route.kind !== "billing") {
+    if (
+      user &&
+      user.isAdmin &&
+      subscriptionStatus === "none" &&
+      route.kind === "home"
+    ) {
+      navigateTo({ kind: "adminSubscriptions" }, true);
+      return;
+    }
+
+    if (
+      user &&
+      subscriptionStatus === "none" &&
+      route.kind !== "billing" &&
+      !isAdminSubscriptionRoute
+    ) {
       navigateTo({ kind: "billing" }, true);
       return;
     }
@@ -433,7 +459,11 @@ export function App() {
       return "callback";
     }
 
-    if (user && subscriptionStatus === "none") {
+    if (
+      user &&
+      subscriptionStatus === "none" &&
+      !(route.kind === "adminSubscriptions" && user.isAdmin)
+    ) {
       return "billing";
     }
 
@@ -512,6 +542,13 @@ export function App() {
         }}
         onRetryBillingStatus={async () => {
           await refreshSession();
+        }}
+        onSignOut={async () => {
+          await logoutSession();
+          clearToken();
+          setUser(null);
+          setCallbackError(null);
+          navigateTo({ kind: "home" }, true);
         }}
       />
     );

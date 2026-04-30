@@ -13,6 +13,24 @@ export interface SubscriptionRecord {
   updatedAt: number;
 }
 
+export type SubscriptionAccessOverrideValue = "grant" | "revoke";
+
+export interface SubscriptionAccessOverrideRecord {
+  username: string;
+  access: SubscriptionAccessOverrideValue;
+  reason: string | null;
+  updatedBy: string;
+  updatedAt: number;
+}
+
+export interface EffectiveSubscriptionAccess {
+  username: string;
+  hasAccess: boolean;
+  source: "stripe" | "admin_grant" | "admin_revoke" | "none";
+  subscription: SubscriptionRecord | null;
+  override: SubscriptionAccessOverrideRecord | null;
+}
+
 interface SubscriptionRow {
   username: string;
   stripe_customer_id: string;
@@ -27,6 +45,14 @@ interface SubscriptionRow {
 interface DuplicateCustomerRow {
   stripe_customer_id: string;
   duplicate_count: number;
+}
+
+interface SubscriptionAccessOverrideRow {
+  username: string;
+  access: SubscriptionAccessOverrideValue;
+  reason: string | null;
+  updated_by: string;
+  updated_at: number;
 }
 
 interface SubscriptionRowWithRowId extends SubscriptionRow {
@@ -44,6 +70,35 @@ function rowToRecord(row: SubscriptionRow): SubscriptionRecord {
     cancelAt: row.cancel_at,
     updatedAt: row.updated_at,
   };
+}
+
+function rowToOverride(
+  row: SubscriptionAccessOverrideRow,
+): SubscriptionAccessOverrideRecord {
+  return {
+    username: row.username,
+    access: row.access,
+    reason: row.reason,
+    updatedBy: row.updated_by,
+    updatedAt: row.updated_at,
+  };
+}
+
+function hasStripeBackedAccess(record: SubscriptionRecord | null): boolean {
+  if (!record) return false;
+  if (record.status !== "active" && record.status !== "trialing") return false;
+  // If currentPeriodEnd is known and more than 3 days past, treat as expired.
+  // This is defense-in-depth against missed/failed webhook delivery.
+  if (record.currentPeriodEnd !== null) {
+    const bufferSeconds = 3 * 24 * 60 * 60;
+    if (
+      record.currentPeriodEnd + bufferSeconds <
+      Math.floor(Date.now() / 1000)
+    ) {
+      return false;
+    }
+  }
+  return true;
 }
 
 export class SubscriptionCustomerConflictError extends Error {
@@ -74,6 +129,13 @@ export class SubscriptionStore {
         current_period_end INTEGER,
         cancel_at_period_end INTEGER NOT NULL DEFAULT 0,
         cancel_at INTEGER,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS subscription_access_overrides (
+        username TEXT PRIMARY KEY,
+        access TEXT NOT NULL CHECK (access IN ('grant', 'revoke')),
+        reason TEXT,
+        updated_by TEXT NOT NULL,
         updated_at INTEGER NOT NULL
       );
     `);
@@ -157,6 +219,107 @@ export class SubscriptionStore {
         record.cancelAt,
         record.updatedAt,
       );
+  }
+
+  getAccessOverride(username: string): SubscriptionAccessOverrideRecord | null {
+    const row = this.db
+      .query<
+        SubscriptionAccessOverrideRow,
+        [string]
+      >("SELECT * FROM subscription_access_overrides WHERE username = ?")
+      .get(username);
+    return row ? rowToOverride(row) : null;
+  }
+
+  putAccessOverride(record: SubscriptionAccessOverrideRecord): void {
+    this.db
+      .query<
+        void,
+        [string, SubscriptionAccessOverrideValue, string | null, string, number]
+      >(
+        `INSERT INTO subscription_access_overrides (username, access, reason, updated_by, updated_at)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(username) DO UPDATE SET
+           access = excluded.access,
+           reason = excluded.reason,
+           updated_by = excluded.updated_by,
+           updated_at = excluded.updated_at`,
+      )
+      .run(
+        record.username,
+        record.access,
+        record.reason,
+        record.updatedBy,
+        record.updatedAt,
+      );
+  }
+
+  deleteAccessOverride(username: string): void {
+    this.db
+      .query<
+        void,
+        [string]
+      >("DELETE FROM subscription_access_overrides WHERE username = ?")
+      .run(username);
+  }
+
+  resolveAccess(username: string): EffectiveSubscriptionAccess {
+    const subscription = this.getByUsername(username);
+    const override = this.getAccessOverride(username);
+
+    if (override?.access === "grant") {
+      return {
+        username,
+        hasAccess: true,
+        source: "admin_grant",
+        subscription,
+        override,
+      };
+    }
+
+    if (override?.access === "revoke") {
+      return {
+        username,
+        hasAccess: false,
+        source: "admin_revoke",
+        subscription,
+        override,
+      };
+    }
+
+    if (hasStripeBackedAccess(subscription)) {
+      return {
+        username,
+        hasAccess: true,
+        source: "stripe",
+        subscription,
+        override,
+      };
+    }
+
+    return {
+      username,
+      hasAccess: false,
+      source: "none",
+      subscription,
+      override,
+    };
+  }
+
+  listKnownAccessStates(): EffectiveSubscriptionAccess[] {
+    const usernames = this.db
+      .query<{ username: string }, []>(
+        `SELECT username
+         FROM subscriptions
+         UNION
+         SELECT username
+         FROM subscription_access_overrides
+         ORDER BY username COLLATE NOCASE ASC`,
+      )
+      .all()
+      .map((row) => row.username);
+
+    return usernames.map((username) => this.resolveAccess(username));
   }
 
   private enforceUniqueCustomerBindings(): void {
@@ -336,24 +499,30 @@ class LazySubscriptionStore {
   upsert(record: SubscriptionRecord): void {
     this.store.upsert(record);
   }
+
+  getAccessOverride(username: string): SubscriptionAccessOverrideRecord | null {
+    return this.store.getAccessOverride(username);
+  }
+
+  putAccessOverride(record: SubscriptionAccessOverrideRecord): void {
+    this.store.putAccessOverride(record);
+  }
+
+  deleteAccessOverride(username: string): void {
+    this.store.deleteAccessOverride(username);
+  }
+
+  resolveAccess(username: string): EffectiveSubscriptionAccess {
+    return this.store.resolveAccess(username);
+  }
+
+  listKnownAccessStates(): EffectiveSubscriptionAccess[] {
+    return this.store.listKnownAccessStates();
+  }
 }
 
 export const subscriptionStore = new LazySubscriptionStore();
 
 export function hasActiveSubscription(username: string): boolean {
-  const record = subscriptionStore.getByUsername(username);
-  if (!record) return false;
-  if (record.status !== "active" && record.status !== "trialing") return false;
-  // If currentPeriodEnd is known and more than 3 days past, treat as expired.
-  // This is defense-in-depth against missed/failed webhook delivery.
-  if (record.currentPeriodEnd !== null) {
-    const bufferSeconds = 3 * 24 * 60 * 60;
-    if (
-      record.currentPeriodEnd + bufferSeconds <
-      Math.floor(Date.now() / 1000)
-    ) {
-      return false;
-    }
-  }
-  return true;
+  return subscriptionStore.resolveAccess(username).hasAccess;
 }

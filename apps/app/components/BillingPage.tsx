@@ -24,6 +24,7 @@ interface BillingPageProps {
   onManage: () => Promise<void>;
   onSubscriptionConfirmed: () => void;
   onRetryBillingStatus: () => Promise<void>;
+  onSignOut: () => void | Promise<void>;
 }
 
 export function BillingPage({
@@ -37,6 +38,7 @@ export function BillingPage({
   onManage,
   onSubscriptionConfirmed,
   onRetryBillingStatus,
+  onSignOut,
 }: BillingPageProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -225,6 +227,22 @@ export function BillingPage({
             >
               &larr; Return to workspace
             </button>
+            <button
+              type="button"
+              style={{
+                background: "none",
+                border: "none",
+                padding: 0,
+                cursor: "pointer",
+                color: "var(--bs-text-muted)",
+                fontSize: "var(--brand-text-sm)",
+                fontFamily: "var(--brand-font-sans)",
+                textAlign: "left",
+              }}
+              onClick={() => void onSignOut()}
+            >
+              Sign out
+            </button>
           </div>
         </div>
       </section>
@@ -322,6 +340,22 @@ export function BillingPage({
             {isSubmitting ? "Redirecting…" : "Subscribe now"}
           </button>
           {error ? <p className="app-inline-error">{error}</p> : null}
+          <button
+            type="button"
+            style={{
+              background: "none",
+              border: "none",
+              padding: 0,
+              cursor: "pointer",
+              color: "var(--bs-text-muted)",
+              fontSize: "var(--brand-text-sm)",
+              fontFamily: "var(--brand-font-sans)",
+              textAlign: "left",
+            }}
+            onClick={() => void onSignOut()}
+          >
+            Sign out
+          </button>
         </div>
       </div>
     </section>

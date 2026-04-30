@@ -8,10 +8,13 @@ import {
   Plus,
   Search,
   Settings,
+  Shield,
   User,
 } from "lucide-react";
+import type { SessionUser } from "../api";
 import type { AppRoute } from "../routes";
 import { ActivityLogPage } from "./ActivityLogPage";
+import { AdminSubscriptionManagementPage } from "./AdminSubscriptionManagementPage";
 import { BindersnapLogoMark } from "./BindersnapLogoMark";
 import { CreateDocumentModal } from "./CreateDocumentModal";
 import { DocumentDetail } from "./DocumentDetail";
@@ -20,10 +23,7 @@ import { HomePage } from "./HomePage";
 import { InboxPage } from "./InboxPage";
 
 interface AppShellProps {
-  user: {
-    username: string;
-    fullName?: string;
-  } | null;
+  user: SessionUser | null;
   route: AppRoute;
   onNavigate: (route: AppRoute, replace?: boolean) => void;
   onSignOut: () => void | Promise<void>;
@@ -46,6 +46,8 @@ function getTopnavTitle(route: AppRoute): ReactNode {
       return "Inbox";
     case "activity":
       return "Activity";
+    case "adminSubscriptions":
+      return "Pro Access";
     case "document":
       return (
         <>
@@ -88,6 +90,8 @@ function renderProfileMenuIcon(icon: string) {
       return <Settings size={16} strokeWidth={1.5} aria-hidden="true" />;
     case "appearance":
       return <Moon size={16} strokeWidth={1.5} aria-hidden="true" />;
+    case "admin":
+      return <Shield size={16} strokeWidth={1.5} aria-hidden="true" />;
     case "signout":
       return <LogOut size={16} strokeWidth={1.5} aria-hidden="true" />;
     default:
@@ -104,6 +108,7 @@ export function AppShell({
   const isWorkspace = route.kind === "workspace";
   const isDocuments = route.kind === "documents" || route.kind === "document";
   const isInbox = route.kind === "inbox";
+  const isAdminSubscriptions = route.kind === "adminSubscriptions";
   const topnavTitle = getTopnavTitle(route);
 
   const displayName = user?.fullName ?? user?.username ?? "";
@@ -222,7 +227,7 @@ export function AppShell({
               type="button"
               className="app-topnav-avatar"
               title={displayName || user?.username}
-              aria-label={`User: ${displayName || user?.username}`}
+              aria-label={`User: ${user?.username}`}
               aria-expanded={profileOpen}
               aria-haspopup="menu"
               onClick={() => setProfileOpen((o) => !o)}
@@ -313,6 +318,24 @@ export function AppShell({
                       </span>
                       <span className="app-profile-menu-label">Appearance</span>
                     </button>
+                    {user?.isAdmin ? (
+                      <button
+                        type="button"
+                        className={`app-profile-menu-item${isAdminSubscriptions ? " app-profile-menu-item--active" : ""}`}
+                        role="menuitem"
+                        onClick={() => {
+                          setProfileOpen(false);
+                          onNavigate({ kind: "adminSubscriptions" });
+                        }}
+                      >
+                        <span className="app-profile-menu-icon">
+                          {renderProfileMenuIcon("admin")}
+                        </span>
+                        <span className="app-profile-menu-label">
+                          Pro Access
+                        </span>
+                      </button>
+                    ) : null}
                   </div>
 
                   <div
@@ -392,6 +415,10 @@ export function AppShell({
               />
             ) : route.kind === "activity" ? (
               <ActivityLogPage />
+            ) : route.kind === "adminSubscriptions" ? (
+              <AdminSubscriptionManagementPage
+                currentUsername={currentUsername}
+              />
             ) : (
               <HomePage
                 currentUsername={currentUsername}
