@@ -227,7 +227,7 @@ export function AppShell({
               type="button"
               className="app-topnav-avatar"
               title={displayName || user?.username}
-              aria-label={`User: ${displayName || user?.username}`}
+              aria-label={`User: ${user?.username}`}
               aria-expanded={profileOpen}
               aria-haspopup="menu"
               onClick={() => setProfileOpen((o) => !o)}
