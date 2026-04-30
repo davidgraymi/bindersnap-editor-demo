@@ -7,6 +7,7 @@ export type AppRoute =
   | { kind: "documents" }
   | { kind: "inbox" }
   | { kind: "activity" }
+  | { kind: "adminSubscriptions" }
   | { kind: "billing" }
   | {
       kind: "document";
@@ -52,6 +53,13 @@ export function getRoute(pathname: string): AppRoute {
 
   if (normalizedPath === "/activity") {
     return { kind: "activity" };
+  }
+
+  if (
+    normalizedPath === "/admin/subscriptions" ||
+    normalizedPath === "/admin/pro-access"
+  ) {
+    return { kind: "adminSubscriptions" };
   }
 
   if (normalizedPath === "/billing") {
@@ -101,6 +109,8 @@ export function routeToPath(route: AppRoute): string {
       return "/inbox";
     case "activity":
       return "/activity";
+    case "adminSubscriptions":
+      return "/admin/subscriptions";
     case "billing":
       return "/billing";
     case "home":
@@ -116,7 +126,8 @@ export function isProtectedAppRoute(route: AppRoute): boolean {
     route.kind === "documents" ||
     route.kind === "document" ||
     route.kind === "inbox" ||
-    route.kind === "activity"
+    route.kind === "activity" ||
+    route.kind === "adminSubscriptions"
   );
 }
 

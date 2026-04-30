@@ -48,12 +48,19 @@ mock.module("./api", () => ({
 }));
 
 mock.module("./components/AppShell", () => ({
-  AppShell: ({ route }: { route: { kind: string } }) =>
+  AppShell: ({
+    route,
+    user,
+  }: {
+    route: { kind: string };
+    user: { isAdmin?: boolean } | null;
+  }) =>
     createElement(
       "div",
       {
         "data-testid": "app-shell",
         "data-route-kind": route.kind,
+        "data-user-is-admin": user?.isAdmin ? "true" : "false",
       },
       `workspace:${route.kind}`,
     ),
@@ -357,6 +364,78 @@ test("App redirects signed-in users to billing when the payment required handler
       expect(billingPage?.dataset.subscriptionStatus).toBe("none");
       expect(billingPage?.dataset.hasBillingStatusError).toBe("false");
       expect(container.querySelector('[data-testid="app-shell"]')).toBeNull();
+    });
+  } finally {
+    unmount();
+  }
+});
+
+test("App keeps Gitea admins on the Pro access route even when billing status is unavailable", async () => {
+  installDom("/admin/subscriptions");
+
+  mockFetchSessionUser.mockImplementation(async () => ({
+    user: {
+      username: "alice",
+      fullName: "Alice Example",
+      isAdmin: true,
+    },
+    token: "session-token",
+  }));
+  mockFetchBillingStatus.mockImplementation(async () => {
+    throw new Error("billing service unavailable");
+  });
+
+  const { App } = await import("./App");
+  const { container, unmount } = mountApp(App);
+
+  try {
+    await waitFor(() => {
+      const appShell = container.querySelector<HTMLElement>(
+        '[data-testid="app-shell"]',
+      );
+
+      expect(window.location.pathname).toBe("/admin/subscriptions");
+      expect(appShell?.dataset.routeKind).toBe("adminSubscriptions");
+      expect(appShell?.dataset.userIsAdmin).toBe("true");
+      expect(
+        container.querySelector('[data-testid="billing-page"]'),
+      ).toBeNull();
+    });
+  } finally {
+    unmount();
+  }
+});
+
+test("App redirects non-admin users away from the Pro access route", async () => {
+  installDom("/admin/subscriptions");
+
+  mockFetchSessionUser.mockImplementation(async () => ({
+    user: {
+      username: "alice",
+      fullName: "Alice Example",
+      isAdmin: false,
+    },
+    token: "session-token",
+  }));
+  mockFetchBillingStatus.mockImplementation(async () => ({
+    status: "active",
+    currentPeriodEnd: null,
+    cancelAtPeriodEnd: false,
+    cancelAt: null,
+  }));
+
+  const { App } = await import("./App");
+  const { container, unmount } = mountApp(App);
+
+  try {
+    await waitFor(() => {
+      const appShell = container.querySelector<HTMLElement>(
+        '[data-testid="app-shell"]',
+      );
+
+      expect(window.location.pathname).toBe("/");
+      expect(appShell?.dataset.routeKind).toBe("workspace");
+      expect(appShell?.dataset.userIsAdmin).toBe("false");
     });
   } finally {
     unmount();

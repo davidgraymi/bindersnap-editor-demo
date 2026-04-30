@@ -7,6 +7,8 @@ import {
   subscriptionStore,
   hasActiveSubscription,
   webhookEventStore,
+  type EffectiveSubscriptionAccess,
+  type SubscriptionAccessOverrideRecord,
 } from "./subscriptions";
 import type Stripe from "stripe";
 import { extractCurrentPeriodEnd } from "./stripe/api-version";
@@ -38,6 +40,7 @@ import {
   searchUsers,
   removeRepoCollaborator,
   type RepoCollaboratorPermissionSummary,
+  type RepoUserSummary,
   type WorkspaceRepo,
 } from "../../packages/gitea-client/repos";
 import {
@@ -559,6 +562,117 @@ function requireSubscription(
   return auth;
 }
 
+async function requireAdminSession(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<
+  | {
+      session: SessionRecord;
+      client: GiteaClient;
+      currentUser: ResolvedGiteaCurrentUser;
+    }
+  | Response
+> {
+  const auth = requireSession(req, baseHeaders);
+  if (auth instanceof Response) {
+    return auth;
+  }
+
+  const currentUser = await fetchSessionGiteaUser(auth.session);
+  if (!currentUser) {
+    return json(
+      502,
+      { error: "Unable to verify admin access right now." },
+      baseHeaders,
+    );
+  }
+
+  if (!currentUser.isAdmin) {
+    return json(403, { error: "Admin access required." }, baseHeaders);
+  }
+
+  return {
+    ...auth,
+    currentUser,
+  };
+}
+
+async function requireSubscriptionOrAdmin(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<{ session: SessionRecord; client: GiteaClient } | Response> {
+  const auth = requireSession(req, baseHeaders);
+  if (auth instanceof Response) {
+    return auth;
+  }
+
+  if (config.bypassSubscriptionForUsers.includes(auth.session.username)) {
+    return auth;
+  }
+
+  if (hasActiveSubscription(auth.session.username)) {
+    return auth;
+  }
+
+  const currentUser = await fetchSessionGiteaUser(auth.session);
+  if (currentUser?.isAdmin) {
+    return auth;
+  }
+
+  return json(402, { error: "Subscription required." }, baseHeaders);
+}
+
+function resolveSubscriptionAccessSource(
+  username: string,
+): "config_bypass" | "stripe" | "admin_grant" | "admin_revoke" | "none" {
+  if (config.bypassSubscriptionForUsers.includes(username)) {
+    return "config_bypass";
+  }
+
+  return subscriptionStore.resolveAccess(username).source;
+}
+
+function resolveSubscriptionAccessState(username: string): {
+  hasAccess: boolean;
+  source: "config_bypass" | "stripe" | "admin_grant" | "admin_revoke" | "none";
+  status: string | null;
+  stripeStatus: string | null;
+  currentPeriodEnd: number | null;
+  cancelAtPeriodEnd: boolean;
+  cancelAt: number | null;
+  override: SubscriptionAccessOverrideRecord | null;
+} {
+  if (config.bypassSubscriptionForUsers.includes(username)) {
+    return {
+      hasAccess: true,
+      source: "config_bypass",
+      status: "active",
+      stripeStatus: subscriptionStore.getByUsername(username)?.status ?? null,
+      currentPeriodEnd: null,
+      cancelAtPeriodEnd: false,
+      cancelAt: null,
+      override: subscriptionStore.getAccessOverride(username),
+    };
+  }
+
+  const access = subscriptionStore.resolveAccess(username);
+  return {
+    hasAccess: access.hasAccess,
+    source: access.source,
+    status:
+      access.source === "admin_grant"
+        ? "active"
+        : access.source === "admin_revoke"
+          ? "revoked"
+          : (access.subscription?.status ?? null),
+    stripeStatus: access.subscription?.status ?? null,
+    currentPeriodEnd: access.subscription?.currentPeriodEnd ?? null,
+    cancelAtPeriodEnd: access.subscription?.cancelAtPeriodEnd ?? false,
+    cancelAt: access.subscription?.cancelAt ?? null,
+    override: access.override,
+  };
+}
+
 export function createStripeRequestIdempotencyKey(
   flow: "checkout" | "portal",
   clientKey?: string | null,
@@ -1054,12 +1168,22 @@ async function verifyUserCredentials(
 }
 
 type GiteaCurrentUserRecord = {
+  login?: unknown;
+  full_name?: unknown;
   email?: unknown;
+  is_admin?: unknown;
 };
 
-async function fetchSessionUserEmail(
+type ResolvedGiteaCurrentUser = {
+  username: string;
+  fullName: string | null;
+  email: string | null;
+  isAdmin: boolean;
+};
+
+async function fetchSessionGiteaUser(
   session: SessionRecord,
-): Promise<string | null> {
+): Promise<ResolvedGiteaCurrentUser | null> {
   const response = await giteaFetch("/api/v1/user", {
     method: "GET",
     headers: {
@@ -1069,14 +1193,14 @@ async function fetchSessionUserEmail(
   }).catch(() => null);
 
   if (!response) {
-    logger.warn("Unable to reach Gitea for billing email lookup", {
+    logger.warn("Unable to reach Gitea for session user lookup", {
       username: session.username,
     });
     return null;
   }
 
   if (!response.ok) {
-    logger.warn("Gitea billing email lookup failed", {
+    logger.warn("Gitea session user lookup failed", {
       username: session.username,
       status: response.status,
     });
@@ -1086,11 +1210,32 @@ async function fetchSessionUserEmail(
   const payload = (await response
     .json()
     .catch(() => null)) as GiteaCurrentUserRecord | null;
+  const username =
+    typeof payload?.login === "string" && payload.login.trim() !== ""
+      ? payload.login.trim()
+      : session.username;
+  const fullName =
+    typeof payload?.full_name === "string" && payload.full_name.trim() !== ""
+      ? payload.full_name.trim()
+      : null;
   const email =
     typeof payload?.email === "string"
       ? payload.email.trim().toLowerCase()
       : "";
-  return looksLikeEmailAddress(email) ? email : null;
+
+  return {
+    username,
+    fullName,
+    email: looksLikeEmailAddress(email) ? email : null,
+    isAdmin: payload?.is_admin === true,
+  };
+}
+
+async function fetchSessionUserEmail(
+  session: SessionRecord,
+): Promise<string | null> {
+  const user = await fetchSessionGiteaUser(session);
+  return user?.email ?? null;
 }
 
 type GiteaEmailRecord = {
@@ -1665,11 +1810,15 @@ async function handleAuthMe(
     clientIp: requestClientIp(req),
   });
 
+  const giteaUser = await fetchSessionGiteaUser(session);
+
   return json(
     200,
     {
       user: {
-        username: session.username,
+        username: giteaUser?.username ?? session.username,
+        fullName: giteaUser?.fullName ?? undefined,
+        isAdmin: giteaUser?.isAdmin === true,
       },
       token: session.giteaToken,
     },
@@ -2382,7 +2531,7 @@ async function handleSearchUsersRoute(
   req: Request,
   baseHeaders: Headers,
 ): Promise<Response> {
-  const auth = requireSubscription(req, baseHeaders);
+  const auth = await requireSubscriptionOrAdmin(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -2409,6 +2558,242 @@ async function handleSearchUsersRoute(
   } catch (err) {
     return responseFromError(err, baseHeaders, "Unable to search users.");
   }
+}
+
+function serializeSubscriptionOverride(
+  override: SubscriptionAccessOverrideRecord | null,
+) {
+  if (!override) {
+    return null;
+  }
+
+  return {
+    access: override.access,
+    mode: override.access,
+    reason: override.reason,
+    updatedBy: override.updatedBy,
+    updatedAt: override.updatedAt,
+  };
+}
+
+function accessStateUpdatedAt(access: EffectiveSubscriptionAccess): number {
+  return Math.max(
+    access.subscription?.updatedAt ?? 0,
+    access.override?.updatedAt ?? 0,
+  );
+}
+
+function buildAdminSubscriptionAccessEntry(
+  user: Pick<RepoUserSummary, "login" | "full_name" | "email">,
+) {
+  const accessState = resolveSubscriptionAccessState(user.login);
+
+  return {
+    username: user.login,
+    fullName: user.full_name || undefined,
+    email: user.email || undefined,
+    hasAccess: accessState.hasAccess,
+    accessSource: accessState.source,
+    status: accessState.status,
+    stripeStatus: accessState.stripeStatus,
+    currentPeriodEnd: accessState.currentPeriodEnd,
+    cancelAtPeriodEnd: accessState.cancelAtPeriodEnd,
+    cancelAt: accessState.cancelAt,
+    override: serializeSubscriptionOverride(accessState.override),
+  };
+}
+
+async function findExactGiteaUser(
+  client: GiteaClient,
+  username: string,
+): Promise<RepoUserSummary | null> {
+  const result = await searchUsers({
+    client,
+    query: username,
+    page: 1,
+    limit: 20,
+  });
+
+  const normalizedUsername = username.trim().toLowerCase();
+  return (
+    result.users.find(
+      (candidate) =>
+        candidate.login.trim().toLowerCase() === normalizedUsername,
+    ) ?? null
+  );
+}
+
+async function handleAdminSubscriptionAccessList(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireAdminSession(req, baseHeaders);
+  if (auth instanceof Response) {
+    return auth;
+  }
+
+  const url = new URL(req.url);
+  const query = url.searchParams.get("q")?.trim() || "";
+  const page = parsePositiveIntInput(url.searchParams.get("page"), 1);
+  const limit = parsePositiveIntInput(url.searchParams.get("limit"), 12);
+
+  if (query === "") {
+    const offset = (page - 1) * limit;
+    const accessRows = subscriptionStore
+      .listKnownAccessStates()
+      .sort((left, right) => {
+        const updatedAtDiff =
+          accessStateUpdatedAt(right) - accessStateUpdatedAt(left);
+        if (updatedAtDiff !== 0) {
+          return updatedAtDiff;
+        }
+
+        return left.username.localeCompare(right.username);
+      });
+    const hasMore = accessRows.length > offset + limit;
+    const users = accessRows.slice(offset, offset + limit).map((access) =>
+      buildAdminSubscriptionAccessEntry({
+        login: access.username,
+        full_name: "",
+        email: "",
+      }),
+    );
+
+    return json(
+      200,
+      {
+        users,
+        page,
+        limit,
+        hasMore,
+        query,
+      },
+      baseHeaders,
+    );
+  }
+
+  try {
+    const result = await searchUsers({
+      client: auth.client,
+      query,
+      page,
+      limit,
+    });
+
+    return json(
+      200,
+      {
+        users: result.users.map(buildAdminSubscriptionAccessEntry),
+        page: result.page,
+        limit: result.limit,
+        hasMore: result.hasMore,
+        query,
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to load admin subscription access.",
+    );
+  }
+}
+
+async function handleAdminSubscriptionAccessUpdate(
+  req: Request,
+  baseHeaders: Headers,
+  rawUsername: string,
+): Promise<Response> {
+  const auth = await requireAdminSession(req, baseHeaders);
+  if (auth instanceof Response) {
+    return auth;
+  }
+
+  const username = decodePathParam(rawUsername).trim();
+  if (username === "") {
+    return json(400, { error: "Username is required." }, baseHeaders);
+  }
+
+  const payload = await readJsonBody(req);
+  const accessInput =
+    readInputString(payload, null, "access") ||
+    readInputString(payload, null, "mode");
+  const access = accessInput.toLowerCase();
+  if (access !== "grant" && access !== "revoke") {
+    return json(400, { error: "access must be grant or revoke." }, baseHeaders);
+  }
+
+  if (username === auth.currentUser.username) {
+    return json(
+      400,
+      { error: "Admin overrides can only target another user." },
+      baseHeaders,
+    );
+  }
+
+  const reasonInput = readInputString(payload, null, "reason");
+  const reason = reasonInput === "" ? null : reasonInput;
+
+  subscriptionStore.putAccessOverride({
+    username,
+    access,
+    reason,
+    updatedBy: auth.currentUser.username,
+    updatedAt: Date.now(),
+  });
+
+  return json(
+    200,
+    {
+      user: buildAdminSubscriptionAccessEntry({
+        login: username,
+        full_name: "",
+        email: "",
+      }),
+    },
+    baseHeaders,
+  );
+}
+
+async function handleAdminSubscriptionAccessDelete(
+  req: Request,
+  baseHeaders: Headers,
+  rawUsername: string,
+): Promise<Response> {
+  const auth = await requireAdminSession(req, baseHeaders);
+  if (auth instanceof Response) {
+    return auth;
+  }
+
+  const username = decodePathParam(rawUsername).trim();
+  if (username === "") {
+    return json(400, { error: "Username is required." }, baseHeaders);
+  }
+
+  if (username === auth.currentUser.username) {
+    return json(
+      400,
+      { error: "Admin overrides can only target another user." },
+      baseHeaders,
+    );
+  }
+
+  subscriptionStore.deleteAccessOverride(username);
+
+  return json(
+    200,
+    {
+      ok: true,
+      username,
+      user: buildAdminSubscriptionAccessEntry({
+        login: username,
+        full_name: "",
+        email: "",
+      }),
+    },
+    baseHeaders,
+  );
 }
 
 async function handleAddCollaborator(
@@ -2749,29 +3134,18 @@ async function handleBillingStatus(
   const { username } = auth.session;
 
   const priceInfo = await fetchStripePriceInfo();
-
-  if (config.bypassSubscriptionForUsers.includes(username)) {
-    return json(
-      200,
-      {
-        status: "active",
-        currentPeriodEnd: null,
-        cancelAtPeriodEnd: false,
-        cancelAt: null,
-        plan: priceInfo,
-      },
-      baseHeaders,
-    );
-  }
-
-  const record = subscriptionStore.getByUsername(username);
+  const accessState = resolveSubscriptionAccessState(username);
   return json(
     200,
     {
-      status: record?.status ?? null,
-      currentPeriodEnd: record?.currentPeriodEnd ?? null,
-      cancelAtPeriodEnd: record?.cancelAtPeriodEnd ?? false,
-      cancelAt: record?.cancelAt ?? null,
+      status: accessState.status,
+      stripeStatus: accessState.stripeStatus,
+      currentPeriodEnd: accessState.currentPeriodEnd,
+      cancelAtPeriodEnd: accessState.cancelAtPeriodEnd,
+      cancelAt: accessState.cancelAt,
+      hasAccess: accessState.hasAccess,
+      accessSource: accessState.source,
+      override: serializeSubscriptionOverride(accessState.override),
       plan: priceInfo,
     },
     baseHeaders,
@@ -2870,10 +3244,137 @@ async function handleDevGrantSubscription(
     stripeSubscriptionId: `sub_dev_${username}`,
     status: "active",
     currentPeriodEnd: Math.floor(Date.now() / 1000) + 365 * 24 * 60 * 60,
+    cancelAtPeriodEnd: false,
+    cancelAt: null,
     updatedAt: Date.now(),
   });
 
   return json(200, { ok: true, username }, baseHeaders);
+}
+
+function buildLegacyAdminSubscriptionAccessState(username: string) {
+  const accessState = resolveSubscriptionAccessState(username);
+
+  return {
+    username,
+    hasProAccess: accessState.hasAccess,
+    source: accessState.source,
+    overrideActive: accessState.override !== null,
+    updatedAt:
+      accessState.override !== null
+        ? new Date(accessState.override.updatedAt).toISOString()
+        : null,
+    updatedBy: accessState.override?.updatedBy ?? null,
+  };
+}
+
+async function handleAdminSubscriptionStatus(
+  req: Request,
+  baseHeaders: Headers,
+  rawUsername: string,
+): Promise<Response> {
+  const auth = await requireAdminSession(req, baseHeaders);
+  if (auth instanceof Response) {
+    return auth;
+  }
+
+  const username = decodePathParam(rawUsername).trim();
+  if (username === "") {
+    return json(400, { error: "Username is required." }, baseHeaders);
+  }
+
+  const matchedUser = await findExactGiteaUser(auth.client, username).catch(
+    () => null,
+  );
+  if (!matchedUser) {
+    return json(404, { error: "User not found." }, baseHeaders);
+  }
+
+  return json(
+    200,
+    buildLegacyAdminSubscriptionAccessState(matchedUser.login),
+    baseHeaders,
+  );
+}
+
+async function upsertLegacyAdminSubscriptionOverride(
+  req: Request,
+  baseHeaders: Headers,
+  rawUsername: string,
+  access: "grant" | "revoke",
+): Promise<Response> {
+  const auth = await requireAdminSession(req, baseHeaders);
+  if (auth instanceof Response) {
+    return auth;
+  }
+
+  const username = decodePathParam(rawUsername).trim();
+  if (username === "") {
+    return json(400, { error: "Username is required." }, baseHeaders);
+  }
+
+  const matchedUser = await findExactGiteaUser(auth.client, username).catch(
+    () => null,
+  );
+  if (!matchedUser) {
+    return json(404, { error: "User not found." }, baseHeaders);
+  }
+
+  subscriptionStore.putAccessOverride({
+    username: matchedUser.login,
+    access,
+    updatedBy: auth.currentUser.username,
+    updatedAt: Date.now(),
+  });
+
+  return json(
+    200,
+    buildLegacyAdminSubscriptionAccessState(matchedUser.login),
+    baseHeaders,
+  );
+}
+
+async function handleAdminSubscriptionBooleanUpdate(
+  req: Request,
+  baseHeaders: Headers,
+  rawUsername: string,
+): Promise<Response> {
+  const payload = await readJsonBody(req);
+  const hasProAccessValue = payload?.hasProAccess;
+
+  if (hasProAccessValue === true) {
+    return upsertLegacyAdminSubscriptionOverride(
+      req,
+      baseHeaders,
+      rawUsername,
+      "grant",
+    );
+  }
+
+  if (hasProAccessValue === false) {
+    return upsertLegacyAdminSubscriptionOverride(
+      req,
+      baseHeaders,
+      rawUsername,
+      "revoke",
+    );
+  }
+
+  const accessValue = readInputString(payload, null, "access").toLowerCase();
+  if (accessValue === "grant" || accessValue === "revoke") {
+    return upsertLegacyAdminSubscriptionOverride(
+      req,
+      baseHeaders,
+      rawUsername,
+      accessValue,
+    );
+  }
+
+  return json(
+    400,
+    { error: "hasProAccess must be provided as a boolean." },
+    baseHeaders,
+  );
 }
 
 async function handleBillingPortal(
@@ -3042,6 +3543,11 @@ export function createApiServer() {
         response = await handleCreateDocument(req, baseHeaders);
       } else if (pathname === "/api/app/users/search" && method === "GET") {
         response = await handleSearchUsersRoute(req, baseHeaders);
+      } else if (
+        pathname === "/api/app/admin/subscriptions/access" &&
+        method === "GET"
+      ) {
+        response = await handleAdminSubscriptionAccessList(req, baseHeaders);
       } else if (pathname === "/api/app/billing/status" && method === "GET") {
         response = await handleBillingStatus(req, baseHeaders);
       } else if (
@@ -3071,6 +3577,18 @@ export function createApiServer() {
         );
         const collaboratorsActionMatch = pathname.match(
           /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/collaborators\/([^/]+)$/,
+        );
+        const adminSubscriptionAccessActionMatch = pathname.match(
+          /^\/api\/app\/admin\/subscriptions\/access\/([^/]+)$/,
+        );
+        const adminSubscriptionGrantMatch = pathname.match(
+          /^\/api\/app\/admin\/subscriptions\/([^/]+)\/grant$/,
+        );
+        const adminSubscriptionRevokeMatch = pathname.match(
+          /^\/api\/app\/admin\/subscriptions\/([^/]+)\/revoke$/,
+        );
+        const adminSubscriptionStatusMatch = pathname.match(
+          /^\/api\/app\/admin\/subscriptions\/([^/]+)$/,
         );
         const collaboratorsMatch = pathname.match(
           /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/collaborators$/,
@@ -3108,6 +3626,51 @@ export function createApiServer() {
             baseHeaders,
             decodePathParam(versionsMatch[1] ?? ""),
             decodePathParam(versionsMatch[2] ?? ""),
+          );
+        } else if (adminSubscriptionGrantMatch && method === "POST") {
+          response = await upsertLegacyAdminSubscriptionOverride(
+            req,
+            baseHeaders,
+            adminSubscriptionGrantMatch[1] ?? "",
+            "grant",
+          );
+        } else if (adminSubscriptionRevokeMatch && method === "POST") {
+          response = await upsertLegacyAdminSubscriptionOverride(
+            req,
+            baseHeaders,
+            adminSubscriptionRevokeMatch[1] ?? "",
+            "revoke",
+          );
+        } else if (adminSubscriptionStatusMatch && method === "GET") {
+          response = await handleAdminSubscriptionStatus(
+            req,
+            baseHeaders,
+            adminSubscriptionStatusMatch[1] ?? "",
+          );
+        } else if (adminSubscriptionStatusMatch && method === "PUT") {
+          response = await handleAdminSubscriptionBooleanUpdate(
+            req,
+            baseHeaders,
+            adminSubscriptionStatusMatch[1] ?? "",
+          );
+        } else if (adminSubscriptionStatusMatch && method === "DELETE") {
+          response = await upsertLegacyAdminSubscriptionOverride(
+            req,
+            baseHeaders,
+            adminSubscriptionStatusMatch[1] ?? "",
+            "revoke",
+          );
+        } else if (adminSubscriptionAccessActionMatch && method === "PUT") {
+          response = await handleAdminSubscriptionAccessUpdate(
+            req,
+            baseHeaders,
+            adminSubscriptionAccessActionMatch[1] ?? "",
+          );
+        } else if (adminSubscriptionAccessActionMatch && method === "DELETE") {
+          response = await handleAdminSubscriptionAccessDelete(
+            req,
+            baseHeaders,
+            adminSubscriptionAccessActionMatch[1] ?? "",
           );
         } else if (collaboratorsActionMatch && method === "PUT") {
           response = await handleAddCollaborator(

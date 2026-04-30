@@ -559,3 +559,112 @@ describe("SubscriptionStore — cancel_at_period_end", () => {
     expect(record?.cancelAt).toBeNull();
   });
 });
+
+describe("SubscriptionStore — admin overrides", () => {
+  it("persists override reason and updater metadata", () => {
+    const store = makeStore();
+
+    store.putAccessOverride({
+      username: "override-user",
+      access: "grant",
+      reason: "manual comp",
+      updatedBy: "admin-user",
+      updatedAt: 123,
+    });
+
+    expect(store.getAccessOverride("override-user")).toEqual({
+      username: "override-user",
+      access: "grant",
+      reason: "manual comp",
+      updatedBy: "admin-user",
+      updatedAt: 123,
+    });
+  });
+
+  it("revoke overrides Stripe-backed access until the override is removed", () => {
+    const store = makeStore();
+
+    store.upsert({
+      username: "stripe-user",
+      stripeCustomerId: "cus_override",
+      stripeSubscriptionId: "sub_override",
+      status: "active",
+      currentPeriodEnd: futureEnd,
+      cancelAtPeriodEnd: false,
+      cancelAt: null,
+      updatedAt: 100,
+    });
+    store.putAccessOverride({
+      username: "stripe-user",
+      access: "revoke",
+      reason: "manual review hold",
+      updatedBy: "admin-user",
+      updatedAt: 200,
+    });
+
+    expect(store.resolveAccess("stripe-user")).toEqual({
+      username: "stripe-user",
+      hasAccess: false,
+      source: "admin_revoke",
+      subscription: expect.objectContaining({
+        status: "active",
+      }),
+      override: {
+        username: "stripe-user",
+        access: "revoke",
+        reason: "manual review hold",
+        updatedBy: "admin-user",
+        updatedAt: 200,
+      },
+    });
+
+    store.deleteAccessOverride("stripe-user");
+
+    expect(store.resolveAccess("stripe-user")).toEqual({
+      username: "stripe-user",
+      hasAccess: true,
+      source: "stripe",
+      subscription: expect.objectContaining({
+        status: "active",
+      }),
+      override: null,
+    });
+  });
+
+  it("lists known access states for Stripe-only and override-only users", () => {
+    const store = makeStore();
+
+    store.upsert({
+      username: "stripe-only",
+      stripeCustomerId: "cus_list",
+      stripeSubscriptionId: "sub_list",
+      status: "active",
+      currentPeriodEnd: futureEnd,
+      cancelAtPeriodEnd: false,
+      cancelAt: null,
+      updatedAt: 10,
+    });
+    store.putAccessOverride({
+      username: "override-only",
+      access: "grant",
+      reason: null,
+      updatedBy: "admin-user",
+      updatedAt: 20,
+    });
+
+    expect(store.listKnownAccessStates()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          username: "override-only",
+          source: "admin_grant",
+          hasAccess: true,
+        }),
+        expect.objectContaining({
+          username: "stripe-only",
+          source: "stripe",
+          hasAccess: true,
+        }),
+      ]),
+    );
+  });
+});

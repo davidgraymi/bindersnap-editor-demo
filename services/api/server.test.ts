@@ -24,6 +24,13 @@ type MockedStripeResource = {
   body: Record<string, unknown>;
 };
 
+type MockedGiteaUser = {
+  login: string;
+  email: string;
+  fullName?: string;
+  isAdmin?: boolean;
+};
+
 const originalFetch = globalThis.fetch;
 const originalApiPort = config.apiPort;
 const originalStripeSecretKey = config.stripeSecretKey;
@@ -32,7 +39,8 @@ const originalStripePriceId = config.stripePriceId;
 const originalSessionsDbPath = config.sessionsDbPath;
 
 let fetchCalls: MockedFetchCall[] = [];
-let userEmailsByToken = new Map<string, string>();
+let giteaUsersByLogin = new Map<string, MockedGiteaUser>();
+let giteaLoginsByToken = new Map<string, string>();
 let stripeSubscriptionsById = new Map<string, MockedStripeResource>();
 let stripeCustomersById = new Map<string, MockedStripeResource>();
 
@@ -53,7 +61,8 @@ beforeEach(() => {
     new WebhookEventStore(config.sessionsDbPath);
 
   fetchCalls = [];
-  userEmailsByToken = new Map();
+  giteaUsersByLogin = new Map();
+  giteaLoginsByToken = new Map();
   stripeSubscriptionsById = new Map();
   stripeCustomersById = new Map();
   globalThis.fetch = (async (input, init) => {
@@ -84,9 +93,10 @@ beforeEach(() => {
       const token = authHeader.startsWith("token ")
         ? authHeader.slice("token ".length)
         : "";
-      const email = userEmailsByToken.get(token);
+      const login = giteaLoginsByToken.get(token);
+      const user = login ? giteaUsersByLogin.get(login) : null;
 
-      if (!email) {
+      if (!user) {
         return new Response(JSON.stringify({ message: "Not found" }), {
           status: 404,
           headers: {
@@ -95,12 +105,57 @@ beforeEach(() => {
         });
       }
 
-      return new Response(JSON.stringify({ email }), {
-        status: 200,
-        headers: {
-          "Content-Type": "application/json",
+      return new Response(
+        JSON.stringify({
+          login: user.login,
+          email: user.email,
+          full_name: user.fullName ?? "",
+          is_admin: user.isAdmin === true,
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
         },
+      );
+    }
+
+    if (url.pathname === "/api/v1/users/search") {
+      const query = (url.searchParams.get("q") ?? "").trim().toLowerCase();
+      const page = Number.parseInt(url.searchParams.get("page") ?? "1", 10);
+      const limit = Number.parseInt(url.searchParams.get("limit") ?? "10", 10);
+      const matchedUsers = [...giteaUsersByLogin.values()].filter((user) => {
+        if (query === "") {
+          return true;
+        }
+
+        return (
+          user.login.toLowerCase().includes(query) ||
+          user.email.toLowerCase().includes(query) ||
+          (user.fullName ?? "").toLowerCase().includes(query)
+        );
       });
+      const start = Math.max(0, (page - 1) * limit);
+      const pageUsers = matchedUsers.slice(start, start + limit);
+
+      return new Response(
+        JSON.stringify(
+          pageUsers.map((user, index) => ({
+            id: index + 1,
+            login: user.login,
+            full_name: user.fullName ?? "",
+            email: user.email,
+            avatar_url: "",
+          })),
+        ),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      );
     }
 
     if (url.pathname.startsWith("/v1/subscriptions/")) {
@@ -187,6 +242,8 @@ function seedSession(
   username: string,
   options?: {
     email?: string;
+    fullName?: string;
+    isAdmin?: boolean;
   },
 ): string {
   const sessionId = `sess_${randomUUID()}`;
@@ -194,7 +251,13 @@ function seedSession(
   const email =
     options?.email ?? `${username.toLowerCase()}@${config.emailDomain}`;
 
-  userEmailsByToken.set(giteaToken, email);
+  giteaUsersByLogin.set(username, {
+    login: username,
+    email,
+    fullName: options?.fullName,
+    isAdmin: options?.isAdmin === true,
+  });
+  giteaLoginsByToken.set(giteaToken, username);
   sessionStore.put({
     id: sessionId,
     username,
@@ -208,6 +271,10 @@ function seedSession(
 
 function getFetchCallsByPath(path: string): MockedFetchCall[] {
   return fetchCalls.filter((call) => call.path === path);
+}
+
+function seedGiteaUser(user: MockedGiteaUser): void {
+  giteaUsersByLogin.set(user.login, user);
 }
 
 function getPostedFormBody(call: MockedFetchCall): URLSearchParams {
@@ -237,6 +304,28 @@ function makeBillingRequest(
 ): Request {
   return new Request(`http://localhost${pathname}`, {
     method: "POST",
+    headers: {
+      Origin: config.appOrigin,
+      Cookie: `${config.sessionCookieName}=${sessionId}`,
+      ...(body ? { "Content-Type": "application/json" } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+}
+
+function makeSessionRequest(
+  pathname: string,
+  sessionId: string,
+  options?: {
+    method?: string;
+    body?: Record<string, unknown>;
+  },
+): Request {
+  const method = options?.method ?? "GET";
+  const body = options?.body;
+
+  return new Request(`http://localhost${pathname}`, {
+    method,
     headers: {
       Origin: config.appOrigin,
       Cookie: `${config.sessionCookieName}=${sessionId}`,
@@ -867,6 +956,228 @@ describe("billing Stripe webhook recovery", () => {
         1,
       );
       expect(subscriptionStore.getByCustomerId(customerId)).toBeNull();
+    } finally {
+      server.stop(true);
+    }
+  });
+});
+
+describe("admin subscription access overrides", () => {
+  test("auth/me exposes the current user's admin flag", async () => {
+    const server = createApiServer();
+    const sessionId = seedSession(`admin-${randomUUID()}`, {
+      isAdmin: true,
+      fullName: "Admin User",
+    });
+
+    try {
+      const response = await server.fetch(
+        makeSessionRequest("/auth/me", sessionId),
+      );
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
+        user: {
+          username: expect.stringMatching(/^admin-/),
+          fullName: "Admin User",
+          isAdmin: true,
+        },
+        token: expect.stringMatching(/^gitea_token_/),
+      });
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("billing status reflects an admin revoke override over an active Stripe subscription", async () => {
+    const server = createApiServer();
+    const username = `revoked-${randomUUID()}`;
+    const sessionId = seedSession(username);
+
+    subscriptionStore.upsert({
+      username,
+      stripeCustomerId: `cus_${randomUUID()}`,
+      stripeSubscriptionId: `sub_${randomUUID()}`,
+      status: "active",
+      currentPeriodEnd: Math.floor(Date.now() / 1000) + 3_600,
+      cancelAtPeriodEnd: false,
+      cancelAt: null,
+      updatedAt: Date.now(),
+    });
+    subscriptionStore.putAccessOverride({
+      username,
+      access: "revoke",
+      reason: "manual review hold",
+      updatedBy: "admin-user",
+      updatedAt: Date.now(),
+    });
+
+    try {
+      const response = await server.fetch(
+        makeSessionRequest("/api/app/billing/status", sessionId),
+      );
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        status: "revoked",
+        stripeStatus: "active",
+        hasAccess: false,
+        accessSource: "admin_revoke",
+        override: {
+          access: "revoke",
+          mode: "revoke",
+          reason: "manual review hold",
+          updatedBy: "admin-user",
+        },
+      });
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("admin list without a query includes Stripe-backed and override-only users", async () => {
+    const server = createApiServer();
+    const adminSessionId = seedSession(`admin-${randomUUID()}`, {
+      isAdmin: true,
+    });
+    const stripeUser = `stripe-${randomUUID()}`;
+    const overrideUser = `override-${randomUUID()}`;
+
+    seedGiteaUser({
+      login: stripeUser,
+      email: `${stripeUser}@${config.emailDomain}`,
+    });
+    seedGiteaUser({
+      login: overrideUser,
+      email: `${overrideUser}@${config.emailDomain}`,
+    });
+
+    subscriptionStore.upsert({
+      username: stripeUser,
+      stripeCustomerId: `cus_${randomUUID()}`,
+      stripeSubscriptionId: `sub_${randomUUID()}`,
+      status: "active",
+      currentPeriodEnd: Math.floor(Date.now() / 1000) + 3_600,
+      cancelAtPeriodEnd: false,
+      cancelAt: null,
+      updatedAt: Date.now() - 1_000,
+    });
+    subscriptionStore.putAccessOverride({
+      username: overrideUser,
+      access: "grant",
+      reason: "manual comp",
+      updatedBy: "admin-user",
+      updatedAt: Date.now(),
+    });
+
+    try {
+      const response = await server.fetch(
+        makeSessionRequest(
+          "/api/app/admin/subscriptions/access",
+          adminSessionId,
+        ),
+      );
+
+      expect(response.status).toBe(200);
+      const payload = (await response.json()) as {
+        users: Array<{ username: string; accessSource: string }>;
+      };
+      expect(payload.users).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            username: stripeUser,
+            accessSource: "stripe",
+          }),
+          expect.objectContaining({
+            username: overrideUser,
+            accessSource: "admin_grant",
+          }),
+        ]),
+      );
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("only admins can mutate overrides, and revoke blocks subscription-gated routes until cleared", async () => {
+    const server = createApiServer();
+    const adminUsername = `admin-${randomUUID()}`;
+    const memberUsername = `member-${randomUUID()}`;
+    const outsiderSessionId = seedSession(`outsider-${randomUUID()}`);
+    const adminSessionId = seedSession(adminUsername, { isAdmin: true });
+    const memberSessionId = seedSession(memberUsername);
+
+    subscriptionStore.upsert({
+      username: memberUsername,
+      stripeCustomerId: `cus_${randomUUID()}`,
+      stripeSubscriptionId: `sub_${randomUUID()}`,
+      status: "active",
+      currentPeriodEnd: Math.floor(Date.now() / 1000) + 3_600,
+      cancelAtPeriodEnd: false,
+      cancelAt: null,
+      updatedAt: Date.now(),
+    });
+
+    try {
+      const forbidden = await server.fetch(
+        makeSessionRequest(
+          "/api/app/admin/subscriptions/access",
+          outsiderSessionId,
+        ),
+      );
+      expect(forbidden.status).toBe(403);
+
+      const revoke = await server.fetch(
+        makeSessionRequest(
+          `/api/app/admin/subscriptions/access/${encodeURIComponent(memberUsername)}`,
+          adminSessionId,
+          {
+            method: "PUT",
+            body: {
+              access: "revoke",
+              reason: "chargeback",
+            },
+          },
+        ),
+      );
+
+      expect(revoke.status).toBe(200);
+      expect(await revoke.json()).toMatchObject({
+        user: {
+          username: memberUsername,
+          hasAccess: false,
+          accessSource: "admin_revoke",
+          override: {
+            reason: "chargeback",
+            access: "revoke",
+          },
+        },
+      });
+
+      const gatedWhileRevoked = await server.fetch(
+        makeSessionRequest(
+          `/api/app/users/search?q=${encodeURIComponent(adminUsername)}`,
+          memberSessionId,
+        ),
+      );
+      expect(gatedWhileRevoked.status).toBe(402);
+
+      const clear = await server.fetch(
+        makeSessionRequest(
+          `/api/app/admin/subscriptions/access/${encodeURIComponent(memberUsername)}`,
+          adminSessionId,
+          { method: "DELETE" },
+        ),
+      );
+      expect(clear.status).toBe(200);
+
+      const gatedAfterClear = await server.fetch(
+        makeSessionRequest(
+          `/api/app/users/search?q=${encodeURIComponent(adminUsername)}`,
+          memberSessionId,
+        ),
+      );
+      expect(gatedAfterClear.status).toBe(200);
     } finally {
       server.stop(true);
     }
