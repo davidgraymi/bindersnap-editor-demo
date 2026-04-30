@@ -2,7 +2,7 @@
 #
 # Holds the runtime config files that the EC2 host needs but that aren't
 # baked into the API image: docker-compose.prod.yml, Caddyfile.prod,
-# litestream.yml, Dockerfile.caddy, and the Gitea bootstrap script.
+# litestream.yml, Dockerfile.caddy, the host CLI script, and the Gitea bootstrap script.
 #
 # Why this exists:
 #   The deploy workflow only updates the API image. Before this module,
@@ -69,11 +69,12 @@ locals {
   # Map of S3 object key → local file path. Add new entries here when
   # introducing new config files that must land on the host.
   config_files = {
-    "docker-compose.prod.yml"                    = "${local.repo_root}/docker-compose.prod.yml"
-    "Caddyfile.prod"                             = "${local.repo_root}/Caddyfile.prod"
-    "litestream.yml"                             = "${local.repo_root}/litestream.yml"
-    "Dockerfile.caddy"                           = "${local.repo_root}/Dockerfile.caddy"
-    "scripts/bootstrap-gitea-service-account.ts" = "${local.repo_root}/scripts/bootstrap-gitea-service-account.ts"
+    "docker-compose.prod.yml"                    = "${local.repo_root}/config/docker-compose.prod.yml"
+    "Caddyfile.prod"                             = "${local.repo_root}/config/Caddyfile.prod"
+    "litestream.yml"                             = "${local.repo_root}/config/litestream.yml"
+    "Dockerfile.caddy"                           = "${local.repo_root}/config/Dockerfile.caddy"
+    "scripts/bindersnap"                         = "${local.repo_root}/config/scripts/bindersnap"
+    "scripts/bootstrap-gitea-service-account.ts" = "${local.repo_root}/config/scripts/bootstrap-gitea-service-account.ts"
   }
 
   common_tags = {

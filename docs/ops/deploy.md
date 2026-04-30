@@ -1,11 +1,12 @@
 # Production Deploys
 
-Production now has two deploy surfaces:
+Production now has three deploy surfaces:
 
 1. [`../../.github/workflows/pages.yml`](../../.github/workflows/pages.yml) publishes the unified SPA to GitHub Pages at `https://bindersnap.com`.
-2. [`../../.github/workflows/deploy.yml`](../../.github/workflows/deploy.yml) builds and deploys the API image over AWS OIDC + SSM.
+2. [`../../.github/workflows/deploy-config.yml`](../../.github/workflows/deploy-config.yml) publishes the runtime config bundle to `s3://${BINDERSNAP_CONFIG_BUCKET}/` and applies it on the EC2 host over AWS OIDC + SSM.
+3. [`../../.github/workflows/deploy.yml`](../../.github/workflows/deploy.yml) builds and deploys the API image over AWS OIDC + SSM.
 
-Only the API workflow assumes the AWS role provisioned by [`../../infra/ci/oidc.tf`](../../infra/ci/oidc.tf).
+Both production host workflows assume the AWS role provisioned by [`../../infra/ci/oidc.tf`](../../infra/ci/oidc.tf).
 
 ## GitHub Pages SPA
 
@@ -23,6 +24,32 @@ The published app is the single SPA:
 - deep links rely on the `404.html` fallback, not S3 or CloudFront rewrites
 
 Repository settings must point GitHub Pages at `GitHub Actions`, and the custom domain must be `bindersnap.com`.
+
+## Config Deploy Workflow
+
+The config workflow keeps `/opt/bindersnap` on the running host aligned with the tracked repo bundle:
+
+- `docker-compose.prod.yml`
+- `Caddyfile.prod`
+- `litestream.yml`
+- `Dockerfile.caddy`
+- `scripts/bindersnap`
+- `scripts/bootstrap-gitea-service-account.ts`
+
+On pushes to `main` that touch any of those files, the workflow:
+
+1. runs the ops suite
+2. assumes the production deploy role over GitHub OIDC
+3. uploads the tracked bundle to `s3://${BINDERSNAP_CONFIG_BUCKET}/`
+4. sends an SSM Run Command that bootstraps the host CLI if needed, then runs:
+   - `bindersnap config sync`
+   - `bindersnap stack validate`
+   - `bindersnap stack restart`
+5. waits for the SSM invocation to finish and fails the workflow if the host validation or restart fails
+
+`bindersnap stack validate` checks `docker compose ... config -q` and validates `Caddyfile.prod` using the repo's custom `Dockerfile.caddy` build, which includes the `rate_limit` module used in production.
+
+The workflow also supports manual `workflow_dispatch`. Leave `publish_from_repo=true` for a normal re-apply, or set `publish_from_repo=false` to apply whatever object versions are already in S3 without overwriting them from the current repo state.
 
 ## API Deploy Workflow
 
@@ -42,9 +69,10 @@ The workflow does not use SSH and does not require long-lived AWS keys in GitHub
 
 ## GitHub Configuration
 
-Required repository variable:
+Required repository variables:
 
 - `BINDERSNAP_DEPLOY_ROLE_ARN`: IAM role ARN output by `infra/ci/oidc.tf`
+- `BINDERSNAP_CONFIG_BUCKET`: config bucket name (for example `bindersnap-config`)
 
 Optional variables:
 
@@ -62,7 +90,8 @@ The target instance must already satisfy these conditions:
 
 - It is managed by AWS Systems Manager.
 - It matches the deploy target tag used by the workflow.
-- `/opt/bindersnap` contains `docker-compose.prod.yml`, `Caddyfile.prod`, and `litestream.yml` (written by `user-data.sh.tftpl` at first boot — no git clone needed).
+- `/opt/bindersnap` contains the runtime bundle seeded by `user-data.sh.tftpl` on first boot, including `docker-compose.prod.yml`, `Caddyfile.prod`, `litestream.yml`, `Dockerfile.caddy`, and `scripts/bindersnap`.
+- `/usr/local/bin/bindersnap` exists, or the legacy `/usr/local/bin/bindersnap-sync-config` helper still exists so the config workflow can bootstrap the CLI onto older hosts.
 - `/opt/bindersnap/.env.prod` exists (generated from SSM Parameter Store by the `bindersnap-refresh-env` systemd service at boot).
 - `infra/secrets/terraform.tfvars` provided `gitea_admin_user` and `gitea_admin_pass` so the first boot can mint `/bindersnap/prod/gitea_service_token` automatically before the API starts.
 - `infra/apply-all.sh apply` can reach the instance through AWS Systems Manager so it can run the bootstrap flow remotely on existing instances after the secrets module updates.
@@ -135,10 +164,30 @@ docker compose --env-file /opt/bindersnap/.env.prod -f docker-compose.prod.yml p
 docker compose --env-file /opt/bindersnap/.env.prod -f docker-compose.prod.yml up -d api
 ```
 
+For config-only rollback, copy the prior object version back into place, then run the config workflow with `publish_from_repo=false` so it applies the bucket contents without re-uploading the current repo files:
+
+```bash
+CONFIG_BUCKET=your-config-bucket
+
+aws s3api copy-object \
+  --bucket "${CONFIG_BUCKET}" \
+  --copy-source "${CONFIG_BUCKET}/<file>?versionId=<prior-version-id>" \
+  --key <file>
+```
+
+After the copy completes:
+
+1. Open the `Deploy Production Config` workflow in GitHub Actions.
+2. Choose `Run workflow`.
+3. Set `publish_from_repo` to `false`.
+4. Run the workflow so the host re-syncs from S3 and reruns validation before restart.
+
 ## Validation Checklist
 
 - A push to `main` publishes the SPA to GitHub Pages from `dist/`.
 - `dist/404.html` matches `dist/index.html` so deep links load the SPA shell.
+- A push to `main` touching a tracked runtime config file triggers `Deploy Production Config`, publishes to `s3://${BINDERSNAP_CONFIG_BUCKET}/`, and waits for `bindersnap config sync && bindersnap stack validate && bindersnap stack restart` to succeed on the host.
+- Setting `publish_from_repo=false` on `Deploy Production Config` reapplies the existing S3 object versions instead of overwriting them from the current checkout.
 - A forced test failure prevents the API deploy job from running.
 - The API workflow log prints SSM stdout and stderr from the remote deploy command.
 - A manual `api_tag` rollback returns the API to the selected SHA.
