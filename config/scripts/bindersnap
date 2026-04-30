@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_DIR="${APP_DIR:-/opt/bindersnap}"
+ENV_FILE="${ENV_FILE:-${APP_DIR}/.env.prod}"
+COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
+CONFIG_BUCKET="${CONFIG_BUCKET:-}"
+BIN_DIR="${BIN_DIR:-/usr/local/bin}"
+GHCR_LOGIN_CMD="${GHCR_LOGIN_CMD:-bindersnap-ghcr-login}"
+CADDY_VALIDATE_IMAGE="${CADDY_VALIDATE_IMAGE:-bindersnap-caddy-validate:local}"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  bindersnap config sync
+  bindersnap stack validate
+  bindersnap stack restart
+EOF
+}
+
+require_config_bucket() {
+  if [ -z "${CONFIG_BUCKET}" ]; then
+    echo "CONFIG_BUCKET is required" >&2
+    exit 1
+  fi
+}
+
+install_self() {
+  local script_path="${APP_DIR}/scripts/bindersnap"
+
+  if [ -f "${script_path}" ]; then
+    install -d -m 0755 "${BIN_DIR}"
+    install -m 0755 "${script_path}" "${BIN_DIR}/bindersnap"
+  fi
+}
+
+config_sync() {
+  require_config_bucket
+
+  install -d -m 0755 "${APP_DIR}" "${APP_DIR}/scripts"
+
+  aws s3 sync "s3://${CONFIG_BUCKET}/" "${APP_DIR}/" --exact-timestamps \
+    --exclude "*" \
+    --include "docker-compose.prod.yml" \
+    --include "Caddyfile.prod" \
+    --include "litestream.yml" \
+    --include "Dockerfile.caddy" \
+    --include "scripts/bindersnap" \
+    --include "scripts/bootstrap-gitea-service-account.ts"
+
+  chmod 0644 \
+    "${APP_DIR}/docker-compose.prod.yml" \
+    "${APP_DIR}/Caddyfile.prod" \
+    "${APP_DIR}/litestream.yml" \
+    "${APP_DIR}/Dockerfile.caddy" \
+    "${APP_DIR}/scripts/bootstrap-gitea-service-account.ts" 2>/dev/null || true
+  chmod 0755 "${APP_DIR}/scripts/bindersnap" 2>/dev/null || true
+
+  install_self
+}
+
+stack_validate() {
+  cd "${APP_DIR}"
+
+  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" config -q
+
+  # Production Caddy uses the rate-limit module, so validate with the custom image.
+  docker build -q -t "${CADDY_VALIDATE_IMAGE}" -f "${APP_DIR}/Dockerfile.caddy" "${APP_DIR}"
+  docker run --rm \
+    -v "${APP_DIR}/Caddyfile.prod:/etc/caddy/Caddyfile:ro" \
+    "${CADDY_VALIDATE_IMAGE}" \
+    caddy validate --config /etc/caddy/Caddyfile
+}
+
+stack_restart() {
+  cd "${APP_DIR}"
+
+  if command -v "${GHCR_LOGIN_CMD}" >/dev/null 2>&1; then
+    "${GHCR_LOGIN_CMD}"
+  fi
+
+  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" pull api
+  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d
+  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d --build --force-recreate caddy litestream
+  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" ps
+}
+
+main() {
+  local group="${1:-}"
+  local action="${2:-}"
+
+  case "${group}:${action}" in
+    config:sync)
+      config_sync
+      ;;
+    stack:validate)
+      stack_validate
+      ;;
+    stack:restart)
+      stack_restart
+      ;;
+    *)
+      usage >&2
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"
