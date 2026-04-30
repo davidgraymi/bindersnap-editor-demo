@@ -10,7 +10,7 @@ import {
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-const scriptPath = join(process.cwd(), "scripts", "bindersnap");
+const scriptPath = join(process.cwd(), "config", "scripts", "bindersnap");
 const scriptSource = readFileSync(scriptPath, "utf8");
 
 function makeWorkspace() {
