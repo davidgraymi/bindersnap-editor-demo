@@ -54,9 +54,10 @@ describe("config-as-code deploy wiring", () => {
     );
   });
 
-  test("the config bundle and first-boot seed include the host CLI, and user-data drift is no longer ignored", () => {
+  test("S3 is the single source of truth for config — no base64 blobs in user-data, and user-data drift is no longer ignored", () => {
     expect(configBucketTerraform).toContain('"scripts/bindersnap"');
-    expect(computeTerraform).toContain("bindersnap_cli_b64");
+    expect(computeTerraform).not.toContain("bindersnap_cli_b64");
+    expect(computeTerraform).not.toContain("compose_b64");
     expect(userData).toContain(
       'install -m 0755 "${APP_DIR}/scripts/bindersnap" /usr/local/bin/bindersnap',
     );

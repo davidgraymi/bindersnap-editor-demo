@@ -78,31 +78,11 @@ else
   echo "WARNING: EBS data volume not found — Docker will use root volume" >&2
 fi
 
-# ---------- Write config files (injected by Terraform at plan time) ----------
-
-echo '${compose_b64}' | base64 -d > "$${APP_DIR}/docker-compose.prod.yml"
-chmod 0644 "$${APP_DIR}/docker-compose.prod.yml"
-
-echo '${caddyfile_b64}' | base64 -d > "$${APP_DIR}/Caddyfile.prod"
-chmod 0644 "$${APP_DIR}/Caddyfile.prod"
-
-echo '${litestream_b64}' | base64 -d > "$${APP_DIR}/litestream.yml"
-chmod 0644 "$${APP_DIR}/litestream.yml"
-
-install -d -m 0755 "$${APP_DIR}/scripts"
-echo '${bindersnap_cli_b64}' | base64 -d > "$${APP_DIR}/scripts/bindersnap"
-chmod 0755 "$${APP_DIR}/scripts/bindersnap"
-install -m 0755 "$${APP_DIR}/scripts/bindersnap" /usr/local/bin/bindersnap
-
-echo '${bootstrap_script_b64}' | base64 -d > "$${APP_DIR}/scripts/bootstrap-gitea-service-account.ts"
-chmod 0644 "$${APP_DIR}/scripts/bootstrap-gitea-service-account.ts"
-
 # ---------- Config-as-code sync helper ----------
-# The base64 blocks above seed first-boot config. After boot, the source of
-# truth is the bindersnap-config S3 bucket: the deploy workflow uploads new
-# versions of docker-compose.prod.yml / Caddyfile.prod / litestream.yml /
-# Dockerfile.caddy there, and this script syncs them down. Run on a timer
-# (see bindersnap-refresh-and-restart.service) and on demand.
+# S3 is the single source of truth for config files. The config-bucket Terraform
+# module seeds S3 before this instance is created; the deploy workflow pushes
+# updates on every config/** change. This script syncs them down on boot and
+# on the refresh timer (see bindersnap-refresh-and-restart.service).
 
 cat >/usr/local/bin/bindersnap-sync-config <<'SCRIPT'
 #!/usr/bin/env bash
@@ -475,8 +455,8 @@ cat >/etc/systemd/system/bindersnap-bootstrap-gitea.service <<SERVICE
 [Unit]
 Description=Bootstrap the Bindersnap Gitea service token on first boot
 ConditionPathExists=$${ENV_FILE}
-After=network-online.target docker.service bindersnap-refresh-env.service
-Requires=docker.service bindersnap-refresh-env.service
+After=network-online.target docker.service bindersnap-refresh-env.service bindersnap-sync-config.service
+Requires=docker.service bindersnap-refresh-env.service bindersnap-sync-config.service
 Wants=network-online.target
 
 [Service]
