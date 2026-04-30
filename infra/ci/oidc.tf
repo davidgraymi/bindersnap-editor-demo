@@ -69,6 +69,12 @@ variable "instance_tag_value" {
   default     = "bindersnap"
 }
 
+variable "config_bucket_name" {
+  description = "S3 bucket that stores the runtime config bundle applied by the production config deploy workflow"
+  type        = string
+  default     = "bindersnap-config"
+}
+
 data "aws_caller_identity" "current" {}
 
 data "aws_partition" "current" {}
@@ -178,6 +184,33 @@ data "aws_iam_policy_document" "deploy" {
     ]
 
     resources = ["*"]
+  }
+
+  statement {
+    sid    = "PublishRuntimeConfigBundle"
+    effect = "Allow"
+
+    actions = [
+      "s3:ListBucket",
+      "s3:GetBucketLocation",
+    ]
+
+    resources = [
+      "arn:${data.aws_partition.current.partition}:s3:::${var.config_bucket_name}",
+    ]
+  }
+
+  statement {
+    sid    = "WriteRuntimeConfigObjects"
+    effect = "Allow"
+
+    actions = [
+      "s3:PutObject",
+    ]
+
+    resources = [
+      "arn:${data.aws_partition.current.partition}:s3:::${var.config_bucket_name}/*",
+    ]
   }
 }
 

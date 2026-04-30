@@ -90,6 +90,10 @@ echo '${litestream_b64}' | base64 -d > "$${APP_DIR}/litestream.yml"
 chmod 0644 "$${APP_DIR}/litestream.yml"
 
 install -d -m 0755 "$${APP_DIR}/scripts"
+echo '${bindersnap_cli_b64}' | base64 -d > "$${APP_DIR}/scripts/bindersnap"
+chmod 0755 "$${APP_DIR}/scripts/bindersnap"
+install -m 0755 "$${APP_DIR}/scripts/bindersnap" /usr/local/bin/bindersnap
+
 echo '${bootstrap_script_b64}' | base64 -d > "$${APP_DIR}/scripts/bootstrap-gitea-service-account.ts"
 chmod 0644 "$${APP_DIR}/scripts/bootstrap-gitea-service-account.ts"
 
@@ -117,9 +121,15 @@ aws s3 sync "s3://$${CONFIG_BUCKET}/" "$${APP_DIR}/" --exact-timestamps \
   --include "Caddyfile.prod" \
   --include "litestream.yml" \
   --include "Dockerfile.caddy" \
-  --include "scripts/*"
+  --include "scripts/bindersnap" \
+  --include "scripts/bootstrap-gitea-service-account.ts"
 
-chmod 0644 "$${APP_DIR}"/*.yml "$${APP_DIR}"/Caddyfile.prod "$${APP_DIR}"/Dockerfile.caddy 2>/dev/null || true
+chmod 0644 "$${APP_DIR}"/*.yml "$${APP_DIR}"/Caddyfile.prod "$${APP_DIR}"/Dockerfile.caddy "$${APP_DIR}"/scripts/bootstrap-gitea-service-account.ts 2>/dev/null || true
+chmod 0755 "$${APP_DIR}"/scripts/bindersnap 2>/dev/null || true
+
+if [ -f "$${APP_DIR}/scripts/bindersnap" ]; then
+  install -m 0755 "$${APP_DIR}/scripts/bindersnap" /usr/local/bin/bindersnap
+fi
 SCRIPT
 
 chmod 0755 /usr/local/bin/bindersnap-sync-config

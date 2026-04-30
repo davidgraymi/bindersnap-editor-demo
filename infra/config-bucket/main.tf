@@ -2,7 +2,7 @@
 #
 # Holds the runtime config files that the EC2 host needs but that aren't
 # baked into the API image: docker-compose.prod.yml, Caddyfile.prod,
-# litestream.yml, Dockerfile.caddy, and the Gitea bootstrap script.
+# litestream.yml, Dockerfile.caddy, the host CLI script, and the Gitea bootstrap script.
 #
 # Why this exists:
 #   The deploy workflow only updates the API image. Before this module,
@@ -73,6 +73,7 @@ locals {
     "Caddyfile.prod"                             = "${local.repo_root}/Caddyfile.prod"
     "litestream.yml"                             = "${local.repo_root}/litestream.yml"
     "Dockerfile.caddy"                           = "${local.repo_root}/Dockerfile.caddy"
+    "scripts/bindersnap"                         = "${local.repo_root}/scripts/bindersnap"
     "scripts/bootstrap-gitea-service-account.ts" = "${local.repo_root}/scripts/bootstrap-gitea-service-account.ts"
   }
 
