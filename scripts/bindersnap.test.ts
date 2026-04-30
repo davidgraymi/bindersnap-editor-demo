@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { chmodSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -61,7 +68,10 @@ printf 'ghcr-login\\n' >> "$LOG_PATH"
   chmodSync(ghcrLoginStub, 0o755);
 
   writeFileSync(join(mockS3Dir, "docker-compose.prod.yml"), "services: {}\n");
-  writeFileSync(join(mockS3Dir, "Caddyfile.prod"), "example.com {\n\treverse_proxy localhost:3000\n}\n");
+  writeFileSync(
+    join(mockS3Dir, "Caddyfile.prod"),
+    "example.com {\n\treverse_proxy localhost:3000\n}\n",
+  );
   writeFileSync(join(mockS3Dir, "litestream.yml"), "dbs: []\n");
   writeFileSync(join(mockS3Dir, "Dockerfile.caddy"), "FROM caddy:2\n");
   writeFileSync(join(mockS3Dir, "scripts", "bindersnap"), scriptSource);
@@ -101,14 +111,14 @@ describe("bindersnap host CLI", () => {
       const result = runCli(["config", "sync"], workspace);
       expect(result.exitCode).toBe(0);
       expect(readFileSync(workspace.logPath, "utf8")).toContain(
-        'aws s3 sync s3://bindersnap-config/ ',
+        "aws s3 sync s3://bindersnap-config/ ",
       );
-      expect(readFileSync(join(workspace.appDir, "docker-compose.prod.yml"), "utf8")).toContain(
-        "services: {}",
-      );
-      expect(readFileSync(join(workspace.installBinDir, "bindersnap"), "utf8")).toContain(
-        "Usage:",
-      );
+      expect(
+        readFileSync(join(workspace.appDir, "docker-compose.prod.yml"), "utf8"),
+      ).toContain("services: {}");
+      expect(
+        readFileSync(join(workspace.installBinDir, "bindersnap"), "utf8"),
+      ).toContain("Usage:");
     } finally {
       rmSync(workspace.root, { force: true, recursive: true });
     }
@@ -117,8 +127,14 @@ describe("bindersnap host CLI", () => {
   test("stack validate checks compose config and validates the custom Caddy build", () => {
     const workspace = makeWorkspace();
 
-    writeFileSync(join(workspace.appDir, "docker-compose.prod.yml"), "services: {}\n");
-    writeFileSync(join(workspace.appDir, "Caddyfile.prod"), "example.com {\n\treverse_proxy localhost:3000\n}\n");
+    writeFileSync(
+      join(workspace.appDir, "docker-compose.prod.yml"),
+      "services: {}\n",
+    );
+    writeFileSync(
+      join(workspace.appDir, "Caddyfile.prod"),
+      "example.com {\n\treverse_proxy localhost:3000\n}\n",
+    );
     writeFileSync(join(workspace.appDir, "Dockerfile.caddy"), "FROM caddy:2\n");
 
     try {
@@ -126,10 +142,10 @@ describe("bindersnap host CLI", () => {
       expect(result.exitCode).toBe(0);
 
       const log = readFileSync(workspace.logPath, "utf8");
+      expect(log).toContain("docker compose --env-file");
       expect(log).toContain(
-        "docker compose --env-file",
+        "docker build -q -t bindersnap-caddy-validate:test",
       );
-      expect(log).toContain("docker build -q -t bindersnap-caddy-validate:test");
       expect(log).toContain("caddy validate --config /etc/caddy/Caddyfile");
     } finally {
       rmSync(workspace.root, { force: true, recursive: true });
@@ -139,7 +155,10 @@ describe("bindersnap host CLI", () => {
   test("stack restart logs into GHCR, refreshes compose, and force-recreates caddy and litestream", () => {
     const workspace = makeWorkspace();
 
-    writeFileSync(join(workspace.appDir, "docker-compose.prod.yml"), "services: {}\n");
+    writeFileSync(
+      join(workspace.appDir, "docker-compose.prod.yml"),
+      "services: {}\n",
+    );
     writeFileSync(join(workspace.appDir, ".env.prod"), "API_TAG=test\n");
 
     try {
