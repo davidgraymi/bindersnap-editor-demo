@@ -104,6 +104,12 @@ variable "ssm_parameter_path" {
   default     = "/bindersnap/prod"
 }
 
+variable "config_bucket_name" {
+  description = "S3 bucket holding the config-as-code files (docker-compose.prod.yml, Caddyfile.prod, litestream.yml, etc.). Defaults to bindersnap-config; the host syncs from this bucket on boot and on the refresh timer."
+  type        = string
+  default     = "bindersnap-config"
+}
+
 # ---------- Data sources ----------
 
 # Auto-discover latest AL2023 ARM64 AMI if not pinned
@@ -289,6 +295,7 @@ resource "aws_instance" "app" {
     litestream_b64       = base64encode(file("${path.root}/../../litestream.yml"))
     bootstrap_script_b64 = base64encode(file("${path.root}/../../scripts/bootstrap-gitea-service-account.ts"))
     ssm_parameter_path   = var.ssm_parameter_path
+    config_bucket_name   = var.config_bucket_name
   }))
   user_data_replace_on_change = false
 

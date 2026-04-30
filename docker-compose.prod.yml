@@ -81,8 +81,8 @@ services:
       options:
         awslogs-group: /bindersnap/api
         awslogs-region: "${AWS_REGION:-us-east-1}"
-        awslogs-stream-prefix: api
         awslogs-create-group: "true"
+        tag: "api/{{.Name}}"
     environment:
       - API_PORT=8787
       - PORT=8787

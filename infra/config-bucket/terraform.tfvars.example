@@ -1,0 +1,9 @@
+# Copy to terraform.tfvars and fill in real values.
+
+aws_region  = "us-east-1"
+bucket_name = "bindersnap-config"
+
+# From: cd ../compute && terraform output instance_role_name
+# Leave commented on first apply if compute hasn't been created yet —
+# apply-all.sh will pass it in via -var when it has the output.
+# ec2_instance_role_name = "bindersnap-prod-instance"

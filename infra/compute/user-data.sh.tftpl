@@ -6,6 +6,8 @@ ENV_FILE="$${ENV_FILE:-$${APP_DIR}/.env.prod}"
 DEFAULT_PARAMETER_PATH='${ssm_parameter_path}'
 PARAMETER_PATH="$${SSM_PARAMETER_PATH:-$${DEFAULT_PARAMETER_PATH}}"
 COMPOSE_FILE="$${COMPOSE_FILE:-docker-compose.prod.yml}"
+DEFAULT_CONFIG_BUCKET='${config_bucket_name}'
+CONFIG_BUCKET="$${CONFIG_BUCKET:-$${DEFAULT_CONFIG_BUCKET}}"
 
 install -d -m 0755 "$${APP_DIR}"
 
@@ -90,6 +92,37 @@ chmod 0644 "$${APP_DIR}/litestream.yml"
 install -d -m 0755 "$${APP_DIR}/scripts"
 echo '${bootstrap_script_b64}' | base64 -d > "$${APP_DIR}/scripts/bootstrap-gitea-service-account.ts"
 chmod 0644 "$${APP_DIR}/scripts/bootstrap-gitea-service-account.ts"
+
+# ---------- Config-as-code sync helper ----------
+# The base64 blocks above seed first-boot config. After boot, the source of
+# truth is the bindersnap-config S3 bucket: the deploy workflow uploads new
+# versions of docker-compose.prod.yml / Caddyfile.prod / litestream.yml /
+# Dockerfile.caddy there, and this script syncs them down. Run on a timer
+# (see bindersnap-refresh-and-restart.service) and on demand.
+
+cat >/usr/local/bin/bindersnap-sync-config <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_DIR="$${APP_DIR:-/opt/bindersnap}"
+CONFIG_BUCKET="$${CONFIG_BUCKET:?CONFIG_BUCKET is required}"
+
+install -d -m 0755 "$${APP_DIR}" "$${APP_DIR}/scripts"
+
+# --exact-timestamps protects against clock skew making local files look
+# newer than S3. We want S3 to win on every sync.
+aws s3 sync "s3://$${CONFIG_BUCKET}/" "$${APP_DIR}/" --exact-timestamps \
+  --exclude "*" \
+  --include "docker-compose.prod.yml" \
+  --include "Caddyfile.prod" \
+  --include "litestream.yml" \
+  --include "Dockerfile.caddy" \
+  --include "scripts/*"
+
+chmod 0644 "$${APP_DIR}"/*.yml "$${APP_DIR}"/Caddyfile.prod "$${APP_DIR}"/Dockerfile.caddy 2>/dev/null || true
+SCRIPT
+
+chmod 0755 /usr/local/bin/bindersnap-sync-config
 
 # ---------- CloudWatch Agent (disk + memory metrics) ----------
 
@@ -355,7 +388,7 @@ SERVICE
 #   systemctl start bindersnap-refresh-and-restart.service
 cat >/etc/systemd/system/bindersnap-refresh-and-restart.service <<SERVICE
 [Unit]
-Description=Refresh SSM secrets and restart Bindersnap if env changed
+Description=Refresh SSM secrets + config bucket and restart Bindersnap if anything changed
 After=network-online.target docker.service
 Requires=docker.service
 Wants=network-online.target
@@ -365,16 +398,22 @@ Type=oneshot
 Environment=APP_DIR=$${APP_DIR}
 Environment=ENV_FILE=$${ENV_FILE}
 Environment=SSM_PARAMETER_PATH=$${PARAMETER_PATH}
+Environment=CONFIG_BUCKET=$${CONFIG_BUCKET}
 ExecStart=/bin/bash -c '\
-  BEFORE=\$(sha256sum "\$${ENV_FILE}" 2>/dev/null || echo "none"); \
+  hash_dir() { find "\$${APP_DIR}" -maxdepth 2 -type f \\( -name "*.yml" -o -name "Caddyfile.prod" -o -name "Dockerfile.caddy" \\) -print0 | sort -z | xargs -0 sha256sum 2>/dev/null | sha256sum; }; \
+  BEFORE_ENV=\$(sha256sum "\$${ENV_FILE}" 2>/dev/null || echo "none"); \
+  BEFORE_CFG=\$(hash_dir); \
   /usr/local/bin/bindersnap-refresh-env; \
+  /usr/local/bin/bindersnap-sync-config; \
   /usr/local/bin/bindersnap-bootstrap-gitea; \
-  AFTER=\$(sha256sum "\$${ENV_FILE}"); \
-  if [ "\$BEFORE" != "\$AFTER" ]; then \
-    echo "Env file changed — restarting compose stack"; \
-    cd $${APP_DIR} && docker compose --env-file $${ENV_FILE} -f $${COMPOSE_FILE} up -d; \
+  AFTER_ENV=\$(sha256sum "\$${ENV_FILE}"); \
+  AFTER_CFG=\$(hash_dir); \
+  if [ "\$BEFORE_ENV" != "\$AFTER_ENV" ] || [ "\$BEFORE_CFG" != "\$AFTER_CFG" ]; then \
+    echo "Env or config changed — recreating compose stack"; \
+    cd $${APP_DIR} && docker compose --env-file $${ENV_FILE} -f $${COMPOSE_FILE} pull; \
+    cd $${APP_DIR} && docker compose --env-file $${ENV_FILE} -f $${COMPOSE_FILE} up -d --force-recreate; \
   else \
-    echo "Env file unchanged — no restart needed"; \
+    echo "Env and config unchanged — no restart needed"; \
   fi'
 SERVICE
 
@@ -390,6 +429,22 @@ Persistent=true
 [Install]
 WantedBy=timers.target
 TIMER
+
+cat >/etc/systemd/system/bindersnap-sync-config.service <<SERVICE
+[Unit]
+Description=Sync Bindersnap runtime config from S3
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=APP_DIR=$${APP_DIR}
+Environment=CONFIG_BUCKET=$${CONFIG_BUCKET}
+ExecStart=/usr/local/bin/bindersnap-sync-config
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
 
 cat >/etc/systemd/system/bindersnap-ghcr-login.service <<SERVICE
 [Unit]
@@ -430,9 +485,9 @@ cat >/etc/systemd/system/bindersnap-compose.service <<SERVICE
 [Unit]
 Description=Start the Bindersnap production Docker Compose stack
 ConditionPathExists=$${APP_DIR}/$${COMPOSE_FILE}
-After=network-online.target docker.service bindersnap-refresh-env.service bindersnap-ghcr-login.service bindersnap-bootstrap-gitea.service
+After=network-online.target docker.service bindersnap-refresh-env.service bindersnap-sync-config.service bindersnap-ghcr-login.service bindersnap-bootstrap-gitea.service
 Requires=docker.service bindersnap-refresh-env.service bindersnap-bootstrap-gitea.service
-Wants=network-online.target bindersnap-ghcr-login.service
+Wants=network-online.target bindersnap-sync-config.service bindersnap-ghcr-login.service
 
 [Service]
 Type=oneshot
@@ -447,6 +502,7 @@ SERVICE
 
 systemctl daemon-reload
 systemctl enable --now bindersnap-refresh-env.service
+systemctl enable --now bindersnap-sync-config.service
 systemctl enable --now bindersnap-ghcr-login.service
 systemctl enable --now bindersnap-bootstrap-gitea.service
 systemctl enable --now bindersnap-compose.service

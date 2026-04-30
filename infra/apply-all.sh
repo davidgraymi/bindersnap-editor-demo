@@ -30,16 +30,11 @@ tf_init() {
 }
 
 # Read a terraform output. Returns empty string if state has no outputs yet.
+# Trusts terraform's exit code — `output -raw` exits non-zero when missing —
+# and discards stderr so deprecation warnings can't contaminate the value.
 tf_output() {
   local dir="$1" key="$2"
-  local val
-  val="$(terraform -chdir="${SCRIPT_DIR}/${dir}" output -raw "${key}" 2>/dev/null)" || true
-  # Terraform emits ANSI warning text when no outputs exist — detect and discard
-  if [[ -z "$val" || "$val" == *"Warning"* || "$val" == *"No outputs"* ]]; then
-    echo ""
-  else
-    echo "$val"
-  fi
+  terraform -chdir="${SCRIPT_DIR}/${dir}" output -raw "${key}" 2>/dev/null || echo ""
 }
 
 # Returns 0 (true) if the Gitea service token SSM parameter still holds the
@@ -201,6 +196,7 @@ echo "=== Bindersnap infrastructure: ${ACTION} ==="
 if [[ "$ACTION" == "plan" ]]; then
   tf_run "compute"
   tf_run "secrets"
+  tf_run "config-bucket"
   tf_run "backups"
   tf_run "monitoring"
   tf_run "ci"
@@ -242,7 +238,13 @@ else
   echo "  Gitea service token already bootstrapped — skipping remote bootstrap."
 fi
 
-# 3. Backups (needs instance role + volume ID)
+# 3. Config bucket (needs instance role for read policy attachment)
+tf_run "config-bucket" "ec2_instance_role_name=${INSTANCE_ROLE}"
+
+CONFIG_BUCKET="$(tf_output config-bucket config_bucket_name)"
+echo "  Config bucket outputs: bucket=${CONFIG_BUCKET}"
+
+# 4. Backups (needs instance role + volume ID)
 tf_run "backups" \
   "ec2_instance_role_name=${INSTANCE_ROLE}" \
   "gitea_data_volume_id=${DATA_VOLUME_ID}"
@@ -250,10 +252,10 @@ tf_run "backups" \
 LITESTREAM_BUCKET="$(tf_output backups litestream_bucket_name)"
 echo "  Backups outputs: litestream_bucket=${LITESTREAM_BUCKET}"
 
-# 4. Monitoring (needs instance ID)
+# 5. Monitoring (needs instance ID)
 tf_run "monitoring" "instance_id=${INSTANCE_ID}"
 
-# 5. CI (SPA bucket + CloudFront dist come from tfvars — no upstream module yet)
+# 6. CI (SPA bucket + CloudFront dist come from tfvars — no upstream module yet)
 tf_run "ci"
 
 echo ""
