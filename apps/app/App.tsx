@@ -543,6 +543,13 @@ export function App() {
         onRetryBillingStatus={async () => {
           await refreshSession();
         }}
+        onSignOut={async () => {
+          await logoutSession();
+          clearToken();
+          setUser(null);
+          setCallbackError(null);
+          navigateTo({ kind: "home" }, true);
+        }}
       />
     );
   }
