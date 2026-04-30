@@ -1,4 +1,4 @@
-# Bindersnap API
+=# Bindersnap API
 
 Lightweight Bun auth/BFF service for the unified GitHub Pages SPA.
 
@@ -9,6 +9,7 @@ Lightweight Bun auth/BFF service for the unified GitHub Pages SPA.
 - `POST /auth/logout`
 - `GET /auth/me`
 - `GET /api/app/documents`
+- & more
 
 The browser only receives a Bindersnap session cookie. Gitea access tokens stay server-side in the session store for this MVP.
 
