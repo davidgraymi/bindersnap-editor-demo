@@ -33,13 +33,17 @@ import {
   getLatestDocTag,
   getRepoBranchProtection,
   getRepoCollaboratorPermission,
+  getRepoInfo,
   listDocTags,
   listRepoCollaborators,
   listWorkspaceRepos,
   repoExists,
   searchUsers,
   removeRepoCollaborator,
+  updateRepoBranchProtection,
+  updateRepoVisibility,
   type RepoCollaboratorPermissionSummary,
+  type RepoBranchProtection,
   type RepoUserSummary,
   type WorkspaceRepo,
 } from "../../packages/gitea-client/repos";
@@ -2898,6 +2902,147 @@ async function handleDeleteCollaborator(
   }
 }
 
+async function handleGetDocumentPermissions(
+  req: Request,
+  baseHeaders: Headers,
+  owner: string,
+  repo: string,
+): Promise<Response> {
+  const auth = requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const { client, session } = auth;
+
+  try {
+    const [branchProtection, repoInfo, currentUserPermission] =
+      await Promise.all([
+        getRepoBranchProtection(client, owner, repo, "main").catch(() => null),
+        getRepoInfo({ client, owner, repo }),
+        resolveCurrentUserPermission(
+          client,
+          owner,
+          repo,
+          session.username,
+        ).catch(() => null),
+      ]);
+
+    return json(
+      200,
+      {
+        branchProtection,
+        isPrivate: repoInfo.isPrivate,
+        currentUserPermission,
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to load document permissions.",
+    );
+  }
+}
+
+async function handleUpdateDocumentPermissions(
+  req: Request,
+  baseHeaders: Headers,
+  owner: string,
+  repo: string,
+): Promise<Response> {
+  const auth = requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const { client, session } = auth;
+
+  if (session.username !== owner) {
+    return json(
+      403,
+      { error: "Only the document owner can change permissions." },
+      baseHeaders,
+    );
+  }
+
+  const payload = await readJsonBody(req);
+
+  const requiredApprovals =
+    typeof payload?.requiredApprovals === "number"
+      ? Math.max(0, Math.floor(payload.requiredApprovals))
+      : undefined;
+  const enableApprovalsWhitelist =
+    typeof payload?.enableApprovalsWhitelist === "boolean"
+      ? payload.enableApprovalsWhitelist
+      : undefined;
+  const approvalsWhitelistUsernames = Array.isArray(
+    payload?.approvalsWhitelistUsernames,
+  )
+    ? (payload.approvalsWhitelistUsernames as unknown[]).filter(
+        (u): u is string => typeof u === "string",
+      )
+    : undefined;
+  const enableMergeWhitelist =
+    typeof payload?.enableMergeWhitelist === "boolean"
+      ? payload.enableMergeWhitelist
+      : undefined;
+  const mergeWhitelistUsernames = Array.isArray(
+    payload?.mergeWhitelistUsernames,
+  )
+    ? (payload.mergeWhitelistUsernames as unknown[]).filter(
+        (u): u is string => typeof u === "string",
+      )
+    : undefined;
+  const isPrivate =
+    typeof payload?.isPrivate === "boolean" ? payload.isPrivate : undefined;
+
+  try {
+    const updates: Array<Promise<unknown>> = [];
+
+    const hasBranchUpdate =
+      requiredApprovals !== undefined ||
+      enableApprovalsWhitelist !== undefined ||
+      approvalsWhitelistUsernames !== undefined ||
+      enableMergeWhitelist !== undefined ||
+      mergeWhitelistUsernames !== undefined;
+
+    if (hasBranchUpdate) {
+      updates.push(
+        updateRepoBranchProtection({
+          client,
+          owner,
+          repo,
+          ruleName: "main",
+          requiredApprovals,
+          enableApprovalsWhitelist,
+          approvalsWhitelistUsernames,
+          enableMergeWhitelist,
+          mergeWhitelistUsernames,
+        }),
+      );
+    }
+
+    if (isPrivate !== undefined) {
+      updates.push(updateRepoVisibility({ client, owner, repo, isPrivate }));
+    }
+
+    await Promise.all(updates);
+
+    const [branchProtection, repoInfo] = await Promise.all([
+      getRepoBranchProtection(client, owner, repo, "main").catch(() => null),
+      getRepoInfo({ client, owner, repo }),
+    ]);
+
+    return json(
+      200,
+      { branchProtection, isPrivate: repoInfo.isPrivate },
+      baseHeaders,
+    );
+  } catch (err) {
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to update document permissions.",
+    );
+  }
+}
+
 async function handleStripeWebhook(
   req: Request,
   baseHeaders: Headers,
@@ -3575,6 +3720,9 @@ export function createApiServer() {
         const versionsMatch = pathname.match(
           /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/versions$/,
         );
+        const permissionsMatch = pathname.match(
+          /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/permissions$/,
+        );
         const collaboratorsActionMatch = pathname.match(
           /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/collaborators\/([^/]+)$/,
         );
@@ -3626,6 +3774,20 @@ export function createApiServer() {
             baseHeaders,
             decodePathParam(versionsMatch[1] ?? ""),
             decodePathParam(versionsMatch[2] ?? ""),
+          );
+        } else if (permissionsMatch && method === "GET") {
+          response = await handleGetDocumentPermissions(
+            req,
+            baseHeaders,
+            decodePathParam(permissionsMatch[1] ?? ""),
+            decodePathParam(permissionsMatch[2] ?? ""),
+          );
+        } else if (permissionsMatch && method === "PUT") {
+          response = await handleUpdateDocumentPermissions(
+            req,
+            baseHeaders,
+            decodePathParam(permissionsMatch[1] ?? ""),
+            decodePathParam(permissionsMatch[2] ?? ""),
           );
         } else if (adminSubscriptionGrantMatch && method === "POST") {
           response = await upsertLegacyAdminSubscriptionOverride(

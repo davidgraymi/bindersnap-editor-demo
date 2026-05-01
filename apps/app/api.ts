@@ -116,6 +116,21 @@ export interface CollaboratorListPayload {
   currentUserPermission: RepoCollaboratorPermissionSummary | null;
 }
 
+export interface DocumentPermissionsPayload {
+  branchProtection: {
+    requiredApprovals: number;
+    enableApprovalsWhitelist: boolean;
+    approvalsWhitelistUsernames: string[];
+    approvalsWhitelistTeams: string[];
+    enableMergeWhitelist: boolean;
+    mergeWhitelistUsernames: string[];
+    mergeWhitelistTeams: string[];
+    blockOnRejectedReviews: boolean;
+  } | null;
+  isPrivate: boolean;
+  currentUserPermission?: RepoCollaboratorPermissionSummary | null;
+}
+
 export interface SearchUsersPayload {
   users: RepoUserSummary[];
   page: number;
@@ -908,6 +923,43 @@ export async function removeDocumentCollaborator(
       },
     },
     "Unable to remove collaborator.",
+  );
+}
+
+export async function getDocumentPermissions(
+  owner: string,
+  repo: string,
+): Promise<DocumentPermissionsPayload> {
+  return requestJson<DocumentPermissionsPayload>(
+    `/api/app/documents/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/permissions`,
+    { method: "GET", headers: { Accept: "application/json" } },
+    "Unable to load document permissions.",
+  );
+}
+
+export async function updateDocumentPermissions(
+  owner: string,
+  repo: string,
+  updates: {
+    requiredApprovals?: number;
+    enableApprovalsWhitelist?: boolean;
+    approvalsWhitelistUsernames?: string[];
+    enableMergeWhitelist?: boolean;
+    mergeWhitelistUsernames?: string[];
+    isPrivate?: boolean;
+  },
+): Promise<DocumentPermissionsPayload> {
+  return requestJson<DocumentPermissionsPayload>(
+    `/api/app/documents/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/permissions`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(updates),
+    },
+    "Unable to update document permissions.",
   );
 }
 

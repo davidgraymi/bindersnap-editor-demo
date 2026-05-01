@@ -13,7 +13,7 @@ export type AppRoute =
       kind: "document";
       owner: string;
       repo: string;
-      tab: "overview" | "collaborators";
+      tab: "overview" | "collaborators" | "permissions";
     };
 
 function normalizePathname(pathname: string): string {
@@ -66,6 +66,18 @@ export function getRoute(pathname: string): AppRoute {
     return { kind: "billing" };
   }
 
+  const permissionsMatch = normalizedPath.match(
+    /^\/docs\/([^/]+)\/([^/]+)\/permissions$/,
+  );
+  if (permissionsMatch) {
+    return {
+      kind: "document",
+      owner: permissionsMatch[1]!,
+      repo: permissionsMatch[2]!,
+      tab: "permissions",
+    };
+  }
+
   const collaboratorsMatch = normalizedPath.match(
     /^\/docs\/([^/]+)\/([^/]+)\/collaborators$/,
   );
@@ -100,9 +112,11 @@ export function routeToPath(route: AppRoute): string {
     case "callback":
       return "/auth/callback";
     case "document":
-      return route.tab === "collaborators"
-        ? `/docs/${route.owner}/${route.repo}/collaborators`
-        : `/docs/${route.owner}/${route.repo}`;
+      if (route.tab === "collaborators")
+        return `/docs/${route.owner}/${route.repo}/collaborators`;
+      if (route.tab === "permissions")
+        return `/docs/${route.owner}/${route.repo}/permissions`;
+      return `/docs/${route.owner}/${route.repo}`;
     case "documents":
       return "/documents";
     case "inbox":

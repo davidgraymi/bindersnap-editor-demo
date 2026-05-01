@@ -13,14 +13,15 @@ import {
   submitDocumentReview,
 } from "../api";
 import { DocumentCollaborators } from "./DocumentCollaborators";
+import { DocumentPermissions } from "./DocumentPermissions";
 import { UploadModal } from "./UploadModal";
 
 interface DocumentDetailProps {
   owner: string;
   repo: string;
   uploaderSlug: string;
-  activeView: "overview" | "collaborators";
-  onTabChange: (tab: "overview" | "collaborators") => void;
+  activeView: "overview" | "collaborators" | "permissions";
+  onTabChange: (tab: "overview" | "collaborators" | "permissions") => void;
   onBack: () => void;
 }
 
@@ -455,12 +456,29 @@ export function DocumentDetail({
           >
             Team
           </button>
+          <button
+            className={`document-detail-tab${activeView === "permissions" ? " document-detail-tab-active" : ""}`}
+            type="button"
+            role="tab"
+            aria-selected={activeView === "permissions"}
+            onClick={() => onTabChange("permissions")}
+          >
+            Permissions
+          </button>
         </div>
       </section>
 
       {activeView === "collaborators" ? (
         <div className="document-detail-tab-panel document-detail-tab-panel--collaborators">
           <DocumentCollaborators
+            owner={owner}
+            repo={repo}
+            currentUsername={uploaderSlug}
+          />
+        </div>
+      ) : activeView === "permissions" ? (
+        <div className="document-detail-tab-panel document-detail-tab-panel--permissions">
+          <DocumentPermissions
             owner={owner}
             repo={repo}
             currentUsername={uploaderSlug}
