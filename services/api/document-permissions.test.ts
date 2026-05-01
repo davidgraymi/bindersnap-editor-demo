@@ -74,13 +74,9 @@ beforeEach(() => {
           : input.url;
     const url = new URL(requestUrl);
     const headers =
-      input instanceof Request
-        ? input.headers
-        : new Headers(init?.headers);
+      input instanceof Request ? input.headers : new Headers(init?.headers);
     const method =
-      input instanceof Request
-        ? input.method
-        : (init?.method ?? "GET");
+      input instanceof Request ? input.method : (init?.method ?? "GET");
     const rawBody =
       input instanceof Request
         ? await input.clone().text()
@@ -104,7 +100,12 @@ beforeEach(() => {
         });
       }
       return new Response(
-        JSON.stringify({ login: user.login, email: user.email, full_name: "", is_admin: false }),
+        JSON.stringify({
+          login: user.login,
+          email: user.email,
+          full_name: "",
+          is_admin: false,
+        }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
     }
@@ -137,7 +138,9 @@ beforeEach(() => {
           headers: { "Content-Type": "application/json" },
         });
       }
-      const patch = bodyText ? (JSON.parse(bodyText) as Record<string, unknown>) : {};
+      const patch = bodyText
+        ? (JSON.parse(bodyText) as Record<string, unknown>)
+        : {};
       const updated: MockedBranchProtection = {
         ...existing,
         ...(typeof patch.required_approvals === "number" && {
@@ -147,16 +150,20 @@ beforeEach(() => {
           enable_approvals_whitelist: patch.enable_approvals_whitelist,
         }),
         ...(Array.isArray(patch.approvals_whitelist_username) && {
-          approvals_whitelist_username: patch.approvals_whitelist_username as string[],
+          approvals_whitelist_username:
+            patch.approvals_whitelist_username as string[],
         }),
         ...(typeof patch.enable_merge_whitelist === "boolean" && {
           enable_merge_whitelist: patch.enable_merge_whitelist,
         }),
         ...(Array.isArray(patch.merge_whitelist_usernames) && {
-          merge_whitelist_usernames: patch.merge_whitelist_usernames as string[],
+          merge_whitelist_usernames:
+            patch.merge_whitelist_usernames as string[],
         }),
       };
-      const newRules = rules.map((r) => (r.rule_name === ruleName ? updated : r));
+      const newRules = rules.map((r) =>
+        r.rule_name === ruleName ? updated : r,
+      );
       branchProtectionsByRepoKey.set(key, newRules);
       return new Response(JSON.stringify(updated), {
         status: 200,
@@ -165,7 +172,9 @@ beforeEach(() => {
     }
 
     // Gitea: GET /api/v1/repos/{owner}/{repo}
-    const repoMatch = url.pathname.match(/^\/api\/v1\/repos\/([^/]+)\/([^/]+)$/);
+    const repoMatch = url.pathname.match(
+      /^\/api\/v1\/repos\/([^/]+)\/([^/]+)$/,
+    );
     if (repoMatch && method === "GET") {
       const key = repoKey(repoMatch[1]!, repoMatch[2]!);
       const repo = reposByKey.get(key);
@@ -197,16 +206,25 @@ beforeEach(() => {
           headers: { "Content-Type": "application/json" },
         });
       }
-      const patch = bodyText ? (JSON.parse(bodyText) as Record<string, unknown>) : {};
+      const patch = bodyText
+        ? (JSON.parse(bodyText) as Record<string, unknown>)
+        : {};
       if (typeof patch.private === "boolean") repo.private = patch.private;
       return new Response(
-        JSON.stringify({ id: 1, name: repoMatch[2], full_name: key, private: repo.private }),
+        JSON.stringify({
+          id: 1,
+          name: repoMatch[2],
+          full_name: key,
+          private: repo.private,
+        }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
     }
 
     // Gitea: GET /api/v1/repos/{owner}/{repo}/tags — return empty tags
-    const tagsMatch = url.pathname.match(/^\/api\/v1\/repos\/([^/]+)\/([^/]+)\/tags$/);
+    const tagsMatch = url.pathname.match(
+      /^\/api\/v1\/repos\/([^/]+)\/([^/]+)\/tags$/,
+    );
     if (tagsMatch && method === "GET") {
       return new Response(JSON.stringify([]), {
         status: 200,
@@ -215,7 +233,9 @@ beforeEach(() => {
     }
 
     // Gitea: GET /api/v1/repos/{owner}/{repo}/pulls — return empty pulls
-    const pullsMatch = url.pathname.match(/^\/api\/v1\/repos\/([^/]+)\/([^/]+)\/pulls$/);
+    const pullsMatch = url.pathname.match(
+      /^\/api\/v1\/repos\/([^/]+)\/([^/]+)\/pulls$/,
+    );
     if (pullsMatch && method === "GET") {
       return new Response(JSON.stringify([]), {
         status: 200,
@@ -224,7 +244,9 @@ beforeEach(() => {
     }
 
     // Gitea: GET /api/v1/repos/{owner}/{repo}/contents/* — return empty
-    const contentsMatch = url.pathname.match(/^\/api\/v1\/repos\/([^/]+)\/([^/]+)\/contents\//);
+    const contentsMatch = url.pathname.match(
+      /^\/api\/v1\/repos\/([^/]+)\/([^/]+)\/contents\//,
+    );
     if (contentsMatch && method === "GET") {
       return new Response(JSON.stringify({ message: "Not found" }), {
         status: 404,
@@ -233,7 +255,9 @@ beforeEach(() => {
     }
 
     // Gitea: GET /api/v1/repos/{owner}/{repo}/branches — return empty branches
-    const branchesMatch = url.pathname.match(/^\/api\/v1\/repos\/([^/]+)\/([^/]+)\/branches$/);
+    const branchesMatch = url.pathname.match(
+      /^\/api\/v1\/repos\/([^/]+)\/([^/]+)\/branches$/,
+    );
     if (branchesMatch && method === "GET") {
       return new Response(JSON.stringify([]), {
         status: 200,
@@ -242,7 +266,9 @@ beforeEach(() => {
     }
 
     // Gitea: GET /api/v1/repos/{owner}/{repo}/collaborators/{user} — return 404 (no collaborators setup)
-    const collabMatch = url.pathname.match(/^\/api\/v1\/repos\/([^/]+)\/([^/]+)\/collaborators\/([^/]+)$/);
+    const collabMatch = url.pathname.match(
+      /^\/api\/v1\/repos\/([^/]+)\/([^/]+)\/collaborators\/([^/]+)$/,
+    );
     if (collabMatch && method === "GET") {
       return new Response(JSON.stringify({ message: "Not found" }), {
         status: 404,
@@ -269,7 +295,10 @@ afterEach(() => {
 function seedSession(username: string): string {
   const sessionId = `sess_${randomUUID()}`;
   const giteaToken = `gitea_${randomUUID()}`;
-  giteaUsersByLogin.set(username, { login: username, email: `${username}@test.local` });
+  giteaUsersByLogin.set(username, {
+    login: username,
+    email: `${username}@test.local`,
+  });
   giteaLoginsByToken.set(giteaToken, username);
   sessionStore.put({
     id: sessionId,
@@ -347,9 +376,12 @@ describe("GET /api/app/documents/:owner/:repo/permissions", () => {
     const server = createApiServer();
     try {
       const response = await server.fetch(
-        new Request("http://localhost/api/app/documents/alice/my-doc/permissions", {
-          headers: { Origin: config.appOrigin },
-        }),
+        new Request(
+          "http://localhost/api/app/documents/alice/my-doc/permissions",
+          {
+            headers: { Origin: config.appOrigin },
+          },
+        ),
       );
       expect(response.status).toBe(401);
     } finally {
@@ -362,7 +394,10 @@ describe("GET /api/app/documents/:owner/:repo/permissions", () => {
     const sessionId = `sess_${randomUUID()}`;
     const giteaToken = `gitea_${randomUUID()}`;
     const username = `no-sub-${randomUUID()}`;
-    giteaUsersByLogin.set(username, { login: username, email: `${username}@test.local` });
+    giteaUsersByLogin.set(username, {
+      login: username,
+      email: `${username}@test.local`,
+    });
     giteaLoginsByToken.set(giteaToken, username);
     sessionStore.put({
       id: sessionId,
@@ -376,7 +411,10 @@ describe("GET /api/app/documents/:owner/:repo/permissions", () => {
 
     try {
       const response = await server.fetch(
-        makeRequest(`/api/app/documents/${username}/my-doc/permissions`, sessionId),
+        makeRequest(
+          `/api/app/documents/${username}/my-doc/permissions`,
+          sessionId,
+        ),
       );
       expect(response.status).toBe(402);
     } finally {
@@ -400,7 +438,10 @@ describe("GET /api/app/documents/:owner/:repo/permissions", () => {
 
     try {
       const response = await server.fetch(
-        makeRequest(`/api/app/documents/${owner}/${repo}/permissions`, sessionId),
+        makeRequest(
+          `/api/app/documents/${owner}/${repo}/permissions`,
+          sessionId,
+        ),
       );
       expect(response.status).toBe(200);
 
@@ -417,7 +458,9 @@ describe("GET /api/app/documents/:owner/:repo/permissions", () => {
       expect(body.branchProtection).not.toBeNull();
       expect(body.branchProtection?.requiredApprovals).toBe(2);
       expect(body.branchProtection?.enableApprovalsWhitelist).toBe(true);
-      expect(body.branchProtection?.approvalsWhitelistUsernames).toEqual(["reviewer1"]);
+      expect(body.branchProtection?.approvalsWhitelistUsernames).toEqual([
+        "reviewer1",
+      ]);
       expect(body.isPrivate).toBe(true);
     } finally {
       server.stop(true);
@@ -435,11 +478,17 @@ describe("GET /api/app/documents/:owner/:repo/permissions", () => {
 
     try {
       const response = await server.fetch(
-        makeRequest(`/api/app/documents/${owner}/${repo}/permissions`, sessionId),
+        makeRequest(
+          `/api/app/documents/${owner}/${repo}/permissions`,
+          sessionId,
+        ),
       );
       expect(response.status).toBe(200);
 
-      const body = (await response.json()) as { branchProtection: null; isPrivate: boolean };
+      const body = (await response.json()) as {
+        branchProtection: null;
+        isPrivate: boolean;
+      };
       expect(body.branchProtection).toBeNull();
       expect(body.isPrivate).toBe(false);
     } finally {
@@ -457,7 +506,10 @@ describe("GET /api/app/documents/:owner/:repo/permissions", () => {
 
     try {
       const response = await server.fetch(
-        makeRequest(`/api/app/documents/${owner}/${repo}/permissions`, sessionId),
+        makeRequest(
+          `/api/app/documents/${owner}/${repo}/permissions`,
+          sessionId,
+        ),
       );
       expect(response.status).toBe(200);
       const body = (await response.json()) as { isPrivate: boolean };
@@ -482,10 +534,14 @@ describe("PUT /api/app/documents/:owner/:repo/permissions", () => {
 
     try {
       const response = await server.fetch(
-        makeRequest(`/api/app/documents/${owner}/${repo}/permissions`, collabSessionId, {
-          method: "PUT",
-          body: { requiredApprovals: 3 },
-        }),
+        makeRequest(
+          `/api/app/documents/${owner}/${repo}/permissions`,
+          collabSessionId,
+          {
+            method: "PUT",
+            body: { requiredApprovals: 3 },
+          },
+        ),
       );
       expect(response.status).toBe(403);
       const body = (await response.json()) as { error: string };
@@ -501,14 +557,21 @@ describe("PUT /api/app/documents/:owner/:repo/permissions", () => {
     const repo = "my-doc";
     const sessionId = seedSession(owner);
     seedRepo(owner, repo, { isPrivate: true });
-    seedBranchProtection(owner, repo, { rule_name: "main", required_approvals: 1 });
+    seedBranchProtection(owner, repo, {
+      rule_name: "main",
+      required_approvals: 1,
+    });
 
     try {
       const response = await server.fetch(
-        makeRequest(`/api/app/documents/${owner}/${repo}/permissions`, sessionId, {
-          method: "PUT",
-          body: { requiredApprovals: 3 },
-        }),
+        makeRequest(
+          `/api/app/documents/${owner}/${repo}/permissions`,
+          sessionId,
+          {
+            method: "PUT",
+            body: { requiredApprovals: 3 },
+          },
+        ),
       );
       expect(response.status).toBe(200);
       const body = (await response.json()) as {
@@ -530,13 +593,17 @@ describe("PUT /api/app/documents/:owner/:repo/permissions", () => {
 
     try {
       const response = await server.fetch(
-        makeRequest(`/api/app/documents/${owner}/${repo}/permissions`, sessionId, {
-          method: "PUT",
-          body: {
-            enableApprovalsWhitelist: true,
-            approvalsWhitelistUsernames: ["alice", "bob"],
+        makeRequest(
+          `/api/app/documents/${owner}/${repo}/permissions`,
+          sessionId,
+          {
+            method: "PUT",
+            body: {
+              enableApprovalsWhitelist: true,
+              approvalsWhitelistUsernames: ["alice", "bob"],
+            },
           },
-        }),
+        ),
       );
       expect(response.status).toBe(200);
       const body = (await response.json()) as {
@@ -546,7 +613,10 @@ describe("PUT /api/app/documents/:owner/:repo/permissions", () => {
         } | null;
       };
       expect(body.branchProtection?.enableApprovalsWhitelist).toBe(true);
-      expect(body.branchProtection?.approvalsWhitelistUsernames).toEqual(["alice", "bob"]);
+      expect(body.branchProtection?.approvalsWhitelistUsernames).toEqual([
+        "alice",
+        "bob",
+      ]);
     } finally {
       server.stop(true);
     }
@@ -562,13 +632,17 @@ describe("PUT /api/app/documents/:owner/:repo/permissions", () => {
 
     try {
       const response = await server.fetch(
-        makeRequest(`/api/app/documents/${owner}/${repo}/permissions`, sessionId, {
-          method: "PUT",
-          body: {
-            enableMergeWhitelist: true,
-            mergeWhitelistUsernames: ["publisher1"],
+        makeRequest(
+          `/api/app/documents/${owner}/${repo}/permissions`,
+          sessionId,
+          {
+            method: "PUT",
+            body: {
+              enableMergeWhitelist: true,
+              mergeWhitelistUsernames: ["publisher1"],
+            },
           },
-        }),
+        ),
       );
       expect(response.status).toBe(200);
       const body = (await response.json()) as {
@@ -578,7 +652,9 @@ describe("PUT /api/app/documents/:owner/:repo/permissions", () => {
         } | null;
       };
       expect(body.branchProtection?.enableMergeWhitelist).toBe(true);
-      expect(body.branchProtection?.mergeWhitelistUsernames).toEqual(["publisher1"]);
+      expect(body.branchProtection?.mergeWhitelistUsernames).toEqual([
+        "publisher1",
+      ]);
     } finally {
       server.stop(true);
     }
@@ -594,10 +670,14 @@ describe("PUT /api/app/documents/:owner/:repo/permissions", () => {
 
     try {
       const response = await server.fetch(
-        makeRequest(`/api/app/documents/${owner}/${repo}/permissions`, sessionId, {
-          method: "PUT",
-          body: { isPrivate: false },
-        }),
+        makeRequest(
+          `/api/app/documents/${owner}/${repo}/permissions`,
+          sessionId,
+          {
+            method: "PUT",
+            body: { isPrivate: false },
+          },
+        ),
       );
       expect(response.status).toBe(200);
       const body = (await response.json()) as { isPrivate: boolean };
@@ -617,10 +697,14 @@ describe("PUT /api/app/documents/:owner/:repo/permissions", () => {
 
     try {
       const response = await server.fetch(
-        makeRequest(`/api/app/documents/${owner}/${repo}/permissions`, sessionId, {
-          method: "PUT",
-          body: { isPrivate: true },
-        }),
+        makeRequest(
+          `/api/app/documents/${owner}/${repo}/permissions`,
+          sessionId,
+          {
+            method: "PUT",
+            body: { isPrivate: true },
+          },
+        ),
       );
       expect(response.status).toBe(200);
       const body = (await response.json()) as { isPrivate: boolean };
@@ -636,14 +720,21 @@ describe("PUT /api/app/documents/:owner/:repo/permissions", () => {
     const repo = "my-doc";
     const sessionId = seedSession(owner);
     seedRepo(owner, repo, { isPrivate: true });
-    seedBranchProtection(owner, repo, { rule_name: "main", required_approvals: 1 });
+    seedBranchProtection(owner, repo, {
+      rule_name: "main",
+      required_approvals: 1,
+    });
 
     try {
       const response = await server.fetch(
-        makeRequest(`/api/app/documents/${owner}/${repo}/permissions`, sessionId, {
-          method: "PUT",
-          body: { requiredApprovals: -5 },
-        }),
+        makeRequest(
+          `/api/app/documents/${owner}/${repo}/permissions`,
+          sessionId,
+          {
+            method: "PUT",
+            body: { requiredApprovals: -5 },
+          },
+        ),
       );
       expect(response.status).toBe(200);
       const body = (await response.json()) as {
@@ -665,19 +756,31 @@ describe("PUT /api/app/documents/:owner/:repo/permissions", () => {
 
     try {
       const response = await server.fetch(
-        makeRequest(`/api/app/documents/${owner}/${repo}/permissions`, sessionId, {
-          method: "PUT",
-          body: {
-            enableApprovalsWhitelist: true,
-            approvalsWhitelistUsernames: ["alice", 42, null, "bob"] as unknown as string[],
+        makeRequest(
+          `/api/app/documents/${owner}/${repo}/permissions`,
+          sessionId,
+          {
+            method: "PUT",
+            body: {
+              enableApprovalsWhitelist: true,
+              approvalsWhitelistUsernames: [
+                "alice",
+                42,
+                null,
+                "bob",
+              ] as unknown as string[],
+            },
           },
-        }),
+        ),
       );
       expect(response.status).toBe(200);
       const body = (await response.json()) as {
         branchProtection: { approvalsWhitelistUsernames: string[] } | null;
       };
-      expect(body.branchProtection?.approvalsWhitelistUsernames).toEqual(["alice", "bob"]);
+      expect(body.branchProtection?.approvalsWhitelistUsernames).toEqual([
+        "alice",
+        "bob",
+      ]);
     } finally {
       server.stop(true);
     }
@@ -687,14 +790,17 @@ describe("PUT /api/app/documents/:owner/:repo/permissions", () => {
     const server = createApiServer();
     try {
       const response = await server.fetch(
-        new Request("http://localhost/api/app/documents/alice/my-doc/permissions", {
-          method: "PUT",
-          headers: {
-            Origin: config.appOrigin,
-            "Content-Type": "application/json",
+        new Request(
+          "http://localhost/api/app/documents/alice/my-doc/permissions",
+          {
+            method: "PUT",
+            headers: {
+              Origin: config.appOrigin,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ isPrivate: false }),
           },
-          body: JSON.stringify({ isPrivate: false }),
-        }),
+        ),
       );
       expect(response.status).toBe(401);
     } finally {
@@ -708,14 +814,21 @@ describe("PUT /api/app/documents/:owner/:repo/permissions", () => {
     const repo = "my-doc";
     const sessionId = seedSession(owner);
     seedRepo(owner, repo, { isPrivate: true });
-    seedBranchProtection(owner, repo, { rule_name: "main", required_approvals: 2 });
+    seedBranchProtection(owner, repo, {
+      rule_name: "main",
+      required_approvals: 2,
+    });
 
     try {
       const response = await server.fetch(
-        makeRequest(`/api/app/documents/${owner}/${repo}/permissions`, sessionId, {
-          method: "PUT",
-          body: { requiredApprovals: 0 },
-        }),
+        makeRequest(
+          `/api/app/documents/${owner}/${repo}/permissions`,
+          sessionId,
+          {
+            method: "PUT",
+            body: { requiredApprovals: 0 },
+          },
+        ),
       );
       expect(response.status).toBe(200);
       const body = (await response.json()) as {
@@ -733,14 +846,21 @@ describe("PUT /api/app/documents/:owner/:repo/permissions", () => {
     const repo = "my-doc";
     const sessionId = seedSession(owner);
     seedRepo(owner, repo, { isPrivate: true });
-    seedBranchProtection(owner, repo, { rule_name: "main", required_approvals: 1 });
+    seedBranchProtection(owner, repo, {
+      rule_name: "main",
+      required_approvals: 1,
+    });
 
     try {
       const response = await server.fetch(
-        makeRequest(`/api/app/documents/${owner}/${repo}/permissions`, sessionId, {
-          method: "PUT",
-          body: { requiredApprovals: 5 },
-        }),
+        makeRequest(
+          `/api/app/documents/${owner}/${repo}/permissions`,
+          sessionId,
+          {
+            method: "PUT",
+            body: { requiredApprovals: 5 },
+          },
+        ),
       );
       expect(response.status).toBe(200);
       const body = (await response.json()) as {
@@ -766,13 +886,17 @@ describe("PUT /api/app/documents/:owner/:repo/permissions", () => {
 
     try {
       const response = await server.fetch(
-        makeRequest(`/api/app/documents/${owner}/${repo}/permissions`, sessionId, {
-          method: "PUT",
-          body: {
-            enableApprovalsWhitelist: false,
-            approvalsWhitelistUsernames: [],
+        makeRequest(
+          `/api/app/documents/${owner}/${repo}/permissions`,
+          sessionId,
+          {
+            method: "PUT",
+            body: {
+              enableApprovalsWhitelist: false,
+              approvalsWhitelistUsernames: [],
+            },
           },
-        }),
+        ),
       );
       expect(response.status).toBe(200);
       const body = (await response.json()) as {
@@ -802,13 +926,17 @@ describe("PUT /api/app/documents/:owner/:repo/permissions", () => {
 
     try {
       const response = await server.fetch(
-        makeRequest(`/api/app/documents/${owner}/${repo}/permissions`, sessionId, {
-          method: "PUT",
-          body: {
-            enableMergeWhitelist: false,
-            mergeWhitelistUsernames: [],
+        makeRequest(
+          `/api/app/documents/${owner}/${repo}/permissions`,
+          sessionId,
+          {
+            method: "PUT",
+            body: {
+              enableMergeWhitelist: false,
+              mergeWhitelistUsernames: [],
+            },
           },
-        }),
+        ),
       );
       expect(response.status).toBe(200);
       const body = (await response.json()) as {
@@ -834,19 +962,31 @@ describe("PUT /api/app/documents/:owner/:repo/permissions", () => {
 
     try {
       const response = await server.fetch(
-        makeRequest(`/api/app/documents/${owner}/${repo}/permissions`, sessionId, {
-          method: "PUT",
-          body: {
-            enableMergeWhitelist: true,
-            mergeWhitelistUsernames: ["publisher1", 123, null, "publisher2"] as unknown as string[],
+        makeRequest(
+          `/api/app/documents/${owner}/${repo}/permissions`,
+          sessionId,
+          {
+            method: "PUT",
+            body: {
+              enableMergeWhitelist: true,
+              mergeWhitelistUsernames: [
+                "publisher1",
+                123,
+                null,
+                "publisher2",
+              ] as unknown as string[],
+            },
           },
-        }),
+        ),
       );
       expect(response.status).toBe(200);
       const body = (await response.json()) as {
         branchProtection: { mergeWhitelistUsernames: string[] } | null;
       };
-      expect(body.branchProtection?.mergeWhitelistUsernames).toEqual(["publisher1", "publisher2"]);
+      expect(body.branchProtection?.mergeWhitelistUsernames).toEqual([
+        "publisher1",
+        "publisher2",
+      ]);
     } finally {
       server.stop(true);
     }
@@ -862,16 +1002,20 @@ describe("PUT /api/app/documents/:owner/:repo/permissions", () => {
 
     try {
       const response = await server.fetch(
-        makeRequest(`/api/app/documents/${owner}/${repo}/permissions`, sessionId, {
-          method: "PUT",
-          body: {
-            requiredApprovals: 2,
-            enableApprovalsWhitelist: true,
-            approvalsWhitelistUsernames: ["alice"],
-            enableMergeWhitelist: true,
-            mergeWhitelistUsernames: ["bob"],
+        makeRequest(
+          `/api/app/documents/${owner}/${repo}/permissions`,
+          sessionId,
+          {
+            method: "PUT",
+            body: {
+              requiredApprovals: 2,
+              enableApprovalsWhitelist: true,
+              approvalsWhitelistUsernames: ["alice"],
+              enableMergeWhitelist: true,
+              mergeWhitelistUsernames: ["bob"],
+            },
           },
-        }),
+        ),
       );
       expect(response.status).toBe(200);
       const body = (await response.json()) as {
@@ -885,7 +1029,9 @@ describe("PUT /api/app/documents/:owner/:repo/permissions", () => {
       };
       expect(body.branchProtection?.requiredApprovals).toBe(2);
       expect(body.branchProtection?.enableApprovalsWhitelist).toBe(true);
-      expect(body.branchProtection?.approvalsWhitelistUsernames).toEqual(["alice"]);
+      expect(body.branchProtection?.approvalsWhitelistUsernames).toEqual([
+        "alice",
+      ]);
       expect(body.branchProtection?.enableMergeWhitelist).toBe(true);
       expect(body.branchProtection?.mergeWhitelistUsernames).toEqual(["bob"]);
     } finally {
@@ -912,7 +1058,10 @@ describe("GET /api/app/documents/:owner/:repo/permissions - additional scenarios
 
     try {
       const response = await server.fetch(
-        makeRequest(`/api/app/documents/${owner}/${repo}/permissions`, sessionId),
+        makeRequest(
+          `/api/app/documents/${owner}/${repo}/permissions`,
+          sessionId,
+        ),
       );
       expect(response.status).toBe(200);
 
@@ -925,7 +1074,9 @@ describe("GET /api/app/documents/:owner/:repo/permissions - additional scenarios
 
       expect(body.branchProtection).not.toBeNull();
       expect(body.branchProtection?.enableMergeWhitelist).toBe(true);
-      expect(body.branchProtection?.mergeWhitelistUsernames).toContain("publisher");
+      expect(body.branchProtection?.mergeWhitelistUsernames).toContain(
+        "publisher",
+      );
     } finally {
       server.stop(true);
     }
@@ -942,7 +1093,10 @@ describe("GET /api/app/documents/:owner/:repo/permissions - additional scenarios
 
     try {
       const response = await server.fetch(
-        makeRequest(`/api/app/documents/${owner}/${repo}/permissions`, sessionId),
+        makeRequest(
+          `/api/app/documents/${owner}/${repo}/permissions`,
+          sessionId,
+        ),
       );
       expect(response.status).toBe(200);
 
@@ -985,7 +1139,9 @@ describe("GET /api/app/documents/:owner/:repo - public and private access", () =
         makeRequest(`/api/app/documents/${owner}/${repo}`, nonOwnerSessionId),
       );
       expect(response.status).toBe(200);
-      const body = (await response.json()) as { repository: { full_name: string } };
+      const body = (await response.json()) as {
+        repository: { full_name: string };
+      };
       expect(body.repository.full_name).toBe(`${owner}/${repo}`);
     } finally {
       server.stop(true);
@@ -1013,15 +1169,17 @@ describe("GET /api/app/documents/:owner/:repo - public and private access", () =
             : input.url;
       const url = new URL(requestUrl);
       const headers =
-        input instanceof Request
-          ? input.headers
-          : new Headers(init?.headers);
+        input instanceof Request ? input.headers : new Headers(init?.headers);
 
       // Check if this is a repo GET request for the private repo from the non-collaborator
-      const repoMatch = url.pathname.match(/^\/api\/v1\/repos\/([^/]+)\/([^/]+)$/);
+      const repoMatch = url.pathname.match(
+        /^\/api\/v1\/repos\/([^/]+)\/([^/]+)$/,
+      );
       if (repoMatch && repoMatch[1] === owner && repoMatch[2] === repo) {
         const authHeader = headers.get("Authorization") ?? "";
-        const token = authHeader.startsWith("token ") ? authHeader.slice(6) : "";
+        const token = authHeader.startsWith("token ")
+          ? authHeader.slice(6)
+          : "";
         const login = giteaLoginsByToken.get(token);
 
         // If the requesting user is NOT the owner, return 404

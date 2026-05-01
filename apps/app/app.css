@@ -1541,7 +1541,8 @@ input {
   border: 1px solid var(--bs-rule);
   border-radius: var(--brand-radius-lg);
   cursor: pointer;
-  transition: background var(--brand-transition-fast),
+  transition:
+    background var(--brand-transition-fast),
     border-color var(--brand-transition-fast);
 }
 
