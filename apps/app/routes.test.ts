@@ -29,6 +29,22 @@ test("getRoute preserves document detail routes", () => {
     repo: "quarterly-report",
     tab: "collaborators",
   });
+
+  expect(getRoute("/docs/alice/quarterly-report/permissions")).toEqual({
+    kind: "document",
+    owner: "alice",
+    repo: "quarterly-report",
+    tab: "permissions",
+  });
+});
+
+test("getRoute maps permissions path with URL-encoded owner/repo", () => {
+  expect(getRoute("/docs/alice-org/my%20doc/permissions")).toEqual({
+    kind: "document",
+    owner: "alice-org",
+    repo: "my%20doc",
+    tab: "permissions",
+  });
 });
 
 test("routeToPath keeps home and workspace on the root URL", () => {
