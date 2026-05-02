@@ -188,6 +188,7 @@ export function DocumentPermissions({
   const [enableMergeWhitelist, setEnableMergeWhitelist] = useState(false);
   const [mergeWhitelistUsers, setMergeWhitelistUsers] = useState<string[]>([]);
   const [isPrivate, setIsPrivate] = useState(true);
+  const [isInternal, setIsInternal] = useState(false);
 
   const [currentUserPermission, setCurrentUserPermission] = useState<
     string | null
@@ -223,6 +224,7 @@ export function DocumentPermissions({
     setEnableMergeWhitelist(bp?.enableMergeWhitelist ?? false);
     setMergeWhitelistUsers(bp?.mergeWhitelistUsernames ?? []);
     setIsPrivate(data.isPrivate);
+    setIsInternal(data.isInternal);
     setCurrentUserPermission(data.currentUserPermission?.access ?? null);
   }
 
@@ -390,44 +392,69 @@ export function DocumentPermissions({
         <div className="perms-group">
           <p className="perms-group-heading">Visibility</p>
 
-          <div className="perms-radio-group">
-            <label
-              className={`perms-radio-option${isPrivate ? " perms-radio-option--selected" : ""}`}
-            >
-              <input
-                type="radio"
-                name="doc-visibility"
-                value="private"
-                checked={isPrivate}
-                disabled={disabled}
-                onChange={() => setIsPrivate(true)}
-              />
-              <div>
-                <div className="perms-radio-title">Private</div>
-                <div className="perms-radio-desc">
-                  Only collaborators can access this document.
-                </div>
+          {isInternal ? (
+            <div className="perms-notice">
+              <div className="bs-eyebrow">Internal (Gitea)</div>
+              <p>
+                This document uses <strong>Internal</strong> visibility —
+                accessible to all logged-in Gitea users but not listed on your
+                profile or in search results. To change it, update the
+                repository visibility in Gitea settings.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="perms-radio-group">
+                <label
+                  className={`perms-radio-option${isPrivate ? " perms-radio-option--selected" : ""}`}
+                >
+                  <input
+                    type="radio"
+                    name="doc-visibility"
+                    value="private"
+                    checked={isPrivate}
+                    disabled={disabled}
+                    onChange={() => setIsPrivate(true)}
+                  />
+                  <div>
+                    <div className="perms-radio-title">Private</div>
+                    <div className="perms-radio-desc">
+                      Only collaborators you've added can access this document.
+                      It won't appear in search results or on your profile.
+                    </div>
+                  </div>
+                </label>
+                <label
+                  className={`perms-radio-option${!isPrivate ? " perms-radio-option--selected" : ""}`}
+                >
+                  <input
+                    type="radio"
+                    name="doc-visibility"
+                    value="public"
+                    checked={!isPrivate}
+                    disabled={disabled}
+                    onChange={() => setIsPrivate(false)}
+                  />
+                  <div>
+                    <div className="perms-radio-title">Public</div>
+                    <div className="perms-radio-desc">
+                      Anyone on the internet can view this document and its full
+                      revision history, even without an account.
+                    </div>
+                  </div>
+                </label>
               </div>
-            </label>
-            <label
-              className={`perms-radio-option${!isPrivate ? " perms-radio-option--selected" : ""}`}
-            >
-              <input
-                type="radio"
-                name="doc-visibility"
-                value="public"
-                checked={!isPrivate}
-                disabled={disabled}
-                onChange={() => setIsPrivate(false)}
-              />
-              <div>
-                <div className="perms-radio-title">Public</div>
-                <div className="perms-radio-desc">
-                  Anyone can read this document and its review history.
-                </div>
-              </div>
-            </label>
-          </div>
+              {isPrivate && (
+                <p className="perms-public-access-hint">
+                  To allow anonymous users to view specific parts of this
+                  private document (such as code or issues), configure{" "}
+                  <strong>Public Access settings</strong> in your Gitea
+                  repository settings. These are separate from the
+                  public/private toggle above.
+                </p>
+              )}
+            </>
+          )}
         </div>
 
         {/* Footer */}

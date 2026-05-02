@@ -1603,6 +1603,13 @@ input {
   color: var(--brand-green);
 }
 
+.perms-public-access-hint {
+  margin: var(--brand-space-4) 0 0;
+  font-size: var(--brand-text-xs);
+  color: var(--bs-text-muted);
+  line-height: var(--brand-leading-relaxed);
+}
+
 @media (max-width: 960px) {
   .collaborators-table-head,
   .collaborator-row {

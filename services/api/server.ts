@@ -2930,6 +2930,7 @@ async function handleGetDocumentPermissions(
       {
         branchProtection,
         isPrivate: repoInfo.isPrivate,
+        isInternal: repoInfo.isInternal,
         currentUserPermission,
       },
       baseHeaders,
@@ -3031,7 +3032,11 @@ async function handleUpdateDocumentPermissions(
 
     return json(
       200,
-      { branchProtection, isPrivate: repoInfo.isPrivate },
+      {
+        branchProtection,
+        isPrivate: repoInfo.isPrivate,
+        isInternal: repoInfo.isInternal,
+      },
       baseHeaders,
     );
   } catch (err) {

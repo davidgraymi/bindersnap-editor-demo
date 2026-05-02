@@ -128,6 +128,7 @@ export interface DocumentPermissionsPayload {
     blockOnRejectedReviews: boolean;
   } | null;
   isPrivate: boolean;
+  isInternal: boolean;
   currentUserPermission?: RepoCollaboratorPermissionSummary | null;
 }
 

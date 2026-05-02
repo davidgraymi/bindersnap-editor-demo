@@ -16,7 +16,7 @@ services:
       - ./data/gitea:/data
 
   gitea:
-    image: gitea/gitea:1.25
+    image: gitea/gitea:1.26
     container_name: bindersnap-gitea
     restart: unless-stopped
     depends_on:

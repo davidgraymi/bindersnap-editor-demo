@@ -680,12 +680,15 @@ export interface GetRepoInfoParams {
 
 export async function getRepoInfo(
   params: GetRepoInfoParams,
-): Promise<{ isPrivate: boolean }> {
+): Promise<{ isPrivate: boolean; isInternal: boolean }> {
   const { client, owner, repo } = params;
   const repo_data = await unwrap(
     client.GET("/repos/{owner}/{repo}", {
       params: { path: { owner, repo } },
     }),
   );
-  return { isPrivate: repo_data.private ?? true };
+  return {
+    isPrivate: repo_data.private ?? true,
+    isInternal: repo_data.internal ?? false,
+  };
 }

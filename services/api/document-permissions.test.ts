@@ -15,7 +15,7 @@ import {
 // ── Mock Gitea state ─────────────────────────────────────────────────────────
 
 type MockedGiteaUser = { login: string; email: string };
-type MockedRepo = { private: boolean };
+type MockedRepo = { private: boolean; internal: boolean };
 type MockedBranchProtection = {
   rule_name: string;
   required_approvals: number;
@@ -190,6 +190,7 @@ beforeEach(() => {
           name: repoMatch[2],
           full_name: key,
           private: repo.private,
+          internal: repo.internal,
           permissions: { admin: true, push: true, pull: true },
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
@@ -324,9 +325,12 @@ function seedSession(username: string): string {
 function seedRepo(
   owner: string,
   repo: string,
-  options?: { isPrivate?: boolean },
+  options?: { isPrivate?: boolean; isInternal?: boolean },
 ): void {
-  reposByKey.set(repoKey(owner, repo), { private: options?.isPrivate ?? true });
+  reposByKey.set(repoKey(owner, repo), {
+    private: options?.isPrivate ?? true,
+    internal: options?.isInternal ?? false,
+  });
 }
 
 function seedBranchProtection(
@@ -514,6 +518,60 @@ describe("GET /api/app/documents/:owner/:repo/permissions", () => {
       expect(response.status).toBe(200);
       const body = (await response.json()) as { isPrivate: boolean };
       expect(body.isPrivate).toBe(false);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("returns isInternal: false for a normal private repo", async () => {
+    const server = createApiServer();
+    const owner = `owner-${randomUUID()}`;
+    const repo = "private-doc";
+    const sessionId = seedSession(owner);
+
+    seedRepo(owner, repo, { isPrivate: true, isInternal: false });
+
+    try {
+      const response = await server.fetch(
+        makeRequest(
+          `/api/app/documents/${owner}/${repo}/permissions`,
+          sessionId,
+        ),
+      );
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as {
+        isPrivate: boolean;
+        isInternal: boolean;
+      };
+      expect(body.isPrivate).toBe(true);
+      expect(body.isInternal).toBe(false);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("returns isInternal: true for an internal repo", async () => {
+    const server = createApiServer();
+    const owner = `owner-${randomUUID()}`;
+    const repo = "internal-doc";
+    const sessionId = seedSession(owner);
+
+    seedRepo(owner, repo, { isPrivate: false, isInternal: true });
+
+    try {
+      const response = await server.fetch(
+        makeRequest(
+          `/api/app/documents/${owner}/${repo}/permissions`,
+          sessionId,
+        ),
+      );
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as {
+        isPrivate: boolean;
+        isInternal: boolean;
+      };
+      expect(body.isPrivate).toBe(false);
+      expect(body.isInternal).toBe(true);
     } finally {
       server.stop(true);
     }
