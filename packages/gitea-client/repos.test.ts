@@ -128,7 +128,7 @@ test("listWorkspaceRepos normalizes repository data", async () => {
 
   const { client } = createMockClient({
     GET: {
-      "/repos/search": () => ({ data: repos }),
+      "/repos/search": () => ({ ok: true, data: repos }),
     },
   });
 
@@ -143,7 +143,7 @@ test("listWorkspaceRepos normalizes repository data", async () => {
 
 test("listWorkspaceRepos handles empty response", async () => {
   const { client } = createMockClient({
-    GET: { "/repos/search": () => ({ data: [] }) },
+    GET: { "/repos/search": () => ({ ok: true, data: [] }) },
   });
 
   const { listWorkspaceRepos } = await import("./repos");

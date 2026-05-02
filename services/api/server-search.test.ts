@@ -80,7 +80,8 @@ beforeEach(() => {
           ? input.toString()
           : input.url;
     const url = new URL(requestUrl);
-    const headers = new Headers(init?.headers);
+    const headers =
+      input instanceof Request ? input.headers : new Headers(init?.headers);
     const body =
       typeof init?.body === "string"
         ? init.body
@@ -227,6 +228,12 @@ beforeEach(() => {
       const user = login ? giteaUsersByLogin.get(login) : null;
 
       if (!user) {
+        console.log("DEBUG: /api/v1/user/repos 401", {
+          token,
+          availableTokens: Array.from(giteaLoginsByToken.keys()),
+          authHeader,
+          init,
+        });
         return new Response(JSON.stringify({ message: "Unauthorized" }), {
           status: 401,
           headers: {
@@ -403,11 +410,11 @@ describe("GET /api/app/documents with search query", () => {
     );
 
     expect(response.status).toBe(200);
+    // listWorkspaceRepos uses /repos/search with no filters
     const searchCalls = fetchCalls.filter(
       (call) => call.path === "/api/v1/repos/search",
     );
     expect(searchCalls.length).toBe(1);
-    // listWorkspaceRepos uses /repos/search with no filters
     expect(searchCalls[0]!.queryParams.get("q")).toBeNull();
     expect(searchCalls[0]!.queryParams.get("uid")).toBeNull();
     expect(searchCalls[0]!.queryParams.get("exclusive")).toBeNull();
@@ -429,6 +436,7 @@ describe("GET /api/app/documents with search query", () => {
     );
 
     expect(response.status).toBe(200);
+    // empty q treated same as no q — uses listWorkspaceRepos (/repos/search with no filters)
     const searchCalls = fetchCalls.filter(
       (call) => call.path === "/api/v1/repos/search",
     );
