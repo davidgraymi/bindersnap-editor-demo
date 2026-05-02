@@ -55,8 +55,8 @@ test("getWorkspaceDocuments with no query makes GET request without query string
     }
   `);
 
-  expect(result.exitCode).toBe(0);
   expect(result.stderr).toBe("");
+  expect(result.exitCode).toBe(0);
 });
 
 test("getWorkspaceDocuments with query makes GET request with encoded query param", () => {
@@ -94,8 +94,8 @@ test("getWorkspaceDocuments with query makes GET request with encoded query para
     }
   `);
 
-  expect(result.exitCode).toBe(0);
   expect(result.stderr).toBe("");
+  expect(result.exitCode).toBe(0);
 });
 
 test("getWorkspaceDocuments with contributed-by query encodes correctly", () => {
@@ -133,8 +133,8 @@ test("getWorkspaceDocuments with contributed-by query encodes correctly", () => 
     }
   `);
 
-  expect(result.exitCode).toBe(0);
   expect(result.stderr).toBe("");
+  expect(result.exitCode).toBe(0);
 });
 
 test("getWorkspaceDocuments with complex query encodes correctly", () => {
@@ -175,6 +175,6 @@ test("getWorkspaceDocuments with complex query encodes correctly", () => {
     }
   `);
 
-  expect(result.exitCode).toBe(0);
   expect(result.stderr).toBe("");
+  expect(result.exitCode).toBe(0);
 });
