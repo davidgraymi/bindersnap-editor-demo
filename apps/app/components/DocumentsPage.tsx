@@ -1,11 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  FileText,
-  GitPullRequest,
-  Search,
-  Tag,
-  Users,
-} from "lucide-react";
+import { FileText, GitPullRequest, Search, Tag, Users } from "lucide-react";
 import { getWorkspaceDocuments, type WorkspaceDocumentSummary } from "../api";
 import { BindersnapLogoMark } from "./BindersnapLogoMark";
 
@@ -240,12 +234,6 @@ export function DocumentsPage({
         onSubmit={handleSearchSubmit}
         role="search"
       >
-        <Search
-          size={18}
-          strokeWidth={1.5}
-          className="docs-hero-search-icon"
-          aria-hidden="true"
-        />
         <input
           ref={inputRef}
           type="text"
@@ -263,39 +251,42 @@ export function DocumentsPage({
             className="docs-hero-search-clear"
             aria-label="Clear search"
             onClick={() => {
-              setInputValue(DEFAULT_QUERY);
-              navigateToQuery("");
+              setInputValue("");
               inputRef.current?.focus();
             }}
           >
             ×
           </button>
         )}
+        <button
+          type="submit"
+          className="docs-hero-search-submit"
+          aria-label="Search"
+        >
+          <Search size={16} strokeWidth={1.5} aria-hidden="true" />
+        </button>
       </form>
 
-      <div className="docs-controls-card">
-        {/* Scope tabs */}
-        <div className="docs-scope-tabs">
-          <button
-            type="button"
-            className={`docs-scope-tab${isContributionsTab ? " docs-scope-tab--active" : ""}`}
-            onClick={() => handleTabClick("contributions")}
-          >
-            My Contributions
-          </button>
-          <button
-            type="button"
-            className={`docs-scope-tab${isMyDocsTab ? " docs-scope-tab--active" : ""}`}
-            onClick={() => handleTabClick("my-docs")}
-          >
-            My Documents
-          </button>
-        </div>
-
-        {/* Sort toolbar */}
-        <div className="docs-toolbar">
-          <div className="docs-toolbar-right">
-            <span className="docs-toolbar-label">Sort</span>
+      <div className="docs-panel">
+        {/* Header: scope tabs + sort */}
+        <div className="docs-panel-header">
+          <div className="docs-scope-tabs">
+            <button
+              type="button"
+              className={`docs-scope-tab${isContributionsTab ? " docs-scope-tab--active" : ""}`}
+              onClick={() => handleTabClick("contributions")}
+            >
+              My Contributions
+            </button>
+            <button
+              type="button"
+              className={`docs-scope-tab${isMyDocsTab ? " docs-scope-tab--active" : ""}`}
+              onClick={() => handleTabClick("my-docs")}
+            >
+              My Documents
+            </button>
+          </div>
+          <div className="docs-sort-control">
             <select
               className="docs-toolbar-select"
               value={sort}
@@ -308,101 +299,98 @@ export function DocumentsPage({
             </select>
           </div>
         </div>
-      </div>
 
-      {loading ? (
-        <div className="docs-list">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="docs-list-item docs-list-item--skeleton">
-              <div className="docs-skeleton docs-skeleton--icon" />
-              <div className="docs-skeleton-body">
-                <div className="docs-skeleton docs-skeleton--title" />
-                <div className="docs-skeleton docs-skeleton--meta" />
+        {loading && documents.length === 0 ? (
+          <div className="docs-list">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="docs-list-item docs-list-item--skeleton">
+                <div className="docs-skeleton docs-skeleton--icon" />
+                <div className="docs-skeleton-body">
+                  <div className="docs-skeleton docs-skeleton--title" />
+                  <div className="docs-skeleton docs-skeleton--desc" />
+                  <div className="docs-skeleton docs-skeleton--meta" />
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
-      ) : error ? (
-        <div className="bs-card docs-error-card">
-          <p className="docs-error-text">{error}</p>
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="docs-empty">
-          <div className="docs-empty-icon">
-            <FileText size={32} strokeWidth={1} aria-hidden="true" />
+            ))}
           </div>
-          <p className="docs-empty-title">No documents found.</p>
-          <p className="docs-empty-sub">
-            {isContributionsTab
-              ? "You haven't contributed to any documents yet."
-              : "No documents matched your search."}
-          </p>
-        </div>
-      ) : (
-        <div className="docs-list">
-          {filtered.map((doc) => {
-            const status = getDocStatus(doc);
-            const name = formatDocumentName(doc.repo.name);
-            const updated = formatRelativeTime(doc.repo.updated_at);
-            const openPRs = doc.pendingPRs.length;
-            const owner = doc.repo.owner.login;
+        ) : error ? (
+          <div className="docs-error-card">
+            <p className="docs-error-text">{error}</p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="docs-empty">
+            <div className="docs-empty-icon">
+              <FileText size={32} strokeWidth={1} aria-hidden="true" />
+            </div>
+            <p className="docs-empty-title">No documents found.</p>
+            <p className="docs-empty-sub">
+              {isContributionsTab
+                ? "You haven't contributed to any documents yet."
+                : "No documents matched your search."}
+            </p>
+          </div>
+        ) : (
+          <div className={`docs-list${loading ? " docs-list--loading" : ""}`}>
+            {filtered.map((doc) => {
+              const status = getDocStatus(doc);
+              const name = formatDocumentName(doc.repo.name);
+              const updated = formatRelativeTime(doc.repo.updated_at);
+              const openPRs = doc.pendingPRs.length;
+              const owner = doc.repo.owner.login;
 
-            return (
-              <button
-                key={`${owner}/${doc.repo.name}`}
-                type="button"
-                className="docs-list-item"
-                onClick={() => onSelectDocument(owner, doc.repo.name)}
-              >
-                {/* Icon */}
-                <div className="docs-list-item-icon" aria-hidden="true">
-                  <BindersnapLogoMark width={18} height={18} />
-                </div>
-
-                {/* Main content */}
-                <div className="docs-list-item-body">
-                  <div className="docs-list-item-top">
-                    <span className="docs-list-item-name">{name}</span>
-                    <span className={getStatusClass(status)}>
-                      {getStatusLabel(status)}
-                    </span>
+              return (
+                <button
+                  key={`${owner}/${doc.repo.name}`}
+                  type="button"
+                  className="docs-list-item"
+                  onClick={() => onSelectDocument(owner, doc.repo.name)}
+                >
+                  <div className="docs-list-item-icon" aria-hidden="true">
+                    <BindersnapLogoMark width={18} height={18} />
                   </div>
-
-                  {doc.repo.description && (
-                    <p className="docs-list-item-description">
-                      {doc.repo.description}
-                    </p>
-                  )}
-
-                  <div className="docs-list-item-meta">
-                    <span className="docs-list-item-owner">
-                      <Users size={12} strokeWidth={1.5} aria-hidden="true" />
-                      {owner}
-                    </span>
-                    {openPRs > 0 && (
-                      <span className="docs-list-item-prs">
-                        <GitPullRequest
-                          size={12}
-                          strokeWidth={1.5}
-                          aria-hidden="true"
-                        />
-                        {openPRs} open {openPRs === 1 ? "request" : "requests"}
+                  <div className="docs-list-item-body">
+                    <div className="docs-list-item-top">
+                      <span className="docs-list-item-name">{name}</span>
+                      <span className={getStatusClass(status)}>
+                        {getStatusLabel(status)}
                       </span>
+                    </div>
+                    {doc.repo.description && (
+                      <p className="docs-list-item-description">
+                        {doc.repo.description}
+                      </p>
                     )}
-                    {doc.latestTag && (
-                      <span className="docs-list-item-tag">
-                        <Tag size={12} strokeWidth={1.5} aria-hidden="true" />
-                        {doc.latestTag.name}
+                    <div className="docs-list-item-meta">
+                      <span className="docs-list-item-owner">
+                        <Users size={12} strokeWidth={1.5} aria-hidden="true" />
+                        {owner}
                       </span>
-                    )}
-                    <span className="docs-list-item-updated">{updated}</span>
+                      {openPRs > 0 && (
+                        <span className="docs-list-item-prs">
+                          <GitPullRequest
+                            size={12}
+                            strokeWidth={1.5}
+                            aria-hidden="true"
+                          />
+                          {openPRs} open{" "}
+                          {openPRs === 1 ? "request" : "requests"}
+                        </span>
+                      )}
+                      {doc.latestTag && (
+                        <span className="docs-list-item-tag">
+                          <Tag size={12} strokeWidth={1.5} aria-hidden="true" />
+                          {doc.latestTag.name}
+                        </span>
+                      )}
+                      <span className="docs-list-item-updated">{updated}</span>
+                    </div>
                   </div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {!loading && !error && filtered.length > 0 && (
         <p className="docs-result-count">

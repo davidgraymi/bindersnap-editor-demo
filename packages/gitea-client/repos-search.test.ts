@@ -135,7 +135,10 @@ describe("searchWorkspaceRepos", () => {
       },
     });
 
-    const result = await searchWorkspaceRepos({ client, ownerUsername: "alice" });
+    const result = await searchWorkspaceRepos({
+      client,
+      ownerUsername: "alice",
+    });
 
     expect(result).toHaveLength(1);
     expect(result[0]?.name).toBe("doc-alpha");
@@ -179,7 +182,10 @@ describe("searchWorkspaceRepos", () => {
       },
     });
 
-    const result = await searchWorkspaceRepos({ client, memberUsername: "alice" });
+    const result = await searchWorkspaceRepos({
+      client,
+      memberUsername: "alice",
+    });
 
     expect(result).toHaveLength(2);
     expect(result[0]?.name).toBe("doc-alpha");

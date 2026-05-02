@@ -131,7 +131,10 @@ beforeEach(() => {
     }
 
     // Mock /api/v1/users/{username} (lookup user by username)
-    if (url.pathname.startsWith("/api/v1/users/") && !url.pathname.includes("/search")) {
+    if (
+      url.pathname.startsWith("/api/v1/users/") &&
+      !url.pathname.includes("/search")
+    ) {
       const username = url.pathname.slice("/api/v1/users/".length);
       const user = giteaUsersByLogin.get(username);
 
@@ -349,9 +352,7 @@ function seedGiteaUser(user: Omit<MockedGiteaUser, "id">): MockedGiteaUser {
   return fullUser;
 }
 
-function seedGiteaRepo(
-  repo: Omit<MockedGiteaRepo, "id">,
-): MockedGiteaRepo {
+function seedGiteaRepo(repo: Omit<MockedGiteaRepo, "id">): MockedGiteaRepo {
   const repoId = giteaRepos.length + 1;
   const fullRepo = { ...repo, id: repoId };
   giteaRepos.push(fullRepo);
@@ -457,7 +458,9 @@ describe("GET /api/app/documents with search query", () => {
       (call) => call.path === "/api/v1/repos/search",
     );
     expect(searchCalls.length).toBe(1);
-    expect(searchCalls[0]!.queryParams.get("uid")).toBe(aliceUser.id.toString());
+    expect(searchCalls[0]!.queryParams.get("uid")).toBe(
+      aliceUser.id.toString(),
+    );
     expect(searchCalls[0]!.queryParams.get("exclusive")).toBe("true");
     expect(searchCalls[0]!.queryParams.get("q")).toBeNull();
   });
@@ -498,7 +501,10 @@ describe("GET /api/app/documents with search query", () => {
     });
 
     const response = await server.fetch(
-      makeSessionRequest("/api/app/documents?q=contributed-by%3A%40me", sessionId),
+      makeSessionRequest(
+        "/api/app/documents?q=contributed-by%3A%40me",
+        sessionId,
+      ),
     );
 
     expect(response.status).toBe(200);
@@ -506,7 +512,9 @@ describe("GET /api/app/documents with search query", () => {
       (call) => call.path === "/api/v1/repos/search",
     );
     expect(searchCalls.length).toBe(1);
-    expect(searchCalls[0]!.queryParams.get("uid")).toBe(aliceUser.id.toString());
+    expect(searchCalls[0]!.queryParams.get("uid")).toBe(
+      aliceUser.id.toString(),
+    );
     expect(searchCalls[0]!.queryParams.get("exclusive")).toBeNull();
   });
 
@@ -522,7 +530,10 @@ describe("GET /api/app/documents with search query", () => {
     });
 
     const response = await server.fetch(
-      makeSessionRequest("/api/app/documents?q=contributed-by%3A%40bob", sessionId),
+      makeSessionRequest(
+        "/api/app/documents?q=contributed-by%3A%40bob",
+        sessionId,
+      ),
     );
 
     expect(response.status).toBe(200);
@@ -547,7 +558,10 @@ describe("GET /api/app/documents with search query", () => {
     });
 
     const response = await server.fetch(
-      makeSessionRequest("/api/app/documents?q=owner%3A%40me%20hello%20world", sessionId),
+      makeSessionRequest(
+        "/api/app/documents?q=owner%3A%40me%20hello%20world",
+        sessionId,
+      ),
     );
 
     expect(response.status).toBe(200);
@@ -555,7 +569,9 @@ describe("GET /api/app/documents with search query", () => {
       (call) => call.path === "/api/v1/repos/search",
     );
     expect(searchCalls.length).toBe(1);
-    expect(searchCalls[0]!.queryParams.get("uid")).toBe(aliceUser.id.toString());
+    expect(searchCalls[0]!.queryParams.get("uid")).toBe(
+      aliceUser.id.toString(),
+    );
     expect(searchCalls[0]!.queryParams.get("exclusive")).toBe("true");
     expect(searchCalls[0]!.queryParams.get("q")).toBe("hello world");
   });
@@ -573,7 +589,10 @@ describe("GET /api/app/documents with search query", () => {
     });
 
     const response = await server.fetch(
-      makeSessionRequest("/api/app/documents?q=contributed-by%3A%40me%20some%20query", sessionId),
+      makeSessionRequest(
+        "/api/app/documents?q=contributed-by%3A%40me%20some%20query",
+        sessionId,
+      ),
     );
 
     expect(response.status).toBe(200);
@@ -581,7 +600,9 @@ describe("GET /api/app/documents with search query", () => {
       (call) => call.path === "/api/v1/repos/search",
     );
     expect(searchCalls.length).toBe(1);
-    expect(searchCalls[0]!.queryParams.get("uid")).toBe(aliceUser.id.toString());
+    expect(searchCalls[0]!.queryParams.get("uid")).toBe(
+      aliceUser.id.toString(),
+    );
     expect(searchCalls[0]!.queryParams.get("exclusive")).toBeNull();
     expect(searchCalls[0]!.queryParams.get("q")).toBe("some query");
   });
@@ -611,7 +632,9 @@ describe("GET /api/app/documents with search query", () => {
     );
     expect(searchCalls.length).toBe(1);
     // Owner takes precedence
-    expect(searchCalls[0]!.queryParams.get("uid")).toBe(aliceUser.id.toString());
+    expect(searchCalls[0]!.queryParams.get("uid")).toBe(
+      aliceUser.id.toString(),
+    );
     expect(searchCalls[0]!.queryParams.get("exclusive")).toBe("true");
   });
 
@@ -662,7 +685,9 @@ describe("GET /api/app/documents with search query", () => {
       (call) => call.path === "/api/v1/repos/search",
     );
     expect(searchCalls.length).toBe(1);
-    expect(searchCalls[0]!.queryParams.get("uid")).toBe(aliceUser.id.toString());
+    expect(searchCalls[0]!.queryParams.get("uid")).toBe(
+      aliceUser.id.toString(),
+    );
   });
 
   test("@ prefix is stripped from usernames", async () => {
