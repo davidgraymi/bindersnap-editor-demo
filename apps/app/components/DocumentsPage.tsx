@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   FileText,
   GitPullRequest,
@@ -23,6 +23,17 @@ type FilterStatus =
   | "in_review"
   | "approved"
   | "changes_requested";
+
+const DEFAULT_QUERY = "contributed-by:@me";
+const MY_DOCS_QUERY = "owner:@me";
+
+function readQueryFromUrl(): string {
+  return new URLSearchParams(window.location.search).get("q") ?? "";
+}
+
+function queryToSearchBarValue(q: string): string {
+  return q === "" ? DEFAULT_QUERY : q;
+}
 
 function formatRelativeTime(timestamp: string): string {
   if (!timestamp) return "Unknown";
@@ -129,6 +140,24 @@ function sortDocs(
   });
 }
 
+function navigateToQuery(q: string, replace = false): void {
+  const normalised = q.trim();
+  const url =
+    normalised === "" || normalised === DEFAULT_QUERY
+      ? "/documents"
+      : `/documents?q=${encodeURIComponent(normalised)}`;
+  const method = replace ? "replaceState" : "pushState";
+  window.history[method]({}, "", url);
+  window.dispatchEvent(new PopStateEvent("popstate"));
+}
+
+function isScopeTab(activeQ: string, tab: "contributions" | "my-docs"): boolean {
+  if (tab === "contributions") {
+    return activeQ === "" || activeQ === DEFAULT_QUERY;
+  }
+  return activeQ === MY_DOCS_QUERY;
+}
+
 export function DocumentsPage({
   currentUsername,
   onSelectDocument,
@@ -137,16 +166,40 @@ export function DocumentsPage({
   const [documents, setDocuments] = useState<WorkspaceDocumentSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
+
+  // The active query (from URL) drives data fetching.
+  const [activeQ, setActiveQ] = useState<string>(readQueryFromUrl);
+  // The search bar input (may differ from activeQ while the user types).
+  const [inputValue, setInputValue] = useState<string>(() =>
+    queryToSearchBarValue(readQueryFromUrl()),
+  );
+
   const [sort, setSort] = useState<SortOption>("updated");
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
 
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Sync state when the user navigates with browser back/forward.
+  useEffect(() => {
+    const handler = () => {
+      const q = readQueryFromUrl();
+      setActiveQ(q);
+      setInputValue(queryToSearchBarValue(q));
+    };
+    window.addEventListener("popstate", handler);
+    return () => window.removeEventListener("popstate", handler);
+  }, []);
+
+  // Fetch documents whenever activeQ changes.
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
 
-    getWorkspaceDocuments()
+    // Send the raw query; when empty the API returns contributed-by:@me results.
+    const apiQ = activeQ === DEFAULT_QUERY ? "" : activeQ;
+
+    getWorkspaceDocuments(apiQ || undefined)
       .then((docs) => {
         if (!cancelled) {
           setDocuments(docs);
@@ -165,18 +218,24 @@ export function DocumentsPage({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [activeQ]);
+
+  function handleSearchSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const q = inputValue.trim();
+    navigateToQuery(q === DEFAULT_QUERY ? "" : q);
+  }
+
+  function handleTabClick(tab: "contributions" | "my-docs") {
+    const q = tab === "my-docs" ? MY_DOCS_QUERY : "";
+    navigateToQuery(q);
+  }
 
   const filtered = sortDocs(
     documents.filter((doc) => {
       const status = getDocStatus(doc);
-      const description = doc.repo.description ?? "";
-      const matchesSearch =
-        !search ||
-        doc.repo.name.toLowerCase().includes(search.toLowerCase()) ||
-        description.toLowerCase().includes(search.toLowerCase());
       const matchesStatus = filterStatus === "all" || status === filterStatus;
-      return matchesSearch && matchesStatus;
+      return matchesStatus;
     }),
     sort,
   );
@@ -201,6 +260,9 @@ export function DocumentsPage({
         ? `${currentUsername}'s workspace is ready for its first document.`
         : "Your workspace is ready for its first document.";
 
+  const isContributionsTab = isScopeTab(activeQ, "contributions");
+  const isMyDocsTab = isScopeTab(activeQ, "my-docs");
+
   return (
     <div className="docs-page app-page-shell">
       <div className="docs-page-header">
@@ -221,7 +283,64 @@ export function DocumentsPage({
         </div>
       </div>
 
+      {/* Hero search bar */}
+      <form className="docs-hero-search" onSubmit={handleSearchSubmit} role="search">
+        <Search
+          size={18}
+          strokeWidth={1.5}
+          className="docs-hero-search-icon"
+          aria-hidden="true"
+        />
+        <input
+          ref={inputRef}
+          type="text"
+          className="docs-hero-search-input"
+          placeholder={`Try owner:@${currentUsername || "me"} or contributed-by:@someone`}
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          aria-label="Search documents"
+          autoComplete="off"
+          spellCheck={false}
+        />
+        {inputValue !== "" && (
+          <button
+            type="button"
+            className="docs-hero-search-clear"
+            aria-label="Clear search"
+            onClick={() => {
+              setInputValue(DEFAULT_QUERY);
+              navigateToQuery("");
+              inputRef.current?.focus();
+            }}
+          >
+            ×
+          </button>
+        )}
+        <button type="submit" className="docs-hero-search-btn">
+          Search
+        </button>
+      </form>
+
       <div className="docs-controls-card">
+        {/* Scope tabs */}
+        <div className="docs-scope-tabs">
+          <button
+            type="button"
+            className={`docs-scope-tab${isContributionsTab ? " docs-scope-tab--active" : ""}`}
+            onClick={() => handleTabClick("contributions")}
+          >
+            My Contributions
+          </button>
+          <button
+            type="button"
+            className={`docs-scope-tab${isMyDocsTab ? " docs-scope-tab--active" : ""}`}
+            onClick={() => handleTabClick("my-docs")}
+          >
+            My Documents
+          </button>
+        </div>
+
+        {/* Status filter tabs */}
         <div className="docs-filter-bar">
           {(
             [
@@ -252,23 +371,8 @@ export function DocumentsPage({
           ))}
         </div>
 
+        {/* Sort toolbar */}
         <div className="docs-toolbar">
-          <div className="docs-toolbar-search">
-            <Search
-              size={14}
-              strokeWidth={1.5}
-              className="docs-toolbar-search-icon"
-              aria-hidden="true"
-            />
-            <input
-              type="text"
-              className="docs-toolbar-search-input"
-              placeholder="Find a document..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              aria-label="Search documents"
-            />
-          </div>
           <div className="docs-toolbar-right">
             <span className="docs-toolbar-label">Sort</span>
             <select
@@ -306,40 +410,41 @@ export function DocumentsPage({
           <div className="docs-empty-icon">
             <FileText size={32} strokeWidth={1} aria-hidden="true" />
           </div>
-          {search || filterStatus !== "all" ? (
+          {filterStatus !== "all" ? (
             <>
               <p className="docs-empty-title">
                 No documents match your filters.
               </p>
               <p className="docs-empty-sub">
-                Try a different search or{" "}
+                Try a different status or{" "}
                 <button
                   type="button"
                   className="docs-empty-reset"
-                  onClick={() => {
-                    setSearch("");
-                    setFilterStatus("all");
-                  }}
+                  onClick={() => setFilterStatus("all")}
                 >
-                  clear all filters
+                  clear the filter
                 </button>
                 .
               </p>
             </>
           ) : (
             <>
-              <p className="docs-empty-title">No documents yet.</p>
+              <p className="docs-empty-title">No documents found.</p>
               <p className="docs-empty-sub">
-                Create your first document to get started.
+                {isContributionsTab
+                  ? "You haven't contributed to any documents yet. Create one to get started."
+                  : "No documents matched your search."}
               </p>
-              <button
-                type="button"
-                className="docs-btn-primary"
-                onClick={onNewDocument}
-              >
-                <Plus size={14} strokeWidth={2} aria-hidden="true" />
-                New Document
-              </button>
+              {isContributionsTab && (
+                <button
+                  type="button"
+                  className="docs-btn-primary"
+                  onClick={onNewDocument}
+                >
+                  <Plus size={14} strokeWidth={2} aria-hidden="true" />
+                  New Document
+                </button>
+              )}
             </>
           )}
         </div>

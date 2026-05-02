@@ -646,11 +646,12 @@ export async function logoutSession(): Promise<void> {
   }).catch(() => undefined);
 }
 
-export async function getWorkspaceDocuments(): Promise<
-  WorkspaceDocumentSummary[]
-> {
+export async function getWorkspaceDocuments(
+  q?: string,
+): Promise<WorkspaceDocumentSummary[]> {
+  const search = q ? `?q=${encodeURIComponent(q)}` : "";
   const payload = await requestJson<{ documents?: WorkspaceDocumentSummary[] }>(
-    "/api/app/documents",
+    `/api/app/documents${search}`,
     {
       method: "GET",
       headers: {

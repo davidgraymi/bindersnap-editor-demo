@@ -37,6 +37,7 @@ import {
   listDocTags,
   listRepoCollaborators,
   listWorkspaceRepos,
+  searchWorkspaceRepos,
   repoExists,
   searchUsers,
   removeRepoCollaborator,
@@ -1830,6 +1831,33 @@ async function handleAuthMe(
   );
 }
 
+function parseDocumentSearchQuery(
+  rawQ: string,
+  sessionUsername: string,
+): { ownerUsername?: string; memberUsername?: string; freeText?: string } {
+  const resolveUsername = (u: string) =>
+    u === "@me" || u === "me" ? sessionUsername : u.replace(/^@/, "");
+
+  let remainder = rawQ;
+  let ownerUsername: string | undefined;
+  let memberUsername: string | undefined;
+
+  const ownerMatch = /(?:^|\s)owner:@(\S+)/.exec(remainder);
+  if (ownerMatch) {
+    ownerUsername = resolveUsername(ownerMatch[1]!);
+    remainder = remainder.replace(ownerMatch[0], "");
+  }
+
+  const memberMatch = /(?:^|\s)contributed-by:@(\S+)/.exec(remainder);
+  if (memberMatch) {
+    memberUsername = resolveUsername(memberMatch[1]!);
+    remainder = remainder.replace(memberMatch[0], "");
+  }
+
+  const freeText = remainder.trim() || undefined;
+  return { ownerUsername, memberUsername, freeText };
+}
+
 async function handleDocuments(
   req: Request,
   baseHeaders: Headers,
@@ -1839,10 +1867,24 @@ async function handleDocuments(
     return auth;
   }
 
-  const { client } = auth;
+  const { session, client } = auth;
+  const url = new URL(req.url);
+  const rawQ = url.searchParams.get("q")?.trim() ?? "";
 
   try {
-    const repos = await listWorkspaceRepos(client);
+    let repos: WorkspaceRepo[];
+    if (rawQ) {
+      const { ownerUsername, memberUsername, freeText } =
+        parseDocumentSearchQuery(rawQ, session.username);
+      repos = await searchWorkspaceRepos({
+        client,
+        q: freeText,
+        ownerUsername,
+        memberUsername,
+      });
+    } else {
+      repos = await listWorkspaceRepos(client);
+    }
     const documents = await Promise.all(
       repos.map(async (repo) => {
         try {

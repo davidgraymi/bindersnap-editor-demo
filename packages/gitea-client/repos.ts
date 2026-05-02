@@ -242,6 +242,50 @@ export async function listWorkspaceRepos(
   return result.data?.map(normalizeWorkspaceRepo) ?? [];
 }
 
+export interface SearchWorkspaceReposParams {
+  client: GiteaClient;
+  /** Free-text keyword to filter repository names/descriptions. */
+  q?: string;
+  /** If set, return only repos owned by this username (exclusive owner filter). */
+  ownerUsername?: string;
+  /** If set, return repos where this username is a member (owner or collaborator). */
+  memberUsername?: string;
+}
+
+export async function searchWorkspaceRepos(
+  params: SearchWorkspaceReposParams,
+): Promise<WorkspaceRepo[]> {
+  const { client, q, ownerUsername, memberUsername } = params;
+
+  const filterUsername = ownerUsername ?? memberUsername;
+  const exclusive = !!ownerUsername;
+
+  let uid: number | undefined;
+  if (filterUsername) {
+    const user = await unwrap(
+      client.GET("/users/{username}", {
+        params: { path: { username: filterUsername } },
+      }),
+    );
+    uid = user.id;
+  }
+
+  const result = await unwrap(
+    client.GET("/repos/search", {
+      params: {
+        query: {
+          limit: 100,
+          ...(q ? { q } : {}),
+          ...(uid !== undefined ? { uid } : {}),
+          ...(exclusive ? { exclusive: true } : {}),
+        },
+      },
+    }),
+  );
+
+  return result.data?.map(normalizeWorkspaceRepo) ?? [];
+}
+
 export async function createPrivateCurrentUserRepo(
   params: CreatePrivateCurrentUserRepoParams,
 ): Promise<Repository> {
