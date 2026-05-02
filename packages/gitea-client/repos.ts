@@ -429,8 +429,10 @@ function normalizeBranchProtection(
     requiredApprovals: raw.required_approvals ?? 0,
     enableApprovalsWhitelist: raw.enable_approvals_whitelist ?? false,
     approvalsWhitelistUsernames: raw.approvals_whitelist_username ?? [],
+    approvalsWhitelistTeams: raw.approvals_whitelist_teams ?? [],
     enableMergeWhitelist: raw.enable_merge_whitelist ?? false,
     mergeWhitelistUsernames: raw.merge_whitelist_usernames ?? [],
+    mergeWhitelistTeams: raw.merge_whitelist_teams ?? [],
     blockOnRejectedReviews: raw.block_on_rejected_reviews ?? false,
   };
 }
@@ -553,8 +555,10 @@ export interface RepoBranchProtection {
   requiredApprovals: number;
   enableApprovalsWhitelist: boolean;
   approvalsWhitelistUsernames: string[];
+  approvalsWhitelistTeams: string[];
   enableMergeWhitelist: boolean;
   mergeWhitelistUsernames: string[];
+  mergeWhitelistTeams: string[];
   blockOnRejectedReviews: boolean;
 }
 
@@ -607,4 +611,84 @@ export async function createDocTag(
     throw new GiteaApiError(0, `Failed to parse created tag: ${tagName}`);
   }
   return docTag;
+}
+
+export interface UpdateRepoBranchProtectionParams {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+  ruleName: string;
+  requiredApprovals?: number;
+  enableApprovalsWhitelist?: boolean;
+  approvalsWhitelistUsernames?: string[];
+  enableMergeWhitelist?: boolean;
+  mergeWhitelistUsernames?: string[];
+}
+
+export async function updateRepoBranchProtection(
+  params: UpdateRepoBranchProtectionParams,
+): Promise<RepoBranchProtection> {
+  const { client, owner, repo, ruleName, ...rest } = params;
+  const body: Record<string, unknown> = {};
+  if (rest.requiredApprovals !== undefined)
+    body.required_approvals = rest.requiredApprovals;
+  if (rest.enableApprovalsWhitelist !== undefined)
+    body.enable_approvals_whitelist = rest.enableApprovalsWhitelist;
+  if (rest.approvalsWhitelistUsernames !== undefined)
+    body.approvals_whitelist_username = rest.approvalsWhitelistUsernames;
+  if (rest.enableMergeWhitelist !== undefined)
+    body.enable_merge_whitelist = rest.enableMergeWhitelist;
+  if (rest.mergeWhitelistUsernames !== undefined)
+    body.merge_whitelist_usernames = rest.mergeWhitelistUsernames;
+
+  const protection = await unwrap(
+    client.PATCH("/repos/{owner}/{repo}/branch_protections/{name}", {
+      params: { path: { owner, repo, name: ruleName } },
+      body: body as import("./spec/gitea").components["schemas"]["EditBranchProtectionOption"],
+    }),
+  );
+  return normalizeBranchProtection(protection);
+}
+
+export interface UpdateRepoVisibilityParams {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+  isPrivate: boolean;
+}
+
+export async function updateRepoVisibility(
+  params: UpdateRepoVisibilityParams,
+): Promise<void> {
+  const { client, owner, repo, isPrivate } = params;
+  const { error, response } = await client.PATCH("/repos/{owner}/{repo}", {
+    params: { path: { owner, repo } },
+    body: {
+      private: isPrivate,
+    } as import("./spec/gitea").components["schemas"]["EditRepoOption"],
+  });
+  if (error !== undefined || !response.ok) {
+    throw toGiteaApiError(response.status, error);
+  }
+}
+
+export interface GetRepoInfoParams {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+}
+
+export async function getRepoInfo(
+  params: GetRepoInfoParams,
+): Promise<{ isPrivate: boolean; isInternal: boolean }> {
+  const { client, owner, repo } = params;
+  const repo_data = await unwrap(
+    client.GET("/repos/{owner}/{repo}", {
+      params: { path: { owner, repo } },
+    }),
+  );
+  return {
+    isPrivate: repo_data.private ?? true,
+    isInternal: repo_data.internal ?? false,
+  };
 }
