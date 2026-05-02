@@ -405,7 +405,7 @@ export async function navigateToDocument(
   await page.waitForLoadState("domcontentloaded");
   // DocumentsPage uses .docs-list-item; fallback to .dash-doc-item on HomePage
   const card = page
-    .locator(".docs-list-item, .dash-doc-item")
+    .locator(".docs-list-item")
     .filter({ hasText: docName })
     .first();
   await expect(card).toBeVisible({ timeout: 10_000 });
