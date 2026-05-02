@@ -4042,43 +4042,6 @@ input {
   align-content: start;
 }
 
-/* ── Header ── */
-
-.docs-page-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--brand-space-4);
-}
-
-.docs-page-header-left {
-  display: grid;
-  gap: var(--brand-space-2);
-}
-
-.docs-page-title {
-  margin: 0;
-  font-family: var(--brand-font-serif);
-  font-size: 20px;
-  font-weight: var(--brand-weight-semibold);
-  color: var(--bs-text-primary);
-  line-height: 1.2;
-}
-
-.docs-page-subtitle {
-  margin: 0;
-  max-width: 760px;
-  color: var(--bs-text-faint);
-  font-size: 13px;
-  line-height: var(--brand-leading-relaxed);
-}
-
-.docs-page-header-right {
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-2);
-}
-
 /* ── Hero search bar ── */
 
 .docs-hero-search {
@@ -4142,25 +4105,6 @@ input {
   color: #fff;
 }
 
-.docs-hero-search-btn {
-  height: 34px;
-  padding: 0 var(--brand-space-4);
-  background: var(--brand-coral);
-  color: #fff;
-  border: none;
-  border-radius: var(--brand-radius-md);
-  font-size: 13px;
-  font-weight: var(--brand-weight-medium);
-  cursor: pointer;
-  white-space: nowrap;
-  flex-shrink: 0;
-  transition: background var(--brand-transition-base);
-}
-
-.docs-hero-search-btn:hover {
-  background: var(--brand-coral-dark);
-}
-
 /* ── Controls card ── */
 
 .docs-controls-card {
@@ -4211,28 +4155,6 @@ input {
   color: var(--bs-text-primary);
   border-bottom-color: var(--brand-coral);
   font-weight: var(--brand-weight-semibold);
-}
-
-.docs-btn-primary {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--brand-space-2);
-  height: 34px;
-  padding: 0 var(--brand-space-4);
-  background: var(--brand-coral);
-  color: #fff;
-  border: none;
-  border-radius: var(--brand-radius-md);
-  font-size: 13px;
-  font-weight: var(--brand-weight-medium);
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background var(--brand-transition-base);
-  flex-shrink: 0;
-}
-
-.docs-btn-primary:hover {
-  background: var(--brand-coral-dark);
 }
 
 /* ── Toolbar (sort) ── */
@@ -4613,11 +4535,6 @@ input {
 /* ── Responsive ── */
 
 @media (max-width: 640px) {
-  .docs-page-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
   .docs-toolbar {
     flex-direction: column;
     align-items: stretch;
@@ -4638,10 +4555,6 @@ input {
   .docs-hero-search-input {
     height: 44px;
     font-size: 13px;
-  }
-
-  .docs-hero-search-btn {
-    display: none;
   }
 
   .docs-scope-tabs {

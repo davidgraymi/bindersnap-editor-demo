@@ -399,7 +399,6 @@ export function AppShell({
                     tab: "overview",
                   })
                 }
-                onNewDocument={openCreateDocumentModal}
               />
             ) : route.kind === "inbox" ? (
               <InboxPage

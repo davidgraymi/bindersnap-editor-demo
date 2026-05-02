@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   FileText,
   GitPullRequest,
-  Plus,
   Search,
   Tag,
   Users,
@@ -13,7 +12,6 @@ import { BindersnapLogoMark } from "./BindersnapLogoMark";
 interface DocumentsPageProps {
   currentUsername: string;
   onSelectDocument: (owner: string, repo: string) => void;
-  onNewDocument: () => void;
 }
 
 type SortOption = "updated" | "name" | "status";
@@ -145,7 +143,10 @@ function navigateToQuery(q: string, replace = false): void {
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
-function isScopeTab(activeQ: string, tab: "contributions" | "my-docs"): boolean {
+function isScopeTab(
+  activeQ: string,
+  tab: "contributions" | "my-docs",
+): boolean {
   if (tab === "contributions") {
     return activeQ === "" || activeQ === DEFAULT_QUERY;
   }
@@ -155,7 +156,6 @@ function isScopeTab(activeQ: string, tab: "contributions" | "my-docs"): boolean 
 export function DocumentsPage({
   currentUsername,
   onSelectDocument,
-  onNewDocument,
 }: DocumentsPageProps) {
   const [documents, setDocuments] = useState<WorkspaceDocumentSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -228,42 +228,18 @@ export function DocumentsPage({
 
   const totalDocuments = documents.length;
   const totalResults = filtered.length;
-  const reviewQueueCount = documents.filter(
-    (d) => getDocStatus(d) === "in_review" || getDocStatus(d) === "changes_requested",
-  ).length;
-  const pageSubtitle = loading
-    ? "Loading your workspace library."
-    : totalDocuments > 0
-      ? `Browse ${totalDocuments} document${totalDocuments === 1 ? "" : "s"}, keep tabs on ${reviewQueueCount} active review${reviewQueueCount === 1 ? "" : "s"}, and jump straight into the latest approved version.`
-      : currentUsername
-        ? `${currentUsername}'s workspace is ready for its first document.`
-        : "Your workspace is ready for its first document.";
 
   const isContributionsTab = isScopeTab(activeQ, "contributions");
   const isMyDocsTab = isScopeTab(activeQ, "my-docs");
 
   return (
     <div className="docs-page app-page-shell">
-      <div className="docs-page-header">
-        <div className="docs-page-header-left">
-          <span className="bs-eyebrow">Workspace Library</span>
-          <h1 className="docs-page-title">Documents</h1>
-          <p className="docs-page-subtitle">{pageSubtitle}</p>
-        </div>
-        <div className="docs-page-header-right">
-          <button
-            type="button"
-            className="docs-btn-primary"
-            onClick={onNewDocument}
-          >
-            <Plus size={14} strokeWidth={2} aria-hidden="true" />
-            New Document
-          </button>
-        </div>
-      </div>
-
       {/* Hero search bar */}
-      <form className="docs-hero-search" onSubmit={handleSearchSubmit} role="search">
+      <form
+        className="docs-hero-search"
+        onSubmit={handleSearchSubmit}
+        role="search"
+      >
         <Search
           size={18}
           strokeWidth={1.5}
@@ -295,9 +271,6 @@ export function DocumentsPage({
             ×
           </button>
         )}
-        <button type="submit" className="docs-hero-search-btn">
-          Search
-        </button>
       </form>
 
       <div className="docs-controls-card">
@@ -361,19 +334,9 @@ export function DocumentsPage({
           <p className="docs-empty-title">No documents found.</p>
           <p className="docs-empty-sub">
             {isContributionsTab
-              ? "You haven't contributed to any documents yet. Create one to get started."
+              ? "You haven't contributed to any documents yet."
               : "No documents matched your search."}
           </p>
-          {isContributionsTab && (
-            <button
-              type="button"
-              className="docs-btn-primary"
-              onClick={onNewDocument}
-            >
-              <Plus size={14} strokeWidth={2} aria-hidden="true" />
-              New Document
-            </button>
-          )}
         </div>
       ) : (
         <div className="docs-list">
