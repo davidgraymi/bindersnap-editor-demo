@@ -4235,67 +4235,6 @@ input {
   background: var(--brand-coral-dark);
 }
 
-/* ── Status filter tabs ── */
-
-.docs-filter-bar {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  padding: 0 var(--brand-space-2);
-  border-bottom: 1px solid var(--bs-rule);
-}
-
-.docs-filter-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--brand-space-2);
-  padding: var(--brand-space-2) var(--brand-space-4);
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  font-family: var(--brand-font-sans);
-  font-size: 13px;
-  font-weight: var(--brand-weight-medium);
-  color: var(--bs-text-muted);
-  cursor: pointer;
-  transition:
-    color var(--brand-transition-fast),
-    border-color var(--brand-transition-fast);
-  white-space: nowrap;
-}
-
-.docs-filter-tab:hover {
-  color: var(--bs-text-primary);
-}
-
-.docs-filter-tab--active {
-  color: var(--bs-text-primary);
-  border-bottom-color: var(--brand-coral);
-  font-weight: var(--brand-weight-semibold);
-}
-
-.docs-filter-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  background: var(--bs-surface-3);
-  border-radius: var(--brand-radius-full);
-  font-family: var(--brand-font-mono);
-  font-size: 10px;
-  font-weight: var(--brand-weight-medium);
-  color: var(--bs-text-muted);
-  line-height: 1;
-}
-
-.docs-filter-tab--active .docs-filter-count {
-  background: var(--brand-coral);
-  color: #fff;
-}
-
 /* ── Toolbar (sort) ── */
 
 .docs-toolbar {
@@ -4677,11 +4616,6 @@ input {
   .docs-page-header {
     flex-direction: column;
     align-items: flex-start;
-  }
-
-  .docs-filter-bar {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
   }
 
   .docs-toolbar {

@@ -17,12 +17,6 @@ interface DocumentsPageProps {
 }
 
 type SortOption = "updated" | "name" | "status";
-type FilterStatus =
-  | "all"
-  | "draft"
-  | "in_review"
-  | "approved"
-  | "changes_requested";
 
 const DEFAULT_QUERY = "contributed-by:@me";
 const MY_DOCS_QUERY = "owner:@me";
@@ -175,7 +169,6 @@ export function DocumentsPage({
   );
 
   const [sort, setSort] = useState<SortOption>("updated");
-  const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -231,27 +224,13 @@ export function DocumentsPage({
     navigateToQuery(q);
   }
 
-  const filtered = sortDocs(
-    documents.filter((doc) => {
-      const status = getDocStatus(doc);
-      const matchesStatus = filterStatus === "all" || status === filterStatus;
-      return matchesStatus;
-    }),
-    sort,
-  );
+  const filtered = sortDocs(documents, sort);
 
   const totalDocuments = documents.length;
-  const counts = {
-    all: totalDocuments,
-    draft: documents.filter((d) => getDocStatus(d) === "draft").length,
-    in_review: documents.filter((d) => getDocStatus(d) === "in_review").length,
-    approved: documents.filter((d) => getDocStatus(d) === "approved").length,
-    changes_requested: documents.filter(
-      (d) => getDocStatus(d) === "changes_requested",
-    ).length,
-  };
   const totalResults = filtered.length;
-  const reviewQueueCount = counts.in_review + counts.changes_requested;
+  const reviewQueueCount = documents.filter(
+    (d) => getDocStatus(d) === "in_review" || getDocStatus(d) === "changes_requested",
+  ).length;
   const pageSubtitle = loading
     ? "Loading your workspace library."
     : totalDocuments > 0
@@ -340,37 +319,6 @@ export function DocumentsPage({
           </button>
         </div>
 
-        {/* Status filter tabs */}
-        <div className="docs-filter-bar">
-          {(
-            [
-              "all",
-              "draft",
-              "in_review",
-              "approved",
-              "changes_requested",
-            ] as FilterStatus[]
-          ).map((f) => (
-            <button
-              key={f}
-              type="button"
-              className={`docs-filter-tab${filterStatus === f ? " docs-filter-tab--active" : ""}`}
-              onClick={() => setFilterStatus(f)}
-            >
-              {f === "all"
-                ? "All"
-                : f === "draft"
-                  ? "Draft"
-                  : f === "in_review"
-                    ? "In Review"
-                    : f === "approved"
-                      ? "Approved"
-                      : "Changes Requested"}
-              <span className="docs-filter-count">{counts[f]}</span>
-            </button>
-          ))}
-        </div>
-
         {/* Sort toolbar */}
         <div className="docs-toolbar">
           <div className="docs-toolbar-right">
@@ -410,42 +358,21 @@ export function DocumentsPage({
           <div className="docs-empty-icon">
             <FileText size={32} strokeWidth={1} aria-hidden="true" />
           </div>
-          {filterStatus !== "all" ? (
-            <>
-              <p className="docs-empty-title">
-                No documents match your filters.
-              </p>
-              <p className="docs-empty-sub">
-                Try a different status or{" "}
-                <button
-                  type="button"
-                  className="docs-empty-reset"
-                  onClick={() => setFilterStatus("all")}
-                >
-                  clear the filter
-                </button>
-                .
-              </p>
-            </>
-          ) : (
-            <>
-              <p className="docs-empty-title">No documents found.</p>
-              <p className="docs-empty-sub">
-                {isContributionsTab
-                  ? "You haven't contributed to any documents yet. Create one to get started."
-                  : "No documents matched your search."}
-              </p>
-              {isContributionsTab && (
-                <button
-                  type="button"
-                  className="docs-btn-primary"
-                  onClick={onNewDocument}
-                >
-                  <Plus size={14} strokeWidth={2} aria-hidden="true" />
-                  New Document
-                </button>
-              )}
-            </>
+          <p className="docs-empty-title">No documents found.</p>
+          <p className="docs-empty-sub">
+            {isContributionsTab
+              ? "You haven't contributed to any documents yet. Create one to get started."
+              : "No documents matched your search."}
+          </p>
+          {isContributionsTab && (
+            <button
+              type="button"
+              className="docs-btn-primary"
+              onClick={onNewDocument}
+            >
+              <Plus size={14} strokeWidth={2} aria-hidden="true" />
+              New Document
+            </button>
           )}
         </div>
       ) : (
