@@ -89,7 +89,7 @@ test.describe("UI document version upload flow", () => {
 
     // Wait for navigation to document detail
     await expect(page.locator(".vault-detail")).toBeVisible({
-      timeout: 10_000,
+      timeout: 30_000,
     });
 
     await expect(

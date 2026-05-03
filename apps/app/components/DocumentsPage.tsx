@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { FileText, GitPullRequest, Search, Tag, Users } from "lucide-react";
 import { getWorkspaceDocuments, type WorkspaceDocumentSummary } from "../api";
+import { parseDocumentSearchQuery } from "../documentSearch";
 import { BindersnapLogoMark } from "./BindersnapLogoMark";
 
 interface DocumentsPageProps {
@@ -183,10 +184,12 @@ export function DocumentsPage({
     setLoading(true);
     setError(null);
 
-    // Send the raw query; when empty the API returns contributed-by:@me results.
-    const apiQ = activeQ === DEFAULT_QUERY ? "" : activeQ;
+    const params =
+      activeQ && activeQ !== DEFAULT_QUERY
+        ? parseDocumentSearchQuery(activeQ, currentUsername)
+        : undefined;
 
-    getWorkspaceDocuments(apiQ || undefined)
+    getWorkspaceDocuments(params)
       .then((docs) => {
         if (!cancelled) {
           setDocuments(docs);

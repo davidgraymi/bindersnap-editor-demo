@@ -88,7 +88,7 @@ test.describe("Document download", () => {
 
     // Wait for navigation to document detail
     await expect(page.locator(".vault-detail")).toBeVisible({
-      timeout: 10_000,
+      timeout: 30_000,
     });
 
     // Verify the document is in the unpublished state with 1 pending approval

@@ -1838,33 +1838,6 @@ async function handleAuthMe(
   );
 }
 
-function parseDocumentSearchQuery(
-  rawQ: string,
-  sessionUsername: string,
-): { ownerUsername?: string; memberUsername?: string; freeText?: string } {
-  const resolveUsername = (u: string) =>
-    u === "@me" || u === "me" ? sessionUsername : u.replace(/^@/, "");
-
-  let remainder = rawQ;
-  let ownerUsername: string | undefined;
-  let memberUsername: string | undefined;
-
-  const ownerMatch = /(?:^|\s)owner:@(\S+)/.exec(remainder);
-  if (ownerMatch) {
-    ownerUsername = resolveUsername(ownerMatch[1]!);
-    remainder = remainder.replace(ownerMatch[0], "");
-  }
-
-  const memberMatch = /(?:^|\s)contributed-by:@(\S+)/.exec(remainder);
-  if (memberMatch) {
-    memberUsername = resolveUsername(memberMatch[1]!);
-    remainder = remainder.replace(memberMatch[0], "");
-  }
-
-  const freeText = remainder.trim() || undefined;
-  return { ownerUsername, memberUsername, freeText };
-}
-
 async function handleDocuments(
   req: Request,
   baseHeaders: Headers,
@@ -1874,15 +1847,15 @@ async function handleDocuments(
     return auth;
   }
 
-  const { session, client } = auth;
-  const url = new URL(req.url);
-  const rawQ = url.searchParams.get("q")?.trim() ?? "";
+  const { session: _session, client } = auth;
+  const reqUrl = new URL(req.url);
+  const ownerUsername = reqUrl.searchParams.get("owner") || undefined;
+  const memberUsername = reqUrl.searchParams.get("member") || undefined;
+  const freeText = reqUrl.searchParams.get("q") || undefined;
 
   try {
     let repos: WorkspaceRepo[];
-    if (rawQ) {
-      const { ownerUsername, memberUsername, freeText } =
-        parseDocumentSearchQuery(rawQ, session.username);
+    if (ownerUsername || memberUsername || freeText) {
       repos = await searchWorkspaceRepos({
         client,
         q: freeText,

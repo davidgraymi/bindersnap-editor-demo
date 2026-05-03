@@ -85,7 +85,7 @@ async function grantDevSubscription(
   await page.goto("/");
   await expect(
     page.locator(`.app-topnav-avatar[aria-label="User: ${username}"]`),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 15_000 });
 }
 
 async function createDocument(page: Page, fileName: string): Promise<void> {

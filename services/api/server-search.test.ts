@@ -371,13 +371,19 @@ function makeSessionRequest(
   sessionId: string,
   options?: {
     method?: string;
+    queryParams?: Record<string, string>;
     body?: Record<string, unknown>;
   },
 ): Request {
   const method = options?.method ?? "GET";
   const body = options?.body;
+  let url = `http://localhost${pathname}`;
+  if (options?.queryParams) {
+    const qs = new URLSearchParams(options.queryParams);
+    url += `?${qs.toString()}`;
+  }
 
-  return new Request(`http://localhost${pathname}`, {
+  return new Request(url, {
     method,
     headers: {
       Origin: config.appOrigin,
@@ -420,7 +426,7 @@ describe("GET /api/app/documents with search query", () => {
     expect(searchCalls[0]!.queryParams.get("exclusive")).toBeNull();
   });
 
-  test("empty query param resolves to no filters", async () => {
+  test("no query params resolves to no filters", async () => {
     const server = await createApiServer();
     const sessionId = seedSession("alice");
     const aliceUser = giteaUsersByLogin.get("alice")!;
@@ -432,11 +438,11 @@ describe("GET /api/app/documents with search query", () => {
     });
 
     const response = await server.fetch(
-      makeSessionRequest("/api/app/documents?q=", sessionId),
+      makeSessionRequest("/api/app/documents", sessionId),
     );
 
     expect(response.status).toBe(200);
-    // empty q treated same as no q — uses listWorkspaceRepos (/repos/search with no filters)
+    // no query params — uses listWorkspaceRepos (/repos/search with no filters)
     const searchCalls = fetchCalls.filter(
       (call) => call.path === "/api/v1/repos/search",
     );
@@ -457,8 +463,11 @@ describe("GET /api/app/documents with search query", () => {
       private: true,
     });
 
+    // Frontend resolves @me → "alice" before sending
     const response = await server.fetch(
-      makeSessionRequest("/api/app/documents?q=owner%3A%40me", sessionId),
+      makeSessionRequest("/api/app/documents", sessionId, {
+        queryParams: { owner: "alice" },
+      }),
     );
 
     expect(response.status).toBe(200);
@@ -484,8 +493,11 @@ describe("GET /api/app/documents with search query", () => {
       private: true,
     });
 
+    // Frontend resolves @bob → "bob" before sending
     const response = await server.fetch(
-      makeSessionRequest("/api/app/documents?q=owner%3A%40bob", sessionId),
+      makeSessionRequest("/api/app/documents", sessionId, {
+        queryParams: { owner: "bob" },
+      }),
     );
 
     expect(response.status).toBe(200);
@@ -508,11 +520,11 @@ describe("GET /api/app/documents with search query", () => {
       private: true,
     });
 
+    // Frontend resolves @me → "alice" before sending
     const response = await server.fetch(
-      makeSessionRequest(
-        "/api/app/documents?q=contributed-by%3A%40me",
-        sessionId,
-      ),
+      makeSessionRequest("/api/app/documents", sessionId, {
+        queryParams: { member: "alice" },
+      }),
     );
 
     expect(response.status).toBe(200);
@@ -537,11 +549,11 @@ describe("GET /api/app/documents with search query", () => {
       private: true,
     });
 
+    // Frontend resolves @bob → "bob" before sending
     const response = await server.fetch(
-      makeSessionRequest(
-        "/api/app/documents?q=contributed-by%3A%40bob",
-        sessionId,
-      ),
+      makeSessionRequest("/api/app/documents", sessionId, {
+        queryParams: { member: "bob" },
+      }),
     );
 
     expect(response.status).toBe(200);
@@ -565,11 +577,11 @@ describe("GET /api/app/documents with search query", () => {
       private: true,
     });
 
+    // Frontend resolves "owner:@me hello world" → { ownerUsername: "alice", freeText: "hello world" }
     const response = await server.fetch(
-      makeSessionRequest(
-        "/api/app/documents?q=owner%3A%40me%20hello%20world",
-        sessionId,
-      ),
+      makeSessionRequest("/api/app/documents", sessionId, {
+        queryParams: { owner: "alice", q: "hello world" },
+      }),
     );
 
     expect(response.status).toBe(200);
@@ -596,11 +608,11 @@ describe("GET /api/app/documents with search query", () => {
       private: true,
     });
 
+    // Frontend resolves "contributed-by:@me some query" → { memberUsername: "alice", freeText: "some query" }
     const response = await server.fetch(
-      makeSessionRequest(
-        "/api/app/documents?q=contributed-by%3A%40me%20some%20query",
-        sessionId,
-      ),
+      makeSessionRequest("/api/app/documents", sessionId, {
+        queryParams: { member: "alice", q: "some query" },
+      }),
     );
 
     expect(response.status).toBe(200);
@@ -627,11 +639,11 @@ describe("GET /api/app/documents with search query", () => {
       private: true,
     });
 
+    // Frontend sends both; searchWorkspaceRepos uses ownerUsername ?? memberUsername
     const response = await server.fetch(
-      makeSessionRequest(
-        "/api/app/documents?q=owner%3A%40me%20contributed-by%3A%40bob",
-        sessionId,
-      ),
+      makeSessionRequest("/api/app/documents", sessionId, {
+        queryParams: { owner: "alice", member: "bob" },
+      }),
     );
 
     expect(response.status).toBe(200);
@@ -639,7 +651,7 @@ describe("GET /api/app/documents with search query", () => {
       (call) => call.path === "/api/v1/repos/search",
     );
     expect(searchCalls.length).toBe(1);
-    // Owner takes precedence
+    // ownerUsername takes precedence over memberUsername
     expect(searchCalls[0]!.queryParams.get("uid")).toBe(
       aliceUser.id.toString(),
     );
@@ -659,7 +671,9 @@ describe("GET /api/app/documents with search query", () => {
     });
 
     const response = await server.fetch(
-      makeSessionRequest("/api/app/documents?q=foobar", sessionId),
+      makeSessionRequest("/api/app/documents", sessionId, {
+        queryParams: { q: "foobar" },
+      }),
     );
 
     expect(response.status).toBe(200);
@@ -683,9 +697,11 @@ describe("GET /api/app/documents with search query", () => {
       private: true,
     });
 
-    // Test both @me and me (without @) resolve correctly
+    // Frontend resolves @me → "alice"; backend receives the plain username
     const response = await server.fetch(
-      makeSessionRequest("/api/app/documents?q=owner%3A%40me", sessionId),
+      makeSessionRequest("/api/app/documents", sessionId, {
+        queryParams: { owner: "alice" },
+      }),
     );
 
     expect(response.status).toBe(200);
@@ -709,8 +725,11 @@ describe("GET /api/app/documents with search query", () => {
       private: true,
     });
 
+    // Frontend strips @ from "@bob" → "bob" before sending
     const response = await server.fetch(
-      makeSessionRequest("/api/app/documents?q=owner%3A%40bob", sessionId),
+      makeSessionRequest("/api/app/documents", sessionId, {
+        queryParams: { owner: "bob" },
+      }),
     );
 
     expect(response.status).toBe(200);
