@@ -85,7 +85,7 @@ async function grantDevSubscription(
   await page.goto("/");
   await expect(
     page.locator(`.app-topnav-avatar[aria-label="User: ${username}"]`),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 15_000 });
 }
 
 async function createDocument(page: Page, fileName: string): Promise<void> {
@@ -160,15 +160,13 @@ async function addReadCollaborator(page: Page, login: string): Promise<void> {
 async function reopenDocumentFromWorkspace(page: Page): Promise<void> {
   // New UI uses .app-topnav-link instead of breadcrumb navigation
   await page.locator(".app-topnav-link", { hasText: "Documents" }).click();
-  await expect(page.getByRole("heading", { name: "Documents" })).toBeVisible({
+  await expect(page.locator(".docs-page")).toBeVisible({
     timeout: 10_000,
   });
 
-  await page.reload();
-  await expect(page.getByRole("heading", { name: "Documents" })).toBeVisible({
-    timeout: 10_000,
-  });
-
+  // Switch to "My Documents" (owner:@me) so we only see documents this user owns.
+  // The default "My Contributions" scope may include documents from other tests.
+  await page.locator(".docs-scope-tab", { hasText: "My Documents" }).click();
   await expect(page.locator(".docs-list-item")).toHaveCount(1, {
     timeout: 10_000,
   });

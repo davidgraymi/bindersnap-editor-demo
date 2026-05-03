@@ -20,6 +20,7 @@ import {
   notifyPaymentRequired,
   shouldInterceptPaymentRequired,
 } from "./paymentRequired";
+import type { DocumentSearchParams } from "./documentSearch";
 
 // Bun's bundler (`bun build --env='BUN_PUBLIC_*'`) replaces
 // process.env.BUN_PUBLIC_API_BASE_URL with a literal string at compile time.
@@ -646,11 +647,21 @@ export async function logoutSession(): Promise<void> {
   }).catch(() => undefined);
 }
 
-export async function getWorkspaceDocuments(): Promise<
-  WorkspaceDocumentSummary[]
-> {
+export type { DocumentSearchParams } from "./documentSearch";
+export { parseDocumentSearchQuery } from "./documentSearch";
+
+export async function getWorkspaceDocuments(
+  params?: DocumentSearchParams,
+): Promise<WorkspaceDocumentSummary[]> {
+  const qs = new URLSearchParams();
+  if (params?.ownerUsername) qs.set("owner", params.ownerUsername);
+  if (params?.memberUsername) qs.set("member", params.memberUsername);
+  if (params?.freeText) qs.set("q", params.freeText);
+  const query = qs.toString();
+  const path = query ? `/api/app/documents?${query}` : "/api/app/documents";
+
   const payload = await requestJson<{ documents?: WorkspaceDocumentSummary[] }>(
-    "/api/app/documents",
+    path,
     {
       method: "GET",
       headers: {

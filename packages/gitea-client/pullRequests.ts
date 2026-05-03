@@ -181,11 +181,7 @@ export async function createPullRequest(
     }),
   );
 
-  const reviews = pullRequest.number
-    ? await listPullReviews(client, owner, repo, pullRequest.number)
-    : [];
-
-  return withApprovalState(pullRequest, reviews);
+  return withApprovalState(pullRequest, []);
 }
 
 export async function getPullRequestForBranch(

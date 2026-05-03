@@ -394,18 +394,13 @@ export async function navigateToDocument(
   page: Page,
   docName: string,
 ): Promise<void> {
-  // Navigate to Documents page to get the full list
-  const docsLink = page.locator(".app-topnav-link", { hasText: "Documents" });
-  const isDocsLinkVisible = await docsLink
-    .isVisible({ timeout: 3_000 })
-    .catch(() => false);
-  if (isDocsLinkVisible) {
-    await docsLink.click();
-  }
+  // Navigate to Documents page with a search query for the specific document
+  await page.goto(`/documents?q=${encodeURIComponent(docName)}`);
   await page.waitForLoadState("domcontentloaded");
-  // DocumentsPage uses .docs-list-item; fallback to .dash-doc-item on HomePage
+
+  // DocumentsPage uses .docs-list-item
   const card = page
-    .locator(".docs-list-item, .dash-doc-item")
+    .locator(".docs-list-item")
     .filter({ hasText: docName })
     .first();
   await expect(card).toBeVisible({ timeout: 10_000 });

@@ -9,9 +9,7 @@ test.describe("top nav new document button", () => {
     await signInAsBob(page);
 
     await page.locator(".app-topnav-link", { hasText: "Documents" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Documents", exact: true }),
-    ).toBeVisible();
+    await expect(page.locator(".docs-page")).toBeVisible();
 
     await expect(page.locator("#topnav-new-doc-btn")).toBeVisible();
     await page.locator("#topnav-new-doc-btn").click();

@@ -37,6 +37,7 @@ import {
   listDocTags,
   listRepoCollaborators,
   listWorkspaceRepos,
+  searchWorkspaceRepos,
   repoExists,
   searchUsers,
   removeRepoCollaborator,
@@ -843,6 +844,10 @@ function normalizeWorkspaceRepoSummary(repo: {
 
 async function computeFileHash(file: File): Promise<string> {
   const buffer = await file.arrayBuffer();
+  return computeFileHashFromBuffer(buffer);
+}
+
+async function computeFileHashFromBuffer(buffer: ArrayBuffer): Promise<string> {
   const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -1129,12 +1134,14 @@ function responseFromError(
         message: err.message || fallback,
         errorType: "GiteaApiError",
       });
+      logger.debug("Gitea API error details", { err });
     } else {
       logger.warn("Gitea API error (4xx)", {
         status,
         message: err.message || fallback,
         errorType: "GiteaApiError",
       });
+      logger.debug("Gitea API error details", { err });
     }
     return json(status, { error: err.message || fallback }, baseHeaders);
   }
@@ -1145,6 +1152,7 @@ function responseFromError(
     errorType: err instanceof Error ? err.constructor.name : typeof err,
     stack: err instanceof Error ? err.stack : undefined,
   });
+  logger.debug("Gitea API error details", { err });
 
   return json(500, { error: message }, baseHeaders);
 }
@@ -1839,10 +1847,24 @@ async function handleDocuments(
     return auth;
   }
 
-  const { client } = auth;
+  const { session: _session, client } = auth;
+  const reqUrl = new URL(req.url);
+  const ownerUsername = reqUrl.searchParams.get("owner") || undefined;
+  const memberUsername = reqUrl.searchParams.get("member") || undefined;
+  const freeText = reqUrl.searchParams.get("q") || undefined;
 
   try {
-    const repos = await listWorkspaceRepos(client);
+    let repos: WorkspaceRepo[];
+    if (ownerUsername || memberUsername || freeText) {
+      repos = await searchWorkspaceRepos({
+        client,
+        q: freeText,
+        ownerUsername,
+        memberUsername,
+      });
+    } else {
+      repos = await listWorkspaceRepos(client);
+    }
     const documents = await Promise.all(
       repos.map(async (repo) => {
         try {
@@ -1962,11 +1984,17 @@ async function handleCreateDocument(
     const extension = getFileExtension(file.name);
     const canonicalFile = buildCanonicalDocumentFileName(extension);
 
-    const fullHash = await computeFileHash(file);
+    // Read buffer once to compute hash and base64
+    const buffer = await file.arrayBuffer();
+    const [fullHash, base64Content] = await Promise.all([
+      computeFileHashFromBuffer(buffer),
+      Buffer.from(buffer).toString("base64"),
+    ]);
     const contentHash8 = fullHash.slice(0, 8);
-    const base64Content = await readFileAsBase64(file);
     const branchName = buildUploadBranchName(repoName, owner, contentHash8);
 
+    // Sequential initialization to avoid sqlite locking issues in gitea.
+    // We keep bootstrapEmptyMainBranch to ensure a clean starting point.
     await bootstrapEmptyMainBranch({
       client,
       owner,
@@ -2005,6 +2033,7 @@ async function handleCreateDocument(
       filePath: canonicalFile,
       base64Content,
       message: commitMessage,
+      isNewFile: true,
     });
 
     const prTitle = `Upload v${nextVersion}: ${repoName

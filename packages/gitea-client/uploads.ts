@@ -39,6 +39,11 @@ export interface CommitBinaryFileParams {
   filePath: string;
   base64Content: string;
   message: string;
+  /**
+   * If true, skips checking if the file exists and proceeds directly to POST.
+   * Useful when creating a fresh document/branch where we know the file is new.
+   */
+  isNewFile?: boolean;
 }
 
 export interface UploadFileParams {
@@ -183,26 +188,36 @@ export async function createUploadBranch(
 export async function commitBinaryFile(
   params: CommitBinaryFileParams,
 ): Promise<{ sha: string }> {
-  const { client, owner, repo, branch, filePath, base64Content, message } =
-    params;
+  const {
+    client,
+    owner,
+    repo,
+    branch,
+    filePath,
+    base64Content,
+    message,
+    isNewFile,
+  } = params;
 
   // Check if the file already exists on this branch so we can update (PUT)
   // instead of create (POST). Gitea requires the existing file's SHA for updates.
   let existingSha: string | undefined;
-  try {
-    const existing = await unwrap(
-      client.GET("/repos/{owner}/{repo}/contents/{filepath}", {
-        params: {
-          path: { owner, repo, filepath: filePath },
-          query: { ref: branch },
-        },
-      }),
-    );
-    if (existing && !Array.isArray(existing) && existing.sha) {
-      existingSha = existing.sha;
+  if (!isNewFile) {
+    try {
+      const existing = await unwrap(
+        client.GET("/repos/{owner}/{repo}/contents/{filepath}", {
+          params: {
+            path: { owner, repo, filepath: filePath },
+            query: { ref: branch },
+          },
+        }),
+      );
+      if (existing && !Array.isArray(existing) && existing.sha) {
+        existingSha = existing.sha;
+      }
+    } catch {
+      // File doesn't exist on this branch — will use POST (create)
     }
-  } catch {
-    // File doesn't exist on this branch — will use POST (create)
   }
 
   if (existingSha) {

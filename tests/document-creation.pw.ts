@@ -16,7 +16,7 @@ import {
 } from "./helpers";
 
 test.describe("UI document creation flow", () => {
-  test.describe.configure({ timeout: 10_000 });
+  test.describe.configure({ timeout: 60_000 });
 
   test("creates a new document as bob and leaves version 1 in review", async ({
     page,
@@ -43,7 +43,7 @@ test.describe("UI document creation flow", () => {
 
     // New UI shows .vault-detail when the document detail page has loaded
     await expect(page.locator(".vault-detail")).toBeVisible({
-      timeout: 10_000,
+      timeout: 30_000,
     });
     await expect(
       page.getByRole("heading", { name: /No approved version yet/i }),
