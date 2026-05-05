@@ -1,6 +1,11 @@
 import { expect, test } from "bun:test";
 
-import { asShellRoute, getRoute, isProtectedAppRoute, routeToPath } from "./routes";
+import {
+  asShellRoute,
+  getRoute,
+  isProtectedAppRoute,
+  routeToPath,
+} from "./routes";
 
 test("getRoute maps the SPA home route to the landing/app home kind", () => {
   expect(getRoute("/")).toEqual({ kind: "home" });
@@ -60,7 +65,12 @@ test("routeToPath keeps home and workspace on the root URL", () => {
 
 test("document routes are not protected — anonymous users can view public docs", () => {
   expect(
-    isProtectedAppRoute({ kind: "document", owner: "alice", repo: "report", tab: "overview" }),
+    isProtectedAppRoute({
+      kind: "document",
+      owner: "alice",
+      repo: "report",
+      tab: "overview",
+    }),
   ).toBe(false);
   expect(isProtectedAppRoute({ kind: "documents" })).toBe(true);
   expect(isProtectedAppRoute({ kind: "workspace" })).toBe(true);

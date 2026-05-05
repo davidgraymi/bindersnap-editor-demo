@@ -624,9 +624,7 @@ export function App() {
   }
 
   if (view === "publicDoc" && route.kind === "document") {
-    return (
-      <AnonymousDocumentShell route={route} onNavigate={navigateTo} />
-    );
+    return <AnonymousDocumentShell route={route} onNavigate={navigateTo} />;
   }
 
   if (view === "landing") {

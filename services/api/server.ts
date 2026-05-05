@@ -563,11 +563,19 @@ async function resolveDocumentAccess(
 
   const serviceClient = createServiceGiteaClient();
   try {
-    const { isPrivate } = await getRepoInfo({ client: serviceClient, owner, repo });
+    const { isPrivate } = await getRepoInfo({
+      client: serviceClient,
+      owner,
+      repo,
+    });
     if (isPrivate) {
       return auth;
     }
-    return { client: serviceClient, username: null, token: config.giteaServiceToken };
+    return {
+      client: serviceClient,
+      username: null,
+      token: config.giteaServiceToken,
+    };
   } catch {
     return auth;
   }
@@ -2185,12 +2193,9 @@ async function handleDocumentDetail(
     }
 
     const currentUserPermission = username
-      ? await resolveCurrentUserPermission(
-          client,
-          owner,
-          repo,
-          username,
-        ).catch(() => null)
+      ? await resolveCurrentUserPermission(client, owner, repo, username).catch(
+          () => null,
+        )
       : null;
 
     return json(
@@ -2581,12 +2586,9 @@ async function handleDocumentCollaborators(
     });
 
     const currentUserPermission = username
-      ? await resolveCurrentUserPermission(
-          client,
-          owner,
-          repo,
-          username,
-        ).catch(() => null)
+      ? await resolveCurrentUserPermission(client, owner, repo, username).catch(
+          () => null,
+        )
       : null;
 
     return json(

@@ -58,7 +58,11 @@ export function AnonymousDocumentShell({
               owner={route.owner}
               repo={route.repo}
               uploaderSlug={null}
-              activeView={route.tab === "permissions" || route.tab === "collaborators" ? "overview" : route.tab}
+              activeView={
+                route.tab === "permissions" || route.tab === "collaborators"
+                  ? "overview"
+                  : route.tab
+              }
               onTabChange={(tab) =>
                 onNavigate({
                   kind: "document",
