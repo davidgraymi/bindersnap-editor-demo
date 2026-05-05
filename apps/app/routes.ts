@@ -138,7 +138,6 @@ export function isProtectedAppRoute(route: AppRoute): boolean {
   return (
     route.kind === "workspace" ||
     route.kind === "documents" ||
-    route.kind === "document" ||
     route.kind === "inbox" ||
     route.kind === "activity" ||
     route.kind === "adminSubscriptions"

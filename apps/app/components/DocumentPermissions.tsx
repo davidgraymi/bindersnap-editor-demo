@@ -439,20 +439,11 @@ export function DocumentPermissions({
                     <div className="perms-radio-title">Public</div>
                     <div className="perms-radio-desc">
                       Anyone on the internet can view this document and its full
-                      revision history, even without an account.
+                      revision history without an account.
                     </div>
                   </div>
                 </label>
               </div>
-              {isPrivate && (
-                <p className="perms-public-access-hint">
-                  To allow anonymous users to view specific parts of this
-                  private document (such as code or issues), configure{" "}
-                  <strong>Public Access settings</strong> in your Gitea
-                  repository settings. These are separate from the
-                  public/private toggle above.
-                </p>
-              )}
             </>
           )}
         </div>

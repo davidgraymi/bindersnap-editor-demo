@@ -19,7 +19,7 @@ import { UploadModal } from "./UploadModal";
 interface DocumentDetailProps {
   owner: string;
   repo: string;
-  uploaderSlug: string;
+  uploaderSlug: string | null;
   activeView: "overview" | "collaborators" | "permissions";
   onTabChange: (tab: "overview" | "collaborators" | "permissions") => void;
   onBack: () => void;
@@ -267,6 +267,8 @@ export function DocumentDetail({
     void loadDocumentData();
   }, [loadDocumentData]);
 
+  const isAnonymous = uploaderSlug === null;
+  const currentUser = uploaderSlug ?? "";
   const documentName = formatDocumentName(repo);
   const latestTag = tags.length > 0 ? tags[0] : null;
   const nextVersion = (latestTag?.version ?? 0) + 1;
@@ -447,24 +449,28 @@ export function DocumentDetail({
           >
             Overview
           </button>
-          <button
-            className={`document-detail-tab${activeView === "collaborators" ? " document-detail-tab-active" : ""}`}
-            type="button"
-            role="tab"
-            aria-selected={activeView === "collaborators"}
-            onClick={() => onTabChange("collaborators")}
-          >
-            Team
-          </button>
-          <button
-            className={`document-detail-tab${activeView === "permissions" ? " document-detail-tab-active" : ""}`}
-            type="button"
-            role="tab"
-            aria-selected={activeView === "permissions"}
-            onClick={() => onTabChange("permissions")}
-          >
-            Permissions
-          </button>
+          {!isAnonymous ? (
+            <button
+              className={`document-detail-tab${activeView === "collaborators" ? " document-detail-tab-active" : ""}`}
+              type="button"
+              role="tab"
+              aria-selected={activeView === "collaborators"}
+              onClick={() => onTabChange("collaborators")}
+            >
+              Team
+            </button>
+          ) : null}
+          {!isAnonymous ? (
+            <button
+              className={`document-detail-tab${activeView === "permissions" ? " document-detail-tab-active" : ""}`}
+              type="button"
+              role="tab"
+              aria-selected={activeView === "permissions"}
+              onClick={() => onTabChange("permissions")}
+            >
+              Permissions
+            </button>
+          ) : null}
         </div>
       </section>
 
@@ -473,7 +479,7 @@ export function DocumentDetail({
           <DocumentCollaborators
             owner={owner}
             repo={repo}
-            currentUsername={uploaderSlug}
+            currentUsername={currentUser}
           />
         </div>
       ) : activeView === "permissions" ? (
@@ -481,7 +487,7 @@ export function DocumentDetail({
           <DocumentPermissions
             owner={owner}
             repo={repo}
-            currentUsername={uploaderSlug}
+            currentUsername={currentUser}
           />
         </div>
       ) : (
@@ -527,17 +533,19 @@ export function DocumentDetail({
                     it's approved, it becomes the official record.
                   </p>
                 )}
-                <button
-                  className="bs-btn bs-btn-primary"
-                  type="button"
-                  onClick={() => setShowUploadModal(true)}
-                >
-                  Submit New Version
-                </button>
+                {!isAnonymous ? (
+                  <button
+                    className="bs-btn bs-btn-primary"
+                    type="button"
+                    onClick={() => setShowUploadModal(true)}
+                  >
+                    Submit New Version
+                  </button>
+                ) : null}
               </section>
             </div>
             <div className="vault-overview-right">
-              {openPRs.length > 0 ? (
+              {isAnonymous ? null : openPRs.length > 0 ? (
                 <section className="bs-card vault-section">
                   <div className="bs-eyebrow">Pending Approvals</div>
                   <h2>
@@ -550,17 +558,17 @@ export function DocumentDetail({
                       const actionState = getPRActionState(prNum);
                       const isSubmitting = actionState.status === "submitting";
                       const reviewPerms = canUserReview(
-                        uploaderSlug,
+                        currentUser,
                         pr.user?.login,
                         branchProtection,
                       );
                       const mergePerms = canUserMerge(
-                        uploaderSlug,
+                        currentUser,
                         branchProtection,
                       );
                       const mergeReady = pr.approvalState === "approved";
                       const ownSubmission = isOwnSubmission(
-                        uploaderSlug,
+                        currentUser,
                         pr.user?.login,
                       );
 
@@ -804,18 +812,18 @@ export function DocumentDetail({
             )}
           </section>
 
-          {showUploadModal && (
+          {showUploadModal && !isAnonymous ? (
             <UploadModal
               owner={owner}
               repo={repo}
               docSlug={repo}
-              uploaderSlug={uploaderSlug}
+              uploaderSlug={currentUser}
               nextVersion={nextVersion}
               canonicalFileName={canonicalFileInfo?.storedFileName ?? null}
               onClose={() => setShowUploadModal(false)}
               onSuccess={handleUploadSuccess}
             />
-          )}
+          ) : null}
         </>
       )}
     </div>
