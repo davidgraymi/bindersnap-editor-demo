@@ -449,15 +449,17 @@ export function DocumentDetail({
           >
             Overview
           </button>
-          <button
-            className={`document-detail-tab${activeView === "collaborators" ? " document-detail-tab-active" : ""}`}
-            type="button"
-            role="tab"
-            aria-selected={activeView === "collaborators"}
-            onClick={() => onTabChange("collaborators")}
-          >
-            Team
-          </button>
+          {!isAnonymous ? (
+            <button
+              className={`document-detail-tab${activeView === "collaborators" ? " document-detail-tab-active" : ""}`}
+              type="button"
+              role="tab"
+              aria-selected={activeView === "collaborators"}
+              onClick={() => onTabChange("collaborators")}
+            >
+              Team
+            </button>
+          ) : null}
           {!isAnonymous ? (
             <button
               className={`document-detail-tab${activeView === "permissions" ? " document-detail-tab-active" : ""}`}
