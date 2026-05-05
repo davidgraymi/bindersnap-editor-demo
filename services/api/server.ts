@@ -585,7 +585,11 @@ async function resolveDocumentAccess(
       repo,
       error: err instanceof Error ? err.message : String(err),
     });
-    return json(503, { error: "Unable to verify document access." }, baseHeaders);
+    return json(
+      503,
+      { error: "Unable to verify document access." },
+      baseHeaders,
+    );
   }
 }
 
