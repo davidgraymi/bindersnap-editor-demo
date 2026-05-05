@@ -266,6 +266,17 @@ beforeEach(() => {
       });
     }
 
+    // Gitea: GET /api/v1/repos/{owner}/{repo}/collaborators — return empty list
+    const collabListMatch = url.pathname.match(
+      /^\/api\/v1\/repos\/([^/]+)\/([^/]+)\/collaborators$/,
+    );
+    if (collabListMatch && method === "GET") {
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     // Gitea: GET /api/v1/repos/{owner}/{repo}/collaborators/{user} — return 404 (no collaborators setup)
     const collabMatch = url.pathname.match(
       /^\/api\/v1\/repos\/([^/]+)\/([^/]+)\/collaborators\/([^/]+)$/,
@@ -372,6 +383,107 @@ function makeRequest(
     body: options?.body ? JSON.stringify(options.body) : undefined,
   });
 }
+
+// ── Tests: Public document access (no session) ──────────────────────────────
+
+describe("public document access — GET /api/app/documents/:owner/:repo", () => {
+  test("returns 401 for an anonymous request to a private repo", async () => {
+    const server = createApiServer();
+    const owner = `owner-${randomUUID()}`;
+    const repo = "private-doc";
+    seedRepo(owner, repo, { isPrivate: true });
+
+    try {
+      const response = await server.fetch(
+        new Request(`http://localhost/api/app/documents/${owner}/${repo}`, {
+          headers: { Origin: config.appOrigin },
+        }),
+      );
+      expect(response.status).toBe(401);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("returns 404 for an anonymous request to a non-existent repo", async () => {
+    const server = createApiServer();
+
+    try {
+      const response = await server.fetch(
+        new Request(
+          `http://localhost/api/app/documents/nobody/does-not-exist`,
+          { headers: { Origin: config.appOrigin } },
+        ),
+      );
+      expect(response.status).toBe(401);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("returns 200 for an anonymous request to a public repo", async () => {
+    const server = createApiServer();
+    const owner = `owner-${randomUUID()}`;
+    const repo = "public-doc";
+    seedRepo(owner, repo, { isPrivate: false });
+
+    try {
+      const response = await server.fetch(
+        new Request(`http://localhost/api/app/documents/${owner}/${repo}`, {
+          headers: { Origin: config.appOrigin },
+        }),
+      );
+      const body = (await response.json()) as Record<string, unknown>;
+      expect(response.status).toBe(200);
+      expect(body.currentUserPermission).toBeNull();
+      expect(Array.isArray(body.tags)).toBe(true);
+    } finally {
+      server.stop(true);
+    }
+  });
+});
+
+describe("public document access — GET /api/app/documents/:owner/:repo/collaborators", () => {
+  test("returns 401 for an anonymous request to collaborators of a private repo", async () => {
+    const server = createApiServer();
+    const owner = `owner-${randomUUID()}`;
+    const repo = "private-doc";
+    seedRepo(owner, repo, { isPrivate: true });
+
+    try {
+      const response = await server.fetch(
+        new Request(
+          `http://localhost/api/app/documents/${owner}/${repo}/collaborators`,
+          { headers: { Origin: config.appOrigin } },
+        ),
+      );
+      expect(response.status).toBe(401);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("returns 200 for an anonymous request to collaborators of a public repo", async () => {
+    const server = createApiServer();
+    const owner = `owner-${randomUUID()}`;
+    const repo = "public-doc";
+    seedRepo(owner, repo, { isPrivate: false });
+
+    try {
+      const response = await server.fetch(
+        new Request(
+          `http://localhost/api/app/documents/${owner}/${repo}/collaborators`,
+          { headers: { Origin: config.appOrigin } },
+        ),
+      );
+      const body = (await response.json()) as Record<string, unknown>;
+      expect(response.status).toBe(200);
+      expect(body.currentUserPermission).toBeNull();
+    } finally {
+      server.stop(true);
+    }
+  });
+});
 
 // ── Tests: GET /api/app/documents/:owner/:repo/permissions ───────────────────
 

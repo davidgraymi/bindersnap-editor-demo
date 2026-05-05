@@ -8,6 +8,7 @@ import {
 
 import "./app.css";
 
+import { AnonymousDocumentShell } from "./components/AnonymousDocumentShell";
 import { AppShell } from "./components/AppShell";
 import { BillingPage } from "./components/BillingPage";
 import { BindersnapLogoMark } from "./components/BindersnapLogoMark";
@@ -40,7 +41,8 @@ type AuthView =
   | "landing"
   | "login"
   | "billing"
-  | "app";
+  | "app"
+  | "publicDoc";
 type AuthMode = "signin" | "signup";
 
 interface LoginPageProps {
@@ -479,6 +481,10 @@ export function App() {
       return "billing";
     }
 
+    if (!user && route.kind === "document") {
+      return "publicDoc";
+    }
+
     return user ? "app" : "login";
   }, [isCheckingSession, route, subscriptionStatus, user]);
 
@@ -614,6 +620,12 @@ export function App() {
           navigateTo({ kind: "home" }, true);
         }}
       />
+    );
+  }
+
+  if (view === "publicDoc" && route.kind === "document") {
+    return (
+      <AnonymousDocumentShell route={route} onNavigate={navigateTo} />
     );
   }
 

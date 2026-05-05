@@ -92,6 +92,23 @@ mock.module("./components/BindersnapLogoMark", () => ({
     createElement("div", { "data-testid": "logo-mark" }),
 }));
 
+mock.module("./components/AnonymousDocumentShell", () => ({
+  AnonymousDocumentShell: ({
+    route,
+  }: {
+    route: { kind: string; owner: string; repo: string };
+  }) =>
+    createElement(
+      "div",
+      {
+        "data-testid": "anonymous-document-shell",
+        "data-owner": route.owner,
+        "data-repo": route.repo,
+      },
+      `public:${route.owner}/${route.repo}`,
+    ),
+}));
+
 mock.module("./components/LandingPage", () => ({
   LandingPage: () => createElement("div", { "data-testid": "landing-page" }),
 }));

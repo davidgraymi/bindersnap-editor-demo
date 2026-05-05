@@ -536,6 +536,43 @@ function createSessionGiteaClient(session: SessionRecord): GiteaClient {
   return createGiteaClient(config.giteaUrl, session.giteaToken);
 }
 
+function createServiceGiteaClient(): GiteaClient {
+  return createGiteaClient(config.giteaUrl, config.giteaServiceToken);
+}
+
+interface DocumentAccessContext {
+  client: GiteaClient;
+  username: string | null;
+  token: string;
+}
+
+async function resolveDocumentAccess(
+  req: Request,
+  baseHeaders: Headers,
+  owner: string,
+  repo: string,
+): Promise<DocumentAccessContext | Response> {
+  const auth = requireSubscription(req, baseHeaders);
+  if (!(auth instanceof Response)) {
+    return {
+      client: auth.client,
+      username: auth.session.username,
+      token: auth.session.giteaToken,
+    };
+  }
+
+  const serviceClient = createServiceGiteaClient();
+  try {
+    const { isPrivate } = await getRepoInfo({ client: serviceClient, owner, repo });
+    if (isPrivate) {
+      return auth;
+    }
+    return { client: serviceClient, username: null, token: config.giteaServiceToken };
+  } catch {
+    return auth;
+  }
+}
+
 function requireSession(
   req: Request,
   baseHeaders: Headers,
@@ -2088,12 +2125,12 @@ async function handleDocumentDetail(
   owner: string,
   repo: string,
 ): Promise<Response> {
-  const auth = requireSubscription(req, baseHeaders);
-  if (auth instanceof Response) {
-    return auth;
+  const access = await resolveDocumentAccess(req, baseHeaders, owner, repo);
+  if (access instanceof Response) {
+    return access;
   }
 
-  const { client, session } = auth;
+  const { client, username } = access;
 
   try {
     const repository = normalizeWorkspaceRepoSummary(
@@ -2147,12 +2184,14 @@ async function handleDocumentDetail(
       }
     }
 
-    const currentUserPermission = await resolveCurrentUserPermission(
-      client,
-      owner,
-      repo,
-      session.username,
-    ).catch(() => null);
+    const currentUserPermission = username
+      ? await resolveCurrentUserPermission(
+          client,
+          owner,
+          repo,
+          username,
+        ).catch(() => null)
+      : null;
 
     return json(
       200,
@@ -2443,12 +2482,12 @@ async function handleDocumentDownload(
   owner: string,
   repo: string,
 ): Promise<Response> {
-  const auth = requireSubscription(req, baseHeaders);
-  if (auth instanceof Response) {
-    return auth;
+  const access = await resolveDocumentAccess(req, baseHeaders, owner, repo);
+  if (access instanceof Response) {
+    return access;
   }
 
-  const { session, client } = auth;
+  const { client, token } = access;
   const url = new URL(req.url);
   const ref = url.searchParams.get("ref")?.trim() || "main";
 
@@ -2480,14 +2519,15 @@ async function handleDocumentDownload(
       );
     }
 
+    const downloadAuthHeaders: HeadersInit = token
+      ? { Authorization: buildTokenAuthHeader(token), Accept: "*/*" }
+      : { Accept: "*/*" };
+
     const response = await giteaFetch(
       `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/raw/${encodeURIComponent(canonicalFile.storedFileName)}?ref=${encodeURIComponent(ref)}`,
       {
         method: "GET",
-        headers: {
-          Authorization: buildTokenAuthHeader(session.giteaToken),
-          Accept: "*/*",
-        },
+        headers: downloadAuthHeaders,
       },
     );
 
@@ -2521,12 +2561,12 @@ async function handleDocumentCollaborators(
   owner: string,
   repo: string,
 ): Promise<Response> {
-  const auth = requireSubscription(req, baseHeaders);
-  if (auth instanceof Response) {
-    return auth;
+  const access = await resolveDocumentAccess(req, baseHeaders, owner, repo);
+  if (access instanceof Response) {
+    return access;
   }
 
-  const { client, session } = auth;
+  const { client, username } = access;
   const url = new URL(req.url);
   const page = parsePositiveIntInput(url.searchParams.get("page"), 1);
   const limit = parsePositiveIntInput(url.searchParams.get("limit"), 12);
@@ -2540,12 +2580,14 @@ async function handleDocumentCollaborators(
       limit,
     });
 
-    const currentUserPermission = await resolveCurrentUserPermission(
-      client,
-      owner,
-      repo,
-      session.username,
-    ).catch(() => null);
+    const currentUserPermission = username
+      ? await resolveCurrentUserPermission(
+          client,
+          owner,
+          repo,
+          username,
+        ).catch(() => null)
+      : null;
 
     return json(
       200,
