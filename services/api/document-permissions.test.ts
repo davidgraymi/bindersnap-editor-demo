@@ -441,6 +441,138 @@ describe("public document access — GET /api/app/documents/:owner/:repo", () =>
       server.stop(true);
     }
   });
+
+  test("returns 200 for anonymous request even when no service token is configured", async () => {
+    // Regression test: createGiteaClient must not send `Authorization: token `
+    // (with empty token) — an empty/missing service token should result in a
+    // headerless anonymous request to Gitea, not a malformed one that Gitea rejects.
+    const originalToken = config.giteaServiceToken;
+    config.giteaServiceToken = "";
+    const server = createApiServer();
+    const owner = `owner-${randomUUID()}`;
+    const repo = "public-doc";
+
+    const originalMockFetch = globalThis.fetch;
+    globalThis.fetch = (async (input, init) => {
+      const requestUrl =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : (input as Request).url;
+      const url = new URL(requestUrl);
+      const headers =
+        input instanceof Request
+          ? (input as Request).headers
+          : new Headers((init as RequestInit | undefined)?.headers);
+      const method =
+        input instanceof Request
+          ? (input as Request).method
+          : ((init as RequestInit | undefined)?.method ?? "GET");
+
+      const repoMatch = url.pathname.match(
+        /^\/api\/v1\/repos\/([^/]+)\/([^/]+)$/,
+      );
+      if (repoMatch && method === "GET") {
+        // Simulate Gitea rejecting an empty/malformed token with 401.
+        // `Authorization: token ` (empty token value) is also invalid.
+        const authHeader = headers.get("Authorization") ?? "";
+        const tokenValue = authHeader.startsWith("token ")
+          ? authHeader.slice(6)
+          : null;
+        if (authHeader !== "" && !tokenValue) {
+          return new Response(JSON.stringify({ message: "Unauthorized" }), {
+            status: 401,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        // No auth header (truly anonymous) — allow public repo access
+        if (repoMatch[1] === owner && repoMatch[2] === repo) {
+          return new Response(
+            JSON.stringify({
+              id: 1,
+              name: repo,
+              full_name: `${owner}/${repo}`,
+              private: false,
+              internal: false,
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        return new Response(JSON.stringify({ message: "Not found" }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      return originalMockFetch(input, init);
+    }) as typeof fetch;
+
+    try {
+      const response = await server.fetch(
+        new Request(`http://localhost/api/app/documents/${owner}/${repo}`, {
+          headers: { Origin: config.appOrigin },
+        }),
+      );
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as Record<string, unknown>;
+      expect(body.currentUserPermission).toBeNull();
+    } finally {
+      globalThis.fetch = originalMockFetch;
+      config.giteaServiceToken = originalToken;
+      server.stop(true);
+    }
+  });
+
+  test("returns 503 when Gitea rejects the service token", async () => {
+    // Regression test: when the service client gets a non-404 error from Gitea
+    // (e.g. invalid service token → Gitea 401), the API must return 503, not a
+    // misleading 401 that looks like the user needs to log in.
+    const server = createApiServer();
+    const owner = `owner-${randomUUID()}`;
+    const repo = "public-doc";
+
+    const originalMockFetch = globalThis.fetch;
+    globalThis.fetch = (async (input, init) => {
+      const requestUrl =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : (input as Request).url;
+      const url = new URL(requestUrl);
+      const method =
+        input instanceof Request
+          ? (input as Request).method
+          : ((init as RequestInit | undefined)?.method ?? "GET");
+
+      const repoMatch = url.pathname.match(
+        /^\/api\/v1\/repos\/([^/]+)\/([^/]+)$/,
+      );
+      if (repoMatch && method === "GET") {
+        // Simulate Gitea rejecting the service token with 401
+        return new Response(JSON.stringify({ message: "Unauthorized" }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      return originalMockFetch(input, init);
+    }) as typeof fetch;
+
+    try {
+      const response = await server.fetch(
+        new Request(`http://localhost/api/app/documents/${owner}/${repo}`, {
+          headers: { Origin: config.appOrigin },
+        }),
+      );
+      // Must be 503 (service misconfigured), not 401 (user must log in)
+      expect(response.status).toBe(503);
+    } finally {
+      globalThis.fetch = originalMockFetch;
+      server.stop(true);
+    }
+  });
 });
 
 describe("public document access — GET /api/app/documents/:owner/:repo/collaborators", () => {
