@@ -4,7 +4,7 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
-import type { AdminSubscriptionAccessListPayloadUsersItem } from "./adminSubscriptionAccessListPayloadUsersItem";
+import type { AdminSubscriptionAccessListPayloadUsersItem } from './adminSubscriptionAccessListPayloadUsersItem';
 
 export interface AdminSubscriptionAccessListPayload {
   users: AdminSubscriptionAccessListPayloadUsersItem[];

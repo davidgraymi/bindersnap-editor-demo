@@ -4,9 +4,9 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
-import type { ListDocuments200DocumentsItemLatestTag } from "./listDocuments200DocumentsItemLatestTag";
-import type { ListDocuments200DocumentsItemPendingPRsItem } from "./listDocuments200DocumentsItemPendingPRsItem";
-import type { ListDocuments200DocumentsItemRepo } from "./listDocuments200DocumentsItemRepo";
+import type { ListDocuments200DocumentsItemLatestTag } from './listDocuments200DocumentsItemLatestTag';
+import type { ListDocuments200DocumentsItemPendingPRsItem } from './listDocuments200DocumentsItemPendingPRsItem';
+import type { ListDocuments200DocumentsItemRepo } from './listDocuments200DocumentsItemRepo';
 
 export type ListDocuments200DocumentsItem = {
   repo: ListDocuments200DocumentsItemRepo;

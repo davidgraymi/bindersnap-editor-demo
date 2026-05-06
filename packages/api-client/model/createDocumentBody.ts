@@ -7,7 +7,7 @@
 
 export type CreateDocumentBody = {
   /** File upload */
-  file?: unknown | null;
+  file: Blob;
   repoName: string;
   nextVersion: string;
   requiredApprovals?: string;

@@ -4,8 +4,8 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
-import type { AdminSubscriptionAccessListPayloadUsersItemAccessSource } from "./adminSubscriptionAccessListPayloadUsersItemAccessSource";
-import type { AdminSubscriptionAccessListPayloadUsersItemOverride } from "./adminSubscriptionAccessListPayloadUsersItemOverride";
+import type { AdminSubscriptionAccessListPayloadUsersItemAccessSource } from './adminSubscriptionAccessListPayloadUsersItemAccessSource';
+import type { AdminSubscriptionAccessListPayloadUsersItemOverride } from './adminSubscriptionAccessListPayloadUsersItemOverride';
 
 export type AdminSubscriptionAccessListPayloadUsersItem = {
   username: string;

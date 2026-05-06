@@ -4,8 +4,8 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
-import type { ListDocumentCollaborators200CollaboratorsItemAccess } from "./listDocumentCollaborators200CollaboratorsItemAccess";
-import type { ListDocumentCollaborators200CollaboratorsItemUser } from "./listDocumentCollaborators200CollaboratorsItemUser";
+import type { ListDocumentCollaborators200CollaboratorsItemAccess } from './listDocumentCollaborators200CollaboratorsItemAccess';
+import type { ListDocumentCollaborators200CollaboratorsItemUser } from './listDocumentCollaborators200CollaboratorsItemUser';
 
 export type ListDocumentCollaborators200CollaboratorsItem = {
   permission: string;

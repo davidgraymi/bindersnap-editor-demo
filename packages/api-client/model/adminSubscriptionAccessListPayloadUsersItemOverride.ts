@@ -10,7 +10,7 @@
  */
 export type AdminSubscriptionAccessListPayloadUsersItemOverride = {
   username: string;
-  access: "grant" | "revoke";
+  access: 'grant' | 'revoke';
   updatedBy: string;
   updatedAt: number;
 } | null;

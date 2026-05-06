@@ -4,9 +4,9 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
-import type { WorkspaceDocumentSummaryLatestTag } from "./workspaceDocumentSummaryLatestTag";
-import type { WorkspaceDocumentSummaryPendingPRsItem } from "./workspaceDocumentSummaryPendingPRsItem";
-import type { WorkspaceDocumentSummaryRepo } from "./workspaceDocumentSummaryRepo";
+import type { WorkspaceDocumentSummaryLatestTag } from './workspaceDocumentSummaryLatestTag';
+import type { WorkspaceDocumentSummaryPendingPRsItem } from './workspaceDocumentSummaryPendingPRsItem';
+import type { WorkspaceDocumentSummaryRepo } from './workspaceDocumentSummaryRepo';
 
 export interface WorkspaceDocumentSummary {
   repo: WorkspaceDocumentSummaryRepo;

@@ -6,7 +6,7 @@
  */
 
 export type SearchUsersParams = {
-  q: string;
-  page?: string;
-  limit?: string;
+q: string;
+page?: string;
+limit?: string;
 };

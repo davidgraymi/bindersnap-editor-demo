@@ -4,9 +4,9 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
-import type { GetBillingStatus200AccessSource } from "./getBillingStatus200AccessSource";
-import type { GetBillingStatus200Override } from "./getBillingStatus200Override";
-import type { GetBillingStatus200Plan } from "./getBillingStatus200Plan";
+import type { GetBillingStatus200AccessSource } from './getBillingStatus200AccessSource';
+import type { GetBillingStatus200Override } from './getBillingStatus200Override';
+import type { GetBillingStatus200Plan } from './getBillingStatus200Plan';
 
 export type GetBillingStatus200 = {
   /** @nullable */

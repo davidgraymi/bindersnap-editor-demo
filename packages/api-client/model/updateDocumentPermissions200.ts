@@ -4,8 +4,8 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
-import type { UpdateDocumentPermissions200BranchProtection } from "./updateDocumentPermissions200BranchProtection";
-import type { UpdateDocumentPermissions200CurrentUserPermission } from "./updateDocumentPermissions200CurrentUserPermission";
+import type { UpdateDocumentPermissions200BranchProtection } from './updateDocumentPermissions200BranchProtection';
+import type { UpdateDocumentPermissions200CurrentUserPermission } from './updateDocumentPermissions200CurrentUserPermission';
 
 export type UpdateDocumentPermissions200 = {
   /** @nullable */

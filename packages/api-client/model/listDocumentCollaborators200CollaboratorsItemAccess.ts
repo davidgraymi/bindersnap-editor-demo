@@ -5,11 +5,11 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type ListDocumentCollaborators200CollaboratorsItemAccess =
-  (typeof ListDocumentCollaborators200CollaboratorsItemAccess)[keyof typeof ListDocumentCollaborators200CollaboratorsItemAccess];
+export type ListDocumentCollaborators200CollaboratorsItemAccess = typeof ListDocumentCollaborators200CollaboratorsItemAccess[keyof typeof ListDocumentCollaborators200CollaboratorsItemAccess];
+
 
 export const ListDocumentCollaborators200CollaboratorsItemAccess = {
-  read: "read",
-  write: "write",
-  admin: "admin",
+  read: 'read',
+  write: 'write',
+  admin: 'admin',
 } as const;

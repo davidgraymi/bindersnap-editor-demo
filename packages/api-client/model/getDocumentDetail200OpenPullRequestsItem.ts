@@ -4,16 +4,25 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
+import type { GetDocumentDetail200OpenPullRequestsItemApprovalState } from './getDocumentDetail200OpenPullRequestsItemApprovalState';
+import type { GetDocumentDetail200OpenPullRequestsItemUser } from './getDocumentDetail200OpenPullRequestsItemUser';
 
 export type GetDocumentDetail200OpenPullRequestsItem = {
+  id: number;
   number: number;
   title: string;
   state: string;
   created: string;
+  created_at?: string;
+  updated_at?: string;
   branchName: string;
   approvalCount: number;
   requiredApprovals: number;
   isApproved: boolean;
   isRejected: boolean;
   reviewers: string[];
+  body?: string;
+  approvalState: GetDocumentDetail200OpenPullRequestsItemApprovalState;
+  /** @nullable */
+  user?: GetDocumentDetail200OpenPullRequestsItemUser;
 };

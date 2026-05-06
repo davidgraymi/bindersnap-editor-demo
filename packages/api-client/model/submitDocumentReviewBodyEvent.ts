@@ -5,11 +5,11 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type SubmitDocumentReviewBodyEvent =
-  (typeof SubmitDocumentReviewBodyEvent)[keyof typeof SubmitDocumentReviewBodyEvent];
+export type SubmitDocumentReviewBodyEvent = typeof SubmitDocumentReviewBodyEvent[keyof typeof SubmitDocumentReviewBodyEvent];
+
 
 export const SubmitDocumentReviewBodyEvent = {
-  APPROVE: "APPROVE",
-  REQUEST_CHANGES: "REQUEST_CHANGES",
-  COMMENT: "COMMENT",
+  APPROVE: 'APPROVE',
+  REQUEST_CHANGES: 'REQUEST_CHANGES',
+  COMMENT: 'COMMENT',
 } as const;

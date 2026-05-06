@@ -4,7 +4,7 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
-import type { CreateDocument200Repository } from "./createDocument200Repository";
+import type { CreateDocument200Repository } from './createDocument200Repository';
 
 export type CreateDocument200 = {
   repository: CreateDocument200Repository;

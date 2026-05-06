@@ -4,8 +4,8 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
-import type { CollaboratorListPayloadCollaboratorsItem } from "./collaboratorListPayloadCollaboratorsItem";
-import type { CollaboratorListPayloadCurrentUserPermission } from "./collaboratorListPayloadCurrentUserPermission";
+import type { CollaboratorListPayloadCollaboratorsItem } from './collaboratorListPayloadCollaboratorsItem';
+import type { CollaboratorListPayloadCurrentUserPermission } from './collaboratorListPayloadCurrentUserPermission';
 
 export interface CollaboratorListPayload {
   collaborators: CollaboratorListPayloadCollaboratorsItem[];

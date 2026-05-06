@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, mock, test } from "bun:test";
 import { createElement } from "react";
+import type { JSX } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { JSDOM } from "jsdom";
@@ -15,18 +16,24 @@ const mockCreatePortalSession = mock(async () => ({
   url: "https://example.com/portal",
 }));
 const mockFetchBillingStatus = mock(async () => ({
-  status: "active",
-  currentPeriodEnd: null,
+  status: "active" as string | null,
+  currentPeriodEnd: null as number | null,
   cancelAtPeriodEnd: false,
-  cancelAt: null,
+  cancelAt: null as number | null,
+  hasAccess: true,
+  accessSource: null as string | null,
+  override: null,
+  plan: null,
 }));
-const mockFetchSessionUser = mock(async () => ({
-  user: null,
-  token: null,
-}));
+const mockFetchSessionUser = mock(
+  async (): Promise<{
+    user: { username: string; fullName?: string; isAdmin?: boolean } | null;
+    token: string | null;
+  } | null> => ({ user: null, token: null }),
+);
 const mockLogin = mock(async () => ({
-  user: null,
-  token: null,
+  user: null as { username: string; fullName?: string; isAdmin?: boolean } | null,
+  token: null as string | null,
 }));
 const mockLogoutSession = mock(async () => {});
 const mockSignup = mock(async () => ({
@@ -236,6 +243,10 @@ beforeEach(() => {
     currentPeriodEnd: null,
     cancelAtPeriodEnd: false,
     cancelAt: null,
+    hasAccess: true,
+    accessSource: null,
+    override: null,
+    plan: null,
   }));
   mockFetchSessionUser.mockImplementation(async () => ({
     user: null,
@@ -357,6 +368,10 @@ test("App redirects signed-in users to billing when the payment required handler
     currentPeriodEnd: null,
     cancelAtPeriodEnd: false,
     cancelAt: null,
+    hasAccess: true,
+    accessSource: null,
+    override: null,
+    plan: null,
   }));
 
   const { App } = await import("./App");
@@ -439,6 +454,10 @@ test("App redirects non-admin users away from the Pro access route", async () =>
     currentPeriodEnd: null,
     cancelAtPeriodEnd: false,
     cancelAt: null,
+    hasAccess: true,
+    accessSource: null,
+    override: null,
+    plan: null,
   }));
 
   const { App } = await import("./App");

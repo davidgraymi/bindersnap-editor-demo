@@ -6,5 +6,5 @@
  */
 
 export type DownloadDocumentParams = {
-  ref?: string;
+ref?: string;
 };

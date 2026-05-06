@@ -4,7 +4,7 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
-import type { SessionAuthStateUser } from "./sessionAuthStateUser";
+import type { SessionAuthStateUser } from './sessionAuthStateUser';
 
 export interface SessionAuthState {
   /** @nullable */

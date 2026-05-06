@@ -1,8 +1,5 @@
 // Re-export gitea-client auth (token ops, not API calls)
-export {
-  clearToken as clearStoredToken,
-  storeToken as storeStoredToken,
-} from "../../packages/gitea-client/auth";
+export { clearToken, storeToken } from "../../packages/gitea-client/auth";
 
 // Re-export document search utilities
 export type { DocumentSearchParams } from "./documentSearch";
@@ -33,7 +30,6 @@ import type {
 import type {
   AdminSubscriptionAccessListPayload,
   AdminSubscriptionAccessUser,
-  AdminSubscriptionAccessOverride,
 } from "../../packages/api-schema/schemas/admin";
 
 // Re-export all generated types
@@ -47,11 +43,14 @@ export type {
   DocumentPermissionsPayload,
   WorkspaceDocumentSummary,
   InitialDocumentUploadResult,
+  PullRequestWithApprovalState,
   UploadResult,
 } from "../../packages/api-schema/schemas/documents";
 export type {
   AdminSubscriptionAccessListPayload,
   AdminSubscriptionAccessUser,
+} from "../../packages/api-schema/schemas/admin";
+export type {
   AdminSubscriptionAccessOverride,
   AdminSubscriptionAccessSource,
   BillingStatusPayload,
@@ -59,7 +58,10 @@ export type {
 export type { SearchUsersPayload } from "../../packages/api-schema/schemas/users";
 
 // Re-export from gitea-client for validation
-export { validateUploadFile as validateUploadFileWithClient } from "../../packages/gitea-client/uploads";
+export {
+  validateUploadFile,
+  validateUploadFile as validateUploadFileWithClient,
+} from "../../packages/gitea-client/uploads";
 export type { UploadValidationResult } from "../../packages/gitea-client/uploads";
 
 import { ApiRequestError } from "../../packages/api-client/mutator";
@@ -114,7 +116,7 @@ export async function signup(
 export async function fetchSessionUser(): Promise<SessionAuthState | null> {
   try {
     const response = await AuthClient.authMe();
-    return response.data;
+    return response.status === 200 ? response.data : null;
   } catch (error) {
     if (
       error instanceof ApiRequestError &&
@@ -407,8 +409,17 @@ export async function publishDocument(
 // Billing functions
 
 export async function fetchBillingStatus(): Promise<BillingStatusPayload> {
-  const response = await BillingClient.getBillingStatus();
-  return response.data;
+  try {
+    const response = await BillingClient.getBillingStatus();
+    return response.data;
+  } catch (error) {
+    // 402 from the billing endpoint contains billing data (e.g. past_due status),
+    // not a payment gate. Return the parsed body instead of throwing.
+    if (error instanceof ApiRequestError && error.status === 402 && error.data) {
+      return error.data as BillingStatusPayload;
+    }
+    throw error;
+  }
 }
 
 export async function createCheckoutSession(): Promise<{ url: string }> {
@@ -507,18 +518,3 @@ export async function revokeAdminSubscriptionAccess(
   };
 }
 
-// Validation helper
-export function validateUploadFile(
-  file: File,
-): import("../../packages/gitea-client/uploads").UploadValidationResult {
-  return validateUploadFileWithClient(file);
-}
-
-// Re-export token functions with original names
-export function clearToken(): void {
-  clearStoredToken();
-}
-
-export function storeToken(token: string): void {
-  storeStoredToken(token);
-}

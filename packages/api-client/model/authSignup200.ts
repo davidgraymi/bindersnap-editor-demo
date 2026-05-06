@@ -4,7 +4,7 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
-import type { AuthSignup200User } from "./authSignup200User";
+import type { AuthSignup200User } from './authSignup200User';
 
 export type AuthSignup200 = {
   /** @nullable */

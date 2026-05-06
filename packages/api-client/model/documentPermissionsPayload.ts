@@ -4,8 +4,8 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
-import type { DocumentPermissionsPayloadBranchProtection } from "./documentPermissionsPayloadBranchProtection";
-import type { DocumentPermissionsPayloadCurrentUserPermission } from "./documentPermissionsPayloadCurrentUserPermission";
+import type { DocumentPermissionsPayloadBranchProtection } from './documentPermissionsPayloadBranchProtection';
+import type { DocumentPermissionsPayloadCurrentUserPermission } from './documentPermissionsPayloadCurrentUserPermission';
 
 export interface DocumentPermissionsPayload {
   /** @nullable */

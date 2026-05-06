@@ -4,14 +4,14 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
-import type { DocumentDetailPayloadBranchProtection } from "./documentDetailPayloadBranchProtection";
-import type { DocumentDetailPayloadCanonicalFile } from "./documentDetailPayloadCanonicalFile";
-import type { DocumentDetailPayloadCurrentUserPermission } from "./documentDetailPayloadCurrentUserPermission";
-import type { DocumentDetailPayloadLatestTag } from "./documentDetailPayloadLatestTag";
-import type { DocumentDetailPayloadOpenPullRequestsItem } from "./documentDetailPayloadOpenPullRequestsItem";
-import type { DocumentDetailPayloadRepository } from "./documentDetailPayloadRepository";
-import type { DocumentDetailPayloadTagsItem } from "./documentDetailPayloadTagsItem";
-import type { DocumentDetailPayloadUploadPullRequestsItem } from "./documentDetailPayloadUploadPullRequestsItem";
+import type { DocumentDetailPayloadBranchProtection } from './documentDetailPayloadBranchProtection';
+import type { DocumentDetailPayloadCanonicalFile } from './documentDetailPayloadCanonicalFile';
+import type { DocumentDetailPayloadCurrentUserPermission } from './documentDetailPayloadCurrentUserPermission';
+import type { DocumentDetailPayloadLatestTag } from './documentDetailPayloadLatestTag';
+import type { DocumentDetailPayloadOpenPullRequestsItem } from './documentDetailPayloadOpenPullRequestsItem';
+import type { DocumentDetailPayloadRepository } from './documentDetailPayloadRepository';
+import type { DocumentDetailPayloadTagsItem } from './documentDetailPayloadTagsItem';
+import type { DocumentDetailPayloadUploadPullRequestsItem } from './documentDetailPayloadUploadPullRequestsItem';
 
 export interface DocumentDetailPayload {
   repository: DocumentDetailPayloadRepository;

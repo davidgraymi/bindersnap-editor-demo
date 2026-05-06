@@ -23,17 +23,32 @@ export const CanonicalFileInfoSchema = z.object({
 });
 export type CanonicalFileInfo = z.infer<typeof CanonicalFileInfoSchema>;
 
+export const ApprovalStateSchema = z.enum([
+  "working",
+  "in_review",
+  "changes_requested",
+  "approved",
+  "published",
+]);
+export type ApprovalState = z.infer<typeof ApprovalStateSchema>;
+
 export const PullRequestWithApprovalStateSchema = z.object({
+  id: z.number(),
   number: z.number(),
   title: z.string(),
   state: z.string(),
   created: z.string(),
+  created_at: z.string().optional(),
+  updated_at: z.string().optional(),
   branchName: z.string(),
   approvalCount: z.number(),
   requiredApprovals: z.number(),
   isApproved: z.boolean(),
   isRejected: z.boolean(),
   reviewers: z.array(z.string()),
+  body: z.string().optional(),
+  approvalState: ApprovalStateSchema,
+  user: z.object({ login: z.string() }).nullable().optional(),
 });
 export type PullRequestWithApprovalState = z.infer<
   typeof PullRequestWithApprovalStateSchema

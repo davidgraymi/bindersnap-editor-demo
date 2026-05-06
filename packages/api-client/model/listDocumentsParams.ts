@@ -6,7 +6,7 @@
  */
 
 export type ListDocumentsParams = {
-  owner?: string;
-  member?: string;
-  q?: string;
+owner?: string;
+member?: string;
+q?: string;
 };

@@ -8,14 +8,13 @@
 /**
  * @nullable
  */
-export type BillingStatusPayloadAccessSource =
-  | (typeof BillingStatusPayloadAccessSource)[keyof typeof BillingStatusPayloadAccessSource]
-  | null;
+export type BillingStatusPayloadAccessSource = typeof BillingStatusPayloadAccessSource[keyof typeof BillingStatusPayloadAccessSource] | null;
+
 
 export const BillingStatusPayloadAccessSource = {
-  config_bypass: "config_bypass",
-  stripe: "stripe",
-  admin_grant: "admin_grant",
-  admin_revoke: "admin_revoke",
-  none: "none",
+  config_bypass: 'config_bypass',
+  stripe: 'stripe',
+  admin_grant: 'admin_grant',
+  admin_revoke: 'admin_revoke',
+  none: 'none',
 } as const;

@@ -4,7 +4,7 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
-import type { ListDocuments200DocumentsItemRepoOwner } from "./listDocuments200DocumentsItemRepoOwner";
+import type { ListDocuments200DocumentsItemRepoOwner } from './listDocuments200DocumentsItemRepoOwner';
 
 export type ListDocuments200DocumentsItemRepo = {
   id: number;

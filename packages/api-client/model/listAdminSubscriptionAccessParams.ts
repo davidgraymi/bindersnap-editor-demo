@@ -6,7 +6,7 @@
  */
 
 export type ListAdminSubscriptionAccessParams = {
-  q?: string;
-  page?: string;
-  limit?: string;
+q?: string;
+page?: string;
+limit?: string;
 };

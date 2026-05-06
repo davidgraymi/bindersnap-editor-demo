@@ -22,465 +22,474 @@ import type {
   UpdateDocumentPermissions200,
   UpdateDocumentPermissionsBody,
   UploadDocumentVersion200,
-  UploadDocumentVersionBody,
-} from "../model";
+  UploadDocumentVersionBody
+} from '../model';
 
-import { customFetch } from ".././mutator";
+import { customFetch } from '.././mutator';
 
 export type listDocumentsResponse200 = {
-  data: ListDocuments200;
-  status: 200;
-};
+  data: ListDocuments200
+  status: 200
+}
 
-export type listDocumentsResponseSuccess = listDocumentsResponse200 & {
+export type listDocumentsResponseSuccess = (listDocumentsResponse200) & {
   headers: Headers;
 };
-export type listDocumentsResponse = listDocumentsResponseSuccess;
+;
 
-export const getListDocumentsUrl = (params?: ListDocumentsParams) => {
+export type listDocumentsResponse = (listDocumentsResponseSuccess)
+
+export const getListDocumentsUrl = (params?: ListDocumentsParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
+
     if (value !== undefined) {
-      normalizedParams.append(key, value === null ? "null" : value.toString());
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
     }
   });
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0
-    ? `/api/app/documents?${stringifiedParams}`
-    : `/api/app/documents`;
-};
+  return stringifiedParams.length > 0 ? `/api/app/documents?${stringifiedParams}` : `/api/app/documents`
+}
 
-export const listDocuments = async (
-  params?: ListDocumentsParams,
-  options?: RequestInit,
-): Promise<listDocumentsResponse> => {
-  return customFetch<listDocumentsResponse>(getListDocumentsUrl(params), {
+export const listDocuments = async (params?: ListDocumentsParams, options?: RequestInit): Promise<listDocumentsResponse> => {
+
+  return customFetch<listDocumentsResponse>(getListDocumentsUrl(params),
+  {
     ...options,
-    method: "GET",
-  });
-};
+    method: 'GET'
+
+
+  }
+);}
+
 
 export type createDocumentResponse200 = {
-  data: CreateDocument200;
-  status: 200;
-};
+  data: CreateDocument200
+  status: 200
+}
 
-export type createDocumentResponseSuccess = createDocumentResponse200 & {
+export type createDocumentResponseSuccess = (createDocumentResponse200) & {
   headers: Headers;
 };
-export type createDocumentResponse = createDocumentResponseSuccess;
+;
+
+export type createDocumentResponse = (createDocumentResponseSuccess)
 
 export const getCreateDocumentUrl = () => {
-  return `/api/app/documents`;
-};
 
-export const createDocument = async (
-  createDocumentBody: CreateDocumentBody,
-  options?: RequestInit,
-): Promise<createDocumentResponse> => {
-  const formData = new FormData();
-  if (
-    createDocumentBody.file !== undefined &&
-    createDocumentBody.file !== null
-  ) {
-    formData.append(`file`, createDocumentBody.file);
-  }
-  formData.append(`repoName`, createDocumentBody.repoName);
-  formData.append(`nextVersion`, createDocumentBody.nextVersion);
-  if (createDocumentBody.requiredApprovals !== undefined) {
-    formData.append(`requiredApprovals`, createDocumentBody.requiredApprovals);
-  }
-  if (createDocumentBody.description !== undefined) {
-    formData.append(`description`, createDocumentBody.description);
-  }
 
-  return customFetch<createDocumentResponse>(getCreateDocumentUrl(), {
+
+
+  return `/api/app/documents`
+}
+
+export const createDocument = async (createDocumentBody: CreateDocumentBody, options?: RequestInit): Promise<createDocumentResponse> => {
+    const formData = new FormData();
+formData.append(`file`, createDocumentBody.file);
+formData.append(`repoName`, createDocumentBody.repoName);
+formData.append(`nextVersion`, createDocumentBody.nextVersion);
+if(createDocumentBody.requiredApprovals !== undefined) {
+ formData.append(`requiredApprovals`, createDocumentBody.requiredApprovals);
+ }
+if(createDocumentBody.description !== undefined) {
+ formData.append(`description`, createDocumentBody.description);
+ }
+
+  return customFetch<createDocumentResponse>(getCreateDocumentUrl(),
+  {
     ...options,
-    method: "POST",
-    body: formData,
-  });
-};
+    method: 'POST'
+    ,
+    body:
+      formData,
+  }
+);}
+
 
 export type getDocumentDetailResponse200 = {
-  data: GetDocumentDetail200;
-  status: 200;
-};
+  data: GetDocumentDetail200
+  status: 200
+}
 
-export type getDocumentDetailResponseSuccess = getDocumentDetailResponse200 & {
+export type getDocumentDetailResponseSuccess = (getDocumentDetailResponse200) & {
   headers: Headers;
 };
-export type getDocumentDetailResponse = getDocumentDetailResponseSuccess;
+;
 
-export const getGetDocumentDetailUrl = (owner: string, repo: string) => {
-  return `/api/app/documents/${owner}/${repo}`;
-};
+export type getDocumentDetailResponse = (getDocumentDetailResponseSuccess)
 
-export const getDocumentDetail = async (
-  owner: string,
-  repo: string,
-  options?: RequestInit,
-): Promise<getDocumentDetailResponse> => {
-  return customFetch<getDocumentDetailResponse>(
-    getGetDocumentDetailUrl(owner, repo),
-    {
-      ...options,
-      method: "GET",
-    },
-  );
-};
+export const getGetDocumentDetailUrl = (owner: string,
+    repo: string,) => {
+
+
+
+
+  return `/api/app/documents/${owner}/${repo}`
+}
+
+export const getDocumentDetail = async (owner: string,
+    repo: string, options?: RequestInit): Promise<getDocumentDetailResponse> => {
+
+  return customFetch<getDocumentDetailResponse>(getGetDocumentDetailUrl(owner,repo),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
 
 export type uploadDocumentVersionResponse200 = {
-  data: UploadDocumentVersion200;
-  status: 200;
+  data: UploadDocumentVersion200
+  status: 200
+}
+
+export type uploadDocumentVersionResponseSuccess = (uploadDocumentVersionResponse200) & {
+  headers: Headers;
 };
+;
 
-export type uploadDocumentVersionResponseSuccess =
-  uploadDocumentVersionResponse200 & {
-    headers: Headers;
-  };
-export type uploadDocumentVersionResponse =
-  uploadDocumentVersionResponseSuccess;
+export type uploadDocumentVersionResponse = (uploadDocumentVersionResponseSuccess)
 
-export const getUploadDocumentVersionUrl = (owner: string, repo: string) => {
-  return `/api/app/documents/${owner}/${repo}/versions`;
-};
+export const getUploadDocumentVersionUrl = (owner: string,
+    repo: string,) => {
 
-export const uploadDocumentVersion = async (
-  owner: string,
-  repo: string,
-  uploadDocumentVersionBody: UploadDocumentVersionBody,
-  options?: RequestInit,
-): Promise<uploadDocumentVersionResponse> => {
-  const formData = new FormData();
-  if (
-    uploadDocumentVersionBody.file !== undefined &&
-    uploadDocumentVersionBody.file !== null
-  ) {
-    formData.append(`file`, uploadDocumentVersionBody.file);
+
+
+
+  return `/api/app/documents/${owner}/${repo}/versions`
+}
+
+export const uploadDocumentVersion = async (owner: string,
+    repo: string,
+    uploadDocumentVersionBody: UploadDocumentVersionBody, options?: RequestInit): Promise<uploadDocumentVersionResponse> => {
+    const formData = new FormData();
+formData.append(`file`, uploadDocumentVersionBody.file);
+formData.append(`docSlug`, uploadDocumentVersionBody.docSlug);
+formData.append(`uploaderSlug`, uploadDocumentVersionBody.uploaderSlug);
+formData.append(`nextVersion`, uploadDocumentVersionBody.nextVersion);
+if(uploadDocumentVersionBody.canonicalFileName !== undefined) {
+ formData.append(`canonicalFileName`, uploadDocumentVersionBody.canonicalFileName);
+ }
+
+  return customFetch<uploadDocumentVersionResponse>(getUploadDocumentVersionUrl(owner,repo),
+  {
+    ...options,
+    method: 'POST'
+    ,
+    body:
+      formData,
   }
-  formData.append(`docSlug`, uploadDocumentVersionBody.docSlug);
-  formData.append(`uploaderSlug`, uploadDocumentVersionBody.uploaderSlug);
-  formData.append(`nextVersion`, uploadDocumentVersionBody.nextVersion);
-  if (uploadDocumentVersionBody.canonicalFileName !== undefined) {
-    formData.append(
-      `canonicalFileName`,
-      uploadDocumentVersionBody.canonicalFileName,
-    );
-  }
+);}
 
-  return customFetch<uploadDocumentVersionResponse>(
-    getUploadDocumentVersionUrl(owner, repo),
-    {
-      ...options,
-      method: "POST",
-      body: formData,
-    },
-  );
-};
 
 export type downloadDocumentResponse200 = {
-  data: Blob;
-  status: 200;
-};
+  data: Blob
+  status: 200
+}
 
-export type downloadDocumentResponseSuccess = downloadDocumentResponse200 & {
+export type downloadDocumentResponseSuccess = (downloadDocumentResponse200) & {
   headers: Headers;
 };
-export type downloadDocumentResponse = downloadDocumentResponseSuccess;
+;
 
-export const getDownloadDocumentUrl = (
-  owner: string,
-  repo: string,
-  params?: DownloadDocumentParams,
-) => {
+export type downloadDocumentResponse = (downloadDocumentResponseSuccess)
+
+export const getDownloadDocumentUrl = (owner: string,
+    repo: string,
+    params?: DownloadDocumentParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
+
     if (value !== undefined) {
-      normalizedParams.append(key, value === null ? "null" : value.toString());
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
     }
   });
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0
-    ? `/api/app/documents/${owner}/${repo}/download?${stringifiedParams}`
-    : `/api/app/documents/${owner}/${repo}/download`;
-};
+  return stringifiedParams.length > 0 ? `/api/app/documents/${owner}/${repo}/download?${stringifiedParams}` : `/api/app/documents/${owner}/${repo}/download`
+}
 
-export const downloadDocument = async (
-  owner: string,
-  repo: string,
-  params?: DownloadDocumentParams,
-  options?: RequestInit,
-): Promise<downloadDocumentResponse> => {
-  return customFetch<downloadDocumentResponse>(
-    getDownloadDocumentUrl(owner, repo, params),
-    {
-      ...options,
-      method: "GET",
-    },
-  );
-};
+export const downloadDocument = async (owner: string,
+    repo: string,
+    params?: DownloadDocumentParams, options?: RequestInit): Promise<downloadDocumentResponse> => {
+
+  return customFetch<downloadDocumentResponse>(getDownloadDocumentUrl(owner,repo,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
 
 export type getDocumentPermissionsResponse200 = {
-  data: GetDocumentPermissions200;
-  status: 200;
-};
+  data: GetDocumentPermissions200
+  status: 200
+}
 
-export type getDocumentPermissionsResponseSuccess =
-  getDocumentPermissionsResponse200 & {
-    headers: Headers;
-  };
-export type getDocumentPermissionsResponse =
-  getDocumentPermissionsResponseSuccess;
-
-export const getGetDocumentPermissionsUrl = (owner: string, repo: string) => {
-  return `/api/app/documents/${owner}/${repo}/permissions`;
+export type getDocumentPermissionsResponseSuccess = (getDocumentPermissionsResponse200) & {
+  headers: Headers;
 };
+;
 
-export const getDocumentPermissions = async (
-  owner: string,
-  repo: string,
-  options?: RequestInit,
-): Promise<getDocumentPermissionsResponse> => {
-  return customFetch<getDocumentPermissionsResponse>(
-    getGetDocumentPermissionsUrl(owner, repo),
-    {
-      ...options,
-      method: "GET",
-    },
-  );
-};
+export type getDocumentPermissionsResponse = (getDocumentPermissionsResponseSuccess)
+
+export const getGetDocumentPermissionsUrl = (owner: string,
+    repo: string,) => {
+
+
+
+
+  return `/api/app/documents/${owner}/${repo}/permissions`
+}
+
+export const getDocumentPermissions = async (owner: string,
+    repo: string, options?: RequestInit): Promise<getDocumentPermissionsResponse> => {
+
+  return customFetch<getDocumentPermissionsResponse>(getGetDocumentPermissionsUrl(owner,repo),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
 
 export type updateDocumentPermissionsResponse200 = {
-  data: UpdateDocumentPermissions200;
-  status: 200;
-};
+  data: UpdateDocumentPermissions200
+  status: 200
+}
 
-export type updateDocumentPermissionsResponseSuccess =
-  updateDocumentPermissionsResponse200 & {
-    headers: Headers;
-  };
-export type updateDocumentPermissionsResponse =
-  updateDocumentPermissionsResponseSuccess;
-
-export const getUpdateDocumentPermissionsUrl = (
-  owner: string,
-  repo: string,
-) => {
-  return `/api/app/documents/${owner}/${repo}/permissions`;
+export type updateDocumentPermissionsResponseSuccess = (updateDocumentPermissionsResponse200) & {
+  headers: Headers;
 };
+;
 
-export const updateDocumentPermissions = async (
-  owner: string,
-  repo: string,
-  updateDocumentPermissionsBody: UpdateDocumentPermissionsBody,
-  options?: RequestInit,
-): Promise<updateDocumentPermissionsResponse> => {
-  return customFetch<updateDocumentPermissionsResponse>(
-    getUpdateDocumentPermissionsUrl(owner, repo),
-    {
-      ...options,
-      method: "PUT",
-      headers: { "Content-Type": "application/json", ...options?.headers },
-      body: JSON.stringify(updateDocumentPermissionsBody),
-    },
-  );
-};
+export type updateDocumentPermissionsResponse = (updateDocumentPermissionsResponseSuccess)
+
+export const getUpdateDocumentPermissionsUrl = (owner: string,
+    repo: string,) => {
+
+
+
+
+  return `/api/app/documents/${owner}/${repo}/permissions`
+}
+
+export const updateDocumentPermissions = async (owner: string,
+    repo: string,
+    updateDocumentPermissionsBody: UpdateDocumentPermissionsBody, options?: RequestInit): Promise<updateDocumentPermissionsResponse> => {
+
+  return customFetch<updateDocumentPermissionsResponse>(getUpdateDocumentPermissionsUrl(owner,repo),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      updateDocumentPermissionsBody,)
+  }
+);}
+
 
 export type listDocumentCollaboratorsResponse200 = {
-  data: ListDocumentCollaborators200;
-  status: 200;
+  data: ListDocumentCollaborators200
+  status: 200
+}
+
+export type listDocumentCollaboratorsResponseSuccess = (listDocumentCollaboratorsResponse200) & {
+  headers: Headers;
 };
+;
 
-export type listDocumentCollaboratorsResponseSuccess =
-  listDocumentCollaboratorsResponse200 & {
-    headers: Headers;
-  };
-export type listDocumentCollaboratorsResponse =
-  listDocumentCollaboratorsResponseSuccess;
+export type listDocumentCollaboratorsResponse = (listDocumentCollaboratorsResponseSuccess)
 
-export const getListDocumentCollaboratorsUrl = (
-  owner: string,
-  repo: string,
-  params?: ListDocumentCollaboratorsParams,
-) => {
+export const getListDocumentCollaboratorsUrl = (owner: string,
+    repo: string,
+    params?: ListDocumentCollaboratorsParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
+
     if (value !== undefined) {
-      normalizedParams.append(key, value === null ? "null" : value.toString());
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
     }
   });
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0
-    ? `/api/app/documents/${owner}/${repo}/collaborators?${stringifiedParams}`
-    : `/api/app/documents/${owner}/${repo}/collaborators`;
-};
+  return stringifiedParams.length > 0 ? `/api/app/documents/${owner}/${repo}/collaborators?${stringifiedParams}` : `/api/app/documents/${owner}/${repo}/collaborators`
+}
 
-export const listDocumentCollaborators = async (
-  owner: string,
-  repo: string,
-  params?: ListDocumentCollaboratorsParams,
-  options?: RequestInit,
-): Promise<listDocumentCollaboratorsResponse> => {
-  return customFetch<listDocumentCollaboratorsResponse>(
-    getListDocumentCollaboratorsUrl(owner, repo, params),
-    {
-      ...options,
-      method: "GET",
-    },
-  );
-};
+export const listDocumentCollaborators = async (owner: string,
+    repo: string,
+    params?: ListDocumentCollaboratorsParams, options?: RequestInit): Promise<listDocumentCollaboratorsResponse> => {
+
+  return customFetch<listDocumentCollaboratorsResponse>(getListDocumentCollaboratorsUrl(owner,repo,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
 
 export type addDocumentCollaboratorResponse200 = {
-  data: AddDocumentCollaborator200;
-  status: 200;
-};
+  data: AddDocumentCollaborator200
+  status: 200
+}
 
-export type addDocumentCollaboratorResponseSuccess =
-  addDocumentCollaboratorResponse200 & {
-    headers: Headers;
-  };
-export type addDocumentCollaboratorResponse =
-  addDocumentCollaboratorResponseSuccess;
-
-export const getAddDocumentCollaboratorUrl = (
-  owner: string,
-  repo: string,
-  collaborator: string,
-) => {
-  return `/api/app/documents/${owner}/${repo}/collaborators/${collaborator}`;
-};
-
-export const addDocumentCollaborator = async (
-  owner: string,
-  repo: string,
-  collaborator: string,
-  addDocumentCollaboratorBody: AddDocumentCollaboratorBody,
-  options?: RequestInit,
-): Promise<addDocumentCollaboratorResponse> => {
-  return customFetch<addDocumentCollaboratorResponse>(
-    getAddDocumentCollaboratorUrl(owner, repo, collaborator),
-    {
-      ...options,
-      method: "PUT",
-      headers: { "Content-Type": "application/json", ...options?.headers },
-      body: JSON.stringify(addDocumentCollaboratorBody),
-    },
-  );
-};
-
-export type removeDocumentCollaboratorResponse204 = {
-  data: void;
-  status: 204;
-};
-
-export type removeDocumentCollaboratorResponseSuccess =
-  removeDocumentCollaboratorResponse204 & {
-    headers: Headers;
-  };
-export type removeDocumentCollaboratorResponse =
-  removeDocumentCollaboratorResponseSuccess;
-
-export const getRemoveDocumentCollaboratorUrl = (
-  owner: string,
-  repo: string,
-  collaborator: string,
-) => {
-  return `/api/app/documents/${owner}/${repo}/collaborators/${collaborator}`;
-};
-
-export const removeDocumentCollaborator = async (
-  owner: string,
-  repo: string,
-  collaborator: string,
-  options?: RequestInit,
-): Promise<removeDocumentCollaboratorResponse> => {
-  return customFetch<removeDocumentCollaboratorResponse>(
-    getRemoveDocumentCollaboratorUrl(owner, repo, collaborator),
-    {
-      ...options,
-      method: "DELETE",
-    },
-  );
-};
-
-export type submitDocumentReviewResponse204 = {
-  data: void;
-  status: 204;
-};
-
-export type submitDocumentReviewResponseSuccess =
-  submitDocumentReviewResponse204 & {
-    headers: Headers;
-  };
-export type submitDocumentReviewResponse = submitDocumentReviewResponseSuccess;
-
-export const getSubmitDocumentReviewUrl = (
-  owner: string,
-  repo: string,
-  pullNumber: string,
-) => {
-  return `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/reviews`;
-};
-
-export const submitDocumentReview = async (
-  owner: string,
-  repo: string,
-  pullNumber: string,
-  submitDocumentReviewBody: SubmitDocumentReviewBody,
-  options?: RequestInit,
-): Promise<submitDocumentReviewResponse> => {
-  return customFetch<submitDocumentReviewResponse>(
-    getSubmitDocumentReviewUrl(owner, repo, pullNumber),
-    {
-      ...options,
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...options?.headers },
-      body: JSON.stringify(submitDocumentReviewBody),
-    },
-  );
-};
-
-export type publishDocumentResponse200 = {
-  data: PublishDocument200;
-  status: 200;
-};
-
-export type publishDocumentResponseSuccess = publishDocumentResponse200 & {
+export type addDocumentCollaboratorResponseSuccess = (addDocumentCollaboratorResponse200) & {
   headers: Headers;
 };
-export type publishDocumentResponse = publishDocumentResponseSuccess;
+;
 
-export const getPublishDocumentUrl = (
-  owner: string,
-  repo: string,
-  pullNumber: string,
-) => {
-  return `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/publish`;
-};
+export type addDocumentCollaboratorResponse = (addDocumentCollaboratorResponseSuccess)
 
-export const publishDocument = async (
-  owner: string,
-  repo: string,
-  pullNumber: string,
-  publishDocumentBody: PublishDocumentBody,
-  options?: RequestInit,
-): Promise<publishDocumentResponse> => {
-  return customFetch<publishDocumentResponse>(
-    getPublishDocumentUrl(owner, repo, pullNumber),
-    {
-      ...options,
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...options?.headers },
-      body: JSON.stringify(publishDocumentBody),
-    },
-  );
+export const getAddDocumentCollaboratorUrl = (owner: string,
+    repo: string,
+    collaborator: string,) => {
+
+
+
+
+  return `/api/app/documents/${owner}/${repo}/collaborators/${collaborator}`
+}
+
+export const addDocumentCollaborator = async (owner: string,
+    repo: string,
+    collaborator: string,
+    addDocumentCollaboratorBody: AddDocumentCollaboratorBody, options?: RequestInit): Promise<addDocumentCollaboratorResponse> => {
+
+  return customFetch<addDocumentCollaboratorResponse>(getAddDocumentCollaboratorUrl(owner,repo,collaborator),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      addDocumentCollaboratorBody,)
+  }
+);}
+
+
+export type removeDocumentCollaboratorResponse204 = {
+  data: void
+  status: 204
+}
+
+export type removeDocumentCollaboratorResponseSuccess = (removeDocumentCollaboratorResponse204) & {
+  headers: Headers;
 };
+;
+
+export type removeDocumentCollaboratorResponse = (removeDocumentCollaboratorResponseSuccess)
+
+export const getRemoveDocumentCollaboratorUrl = (owner: string,
+    repo: string,
+    collaborator: string,) => {
+
+
+
+
+  return `/api/app/documents/${owner}/${repo}/collaborators/${collaborator}`
+}
+
+export const removeDocumentCollaborator = async (owner: string,
+    repo: string,
+    collaborator: string, options?: RequestInit): Promise<removeDocumentCollaboratorResponse> => {
+
+  return customFetch<removeDocumentCollaboratorResponse>(getRemoveDocumentCollaboratorUrl(owner,repo,collaborator),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+export type submitDocumentReviewResponse204 = {
+  data: void
+  status: 204
+}
+
+export type submitDocumentReviewResponseSuccess = (submitDocumentReviewResponse204) & {
+  headers: Headers;
+};
+;
+
+export type submitDocumentReviewResponse = (submitDocumentReviewResponseSuccess)
+
+export const getSubmitDocumentReviewUrl = (owner: string,
+    repo: string,
+    pullNumber: string,) => {
+
+
+
+
+  return `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/reviews`
+}
+
+export const submitDocumentReview = async (owner: string,
+    repo: string,
+    pullNumber: string,
+    submitDocumentReviewBody: SubmitDocumentReviewBody, options?: RequestInit): Promise<submitDocumentReviewResponse> => {
+
+  return customFetch<submitDocumentReviewResponse>(getSubmitDocumentReviewUrl(owner,repo,pullNumber),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      submitDocumentReviewBody,)
+  }
+);}
+
+
+export type publishDocumentResponse200 = {
+  data: PublishDocument200
+  status: 200
+}
+
+export type publishDocumentResponseSuccess = (publishDocumentResponse200) & {
+  headers: Headers;
+};
+;
+
+export type publishDocumentResponse = (publishDocumentResponseSuccess)
+
+export const getPublishDocumentUrl = (owner: string,
+    repo: string,
+    pullNumber: string,) => {
+
+
+
+
+  return `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/publish`
+}
+
+export const publishDocument = async (owner: string,
+    repo: string,
+    pullNumber: string,
+    publishDocumentBody: PublishDocumentBody, options?: RequestInit): Promise<publishDocumentResponse> => {
+
+  return customFetch<publishDocumentResponse>(getPublishDocumentUrl(owner,repo,pullNumber),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      publishDocumentBody,)
+  }
+);}
+
+

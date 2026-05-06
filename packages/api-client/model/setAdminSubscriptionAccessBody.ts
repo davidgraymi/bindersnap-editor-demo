@@ -4,7 +4,7 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
-import type { SetAdminSubscriptionAccessBodyAccess } from "./setAdminSubscriptionAccessBodyAccess";
+import type { SetAdminSubscriptionAccessBodyAccess } from './setAdminSubscriptionAccessBodyAccess';
 
 export type SetAdminSubscriptionAccessBody = {
   access: SetAdminSubscriptionAccessBodyAccess;

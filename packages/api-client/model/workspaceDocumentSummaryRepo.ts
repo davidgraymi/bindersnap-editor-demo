@@ -4,7 +4,7 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
-import type { WorkspaceDocumentSummaryRepoOwner } from "./workspaceDocumentSummaryRepoOwner";
+import type { WorkspaceDocumentSummaryRepoOwner } from './workspaceDocumentSummaryRepoOwner';
 
 export type WorkspaceDocumentSummaryRepo = {
   id: number;

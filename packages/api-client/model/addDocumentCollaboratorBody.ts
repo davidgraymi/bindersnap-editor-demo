@@ -4,7 +4,7 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
-import type { AddDocumentCollaboratorBodyPermission } from "./addDocumentCollaboratorBodyPermission";
+import type { AddDocumentCollaboratorBodyPermission } from './addDocumentCollaboratorBodyPermission';
 
 export type AddDocumentCollaboratorBody = {
   permission: AddDocumentCollaboratorBodyPermission;

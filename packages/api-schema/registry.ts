@@ -160,7 +160,7 @@ registry.registerPath({
       content: {
         "multipart/form-data": {
           schema: z.object({
-            file: z.any().describe("File upload"),
+            file: z.string().openapi({ type: "string", format: "binary", description: "File upload" }),
             repoName: z.string(),
             nextVersion: z.string(),
             requiredApprovals: z.string().optional(),
@@ -208,7 +208,7 @@ registry.registerPath({
       content: {
         "multipart/form-data": {
           schema: z.object({
-            file: z.any().describe("File upload"),
+            file: z.string().openapi({ type: "string", format: "binary", description: "File upload" }),
             docSlug: z.string(),
             uploaderSlug: z.string(),
             nextVersion: z.string(),

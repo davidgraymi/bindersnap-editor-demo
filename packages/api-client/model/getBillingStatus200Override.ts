@@ -10,7 +10,7 @@
  */
 export type GetBillingStatus200Override = {
   username: string;
-  access: "grant" | "revoke";
+  access: 'grant' | 'revoke';
   updatedBy: string;
   updatedAt: number;
 } | null;

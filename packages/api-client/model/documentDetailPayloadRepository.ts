@@ -4,7 +4,7 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
-import type { DocumentDetailPayloadRepositoryOwner } from "./documentDetailPayloadRepositoryOwner";
+import type { DocumentDetailPayloadRepositoryOwner } from './documentDetailPayloadRepositoryOwner';
 
 export type DocumentDetailPayloadRepository = {
   id: number;

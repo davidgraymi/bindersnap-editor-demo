@@ -5,11 +5,11 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type CollaboratorListPayloadCollaboratorsItemAccess =
-  (typeof CollaboratorListPayloadCollaboratorsItemAccess)[keyof typeof CollaboratorListPayloadCollaboratorsItemAccess];
+export type CollaboratorListPayloadCollaboratorsItemAccess = typeof CollaboratorListPayloadCollaboratorsItemAccess[keyof typeof CollaboratorListPayloadCollaboratorsItemAccess];
+
 
 export const CollaboratorListPayloadCollaboratorsItemAccess = {
-  read: "read",
-  write: "write",
-  admin: "admin",
+  read: 'read',
+  write: 'write',
+  admin: 'admin',
 } as const;

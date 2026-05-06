@@ -4,7 +4,7 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
-import type { ListAdminSubscriptionAccess200UsersItem } from "./listAdminSubscriptionAccess200UsersItem";
+import type { ListAdminSubscriptionAccess200UsersItem } from './listAdminSubscriptionAccess200UsersItem';
 
 export type ListAdminSubscriptionAccess200 = {
   users: ListAdminSubscriptionAccess200UsersItem[];

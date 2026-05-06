@@ -4,9 +4,9 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
-import type { BillingStatusPayloadAccessSource } from "./billingStatusPayloadAccessSource";
-import type { BillingStatusPayloadOverride } from "./billingStatusPayloadOverride";
-import type { BillingStatusPayloadPlan } from "./billingStatusPayloadPlan";
+import type { BillingStatusPayloadAccessSource } from './billingStatusPayloadAccessSource';
+import type { BillingStatusPayloadOverride } from './billingStatusPayloadOverride';
+import type { BillingStatusPayloadPlan } from './billingStatusPayloadPlan';
 
 export interface BillingStatusPayload {
   /** @nullable */

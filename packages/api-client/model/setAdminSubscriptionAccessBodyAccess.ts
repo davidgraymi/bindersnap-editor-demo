@@ -5,10 +5,10 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type SetAdminSubscriptionAccessBodyAccess =
-  (typeof SetAdminSubscriptionAccessBodyAccess)[keyof typeof SetAdminSubscriptionAccessBodyAccess];
+export type SetAdminSubscriptionAccessBodyAccess = typeof SetAdminSubscriptionAccessBodyAccess[keyof typeof SetAdminSubscriptionAccessBodyAccess];
+
 
 export const SetAdminSubscriptionAccessBodyAccess = {
-  grant: "grant",
-  revoke: "revoke",
+  grant: 'grant',
+  revoke: 'revoke',
 } as const;

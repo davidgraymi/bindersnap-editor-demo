@@ -4,8 +4,8 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
-import type { GetDocumentPermissions200BranchProtection } from "./getDocumentPermissions200BranchProtection";
-import type { GetDocumentPermissions200CurrentUserPermission } from "./getDocumentPermissions200CurrentUserPermission";
+import type { GetDocumentPermissions200BranchProtection } from './getDocumentPermissions200BranchProtection';
+import type { GetDocumentPermissions200CurrentUserPermission } from './getDocumentPermissions200CurrentUserPermission';
 
 export type GetDocumentPermissions200 = {
   /** @nullable */

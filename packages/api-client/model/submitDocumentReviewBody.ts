@@ -4,7 +4,7 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
-import type { SubmitDocumentReviewBodyEvent } from "./submitDocumentReviewBodyEvent";
+import type { SubmitDocumentReviewBodyEvent } from './submitDocumentReviewBodyEvent';
 
 export type SubmitDocumentReviewBody = {
   event: SubmitDocumentReviewBodyEvent;

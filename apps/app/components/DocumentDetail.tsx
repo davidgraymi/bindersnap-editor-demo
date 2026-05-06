@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-import type { PullRequestWithApprovalState } from "../../../packages/gitea-client/pullRequests";
+import type { PullRequestWithApprovalState } from "../api";
 import type {
   DocTag,
   RepoBranchProtection,

@@ -16,7 +16,7 @@ export default defineConfig({
           name: "customFetch",
         },
         fetch: {
-          includeHttpStatusReturnType: false,
+          includeHttpResponseReturnType: true,
         },
       },
     },

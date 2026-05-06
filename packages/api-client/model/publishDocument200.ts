@@ -4,7 +4,7 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
-import type { PublishDocument200Tag } from "./publishDocument200Tag";
+import type { PublishDocument200Tag } from './publishDocument200Tag';
 
 export type PublishDocument200 = {
   ok: boolean;

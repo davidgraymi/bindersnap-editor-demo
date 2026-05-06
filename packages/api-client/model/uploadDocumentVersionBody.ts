@@ -7,7 +7,7 @@
 
 export type UploadDocumentVersionBody = {
   /** File upload */
-  file?: unknown | null;
+  file: Blob;
   docSlug: string;
   uploaderSlug: string;
   nextVersion: string;

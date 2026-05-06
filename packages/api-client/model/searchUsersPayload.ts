@@ -4,7 +4,7 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
-import type { SearchUsersPayloadUsersItem } from "./searchUsersPayloadUsersItem";
+import type { SearchUsersPayloadUsersItem } from './searchUsersPayloadUsersItem';
 
 export interface SearchUsersPayload {
   users: SearchUsersPayloadUsersItem[];

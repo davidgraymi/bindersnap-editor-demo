@@ -4,42 +4,49 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
-import type { SearchUsers200, SearchUsersParams } from "../model";
+import type {
+  SearchUsers200,
+  SearchUsersParams
+} from '../model';
 
-import { customFetch } from ".././mutator";
+import { customFetch } from '.././mutator';
 
 export type searchUsersResponse200 = {
-  data: SearchUsers200;
-  status: 200;
-};
+  data: SearchUsers200
+  status: 200
+}
 
-export type searchUsersResponseSuccess = searchUsersResponse200 & {
+export type searchUsersResponseSuccess = (searchUsersResponse200) & {
   headers: Headers;
 };
-export type searchUsersResponse = searchUsersResponseSuccess;
+;
 
-export const getSearchUsersUrl = (params: SearchUsersParams) => {
+export type searchUsersResponse = (searchUsersResponseSuccess)
+
+export const getSearchUsersUrl = (params: SearchUsersParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
+
     if (value !== undefined) {
-      normalizedParams.append(key, value === null ? "null" : value.toString());
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
     }
   });
 
   const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0
-    ? `/api/app/users/search?${stringifiedParams}`
-    : `/api/app/users/search`;
-};
+  return stringifiedParams.length > 0 ? `/api/app/users/search?${stringifiedParams}` : `/api/app/users/search`
+}
 
-export const searchUsers = async (
-  params: SearchUsersParams,
-  options?: RequestInit,
-): Promise<searchUsersResponse> => {
-  return customFetch<searchUsersResponse>(getSearchUsersUrl(params), {
+export const searchUsers = async (params: SearchUsersParams, options?: RequestInit): Promise<searchUsersResponse> => {
+
+  return customFetch<searchUsersResponse>(getSearchUsersUrl(params),
+  {
     ...options,
-    method: "GET",
-  });
-};
+    method: 'GET'
+
+
+  }
+);}
+
+

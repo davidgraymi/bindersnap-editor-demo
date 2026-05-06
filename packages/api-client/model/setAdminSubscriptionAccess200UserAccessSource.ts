@@ -5,13 +5,13 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type SetAdminSubscriptionAccess200UserAccessSource =
-  (typeof SetAdminSubscriptionAccess200UserAccessSource)[keyof typeof SetAdminSubscriptionAccess200UserAccessSource];
+export type SetAdminSubscriptionAccess200UserAccessSource = typeof SetAdminSubscriptionAccess200UserAccessSource[keyof typeof SetAdminSubscriptionAccess200UserAccessSource];
+
 
 export const SetAdminSubscriptionAccess200UserAccessSource = {
-  config_bypass: "config_bypass",
-  stripe: "stripe",
-  admin_grant: "admin_grant",
-  admin_revoke: "admin_revoke",
-  none: "none",
+  config_bypass: 'config_bypass',
+  stripe: 'stripe',
+  admin_grant: 'admin_grant',
+  admin_revoke: 'admin_revoke',
+  none: 'none',
 } as const;

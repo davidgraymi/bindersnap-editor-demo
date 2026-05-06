@@ -5,11 +5,11 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type AddDocumentCollaboratorBodyPermission =
-  (typeof AddDocumentCollaboratorBodyPermission)[keyof typeof AddDocumentCollaboratorBodyPermission];
+export type AddDocumentCollaboratorBodyPermission = typeof AddDocumentCollaboratorBodyPermission[keyof typeof AddDocumentCollaboratorBodyPermission];
+
 
 export const AddDocumentCollaboratorBodyPermission = {
-  read: "read",
-  write: "write",
-  admin: "admin",
+  read: 'read',
+  write: 'write',
+  admin: 'admin',
 } as const;

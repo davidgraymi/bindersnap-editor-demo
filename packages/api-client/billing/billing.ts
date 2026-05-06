@@ -9,88 +9,106 @@ import type {
   CreateBillingCheckoutBody,
   CreateBillingPortal200,
   CreateBillingPortalBody,
-  GetBillingStatus200,
-} from "../model";
+  GetBillingStatus200
+} from '../model';
 
-import { customFetch } from ".././mutator";
+import { customFetch } from '.././mutator';
 
 export type getBillingStatusResponse200 = {
-  data: GetBillingStatus200;
-  status: 200;
-};
+  data: GetBillingStatus200
+  status: 200
+}
 
-export type getBillingStatusResponseSuccess = getBillingStatusResponse200 & {
+export type getBillingStatusResponseSuccess = (getBillingStatusResponse200) & {
   headers: Headers;
 };
-export type getBillingStatusResponse = getBillingStatusResponseSuccess;
+;
+
+export type getBillingStatusResponse = (getBillingStatusResponseSuccess)
 
 export const getGetBillingStatusUrl = () => {
-  return `/api/app/billing/status`;
-};
 
-export const getBillingStatus = async (
-  options?: RequestInit,
-): Promise<getBillingStatusResponse> => {
-  return customFetch<getBillingStatusResponse>(getGetBillingStatusUrl(), {
+
+
+
+  return `/api/app/billing/status`
+}
+
+export const getBillingStatus = async ( options?: RequestInit): Promise<getBillingStatusResponse> => {
+
+  return customFetch<getBillingStatusResponse>(getGetBillingStatusUrl(),
+  {
     ...options,
-    method: "GET",
-  });
-};
+    method: 'GET'
+
+
+  }
+);}
+
 
 export type createBillingCheckoutResponse200 = {
-  data: CreateBillingCheckout200;
-  status: 200;
-};
+  data: CreateBillingCheckout200
+  status: 200
+}
 
-export type createBillingCheckoutResponseSuccess =
-  createBillingCheckoutResponse200 & {
-    headers: Headers;
-  };
-export type createBillingCheckoutResponse =
-  createBillingCheckoutResponseSuccess;
+export type createBillingCheckoutResponseSuccess = (createBillingCheckoutResponse200) & {
+  headers: Headers;
+};
+;
+
+export type createBillingCheckoutResponse = (createBillingCheckoutResponseSuccess)
 
 export const getCreateBillingCheckoutUrl = () => {
-  return `/api/app/billing/checkout`;
-};
 
-export const createBillingCheckout = async (
-  createBillingCheckoutBody: CreateBillingCheckoutBody,
-  options?: RequestInit,
-): Promise<createBillingCheckoutResponse> => {
-  return customFetch<createBillingCheckoutResponse>(
-    getCreateBillingCheckoutUrl(),
-    {
-      ...options,
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...options?.headers },
-      body: JSON.stringify(createBillingCheckoutBody),
-    },
-  );
-};
+
+
+
+  return `/api/app/billing/checkout`
+}
+
+export const createBillingCheckout = async (createBillingCheckoutBody: CreateBillingCheckoutBody, options?: RequestInit): Promise<createBillingCheckoutResponse> => {
+
+  return customFetch<createBillingCheckoutResponse>(getCreateBillingCheckoutUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      createBillingCheckoutBody,)
+  }
+);}
+
 
 export type createBillingPortalResponse200 = {
-  data: CreateBillingPortal200;
-  status: 200;
-};
+  data: CreateBillingPortal200
+  status: 200
+}
 
-export type createBillingPortalResponseSuccess =
-  createBillingPortalResponse200 & {
-    headers: Headers;
-  };
-export type createBillingPortalResponse = createBillingPortalResponseSuccess;
+export type createBillingPortalResponseSuccess = (createBillingPortalResponse200) & {
+  headers: Headers;
+};
+;
+
+export type createBillingPortalResponse = (createBillingPortalResponseSuccess)
 
 export const getCreateBillingPortalUrl = () => {
-  return `/api/app/billing/portal`;
-};
 
-export const createBillingPortal = async (
-  createBillingPortalBody: CreateBillingPortalBody,
-  options?: RequestInit,
-): Promise<createBillingPortalResponse> => {
-  return customFetch<createBillingPortalResponse>(getCreateBillingPortalUrl(), {
+
+
+
+  return `/api/app/billing/portal`
+}
+
+export const createBillingPortal = async (createBillingPortalBody: CreateBillingPortalBody, options?: RequestInit): Promise<createBillingPortalResponse> => {
+
+  return customFetch<createBillingPortalResponse>(getCreateBillingPortalUrl(),
+  {
     ...options,
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(createBillingPortalBody),
-  });
-};
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      createBillingPortalBody,)
+  }
+);}
+
+

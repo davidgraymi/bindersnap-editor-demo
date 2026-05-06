@@ -15,7 +15,7 @@
     "down": "docker compose down -v --remove-orphans",
     "format": "bunx prettier --write \"**/*.{js,ts,jsx,tsx,html,css,json,yml,yaml,md}\" --ignore-path .gitignore --ignore-path .prettierignore",
     "format:check": "bunx prettier --check \"**/*.{js,ts,jsx,tsx,html,css,json,yml,yaml,md}\" --ignore-path .gitignore --ignore-path .prettierignore",
-    "generate:api": "bun run scripts/generate-gitea-api.ts",
+    "generate:gitea-client": "bun run scripts/generate-gitea-api.ts",
     "generate:api-schema": "bun packages/api-schema/generate-openapi.ts",
     "generate:api-client": "bunx orval --config orval.config.ts",
     "generate:bff": "bun run generate:api-schema && bun run generate:api-client",

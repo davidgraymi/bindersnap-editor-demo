@@ -4,16 +4,25 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
+import type { ListDocuments200DocumentsItemPendingPRsItemApprovalState } from './listDocuments200DocumentsItemPendingPRsItemApprovalState';
+import type { ListDocuments200DocumentsItemPendingPRsItemUser } from './listDocuments200DocumentsItemPendingPRsItemUser';
 
 export type ListDocuments200DocumentsItemPendingPRsItem = {
+  id: number;
   number: number;
   title: string;
   state: string;
   created: string;
+  created_at?: string;
+  updated_at?: string;
   branchName: string;
   approvalCount: number;
   requiredApprovals: number;
   isApproved: boolean;
   isRejected: boolean;
   reviewers: string[];
+  body?: string;
+  approvalState: ListDocuments200DocumentsItemPendingPRsItemApprovalState;
+  /** @nullable */
+  user?: ListDocuments200DocumentsItemPendingPRsItemUser;
 };

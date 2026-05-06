@@ -4,7 +4,7 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
-import type { AddDocumentCollaborator200Collaborator } from "./addDocumentCollaborator200Collaborator";
+import type { AddDocumentCollaborator200Collaborator } from './addDocumentCollaborator200Collaborator';
 
 export type AddDocumentCollaborator200 = {
   /** @nullable */

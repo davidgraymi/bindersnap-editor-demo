@@ -28,14 +28,19 @@
                 "type": "boolean"
               }
             },
-            "required": ["username"]
+            "required": [
+              "username"
+            ]
           },
           "token": {
             "type": "string",
             "nullable": true
           }
         },
-        "required": ["user", "token"]
+        "required": [
+          "user",
+          "token"
+        ]
       },
       "LoginBody": {
         "type": "object",
@@ -54,7 +59,9 @@
             "type": "boolean"
           }
         },
-        "required": ["password"]
+        "required": [
+          "password"
+        ]
       },
       "SignupBody": {
         "type": "object",
@@ -72,7 +79,11 @@
             "minLength": 1
           }
         },
-        "required": ["username", "email", "password"]
+        "required": [
+          "username",
+          "email",
+          "password"
+        ]
       },
       "WorkspaceDocumentSummary": {
         "type": "object",
@@ -102,7 +113,9 @@
                     "type": "string"
                   }
                 },
-                "required": ["login"]
+                "required": [
+                  "login"
+                ]
               }
             },
             "required": [
@@ -131,13 +144,21 @@
                 "type": "string"
               }
             },
-            "required": ["name", "version", "sha", "created"]
+            "required": [
+              "name",
+              "version",
+              "sha",
+              "created"
+            ]
           },
           "pendingPRs": {
             "type": "array",
             "items": {
               "type": "object",
               "properties": {
+                "id": {
+                  "type": "number"
+                },
                 "number": {
                   "type": "number"
                 },
@@ -148,6 +169,12 @@
                   "type": "string"
                 },
                 "created": {
+                  "type": "string"
+                },
+                "created_at": {
+                  "type": "string"
+                },
+                "updated_at": {
                   "type": "string"
                 },
                 "branchName": {
@@ -170,9 +197,35 @@
                   "items": {
                     "type": "string"
                   }
+                },
+                "body": {
+                  "type": "string"
+                },
+                "approvalState": {
+                  "type": "string",
+                  "enum": [
+                    "working",
+                    "in_review",
+                    "changes_requested",
+                    "approved",
+                    "published"
+                  ]
+                },
+                "user": {
+                  "type": "object",
+                  "nullable": true,
+                  "properties": {
+                    "login": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "login"
+                  ]
                 }
               },
               "required": [
+                "id",
                 "number",
                 "title",
                 "state",
@@ -182,7 +235,8 @@
                 "requiredApprovals",
                 "isApproved",
                 "isRejected",
-                "reviewers"
+                "reviewers",
+                "approvalState"
               ]
             }
           },
@@ -191,7 +245,12 @@
             "nullable": true
           }
         },
-        "required": ["repo", "latestTag", "pendingPRs", "error"]
+        "required": [
+          "repo",
+          "latestTag",
+          "pendingPRs",
+          "error"
+        ]
       },
       "DocumentDetailPayload": {
         "type": "object",
@@ -221,7 +280,9 @@
                     "type": "string"
                   }
                 },
-                "required": ["login"]
+                "required": [
+                  "login"
+                ]
               }
             },
             "required": [
@@ -251,7 +312,12 @@
                   "type": "string"
                 }
               },
-              "required": ["name", "version", "sha", "created"]
+              "required": [
+                "name",
+                "version",
+                "sha",
+                "created"
+              ]
             }
           },
           "latestTag": {
@@ -271,13 +337,21 @@
                 "type": "string"
               }
             },
-            "required": ["name", "version", "sha", "created"]
+            "required": [
+              "name",
+              "version",
+              "sha",
+              "created"
+            ]
           },
           "openPullRequests": {
             "type": "array",
             "items": {
               "type": "object",
               "properties": {
+                "id": {
+                  "type": "number"
+                },
                 "number": {
                   "type": "number"
                 },
@@ -288,6 +362,12 @@
                   "type": "string"
                 },
                 "created": {
+                  "type": "string"
+                },
+                "created_at": {
+                  "type": "string"
+                },
+                "updated_at": {
                   "type": "string"
                 },
                 "branchName": {
@@ -310,9 +390,35 @@
                   "items": {
                     "type": "string"
                   }
+                },
+                "body": {
+                  "type": "string"
+                },
+                "approvalState": {
+                  "type": "string",
+                  "enum": [
+                    "working",
+                    "in_review",
+                    "changes_requested",
+                    "approved",
+                    "published"
+                  ]
+                },
+                "user": {
+                  "type": "object",
+                  "nullable": true,
+                  "properties": {
+                    "login": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "login"
+                  ]
                 }
               },
               "required": [
+                "id",
                 "number",
                 "title",
                 "state",
@@ -322,7 +428,8 @@
                 "requiredApprovals",
                 "isApproved",
                 "isRejected",
-                "reviewers"
+                "reviewers",
+                "approvalState"
               ]
             }
           },
@@ -331,6 +438,9 @@
             "items": {
               "type": "object",
               "properties": {
+                "id": {
+                  "type": "number"
+                },
                 "number": {
                   "type": "number"
                 },
@@ -341,6 +451,12 @@
                   "type": "string"
                 },
                 "created": {
+                  "type": "string"
+                },
+                "created_at": {
+                  "type": "string"
+                },
+                "updated_at": {
                   "type": "string"
                 },
                 "branchName": {
@@ -363,9 +479,35 @@
                   "items": {
                     "type": "string"
                   }
+                },
+                "body": {
+                  "type": "string"
+                },
+                "approvalState": {
+                  "type": "string",
+                  "enum": [
+                    "working",
+                    "in_review",
+                    "changes_requested",
+                    "approved",
+                    "published"
+                  ]
+                },
+                "user": {
+                  "type": "object",
+                  "nullable": true,
+                  "properties": {
+                    "login": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "login"
+                  ]
                 }
               },
               "required": [
+                "id",
                 "number",
                 "title",
                 "state",
@@ -375,7 +517,8 @@
                 "requiredApprovals",
                 "isApproved",
                 "isRejected",
-                "reviewers"
+                "reviewers",
+                "approvalState"
               ]
             }
           },
@@ -442,7 +585,10 @@
                 "type": "string"
               }
             },
-            "required": ["storedFileName", "downloadFileName"]
+            "required": [
+              "storedFileName",
+              "downloadFileName"
+            ]
           },
           "currentUserPermission": {
             "type": "object",
@@ -453,7 +599,11 @@
               },
               "access": {
                 "type": "string",
-                "enum": ["read", "write", "admin"]
+                "enum": [
+                  "read",
+                  "write",
+                  "admin"
+                ]
               },
               "permissionLabel": {
                 "type": "string"
@@ -480,7 +630,13 @@
                     "type": "string"
                   }
                 },
-                "required": ["id", "login", "full_name", "email", "avatar_url"]
+                "required": [
+                  "id",
+                  "login",
+                  "full_name",
+                  "email",
+                  "avatar_url"
+                ]
               }
             },
             "required": [
@@ -531,7 +687,9 @@
                     "type": "string"
                   }
                 },
-                "required": ["login"]
+                "required": [
+                  "login"
+                ]
               }
             },
             "required": [
@@ -592,7 +750,12 @@
             "type": "string"
           }
         },
-        "required": ["prNumber", "prTitle", "branchName", "commitSha"]
+        "required": [
+          "prNumber",
+          "prTitle",
+          "branchName",
+          "commitSha"
+        ]
       },
       "CollaboratorListPayload": {
         "type": "object",
@@ -607,7 +770,11 @@
                 },
                 "access": {
                   "type": "string",
-                  "enum": ["read", "write", "admin"]
+                  "enum": [
+                    "read",
+                    "write",
+                    "admin"
+                  ]
                 },
                 "permissionLabel": {
                   "type": "string"
@@ -670,7 +837,11 @@
               },
               "access": {
                 "type": "string",
-                "enum": ["read", "write", "admin"]
+                "enum": [
+                  "read",
+                  "write",
+                  "admin"
+                ]
               },
               "permissionLabel": {
                 "type": "string"
@@ -697,7 +868,13 @@
                     "type": "string"
                   }
                 },
-                "required": ["id", "login", "full_name", "email", "avatar_url"]
+                "required": [
+                  "id",
+                  "login",
+                  "full_name",
+                  "email",
+                  "avatar_url"
+                ]
               }
             },
             "required": [
@@ -787,7 +964,11 @@
               },
               "access": {
                 "type": "string",
-                "enum": ["read", "write", "admin"]
+                "enum": [
+                  "read",
+                  "write",
+                  "admin"
+                ]
               },
               "permissionLabel": {
                 "type": "string"
@@ -814,7 +995,13 @@
                     "type": "string"
                   }
                 },
-                "required": ["id", "login", "full_name", "email", "avatar_url"]
+                "required": [
+                  "id",
+                  "login",
+                  "full_name",
+                  "email",
+                  "avatar_url"
+                ]
               }
             },
             "required": [
@@ -826,7 +1013,11 @@
             ]
           }
         },
-        "required": ["branchProtection", "isPrivate", "isInternal"]
+        "required": [
+          "branchProtection",
+          "isPrivate",
+          "isInternal"
+        ]
       },
       "SearchUsersPayload": {
         "type": "object",
@@ -852,7 +1043,13 @@
                   "type": "string"
                 }
               },
-              "required": ["id", "login", "full_name", "email", "avatar_url"]
+              "required": [
+                "id",
+                "login",
+                "full_name",
+                "email",
+                "avatar_url"
+              ]
             }
           },
           "page": {
@@ -865,7 +1062,12 @@
             "type": "boolean"
           }
         },
-        "required": ["users", "page", "limit", "hasMore"]
+        "required": [
+          "users",
+          "page",
+          "limit",
+          "hasMore"
+        ]
       },
       "BillingStatusPayload": {
         "type": "object",
@@ -909,7 +1111,10 @@
               },
               "access": {
                 "type": "string",
-                "enum": ["grant", "revoke"]
+                "enum": [
+                  "grant",
+                  "revoke"
+                ]
               },
               "updatedBy": {
                 "type": "string"
@@ -918,7 +1123,12 @@
                 "type": "number"
               }
             },
-            "required": ["username", "access", "updatedBy", "updatedAt"]
+            "required": [
+              "username",
+              "access",
+              "updatedBy",
+              "updatedAt"
+            ]
           },
           "plan": {
             "type": "object",
@@ -937,7 +1147,12 @@
                 "type": "string"
               }
             },
-            "required": ["amount", "currency", "interval", "formatted"]
+            "required": [
+              "amount",
+              "currency",
+              "interval",
+              "formatted"
+            ]
           }
         },
         "required": [
@@ -1005,7 +1220,10 @@
                     },
                     "access": {
                       "type": "string",
-                      "enum": ["grant", "revoke"]
+                      "enum": [
+                        "grant",
+                        "revoke"
+                      ]
                     },
                     "updatedBy": {
                       "type": "string"
@@ -1014,7 +1232,12 @@
                       "type": "number"
                     }
                   },
-                  "required": ["username", "access", "updatedBy", "updatedAt"]
+                  "required": [
+                    "username",
+                    "access",
+                    "updatedBy",
+                    "updatedAt"
+                  ]
                 }
               },
               "required": [
@@ -1042,7 +1265,13 @@
             "type": "string"
           }
         },
-        "required": ["users", "page", "limit", "hasMore", "query"]
+        "required": [
+          "users",
+          "page",
+          "limit",
+          "hasMore",
+          "query"
+        ]
       }
     },
     "parameters": {}
@@ -1051,7 +1280,9 @@
     "/auth/login": {
       "post": {
         "operationId": "authLogin",
-        "tags": ["auth"],
+        "tags": [
+          "auth"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1073,7 +1304,9 @@
                     "type": "boolean"
                   }
                 },
-                "required": ["password"]
+                "required": [
+                  "password"
+                ]
               }
             }
           }
@@ -1100,14 +1333,19 @@
                           "type": "boolean"
                         }
                       },
-                      "required": ["username"]
+                      "required": [
+                        "username"
+                      ]
                     },
                     "token": {
                       "type": "string",
                       "nullable": true
                     }
                   },
-                  "required": ["user", "token"]
+                  "required": [
+                    "user",
+                    "token"
+                  ]
                 }
               }
             }
@@ -1118,7 +1356,9 @@
     "/auth/signup": {
       "post": {
         "operationId": "authSignup",
-        "tags": ["auth"],
+        "tags": [
+          "auth"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1139,7 +1379,11 @@
                     "minLength": 1
                   }
                 },
-                "required": ["username", "email", "password"]
+                "required": [
+                  "username",
+                  "email",
+                  "password"
+                ]
               }
             }
           }
@@ -1166,14 +1410,19 @@
                           "type": "boolean"
                         }
                       },
-                      "required": ["username"]
+                      "required": [
+                        "username"
+                      ]
                     },
                     "token": {
                       "type": "string",
                       "nullable": true
                     }
                   },
-                  "required": ["user", "token"]
+                  "required": [
+                    "user",
+                    "token"
+                  ]
                 }
               }
             }
@@ -1184,7 +1433,9 @@
     "/auth/me": {
       "get": {
         "operationId": "authMe",
-        "tags": ["auth"],
+        "tags": [
+          "auth"
+        ],
         "responses": {
           "200": {
             "description": "Current session",
@@ -1207,14 +1458,19 @@
                           "type": "boolean"
                         }
                       },
-                      "required": ["username"]
+                      "required": [
+                        "username"
+                      ]
                     },
                     "token": {
                       "type": "string",
                       "nullable": true
                     }
                   },
-                  "required": ["user", "token"]
+                  "required": [
+                    "user",
+                    "token"
+                  ]
                 }
               }
             }
@@ -1228,7 +1484,9 @@
     "/auth/logout": {
       "post": {
         "operationId": "authLogout",
-        "tags": ["auth"],
+        "tags": [
+          "auth"
+        ],
         "responses": {
           "204": {
             "description": "Session ended"
@@ -1239,7 +1497,9 @@
     "/api/app/documents": {
       "get": {
         "operationId": "listDocuments",
-        "tags": ["documents"],
+        "tags": [
+          "documents"
+        ],
         "parameters": [
           {
             "schema": {
@@ -1304,7 +1564,9 @@
                                     "type": "string"
                                   }
                                 },
-                                "required": ["login"]
+                                "required": [
+                                  "login"
+                                ]
                               }
                             },
                             "required": [
@@ -1333,13 +1595,21 @@
                                 "type": "string"
                               }
                             },
-                            "required": ["name", "version", "sha", "created"]
+                            "required": [
+                              "name",
+                              "version",
+                              "sha",
+                              "created"
+                            ]
                           },
                           "pendingPRs": {
                             "type": "array",
                             "items": {
                               "type": "object",
                               "properties": {
+                                "id": {
+                                  "type": "number"
+                                },
                                 "number": {
                                   "type": "number"
                                 },
@@ -1350,6 +1620,12 @@
                                   "type": "string"
                                 },
                                 "created": {
+                                  "type": "string"
+                                },
+                                "created_at": {
+                                  "type": "string"
+                                },
+                                "updated_at": {
                                   "type": "string"
                                 },
                                 "branchName": {
@@ -1372,9 +1648,35 @@
                                   "items": {
                                     "type": "string"
                                   }
+                                },
+                                "body": {
+                                  "type": "string"
+                                },
+                                "approvalState": {
+                                  "type": "string",
+                                  "enum": [
+                                    "working",
+                                    "in_review",
+                                    "changes_requested",
+                                    "approved",
+                                    "published"
+                                  ]
+                                },
+                                "user": {
+                                  "type": "object",
+                                  "nullable": true,
+                                  "properties": {
+                                    "login": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "login"
+                                  ]
                                 }
                               },
                               "required": [
+                                "id",
                                 "number",
                                 "title",
                                 "state",
@@ -1384,7 +1686,8 @@
                                 "requiredApprovals",
                                 "isApproved",
                                 "isRejected",
-                                "reviewers"
+                                "reviewers",
+                                "approvalState"
                               ]
                             }
                           },
@@ -1393,11 +1696,18 @@
                             "nullable": true
                           }
                         },
-                        "required": ["repo", "latestTag", "pendingPRs", "error"]
+                        "required": [
+                          "repo",
+                          "latestTag",
+                          "pendingPRs",
+                          "error"
+                        ]
                       }
                     }
                   },
-                  "required": ["documents"]
+                  "required": [
+                    "documents"
+                  ]
                 }
               }
             }
@@ -1406,7 +1716,9 @@
       },
       "post": {
         "operationId": "createDocument",
-        "tags": ["documents"],
+        "tags": [
+          "documents"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -1415,7 +1727,8 @@
                 "type": "object",
                 "properties": {
                   "file": {
-                    "nullable": true,
+                    "type": "string",
+                    "format": "binary",
                     "description": "File upload"
                   },
                   "repoName": {
@@ -1431,7 +1744,11 @@
                     "type": "string"
                   }
                 },
-                "required": ["repoName", "nextVersion"]
+                "required": [
+                  "file",
+                  "repoName",
+                  "nextVersion"
+                ]
               }
             }
           }
@@ -1469,7 +1786,9 @@
                               "type": "string"
                             }
                           },
-                          "required": ["login"]
+                          "required": [
+                            "login"
+                          ]
                         }
                       },
                       "required": [
@@ -1523,7 +1842,9 @@
     "/api/app/documents/{owner}/{repo}": {
       "get": {
         "operationId": "getDocumentDetail",
-        "tags": ["documents"],
+        "tags": [
+          "documents"
+        ],
         "parameters": [
           {
             "schema": {
@@ -1575,7 +1896,9 @@
                               "type": "string"
                             }
                           },
-                          "required": ["login"]
+                          "required": [
+                            "login"
+                          ]
                         }
                       },
                       "required": [
@@ -1605,7 +1928,12 @@
                             "type": "string"
                           }
                         },
-                        "required": ["name", "version", "sha", "created"]
+                        "required": [
+                          "name",
+                          "version",
+                          "sha",
+                          "created"
+                        ]
                       }
                     },
                     "latestTag": {
@@ -1625,13 +1953,21 @@
                           "type": "string"
                         }
                       },
-                      "required": ["name", "version", "sha", "created"]
+                      "required": [
+                        "name",
+                        "version",
+                        "sha",
+                        "created"
+                      ]
                     },
                     "openPullRequests": {
                       "type": "array",
                       "items": {
                         "type": "object",
                         "properties": {
+                          "id": {
+                            "type": "number"
+                          },
                           "number": {
                             "type": "number"
                           },
@@ -1642,6 +1978,12 @@
                             "type": "string"
                           },
                           "created": {
+                            "type": "string"
+                          },
+                          "created_at": {
+                            "type": "string"
+                          },
+                          "updated_at": {
                             "type": "string"
                           },
                           "branchName": {
@@ -1664,9 +2006,35 @@
                             "items": {
                               "type": "string"
                             }
+                          },
+                          "body": {
+                            "type": "string"
+                          },
+                          "approvalState": {
+                            "type": "string",
+                            "enum": [
+                              "working",
+                              "in_review",
+                              "changes_requested",
+                              "approved",
+                              "published"
+                            ]
+                          },
+                          "user": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "login": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "login"
+                            ]
                           }
                         },
                         "required": [
+                          "id",
                           "number",
                           "title",
                           "state",
@@ -1676,7 +2044,8 @@
                           "requiredApprovals",
                           "isApproved",
                           "isRejected",
-                          "reviewers"
+                          "reviewers",
+                          "approvalState"
                         ]
                       }
                     },
@@ -1685,6 +2054,9 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "id": {
+                            "type": "number"
+                          },
                           "number": {
                             "type": "number"
                           },
@@ -1695,6 +2067,12 @@
                             "type": "string"
                           },
                           "created": {
+                            "type": "string"
+                          },
+                          "created_at": {
+                            "type": "string"
+                          },
+                          "updated_at": {
                             "type": "string"
                           },
                           "branchName": {
@@ -1717,9 +2095,35 @@
                             "items": {
                               "type": "string"
                             }
+                          },
+                          "body": {
+                            "type": "string"
+                          },
+                          "approvalState": {
+                            "type": "string",
+                            "enum": [
+                              "working",
+                              "in_review",
+                              "changes_requested",
+                              "approved",
+                              "published"
+                            ]
+                          },
+                          "user": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "login": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "login"
+                            ]
                           }
                         },
                         "required": [
+                          "id",
                           "number",
                           "title",
                           "state",
@@ -1729,7 +2133,8 @@
                           "requiredApprovals",
                           "isApproved",
                           "isRejected",
-                          "reviewers"
+                          "reviewers",
+                          "approvalState"
                         ]
                       }
                     },
@@ -1796,7 +2201,10 @@
                           "type": "string"
                         }
                       },
-                      "required": ["storedFileName", "downloadFileName"]
+                      "required": [
+                        "storedFileName",
+                        "downloadFileName"
+                      ]
                     },
                     "currentUserPermission": {
                       "type": "object",
@@ -1807,7 +2215,11 @@
                         },
                         "access": {
                           "type": "string",
-                          "enum": ["read", "write", "admin"]
+                          "enum": [
+                            "read",
+                            "write",
+                            "admin"
+                          ]
                         },
                         "permissionLabel": {
                           "type": "string"
@@ -1872,7 +2284,9 @@
     "/api/app/documents/{owner}/{repo}/versions": {
       "post": {
         "operationId": "uploadDocumentVersion",
-        "tags": ["documents"],
+        "tags": [
+          "documents"
+        ],
         "parameters": [
           {
             "schema": {
@@ -1899,7 +2313,8 @@
                 "type": "object",
                 "properties": {
                   "file": {
-                    "nullable": true,
+                    "type": "string",
+                    "format": "binary",
                     "description": "File upload"
                   },
                   "docSlug": {
@@ -1915,7 +2330,12 @@
                     "type": "string"
                   }
                 },
-                "required": ["docSlug", "uploaderSlug", "nextVersion"]
+                "required": [
+                  "file",
+                  "docSlug",
+                  "uploaderSlug",
+                  "nextVersion"
+                ]
               }
             }
           }
@@ -1941,7 +2361,12 @@
                       "type": "string"
                     }
                   },
-                  "required": ["prNumber", "prTitle", "branchName", "commitSha"]
+                  "required": [
+                    "prNumber",
+                    "prTitle",
+                    "branchName",
+                    "commitSha"
+                  ]
                 }
               }
             }
@@ -1952,7 +2377,9 @@
     "/api/app/documents/{owner}/{repo}/download": {
       "get": {
         "operationId": "downloadDocument",
-        "tags": ["documents"],
+        "tags": [
+          "documents"
+        ],
         "parameters": [
           {
             "schema": {
@@ -1996,7 +2423,9 @@
     "/api/app/documents/{owner}/{repo}/permissions": {
       "get": {
         "operationId": "getDocumentPermissions",
-        "tags": ["documents"],
+        "tags": [
+          "documents"
+        ],
         "parameters": [
           {
             "schema": {
@@ -2090,7 +2519,11 @@
                         },
                         "access": {
                           "type": "string",
-                          "enum": ["read", "write", "admin"]
+                          "enum": [
+                            "read",
+                            "write",
+                            "admin"
+                          ]
                         },
                         "permissionLabel": {
                           "type": "string"
@@ -2135,7 +2568,11 @@
                       ]
                     }
                   },
-                  "required": ["branchProtection", "isPrivate", "isInternal"]
+                  "required": [
+                    "branchProtection",
+                    "isPrivate",
+                    "isInternal"
+                  ]
                 }
               }
             }
@@ -2144,7 +2581,9 @@
       },
       "put": {
         "operationId": "updateDocumentPermissions",
-        "tags": ["documents"],
+        "tags": [
+          "documents"
+        ],
         "parameters": [
           {
             "schema": {
@@ -2292,7 +2731,11 @@
                         },
                         "access": {
                           "type": "string",
-                          "enum": ["read", "write", "admin"]
+                          "enum": [
+                            "read",
+                            "write",
+                            "admin"
+                          ]
                         },
                         "permissionLabel": {
                           "type": "string"
@@ -2337,7 +2780,11 @@
                       ]
                     }
                   },
-                  "required": ["branchProtection", "isPrivate", "isInternal"]
+                  "required": [
+                    "branchProtection",
+                    "isPrivate",
+                    "isInternal"
+                  ]
                 }
               }
             }
@@ -2348,7 +2795,9 @@
     "/api/app/documents/{owner}/{repo}/collaborators": {
       "get": {
         "operationId": "listDocumentCollaborators",
-        "tags": ["documents"],
+        "tags": [
+          "documents"
+        ],
         "parameters": [
           {
             "schema": {
@@ -2401,7 +2850,11 @@
                           },
                           "access": {
                             "type": "string",
-                            "enum": ["read", "write", "admin"]
+                            "enum": [
+                              "read",
+                              "write",
+                              "admin"
+                            ]
                           },
                           "permissionLabel": {
                             "type": "string"
@@ -2464,7 +2917,11 @@
                         },
                         "access": {
                           "type": "string",
-                          "enum": ["read", "write", "admin"]
+                          "enum": [
+                            "read",
+                            "write",
+                            "admin"
+                          ]
                         },
                         "permissionLabel": {
                           "type": "string"
@@ -2526,7 +2983,9 @@
     "/api/app/documents/{owner}/{repo}/collaborators/{collaborator}": {
       "put": {
         "operationId": "addDocumentCollaborator",
-        "tags": ["documents"],
+        "tags": [
+          "documents"
+        ],
         "parameters": [
           {
             "schema": {
@@ -2562,10 +3021,16 @@
                 "properties": {
                   "permission": {
                     "type": "string",
-                    "enum": ["read", "write", "admin"]
+                    "enum": [
+                      "read",
+                      "write",
+                      "admin"
+                    ]
                   }
                 },
-                "required": ["permission"]
+                "required": [
+                  "permission"
+                ]
               }
             }
           }
@@ -2587,7 +3052,11 @@
                         },
                         "access": {
                           "type": "string",
-                          "enum": ["read", "write", "admin"]
+                          "enum": [
+                            "read",
+                            "write",
+                            "admin"
+                          ]
                         },
                         "permissionLabel": {
                           "type": "string"
@@ -2640,7 +3109,9 @@
       },
       "delete": {
         "operationId": "removeDocumentCollaborator",
-        "tags": ["documents"],
+        "tags": [
+          "documents"
+        ],
         "parameters": [
           {
             "schema": {
@@ -2677,7 +3148,9 @@
     "/api/app/documents/{owner}/{repo}/pull-requests/{pullNumber}/reviews": {
       "post": {
         "operationId": "submitDocumentReview",
-        "tags": ["documents"],
+        "tags": [
+          "documents"
+        ],
         "parameters": [
           {
             "schema": {
@@ -2713,13 +3186,19 @@
                 "properties": {
                   "event": {
                     "type": "string",
-                    "enum": ["APPROVE", "REQUEST_CHANGES", "COMMENT"]
+                    "enum": [
+                      "APPROVE",
+                      "REQUEST_CHANGES",
+                      "COMMENT"
+                    ]
                   },
                   "body": {
                     "type": "string"
                   }
                 },
-                "required": ["event"]
+                "required": [
+                  "event"
+                ]
               }
             }
           }
@@ -2734,7 +3213,9 @@
     "/api/app/documents/{owner}/{repo}/pull-requests/{pullNumber}/publish": {
       "post": {
         "operationId": "publishDocument",
-        "tags": ["documents"],
+        "tags": [
+          "documents"
+        ],
         "parameters": [
           {
             "schema": {
@@ -2772,7 +3253,9 @@
                     "type": "number"
                   }
                 },
-                "required": ["nextVersion"]
+                "required": [
+                  "nextVersion"
+                ]
               }
             }
           }
@@ -2804,10 +3287,18 @@
                           "type": "string"
                         }
                       },
-                      "required": ["name", "version", "sha", "created"]
+                      "required": [
+                        "name",
+                        "version",
+                        "sha",
+                        "created"
+                      ]
                     }
                   },
-                  "required": ["ok", "tag"]
+                  "required": [
+                    "ok",
+                    "tag"
+                  ]
                 }
               }
             }
@@ -2818,7 +3309,9 @@
     "/api/app/users/search": {
       "get": {
         "operationId": "searchUsers",
-        "tags": ["users"],
+        "tags": [
+          "users"
+        ],
         "parameters": [
           {
             "schema": {
@@ -2893,7 +3386,12 @@
                       "type": "boolean"
                     }
                   },
-                  "required": ["users", "page", "limit", "hasMore"]
+                  "required": [
+                    "users",
+                    "page",
+                    "limit",
+                    "hasMore"
+                  ]
                 }
               }
             }
@@ -2904,7 +3402,9 @@
     "/api/app/billing/status": {
       "get": {
         "operationId": "getBillingStatus",
-        "tags": ["billing"],
+        "tags": [
+          "billing"
+        ],
         "responses": {
           "200": {
             "description": "Billing status",
@@ -2952,7 +3452,10 @@
                         },
                         "access": {
                           "type": "string",
-                          "enum": ["grant", "revoke"]
+                          "enum": [
+                            "grant",
+                            "revoke"
+                          ]
                         },
                         "updatedBy": {
                           "type": "string"
@@ -3013,7 +3516,9 @@
     "/api/app/billing/checkout": {
       "post": {
         "operationId": "createBillingCheckout",
-        "tags": ["billing"],
+        "tags": [
+          "billing"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -3025,7 +3530,9 @@
                     "type": "string"
                   }
                 },
-                "required": ["idempotencyKey"]
+                "required": [
+                  "idempotencyKey"
+                ]
               }
             }
           }
@@ -3042,7 +3549,9 @@
                       "type": "string"
                     }
                   },
-                  "required": ["url"]
+                  "required": [
+                    "url"
+                  ]
                 }
               }
             }
@@ -3053,7 +3562,9 @@
     "/api/app/billing/portal": {
       "post": {
         "operationId": "createBillingPortal",
-        "tags": ["billing"],
+        "tags": [
+          "billing"
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -3065,7 +3576,9 @@
                     "type": "string"
                   }
                 },
-                "required": ["idempotencyKey"]
+                "required": [
+                  "idempotencyKey"
+                ]
               }
             }
           }
@@ -3082,7 +3595,9 @@
                       "type": "string"
                     }
                   },
-                  "required": ["url"]
+                  "required": [
+                    "url"
+                  ]
                 }
               }
             }
@@ -3093,7 +3608,9 @@
     "/api/app/admin/subscriptions/access": {
       "get": {
         "operationId": "listAdminSubscriptionAccess",
-        "tags": ["admin"],
+        "tags": [
+          "admin"
+        ],
         "parameters": [
           {
             "schema": {
@@ -3179,7 +3696,10 @@
                               },
                               "access": {
                                 "type": "string",
-                                "enum": ["grant", "revoke"]
+                                "enum": [
+                                  "grant",
+                                  "revoke"
+                                ]
                               },
                               "updatedBy": {
                                 "type": "string"
@@ -3221,7 +3741,13 @@
                       "type": "string"
                     }
                   },
-                  "required": ["users", "page", "limit", "hasMore", "query"]
+                  "required": [
+                    "users",
+                    "page",
+                    "limit",
+                    "hasMore",
+                    "query"
+                  ]
                 }
               }
             }
@@ -3232,7 +3758,9 @@
     "/api/app/admin/subscriptions/access/{username}": {
       "put": {
         "operationId": "setAdminSubscriptionAccess",
-        "tags": ["admin"],
+        "tags": [
+          "admin"
+        ],
         "parameters": [
           {
             "schema": {
@@ -3252,10 +3780,15 @@
                 "properties": {
                   "access": {
                     "type": "string",
-                    "enum": ["grant", "revoke"]
+                    "enum": [
+                      "grant",
+                      "revoke"
+                    ]
                   }
                 },
-                "required": ["access"]
+                "required": [
+                  "access"
+                ]
               }
             }
           }
@@ -3317,7 +3850,10 @@
                             },
                             "access": {
                               "type": "string",
-                              "enum": ["grant", "revoke"]
+                              "enum": [
+                                "grant",
+                                "revoke"
+                              ]
                             },
                             "updatedBy": {
                               "type": "string"
@@ -3346,7 +3882,9 @@
                       ]
                     }
                   },
-                  "required": ["user"]
+                  "required": [
+                    "user"
+                  ]
                 }
               }
             }
@@ -3355,7 +3893,9 @@
       },
       "delete": {
         "operationId": "clearAdminSubscriptionAccess",
-        "tags": ["admin"],
+        "tags": [
+          "admin"
+        ],
         "parameters": [
           {
             "schema": {

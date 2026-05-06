@@ -4,7 +4,7 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
-import type { InitialDocumentUploadResultRepositoryOwner } from "./initialDocumentUploadResultRepositoryOwner";
+import type { InitialDocumentUploadResultRepositoryOwner } from './initialDocumentUploadResultRepositoryOwner';
 
 export type InitialDocumentUploadResultRepository = {
   id: number;

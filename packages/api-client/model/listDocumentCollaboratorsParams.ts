@@ -6,6 +6,6 @@
  */
 
 export type ListDocumentCollaboratorsParams = {
-  page?: string;
-  limit?: string;
+page?: string;
+limit?: string;
 };

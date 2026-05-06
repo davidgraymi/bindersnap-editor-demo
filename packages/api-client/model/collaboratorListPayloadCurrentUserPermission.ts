@@ -10,14 +10,14 @@
  */
 export type CollaboratorListPayloadCurrentUserPermission = {
   permission: string;
-  access: "read" | "write" | "admin";
+  access: 'read' | 'write' | 'admin';
   permissionLabel: string;
   roleName: string;
   user: {
-    id: number;
-    login: string;
-    full_name: string;
-    email: string;
-    avatar_url: string;
-  };
+  id: number;
+  login: string;
+  full_name: string;
+  email: string;
+  avatar_url: string;
+};
 } | null;
