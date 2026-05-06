@@ -1,0 +1,17 @@
+{
+  "output": "CHANGELOG.md",
+  "template": "keepachangelog",
+  "unreleased": true,
+  "commitLimit": false,
+  "ignoreCommitPattern": "^(chore|test|Update changelog|format|Update package|bun install|Update UI|Format)",
+  "replaceText": {
+    "feat: ": "",
+    "fix: ": "",
+    "feat\\((.*)\\): ": "",
+    "fix\\((.*)\\): ": ""
+  },
+  "commitUrl": "https://github.com/davidgraymi/bindersnap-editor-demo/commit/{id}",
+  "issueUrl": "https://github.com/davidgraymi/bindersnap-editor-demo/issues/{id}",
+  "mergeUrl": "https://github.com/davidgraymi/bindersnap-editor-demo/pull/{id}",
+  "compareUrl": "https://github.com/davidgraymi/bindersnap-editor-demo/compare/{from}...{to}"
+}
