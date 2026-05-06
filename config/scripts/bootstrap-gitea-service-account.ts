@@ -6,7 +6,13 @@ export const DEFAULT_SERVICE_ACCOUNT_USERNAME = "bindersnap-service";
 export const DEFAULT_SERVICE_TOKEN_NAME = "bindersnap-api-service";
 export const DEFAULT_SSM_PARAMETER_PATH = "/bindersnap/prod";
 export const DEFAULT_SERVICE_ACCOUNT_EMAIL_DOMAIN = "users.bindersnap.local";
-export const DEFAULT_SERVICE_TOKEN_SCOPES = ["write:admin"] as const;
+export const DEFAULT_SERVICE_TOKEN_SCOPES = [
+  "write:admin",
+  "read:issue",
+  "read:organization",
+  "read:repository",
+  "read:user",
+] as const;
 export const BOOTSTRAP_SERVICE_TOKEN_PLACEHOLDER =
   "BOOTSTRAP_WITH_scripts/bootstrap-gitea-service-account.ts";
 
