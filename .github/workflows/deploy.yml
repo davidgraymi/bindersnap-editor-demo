@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "services/api/**"
+      - "packages/gitea-client/**"
     tags:
       - "v[0-9]*"
   workflow_dispatch:

@@ -576,8 +576,20 @@ async function resolveDocumentAccess(
       username: null,
       token: config.giteaServiceToken,
     };
-  } catch {
-    return auth;
+  } catch (err) {
+    if (err instanceof GiteaApiError && err.status === 404) {
+      return auth;
+    }
+    logger.error("Service client failed to check repo visibility", {
+      owner,
+      repo,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return json(
+      503,
+      { error: "Unable to verify document access." },
+      baseHeaders,
+    );
   }
 }
 

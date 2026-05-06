@@ -5,12 +5,13 @@ import type { paths } from "./spec/gitea";
 export type GiteaClient = ReturnType<typeof createGiteaClient>;
 
 export function createGiteaClient(baseUrl: string, token: string) {
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (token) {
+    headers.Authorization = `token ${token}`;
+  }
   return createClient<paths>({
     baseUrl: `${baseUrl}/api/v1`,
-    headers: {
-      Authorization: `token ${token}`,
-      Accept: "application/json",
-    },
+    headers,
   });
 }
 
