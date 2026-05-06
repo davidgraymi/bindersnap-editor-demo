@@ -1,0 +1,3377 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Bindersnap BFF API",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "components": {
+    "schemas": {
+      "SessionAuthState": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "username": {
+                "type": "string"
+              },
+              "fullName": {
+                "type": "string"
+              },
+              "isAdmin": {
+                "type": "boolean"
+              }
+            },
+            "required": ["username"]
+          },
+          "token": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": ["user", "token"]
+      },
+      "LoginBody": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1
+          },
+          "rememberMe": {
+            "type": "boolean"
+          }
+        },
+        "required": ["password"]
+      },
+      "SignupBody": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "minLength": 1
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": ["username", "email", "password"]
+      },
+      "WorkspaceDocumentSummary": {
+        "type": "object",
+        "properties": {
+          "repo": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "number"
+              },
+              "name": {
+                "type": "string"
+              },
+              "full_name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "updated_at": {
+                "type": "string"
+              },
+              "owner": {
+                "type": "object",
+                "properties": {
+                  "login": {
+                    "type": "string"
+                  }
+                },
+                "required": ["login"]
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "full_name",
+              "description",
+              "updated_at",
+              "owner"
+            ]
+          },
+          "latestTag": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "version": {
+                "type": "number"
+              },
+              "sha": {
+                "type": "string"
+              },
+              "created": {
+                "type": "string"
+              }
+            },
+            "required": ["name", "version", "sha", "created"]
+          },
+          "pendingPRs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "number": {
+                  "type": "number"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string"
+                },
+                "created": {
+                  "type": "string"
+                },
+                "branchName": {
+                  "type": "string"
+                },
+                "approvalCount": {
+                  "type": "number"
+                },
+                "requiredApprovals": {
+                  "type": "number"
+                },
+                "isApproved": {
+                  "type": "boolean"
+                },
+                "isRejected": {
+                  "type": "boolean"
+                },
+                "reviewers": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "number",
+                "title",
+                "state",
+                "created",
+                "branchName",
+                "approvalCount",
+                "requiredApprovals",
+                "isApproved",
+                "isRejected",
+                "reviewers"
+              ]
+            }
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": ["repo", "latestTag", "pendingPRs", "error"]
+      },
+      "DocumentDetailPayload": {
+        "type": "object",
+        "properties": {
+          "repository": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "number"
+              },
+              "name": {
+                "type": "string"
+              },
+              "full_name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "updated_at": {
+                "type": "string"
+              },
+              "owner": {
+                "type": "object",
+                "properties": {
+                  "login": {
+                    "type": "string"
+                  }
+                },
+                "required": ["login"]
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "full_name",
+              "description",
+              "updated_at",
+              "owner"
+            ]
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "version": {
+                  "type": "number"
+                },
+                "sha": {
+                  "type": "string"
+                },
+                "created": {
+                  "type": "string"
+                }
+              },
+              "required": ["name", "version", "sha", "created"]
+            }
+          },
+          "latestTag": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "version": {
+                "type": "number"
+              },
+              "sha": {
+                "type": "string"
+              },
+              "created": {
+                "type": "string"
+              }
+            },
+            "required": ["name", "version", "sha", "created"]
+          },
+          "openPullRequests": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "number": {
+                  "type": "number"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string"
+                },
+                "created": {
+                  "type": "string"
+                },
+                "branchName": {
+                  "type": "string"
+                },
+                "approvalCount": {
+                  "type": "number"
+                },
+                "requiredApprovals": {
+                  "type": "number"
+                },
+                "isApproved": {
+                  "type": "boolean"
+                },
+                "isRejected": {
+                  "type": "boolean"
+                },
+                "reviewers": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "number",
+                "title",
+                "state",
+                "created",
+                "branchName",
+                "approvalCount",
+                "requiredApprovals",
+                "isApproved",
+                "isRejected",
+                "reviewers"
+              ]
+            }
+          },
+          "uploadPullRequests": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "number": {
+                  "type": "number"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string"
+                },
+                "created": {
+                  "type": "string"
+                },
+                "branchName": {
+                  "type": "string"
+                },
+                "approvalCount": {
+                  "type": "number"
+                },
+                "requiredApprovals": {
+                  "type": "number"
+                },
+                "isApproved": {
+                  "type": "boolean"
+                },
+                "isRejected": {
+                  "type": "boolean"
+                },
+                "reviewers": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "number",
+                "title",
+                "state",
+                "created",
+                "branchName",
+                "approvalCount",
+                "requiredApprovals",
+                "isApproved",
+                "isRejected",
+                "reviewers"
+              ]
+            }
+          },
+          "branchProtection": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "requiredApprovals": {
+                "type": "number"
+              },
+              "enableApprovalsWhitelist": {
+                "type": "boolean"
+              },
+              "approvalsWhitelistUsernames": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "approvalsWhitelistTeams": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "enableMergeWhitelist": {
+                "type": "boolean"
+              },
+              "mergeWhitelistUsernames": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "mergeWhitelistTeams": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "blockOnRejectedReviews": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "requiredApprovals",
+              "enableApprovalsWhitelist",
+              "approvalsWhitelistUsernames",
+              "approvalsWhitelistTeams",
+              "enableMergeWhitelist",
+              "mergeWhitelistUsernames",
+              "mergeWhitelistTeams",
+              "blockOnRejectedReviews"
+            ]
+          },
+          "canonicalFile": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "storedFileName": {
+                "type": "string"
+              },
+              "downloadFileName": {
+                "type": "string"
+              }
+            },
+            "required": ["storedFileName", "downloadFileName"]
+          },
+          "currentUserPermission": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "permission": {
+                "type": "string"
+              },
+              "access": {
+                "type": "string",
+                "enum": ["read", "write", "admin"]
+              },
+              "permissionLabel": {
+                "type": "string"
+              },
+              "roleName": {
+                "type": "string"
+              },
+              "user": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "number"
+                  },
+                  "login": {
+                    "type": "string"
+                  },
+                  "full_name": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "avatar_url": {
+                    "type": "string"
+                  }
+                },
+                "required": ["id", "login", "full_name", "email", "avatar_url"]
+              }
+            },
+            "required": [
+              "permission",
+              "access",
+              "permissionLabel",
+              "roleName",
+              "user"
+            ]
+          }
+        },
+        "required": [
+          "repository",
+          "tags",
+          "latestTag",
+          "openPullRequests",
+          "uploadPullRequests",
+          "branchProtection",
+          "canonicalFile",
+          "currentUserPermission"
+        ]
+      },
+      "InitialDocumentUploadResult": {
+        "type": "object",
+        "properties": {
+          "repository": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "number"
+              },
+              "name": {
+                "type": "string"
+              },
+              "full_name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "updated_at": {
+                "type": "string"
+              },
+              "owner": {
+                "type": "object",
+                "properties": {
+                  "login": {
+                    "type": "string"
+                  }
+                },
+                "required": ["login"]
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "full_name",
+              "description",
+              "updated_at",
+              "owner"
+            ]
+          },
+          "owner": {
+            "type": "string"
+          },
+          "repo": {
+            "type": "string"
+          },
+          "canonicalFile": {
+            "type": "string"
+          },
+          "prNumber": {
+            "type": "number"
+          },
+          "prTitle": {
+            "type": "string"
+          },
+          "branchName": {
+            "type": "string"
+          },
+          "commitSha": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "repository",
+          "owner",
+          "repo",
+          "canonicalFile",
+          "prNumber",
+          "prTitle",
+          "branchName",
+          "commitSha"
+        ]
+      },
+      "UploadResult": {
+        "type": "object",
+        "properties": {
+          "prNumber": {
+            "type": "number"
+          },
+          "prTitle": {
+            "type": "string"
+          },
+          "branchName": {
+            "type": "string"
+          },
+          "commitSha": {
+            "type": "string"
+          }
+        },
+        "required": ["prNumber", "prTitle", "branchName", "commitSha"]
+      },
+      "CollaboratorListPayload": {
+        "type": "object",
+        "properties": {
+          "collaborators": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "permission": {
+                  "type": "string"
+                },
+                "access": {
+                  "type": "string",
+                  "enum": ["read", "write", "admin"]
+                },
+                "permissionLabel": {
+                  "type": "string"
+                },
+                "roleName": {
+                  "type": "string"
+                },
+                "user": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "number"
+                    },
+                    "login": {
+                      "type": "string"
+                    },
+                    "full_name": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "avatar_url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "login",
+                    "full_name",
+                    "email",
+                    "avatar_url"
+                  ]
+                }
+              },
+              "required": [
+                "permission",
+                "access",
+                "permissionLabel",
+                "roleName",
+                "user"
+              ]
+            }
+          },
+          "page": {
+            "type": "number"
+          },
+          "limit": {
+            "type": "number"
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "currentUserPermission": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "permission": {
+                "type": "string"
+              },
+              "access": {
+                "type": "string",
+                "enum": ["read", "write", "admin"]
+              },
+              "permissionLabel": {
+                "type": "string"
+              },
+              "roleName": {
+                "type": "string"
+              },
+              "user": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "number"
+                  },
+                  "login": {
+                    "type": "string"
+                  },
+                  "full_name": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "avatar_url": {
+                    "type": "string"
+                  }
+                },
+                "required": ["id", "login", "full_name", "email", "avatar_url"]
+              }
+            },
+            "required": [
+              "permission",
+              "access",
+              "permissionLabel",
+              "roleName",
+              "user"
+            ]
+          }
+        },
+        "required": [
+          "collaborators",
+          "page",
+          "limit",
+          "hasMore",
+          "currentUserPermission"
+        ]
+      },
+      "DocumentPermissionsPayload": {
+        "type": "object",
+        "properties": {
+          "branchProtection": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "requiredApprovals": {
+                "type": "number"
+              },
+              "enableApprovalsWhitelist": {
+                "type": "boolean"
+              },
+              "approvalsWhitelistUsernames": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "approvalsWhitelistTeams": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "enableMergeWhitelist": {
+                "type": "boolean"
+              },
+              "mergeWhitelistUsernames": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "mergeWhitelistTeams": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "blockOnRejectedReviews": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "requiredApprovals",
+              "enableApprovalsWhitelist",
+              "approvalsWhitelistUsernames",
+              "approvalsWhitelistTeams",
+              "enableMergeWhitelist",
+              "mergeWhitelistUsernames",
+              "mergeWhitelistTeams",
+              "blockOnRejectedReviews"
+            ]
+          },
+          "isPrivate": {
+            "type": "boolean"
+          },
+          "isInternal": {
+            "type": "boolean"
+          },
+          "currentUserPermission": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "permission": {
+                "type": "string"
+              },
+              "access": {
+                "type": "string",
+                "enum": ["read", "write", "admin"]
+              },
+              "permissionLabel": {
+                "type": "string"
+              },
+              "roleName": {
+                "type": "string"
+              },
+              "user": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "number"
+                  },
+                  "login": {
+                    "type": "string"
+                  },
+                  "full_name": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "avatar_url": {
+                    "type": "string"
+                  }
+                },
+                "required": ["id", "login", "full_name", "email", "avatar_url"]
+              }
+            },
+            "required": [
+              "permission",
+              "access",
+              "permissionLabel",
+              "roleName",
+              "user"
+            ]
+          }
+        },
+        "required": ["branchProtection", "isPrivate", "isInternal"]
+      },
+      "SearchUsersPayload": {
+        "type": "object",
+        "properties": {
+          "users": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "number"
+                },
+                "login": {
+                  "type": "string"
+                },
+                "full_name": {
+                  "type": "string"
+                },
+                "email": {
+                  "type": "string"
+                },
+                "avatar_url": {
+                  "type": "string"
+                }
+              },
+              "required": ["id", "login", "full_name", "email", "avatar_url"]
+            }
+          },
+          "page": {
+            "type": "number"
+          },
+          "limit": {
+            "type": "number"
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        },
+        "required": ["users", "page", "limit", "hasMore"]
+      },
+      "BillingStatusPayload": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "nullable": true
+          },
+          "currentPeriodEnd": {
+            "type": "number",
+            "nullable": true
+          },
+          "cancelAtPeriodEnd": {
+            "type": "boolean"
+          },
+          "cancelAt": {
+            "type": "number",
+            "nullable": true
+          },
+          "hasAccess": {
+            "type": "boolean"
+          },
+          "accessSource": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "config_bypass",
+              "stripe",
+              "admin_grant",
+              "admin_revoke",
+              "none",
+              null
+            ]
+          },
+          "override": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "username": {
+                "type": "string"
+              },
+              "access": {
+                "type": "string",
+                "enum": ["grant", "revoke"]
+              },
+              "updatedBy": {
+                "type": "string"
+              },
+              "updatedAt": {
+                "type": "number"
+              }
+            },
+            "required": ["username", "access", "updatedBy", "updatedAt"]
+          },
+          "plan": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "amount": {
+                "type": "number"
+              },
+              "currency": {
+                "type": "string"
+              },
+              "interval": {
+                "type": "string"
+              },
+              "formatted": {
+                "type": "string"
+              }
+            },
+            "required": ["amount", "currency", "interval", "formatted"]
+          }
+        },
+        "required": [
+          "status",
+          "currentPeriodEnd",
+          "cancelAtPeriodEnd",
+          "cancelAt",
+          "hasAccess",
+          "accessSource",
+          "override",
+          "plan"
+        ]
+      },
+      "AdminSubscriptionAccessListPayload": {
+        "type": "object",
+        "properties": {
+          "users": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "username": {
+                  "type": "string"
+                },
+                "fullName": {
+                  "type": "string"
+                },
+                "email": {
+                  "type": "string"
+                },
+                "hasAccess": {
+                  "type": "boolean"
+                },
+                "accessSource": {
+                  "type": "string",
+                  "enum": [
+                    "config_bypass",
+                    "stripe",
+                    "admin_grant",
+                    "admin_revoke",
+                    "none"
+                  ]
+                },
+                "stripeStatus": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "currentPeriodEnd": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "cancelAtPeriodEnd": {
+                  "type": "boolean"
+                },
+                "cancelAt": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "override": {
+                  "type": "object",
+                  "nullable": true,
+                  "properties": {
+                    "username": {
+                      "type": "string"
+                    },
+                    "access": {
+                      "type": "string",
+                      "enum": ["grant", "revoke"]
+                    },
+                    "updatedBy": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    }
+                  },
+                  "required": ["username", "access", "updatedBy", "updatedAt"]
+                }
+              },
+              "required": [
+                "username",
+                "hasAccess",
+                "accessSource",
+                "stripeStatus",
+                "currentPeriodEnd",
+                "cancelAtPeriodEnd",
+                "cancelAt",
+                "override"
+              ]
+            }
+          },
+          "page": {
+            "type": "number"
+          },
+          "limit": {
+            "type": "number"
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "query": {
+            "type": "string"
+          }
+        },
+        "required": ["users", "page", "limit", "hasMore", "query"]
+      }
+    },
+    "parameters": {}
+  },
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "operationId": "authLogin",
+        "tags": ["auth"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "rememberMe": {
+                    "type": "boolean"
+                  }
+                },
+                "required": ["password"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Session established",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "username": {
+                          "type": "string"
+                        },
+                        "fullName": {
+                          "type": "string"
+                        },
+                        "isAdmin": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": ["username"]
+                    },
+                    "token": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": ["user", "token"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/signup": {
+      "post": {
+        "operationId": "authSignup",
+        "tags": ["auth"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": ["username", "email", "password"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Account created and session established",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "username": {
+                          "type": "string"
+                        },
+                        "fullName": {
+                          "type": "string"
+                        },
+                        "isAdmin": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": ["username"]
+                    },
+                    "token": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": ["user", "token"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "operationId": "authMe",
+        "tags": ["auth"],
+        "responses": {
+          "200": {
+            "description": "Current session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "username": {
+                          "type": "string"
+                        },
+                        "fullName": {
+                          "type": "string"
+                        },
+                        "isAdmin": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": ["username"]
+                    },
+                    "token": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": ["user", "token"]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "operationId": "authLogout",
+        "tags": ["auth"],
+        "responses": {
+          "204": {
+            "description": "Session ended"
+          }
+        }
+      }
+    },
+    "/api/app/documents": {
+      "get": {
+        "operationId": "listDocuments",
+        "tags": ["documents"],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "owner",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "member",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "q",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workspace documents",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "documents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "repo": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "number"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "full_name": {
+                                "type": "string"
+                              },
+                              "description": {
+                                "type": "string"
+                              },
+                              "updated_at": {
+                                "type": "string"
+                              },
+                              "owner": {
+                                "type": "object",
+                                "properties": {
+                                  "login": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["login"]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "full_name",
+                              "description",
+                              "updated_at",
+                              "owner"
+                            ]
+                          },
+                          "latestTag": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "version": {
+                                "type": "number"
+                              },
+                              "sha": {
+                                "type": "string"
+                              },
+                              "created": {
+                                "type": "string"
+                              }
+                            },
+                            "required": ["name", "version", "sha", "created"]
+                          },
+                          "pendingPRs": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "number": {
+                                  "type": "number"
+                                },
+                                "title": {
+                                  "type": "string"
+                                },
+                                "state": {
+                                  "type": "string"
+                                },
+                                "created": {
+                                  "type": "string"
+                                },
+                                "branchName": {
+                                  "type": "string"
+                                },
+                                "approvalCount": {
+                                  "type": "number"
+                                },
+                                "requiredApprovals": {
+                                  "type": "number"
+                                },
+                                "isApproved": {
+                                  "type": "boolean"
+                                },
+                                "isRejected": {
+                                  "type": "boolean"
+                                },
+                                "reviewers": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "number",
+                                "title",
+                                "state",
+                                "created",
+                                "branchName",
+                                "approvalCount",
+                                "requiredApprovals",
+                                "isApproved",
+                                "isRejected",
+                                "reviewers"
+                              ]
+                            }
+                          },
+                          "error": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": ["repo", "latestTag", "pendingPRs", "error"]
+                      }
+                    }
+                  },
+                  "required": ["documents"]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createDocument",
+        "tags": ["documents"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "nullable": true,
+                    "description": "File upload"
+                  },
+                  "repoName": {
+                    "type": "string"
+                  },
+                  "nextVersion": {
+                    "type": "string"
+                  },
+                  "requiredApprovals": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  }
+                },
+                "required": ["repoName", "nextVersion"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Document created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "repository": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "number"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "full_name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "updated_at": {
+                          "type": "string"
+                        },
+                        "owner": {
+                          "type": "object",
+                          "properties": {
+                            "login": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["login"]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "full_name",
+                        "description",
+                        "updated_at",
+                        "owner"
+                      ]
+                    },
+                    "owner": {
+                      "type": "string"
+                    },
+                    "repo": {
+                      "type": "string"
+                    },
+                    "canonicalFile": {
+                      "type": "string"
+                    },
+                    "prNumber": {
+                      "type": "number"
+                    },
+                    "prTitle": {
+                      "type": "string"
+                    },
+                    "branchName": {
+                      "type": "string"
+                    },
+                    "commitSha": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "repository",
+                    "owner",
+                    "repo",
+                    "canonicalFile",
+                    "prNumber",
+                    "prTitle",
+                    "branchName",
+                    "commitSha"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/documents/{owner}/{repo}": {
+      "get": {
+        "operationId": "getDocumentDetail",
+        "tags": ["documents"],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "owner",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "repo",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Document detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "repository": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "number"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "full_name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "updated_at": {
+                          "type": "string"
+                        },
+                        "owner": {
+                          "type": "object",
+                          "properties": {
+                            "login": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["login"]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "full_name",
+                        "description",
+                        "updated_at",
+                        "owner"
+                      ]
+                    },
+                    "tags": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "version": {
+                            "type": "number"
+                          },
+                          "sha": {
+                            "type": "string"
+                          },
+                          "created": {
+                            "type": "string"
+                          }
+                        },
+                        "required": ["name", "version", "sha", "created"]
+                      }
+                    },
+                    "latestTag": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "number"
+                        },
+                        "sha": {
+                          "type": "string"
+                        },
+                        "created": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["name", "version", "sha", "created"]
+                    },
+                    "openPullRequests": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "number": {
+                            "type": "number"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string"
+                          },
+                          "created": {
+                            "type": "string"
+                          },
+                          "branchName": {
+                            "type": "string"
+                          },
+                          "approvalCount": {
+                            "type": "number"
+                          },
+                          "requiredApprovals": {
+                            "type": "number"
+                          },
+                          "isApproved": {
+                            "type": "boolean"
+                          },
+                          "isRejected": {
+                            "type": "boolean"
+                          },
+                          "reviewers": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "number",
+                          "title",
+                          "state",
+                          "created",
+                          "branchName",
+                          "approvalCount",
+                          "requiredApprovals",
+                          "isApproved",
+                          "isRejected",
+                          "reviewers"
+                        ]
+                      }
+                    },
+                    "uploadPullRequests": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "number": {
+                            "type": "number"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string"
+                          },
+                          "created": {
+                            "type": "string"
+                          },
+                          "branchName": {
+                            "type": "string"
+                          },
+                          "approvalCount": {
+                            "type": "number"
+                          },
+                          "requiredApprovals": {
+                            "type": "number"
+                          },
+                          "isApproved": {
+                            "type": "boolean"
+                          },
+                          "isRejected": {
+                            "type": "boolean"
+                          },
+                          "reviewers": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "number",
+                          "title",
+                          "state",
+                          "created",
+                          "branchName",
+                          "approvalCount",
+                          "requiredApprovals",
+                          "isApproved",
+                          "isRejected",
+                          "reviewers"
+                        ]
+                      }
+                    },
+                    "branchProtection": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "requiredApprovals": {
+                          "type": "number"
+                        },
+                        "enableApprovalsWhitelist": {
+                          "type": "boolean"
+                        },
+                        "approvalsWhitelistUsernames": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "approvalsWhitelistTeams": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "enableMergeWhitelist": {
+                          "type": "boolean"
+                        },
+                        "mergeWhitelistUsernames": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "mergeWhitelistTeams": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "blockOnRejectedReviews": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "requiredApprovals",
+                        "enableApprovalsWhitelist",
+                        "approvalsWhitelistUsernames",
+                        "approvalsWhitelistTeams",
+                        "enableMergeWhitelist",
+                        "mergeWhitelistUsernames",
+                        "mergeWhitelistTeams",
+                        "blockOnRejectedReviews"
+                      ]
+                    },
+                    "canonicalFile": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "storedFileName": {
+                          "type": "string"
+                        },
+                        "downloadFileName": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["storedFileName", "downloadFileName"]
+                    },
+                    "currentUserPermission": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "permission": {
+                          "type": "string"
+                        },
+                        "access": {
+                          "type": "string",
+                          "enum": ["read", "write", "admin"]
+                        },
+                        "permissionLabel": {
+                          "type": "string"
+                        },
+                        "roleName": {
+                          "type": "string"
+                        },
+                        "user": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "number"
+                            },
+                            "login": {
+                              "type": "string"
+                            },
+                            "full_name": {
+                              "type": "string"
+                            },
+                            "email": {
+                              "type": "string"
+                            },
+                            "avatar_url": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "login",
+                            "full_name",
+                            "email",
+                            "avatar_url"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "permission",
+                        "access",
+                        "permissionLabel",
+                        "roleName",
+                        "user"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "repository",
+                    "tags",
+                    "latestTag",
+                    "openPullRequests",
+                    "uploadPullRequests",
+                    "branchProtection",
+                    "canonicalFile",
+                    "currentUserPermission"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/documents/{owner}/{repo}/versions": {
+      "post": {
+        "operationId": "uploadDocumentVersion",
+        "tags": ["documents"],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "owner",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "repo",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "nullable": true,
+                    "description": "File upload"
+                  },
+                  "docSlug": {
+                    "type": "string"
+                  },
+                  "uploaderSlug": {
+                    "type": "string"
+                  },
+                  "nextVersion": {
+                    "type": "string"
+                  },
+                  "canonicalFileName": {
+                    "type": "string"
+                  }
+                },
+                "required": ["docSlug", "uploaderSlug", "nextVersion"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Version uploaded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "prNumber": {
+                      "type": "number"
+                    },
+                    "prTitle": {
+                      "type": "string"
+                    },
+                    "branchName": {
+                      "type": "string"
+                    },
+                    "commitSha": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["prNumber", "prTitle", "branchName", "commitSha"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/documents/{owner}/{repo}/download": {
+      "get": {
+        "operationId": "downloadDocument",
+        "tags": ["documents"],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "owner",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "repo",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "ref",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "File download",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/documents/{owner}/{repo}/permissions": {
+      "get": {
+        "operationId": "getDocumentPermissions",
+        "tags": ["documents"],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "owner",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "repo",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Document permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "branchProtection": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "requiredApprovals": {
+                          "type": "number"
+                        },
+                        "enableApprovalsWhitelist": {
+                          "type": "boolean"
+                        },
+                        "approvalsWhitelistUsernames": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "approvalsWhitelistTeams": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "enableMergeWhitelist": {
+                          "type": "boolean"
+                        },
+                        "mergeWhitelistUsernames": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "mergeWhitelistTeams": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "blockOnRejectedReviews": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "requiredApprovals",
+                        "enableApprovalsWhitelist",
+                        "approvalsWhitelistUsernames",
+                        "approvalsWhitelistTeams",
+                        "enableMergeWhitelist",
+                        "mergeWhitelistUsernames",
+                        "mergeWhitelistTeams",
+                        "blockOnRejectedReviews"
+                      ]
+                    },
+                    "isPrivate": {
+                      "type": "boolean"
+                    },
+                    "isInternal": {
+                      "type": "boolean"
+                    },
+                    "currentUserPermission": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "permission": {
+                          "type": "string"
+                        },
+                        "access": {
+                          "type": "string",
+                          "enum": ["read", "write", "admin"]
+                        },
+                        "permissionLabel": {
+                          "type": "string"
+                        },
+                        "roleName": {
+                          "type": "string"
+                        },
+                        "user": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "number"
+                            },
+                            "login": {
+                              "type": "string"
+                            },
+                            "full_name": {
+                              "type": "string"
+                            },
+                            "email": {
+                              "type": "string"
+                            },
+                            "avatar_url": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "login",
+                            "full_name",
+                            "email",
+                            "avatar_url"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "permission",
+                        "access",
+                        "permissionLabel",
+                        "roleName",
+                        "user"
+                      ]
+                    }
+                  },
+                  "required": ["branchProtection", "isPrivate", "isInternal"]
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "updateDocumentPermissions",
+        "tags": ["documents"],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "owner",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "repo",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "requiredApprovals": {
+                    "type": "number"
+                  },
+                  "enableApprovalsWhitelist": {
+                    "type": "boolean"
+                  },
+                  "approvalsWhitelistUsernames": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "approvalsWhitelistTeams": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "enableMergeWhitelist": {
+                    "type": "boolean"
+                  },
+                  "mergeWhitelistUsernames": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "mergeWhitelistTeams": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "blockOnRejectedReviews": {
+                    "type": "boolean"
+                  },
+                  "isPrivate": {
+                    "type": "boolean"
+                  },
+                  "isInternal": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Permissions updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "branchProtection": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "requiredApprovals": {
+                          "type": "number"
+                        },
+                        "enableApprovalsWhitelist": {
+                          "type": "boolean"
+                        },
+                        "approvalsWhitelistUsernames": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "approvalsWhitelistTeams": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "enableMergeWhitelist": {
+                          "type": "boolean"
+                        },
+                        "mergeWhitelistUsernames": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "mergeWhitelistTeams": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "blockOnRejectedReviews": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "requiredApprovals",
+                        "enableApprovalsWhitelist",
+                        "approvalsWhitelistUsernames",
+                        "approvalsWhitelistTeams",
+                        "enableMergeWhitelist",
+                        "mergeWhitelistUsernames",
+                        "mergeWhitelistTeams",
+                        "blockOnRejectedReviews"
+                      ]
+                    },
+                    "isPrivate": {
+                      "type": "boolean"
+                    },
+                    "isInternal": {
+                      "type": "boolean"
+                    },
+                    "currentUserPermission": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "permission": {
+                          "type": "string"
+                        },
+                        "access": {
+                          "type": "string",
+                          "enum": ["read", "write", "admin"]
+                        },
+                        "permissionLabel": {
+                          "type": "string"
+                        },
+                        "roleName": {
+                          "type": "string"
+                        },
+                        "user": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "number"
+                            },
+                            "login": {
+                              "type": "string"
+                            },
+                            "full_name": {
+                              "type": "string"
+                            },
+                            "email": {
+                              "type": "string"
+                            },
+                            "avatar_url": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "login",
+                            "full_name",
+                            "email",
+                            "avatar_url"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "permission",
+                        "access",
+                        "permissionLabel",
+                        "roleName",
+                        "user"
+                      ]
+                    }
+                  },
+                  "required": ["branchProtection", "isPrivate", "isInternal"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/documents/{owner}/{repo}/collaborators": {
+      "get": {
+        "operationId": "listDocumentCollaborators",
+        "tags": ["documents"],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "owner",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "repo",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Collaborators list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "collaborators": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "permission": {
+                            "type": "string"
+                          },
+                          "access": {
+                            "type": "string",
+                            "enum": ["read", "write", "admin"]
+                          },
+                          "permissionLabel": {
+                            "type": "string"
+                          },
+                          "roleName": {
+                            "type": "string"
+                          },
+                          "user": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "number"
+                              },
+                              "login": {
+                                "type": "string"
+                              },
+                              "full_name": {
+                                "type": "string"
+                              },
+                              "email": {
+                                "type": "string"
+                              },
+                              "avatar_url": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "login",
+                              "full_name",
+                              "email",
+                              "avatar_url"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "permission",
+                          "access",
+                          "permissionLabel",
+                          "roleName",
+                          "user"
+                        ]
+                      }
+                    },
+                    "page": {
+                      "type": "number"
+                    },
+                    "limit": {
+                      "type": "number"
+                    },
+                    "hasMore": {
+                      "type": "boolean"
+                    },
+                    "currentUserPermission": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "permission": {
+                          "type": "string"
+                        },
+                        "access": {
+                          "type": "string",
+                          "enum": ["read", "write", "admin"]
+                        },
+                        "permissionLabel": {
+                          "type": "string"
+                        },
+                        "roleName": {
+                          "type": "string"
+                        },
+                        "user": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "number"
+                            },
+                            "login": {
+                              "type": "string"
+                            },
+                            "full_name": {
+                              "type": "string"
+                            },
+                            "email": {
+                              "type": "string"
+                            },
+                            "avatar_url": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "login",
+                            "full_name",
+                            "email",
+                            "avatar_url"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "permission",
+                        "access",
+                        "permissionLabel",
+                        "roleName",
+                        "user"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "collaborators",
+                    "page",
+                    "limit",
+                    "hasMore",
+                    "currentUserPermission"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/documents/{owner}/{repo}/collaborators/{collaborator}": {
+      "put": {
+        "operationId": "addDocumentCollaborator",
+        "tags": ["documents"],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "owner",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "repo",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "collaborator",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "permission": {
+                    "type": "string",
+                    "enum": ["read", "write", "admin"]
+                  }
+                },
+                "required": ["permission"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Collaborator added",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "collaborator": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "permission": {
+                          "type": "string"
+                        },
+                        "access": {
+                          "type": "string",
+                          "enum": ["read", "write", "admin"]
+                        },
+                        "permissionLabel": {
+                          "type": "string"
+                        },
+                        "roleName": {
+                          "type": "string"
+                        },
+                        "user": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "number"
+                            },
+                            "login": {
+                              "type": "string"
+                            },
+                            "full_name": {
+                              "type": "string"
+                            },
+                            "email": {
+                              "type": "string"
+                            },
+                            "avatar_url": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "login",
+                            "full_name",
+                            "email",
+                            "avatar_url"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "permission",
+                        "access",
+                        "permissionLabel",
+                        "roleName",
+                        "user"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "removeDocumentCollaborator",
+        "tags": ["documents"],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "owner",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "repo",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "collaborator",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Collaborator removed"
+          }
+        }
+      }
+    },
+    "/api/app/documents/{owner}/{repo}/pull-requests/{pullNumber}/reviews": {
+      "post": {
+        "operationId": "submitDocumentReview",
+        "tags": ["documents"],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "owner",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "repo",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "pullNumber",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "event": {
+                    "type": "string",
+                    "enum": ["APPROVE", "REQUEST_CHANGES", "COMMENT"]
+                  },
+                  "body": {
+                    "type": "string"
+                  }
+                },
+                "required": ["event"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Review submitted"
+          }
+        }
+      }
+    },
+    "/api/app/documents/{owner}/{repo}/pull-requests/{pullNumber}/publish": {
+      "post": {
+        "operationId": "publishDocument",
+        "tags": ["documents"],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "owner",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "repo",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "pullNumber",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "nextVersion": {
+                    "type": "number"
+                  }
+                },
+                "required": ["nextVersion"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Document published",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "tag": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "number"
+                        },
+                        "sha": {
+                          "type": "string"
+                        },
+                        "created": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["name", "version", "sha", "created"]
+                    }
+                  },
+                  "required": ["ok", "tag"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/users/search": {
+      "get": {
+        "operationId": "searchUsers",
+        "tags": ["users"],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "q",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User search results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "users": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "number"
+                          },
+                          "login": {
+                            "type": "string"
+                          },
+                          "full_name": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string"
+                          },
+                          "avatar_url": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "login",
+                          "full_name",
+                          "email",
+                          "avatar_url"
+                        ]
+                      }
+                    },
+                    "page": {
+                      "type": "number"
+                    },
+                    "limit": {
+                      "type": "number"
+                    },
+                    "hasMore": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": ["users", "page", "limit", "hasMore"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/billing/status": {
+      "get": {
+        "operationId": "getBillingStatus",
+        "tags": ["billing"],
+        "responses": {
+          "200": {
+            "description": "Billing status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "currentPeriodEnd": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "cancelAtPeriodEnd": {
+                      "type": "boolean"
+                    },
+                    "cancelAt": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "hasAccess": {
+                      "type": "boolean"
+                    },
+                    "accessSource": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "config_bypass",
+                        "stripe",
+                        "admin_grant",
+                        "admin_revoke",
+                        "none",
+                        null
+                      ]
+                    },
+                    "override": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "username": {
+                          "type": "string"
+                        },
+                        "access": {
+                          "type": "string",
+                          "enum": ["grant", "revoke"]
+                        },
+                        "updatedBy": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "username",
+                        "access",
+                        "updatedBy",
+                        "updatedAt"
+                      ]
+                    },
+                    "plan": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "amount": {
+                          "type": "number"
+                        },
+                        "currency": {
+                          "type": "string"
+                        },
+                        "interval": {
+                          "type": "string"
+                        },
+                        "formatted": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "amount",
+                        "currency",
+                        "interval",
+                        "formatted"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "currentPeriodEnd",
+                    "cancelAtPeriodEnd",
+                    "cancelAt",
+                    "hasAccess",
+                    "accessSource",
+                    "override",
+                    "plan"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/billing/checkout": {
+      "post": {
+        "operationId": "createBillingCheckout",
+        "tags": ["billing"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "idempotencyKey": {
+                    "type": "string"
+                  }
+                },
+                "required": ["idempotencyKey"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Checkout URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["url"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/billing/portal": {
+      "post": {
+        "operationId": "createBillingPortal",
+        "tags": ["billing"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "idempotencyKey": {
+                    "type": "string"
+                  }
+                },
+                "required": ["idempotencyKey"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Portal URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["url"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/admin/subscriptions/access": {
+      "get": {
+        "operationId": "listAdminSubscriptionAccess",
+        "tags": ["admin"],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "q",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Admin subscription access list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "users": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "username": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string"
+                          },
+                          "hasAccess": {
+                            "type": "boolean"
+                          },
+                          "accessSource": {
+                            "type": "string",
+                            "enum": [
+                              "config_bypass",
+                              "stripe",
+                              "admin_grant",
+                              "admin_revoke",
+                              "none"
+                            ]
+                          },
+                          "stripeStatus": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "currentPeriodEnd": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "cancelAtPeriodEnd": {
+                            "type": "boolean"
+                          },
+                          "cancelAt": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "override": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "username": {
+                                "type": "string"
+                              },
+                              "access": {
+                                "type": "string",
+                                "enum": ["grant", "revoke"]
+                              },
+                              "updatedBy": {
+                                "type": "string"
+                              },
+                              "updatedAt": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "username",
+                              "access",
+                              "updatedBy",
+                              "updatedAt"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "username",
+                          "hasAccess",
+                          "accessSource",
+                          "stripeStatus",
+                          "currentPeriodEnd",
+                          "cancelAtPeriodEnd",
+                          "cancelAt",
+                          "override"
+                        ]
+                      }
+                    },
+                    "page": {
+                      "type": "number"
+                    },
+                    "limit": {
+                      "type": "number"
+                    },
+                    "hasMore": {
+                      "type": "boolean"
+                    },
+                    "query": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["users", "page", "limit", "hasMore", "query"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/admin/subscriptions/access/{username}": {
+      "put": {
+        "operationId": "setAdminSubscriptionAccess",
+        "tags": ["admin"],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "username",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "access": {
+                    "type": "string",
+                    "enum": ["grant", "revoke"]
+                  }
+                },
+                "required": ["access"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Access updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "type": "object",
+                      "properties": {
+                        "username": {
+                          "type": "string"
+                        },
+                        "fullName": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "hasAccess": {
+                          "type": "boolean"
+                        },
+                        "accessSource": {
+                          "type": "string",
+                          "enum": [
+                            "config_bypass",
+                            "stripe",
+                            "admin_grant",
+                            "admin_revoke",
+                            "none"
+                          ]
+                        },
+                        "stripeStatus": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "currentPeriodEnd": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "cancelAtPeriodEnd": {
+                          "type": "boolean"
+                        },
+                        "cancelAt": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "override": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "username": {
+                              "type": "string"
+                            },
+                            "access": {
+                              "type": "string",
+                              "enum": ["grant", "revoke"]
+                            },
+                            "updatedBy": {
+                              "type": "string"
+                            },
+                            "updatedAt": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "username",
+                            "access",
+                            "updatedBy",
+                            "updatedAt"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "username",
+                        "hasAccess",
+                        "accessSource",
+                        "stripeStatus",
+                        "currentPeriodEnd",
+                        "cancelAtPeriodEnd",
+                        "cancelAt",
+                        "override"
+                      ]
+                    }
+                  },
+                  "required": ["user"]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "clearAdminSubscriptionAccess",
+        "tags": ["admin"],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "username",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Access cleared"
+          }
+        }
+      }
+    }
+  }
+}

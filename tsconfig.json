@@ -26,7 +26,9 @@
       "@editor/*": ["./packages/editor/*"],
       "@gitea/*": ["./packages/gitea-client/*"],
       "@ui/*": ["./packages/ui-tokens/*"],
-      "@utils/*": ["./packages/utils/*"]
+      "@utils/*": ["./packages/utils/*"],
+      "@api-schema/*": ["./packages/api-schema/*"],
+      "@api-client/*": ["./packages/api-client/*"]
     },
 
     // Some stricter flags (disabled by default)
