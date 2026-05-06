@@ -13,10 +13,22 @@ import {
 
 describe("bootstrap-gitea-service-account", () => {
   test("defaults to the minimum admin scope required by the API", () => {
-    expect(resolveServiceTokenScopes()).toEqual(["write:admin"]);
+    expect(resolveServiceTokenScopes()).toEqual([
+      "write:admin",
+      "read:issue",
+      "read:organization",
+      "read:repository",
+      "read:user",
+    ]);
     expect(
       resolveServiceTokenScopes("write:admin,write:admin,read:user"),
-    ).toEqual(["write:admin", "read:user"]);
+    ).toEqual([
+      "write:admin",
+      "read:user",
+      "read:issue",
+      "read:organization",
+      "read:repository",
+    ]);
   });
 
   test("builds the expected SSM parameter name", () => {
@@ -45,7 +57,13 @@ describe("bootstrap-gitea-service-account", () => {
       `${DEFAULT_SERVICE_ACCOUNT_USERNAME}@users.bindersnap.com`,
     );
     expect(config.serviceTokenName).toBe(DEFAULT_SERVICE_TOKEN_NAME);
-    expect(config.serviceTokenScopes).toEqual(["write:admin"]);
+    expect(config.serviceTokenScopes).toEqual([
+      "write:admin",
+      "read:issue",
+      "read:organization",
+      "read:repository",
+      "read:user",
+    ]);
     expect(config.ssmParameterName).toBe(
       "/bindersnap/prod/gitea_service_token",
     );
