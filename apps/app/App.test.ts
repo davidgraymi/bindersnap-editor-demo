@@ -32,7 +32,11 @@ const mockFetchSessionUser = mock(
   } | null> => ({ user: null, token: null }),
 );
 const mockLogin = mock(async () => ({
-  user: null as { username: string; fullName?: string; isAdmin?: boolean } | null,
+  user: null as {
+    username: string;
+    fullName?: string;
+    isAdmin?: boolean;
+  } | null,
   token: null as string | null,
 }));
 const mockLogoutSession = mock(async () => {});

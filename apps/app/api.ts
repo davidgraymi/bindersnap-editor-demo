@@ -415,7 +415,11 @@ export async function fetchBillingStatus(): Promise<BillingStatusPayload> {
   } catch (error) {
     // 402 from the billing endpoint contains billing data (e.g. past_due status),
     // not a payment gate. Return the parsed body instead of throwing.
-    if (error instanceof ApiRequestError && error.status === 402 && error.data) {
+    if (
+      error instanceof ApiRequestError &&
+      error.status === 402 &&
+      error.data
+    ) {
       return error.data as BillingStatusPayload;
     }
     throw error;
@@ -517,4 +521,3 @@ export async function revokeAdminSubscriptionAccess(
     updatedBy: "admin",
   };
 }
-
