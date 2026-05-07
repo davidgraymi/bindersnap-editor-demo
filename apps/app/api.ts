@@ -1,6 +1,3 @@
-// Re-export gitea-client auth (token ops, not API calls)
-export { clearToken, storeToken } from "../../services/api/gitea-client/auth";
-
 // Re-export document search utilities
 export type { DocumentSearchParams } from "./documentSearch";
 export { parseDocumentSearchQuery } from "./documentSearch";
@@ -56,13 +53,44 @@ export type {
   BillingStatusPayload,
 } from "../../packages/api-schema/schemas/billing";
 export type { SearchUsersPayload } from "../../packages/api-schema/schemas/users";
+export type {
+  DocTag,
+  RepoCollaboratorPermissionSummary,
+  RepoUserSummary,
+} from "../../packages/api-schema/schemas/common";
+export type {
+  ApprovalState,
+  RepoBranchProtection,
+} from "../../packages/api-schema/schemas/documents";
 
-// Re-export from gitea-client for validation
-export {
-  validateUploadFile,
-  validateUploadFile as validateUploadFileWithClient,
-} from "../../services/api/gitea-client/uploads";
-export type { UploadValidationResult } from "../../services/api/gitea-client/uploads";
+export interface UploadValidationResult {
+  valid: boolean;
+  reason?: string;
+}
+
+export type InitialDocumentUploadStep =
+  | "hashing"
+  | "creating-repo"
+  | "bootstrapping"
+  | "protecting"
+  | "creating-branch"
+  | "committing"
+  | "opening-pr";
+
+const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024;
+
+export function validateUploadFile(file: File): UploadValidationResult {
+  if (file.size > MAX_FILE_SIZE_BYTES) {
+    const sizeMiB = (file.size / (1024 * 1024)).toFixed(1);
+    return {
+      valid: false,
+      reason: `File is too large (${sizeMiB} MiB). Maximum allowed size is 25 MiB.`,
+    };
+  }
+  return { valid: true };
+}
+
+export { validateUploadFile as validateUploadFileWithClient };
 
 import { ApiRequestError } from "../../packages/api-client/mutator";
 import {
@@ -282,10 +310,7 @@ export async function addDocumentCollaborator(
   repo: string,
   collaborator: string,
   permission: "read" | "write" | "admin",
-): Promise<
-  | import("../../services/api/gitea-client/repos").RepoCollaboratorPermissionSummary
-  | null
-> {
+): Promise<RepoCollaboratorPermissionSummary | null> {
   try {
     const response = await DocumentsClient.addDocumentCollaborator(
       owner,
@@ -388,7 +413,7 @@ export async function publishDocument(
   nextVersion: number,
 ): Promise<{
   ok: boolean;
-  tag: import("../../services/api/gitea-client/repos").DocTag;
+  tag: DocTag;
 }> {
   try {
     const response = await DocumentsClient.publishDocument(

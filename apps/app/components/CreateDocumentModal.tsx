@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { createInitialDocumentUpload } from "../api";
 import {
+  createInitialDocumentUpload,
   type InitialDocumentUploadStep,
   validateUploadFile,
-} from "../../../services/api/gitea-client/uploads";
+} from "../api";
 
 interface CreateDocumentModalProps {
   owner: string;

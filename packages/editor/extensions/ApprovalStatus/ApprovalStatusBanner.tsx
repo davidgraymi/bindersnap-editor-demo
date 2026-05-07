@@ -1,4 +1,4 @@
-import type { ApprovalState } from "../../../../services/api/gitea-client/pullRequests";
+import type { ApprovalState } from "@api-schema/schemas/documents";
 
 export interface ApprovalStatusBannerProps {
   approvalState: ApprovalState;

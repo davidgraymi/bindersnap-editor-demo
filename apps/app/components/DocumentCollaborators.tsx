@@ -9,7 +9,7 @@ import {
 import type {
   RepoCollaboratorPermissionSummary,
   RepoUserSummary,
-} from "../../../services/api/gitea-client/repos";
+} from "../api";
 
 type WritablePermission = "read" | "write" | "admin";
 type DisplayPermission = WritablePermission | "owner" | "unknown";

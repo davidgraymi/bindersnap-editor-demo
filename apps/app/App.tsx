@@ -15,7 +15,6 @@ import { BindersnapLogoMark } from "./components/BindersnapLogoMark";
 import { LandingPage } from "./components/LandingPage";
 import {
   type SessionUser,
-  clearToken,
   createCheckoutSession,
   createPortalSession,
   fetchBillingStatus,
@@ -23,7 +22,6 @@ import {
   login,
   logoutSession,
   signup,
-  storeToken,
 } from "./api";
 import { usePaymentRequiredHandler } from "./paymentRequired";
 import {
@@ -307,11 +305,6 @@ export function App() {
 
     try {
       const nextSession = await fetchSessionUser();
-      if (nextSession?.token) {
-        storeToken(nextSession.token);
-      } else {
-        clearToken();
-      }
       const resolvedUser = nextSession?.user ?? null;
       setUser(resolvedUser);
       setCallbackError(null);
@@ -551,7 +544,6 @@ export function App() {
         }}
         onSignOut={async () => {
           await logoutSession();
-          clearToken();
           setUser(null);
           setCallbackError(null);
           navigateTo({ kind: "home" }, true);
@@ -574,15 +566,11 @@ export function App() {
         prefilledEmail={prefilledEmail}
         callbackError={callbackError}
         onLogin={async (identifier, password, rememberMe) => {
-          clearToken();
           const authenticatedSession = await login(
             identifier,
             password,
             rememberMe,
           );
-          if (authenticatedSession.token) {
-            storeToken(authenticatedSession.token);
-          }
           const loginUser =
             authenticatedSession.user ?? (await refreshSession());
           if (!loginUser) {
@@ -599,11 +587,7 @@ export function App() {
           navigateTo({ kind: "home" }, true);
         }}
         onSignup={async (username, email, password) => {
-          clearToken();
           const authenticatedSession = await signup(username, email, password);
-          if (authenticatedSession.token) {
-            storeToken(authenticatedSession.token);
-          }
           const signupUser =
             authenticatedSession.user ?? (await refreshSession());
           if (!signupUser) {
@@ -639,7 +623,6 @@ export function App() {
         onNavigate={navigateTo}
         onSignOut={async () => {
           await logoutSession();
-          clearToken();
           setUser(null);
           setCallbackError(null);
           navigateTo({ kind: "home" }, true);
