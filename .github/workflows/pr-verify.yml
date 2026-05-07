@@ -6,6 +6,10 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - "CHANGELOG.md"
+      - "package.json"
+      - "bun.lock"
   workflow_dispatch:
 
 permissions:

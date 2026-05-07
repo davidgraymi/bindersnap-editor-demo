@@ -1,6 +1,6 @@
 {
   "name": "bindersnap-editor-demo",
-  "version": "0.4.0",
+  "version": "0.4.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -36,7 +36,8 @@
     "tf:apply": "bash infra/apply-all.sh",
     "tf:bootstrap": "bash infra/bootstrap.sh",
     "tf:plan": "bash infra/apply-all.sh plan",
-    "version": "auto-changelog -p && git add CHANGELOG.md"
+    "release": "standard-version",
+    "version": "auto-changelog -p && bun install && git add CHANGELOG.md bun.lock"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^8.5.0",
@@ -80,6 +81,7 @@
     "jsdom": "^29.0.2",
     "openapi-typescript": "^7.13.0",
     "orval": "^8.9.1",
-    "prettier": "^3.8.3"
+    "prettier": "^3.8.3",
+    "standard-version": "^9.5.0"
   }
 }
