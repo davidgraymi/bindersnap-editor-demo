@@ -2,6 +2,15 @@ name: Build API Image
 
 on:
   workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to checkout and build"
+        type: string
+        required: false
+      sha:
+        description: "Commit SHA to use for the image tag (defaults to github.sha)"
+        type: string
+        required: false
   workflow_dispatch:
 
 permissions:
@@ -15,6 +24,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
 
       - name: Normalize image owner
         run: echo "IMAGE_OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
@@ -29,6 +40,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Resolve image SHA
+        run: echo "IMAGE_SHA=${{ inputs.sha || github.sha }}" >> "$GITHUB_ENV"
+
       - name: Build and push API image
         uses: docker/build-push-action@v6
         with:
@@ -37,10 +51,10 @@ jobs:
           platforms: linux/arm64
           push: true
           tags: |
-            ghcr.io/${{ env.IMAGE_OWNER }}/bindersnap-api:${{ github.sha }}
+            ghcr.io/${{ env.IMAGE_OWNER }}/bindersnap-api:${{ env.IMAGE_SHA }}
             ghcr.io/${{ env.IMAGE_OWNER }}/bindersnap-api:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Inspect published manifest
-        run: docker buildx imagetools inspect ghcr.io/${IMAGE_OWNER}/bindersnap-api:${GITHUB_SHA}
+        run: docker buildx imagetools inspect ghcr.io/${IMAGE_OWNER}/bindersnap-api:${IMAGE_SHA}
