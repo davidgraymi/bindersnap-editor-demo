@@ -33,8 +33,7 @@
     "tf:apply": "bash infra/apply-all.sh",
     "tf:bootstrap": "bash infra/bootstrap.sh",
     "tf:plan": "bash infra/apply-all.sh plan",
-    "release": "standard-version",
-    "version": "auto-changelog -p && bun install && git add CHANGELOG.md bun.lock"
+    "release": "standard-version"
   },
   "dependencies": {
     "@floating-ui/dom": "^1.7.6",
