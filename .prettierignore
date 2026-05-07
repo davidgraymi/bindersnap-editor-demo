@@ -1,8 +1,8 @@
 .claude/
 .github/agents/
-packages/gitea-client/spec/gitea.d.ts
-packages/gitea-client/spec/openapi3.json
-packages/gitea-client/spec/swagger2.json
+services/api/gitea-client/spec/gitea.d.ts
+services/api/gitea-client/spec/openapi3.json
+services/api/gitea-client/spec/swagger2.json
 CHANGELOG.md
 packages/api-schema/openapi.json
 packages/api-client/

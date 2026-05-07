@@ -24,7 +24,7 @@
     "baseUrl": ".",
     "paths": {
       "@editor/*": ["./packages/editor/*"],
-      "@gitea/*": ["./packages/gitea-client/*"],
+      "@gitea/*": ["services/api/gitea-client/*"],
       "@ui/*": ["./packages/ui-tokens/*"],
       "@utils/*": ["./packages/utils/*"],
       "@api-schema/*": ["./packages/api-schema/*"],

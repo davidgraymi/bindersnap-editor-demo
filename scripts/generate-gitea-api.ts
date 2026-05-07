@@ -32,7 +32,7 @@ function deepMerge(target: any, source: any) {
 
 async function main() {
   const GITEA_URL = process.env.GITEA_URL || "http://localhost:3000";
-  const SPEC_DIR = "packages/gitea-client/spec";
+  const SPEC_DIR = "services/api/gitea-client/spec";
   const SWAGGER2_FILE = path.join(SPEC_DIR, "swagger2.json");
   const OPENAPI3_FILE = path.join(SPEC_DIR, "openapi3.json");
   const EXTENSIONS_FILE = path.join(SPEC_DIR, "extensions.json");

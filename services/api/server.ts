@@ -22,7 +22,7 @@ import {
   GiteaApiError,
   unwrap,
   type GiteaClient,
-} from "../../packages/gitea-client/client";
+} from "./gitea-client/client";
 import {
   addRepoCollaborator,
   bootstrapEmptyMainBranch,
@@ -47,21 +47,21 @@ import {
   type RepoBranchProtection,
   type RepoUserSummary,
   type WorkspaceRepo,
-} from "../../packages/gitea-client/repos";
+} from "./gitea-client/repos";
 import {
   buildUploadBranchName,
   buildUploadCommitMessage,
   commitBinaryFile,
   createUploadBranch,
   validateUploadFile,
-} from "../../packages/gitea-client/uploads";
+} from "./gitea-client/uploads";
 import {
   createPullRequest,
   listPullRequests,
   mergeOrResolveConflicts,
   submitReview,
   type PullRequestWithApprovalState,
-} from "../../packages/gitea-client/pullRequests";
+} from "./gitea-client/pullRequests";
 
 const authAttempts = new Map<string, { count: number; resetAt: number }>();
 const checkoutAttempts = new Map<string, { count: number; resetAt: number }>();

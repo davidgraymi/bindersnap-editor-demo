@@ -4,8 +4,8 @@ import type { PullRequestWithApprovalState } from "../api";
 import type {
   DocTag,
   RepoBranchProtection,
-} from "../../../packages/gitea-client/repos";
-import type { UploadResult } from "../../../packages/gitea-client/uploads";
+} from "../../../services/api/gitea-client/repos";
+import type { UploadResult } from "../../../services/api/gitea-client/uploads";
 import {
   downloadDocument,
   getDocumentDetail,

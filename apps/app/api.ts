@@ -1,5 +1,5 @@
 // Re-export gitea-client auth (token ops, not API calls)
-export { clearToken, storeToken } from "../../packages/gitea-client/auth";
+export { clearToken, storeToken } from "../../services/api/gitea-client/auth";
 
 // Re-export document search utilities
 export type { DocumentSearchParams } from "./documentSearch";
@@ -61,8 +61,8 @@ export type { SearchUsersPayload } from "../../packages/api-schema/schemas/users
 export {
   validateUploadFile,
   validateUploadFile as validateUploadFileWithClient,
-} from "../../packages/gitea-client/uploads";
-export type { UploadValidationResult } from "../../packages/gitea-client/uploads";
+} from "../../services/api/gitea-client/uploads";
+export type { UploadValidationResult } from "../../services/api/gitea-client/uploads";
 
 import { ApiRequestError } from "../../packages/api-client/mutator";
 import {
@@ -283,7 +283,7 @@ export async function addDocumentCollaborator(
   collaborator: string,
   permission: "read" | "write" | "admin",
 ): Promise<
-  | import("../../packages/gitea-client/repos").RepoCollaboratorPermissionSummary
+  | import("../../services/api/gitea-client/repos").RepoCollaboratorPermissionSummary
   | null
 > {
   try {
@@ -388,7 +388,7 @@ export async function publishDocument(
   nextVersion: number,
 ): Promise<{
   ok: boolean;
-  tag: import("../../packages/gitea-client/repos").DocTag;
+  tag: import("../../services/api/gitea-client/repos").DocTag;
 }> {
   try {
     const response = await DocumentsClient.publishDocument(

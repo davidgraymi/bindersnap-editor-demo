@@ -20,7 +20,7 @@ bun run build         # Build SPA to dist/
 
 # Tests
 bun run test          # Run all unit tests (test:app + test:ops)
-bun run test:app      # Test apps/app, packages/gitea-client, packages/editor, packages/utils
+bun run test:app      # Test apps/app, packages/editor, packages/utils
 bun run test:ops      # Test services/api, scripts, infra/backups
 bun run test:integration  # Playwright tests (requires: bun run up)
 
@@ -51,7 +51,6 @@ This is a **Bun monorepo** with one unified SPA, shared packages, and backend se
 ### Packages (shared)
 
 - `packages/editor/` — Tiptap 3 + ProseMirror editor. Backend-agnostic: receives a `giteaClient` prop for real use, runs demo mode without it. **Never import `gitea-client` inside `editor/`.**
-- `packages/gitea-client/` — All Gitea API calls (auth, documents, PRs). Stateless service modules.
 - `packages/ui-tokens/` — CSS design tokens (single source of truth for all visual values).
 - `packages/utils/` — Shared utilities (DOMPurify sanitizer, etc.).
 

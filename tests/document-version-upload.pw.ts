@@ -22,7 +22,7 @@ import {
   getPullRequestForBranch,
   listPullRequests,
   submitReview,
-} from "../packages/gitea-client/pullRequests";
+} from "../services/api/gitea-client/pullRequests";
 import {
   createBobClient,
   expectedPrefilledDocumentName,

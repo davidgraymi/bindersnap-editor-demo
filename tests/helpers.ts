@@ -8,12 +8,12 @@
 
 import { randomUUID } from "crypto";
 import { expect, type Page } from "@playwright/test";
-import { createGiteaClient } from "../packages/gitea-client/client";
+import { createGiteaClient } from "../services/api/gitea-client/client";
 import {
   createAuthenticatedClient,
   storeToken,
   validateToken,
-} from "../packages/gitea-client/auth";
+} from "../services/api/gitea-client/auth";
 import { seedDevStack } from "./seed";
 
 // ---------------------------------------------------------------------------

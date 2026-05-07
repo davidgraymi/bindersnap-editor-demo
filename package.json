@@ -28,7 +28,7 @@
     "summarize": "bun scripts/summarize-lighthouse.ts",
     "test": "bun run test:all",
     "test:all": "bun run test:app && bun run test:ops",
-    "test:app": "bun test apps/app packages/gitea-client packages/editor packages/utils",
+    "test:app": "bun test apps/app packages/editor packages/utils",
     "test:ops": "bun test services/api scripts infra/backups",
     "test:integration": "bunx playwright test --config=playwright.config.ts",
     "test:unit": "bun test",

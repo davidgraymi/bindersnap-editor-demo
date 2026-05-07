@@ -80,10 +80,7 @@ Routes:
 
 ### The shared editor
 
-`packages/editor/` is imported by the SPA. The editor is backend-agnostic by
-design — it receives a `giteaClient` prop when wired to the real app, and runs
-in read-only demo mode when that prop is absent. **Never import from
-`packages/gitea-client/` directly inside `packages/editor/`.**
+`packages/editor/` is imported by the SPA.
 
 If you change anything in `packages/editor/` that affects visual appearance, note it
 in your PR description. The landing page demo embed is a static snapshot and must
