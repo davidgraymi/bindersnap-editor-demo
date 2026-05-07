@@ -1,24 +1,31 @@
-# IAM roles for the Fargate task.
+# IAM role for the Lambda function.
 #
-# Two roles, deliberately split:
+# Single role (Lambda has no equivalent of ECS's "task execution role" vs
+# "task role" split — the function itself uses one execution role).
 #
-#   task_execution_role  — used by the ECS agent. Pulls the image from ECR,
-#                          fetches secrets from Secrets Manager / SSM, writes
-#                          logs to CloudWatch. Should NOT have application data
-#                          permissions.
+# Permissions:
 #
-#   task_role            — assumed by the running container. Grants:
-#                            kms:Decrypt/GenerateDataKey on the session
-#                              envelope CMK (used to wrap Gitea tokens before
-#                              writing to the sessions row).
-#                            secretsmanager:GetSecretValue scoped to the
-#                              api/* secrets (Postgres password, Stripe keys,
-#                              Gitea service token).
-#                            (Aurora access is via DB password auth held in
-#                             Secrets Manager, not IAM — we use a long-lived
-#                             connection pool, not data-API per-call IAM.)
+#   Always-on AWS-managed:
+#     AWSLambdaBasicExecutionRole              # CloudWatch Logs
+#     AWSLambdaVPCAccessExecutionRole          # ENI mgmt for VPC attachment
 #
-# Break-glass: ssmmessages:* + ssm:StartSession + DescribeSessions to enable
-# `aws ecs execute-command` (#222).
+#   Custom:
+#     secretsmanager:GetSecretValue            # scoped to api/* secrets
+#                                                (Postgres password, Stripe
+#                                                keys, Gitea service token)
+#     kms:Decrypt, kms:GenerateDataKey         # session_envelope CMK only
 #
-# TODO(#224): aws_iam_role.task_execution + aws_iam_role.task + policies
+# What we deliberately do NOT grant:
+#   rds-data:*    — not using the RDS Data API; Lambda connects to Aurora
+#                   directly over port 5432.
+#   ecs:*         — not using ECS at all.
+#   dynamodb:*    — not using DynamoDB; all state lives in Aurora.
+#
+# Trust policy: lambda.amazonaws.com.
+#
+# TODO(#224):
+#   aws_iam_role.lambda
+#   aws_iam_role_policy.lambda_secrets
+#   aws_iam_role_policy.lambda_kms
+#   aws_iam_role_policy_attachment.lambda_basic_execution
+#   aws_iam_role_policy_attachment.lambda_vpc_access

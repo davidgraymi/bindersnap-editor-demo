@@ -1,63 +1,86 @@
 # infra/api-service
 
-Terraform root for the `services/api` Fargate deployment. **Skeleton only — not yet apply-ready.** Tracks issue #224.
+Terraform root for the `services/api` Lambda + API Gateway deployment. **Skeleton only — not yet apply-ready.** Tracks issue #224.
+
+## Architecture
+
+```
+                    Internet
+                       │
+                       ▼
+              API Gateway HTTP API           ($0 idle, $1/M requests)
+                       │
+                       ▼
+           Lambda (container image, VPC)     ($0 idle, pay per invocation)
+              │       │       │
+   ┌──────────┘       │       └─────────┐
+   ▼                  ▼                 ▼
+ Aurora             Gitea             Stripe API
+ Serverless v2      on EC2            (via Gitea-as-NAT,
+ (private)          (private          using existing public
+                     ENI)             IP — see nat.tf)
+ ($0 idle at
+  min_capacity=0)
+```
+
+**No pay-per-hour resources.** Aurora pauses to ~$0/month, Lambda and API Gateway are pay-per-use, no ALB, no NAT Gateway. The Gitea EC2 instance — already running, already paid for — doubles as the NAT for Lambda's outbound traffic to Stripe.
 
 ## Status
 
-| File                 | Purpose                                                                               | State    |
-| -------------------- | ------------------------------------------------------------------------------------- | -------- |
-| `main.tf`            | Provider, backend, shared variables and locals                                        | scaffold |
-| `ecr.tf`             | ECR repository for the API image                                                      | scaffold |
-| `aurora.tf`          | Aurora Serverless v2 Postgres — sessions, subscriptions, webhook idempotency, all of it | scaffold |
-| `secrets.tf`         | Secrets Manager + KMS for Stripe/Gitea/Postgres credentials                           | scaffold |
-| `iam.tf`             | Task execution role and task role                                                     | scaffold |
-| `security-groups.tf` | ALB SG, task SG, task→Aurora SG                                                       | scaffold |
-| `alb.tf`             | ALB, target group, listener, ACM cert                                                 | scaffold |
-| `ecs-cluster.tf`     | ECS cluster with FARGATE / FARGATE_SPOT capacity providers                            | scaffold |
-| `ecs-service.tf`     | Service, task definition, autoscaling                                                 | scaffold |
+| File                 | Purpose                                                              | State    |
+| -------------------- | -------------------------------------------------------------------- | -------- |
+| `main.tf`            | Provider, backend, shared variables and locals                       | scaffold |
+| `ecr.tf`             | ECR repository for the Lambda container image                        | scaffold |
+| `aurora.tf`          | Aurora Serverless v2 Postgres — sessions, subscriptions, webhook idempotency | scaffold |
+| `secrets.tf`         | Secrets Manager + KMS for Stripe/Gitea/Postgres credentials          | scaffold |
+| `iam.tf`             | Lambda execution role                                                | scaffold |
+| `security-groups.tf` | Lambda SG, Aurora SG, reciprocal Gitea ingress rule                  | scaffold |
+| `apigw.tf`           | API Gateway HTTP API + custom domain                                 | scaffold |
+| `lambda.tf`          | Lambda function (container image, VPC-attached, Lambda Web Adapter)  | scaffold |
+| `nat.tf`             | Lambda subnet egress route via the Gitea ENI                         | scaffold |
 
 ## Apply order
 
-Once filled in, this root slots between `infra/compute/` and `infra/backups/` in `infra/apply-all.sh`. Apply order within this root is the file order above (main → ecr → data store → secrets → iam → networking → alb → cluster → service).
+Once filled in, this root slots between `infra/compute/` and `infra/backups/` in `infra/apply-all.sh`. Apply order within this root: main → ecr → secrets → aurora → iam → security-groups → nat → lambda → apigw.
 
-## Datastore choice: Aurora Serverless v2 Postgres only
+## Cold-start tradeoff
 
-DynamoDB was considered for sessions and dropped to keep operational/cost surface small. One DB, one IAM/networking surface, one backup story, one credential rotation. Sessions are pure key-value but Postgres handles that fine; we lose DynamoDB's native TTL but a tiny reap job (or `pg_cron`) replaces it.
+Aurora Serverless v2 supports `min_capacity = 0` ACU (true auto-pause). Lambda has its own ~1–2s container cold-start when the execution environment is recycled.
 
-### Cold-start tradeoff
+Worst-case: idle for 30+ minutes, first request pays both. Roughly 7–17 seconds. Tolerable for Stripe webhooks (they retry) and acceptable for low-traffic personal use.
 
-Aurora Serverless v2 supports `min_capacity = 0` ACU (true auto-pause). Cost vs. UX:
+If a hot login path matters, two mitigations:
 
-| `min_capacity` | Idle cost | First-request latency after long idle |
+| Knob | Idle cost | Effect |
 | --- | --- | --- |
-| `0` (auto-pause) | ~$0/month | ~5–15s wake-up |
-| `0.5 ACU` | ~$43/month | none |
+| Aurora `min_capacity = 0.5` | +~$43/mo | Removes Aurora wake-up |
+| Lambda provisioned concurrency = 1 | +~$5/mo | Removes Lambda cold-start |
+| Both | +~$48/mo | Hot path always |
 
-Default in this scaffold is `0`. Acceptable for Stripe webhooks (they retry) and for low-traffic personal use; uncomfortable if a user has just been linked a login URL. Knob is a single number in `aurora.tf`.
+A 4-minute warmer cron pinging `/healthz` during business hours is a cheaper middle ground for both.
 
-### Cold-start mitigations if `min_capacity = 0` proves painful
+## Why container-image Lambda (not zip + custom runtime)
 
-- A ~3-line warmer cron that pings `/healthz` (and a trivial DB query inside it) every 4 minutes during business hours. Keeps the cluster warm only when it matters; ~$0–5/month at solo-dev volume.
-- Bump to `0.5 ACU` and stop thinking about it.
+Bun isn't a managed Lambda runtime. Two paths exist:
 
-## Open question: ALB vs. API Gateway HTTP API
+1. **Container image + AWS Lambda Web Adapter (chosen).** The existing Bun HTTP server runs unchanged inside a Lambda container; LWA is a sidecar binary that proxies API Gateway events to a local HTTP listener. No code refactor.
+2. Custom runtime via `bootstrap` script. Requires packaging Bun as a layer and writing handler glue — bigger code change.
 
-ALB has a ~$16/month floor at zero traffic — pay-per-hour, can't be turned off. The "true serverless" alternative is **API Gateway HTTP API + VPC Link to Fargate**, billed per request. Tradeoffs:
+We're picking #1 to keep `services/api/server.ts` portable across local dev (Bun directly), CI tests, and prod (Bun under LWA in Lambda).
 
-| | ALB | API Gateway HTTP API |
-| --- | --- | --- |
-| Idle cost | ~$16/month | $0 |
-| Per-request cost | included in floor | ~$1/M requests |
-| WebSocket support | yes | separate WebSocket API product |
-| Path-based routing | rich | adequate |
-| ECS native integration | direct | via VPC Link |
+## Why Lambda is in the VPC, not using the RDS Data API
 
-Hocuspocus runs separately so the WebSocket gap doesn't matter for the API tier. If you want the smallest possible idle bill, this is worth swapping. The scaffold currently assumes ALB; switching is a contained change to `alb.tf` and `ecs-service.tf`.
+We considered making Lambda VPC-less and reaching Aurora via the RDS Data API (HTTPS, no VPC attachment needed). Rejected because:
+
+- VPC-attached Lambda reaches Aurora over a long-lived Postgres connection — lower latency, no per-request Data API fee, full transaction support without the BeginTransaction/CommitTransaction API dance.
+- Lambda is already in the VPC anyway to reach Gitea privately, so the Data API only saves us one of two private-VPC reasons.
+- The Stripe egress problem (Lambda → public internet) is solved by the Gitea-as-NAT path with no extra cost.
 
 ## Out of scope for #224 first slice
 
 - Filling in the resource bodies. The first slice (this PR) only commits the structure so the design is reviewable. Each subsequent PR fills in one or two files and is independently applyable.
 - Cross-account / multi-region. Single-AZ, single-account is fine for solo-dev launch.
-- Replacing Caddy on the EC2 host (Gitea still fronts it).
+- Replacing Caddy on the host (Gitea still fronts itself; Caddy is unaffected by this change).
+- Refactoring `services/api/server.ts` for Lambda Web Adapter compatibility (no code change needed beyond a Dockerfile addition).
 
-See issue #224 and the plan-verification comment for the full breakdown.
+See issue #224 and the plan-verification thread for the full breakdown.

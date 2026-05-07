@@ -15,12 +15,22 @@
 #   - Sessions are pure KV but Postgres handles that fine; we lose DynamoDB's
 #     native TTL but a tiny reap job (or pg_cron) replaces it.
 #
+# Networking:
+#   Lives in private subnets in the same VPC as the Lambda function and the
+#   Gitea EC2 instance. No public IP, no public accessibility. Lambda
+#   reaches it directly over the private network using a long-lived
+#   connection pool.
+#
+#   We are NOT using the RDS Data API. Lambda is VPC-attached, so a normal
+#   Postgres connection over port 5432 is the right path: lower latency, no
+#   per-request Data API fee, full transaction support without the
+#   Begin/Commit/Rollback API dance. The Data API path was considered and
+#   rejected in favor of keeping Lambda inside the VPC (see issue #224
+#   discussion thread).
+#
 # Capacity (chosen for cost — see README "Cold-start tradeoff"):
 #   min_capacity = 0      # true auto-pause; ~$0 idle, ~5-15s wake-up on first request
 #   max_capacity = 1      # solo-dev cap; raise when load justifies it
-#
-# If the cold-start UX is unacceptable on the login path, raise min_capacity
-# to 0.5 ACU (~$43/mo) — that change is one number here, no other code moves.
 #
 # Token-at-rest for sessions:
 #   gitea_token is wrapped with a per-session DEK encrypted by a KMS CMK
@@ -28,8 +38,9 @@
 #   columns. A snapshot of the DB never reveals plaintext Gitea tokens.
 #
 # Credentials:
-#   master password lives in Secrets Manager with rotation; task fetches via
-#   IAM at boot and holds a connection pool. See secrets.tf.
+#   master password lives in Secrets Manager with rotation; Lambda fetches
+#   it at cold-start and holds a connection pool for the lifetime of the
+#   execution environment.
 #
 # TODO(#224):
 #   aws_rds_cluster.api          (engine = aurora-postgresql)

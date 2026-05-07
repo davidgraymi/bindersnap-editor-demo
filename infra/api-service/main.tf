@@ -1,7 +1,19 @@
-# API service module: ECS Fargate deployment of services/api behind an ALB.
+# API service module: container-image Lambda fronted by API Gateway HTTP API.
 #
 # Tracks issue #224. SKELETON ONLY — resource bodies will be filled in
 # subsequent PRs so each slice is independently reviewable and applyable.
+#
+# Architecture summary:
+#   API Gateway HTTP API
+#     → Lambda (container image, VPC-attached)
+#         ├─→ Aurora Serverless v2 Postgres   (same VPC, private)
+#         ├─→ Gitea on EC2                    (same VPC, private)
+#         └─→ Stripe API                      (via Gitea-as-NAT, see nat.tf)
+#
+# Pay-per-hour resources: NONE (Aurora min_capacity = 0, no ALB, no NAT
+# Gateway, no ECS tasks). The only always-on costs are Aurora storage,
+# CloudWatch log retention, and the existing Gitea EC2 (which doubles as
+# the NAT for Lambda's egress).
 #
 # Usage (once complete):
 #   cd infra/api-service
@@ -30,57 +42,68 @@ provider "aws" {
 # ---------- Variables ----------
 
 variable "aws_region" {
-  description = "AWS region for all api-service resources"
+  description = "AWS region for all api-service resources."
   type        = string
   default     = "us-east-1"
 }
 
 variable "project" {
-  description = "Project name for resource tagging"
+  description = "Project name for resource tagging."
   type        = string
   default     = "bindersnap"
 }
 
 variable "environment" {
-  description = "Environment name"
+  description = "Environment name."
   type        = string
   default     = "prod"
 }
 
 variable "vpc_id" {
-  description = "VPC where the ALB and Fargate tasks live. Must be the same VPC as the Gitea host so tasks can reach Gitea over the private network."
+  description = "VPC shared with the Gitea EC2 instance and the Aurora cluster. Lambda is attached to this VPC."
   type        = string
 }
 
 variable "private_subnet_ids" {
-  description = "Subnets where Fargate tasks run (Aurora and tasks should share these)."
+  description = "Private subnets where Lambda ENIs and Aurora live. Their default route (0.0.0.0/0) points at the Gitea ENI for outbound egress (see nat.tf)."
   type        = list(string)
 }
 
-variable "public_subnet_ids" {
-  description = "Subnets where the ALB lives. Single-AZ acceptable for solo-dev launch; revisit when traffic justifies multi-AZ."
-  type        = list(string)
-}
-
-variable "api_domain_name" {
-  description = "Public hostname served by the ALB, e.g. api.bindersnap.example.com."
-  type        = string
-}
-
-variable "acm_certificate_arn" {
-  description = "ACM certificate ARN for api_domain_name. Issued separately to keep this root idempotent."
+variable "gitea_instance_id" {
+  description = "EC2 instance ID of the Gitea host that doubles as the NAT for Lambda. Used to look up its primary ENI for the Lambda subnet's egress route."
   type        = string
 }
 
 variable "gitea_security_group_id" {
-  description = "Security group of the EC2 instance running Gitea. Tasks need egress on the Gitea port; this SG is referenced from security-groups.tf to add the inbound rule."
+  description = "Security group of the Gitea EC2 instance. A reciprocal ingress rule for Lambda is added to this SG by security-groups.tf."
+  type        = string
+}
+
+variable "gitea_internal_port" {
+  description = "Port on which Gitea listens internally (typically 3000). Lambda's egress SG allows this port to gitea_security_group_id."
+  type        = number
+  default     = 3000
+}
+
+variable "api_domain_name" {
+  description = "Public hostname served by the API Gateway custom domain, e.g. api.bindersnap.example.com."
+  type        = string
+}
+
+variable "acm_certificate_arn" {
+  description = "ACM certificate ARN for api_domain_name. Must be issued in var.aws_region (HTTP APIs are regional)."
   type        = string
 }
 
 variable "image_tag" {
-  description = "Container image tag to deploy. CI sets this to the commit SHA on each push to main."
+  description = "ECR image tag to deploy. CI sets this to the commit SHA on each push to main touching services/api/**."
   type        = string
   default     = "latest"
+}
+
+variable "cors_allowed_origins" {
+  description = "Origins allowed by API Gateway CORS (handles browser preflights without invoking Lambda). Typically the SPA origin and the GitHub Pages origin."
+  type        = list(string)
 }
 
 # ---------- Locals ----------
