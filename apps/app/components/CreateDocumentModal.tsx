@@ -4,7 +4,7 @@ import { createInitialDocumentUpload } from "../api";
 import {
   type InitialDocumentUploadStep,
   validateUploadFile,
-} from "../../../packages/gitea-client/uploads";
+} from "../../../services/api/gitea-client/uploads";
 
 interface CreateDocumentModalProps {
   owner: string;

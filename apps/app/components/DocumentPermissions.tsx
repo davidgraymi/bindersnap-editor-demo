@@ -5,7 +5,7 @@ import {
   updateDocumentPermissions,
 } from "../api";
 import type { DocumentPermissionsPayload } from "../api";
-import type { RepoUserSummary } from "../../../packages/gitea-client/repos";
+import type { RepoUserSummary } from "../../../services/api/gitea-client/repos";
 
 interface DocumentPermissionsProps {
   owner: string;

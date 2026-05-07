@@ -15,7 +15,10 @@
     "down": "docker compose down -v --remove-orphans",
     "format": "bunx prettier --write \"**/*.{js,ts,jsx,tsx,html,css,json,yml,yaml,md}\" --ignore-path .gitignore --ignore-path .prettierignore",
     "format:check": "bunx prettier --check \"**/*.{js,ts,jsx,tsx,html,css,json,yml,yaml,md}\" --ignore-path .gitignore --ignore-path .prettierignore",
-    "generate:api": "bun run scripts/generate-gitea-api.ts",
+    "generate:gitea-client": "bun run scripts/generate-gitea-api.ts",
+    "generate:api-schema": "bun packages/api-schema/generate-openapi.ts",
+    "generate:api-client": "bunx orval --config orval.config.ts",
+    "generate:bff": "bun run generate:api-schema && bun run generate:api-client",
     "lighthouse": "bun run build && sh -c 'python3 -m http.server 4173 --directory dist >/dev/null 2>&1 & SERVER_PID=$!; sleep 1; bunx lighthouse http://localhost:4173 --output=json --output-path=./lighthouse.json --quiet --chrome-flags=\"--headless --no-sandbox --disable-gpu\" --no-enable-error-reporting; kill $SERVER_PID' && bun run summarize",
     "reconcile:stripe-customer": "bun scripts/reconcile-stripe-customer.ts",
     "serve": "bun run serve:app",
@@ -25,7 +28,7 @@
     "summarize": "bun scripts/summarize-lighthouse.ts",
     "test": "bun run test:all",
     "test:all": "bun run test:app && bun run test:ops",
-    "test:app": "bun test apps/app packages/gitea-client packages/editor packages/utils",
+    "test:app": "bun test apps/app packages/editor packages/utils",
     "test:ops": "bun test services/api scripts infra/backups",
     "test:integration": "bunx playwright test --config=playwright.config.ts",
     "test:unit": "bun test",
@@ -37,6 +40,7 @@
     "version": "auto-changelog -p && bun install && git add CHANGELOG.md bun.lock"
   },
   "dependencies": {
+    "@asteasolutions/zod-to-openapi": "^8.5.0",
     "@floating-ui/dom": "^1.7.6",
     "@tiptap/extension-color": "^3.22.4",
     "@tiptap/extension-highlight": "^3.22.4",
@@ -63,7 +67,8 @@
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "stripe": "^22.1.0",
-    "uuid": "^14.0.0"
+    "uuid": "^14.0.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
@@ -75,6 +80,7 @@
     "@types/uuid": "^11.0.0",
     "jsdom": "^29.0.2",
     "openapi-typescript": "^7.13.0",
+    "orval": "^8.9.1",
     "prettier": "^3.8.3",
     "standard-version": "^9.5.0"
   }

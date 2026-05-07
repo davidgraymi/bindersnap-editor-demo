@@ -1,0 +1,548 @@
+import "./init-openapi";
+import { OpenAPIRegistry } from "@asteasolutions/zod-to-openapi";
+import { z } from "zod";
+
+// Import all schemas AFTER calling extendZodWithOpenApi in init-openapi
+import {
+  SessionAuthStateSchema,
+  LoginBodySchema,
+  SignupBodySchema,
+} from "./schemas/auth";
+import {
+  CollaboratorListPayloadSchema,
+  DocumentDetailPayloadSchema,
+  DocumentPermissionsPayloadSchema,
+  InitialDocumentUploadResultSchema,
+  PublishDocumentBodySchema,
+  PublishDocumentResultSchema,
+  SubmitReviewBodySchema,
+  UpdatePermissionsBodySchema,
+  UploadResultSchema,
+  AddCollaboratorBodySchema,
+  WorkspaceDocumentSummarySchema,
+} from "./schemas/documents";
+import { SearchUsersPayloadSchema } from "./schemas/users";
+import {
+  BillingActionBodySchema,
+  BillingStatusPayloadSchema,
+  BillingUrlResultSchema,
+} from "./schemas/billing";
+import {
+  AdminAccessUserResultSchema,
+  AdminSubscriptionAccessListPayloadSchema,
+  SetAdminAccessBodySchema,
+} from "./schemas/admin";
+import { RepoCollaboratorPermissionSummarySchema } from "./schemas/common";
+
+export const registry = new OpenAPIRegistry();
+
+// Register all component schemas
+registry.register("SessionAuthState", SessionAuthStateSchema);
+registry.register("LoginBody", LoginBodySchema);
+registry.register("SignupBody", SignupBodySchema);
+registry.register("WorkspaceDocumentSummary", WorkspaceDocumentSummarySchema);
+registry.register("DocumentDetailPayload", DocumentDetailPayloadSchema);
+registry.register(
+  "InitialDocumentUploadResult",
+  InitialDocumentUploadResultSchema,
+);
+registry.register("UploadResult", UploadResultSchema);
+registry.register("CollaboratorListPayload", CollaboratorListPayloadSchema);
+registry.register(
+  "DocumentPermissionsPayload",
+  DocumentPermissionsPayloadSchema,
+);
+registry.register("SearchUsersPayload", SearchUsersPayloadSchema);
+registry.register("BillingStatusPayload", BillingStatusPayloadSchema);
+registry.register(
+  "AdminSubscriptionAccessListPayload",
+  AdminSubscriptionAccessListPayloadSchema,
+);
+
+// Auth routes
+registry.registerPath({
+  method: "post",
+  path: "/auth/login",
+  operationId: "authLogin",
+  tags: ["auth"],
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: LoginBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Session established",
+      content: { "application/json": { schema: SessionAuthStateSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/auth/signup",
+  operationId: "authSignup",
+  tags: ["auth"],
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: SignupBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Account created and session established",
+      content: { "application/json": { schema: SessionAuthStateSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/auth/me",
+  operationId: "authMe",
+  tags: ["auth"],
+  responses: {
+    200: {
+      description: "Current session",
+      content: { "application/json": { schema: SessionAuthStateSchema } },
+    },
+    401: { description: "Not authenticated" },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/auth/logout",
+  operationId: "authLogout",
+  tags: ["auth"],
+  responses: {
+    204: { description: "Session ended" },
+  },
+});
+
+// Document routes
+registry.registerPath({
+  method: "get",
+  path: "/api/app/documents",
+  operationId: "listDocuments",
+  tags: ["documents"],
+  request: {
+    query: z.object({
+      owner: z.string().optional(),
+      member: z.string().optional(),
+      q: z.string().optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Workspace documents",
+      content: {
+        "application/json": {
+          schema: z.object({
+            documents: z.array(WorkspaceDocumentSummarySchema),
+          }),
+        },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/documents",
+  operationId: "createDocument",
+  tags: ["documents"],
+  request: {
+    body: {
+      required: true,
+      content: {
+        "multipart/form-data": {
+          schema: z.object({
+            file: z.string().openapi({
+              type: "string",
+              format: "binary",
+              description: "File upload",
+            }),
+            repoName: z.string(),
+            nextVersion: z.string(),
+            requiredApprovals: z.string().optional(),
+            description: z.string().optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Document created",
+      content: {
+        "application/json": { schema: InitialDocumentUploadResultSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/documents/{owner}/{repo}",
+  operationId: "getDocumentDetail",
+  tags: ["documents"],
+  request: {
+    params: z.object({ owner: z.string(), repo: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Document detail",
+      content: { "application/json": { schema: DocumentDetailPayloadSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/documents/{owner}/{repo}/versions",
+  operationId: "uploadDocumentVersion",
+  tags: ["documents"],
+  request: {
+    params: z.object({ owner: z.string(), repo: z.string() }),
+    body: {
+      required: true,
+      content: {
+        "multipart/form-data": {
+          schema: z.object({
+            file: z.string().openapi({
+              type: "string",
+              format: "binary",
+              description: "File upload",
+            }),
+            docSlug: z.string(),
+            uploaderSlug: z.string(),
+            nextVersion: z.string(),
+            canonicalFileName: z.string().optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Version uploaded",
+      content: { "application/json": { schema: UploadResultSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/documents/{owner}/{repo}/download",
+  operationId: "downloadDocument",
+  tags: ["documents"],
+  request: {
+    params: z.object({ owner: z.string(), repo: z.string() }),
+    query: z.object({ ref: z.string().optional() }),
+  },
+  responses: {
+    200: {
+      description: "File download",
+      content: {
+        "application/octet-stream": {
+          schema: z.string(),
+        },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/documents/{owner}/{repo}/permissions",
+  operationId: "getDocumentPermissions",
+  tags: ["documents"],
+  request: {
+    params: z.object({ owner: z.string(), repo: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Document permissions",
+      content: {
+        "application/json": { schema: DocumentPermissionsPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "put",
+  path: "/api/app/documents/{owner}/{repo}/permissions",
+  operationId: "updateDocumentPermissions",
+  tags: ["documents"],
+  request: {
+    params: z.object({ owner: z.string(), repo: z.string() }),
+    body: {
+      required: true,
+      content: { "application/json": { schema: UpdatePermissionsBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Permissions updated",
+      content: {
+        "application/json": { schema: DocumentPermissionsPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/documents/{owner}/{repo}/collaborators",
+  operationId: "listDocumentCollaborators",
+  tags: ["documents"],
+  request: {
+    params: z.object({ owner: z.string(), repo: z.string() }),
+    query: z.object({
+      page: z.string().optional(),
+      limit: z.string().optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Collaborators list",
+      content: {
+        "application/json": { schema: CollaboratorListPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "put",
+  path: "/api/app/documents/{owner}/{repo}/collaborators/{collaborator}",
+  operationId: "addDocumentCollaborator",
+  tags: ["documents"],
+  request: {
+    params: z.object({
+      owner: z.string(),
+      repo: z.string(),
+      collaborator: z.string(),
+    }),
+    body: {
+      required: true,
+      content: { "application/json": { schema: AddCollaboratorBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Collaborator added",
+      content: {
+        "application/json": {
+          schema: z.object({
+            collaborator:
+              RepoCollaboratorPermissionSummarySchema.optional().nullable(),
+          }),
+        },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "delete",
+  path: "/api/app/documents/{owner}/{repo}/collaborators/{collaborator}",
+  operationId: "removeDocumentCollaborator",
+  tags: ["documents"],
+  request: {
+    params: z.object({
+      owner: z.string(),
+      repo: z.string(),
+      collaborator: z.string(),
+    }),
+  },
+  responses: {
+    204: { description: "Collaborator removed" },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/documents/{owner}/{repo}/pull-requests/{pullNumber}/reviews",
+  operationId: "submitDocumentReview",
+  tags: ["documents"],
+  request: {
+    params: z.object({
+      owner: z.string(),
+      repo: z.string(),
+      pullNumber: z.string(),
+    }),
+    body: {
+      required: true,
+      content: { "application/json": { schema: SubmitReviewBodySchema } },
+    },
+  },
+  responses: {
+    204: { description: "Review submitted" },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/documents/{owner}/{repo}/pull-requests/{pullNumber}/publish",
+  operationId: "publishDocument",
+  tags: ["documents"],
+  request: {
+    params: z.object({
+      owner: z.string(),
+      repo: z.string(),
+      pullNumber: z.string(),
+    }),
+    body: {
+      required: true,
+      content: { "application/json": { schema: PublishDocumentBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Document published",
+      content: {
+        "application/json": { schema: PublishDocumentResultSchema },
+      },
+    },
+  },
+});
+
+// Users route
+registry.registerPath({
+  method: "get",
+  path: "/api/app/users/search",
+  operationId: "searchUsers",
+  tags: ["users"],
+  request: {
+    query: z.object({
+      q: z.string(),
+      page: z.string().optional(),
+      limit: z.string().optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "User search results",
+      content: { "application/json": { schema: SearchUsersPayloadSchema } },
+    },
+  },
+});
+
+// Billing routes
+registry.registerPath({
+  method: "get",
+  path: "/api/app/billing/status",
+  operationId: "getBillingStatus",
+  tags: ["billing"],
+  responses: {
+    200: {
+      description: "Billing status",
+      content: { "application/json": { schema: BillingStatusPayloadSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/billing/checkout",
+  operationId: "createBillingCheckout",
+  tags: ["billing"],
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: BillingActionBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Checkout URL",
+      content: { "application/json": { schema: BillingUrlResultSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/billing/portal",
+  operationId: "createBillingPortal",
+  tags: ["billing"],
+  request: {
+    body: {
+      required: true,
+      content: { "application/json": { schema: BillingActionBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Portal URL",
+      content: { "application/json": { schema: BillingUrlResultSchema } },
+    },
+  },
+});
+
+// Admin routes
+registry.registerPath({
+  method: "get",
+  path: "/api/app/admin/subscriptions/access",
+  operationId: "listAdminSubscriptionAccess",
+  tags: ["admin"],
+  request: {
+    query: z.object({
+      q: z.string().optional(),
+      page: z.string().optional(),
+      limit: z.string().optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Admin subscription access list",
+      content: {
+        "application/json": {
+          schema: AdminSubscriptionAccessListPayloadSchema,
+        },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "put",
+  path: "/api/app/admin/subscriptions/access/{username}",
+  operationId: "setAdminSubscriptionAccess",
+  tags: ["admin"],
+  request: {
+    params: z.object({ username: z.string() }),
+    body: {
+      required: true,
+      content: { "application/json": { schema: SetAdminAccessBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Access updated",
+      content: {
+        "application/json": { schema: AdminAccessUserResultSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "delete",
+  path: "/api/app/admin/subscriptions/access/{username}",
+  operationId: "clearAdminSubscriptionAccess",
+  tags: ["admin"],
+  request: {
+    params: z.object({ username: z.string() }),
+  },
+  responses: {
+    204: { description: "Access cleared" },
+  },
+});
+
+export default registry;

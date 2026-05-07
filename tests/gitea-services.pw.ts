@@ -14,12 +14,12 @@ import {
   storeToken,
   UnauthenticatedError,
   validateToken,
-} from "../packages/gitea-client/auth";
+} from "../services/api/gitea-client/auth";
 import {
   commitDocument,
   fetchDocumentAtSha,
   listDocumentCommits,
-} from "../packages/gitea-client/documents";
+} from "../services/api/gitea-client/documents";
 import {
   type ApprovalState,
   createPullRequest,
@@ -27,19 +27,19 @@ import {
   listPullRequests,
   mergePullRequest,
   submitReview,
-} from "../packages/gitea-client/pullRequests";
+} from "../services/api/gitea-client/pullRequests";
 import {
   getLatestDocTag,
   listDocTags,
   listWorkspaceRepos,
-} from "../packages/gitea-client/repos";
+} from "../services/api/gitea-client/repos";
 import {
   buildUploadBranchName,
   buildUploadCommitMessage,
   commitBinaryFile,
   createUploadBranch,
   validateUploadFile,
-} from "../packages/gitea-client/uploads";
+} from "../services/api/gitea-client/uploads";
 
 import {
   GITEA_URL,

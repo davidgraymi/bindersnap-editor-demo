@@ -9,7 +9,7 @@
 
 import { test, expect } from "@playwright/test";
 
-import { getPullRequestForBranch } from "../packages/gitea-client/pullRequests";
+import { getPullRequestForBranch } from "../services/api/gitea-client/pullRequests";
 
 import {
   APP_BASE_URL,

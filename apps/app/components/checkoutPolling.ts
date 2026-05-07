@@ -7,7 +7,7 @@ export const BACKGROUND_POLL_INTERVAL_MS = 8000;
 export const BACKGROUND_POLL_WINDOW_MS = 300000;
 
 export async function runBackgroundPoll(
-  fetchFn: () => Promise<{ status: string }>,
+  fetchFn: () => Promise<{ status: string | null }>,
   onConfirmed: () => void,
   intervalMs: number,
   windowMs: number,

@@ -61,7 +61,7 @@ jobs:
       matrix:
         include:
           - target: app-and-shared
-            command: bun test apps/app packages/gitea-client packages/editor packages/utils
+            command: bun test apps/app packages/editor packages/utils
           - target: ops
             command: bun test services/api scripts infra/backups
 

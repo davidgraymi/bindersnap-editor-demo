@@ -87,7 +87,7 @@ it for each run before `docker compose up`.
 Unit tests live alongside source as `*.test.ts` and use `bun:test`. No Docker required.
 
 ```bash
-bun test apps/app packages/gitea-client packages/editor packages/utils
+bun test apps/app packages/editor packages/utils
 bun test services/api scripts infra/backups
 ```
 
