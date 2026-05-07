@@ -34,8 +34,6 @@ bindersnap-editor-demo/
 ├── packages/                       ← Shared internal libraries
 │   ├── editor/                     ← Tiptap editor component (shared by landing + app)
 │   │   └── README.md               ← Read before editing
-│   ├── gitea-client/               ← All Gitea API interaction
-│   │   └── README.md               ← Read before editing
 │   ├── ui-tokens/                  ← CSS design tokens, fonts, icons
 │   └── utils/                      ← Shared utilities (sanitizer, etc.)
 │

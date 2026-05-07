@@ -50,7 +50,6 @@ This is a **Bun monorepo** with one unified SPA, shared packages, and backend se
 
 ### Packages (shared)
 
-- `packages/editor/` — Tiptap 3 + ProseMirror editor. Backend-agnostic: receives a `giteaClient` prop for real use, runs demo mode without it. **Never import `gitea-client` inside `editor/`.**
 - `packages/ui-tokens/` — CSS design tokens (single source of truth for all visual values).
 - `packages/utils/` — Shared utilities (DOMPurify sanitizer, etc.).
 
