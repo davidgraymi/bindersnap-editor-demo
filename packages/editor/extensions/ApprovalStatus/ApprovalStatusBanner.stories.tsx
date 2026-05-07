@@ -1,5 +1,5 @@
 import { ApprovalStatusBanner } from "./ApprovalStatusBanner";
-import type { ApprovalState } from "../../../../services/api/gitea-client/pullRequests";
+import type { ApprovalState } from "@api-schema/schemas/documents";
 import "../../assets/bindersnap-editor.css";
 
 export default {

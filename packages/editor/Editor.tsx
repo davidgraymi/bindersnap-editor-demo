@@ -93,7 +93,7 @@ import { VersionHistory } from "./extensions/VersionHistory";
 import { Conflict } from "./extensions/conflict";
 import { gitService } from "./services/GitService";
 import { sanitizeHtml, sanitizeProseMirrorJson } from "../utils/sanitizer";
-import type { ApprovalState } from "../../services/api/gitea-client/pullRequests";
+import type { ApprovalState } from "@api-schema/schemas/documents";
 
 // --- Types ---
 interface ToolbarProps {

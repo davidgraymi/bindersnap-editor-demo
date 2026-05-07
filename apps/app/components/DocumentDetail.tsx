@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 
-import type { PullRequestWithApprovalState } from "../api";
 import type {
+  PullRequestWithApprovalState,
   DocTag,
   RepoBranchProtection,
-} from "../../../services/api/gitea-client/repos";
-import type { UploadResult } from "../../../services/api/gitea-client/uploads";
+  UploadResult,
+} from "../api";
 import {
   downloadDocument,
   getDocumentDetail,
