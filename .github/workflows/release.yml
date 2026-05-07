@@ -9,19 +9,21 @@ on:
       - "package.json"
       - "bun.lock"
 
-permissions:
-  contents: write
-
 concurrency:
   group: release
   cancel-in-progress: false
 
 jobs:
-  release:
-    name: Release
+  bump:
+    name: Bump Version
     runs-on: ubuntu-24.04
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
     timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.capture.outputs.version }}
+      sha: ${{ steps.capture.outputs.sha }}
 
     steps:
       - name: Checkout
@@ -46,5 +48,47 @@ jobs:
       - name: Bump version and update changelog
         run: bun run release
 
-      - name: Push changes
-        run: git push origin main --tags
+      - name: Capture release commit SHA and version
+        id: capture
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+          echo "version=$(jq -r .version package.json)" >> $GITHUB_OUTPUT
+
+      - name: Push release commit (no tag yet)
+        run: git push origin main
+
+  build:
+    name: Build API Image
+    needs: bump
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build-api.yml
+    with:
+      ref: ${{ needs.bump.outputs.sha }}
+      sha: ${{ needs.bump.outputs.sha }}
+
+  tag:
+    name: Push Version Tag
+    needs: [bump, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Push version tag
+        run: |
+          git tag "v${{ needs.bump.outputs.version }}" "${{ needs.bump.outputs.sha }}"
+          git push origin "v${{ needs.bump.outputs.version }}"
