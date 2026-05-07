@@ -6,7 +6,7 @@
 #
 #   tasks_sg
 #     ingress: container port from alb_sg
-#     egress:  443 to 0.0.0.0/0 (DynamoDB / Secrets Manager / KMS / ECR)
+#     egress:  443 to 0.0.0.0/0 (Secrets Manager / KMS / ECR / Stripe API)
 #              5432 to aurora_sg
 #              <gitea_port> to gitea_security_group_id (var)
 #

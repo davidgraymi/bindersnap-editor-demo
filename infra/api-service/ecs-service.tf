@@ -6,9 +6,9 @@
 #   command:       bun services/api/server.ts
 #   port:          8787
 #   logging:       awslogs → /aws/ecs/${name_prefix}
-#   secrets[]:     stripe.*, gitea service token, postgres password, KMS ARN
-#   env:           BINDERSNAP_SESSION_BACKEND=dynamodb, BINDERSNAP_SUBSCRIPTION_BACKEND=postgres,
-#                  table/cluster identifiers, etc.
+#   secrets[]:     stripe.*, gitea service token, postgres password, session-envelope KMS ARN
+#   env:           BINDERSNAP_STORAGE_BACKEND=postgres, DATABASE_URL host/port/db,
+#                  cluster identifiers, etc.
 #
 # Service:
 #   launch_type:    FARGATE (capacity providers handle Spot mix)

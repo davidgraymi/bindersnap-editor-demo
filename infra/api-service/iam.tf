@@ -8,15 +8,15 @@
 #                          permissions.
 #
 #   task_role            — assumed by the running container. Grants:
-#                            dynamodb:GetItem/PutItem/DeleteItem/Query on the
-#                              sessions table only (no Scan).
 #                            kms:Decrypt/GenerateDataKey on the session
-#                              envelope CMK.
+#                              envelope CMK (used to wrap Gitea tokens before
+#                              writing to the sessions row).
 #                            secretsmanager:GetSecretValue scoped to the
-#                              api/* secrets.
-#                            (Aurora access is via DB auth, not IAM, so no
-#                             rds-data:* — we use a long-lived connection pool
-#                             with credentials from Secrets Manager.)
+#                              api/* secrets (Postgres password, Stripe keys,
+#                              Gitea service token).
+#                            (Aurora access is via DB password auth held in
+#                             Secrets Manager, not IAM — we use a long-lived
+#                             connection pool, not data-API per-call IAM.)
 #
 # Break-glass: ssmmessages:* + ssm:StartSession + DescribeSessions to enable
 # `aws ecs execute-command` (#222).
