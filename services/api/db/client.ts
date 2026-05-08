@@ -1,11 +1,12 @@
 import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
+import { config } from "../config";
 
 // Lazy Postgres connection used by the runtime backends in this directory.
 // One connection pool per process; created on first call.
 //
-// The connection string is read from BINDERSNAP_DATABASE_URL, which is only
-// consulted when the API is configured with BINDERSNAP_DB_BACKEND=postgres.
+// The connection string is read from BINDERSNAP_DATABASE_URL (via config),
+// which is only consulted when BINDERSNAP_DB_BACKEND=postgres.
 
 let client: ReturnType<typeof postgres> | null = null;
 let db: PostgresJsDatabase | null = null;
@@ -19,7 +20,7 @@ export function getPostgresDb(
   options: PostgresClientOptions = {},
 ): PostgresJsDatabase {
   if (db) return db;
-  const url = options.url ?? process.env.BINDERSNAP_DATABASE_URL;
+  const url = options.url ?? config.databaseUrl;
   if (!url) {
     throw new Error(
       "BINDERSNAP_DATABASE_URL is required when BINDERSNAP_DB_BACKEND=postgres.",
@@ -28,6 +29,16 @@ export function getPostgresDb(
   client = postgres(url, { max: options.max ?? 10, prepare: false });
   db = drizzle(client);
   return db;
+}
+
+// Test-only: install a pre-built drizzle DB and underlying client so tests can
+// share one connection across backends without paying connection cost per test.
+export function __setPostgresDbForTests(
+  newDb: PostgresJsDatabase,
+  newClient: ReturnType<typeof postgres>,
+): void {
+  client = newClient;
+  db = newDb;
 }
 
 export async function closePostgresDb(): Promise<void> {

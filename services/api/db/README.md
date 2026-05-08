@@ -7,24 +7,27 @@ Drizzle schema, migrations, and Postgres backend implementations for the API ser
 
 ## Layout
 
-| Path          | Purpose                                                                                                                                         |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `schema.ts`   | Drizzle schema for `sessions`, `subscriptions`, `subscription_access_overrides`, webhook tables, and `schema_versions`. Single source of truth. |
-| `migrations/` | Generated SQL migrations. Hand-edits forbidden — run `bun run db:generate`.                                                                     |
-| `client.ts`   | Lazy Postgres connection used by the runtime backends. Reads `BINDERSNAP_DATABASE_URL`.                                                         |
-| `version.ts`  | The `EXPECTED_SCHEMA_VERSION` constant + the startup probe helper.                                                                              |
-| `migrate/`    | Standalone migration runner. Co-located here, but **not imported** by anything in `services/api/`.                                              |
+| Path                        | Purpose                                                                                                                                         |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schema.ts`                 | Drizzle schema for `sessions`, `subscriptions`, `subscription_access_overrides`, webhook tables, and `schema_versions`. Single source of truth. |
+| `migrations/`               | Generated SQL migrations. Hand-edits forbidden — run `bun run db:generate`.                                                                     |
+| `client.ts`                 | Lazy Postgres connection used by the runtime backends. Reads `BINDERSNAP_DATABASE_URL`.                                                         |
+| `version.ts`                | The `EXPECTED_SCHEMA_VERSION` constant + the startup probe helper.                                                                              |
+| `configure.ts`              | Startup hook that selects the backend trio and runs the schema-version probe when `BINDERSNAP_DB_BACKEND=postgres`.                             |
+| `postgres-sessions.ts`      | `PostgresSessionBackend` — drizzle-backed `SessionBackend`.                                                                                     |
+| `postgres-subscriptions.ts` | `PostgresSubscriptionBackend` + `PostgresWebhookEventBackend`.                                                                                  |
+| `migrate/`                  | Standalone migration runner. Co-located here, but **not imported** by anything in `services/api/`.                                              |
 
-> Postgres `SessionBackend`/`SubscriptionBackend`/`WebhookEventBackend` implementations land in the follow-up PR. They require flipping the existing sync interfaces to async because `postgres-js` is async; that touches every call site and is its own slice.
+## Selecting the backend at runtime
 
-## Selecting the backend at runtime (planned)
-
-Once the Postgres backend implementations land, the API will pick a backend at startup based on `BINDERSNAP_DB_BACKEND`:
+The API picks a backend at startup based on `BINDERSNAP_DB_BACKEND`:
 
 - `sqlite` (default): existing on-disk SQLite store. Used in dev, tests, and the EC2 deployment until cutover.
 - `postgres`: Postgres backends from this directory. Requires `BINDERSNAP_DATABASE_URL`.
 
-When `postgres` is selected the API will run the schema-version probe (see `version.ts`) on first connection and refuse to start if the database schema does not match the version this code was built against. The probe code is in place; the wiring to call it lands with the runtime backends.
+When `postgres` is selected, `configureBackends()` calls `assertSchemaVersionMatches` against the database before installing the lazy-store factories. If the `schema_versions` row does not match `EXPECTED_SCHEMA_VERSION`, startup fails with a `SchemaVersionMismatchError` and the API never serves traffic. Run `bun run db:migrate` (or the equivalent CI step) to bring the database forward.
+
+Cutover from SQLite to Postgres is the next slice — a one-shot migration script that reads the existing `sessions.db` from the EC2 host and copies rows into Postgres.
 
 ## Migration policy
 
