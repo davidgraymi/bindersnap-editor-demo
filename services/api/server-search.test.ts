@@ -311,14 +311,14 @@ afterEach(() => {
   config.bypassSubscriptionForUsers = originalBypassSubscriptionForUsers;
 });
 
-function seedSession(
+async function seedSession(
   username: string,
   options?: {
     email?: string;
     fullName?: string;
     isAdmin?: boolean;
   },
-): string {
+): Promise<string> {
   const sessionId = `sess_${randomUUID()}`;
   const giteaToken = `gitea_token_${randomUUID()}`;
   const email =
@@ -336,7 +336,7 @@ function seedSession(
   giteaUsersByLogin.set(username, user);
   giteaUsersById.set(userId, user);
   giteaLoginsByToken.set(giteaToken, username);
-  sessionStore.put({
+  await sessionStore.put({
     id: sessionId,
     username,
     giteaToken,
@@ -397,7 +397,7 @@ function makeSessionRequest(
 describe("GET /api/app/documents with search query", () => {
   test("no query param uses listWorkspaceRepos (no filters on search)", async () => {
     const server = await createApiServer();
-    const sessionId = seedSession("alice");
+    const sessionId = await seedSession("alice");
     const aliceUser = giteaUsersByLogin.get("alice")!;
 
     seedGiteaRepo({
@@ -428,7 +428,7 @@ describe("GET /api/app/documents with search query", () => {
 
   test("no query params resolves to no filters", async () => {
     const server = await createApiServer();
-    const sessionId = seedSession("alice");
+    const sessionId = await seedSession("alice");
     const aliceUser = giteaUsersByLogin.get("alice")!;
 
     seedGiteaRepo({
@@ -454,7 +454,7 @@ describe("GET /api/app/documents with search query", () => {
 
   test("owner:@me resolves to session username and exclusive=true", async () => {
     const server = await createApiServer();
-    const sessionId = seedSession("alice");
+    const sessionId = await seedSession("alice");
     const aliceUser = giteaUsersByLogin.get("alice")!;
 
     seedGiteaRepo({
@@ -484,7 +484,7 @@ describe("GET /api/app/documents with search query", () => {
 
   test("owner:@username resolves to specified username and exclusive=true", async () => {
     const server = await createApiServer();
-    const sessionId = seedSession("alice");
+    const sessionId = await seedSession("alice");
     const bobUser = seedGiteaUser({ login: "bob", email: "bob@example.com" });
 
     seedGiteaRepo({
@@ -511,7 +511,7 @@ describe("GET /api/app/documents with search query", () => {
 
   test("contributed-by:@me resolves to session username without exclusive", async () => {
     const server = await createApiServer();
-    const sessionId = seedSession("alice");
+    const sessionId = await seedSession("alice");
     const aliceUser = giteaUsersByLogin.get("alice")!;
 
     seedGiteaRepo({
@@ -540,7 +540,7 @@ describe("GET /api/app/documents with search query", () => {
 
   test("contributed-by:@username resolves to specified username without exclusive", async () => {
     const server = await createApiServer();
-    const sessionId = seedSession("alice");
+    const sessionId = await seedSession("alice");
     const bobUser = seedGiteaUser({ login: "bob", email: "bob@example.com" });
 
     seedGiteaRepo({
@@ -567,7 +567,7 @@ describe("GET /api/app/documents with search query", () => {
 
   test("owner:@me with free text passes freeText to q param", async () => {
     const server = await createApiServer();
-    const sessionId = seedSession("alice");
+    const sessionId = await seedSession("alice");
     const aliceUser = giteaUsersByLogin.get("alice")!;
 
     seedGiteaRepo({
@@ -598,7 +598,7 @@ describe("GET /api/app/documents with search query", () => {
 
   test("contributed-by:@me with free text passes freeText to q param", async () => {
     const server = await createApiServer();
-    const sessionId = seedSession("alice");
+    const sessionId = await seedSession("alice");
     const aliceUser = giteaUsersByLogin.get("alice")!;
 
     seedGiteaRepo({
@@ -629,7 +629,7 @@ describe("GET /api/app/documents with search query", () => {
 
   test("both owner and contributed-by: owner takes precedence (exclusive=true)", async () => {
     const server = await createApiServer();
-    const sessionId = seedSession("alice");
+    const sessionId = await seedSession("alice");
     const aliceUser = giteaUsersByLogin.get("alice")!;
     const bobUser = seedGiteaUser({ login: "bob", email: "bob@example.com" });
 
@@ -660,7 +660,7 @@ describe("GET /api/app/documents with search query", () => {
 
   test("free text without owner or contributed-by searches all repos", async () => {
     const server = await createApiServer();
-    const sessionId = seedSession("alice");
+    const sessionId = await seedSession("alice");
     const aliceUser = giteaUsersByLogin.get("alice")!;
 
     seedGiteaRepo({
@@ -688,7 +688,7 @@ describe("GET /api/app/documents with search query", () => {
 
   test("@me is resolved in owner query", async () => {
     const server = await createApiServer();
-    const sessionId = seedSession("alice");
+    const sessionId = await seedSession("alice");
     const aliceUser = giteaUsersByLogin.get("alice")!;
 
     seedGiteaRepo({
@@ -716,7 +716,7 @@ describe("GET /api/app/documents with search query", () => {
 
   test("@ prefix is stripped from usernames", async () => {
     const server = await createApiServer();
-    const sessionId = seedSession("alice");
+    const sessionId = await seedSession("alice");
     const bobUser = seedGiteaUser({ login: "bob", email: "bob@example.com" });
 
     seedGiteaRepo({
