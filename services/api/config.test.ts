@@ -109,4 +109,44 @@ describe("API config", () => {
     expect(config.appOrigin).toBe("https://bindersnap.com");
     expect(config.logLevel).toBe("warn");
   });
+
+  test("dbBackend defaults to sqlite and accepts postgres alias", () => {
+    const url = "postgres://u:p@localhost:5432/db";
+    expect(initializeConfig({}).dbBackend).toBe("sqlite");
+    expect(
+      initializeConfig({
+        BINDERSNAP_DB_BACKEND: "POSTGRES",
+        BINDERSNAP_DATABASE_URL: url,
+      }).dbBackend,
+    ).toBe("postgres");
+    expect(
+      initializeConfig({
+        BINDERSNAP_DB_BACKEND: "postgresql",
+        BINDERSNAP_DATABASE_URL: url,
+      }).dbBackend,
+    ).toBe("postgres");
+  });
+
+  test("dbBackend rejects unknown values", () => {
+    expect(() => initializeConfig({ BINDERSNAP_DB_BACKEND: "mysql" })).toThrow(
+      "BINDERSNAP_DB_BACKEND must be one of sqlite or postgres.",
+    );
+  });
+
+  test("postgres backend requires BINDERSNAP_DATABASE_URL", () => {
+    expect(() =>
+      initializeConfig({ BINDERSNAP_DB_BACKEND: "postgres" }),
+    ).toThrow(
+      "BINDERSNAP_DATABASE_URL is required when BINDERSNAP_DB_BACKEND=postgres.",
+    );
+
+    const config = initializeConfig({
+      BINDERSNAP_DB_BACKEND: "postgres",
+      BINDERSNAP_DATABASE_URL: "postgres://user:pw@localhost:5432/bindersnap",
+    });
+    expect(config.dbBackend).toBe("postgres");
+    expect(config.databaseUrl).toBe(
+      "postgres://user:pw@localhost:5432/bindersnap",
+    );
+  });
 });

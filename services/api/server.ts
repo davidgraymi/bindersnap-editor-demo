@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 
 import { config, type SessionCookieSameSite } from "./config";
+import { configureBackends } from "./db/configure";
 import { logger } from "./logger";
 import { sessionStore, type SessionRecord } from "./sessions";
 import {
@@ -4009,14 +4010,18 @@ export function createApiServer() {
   });
 }
 
-export const server = import.meta.main ? createApiServer() : null;
-
-if (import.meta.main && server) {
+if (import.meta.main) {
+  // configureBackends must run before Bun.serve so the lazy stores resolve to
+  // the right backend on the first request, and so the schema-version probe
+  // can refuse to start the API against an unmigrated Postgres.
+  const chosen = await configureBackends();
+  const server = createApiServer();
   startCleanupTimer();
   logger.info("Bindersnap API listening", {
     url: `http://localhost:${server.port}`,
     port: server.port,
     env: config.nodeEnv,
+    dbBackend: chosen,
   });
   if (config.devFeaturesEnabled) {
     logger.warn(
