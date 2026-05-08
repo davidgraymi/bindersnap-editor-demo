@@ -107,27 +107,29 @@ function hasStripeBackedAccess(record: SubscriptionRecord | null): boolean {
 // secondary-index lookup, UNION across two tables, and a uniqueness invariant
 // enforced via transaction.
 export interface SubscriptionBackend {
-  getByUsername(username: string): SubscriptionRecord | null;
-  getByCustomerId(customerId: string): SubscriptionRecord | null;
-  upsert(record: SubscriptionRecord): void;
-  getAccessOverride(username: string): SubscriptionAccessOverrideRecord | null;
-  putAccessOverride(record: SubscriptionAccessOverrideRecord): void;
-  deleteAccessOverride(username: string): void;
-  resolveAccess(username: string): EffectiveSubscriptionAccess;
-  listKnownAccessStates(): EffectiveSubscriptionAccess[];
+  getByUsername(username: string): Promise<SubscriptionRecord | null>;
+  getByCustomerId(customerId: string): Promise<SubscriptionRecord | null>;
+  upsert(record: SubscriptionRecord): Promise<void>;
+  getAccessOverride(
+    username: string,
+  ): Promise<SubscriptionAccessOverrideRecord | null>;
+  putAccessOverride(record: SubscriptionAccessOverrideRecord): Promise<void>;
+  deleteAccessOverride(username: string): Promise<void>;
+  resolveAccess(username: string): Promise<EffectiveSubscriptionAccess>;
+  listKnownAccessStates(): Promise<EffectiveSubscriptionAccess[]>;
 }
 
 // Backend-agnostic interface for Stripe webhook idempotency + ordering checks.
-// SQLite today; DynamoDB or Postgres viable — pure key-value with TTL.
+// SQLite today; Postgres planned — pure key-value with TTL.
 export interface WebhookEventBackend {
-  isProcessed(eventId: string): boolean;
-  isOutOfOrder(customerId: string, eventCreated: number): boolean;
+  isProcessed(eventId: string): Promise<boolean>;
+  isOutOfOrder(customerId: string, eventCreated: number): Promise<boolean>;
   markProcessed(
     eventId: string,
     eventType: string,
     customerId: string | null,
     eventCreated: number,
-  ): void;
+  ): Promise<void>;
 }
 
 export class SubscriptionCustomerConflictError extends Error {
@@ -171,7 +173,7 @@ export class SubscriptionStore implements SubscriptionBackend {
     this.enforceUniqueCustomerBindings();
   }
 
-  getByUsername(username: string): SubscriptionRecord | null {
+  async getByUsername(username: string): Promise<SubscriptionRecord | null> {
     const row = this.db
       .query<
         SubscriptionRow,
@@ -181,7 +183,9 @@ export class SubscriptionStore implements SubscriptionBackend {
     return row ? rowToRecord(row) : null;
   }
 
-  getByCustomerId(customerId: string): SubscriptionRecord | null {
+  async getByCustomerId(
+    customerId: string,
+  ): Promise<SubscriptionRecord | null> {
     const row = this.db
       .query<
         SubscriptionRow,
@@ -191,8 +195,8 @@ export class SubscriptionStore implements SubscriptionBackend {
     return row ? rowToRecord(row) : null;
   }
 
-  upsert(record: SubscriptionRecord): void {
-    const existingCustomerRecord = this.getByCustomerId(
+  async upsert(record: SubscriptionRecord): Promise<void> {
+    const existingCustomerRecord = await this.getByCustomerId(
       record.stripeCustomerId,
     );
     if (
@@ -250,7 +254,9 @@ export class SubscriptionStore implements SubscriptionBackend {
       );
   }
 
-  getAccessOverride(username: string): SubscriptionAccessOverrideRecord | null {
+  async getAccessOverride(
+    username: string,
+  ): Promise<SubscriptionAccessOverrideRecord | null> {
     const row = this.db
       .query<
         SubscriptionAccessOverrideRow,
@@ -260,7 +266,9 @@ export class SubscriptionStore implements SubscriptionBackend {
     return row ? rowToOverride(row) : null;
   }
 
-  putAccessOverride(record: SubscriptionAccessOverrideRecord): void {
+  async putAccessOverride(
+    record: SubscriptionAccessOverrideRecord,
+  ): Promise<void> {
     this.db
       .query<
         void,
@@ -283,7 +291,7 @@ export class SubscriptionStore implements SubscriptionBackend {
       );
   }
 
-  deleteAccessOverride(username: string): void {
+  async deleteAccessOverride(username: string): Promise<void> {
     this.db
       .query<
         void,
@@ -292,9 +300,9 @@ export class SubscriptionStore implements SubscriptionBackend {
       .run(username);
   }
 
-  resolveAccess(username: string): EffectiveSubscriptionAccess {
-    const subscription = this.getByUsername(username);
-    const override = this.getAccessOverride(username);
+  async resolveAccess(username: string): Promise<EffectiveSubscriptionAccess> {
+    const subscription = await this.getByUsername(username);
+    const override = await this.getAccessOverride(username);
 
     if (override?.access === "grant") {
       return {
@@ -335,7 +343,7 @@ export class SubscriptionStore implements SubscriptionBackend {
     };
   }
 
-  listKnownAccessStates(): EffectiveSubscriptionAccess[] {
+  async listKnownAccessStates(): Promise<EffectiveSubscriptionAccess[]> {
     const usernames = this.db
       .query<{ username: string }, []>(
         `SELECT username
@@ -348,7 +356,9 @@ export class SubscriptionStore implements SubscriptionBackend {
       .all()
       .map((row) => row.username);
 
-    return usernames.map((username) => this.resolveAccess(username));
+    return Promise.all(
+      usernames.map((username) => this.resolveAccess(username)),
+    );
   }
 
   private enforceUniqueCustomerBindings(): void {
@@ -430,7 +440,7 @@ export class WebhookEventStore implements WebhookEventBackend {
     `);
   }
 
-  isProcessed(eventId: string): boolean {
+  async isProcessed(eventId: string): Promise<boolean> {
     const row = this.db
       .query<
         { event_id: string },
@@ -440,7 +450,10 @@ export class WebhookEventStore implements WebhookEventBackend {
     return row !== null;
   }
 
-  isOutOfOrder(customerId: string, eventCreated: number): boolean {
+  async isOutOfOrder(
+    customerId: string,
+    eventCreated: number,
+  ): Promise<boolean> {
     const row = this.db
       .query<
         { last_event_created_at: number },
@@ -451,12 +464,12 @@ export class WebhookEventStore implements WebhookEventBackend {
     return eventCreated < row.last_event_created_at;
   }
 
-  markProcessed(
+  async markProcessed(
     eventId: string,
     eventType: string,
     customerId: string | null,
     eventCreated: number,
-  ): void {
+  ): Promise<void> {
     this.db
       .query<void, [string, string, string | null, number, number]>(
         `INSERT OR IGNORE INTO processed_webhook_events (event_id, event_type, customer_id, created_at, processed_at)
@@ -498,11 +511,11 @@ class LazyWebhookEventStore implements WebhookEventBackend {
     return this._store;
   }
 
-  isProcessed(eventId: string): boolean {
+  isProcessed(eventId: string): Promise<boolean> {
     return this.store.isProcessed(eventId);
   }
 
-  isOutOfOrder(customerId: string, eventCreated: number): boolean {
+  isOutOfOrder(customerId: string, eventCreated: number): Promise<boolean> {
     return this.store.isOutOfOrder(customerId, eventCreated);
   }
 
@@ -511,8 +524,13 @@ class LazyWebhookEventStore implements WebhookEventBackend {
     eventType: string,
     customerId: string | null,
     eventCreated: number,
-  ): void {
-    this.store.markProcessed(eventId, eventType, customerId, eventCreated);
+  ): Promise<void> {
+    return this.store.markProcessed(
+      eventId,
+      eventType,
+      customerId,
+      eventCreated,
+    );
   }
 }
 
@@ -539,41 +557,45 @@ class LazySubscriptionStore implements SubscriptionBackend {
     return this._store;
   }
 
-  getByUsername(username: string): SubscriptionRecord | null {
+  getByUsername(username: string): Promise<SubscriptionRecord | null> {
     return this.store.getByUsername(username);
   }
 
-  getByCustomerId(customerId: string): SubscriptionRecord | null {
+  getByCustomerId(customerId: string): Promise<SubscriptionRecord | null> {
     return this.store.getByCustomerId(customerId);
   }
 
-  upsert(record: SubscriptionRecord): void {
-    this.store.upsert(record);
+  upsert(record: SubscriptionRecord): Promise<void> {
+    return this.store.upsert(record);
   }
 
-  getAccessOverride(username: string): SubscriptionAccessOverrideRecord | null {
+  getAccessOverride(
+    username: string,
+  ): Promise<SubscriptionAccessOverrideRecord | null> {
     return this.store.getAccessOverride(username);
   }
 
-  putAccessOverride(record: SubscriptionAccessOverrideRecord): void {
-    this.store.putAccessOverride(record);
+  putAccessOverride(record: SubscriptionAccessOverrideRecord): Promise<void> {
+    return this.store.putAccessOverride(record);
   }
 
-  deleteAccessOverride(username: string): void {
-    this.store.deleteAccessOverride(username);
+  deleteAccessOverride(username: string): Promise<void> {
+    return this.store.deleteAccessOverride(username);
   }
 
-  resolveAccess(username: string): EffectiveSubscriptionAccess {
+  resolveAccess(username: string): Promise<EffectiveSubscriptionAccess> {
     return this.store.resolveAccess(username);
   }
 
-  listKnownAccessStates(): EffectiveSubscriptionAccess[] {
+  listKnownAccessStates(): Promise<EffectiveSubscriptionAccess[]> {
     return this.store.listKnownAccessStates();
   }
 }
 
 export const subscriptionStore = new LazySubscriptionStore();
 
-export function hasActiveSubscription(username: string): boolean {
-  return subscriptionStore.resolveAccess(username).hasAccess;
+export async function hasActiveSubscription(
+  username: string,
+): Promise<boolean> {
+  return (await subscriptionStore.resolveAccess(username)).hasAccess;
 }

@@ -78,7 +78,7 @@ export async function runReconcileStripeCustomerCli(
   }
 
   const store = options.store ?? subscriptionStore;
-  store.upsert(result.record);
+  await store.upsert(result.record);
 
   const writeStdout =
     options.writeStdout ?? ((output: string) => process.stdout.write(output));
