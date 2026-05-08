@@ -10,6 +10,15 @@ export interface SessionRecord {
   expiresAt: number;
 }
 
+// Backend-agnostic interface for the session store. Implementations may be
+// SQLite (current), DynamoDB (planned, see #224), or in-memory (tests).
+export interface SessionBackend {
+  get(id: string): SessionRecord | null;
+  put(session: SessionRecord): void;
+  delete(id: string): void;
+  reap(now: number): SessionRecord[];
+}
+
 interface SessionRow {
   id: string;
   username: string;
@@ -30,7 +39,7 @@ function rowToRecord(row: SessionRow): SessionRecord {
   };
 }
 
-export class SessionStore {
+export class SessionStore implements SessionBackend {
   private db: Database;
 
   constructor(path: string = config.sessionsDbPath) {
@@ -100,12 +109,22 @@ export class SessionStore {
   }
 }
 
-class LazySessionStore {
-  private _store: SessionStore | null = null;
+// Factory used by the lazy singleton. Override (e.g., from a future
+// dynamodb-backed module) to swap the production backend at startup.
+export type SessionBackendFactory = () => SessionBackend;
 
-  private get store(): SessionStore {
+let sessionBackendFactory: SessionBackendFactory = () => new SessionStore();
+
+export function setSessionBackendFactory(factory: SessionBackendFactory): void {
+  sessionBackendFactory = factory;
+}
+
+class LazySessionStore implements SessionBackend {
+  private _store: SessionBackend | null = null;
+
+  private get store(): SessionBackend {
     if (!this._store) {
-      this._store = new SessionStore();
+      this._store = sessionBackendFactory();
     }
     return this._store;
   }

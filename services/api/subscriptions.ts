@@ -101,6 +101,35 @@ function hasStripeBackedAccess(record: SubscriptionRecord | null): boolean {
   return true;
 }
 
+// Backend-agnostic interface for the Stripe-bound subscription + admin override
+// store. SQLite today; intended target is Aurora Serverless v2 Postgres (see
+// #224 plan-verification comment) because access patterns include
+// secondary-index lookup, UNION across two tables, and a uniqueness invariant
+// enforced via transaction.
+export interface SubscriptionBackend {
+  getByUsername(username: string): SubscriptionRecord | null;
+  getByCustomerId(customerId: string): SubscriptionRecord | null;
+  upsert(record: SubscriptionRecord): void;
+  getAccessOverride(username: string): SubscriptionAccessOverrideRecord | null;
+  putAccessOverride(record: SubscriptionAccessOverrideRecord): void;
+  deleteAccessOverride(username: string): void;
+  resolveAccess(username: string): EffectiveSubscriptionAccess;
+  listKnownAccessStates(): EffectiveSubscriptionAccess[];
+}
+
+// Backend-agnostic interface for Stripe webhook idempotency + ordering checks.
+// SQLite today; DynamoDB or Postgres viable — pure key-value with TTL.
+export interface WebhookEventBackend {
+  isProcessed(eventId: string): boolean;
+  isOutOfOrder(customerId: string, eventCreated: number): boolean;
+  markProcessed(
+    eventId: string,
+    eventType: string,
+    customerId: string | null,
+    eventCreated: number,
+  ): void;
+}
+
 export class SubscriptionCustomerConflictError extends Error {
   constructor(
     customerId: string,
@@ -114,7 +143,7 @@ export class SubscriptionCustomerConflictError extends Error {
   }
 }
 
-export class SubscriptionStore {
+export class SubscriptionStore implements SubscriptionBackend {
   private db: Database;
 
   constructor(path: string = config.sessionsDbPath) {
@@ -380,7 +409,7 @@ export class SubscriptionStore {
   }
 }
 
-export class WebhookEventStore {
+export class WebhookEventStore implements WebhookEventBackend {
   private db: Database;
 
   constructor(path: string = config.sessionsDbPath) {
@@ -448,12 +477,23 @@ export class WebhookEventStore {
   }
 }
 
-class LazyWebhookEventStore {
-  private _store: WebhookEventStore | null = null;
+export type WebhookEventBackendFactory = () => WebhookEventBackend;
 
-  private get store(): WebhookEventStore {
+let webhookEventBackendFactory: WebhookEventBackendFactory = () =>
+  new WebhookEventStore();
+
+export function setWebhookEventBackendFactory(
+  factory: WebhookEventBackendFactory,
+): void {
+  webhookEventBackendFactory = factory;
+}
+
+class LazyWebhookEventStore implements WebhookEventBackend {
+  private _store: WebhookEventBackend | null = null;
+
+  private get store(): WebhookEventBackend {
     if (!this._store) {
-      this._store = new WebhookEventStore();
+      this._store = webhookEventBackendFactory();
     }
     return this._store;
   }
@@ -478,12 +518,23 @@ class LazyWebhookEventStore {
 
 export const webhookEventStore = new LazyWebhookEventStore();
 
-class LazySubscriptionStore {
-  private _store: SubscriptionStore | null = null;
+export type SubscriptionBackendFactory = () => SubscriptionBackend;
 
-  private get store(): SubscriptionStore {
+let subscriptionBackendFactory: SubscriptionBackendFactory = () =>
+  new SubscriptionStore();
+
+export function setSubscriptionBackendFactory(
+  factory: SubscriptionBackendFactory,
+): void {
+  subscriptionBackendFactory = factory;
+}
+
+class LazySubscriptionStore implements SubscriptionBackend {
+  private _store: SubscriptionBackend | null = null;
+
+  private get store(): SubscriptionBackend {
     if (!this._store) {
-      this._store = new SubscriptionStore();
+      this._store = subscriptionBackendFactory();
     }
     return this._store;
   }

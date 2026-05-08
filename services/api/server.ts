@@ -3702,6 +3702,24 @@ export function createApiServer() {
         clientIp,
       });
 
+      // Liveness probe: must respond before any auth/origin/HTTPS gate so an
+      // ALB target group on a private VPC can reach it without TLS. Returns
+      // 200 once the process accepts connections; deeper readiness (Gitea,
+      // DynamoDB, Postgres) will live on /readyz once those backends land.
+      if (pathname === "/healthz" && (method === "GET" || method === "HEAD")) {
+        const durationMs = Date.now() - startMs;
+        logger.info("Response sent", {
+          method,
+          path: pathname,
+          status: 200,
+          durationMs,
+        });
+        return new Response(method === "HEAD" ? null : "ok\n", {
+          status: 200,
+          headers: { "content-type": "text/plain; charset=utf-8" },
+        });
+      }
+
       const baseHeaders = corsHeaders(req);
       const transportError = enforceTransportSecurity(req, baseHeaders);
       if (transportError) {
