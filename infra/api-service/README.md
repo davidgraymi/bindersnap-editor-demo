@@ -27,17 +27,17 @@ Terraform root for the `services/api` Lambda + API Gateway deployment. **Skeleto
 
 ## Status
 
-| File                 | Purpose                                                              | State    |
-| -------------------- | -------------------------------------------------------------------- | -------- |
-| `main.tf`            | Provider, backend, shared variables and locals                       | scaffold |
-| `ecr.tf`             | ECR repository for the Lambda container image                        | scaffold |
+| File                 | Purpose                                                                      | State    |
+| -------------------- | ---------------------------------------------------------------------------- | -------- |
+| `main.tf`            | Provider, backend, shared variables and locals                               | scaffold |
+| `ecr.tf`             | ECR repository for the Lambda container image                                | scaffold |
 | `aurora.tf`          | Aurora Serverless v2 Postgres — sessions, subscriptions, webhook idempotency | scaffold |
-| `secrets.tf`         | Secrets Manager + KMS for Stripe/Gitea/Postgres credentials          | scaffold |
-| `iam.tf`             | Lambda execution role                                                | scaffold |
-| `security-groups.tf` | Lambda SG, Aurora SG, reciprocal Gitea ingress rule                  | scaffold |
-| `apigw.tf`           | API Gateway HTTP API + custom domain                                 | scaffold |
-| `lambda.tf`          | Lambda function (container image, VPC-attached, Lambda Web Adapter)  | scaffold |
-| `nat.tf`             | Lambda subnet egress route via the Gitea ENI                         | scaffold |
+| `secrets.tf`         | Secrets Manager + KMS for Stripe/Gitea/Postgres credentials                  | scaffold |
+| `iam.tf`             | Lambda execution role                                                        | scaffold |
+| `security-groups.tf` | Lambda SG, Aurora SG, reciprocal Gitea ingress rule                          | scaffold |
+| `apigw.tf`           | API Gateway HTTP API + custom domain                                         | scaffold |
+| `lambda.tf`          | Lambda function (container image, VPC-attached, Lambda Web Adapter)          | scaffold |
+| `nat.tf`             | Lambda subnet egress route via the Gitea ENI                                 | scaffold |
 
 ## Apply order
 
@@ -51,11 +51,11 @@ Worst-case: idle for 30+ minutes, first request pays both. Roughly 7–17 second
 
 If a hot login path matters, two mitigations:
 
-| Knob | Idle cost | Effect |
-| --- | --- | --- |
-| Aurora `min_capacity = 0.5` | +~$43/mo | Removes Aurora wake-up |
-| Lambda provisioned concurrency = 1 | +~$5/mo | Removes Lambda cold-start |
-| Both | +~$48/mo | Hot path always |
+| Knob                               | Idle cost | Effect                    |
+| ---------------------------------- | --------- | ------------------------- |
+| Aurora `min_capacity = 0.5`        | +~$43/mo  | Removes Aurora wake-up    |
+| Lambda provisioned concurrency = 1 | +~$5/mo   | Removes Lambda cold-start |
+| Both                               | +~$48/mo  | Hot path always           |
 
 A 4-minute warmer cron pinging `/healthz` during business hours is a cheaper middle ground for both.
 
