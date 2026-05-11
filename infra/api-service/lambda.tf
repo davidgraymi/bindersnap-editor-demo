@@ -12,41 +12,128 @@
 #   Tagged with the commit SHA; deploy is `aws lambda update-function-code
 #   --image-uri <repo>:<sha>` followed by `aws lambda wait function-updated`.
 #
-# Why container-image Lambda instead of zip + custom runtime:
-#   Bun isn't a managed Lambda runtime. Custom runtimes via bootstrap work
-#   but require packaging Bun as a layer and writing handler glue. The
-#   container path keeps the Dockerfile we already have (one extra COPY for
-#   the LWA binary) and lets us run the same image locally for dev parity.
-#
 # Configuration:
 #   memory:        1024 MB    (Bun + Stripe SDK + pg driver headroom)
 #   timeout:       29 seconds (max useful — API Gateway HTTP API timeout is 30s)
 #   architecture:  arm64      (cheaper, Bun supports it)
 #   ephemeral:     512 MB     (default; nothing on-disk persists)
 #
-# Environment:
-#   PORT=8787                                # LWA forwards to this
-#   AWS_LWA_PORT=8787
-#   AWS_LWA_INVOKE_MODE=BUFFERED             # standard request/response
-#   BINDERSNAP_STORAGE_BACKEND=postgres
-#   DATABASE_URL                             # via Secrets Manager
-#   STRIPE_SECRET_KEY                        # via Secrets Manager
-#   STRIPE_WEBHOOK_SECRET                    # via Secrets Manager
-#   BINDERSNAP_GITEA_SERVICE_TOKEN           # via Secrets Manager
-#   BINDERSNAP_GITEA_INTERNAL_URL            # http://<gitea-eni-ip>:3000
-#                                            # (private VPC reach to Gitea)
-#
-# VPC attachment:
-#   subnets:         var.private_subnet_ids
-#   security_groups: [lambda_sg]
-#   This is required so Lambda can reach Aurora (private) and Gitea (private
-#   IP, same VPC). Outbound to Stripe traverses the Gitea-as-NAT path — see
-#   nat.tf.
-#
 # Concurrency:
 #   reserved_concurrent_executions: 10   # solo-dev cap; raise when needed
 #   provisioned_concurrency: 0           # accept ~1-2s cold-start
+
+variable "lambda_memory_mb" {
+  description = "Lambda memory in MB."
+  type        = number
+  default     = 1024
+}
+
+variable "lambda_timeout_seconds" {
+  description = "Lambda timeout in seconds. API Gateway HTTP API caps at 30s."
+  type        = number
+  default     = 29
+}
+
+variable "lambda_reserved_concurrency" {
+  description = "Reserved concurrency. Solo-dev cap; raise when needed."
+  type        = number
+  default     = 10
+}
+
+variable "lambda_log_retention_days" {
+  description = "CloudWatch Logs retention for the Lambda log group."
+  type        = number
+  default     = 14
+}
+
+# Bootstrap image used on first apply (before deploy-api.yml has pushed a
+# real SHA-tagged image). After the first CI push, the function's image_uri
+# is updated out-of-band by `aws lambda update-function-code` and we ignore
+# image_uri drift in `lifecycle.ignore_changes`.
 #
-# TODO(#224):
-#   aws_lambda_function.api
-#   aws_cloudwatch_log_group.api (retention = 14 days)
+# AWS publishes a public hello-world image at this URI; using it avoids a
+# chicken-and-egg dependency on the ECR repo having an image yet.
+locals {
+  bootstrap_image_uri = "public.ecr.aws/lambda/provided:al2023"
+  api_image_uri       = var.image_tag == "latest" || var.image_tag == "" ? local.bootstrap_image_uri : "${aws_ecr_repository.api.repository_url}:${var.image_tag}"
+}
+
+resource "aws_cloudwatch_log_group" "api" {
+  name              = "/aws/lambda/${local.name_prefix}"
+  retention_in_days = var.lambda_log_retention_days
+
+  tags = local.common_tags
+}
+
+resource "aws_lambda_function" "api" {
+  function_name                  = local.name_prefix
+  role                           = aws_iam_role.lambda.arn
+  package_type                   = "Image"
+  image_uri                      = local.api_image_uri
+  architectures                  = ["arm64"]
+  memory_size                    = var.lambda_memory_mb
+  timeout                        = var.lambda_timeout_seconds
+  reserved_concurrent_executions = var.lambda_reserved_concurrency
+
+  vpc_config {
+    subnet_ids         = var.private_subnet_ids
+    security_group_ids = [aws_security_group.lambda.id]
+  }
+
+  environment {
+    variables = {
+      # Lambda Web Adapter — see services/api/Dockerfile.
+      AWS_LWA_PORT        = "8787"
+      AWS_LWA_INVOKE_MODE = "BUFFERED"
+      PORT                = "8787"
+
+      # Backend selection — flips the API onto Postgres (issue #224).
+      BINDERSNAP_DB_BACKEND = "postgres"
+
+      # Aurora connection. Lambda fetches the password at cold-start from
+      # AURORA_MASTER_SECRET_ARN and assembles the URL; we only pass the
+      # non-secret pieces here.
+      BINDERSNAP_PG_HOST     = aws_rds_cluster.api.endpoint
+      BINDERSNAP_PG_PORT     = "5432"
+      BINDERSNAP_PG_DATABASE = aws_rds_cluster.api.database_name
+
+      # Secret ARNs — Lambda reads them via the IAM role; not the values
+      # themselves, so a console screenshot does not leak credentials.
+      AURORA_MASTER_SECRET_ARN     = aws_rds_cluster.api.master_user_secret[0].secret_arn
+      STRIPE_SECRET_ARN            = aws_secretsmanager_secret.stripe.arn
+      GITEA_SECRET_ARN             = aws_secretsmanager_secret.gitea.arn
+      SESSION_ENVELOPE_KMS_KEY_ARN = aws_kms_key.session_envelope.arn
+    }
+  }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.lambda_basic_execution,
+    aws_iam_role_policy_attachment.lambda_vpc_access,
+    aws_cloudwatch_log_group.api,
+  ]
+
+  lifecycle {
+    # deploy-api.yml updates image_uri out-of-band on every push to main;
+    # `terraform apply` must not roll it back to the bootstrap image.
+    ignore_changes = [image_uri]
+  }
+
+  tags = local.common_tags
+}
+
+# ---------- Outputs ----------
+
+output "lambda_function_name" {
+  description = "Lambda function name. Consumed by deploy-api.yml."
+  value       = aws_lambda_function.api.function_name
+}
+
+output "lambda_function_arn" {
+  description = "Lambda function ARN."
+  value       = aws_lambda_function.api.arn
+}
+
+output "lambda_invoke_arn" {
+  description = "Lambda invoke ARN. Consumed by API Gateway integration."
+  value       = aws_lambda_function.api.invoke_arn
+}
