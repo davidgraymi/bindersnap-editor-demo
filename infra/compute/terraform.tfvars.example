@@ -9,3 +9,8 @@ data_volume_size_gb = 20
 # vpc_id            = null          # null = default VPC
 # subnet_id         = null          # null = first default subnet
 # allowed_ssh_cidrs = ["1.2.3.4/32"]
+
+# Gitea-as-NAT for the api-service Lambda. Set once the api-service root
+# has provisioned its private subnets; otherwise leave empty. Must list the
+# CIDRs of every subnet passed to api-service's private_subnet_ids.
+# lambda_subnet_cidrs = ["10.0.16.0/20", "10.0.32.0/20"]
