@@ -12,11 +12,15 @@
 // Usage:
 //   bun run scripts/migrate-sqlite-to-postgres.ts \
 //     --sqlite-path /var/lib/bindersnap/sessions.db \
-//     --database-url "$BINDERSNAP_DATABASE_URL"
+//     --database-url "$BINDERSNAP_DATABASE_URL" \
+//     --token-encryption-key "$BINDERSNAP_TOKEN_ENCRYPTION_KEY"
 //
 // Flags:
 //   --sqlite-path <path>     Source SQLite file. Required.
 //   --database-url <url>     Target Postgres URL. Defaults to env BINDERSNAP_DATABASE_URL.
+//   --token-encryption-key <b64>
+//                            Master key for token-at-rest envelope encryption.
+//                            Defaults to env BINDERSNAP_TOKEN_ENCRYPTION_KEY.
 //   --dry-run                Read + plan only; no writes.
 //   --allow-non-empty        Allow writing into tables that already have rows.
 //                            By default the script refuses, since it is meant
@@ -44,6 +48,10 @@ import {
   EXPECTED_SCHEMA_VERSION,
   assertSchemaVersionMatches,
 } from "../services/api/db/version";
+import {
+  LocalTokenCrypto,
+  type TokenCrypto,
+} from "../services/api/token-crypto";
 
 export interface SourceSessionRow {
   id: string;
@@ -107,6 +115,11 @@ export interface MigrationPlan {
 export interface MigrationOptions {
   sqlitePath: string;
   databaseUrl: string;
+  // Master key for token-at-rest envelope encryption. Required unless
+  // `tokenCrypto` is passed explicitly (tests). Base64 of 32 bytes.
+  tokenEncryptionKey?: string;
+  // Override for tests so we don't have to round-trip a base64 string.
+  tokenCrypto?: TokenCrypto;
   dryRun?: boolean;
   allowNonEmpty?: boolean;
   now?: number;
@@ -398,9 +411,14 @@ export class DestinationNotEmptyError extends Error {
 // Writes the plan into Postgres inside a single transaction. ON CONFLICT DO
 // NOTHING means re-running the script after a partial success is safe — rows
 // already present are not overwritten.
+//
+// Session rows are envelope-encrypted before insertion: each row gets a
+// per-session DEK wrapped by the master key supplied via `crypto`. The raw
+// plaintext giteaToken from SQLite never lands in Postgres.
 export async function writePlan(
   db: PostgresJsDatabase,
   plan: MigrationPlan,
+  crypto: TokenCrypto,
 ): Promise<MigrationResult["written"]> {
   const written: MigrationResult["written"] = {
     sessions: 0,
@@ -410,11 +428,26 @@ export async function writePlan(
     webhookCustomerState: 0,
   };
 
+  const encryptedSessionRows = await Promise.all(
+    plan.sessions.map(async (row) => {
+      const { ciphertext, wrappedDek } = await crypto.encrypt(row.giteaToken);
+      return {
+        id: row.id,
+        username: row.username,
+        giteaTokenCiphertext: ciphertext,
+        giteaTokenDek: wrappedDek,
+        giteaTokenName: row.giteaTokenName,
+        createdAt: row.createdAt,
+        expiresAt: row.expiresAt,
+      };
+    }),
+  );
+
   await db.transaction(async (tx) => {
-    if (plan.sessions.length > 0) {
+    if (encryptedSessionRows.length > 0) {
       const inserted = await tx
         .insert(sessions)
-        .values(plan.sessions)
+        .values(encryptedSessionRows)
         .onConflictDoNothing({ target: sessions.id })
         .returning({ id: sessions.id });
       written.sessions = inserted.length;
@@ -466,6 +499,17 @@ export async function runMigration(
   const log = options.logger ?? ((line) => console.log(line));
   const now = options.now ?? Date.now();
 
+  const crypto =
+    options.tokenCrypto ??
+    (options.tokenEncryptionKey
+      ? LocalTokenCrypto.fromBase64(options.tokenEncryptionKey)
+      : null);
+  if (!crypto) {
+    throw new Error(
+      "tokenEncryptionKey (or tokenCrypto) is required to copy sessions into Postgres.",
+    );
+  }
+
   const snapshot = readSqliteSnapshot(options.sqlitePath);
   const plan = buildPlan(snapshot, now);
 
@@ -516,7 +560,7 @@ export async function runMigration(
       };
     }
 
-    const written = await writePlan(db, plan);
+    const written = await writePlan(db, plan, crypto);
 
     log(
       `Wrote: sessions=${written.sessions}, subscriptions=${written.subscriptions}, ` +
@@ -542,6 +586,7 @@ export async function runMigration(
 interface CliArgs {
   sqlitePath: string | null;
   databaseUrl: string | null;
+  tokenEncryptionKey: string | null;
   dryRun: boolean;
   allowNonEmpty: boolean;
 }
@@ -550,6 +595,7 @@ export function parseCliArgs(argv: string[]): CliArgs {
   const args: CliArgs = {
     sqlitePath: null,
     databaseUrl: null,
+    tokenEncryptionKey: null,
     dryRun: false,
     allowNonEmpty: false,
   };
@@ -559,6 +605,8 @@ export function parseCliArgs(argv: string[]): CliArgs {
       args.sqlitePath = argv[++i] ?? null;
     } else if (arg === "--database-url") {
       args.databaseUrl = argv[++i] ?? null;
+    } else if (arg === "--token-encryption-key") {
+      args.tokenEncryptionKey = argv[++i] ?? null;
     } else if (arg === "--dry-run") {
       args.dryRun = true;
     } else if (arg === "--allow-non-empty") {
@@ -574,6 +622,8 @@ if (import.meta.main) {
   const cli = parseCliArgs(process.argv.slice(2));
   const sqlitePath = cli.sqlitePath;
   const databaseUrl = cli.databaseUrl ?? process.env.BINDERSNAP_DATABASE_URL;
+  const tokenEncryptionKey =
+    cli.tokenEncryptionKey ?? process.env.BINDERSNAP_TOKEN_ENCRYPTION_KEY;
   if (!sqlitePath) {
     console.error("--sqlite-path is required.");
     process.exit(1);
@@ -582,9 +632,16 @@ if (import.meta.main) {
     console.error("--database-url or BINDERSNAP_DATABASE_URL is required.");
     process.exit(1);
   }
+  if (!tokenEncryptionKey) {
+    console.error(
+      "--token-encryption-key or BINDERSNAP_TOKEN_ENCRYPTION_KEY is required.",
+    );
+    process.exit(1);
+  }
   runMigration({
     sqlitePath,
     databaseUrl,
+    tokenEncryptionKey,
     dryRun: cli.dryRun,
     allowNonEmpty: cli.allowNonEmpty,
   })

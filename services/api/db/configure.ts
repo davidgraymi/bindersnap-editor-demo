@@ -4,6 +4,7 @@ import {
   setSubscriptionBackendFactory,
   setWebhookEventBackendFactory,
 } from "../subscriptions";
+import { LocalTokenCrypto, type TokenCrypto } from "../token-crypto";
 import { getPostgresDb } from "./client";
 import { PostgresSessionBackend } from "./postgres-sessions";
 import {
@@ -17,9 +18,12 @@ import { assertSchemaVersionMatches } from "./version";
 //
 // Postgres path additionally runs the schema-version probe so the API refuses
 // to serve traffic against a database the migration runner has not brought up
-// to date. Returns the chosen backend so callers can log it.
+// to date, and builds the TokenCrypto from BINDERSNAP_TOKEN_ENCRYPTION_KEY so
+// every session row is envelope-encrypted at rest. Returns the chosen backend
+// so callers can log it.
 export async function configureBackends(
   apiConfig: ApiConfig = config,
+  cryptoOverride?: TokenCrypto,
 ): Promise<"sqlite" | "postgres"> {
   if (apiConfig.dbBackend === "sqlite") {
     return "sqlite";
@@ -28,7 +32,10 @@ export async function configureBackends(
   const db = getPostgresDb({ url: apiConfig.databaseUrl });
   await assertSchemaVersionMatches(db);
 
-  setSessionBackendFactory(() => new PostgresSessionBackend(db));
+  const crypto =
+    cryptoOverride ?? LocalTokenCrypto.fromBase64(apiConfig.tokenEncryptionKey);
+
+  setSessionBackendFactory(() => new PostgresSessionBackend(crypto, db));
   setSubscriptionBackendFactory(() => new PostgresSubscriptionBackend(db));
   setWebhookEventBackendFactory(() => new PostgresWebhookEventBackend(db));
 
