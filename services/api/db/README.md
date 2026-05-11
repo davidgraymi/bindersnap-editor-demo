@@ -27,7 +27,7 @@ The API picks a backend at startup based on `BINDERSNAP_DB_BACKEND`:
 
 When `postgres` is selected, `configureBackends()` calls `assertSchemaVersionMatches` against the database before installing the lazy-store factories. If the `schema_versions` row does not match `EXPECTED_SCHEMA_VERSION`, startup fails with a `SchemaVersionMismatchError` and the API never serves traffic. Run `bun run db:migrate` (or the equivalent CI step) to bring the database forward.
 
-Cutover from SQLite to Postgres is the next slice — a one-shot migration script that reads the existing `sessions.db` from the EC2 host and copies rows into Postgres.
+Cutover from SQLite to Postgres is performed by the one-shot copy script at `scripts/migrate-sqlite-to-postgres.ts`. It reads the existing `sessions.db` from the EC2 host, asserts the destination's `schema_versions` row matches `EXPECTED_SCHEMA_VERSION`, then copies all five tables in a single transaction with `ON CONFLICT DO NOTHING`. Re-running is safe; the script refuses by default if the destination already has rows (override with `--allow-non-empty`).
 
 ## Migration policy
 
