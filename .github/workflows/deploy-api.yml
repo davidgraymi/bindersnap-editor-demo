@@ -1,0 +1,189 @@
+name: Deploy API Lambda
+
+# Container-image Lambda deploy for services/api (#224). Builds the image
+# from services/api/Dockerfile, pushes to ECR tagged with the commit SHA,
+# calls `aws lambda update-function-code`, waits for the update to settle,
+# then synchronously invokes the function once and fails the job if the
+# returned payload isn't a 200 from /healthz.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "services/api/**"
+      - "packages/api-schema/**"
+      - "package.json"
+      - "bun.lock"
+      - ".github/workflows/deploy-api.yml"
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Optional image tag to deploy instead of the current commit SHA"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-api-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION != '' && vars.AWS_REGION || 'us-east-1' }}
+  DEPLOY_ROLE_ARN: ${{ vars.BINDERSNAP_DEPLOY_ROLE_ARN }}
+  ECR_REPOSITORY: ${{ vars.BINDERSNAP_API_ECR_REPOSITORY != '' && vars.BINDERSNAP_API_ECR_REPOSITORY || 'bindersnap-prod-api' }}
+  LAMBDA_FUNCTION_NAME: ${{ vars.BINDERSNAP_API_LAMBDA_FUNCTION_NAME != '' && vars.BINDERSNAP_API_LAMBDA_FUNCTION_NAME || 'bindersnap-prod-api' }}
+
+jobs:
+  build-and-deploy:
+    name: Build, push, and deploy
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+
+    steps:
+      - name: Validate workflow configuration
+        run: |
+          set -euo pipefail
+          missing=0
+          for var_name in DEPLOY_ROLE_ARN AWS_REGION ECR_REPOSITORY LAMBDA_FUNCTION_NAME; do
+            if [ -z "${!var_name:-}" ]; then
+              echo "::error title=Missing workflow configuration::${var_name} is not set"
+              missing=1
+            fi
+          done
+          [ "${missing}" -eq 0 ]
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve image tag
+        id: tag
+        env:
+          MANUAL_TAG: ${{ github.event.inputs.image_tag || '' }}
+        run: |
+          set -euo pipefail
+          tag="${MANUAL_TAG:-${GITHUB_SHA}}"
+          echo "image_tag=${tag}" >> "${GITHUB_OUTPUT}"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: deploy-api-${{ github.run_id }}
+
+      - name: Log in to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image to ECR
+        id: build
+        uses: docker/build-push-action@v6
+        env:
+          IMAGE_URI: ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.image_tag }}
+        with:
+          context: .
+          file: services/api/Dockerfile
+          platforms: linux/arm64
+          provenance: false
+          push: true
+          tags: ${{ env.IMAGE_URI }}
+          cache-from: type=gha,scope=deploy-api
+          cache-to: type=gha,mode=max,scope=deploy-api
+
+      - name: Update Lambda function code
+        env:
+          IMAGE_URI: ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+          echo "Pointing ${LAMBDA_FUNCTION_NAME} at ${IMAGE_URI}"
+          aws lambda update-function-code \
+            --function-name "${LAMBDA_FUNCTION_NAME}" \
+            --image-uri "${IMAGE_URI}" \
+            --publish \
+            --output json \
+            > /tmp/update-function.json
+          jq -r '"Version: \(.Version)\nLastUpdateStatus: \(.LastUpdateStatus)"' /tmp/update-function.json
+
+          # update-function-code returns immediately; the function transitions
+          # through LastUpdateStatus=InProgress before settling on Successful
+          # or Failed. `aws lambda wait function-updated-v2` polls every 1s
+          # for up to 300s, which is the same SLA Lambda enforces internally
+          # for image pulls.
+          aws lambda wait function-updated-v2 \
+            --function-name "${LAMBDA_FUNCTION_NAME}"
+
+          aws lambda get-function-configuration \
+            --function-name "${LAMBDA_FUNCTION_NAME}" \
+            --query '{State: State, LastUpdateStatus: LastUpdateStatus, LastUpdateStatusReason: LastUpdateStatusReason, ImageUri: Code.ImageUri}' \
+            --output table
+
+      - name: Post-deploy invocation check
+        run: |
+          set -euo pipefail
+
+          # Synthesise an API Gateway v2 HTTP request for GET /healthz. The
+          # Lambda Web Adapter translates this into a local HTTP call against
+          # the Bun server in the container; a 200 response proves the new
+          # image boots, attaches to the VPC, connects to Aurora, and serves
+          # the /healthz route end-to-end.
+          payload_b64="$(printf '%s' '{
+            "version": "2.0",
+            "routeKey": "GET /healthz",
+            "rawPath": "/healthz",
+            "rawQueryString": "",
+            "headers": {"accept": "*/*"},
+            "requestContext": {
+              "http": {"method": "GET", "path": "/healthz", "protocol": "HTTP/1.1", "sourceIp": "127.0.0.1", "userAgent": "deploy-api-workflow"},
+              "stage": "$default",
+              "requestId": "deploy-check-'"${GITHUB_RUN_ID}"'"
+            },
+            "isBase64Encoded": false
+          }' | base64 -w0)"
+
+          aws lambda invoke \
+            --function-name "${LAMBDA_FUNCTION_NAME}" \
+            --invocation-type RequestResponse \
+            --payload "${payload_b64}" \
+            --cli-binary-format raw-in-base64-out \
+            --log-type Tail \
+            --query 'LogResult' \
+            --output text \
+            /tmp/invoke-response.json \
+            | base64 -d > /tmp/invoke-logs.txt || true
+
+          echo "--- Lambda tail logs ---"
+          cat /tmp/invoke-logs.txt || true
+          echo "--- Lambda response ---"
+          cat /tmp/invoke-response.json
+          echo
+
+          status="$(jq -r '.statusCode // empty' /tmp/invoke-response.json)"
+          if [ -z "${status}" ]; then
+            echo "::error title=Post-deploy check failed::Response payload had no statusCode (function likely errored — see logs above)"
+            exit 1
+          fi
+          if [ "${status}" != "200" ]; then
+            echo "::error title=Post-deploy check failed::/healthz returned HTTP ${status}"
+            exit 1
+          fi
+          echo "Post-deploy /healthz check passed (HTTP ${status})"
+
+      - name: Summary
+        if: always()
+        env:
+          IMAGE_URI: ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.image_tag }}
+        run: |
+          {
+            echo "## Deploy API Lambda"
+            echo
+            echo "- Function: \`${LAMBDA_FUNCTION_NAME}\`"
+            echo "- Image: \`${IMAGE_URI}\`"
+            echo "- Commit: \`${GITHUB_SHA}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
