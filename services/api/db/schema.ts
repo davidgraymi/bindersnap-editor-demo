@@ -6,7 +6,17 @@ import {
   index,
   uniqueIndex,
   integer,
+  customType,
 } from "drizzle-orm/pg-core";
+
+// Postgres bytea, surfaced as a Buffer in TypeScript. Used for the envelope-
+// encrypted gitea_token blobs in `sessions`. postgres-js handles the binary
+// transport natively; drizzle just needs to know the column type name.
+export const bytea = customType<{ data: Buffer; default: false }>({
+  dataType() {
+    return "bytea";
+  },
+});
 
 // Single source of truth for the API service's Postgres schema.
 // Mirrors the SQLite shapes in services/api/sessions.ts and subscriptions.ts.
@@ -20,7 +30,12 @@ export const sessions = pgTable(
   {
     id: text("id").primaryKey(),
     username: text("username").notNull(),
-    giteaToken: text("gitea_token").notNull(),
+    // Envelope-encrypted token at rest. `gitea_token_ciphertext` holds the
+    // gitea_token sealed with a per-session DEK; `gitea_token_dek` holds that
+    // DEK wrapped by the master key (KMS CMK in prod, BINDERSNAP_TOKEN_ENCRYPTION_KEY
+    // in local/dev). See services/api/token-crypto.ts.
+    giteaTokenCiphertext: bytea("gitea_token_ciphertext").notNull(),
+    giteaTokenDek: bytea("gitea_token_dek").notNull(),
     giteaTokenName: text("gitea_token_name").notNull(),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),
     expiresAt: bigint("expires_at", { mode: "number" }).notNull(),

@@ -8,7 +8,7 @@ import { schemaVersions } from "./schema";
 //
 // Format: ISO-like string keyed to the migration journal entry that introduced
 // the change. Keep in sync with the latest entry in db/migrations/meta/_journal.json.
-export const EXPECTED_SCHEMA_VERSION = "0000_initial";
+export const EXPECTED_SCHEMA_VERSION = "0001_token_envelope_encryption";
 
 export class SchemaVersionMismatchError extends Error {
   constructor(

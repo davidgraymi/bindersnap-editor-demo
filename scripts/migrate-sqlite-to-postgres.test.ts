@@ -163,12 +163,15 @@ describe("parseCliArgs", () => {
       "/tmp/s.db",
       "--database-url",
       "postgres://x",
+      "--token-encryption-key",
+      "abc=",
       "--dry-run",
       "--allow-non-empty",
     ]);
     expect(args).toEqual({
       sqlitePath: "/tmp/s.db",
       databaseUrl: "postgres://x",
+      tokenEncryptionKey: "abc=",
       dryRun: true,
       allowNonEmpty: true,
     });
@@ -182,6 +185,7 @@ describe("parseCliArgs", () => {
     expect(parseCliArgs([])).toEqual({
       sqlitePath: null,
       databaseUrl: null,
+      tokenEncryptionKey: null,
       dryRun: false,
       allowNonEmpty: false,
     });
