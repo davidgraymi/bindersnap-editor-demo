@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { config, type SessionCookieSameSite } from "./config";
 import { configureBackends } from "./db/configure";
 import { logger } from "./logger";
+import { runSessionReaper } from "./session-reaper";
 import { sessionStore, type SessionRecord } from "./sessions";
 import {
   subscriptionStore,
@@ -3667,13 +3668,12 @@ async function handleBillingPortal(
 
 async function cleanupExpiredSessions(): Promise<void> {
   const now = Date.now();
-  const expired = await sessionStore.reap(now);
-
-  if (expired.length > 0) {
-    await Promise.allSettled(
-      expired.map((session) => revokeUserToken(session)),
-    );
-  }
+  await runSessionReaper({
+    sessionStore,
+    revoke: revokeUserToken,
+    now,
+    logger,
+  });
 
   for (const [key, entry] of authAttempts.entries()) {
     if (entry.resetAt <= now) {
