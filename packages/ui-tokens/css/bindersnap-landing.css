@@ -150,7 +150,6 @@ body::after {
   gap: 0;
 }
 
-
 .nav-cta-link {
   background: var(--bs-text-primary);
   color: var(--bs-page-bg) !important;
