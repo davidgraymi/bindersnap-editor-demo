@@ -36,8 +36,7 @@
     "tf:apply": "bash infra/apply-all.sh",
     "tf:bootstrap": "bash infra/bootstrap.sh",
     "tf:plan": "bash infra/apply-all.sh plan",
-    "release": "standard-version",
-    "version": "auto-changelog -p && bun install && git add CHANGELOG.md bun.lock"
+    "release": "standard-version"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^8.5.0",
@@ -59,7 +58,6 @@
     "@tiptap/react": "^3.22.4",
     "@tiptap/starter-kit": "^3.22.4",
     "@types/dompurify": "^3.2.0",
-    "auto-changelog": "^2.5.0",
     "diff": "^8.0.4",
     "dompurify": "^3.4.1",
     "lucide-react": "^0.574.0",
