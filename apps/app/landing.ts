@@ -94,6 +94,26 @@ export function bindSignupEnterKeys(
   }
 }
 
+const SIGNUP_FORM_IDS = ["hero-form", "cta-form"] as const;
+const SIGNUP_SUCCESS_IDS = ["hero-success", "cta-success"] as const;
+
+export function bindWaitlistJoined(doc: Document): void {
+  doc.addEventListener("bs:waitlist-joined", () => {
+    for (const id of SIGNUP_FORM_IDS) {
+      const el = doc.getElementById(id);
+      if (el) el.style.display = "none";
+    }
+    for (const id of SIGNUP_SUCCESS_IDS) {
+      const el = doc.getElementById(id);
+      if (el) el.removeAttribute("hidden");
+    }
+  });
+}
+
+export function dispatchWaitlistJoined(doc: Document = document): void {
+  doc.dispatchEvent(new CustomEvent("bs:waitlist-joined", { bubbles: false }));
+}
+
 export function installScrollReveal(doc: Document = document): void {
   if (typeof IntersectionObserver === "undefined") {
     return;

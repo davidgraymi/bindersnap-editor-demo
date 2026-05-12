@@ -1,5 +1,6 @@
 import {
   bindSignupEnterKeys,
+  bindWaitlistJoined,
   hideLandingContent,
   installScrollReveal,
   restoreTheme,
@@ -37,6 +38,7 @@ if (shouldShowLanding(window.location.pathname)) {
 }
 
 installScrollReveal();
+bindWaitlistJoined(document);
 
 window.toggleTheme = () => {
   toggleTheme();
