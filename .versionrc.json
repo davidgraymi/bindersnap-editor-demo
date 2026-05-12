@@ -18,6 +18,6 @@
     "changelog": true
   },
   "scripts": {
-    "precommit": "auto-changelog -p && git add CHANGELOG.md"
+    "postbump": "bun run changelog"
   }
 }
