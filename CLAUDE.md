@@ -40,13 +40,13 @@ Test files live alongside source as `*.test.ts`. TypeScript strict mode is the l
 
 Bun monorepo — one SPA, shared packages, backend services.
 
-| Directory | Purpose |
-|-----------|---------|
-| `apps/app/` | Unified SPA → GitHub Pages |
-| `packages/ui-tokens/` | CSS design tokens (single source of truth) |
-| `packages/utils/` | Shared utilities |
-| `services/api/` | Auth + data BFF (port 8787) |
-| `services/hocuspocus/` | Yjs WebSocket collaboration server |
+| Directory              | Purpose                                    |
+| ---------------------- | ------------------------------------------ |
+| `apps/app/`            | Unified SPA → GitHub Pages                 |
+| `packages/ui-tokens/`  | CSS design tokens (single source of truth) |
+| `packages/utils/`      | Shared utilities                           |
+| `services/api/`        | Auth + data BFF (port 8787)                |
+| `services/hocuspocus/` | Yjs WebSocket collaboration server         |
 
 **Path aliases:** `@editor/*`, `@gitea/*`, `@ui/*`, `@utils/*`
 
