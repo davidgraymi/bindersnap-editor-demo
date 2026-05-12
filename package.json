@@ -21,6 +21,7 @@
     "generate:bff": "bun run generate:api-schema && bun run generate:api-client",
     "lighthouse": "bun run build && sh -c 'python3 -m http.server 4173 --directory dist >/dev/null 2>&1 & SERVER_PID=$!; sleep 1; bunx lighthouse http://localhost:4173 --output=json --output-path=./lighthouse.json --quiet --chrome-flags=\"--headless --no-sandbox --disable-gpu\" --no-enable-error-reporting; kill $SERVER_PID' && bun run summarize",
     "reconcile:stripe-customer": "bun scripts/reconcile-stripe-customer.ts",
+    "release": "standard-version",
     "serve": "bun run serve:app",
     "serve:app": "NODE_ENV=production bun server.ts",
     "serve:api": "NODE_ENV=production bun services/api/server.ts",
@@ -35,8 +36,7 @@
     "up": "docker compose up --build",
     "tf:apply": "bash infra/apply-all.sh",
     "tf:bootstrap": "bash infra/bootstrap.sh",
-    "tf:plan": "bash infra/apply-all.sh plan",
-    "release": "standard-version"
+    "tf:plan": "bash infra/apply-all.sh plan"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^8.5.0",
