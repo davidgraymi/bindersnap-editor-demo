@@ -389,8 +389,7 @@ export function HomePage({
           <div className="dash-stat-label">Awaiting Review</div>
           {isLoadingDocuments ? (
             <div
-              className="vault-skeleton-line vault-skeleton-line--short"
-              style={{ height: "2rem", marginTop: 4 }}
+              className="dash-stat-skeleton"
             />
           ) : (
             <div className="dash-stat-value">{awaitingReview}</div>
@@ -409,8 +408,7 @@ export function HomePage({
           <div className="dash-stat-label">Approved This Month</div>
           {isLoadingDocuments ? (
             <div
-              className="vault-skeleton-line vault-skeleton-line--short"
-              style={{ height: "2rem", marginTop: 4 }}
+              className="dash-stat-skeleton"
             />
           ) : (
             <div className="dash-stat-value">{approvedThisMonth}</div>
@@ -425,8 +423,7 @@ export function HomePage({
           <div className="dash-stat-label">Open Change Requests</div>
           {isLoadingDocuments ? (
             <div
-              className="vault-skeleton-line vault-skeleton-line--short"
-              style={{ height: "2rem", marginTop: 4 }}
+              className="dash-stat-skeleton"
             />
           ) : (
             <div className="dash-stat-value">{openChangeRequests}</div>
@@ -440,8 +437,7 @@ export function HomePage({
           <div className="dash-stat-label">Active Contributors</div>
           {isLoadingDocuments ? (
             <div
-              className="vault-skeleton-line vault-skeleton-line--short"
-              style={{ height: "2rem", marginTop: 4 }}
+              className="dash-stat-skeleton"
             />
           ) : (
             <div className="dash-stat-value">{activeContributors}</div>
