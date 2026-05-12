@@ -150,6 +150,19 @@ function avatarStyle(login: string): { bg: string; color: string } {
   return found ?? (fallback as { bg: string; color: string });
 }
 
+// ── Shared sub-components ────────────────────────────────────
+
+function PageGreeting({ username }: { username: string }) {
+  return (
+    <>
+      <h1>
+        {getGreeting()}, {getDisplayFirstName(username)}
+      </h1>
+      <p>{getTodayLabel()} · Bindersnap Workspace</p>
+    </>
+  );
+}
+
 // ── Skeleton ─────────────────────────────────────────────────
 
 function SkeletonRows({ count }: { count: number }) {
@@ -295,10 +308,7 @@ export function HomePage({
       <div className="dash-inner" ref={containerRef}>
         <div className="dash-page-header">
           <div className="dash-page-header-left">
-            <h1>
-              {getGreeting()}, {getDisplayFirstName(currentUsername)}
-            </h1>
-            <p>{getTodayLabel()} · Bindersnap Workspace</p>
+            <PageGreeting username={currentUsername} />
           </div>
           <div className="dash-page-header-right">
             <button
@@ -358,10 +368,7 @@ export function HomePage({
       {/* Page header */}
       <div className="dash-page-header">
         <div className="dash-page-header-left">
-          <h1>
-            {getGreeting()}, {getDisplayFirstName(currentUsername)}
-          </h1>
-          <p>{getTodayLabel()} · Bindersnap Workspace</p>
+          <PageGreeting username={currentUsername} />
         </div>
         <div className="dash-page-header-right">
           <button
