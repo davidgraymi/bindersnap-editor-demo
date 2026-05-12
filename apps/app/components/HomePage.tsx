@@ -398,7 +398,7 @@ export function HomePage({
           {awaitingReview > 0 ? (
             <div className="dash-stat-sub dash-stat-sub--warning">
               <Clock3 size={11} strokeWidth={1.8} aria-hidden="true" />
-              {awaitingReview} past due
+              {awaitingReview} need your review
             </div>
           ) : (
             <div className="dash-stat-sub">All clear</div>
