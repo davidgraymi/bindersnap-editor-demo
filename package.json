@@ -76,6 +76,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@types/uuid": "^11.0.0",
+    "auto-changelog": "^2.5.1",
     "jsdom": "^29.0.2",
     "openapi-typescript": "^7.13.0",
     "orval": "^8.9.1",

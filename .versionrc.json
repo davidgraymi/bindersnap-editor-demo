@@ -13,5 +13,11 @@
   "compareUrlFormat": "https://github.com/davidgraymi/bindersnap-editor-demo/compare/{{previousTag}}...{{currentTag}}",
   "issueUrlFormat": "https://github.com/davidgraymi/bindersnap-editor-demo/issues/{{id}}",
   "userUrlFormat": "https://github.com/{{user}}",
-  "releaseCommitMessageFormat": "chore: release v{{currentTag}} [skip ci]"
+  "releaseCommitMessageFormat": "chore: release v{{currentTag}} [skip ci]",
+  "skip": {
+    "changelog": true
+  },
+  "scripts": {
+    "precommit": "auto-changelog -p && git add CHANGELOG.md"
+  }
 }
