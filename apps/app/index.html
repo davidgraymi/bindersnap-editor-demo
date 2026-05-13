@@ -68,25 +68,6 @@
             <span class="logo-name">Bindersnap</span>
           </a>
           <div class="nav-right">
-            <button
-              class="bs-theme-toggle theme-toggle"
-              onclick="toggleTheme()"
-              aria-label="Toggle dark mode"
-              title="Toggle dark / light mode"
-            >
-              <span
-                class="landing-lucide-icon icon-moon"
-                data-lucide-icon="moon"
-                data-lucide-size="16"
-                aria-hidden="true"
-              ></span>
-              <span
-                class="landing-lucide-icon icon-sun"
-                data-lucide-icon="sun-medium"
-                data-lucide-size="16"
-                aria-hidden="true"
-              ></span>
-            </button>
             <a href="/login" class="nav-login-link">Sign In</a>
             <a href="/signup" class="nav-cta-link">Sign Up</a>
           </div>
@@ -98,7 +79,13 @@
         <section class="hero">
           <div class="hero-inner">
             <div class="chaos-pill">
-              <span class="chaos-pill-emoji">😩</span>
+              <span
+                class="landing-lucide-icon chaos-pill-icon"
+                data-lucide-icon="file-x-2"
+                data-lucide-size="14"
+                data-lucide-stroke-width="1.75"
+                aria-hidden="true"
+              ></span>
               <span class="chaos-file"
                 >contract_FINAL_v2_JanEdits_APPROVED(1).docx</span
               >
@@ -119,15 +106,6 @@
               more reply-all nightmares.
             </p>
 
-            <div class="waitlist-row">
-              <div class="waitlist-avatars">
-                <span>JL</span><span>MR</span><span>SK</span>
-              </div>
-              <p class="waitlist-text">
-                <strong id="waitlist-count">247</strong> teams already signed up
-              </p>
-            </div>
-
             <div class="hero-form-wrap" id="hero-area">
               <div class="email-row" id="hero-form">
                 <input
@@ -136,7 +114,7 @@
                   placeholder="your@company.com"
                   autocomplete="email"
                 />
-                <button type="button" onclick="signup('hero')">
+                <button type="button" id="hero-signup-btn">
                   Sign Up Free &rarr;
                 </button>
               </div>
@@ -161,8 +139,8 @@
                     aria-hidden="true"
                   ></span>
                 </div>
-                <h3>You're on the list! 🎉</h3>
-                <p>We'll be in touch the moment Bindersnap launches.</p>
+                <h3>You're on the waitlist.</h3>
+                <p>We'll email when access opens for your team.</p>
               </div>
             </div>
 
@@ -172,7 +150,7 @@
                   <span></span><span></span><span></span>
                 </div>
                 <div class="mockup-bar">
-                  bindersnap.com &mdash; Q4 Vendor Agreement &middot; In Review
+                  Q4 Vendor Agreement &middot; In Review
                 </div>
               </div>
               <div class="mockup-editor">
@@ -308,7 +286,7 @@
               <div class="eyebrow-tag">The Solution</div>
             </div>
             <h2 class="features-title reveal">
-              One tool that <em>actually</em> handles the whole process
+              One tool that handles the whole process
             </h2>
             <p class="features-subtitle reveal">
               Familiar to write in. Built for teams. Airtight on accountability.
@@ -379,7 +357,7 @@
         <section class="section-compare">
           <div class="compare-inner">
             <div class="compare-header reveal">
-              <h2>Before Bindersnap.<br /><em>After</em> Bindersnap.</h2>
+              <h2>Before Bindersnap.<br />After Bindersnap.</h2>
               <p>The same workflow &mdash; completely transformed.</p>
             </div>
             <div class="compare-grid">
@@ -510,31 +488,16 @@
         <section>
           <div class="section-compliance">
             <div class="comp-left reveal">
-              <div class="overline">Enterprise-Ready</div>
-              <h2>Built for teams that<br />answer to <em>auditors.</em></h2>
+              <div class="overline">Built for the Regulated Stack</div>
+              <h2>
+                Designed to <em>meet</em> the controls your auditors expect.
+              </h2>
               <p>
-                Bindersnap isn't just convenient &mdash; it's built to the
-                security standards that regulated industries demand. Whether
-                you're in law, finance, or healthcare, your documents are safe.
+                Bindersnap is being built to SOC 2 / ISO 27001 readiness from
+                day one &mdash; encrypted at rest, append-only audit log,
+                role-based approvals. Certifications in progress.
               </p>
               <div class="comp-items">
-                <div class="comp-item">
-                  <div class="comp-item-icon">
-                    <span
-                      class="landing-lucide-icon"
-                      data-lucide-icon="badge-check"
-                      data-lucide-size="16"
-                      aria-hidden="true"
-                    ></span>
-                  </div>
-                  <div>
-                    <strong>SOC 2 Type II Certified</strong>
-                    <span
-                      >Independently audited security and privacy
-                      controls.</span
-                    >
-                  </div>
-                </div>
                 <div class="comp-item">
                   <div class="comp-item-icon">
                     <span
@@ -545,9 +508,24 @@
                     ></span>
                   </div>
                   <div>
-                    <strong>AES-256 Encryption</strong>
+                    <strong>Encrypted at Rest</strong>
+                    <span>All documents stored with AES-256 encryption.</span>
+                  </div>
+                </div>
+                <div class="comp-item">
+                  <div class="comp-item-icon">
                     <span
-                      >End-to-end encryption for every document, always.</span
+                      class="landing-lucide-icon"
+                      data-lucide-icon="shield"
+                      data-lucide-size="16"
+                      aria-hidden="true"
+                    ></span>
+                  </div>
+                  <div>
+                    <strong>Append-Only Audit Log</strong>
+                    <span
+                      >Every approval is permanently recorded and
+                      exportable.</span
                     >
                   </div>
                 </div>
@@ -555,68 +533,23 @@
                   <div class="comp-item-icon">
                     <span
                       class="landing-lucide-icon"
-                      data-lucide-icon="globe"
+                      data-lucide-icon="users"
                       data-lucide-size="16"
                       aria-hidden="true"
                     ></span>
                   </div>
                   <div>
-                    <strong>GDPR &amp; CCPA Compliant</strong>
-                    <span>Global data protection, built in by default.</span>
+                    <strong>Role-Based Approvals</strong>
+                    <span
+                      >Only designated reviewers can approve a version.</span
+                    >
                   </div>
                 </div>
               </div>
-            </div>
-
-            <div class="cert-grid reveal reveal-d2">
-              <div class="cert-card">
-                <img
-                  src="../../packages/ui-tokens/img/certs/soc2.webp"
-                  width="80"
-                  height="80"
-                  alt="SOC2"
-                  loading="lazy"
-                  decoding="async"
-                  fetchpriority="low"
-                />
-                <span>SOC 2</span>
-              </div>
-              <div class="cert-card">
-                <img
-                  src="../../packages/ui-tokens/img/certs/gdpr.webp"
-                  width="80"
-                  height="80"
-                  alt="GDPR"
-                  loading="lazy"
-                  decoding="async"
-                  fetchpriority="low"
-                />
-                <span>GDPR</span>
-              </div>
-              <div class="cert-card">
-                <img
-                  src="../../packages/ui-tokens/img/certs/hipaa.webp"
-                  width="80"
-                  height="80"
-                  alt="HIPAA"
-                  loading="lazy"
-                  decoding="async"
-                  fetchpriority="low"
-                />
-                <span>HIPAA</span>
-              </div>
-              <div class="cert-card">
-                <img
-                  src="../../packages/ui-tokens/img/certs/iso27001.webp"
-                  width="80"
-                  height="80"
-                  alt="ISO 27001"
-                  loading="lazy"
-                  decoding="async"
-                  fetchpriority="low"
-                />
-                <span>ISO 27001</span>
-              </div>
+              <!-- TODO: add security posture documentation -->
+              <!-- <a href="/security" class="comp-security-link"
+                >Read our security posture &rarr;</a
+              > -->
             </div>
           </div>
         </section>
@@ -638,11 +571,16 @@
                   placeholder="your@company.com"
                   autocomplete="email"
                 />
-                <button type="button" onclick="signup('cta')">
-                  Sign Up Free
-                </button>
+                <button type="button" id="cta-signup-btn">Sign Up Free</button>
               </div>
-              <p class="cta-hint">
+              <p class="form-hint">
+                <span
+                  class="landing-lucide-icon"
+                  data-lucide-icon="clock-3"
+                  data-lucide-size="12"
+                  data-lucide-stroke-width="1.75"
+                  aria-hidden="true"
+                ></span>
                 Free to join &middot; No credit card &middot; Start in minutes
               </p>
               <div class="cta-success" id="cta-success">
@@ -656,8 +594,8 @@
                     aria-hidden="true"
                   ></span>
                 </div>
-                <h3>You're on the list! 🎉</h3>
-                <p>We'll be in touch the moment we launch.</p>
+                <h3>You're on the waitlist.</h3>
+                <p>We'll email when access opens for your team.</p>
               </div>
             </div>
           </div>

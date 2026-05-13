@@ -150,6 +150,19 @@ function avatarStyle(login: string): { bg: string; color: string } {
   return found ?? (fallback as { bg: string; color: string });
 }
 
+// ── Shared sub-components ────────────────────────────────────
+
+function PageGreeting({ username }: { username: string }) {
+  return (
+    <>
+      <h1>
+        {getGreeting()}, {getDisplayFirstName(username)}
+      </h1>
+      <p>{getTodayLabel()}</p>
+    </>
+  );
+}
+
 // ── Skeleton ─────────────────────────────────────────────────
 
 function SkeletonRows({ count }: { count: number }) {
@@ -295,10 +308,7 @@ export function HomePage({
       <div className="dash-inner" ref={containerRef}>
         <div className="dash-page-header">
           <div className="dash-page-header-left">
-            <h1>
-              {getGreeting()}, {getDisplayFirstName(currentUsername)}
-            </h1>
-            <p>{getTodayLabel()} · Bindersnap Workspace</p>
+            <PageGreeting username={currentUsername} />
           </div>
           <div className="dash-page-header-right">
             <button
@@ -358,10 +368,7 @@ export function HomePage({
       {/* Page header */}
       <div className="dash-page-header">
         <div className="dash-page-header-left">
-          <h1>
-            {getGreeting()}, {getDisplayFirstName(currentUsername)}
-          </h1>
-          <p>{getTodayLabel()} · Bindersnap Workspace</p>
+          <PageGreeting username={currentUsername} />
         </div>
         <div className="dash-page-header-right">
           <button
@@ -388,10 +395,7 @@ export function HomePage({
         <div className="dash-stat-card">
           <div className="dash-stat-label">Awaiting Review</div>
           {isLoadingDocuments ? (
-            <div
-              className="vault-skeleton-line vault-skeleton-line--short"
-              style={{ height: "2rem", marginTop: 4 }}
-            />
+            <div className="dash-stat-skeleton" />
           ) : (
             <div className="dash-stat-value">{awaitingReview}</div>
           )}
@@ -408,10 +412,7 @@ export function HomePage({
         <div className="dash-stat-card">
           <div className="dash-stat-label">Approved This Month</div>
           {isLoadingDocuments ? (
-            <div
-              className="vault-skeleton-line vault-skeleton-line--short"
-              style={{ height: "2rem", marginTop: 4 }}
-            />
+            <div className="dash-stat-skeleton" />
           ) : (
             <div className="dash-stat-value">{approvedThisMonth}</div>
           )}
@@ -424,10 +425,7 @@ export function HomePage({
         <div className="dash-stat-card">
           <div className="dash-stat-label">Open Change Requests</div>
           {isLoadingDocuments ? (
-            <div
-              className="vault-skeleton-line vault-skeleton-line--short"
-              style={{ height: "2rem", marginTop: 4 }}
-            />
+            <div className="dash-stat-skeleton" />
           ) : (
             <div className="dash-stat-value">{openChangeRequests}</div>
           )}
@@ -439,10 +437,7 @@ export function HomePage({
         <div className="dash-stat-card">
           <div className="dash-stat-label">Active Contributors</div>
           {isLoadingDocuments ? (
-            <div
-              className="vault-skeleton-line vault-skeleton-line--short"
-              style={{ height: "2rem", marginTop: 4 }}
-            />
+            <div className="dash-stat-skeleton" />
           ) : (
             <div className="dash-stat-value">{activeContributors}</div>
           )}

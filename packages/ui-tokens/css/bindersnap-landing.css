@@ -151,8 +151,8 @@ body::after {
 }
 
 .nav-cta-link {
-  background: var(--bs-text-primary);
-  color: var(--bs-page-bg) !important;
+  background: var(--brand-coral);
+  color: #fff !important;
   font-size: 13px;
   font-weight: var(--brand-weight-medium);
   padding: 9px 22px;
@@ -160,13 +160,13 @@ body::after {
   text-decoration: none;
   letter-spacing: 0.01em;
   transition:
-    opacity var(--brand-transition-base),
+    background var(--brand-transition-base),
     transform var(--brand-transition-fast);
 }
 
 .nav-cta-link:hover,
 .nav-cta-link:focus-visible {
-  opacity: 0.85;
+  background: var(--brand-coral-dark);
   transform: translateY(-1px);
 }
 
@@ -269,8 +269,8 @@ body::after {
 .chaos-pill-text {
   color: var(--bs-text-muted);
 }
-.chaos-pill-emoji {
-  font-size: 15px;
+.chaos-pill-icon {
+  color: var(--bs-text-muted);
 }
 
 /* Hero headline */
@@ -1272,6 +1272,22 @@ body::after {
   line-height: var(--brand-leading-normal);
 }
 
+.comp-security-link {
+  display: inline-flex;
+  align-items: center;
+  margin-top: var(--brand-space-6);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-label);
+  letter-spacing: var(--brand-tracking-wide);
+  color: var(--brand-coral);
+  text-decoration: none;
+  transition: opacity var(--brand-transition-base);
+}
+
+.comp-security-link:hover {
+  opacity: 0.75;
+}
+
 .cert-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1471,11 +1487,6 @@ body::after {
 
 .cta-email-row button:hover {
   background: var(--brand-coral-dark);
-}
-
-.cta-hint {
-  font-size: 12px;
-  color: var(--bs-text-faint);
 }
 
 .cta-success {
