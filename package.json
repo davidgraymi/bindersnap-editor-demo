@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "bun run clean && bun build ./apps/app/index.html --outdir=dist --target=browser --minify --splitting --public-path=/ --define:process.env.NODE_ENV='\"production\"' --env='BUN_PUBLIC_*' && cp dist/index.html dist/404.html",
+    "changelog": "auto-changelog -p && git add CHANGELOG.md",
     "clean": "rm -rf dist",
     "debug": "bun run debug:app",
     "debug:app": "bun --inspect --hot server.ts",
@@ -21,6 +22,7 @@
     "generate:bff": "bun run generate:api-schema && bun run generate:api-client",
     "lighthouse": "bun run build && sh -c 'python3 -m http.server 4173 --directory dist >/dev/null 2>&1 & SERVER_PID=$!; sleep 1; bunx lighthouse http://localhost:4173 --output=json --output-path=./lighthouse.json --quiet --chrome-flags=\"--headless --no-sandbox --disable-gpu\" --no-enable-error-reporting; kill $SERVER_PID' && bun run summarize",
     "reconcile:stripe-customer": "bun scripts/reconcile-stripe-customer.ts",
+    "release": "standard-version",
     "serve": "bun run serve:app",
     "serve:app": "NODE_ENV=production bun server.ts",
     "serve:api": "NODE_ENV=production bun services/api/server.ts",
@@ -35,9 +37,7 @@
     "up": "docker compose up --build",
     "tf:apply": "bash infra/apply-all.sh",
     "tf:bootstrap": "bash infra/bootstrap.sh",
-    "tf:plan": "bash infra/apply-all.sh plan",
-    "release": "standard-version",
-    "version": "auto-changelog -p && bun install && git add CHANGELOG.md bun.lock"
+    "tf:plan": "bash infra/apply-all.sh plan"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^8.5.0",
@@ -59,7 +59,6 @@
     "@tiptap/react": "^3.22.4",
     "@tiptap/starter-kit": "^3.22.4",
     "@types/dompurify": "^3.2.0",
-    "auto-changelog": "^2.5.0",
     "diff": "^8.0.4",
     "dompurify": "^3.4.1",
     "lucide-react": "^0.574.0",
@@ -78,6 +77,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@types/uuid": "^11.0.0",
+    "auto-changelog": "^2.5.1",
     "jsdom": "^29.0.2",
     "openapi-typescript": "^7.13.0",
     "orval": "^8.9.1",

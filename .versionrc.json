@@ -16,5 +16,8 @@
   "releaseCommitMessageFormat": "chore: release v{{currentTag}} [skip ci]",
   "skip": {
     "changelog": true
+  },
+  "scripts": {
+    "postbump": "bun run changelog"
   }
 }
