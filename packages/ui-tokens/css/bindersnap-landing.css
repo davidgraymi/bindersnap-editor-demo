@@ -1473,11 +1473,6 @@ body::after {
   background: var(--brand-coral-dark);
 }
 
-.cta-hint {
-  font-size: 12px;
-  color: var(--bs-text-faint);
-}
-
 .cta-success {
   display: none;
   flex-direction: column;
