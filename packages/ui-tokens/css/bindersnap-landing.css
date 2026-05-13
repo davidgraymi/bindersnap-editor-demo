@@ -1272,6 +1272,22 @@ body::after {
   line-height: var(--brand-leading-normal);
 }
 
+.comp-security-link {
+  display: inline-flex;
+  align-items: center;
+  margin-top: var(--brand-space-6);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-label);
+  letter-spacing: var(--brand-tracking-wide);
+  color: var(--brand-coral);
+  text-decoration: none;
+  transition: opacity var(--brand-transition-base);
+}
+
+.comp-security-link:hover {
+  opacity: 0.75;
+}
+
 .cert-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
