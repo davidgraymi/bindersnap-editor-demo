@@ -46,6 +46,13 @@ window.signup = (source: SignupSource) => {
   routeLandingSignup(document, source);
 };
 
+document.getElementById("hero-signup-btn")?.addEventListener("click", () => {
+  routeLandingSignup(document, "hero");
+});
+document.getElementById("cta-signup-btn")?.addEventListener("click", () => {
+  routeLandingSignup(document, "cta");
+});
+
 bindSignupEnterKeys(document, (source) => {
   window.signup?.(source);
 });
