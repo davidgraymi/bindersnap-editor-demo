@@ -1695,6 +1695,15 @@ input {
   width: 85%;
 }
 
+.dash-stat-skeleton {
+  height: var(--brand-space-8);
+  margin-top: var(--brand-space-1);
+  background: var(--bs-surface-3);
+  border-radius: var(--brand-radius-sm);
+  width: 40%;
+  animation: vault-skeleton-pulse 2s ease-in-out infinite;
+}
+
 /* ── Login logo lockup ─────────────────────────────────────── */
 
 .app-login-logo {
