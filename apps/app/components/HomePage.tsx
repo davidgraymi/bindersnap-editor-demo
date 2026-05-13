@@ -158,7 +158,7 @@ function PageGreeting({ username }: { username: string }) {
       <h1>
         {getGreeting()}, {getDisplayFirstName(username)}
       </h1>
-      <p>{getTodayLabel()} · Bindersnap Workspace</p>
+      <p>{getTodayLabel()}</p>
     </>
   );
 }
