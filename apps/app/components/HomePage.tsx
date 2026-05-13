@@ -388,17 +388,14 @@ export function HomePage({
         <div className="dash-stat-card">
           <div className="dash-stat-label">Awaiting Review</div>
           {isLoadingDocuments ? (
-            <div
-              className="vault-skeleton-line vault-skeleton-line--short"
-              style={{ height: "2rem", marginTop: 4 }}
-            />
+            <div className="dash-stat-skeleton" />
           ) : (
             <div className="dash-stat-value">{awaitingReview}</div>
           )}
           {awaitingReview > 0 ? (
             <div className="dash-stat-sub dash-stat-sub--warning">
               <Clock3 size={11} strokeWidth={1.8} aria-hidden="true" />
-              {awaitingReview} past due
+              {awaitingReview} need your review
             </div>
           ) : (
             <div className="dash-stat-sub">All clear</div>
@@ -408,10 +405,7 @@ export function HomePage({
         <div className="dash-stat-card">
           <div className="dash-stat-label">Approved This Month</div>
           {isLoadingDocuments ? (
-            <div
-              className="vault-skeleton-line vault-skeleton-line--short"
-              style={{ height: "2rem", marginTop: 4 }}
-            />
+            <div className="dash-stat-skeleton" />
           ) : (
             <div className="dash-stat-value">{approvedThisMonth}</div>
           )}
@@ -424,10 +418,7 @@ export function HomePage({
         <div className="dash-stat-card">
           <div className="dash-stat-label">Open Change Requests</div>
           {isLoadingDocuments ? (
-            <div
-              className="vault-skeleton-line vault-skeleton-line--short"
-              style={{ height: "2rem", marginTop: 4 }}
-            />
+            <div className="dash-stat-skeleton" />
           ) : (
             <div className="dash-stat-value">{openChangeRequests}</div>
           )}
@@ -439,10 +430,7 @@ export function HomePage({
         <div className="dash-stat-card">
           <div className="dash-stat-label">Active Contributors</div>
           {isLoadingDocuments ? (
-            <div
-              className="vault-skeleton-line vault-skeleton-line--short"
-              style={{ height: "2rem", marginTop: 4 }}
-            />
+            <div className="dash-stat-skeleton" />
           ) : (
             <div className="dash-stat-value">{activeContributors}</div>
           )}

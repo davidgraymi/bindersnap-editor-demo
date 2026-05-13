@@ -7,9 +7,7 @@ import {
   Moon,
   Plus,
   Search,
-  Settings,
   Shield,
-  User,
 } from "lucide-react";
 import type { SessionUser } from "../api";
 import type { AppRoute } from "../routes";
@@ -82,12 +80,8 @@ function getInitials(name: string): string {
 
 function renderProfileMenuIcon(icon: string) {
   switch (icon) {
-    case "profile":
-      return <User size={16} strokeWidth={1.5} aria-hidden="true" />;
     case "documents":
       return <FileText size={16} strokeWidth={1.5} aria-hidden="true" />;
-    case "settings":
-      return <Settings size={16} strokeWidth={1.5} aria-hidden="true" />;
     case "appearance":
       return <Moon size={16} strokeWidth={1.5} aria-hidden="true" />;
     case "admin":
@@ -268,18 +262,6 @@ export function AppShell({
                   >
                     <button
                       type="button"
-                      className="app-profile-menu-item app-profile-menu-item--disabled"
-                      role="menuitem"
-                      aria-disabled="true"
-                      disabled
-                    >
-                      <span className="app-profile-menu-icon">
-                        {renderProfileMenuIcon("profile")}
-                      </span>
-                      <span className="app-profile-menu-label">Profile</span>
-                    </button>
-                    <button
-                      type="button"
                       className={`app-profile-menu-item${isDocuments ? " app-profile-menu-item--active" : ""}`}
                       role="menuitem"
                       onClick={() => {
@@ -291,18 +273,6 @@ export function AppShell({
                         {renderProfileMenuIcon("documents")}
                       </span>
                       <span className="app-profile-menu-label">Documents</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="app-profile-menu-item app-profile-menu-item--disabled"
-                      role="menuitem"
-                      aria-disabled="true"
-                      disabled
-                    >
-                      <span className="app-profile-menu-icon">
-                        {renderProfileMenuIcon("settings")}
-                      </span>
-                      <span className="app-profile-menu-label">Settings</span>
                     </button>
                     <button
                       type="button"

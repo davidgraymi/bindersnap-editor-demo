@@ -269,8 +269,8 @@ body::after {
 .chaos-pill-text {
   color: var(--bs-text-muted);
 }
-.chaos-pill-emoji {
-  font-size: 15px;
+.chaos-pill-icon {
+  color: var(--bs-text-muted);
 }
 
 /* Hero headline */
