@@ -151,8 +151,8 @@ body::after {
 }
 
 .nav-cta-link {
-  background: var(--bs-text-primary);
-  color: var(--bs-page-bg) !important;
+  background: var(--brand-coral);
+  color: #fff !important;
   font-size: 13px;
   font-weight: var(--brand-weight-medium);
   padding: 9px 22px;
@@ -160,13 +160,13 @@ body::after {
   text-decoration: none;
   letter-spacing: 0.01em;
   transition:
-    opacity var(--brand-transition-base),
+    background var(--brand-transition-base),
     transform var(--brand-transition-fast);
 }
 
 .nav-cta-link:hover,
 .nav-cta-link:focus-visible {
-  opacity: 0.85;
+  background: var(--brand-coral-dark);
   transform: translateY(-1px);
 }
 
