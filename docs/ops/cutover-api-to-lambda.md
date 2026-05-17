@@ -130,7 +130,7 @@ The Lambda's environment already has `BINDERSNAP_DB_BACKEND=postgres` set by Ter
 aws lambda invoke --function-name bindersnap-prod-api \
   --invocation-type RequestResponse \
   --cli-binary-format raw-in-base64-out \
-  --payload "$(printf '{"version":"2.0","routeKey":"GET /healthz","rawPath":"/healthz","rawQueryString":"","headers":{"accept":"*/*"},"requestContext":{"http":{"method":"GET","path":"/healthz","protocol":"HTTP/1.1","sourceIp":"127.0.0.1","userAgent":"cutover"},"stage":"$default","requestId":"cutover"},"isBase64Encoded":false}' | base64 -w0)" \
+  --payload '{"version":"2.0","routeKey":"GET /healthz","rawPath":"/healthz","rawQueryString":"","headers":{"accept":"*/*"},"requestContext":{"http":{"method":"GET","path":"/healthz","protocol":"HTTP/1.1","sourceIp":"127.0.0.1","userAgent":"cutover"},"stage":"$default","requestId":"cutover"},"isBase64Encoded":false}' \
   /tmp/healthz.json
 jq . /tmp/healthz.json
 ```

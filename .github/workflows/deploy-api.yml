@@ -133,7 +133,11 @@ jobs:
           # the Bun server in the container; a 200 response proves the new
           # image boots, attaches to the VPC, connects to Aurora, and serves
           # the /healthz route end-to-end.
-          payload_b64="$(printf '%s' '{
+          # Raw JSON — --cli-binary-format raw-in-base64-out below tells the
+          # AWS CLI to accept --payload as raw and base64-encode it itself.
+          # Don't pre-encode here, or Lambda receives a double-encoded blob
+          # and rejects it as InvalidRequestContentException.
+          payload='{
             "version": "2.0",
             "routeKey": "GET /healthz",
             "rawPath": "/healthz",
@@ -145,12 +149,12 @@ jobs:
               "requestId": "deploy-check-'"${GITHUB_RUN_ID}"'"
             },
             "isBase64Encoded": false
-          }' | base64 -w0)"
+          }'
 
           aws lambda invoke \
             --function-name "${LAMBDA_FUNCTION_NAME}" \
             --invocation-type RequestResponse \
-            --payload "${payload_b64}" \
+            --payload "${payload}" \
             --cli-binary-format raw-in-base64-out \
             --log-type Tail \
             --query 'LogResult' \
