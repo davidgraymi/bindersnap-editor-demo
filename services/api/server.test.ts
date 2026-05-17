@@ -238,14 +238,14 @@ afterEach(() => {
   config.sessionsDbPath = originalSessionsDbPath;
 });
 
-function seedSession(
+async function seedSession(
   username: string,
   options?: {
     email?: string;
     fullName?: string;
     isAdmin?: boolean;
   },
-): string {
+): Promise<string> {
   const sessionId = `sess_${randomUUID()}`;
   const giteaToken = `gitea_token_${randomUUID()}`;
   const email =
@@ -258,7 +258,7 @@ function seedSession(
     isAdmin: options?.isAdmin === true,
   });
   giteaLoginsByToken.set(giteaToken, username);
-  sessionStore.put({
+  await sessionStore.put({
     id: sessionId,
     username,
     giteaToken,
@@ -389,7 +389,7 @@ describe("billing Stripe idempotency", () => {
   test("checkout sends a unique Stripe Idempotency-Key per attempt when no client key provided", async () => {
     const server = createApiServer();
     const username = `checkout-${randomUUID()}`;
-    const sessionId = seedSession(username);
+    const sessionId = await seedSession(username);
 
     try {
       const first = await server.fetch(
@@ -420,7 +420,7 @@ describe("billing Stripe idempotency", () => {
   test("checkout uses client-supplied idempotency key when valid", async () => {
     const server = createApiServer();
     const username = `checkout-client-key-${randomUUID()}`;
-    const sessionId = seedSession(username);
+    const sessionId = await seedSession(username);
     const clientKey = randomUUID();
 
     try {
@@ -449,7 +449,7 @@ describe("billing Stripe idempotency", () => {
   test("checkout falls back to server-generated key when client key is invalid", async () => {
     const server = createApiServer();
     const username = `checkout-invalid-key-${randomUUID()}`;
-    const sessionId = seedSession(username);
+    const sessionId = await seedSession(username);
 
     try {
       const response = await server.fetch(
@@ -475,7 +475,7 @@ describe("billing Stripe idempotency", () => {
     const server = createApiServer();
     const username = `checkout-metadata-${randomUUID()}`;
     const email = `${username}@${config.emailDomain}`;
-    const sessionId = seedSession(username, { email });
+    const sessionId = await seedSession(username, { email });
 
     try {
       const response = await server.fetch(
@@ -500,9 +500,9 @@ describe("billing Stripe idempotency", () => {
     const username = `checkout-customer-${randomUUID()}`;
     const email = `${username}@${config.emailDomain}`;
     const existingCustomerId = "cus_existing_123";
-    const sessionId = seedSession(username, { email });
+    const sessionId = await seedSession(username, { email });
 
-    subscriptionStore.upsert({
+    await subscriptionStore.upsert({
       username,
       stripeCustomerId: existingCustomerId,
       stripeSubscriptionId: "sub_existing_123",
@@ -534,9 +534,9 @@ describe("billing Stripe idempotency", () => {
   test("portal sends a unique Stripe Idempotency-Key per attempt when no client key provided", async () => {
     const server = createApiServer();
     const username = `portal-${randomUUID()}`;
-    const sessionId = seedSession(username);
+    const sessionId = await seedSession(username);
 
-    subscriptionStore.upsert({
+    await subscriptionStore.upsert({
       username,
       stripeCustomerId: "cus_test_123",
       stripeSubscriptionId: "sub_test_123",
@@ -576,10 +576,10 @@ describe("billing Stripe idempotency", () => {
   test("portal uses client-supplied idempotency key when valid", async () => {
     const server = createApiServer();
     const username = `portal-client-key-${randomUUID()}`;
-    const sessionId = seedSession(username);
+    const sessionId = await seedSession(username);
     const clientKey = randomUUID();
 
-    subscriptionStore.upsert({
+    await subscriptionStore.upsert({
       username,
       stripeCustomerId: "cus_test_456",
       stripeSubscriptionId: "sub_test_456",
@@ -738,7 +738,7 @@ describe("billing Stripe webhook recovery", () => {
       expect(getFetchCallsByPath(`/v1/customers/${customerId}`)).toHaveLength(
         1,
       );
-      expect(subscriptionStore.getByUsername(username)).toEqual({
+      expect(await subscriptionStore.getByUsername(username)).toEqual({
         username,
         stripeCustomerId: customerId,
         stripeSubscriptionId: subscriptionId,
@@ -789,7 +789,7 @@ describe("billing Stripe webhook recovery", () => {
       expect(getFetchCallsByPath(`/v1/customers/${customerId}`)).toHaveLength(
         1,
       );
-      expect(subscriptionStore.getByUsername(username)).toEqual({
+      expect(await subscriptionStore.getByUsername(username)).toEqual({
         username,
         stripeCustomerId: customerId,
         stripeSubscriptionId: subscriptionId,
@@ -841,7 +841,7 @@ describe("billing Stripe webhook recovery", () => {
       expect(getFetchCallsByPath(`/v1/customers/${customerId}`)).toHaveLength(
         1,
       );
-      expect(subscriptionStore.getByUsername(username)).toEqual({
+      expect(await subscriptionStore.getByUsername(username)).toEqual({
         username,
         stripeCustomerId: customerId,
         stripeSubscriptionId: subscriptionId,
@@ -908,7 +908,7 @@ describe("billing Stripe webhook recovery", () => {
       );
       expect(updateBody.get("metadata[bindersnap_username]")).toBe(username);
 
-      expect(subscriptionStore.getByUsername(username)).toEqual({
+      expect(await subscriptionStore.getByUsername(username)).toEqual({
         username,
         stripeCustomerId: customerId,
         stripeSubscriptionId: subscriptionId,
@@ -955,7 +955,7 @@ describe("billing Stripe webhook recovery", () => {
       expect(getFetchCallsByPath(`/v1/customers/${customerId}`)).toHaveLength(
         1,
       );
-      expect(subscriptionStore.getByCustomerId(customerId)).toBeNull();
+      expect(await subscriptionStore.getByCustomerId(customerId)).toBeNull();
     } finally {
       server.stop(true);
     }
@@ -965,7 +965,7 @@ describe("billing Stripe webhook recovery", () => {
 describe("admin subscription access overrides", () => {
   test("auth/me exposes the current user's admin flag", async () => {
     const server = createApiServer();
-    const sessionId = seedSession(`admin-${randomUUID()}`, {
+    const sessionId = await seedSession(`admin-${randomUUID()}`, {
       isAdmin: true,
       fullName: "Admin User",
     });
@@ -992,9 +992,9 @@ describe("admin subscription access overrides", () => {
   test("billing status reflects an admin revoke override over an active Stripe subscription", async () => {
     const server = createApiServer();
     const username = `revoked-${randomUUID()}`;
-    const sessionId = seedSession(username);
+    const sessionId = await seedSession(username);
 
-    subscriptionStore.upsert({
+    await subscriptionStore.upsert({
       username,
       stripeCustomerId: `cus_${randomUUID()}`,
       stripeSubscriptionId: `sub_${randomUUID()}`,
@@ -1004,7 +1004,7 @@ describe("admin subscription access overrides", () => {
       cancelAt: null,
       updatedAt: Date.now(),
     });
-    subscriptionStore.putAccessOverride({
+    await subscriptionStore.putAccessOverride({
       username,
       access: "revoke",
       reason: "manual review hold",
@@ -1037,7 +1037,7 @@ describe("admin subscription access overrides", () => {
 
   test("admin list without a query includes Stripe-backed and override-only users", async () => {
     const server = createApiServer();
-    const adminSessionId = seedSession(`admin-${randomUUID()}`, {
+    const adminSessionId = await seedSession(`admin-${randomUUID()}`, {
       isAdmin: true,
     });
     const stripeUser = `stripe-${randomUUID()}`;
@@ -1052,7 +1052,7 @@ describe("admin subscription access overrides", () => {
       email: `${overrideUser}@${config.emailDomain}`,
     });
 
-    subscriptionStore.upsert({
+    await subscriptionStore.upsert({
       username: stripeUser,
       stripeCustomerId: `cus_${randomUUID()}`,
       stripeSubscriptionId: `sub_${randomUUID()}`,
@@ -1062,7 +1062,7 @@ describe("admin subscription access overrides", () => {
       cancelAt: null,
       updatedAt: Date.now() - 1_000,
     });
-    subscriptionStore.putAccessOverride({
+    await subscriptionStore.putAccessOverride({
       username: overrideUser,
       access: "grant",
       reason: "manual comp",
@@ -1103,11 +1103,11 @@ describe("admin subscription access overrides", () => {
     const server = createApiServer();
     const adminUsername = `admin-${randomUUID()}`;
     const memberUsername = `member-${randomUUID()}`;
-    const outsiderSessionId = seedSession(`outsider-${randomUUID()}`);
-    const adminSessionId = seedSession(adminUsername, { isAdmin: true });
-    const memberSessionId = seedSession(memberUsername);
+    const outsiderSessionId = await seedSession(`outsider-${randomUUID()}`);
+    const adminSessionId = await seedSession(adminUsername, { isAdmin: true });
+    const memberSessionId = await seedSession(memberUsername);
 
-    subscriptionStore.upsert({
+    await subscriptionStore.upsert({
       username: memberUsername,
       stripeCustomerId: `cus_${randomUUID()}`,
       stripeSubscriptionId: `sub_${randomUUID()}`,

@@ -10,6 +10,17 @@ export interface SessionRecord {
   expiresAt: number;
 }
 
+// Backend-agnostic interface for the session store. Implementations may be
+// SQLite (current), Postgres (planned, see #224), or in-memory (tests).
+// Async because the Postgres backend is async; SQLite wraps sync calls in
+// Promise.resolve to satisfy the interface.
+export interface SessionBackend {
+  get(id: string): Promise<SessionRecord | null>;
+  put(session: SessionRecord): Promise<void>;
+  delete(id: string): Promise<void>;
+  reap(now: number): Promise<SessionRecord[]>;
+}
+
 interface SessionRow {
   id: string;
   username: string;
@@ -30,7 +41,7 @@ function rowToRecord(row: SessionRow): SessionRecord {
   };
 }
 
-export class SessionStore {
+export class SessionStore implements SessionBackend {
   private db: Database;
 
   constructor(path: string = config.sessionsDbPath) {
@@ -49,14 +60,14 @@ export class SessionStore {
     `);
   }
 
-  get(id: string): SessionRecord | null {
+  async get(id: string): Promise<SessionRecord | null> {
     const row = this.db
       .query<SessionRow, [string]>("SELECT * FROM sessions WHERE id = ?")
       .get(id);
     return row ? rowToRecord(row) : null;
   }
 
-  put(session: SessionRecord): void {
+  async put(session: SessionRecord): Promise<void> {
     this.db
       .query<void, [string, string, string, string, number, number]>(
         `INSERT INTO sessions (id, username, gitea_token, gitea_token_name, created_at, expires_at)
@@ -78,11 +89,11 @@ export class SessionStore {
       );
   }
 
-  delete(id: string): void {
+  async delete(id: string): Promise<void> {
     this.db.query<void, [string]>("DELETE FROM sessions WHERE id = ?").run(id);
   }
 
-  reap(now: number): SessionRecord[] {
+  async reap(now: number): Promise<SessionRecord[]> {
     const rows = this.db
       .query<
         SessionRow,
@@ -100,29 +111,39 @@ export class SessionStore {
   }
 }
 
-class LazySessionStore {
-  private _store: SessionStore | null = null;
+// Factory used by the lazy singleton. Override (e.g., from a future
+// dynamodb-backed module) to swap the production backend at startup.
+export type SessionBackendFactory = () => SessionBackend;
 
-  private get store(): SessionStore {
+let sessionBackendFactory: SessionBackendFactory = () => new SessionStore();
+
+export function setSessionBackendFactory(factory: SessionBackendFactory): void {
+  sessionBackendFactory = factory;
+}
+
+class LazySessionStore implements SessionBackend {
+  private _store: SessionBackend | null = null;
+
+  private get store(): SessionBackend {
     if (!this._store) {
-      this._store = new SessionStore();
+      this._store = sessionBackendFactory();
     }
     return this._store;
   }
 
-  get(id: string): SessionRecord | null {
+  get(id: string): Promise<SessionRecord | null> {
     return this.store.get(id);
   }
 
-  put(session: SessionRecord): void {
-    this.store.put(session);
+  put(session: SessionRecord): Promise<void> {
+    return this.store.put(session);
   }
 
-  delete(id: string): void {
-    this.store.delete(id);
+  delete(id: string): Promise<void> {
+    return this.store.delete(id);
   }
 
-  reap(now: number): SessionRecord[] {
+  reap(now: number): Promise<SessionRecord[]> {
     return this.store.reap(now);
   }
 }

@@ -127,7 +127,7 @@ describe("runReconcileStripeCustomerCli", () => {
         ),
       ),
     ).toBe(true);
-    expect(testStore.getByUsername(username)).toEqual({
+    expect(await testStore.getByUsername(username)).toEqual({
       username,
       stripeCustomerId: customerId,
       stripeSubscriptionId: subscriptionId,
@@ -196,7 +196,7 @@ describe("runReconcileStripeCustomerCli", () => {
         ),
       ),
     ).toBe(true);
-    expect(testStore.getByUsername(username)).toEqual({
+    expect(await testStore.getByUsername(username)).toEqual({
       username,
       stripeCustomerId: customerId,
       stripeSubscriptionId: subscriptionId,

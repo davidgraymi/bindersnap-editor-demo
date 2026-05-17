@@ -304,7 +304,7 @@ afterEach(() => {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function seedSession(username: string): string {
+async function seedSession(username: string): Promise<string> {
   const sessionId = `sess_${randomUUID()}`;
   const giteaToken = `gitea_${randomUUID()}`;
   giteaUsersByLogin.set(username, {
@@ -312,7 +312,7 @@ function seedSession(username: string): string {
     email: `${username}@test.local`,
   });
   giteaLoginsByToken.set(giteaToken, username);
-  sessionStore.put({
+  await sessionStore.put({
     id: sessionId,
     username,
     giteaToken,
@@ -320,7 +320,7 @@ function seedSession(username: string): string {
     createdAt: Date.now(),
     expiresAt: Date.now() + 60_000,
   });
-  subscriptionStore.upsert({
+  await subscriptionStore.upsert({
     username,
     stripeCustomerId: `cus_${randomUUID()}`,
     stripeSubscriptionId: `sub_${randomUUID()}`,
@@ -647,7 +647,7 @@ describe("GET /api/app/documents/:owner/:repo/permissions", () => {
       email: `${username}@test.local`,
     });
     giteaLoginsByToken.set(giteaToken, username);
-    sessionStore.put({
+    await sessionStore.put({
       id: sessionId,
       username,
       giteaToken,
@@ -674,7 +674,7 @@ describe("GET /api/app/documents/:owner/:repo/permissions", () => {
     const server = createApiServer();
     const owner = `owner-${randomUUID()}`;
     const repo = "my-doc";
-    const sessionId = seedSession(owner);
+    const sessionId = await seedSession(owner);
 
     seedRepo(owner, repo, { isPrivate: true });
     seedBranchProtection(owner, repo, {
@@ -719,7 +719,7 @@ describe("GET /api/app/documents/:owner/:repo/permissions", () => {
     const server = createApiServer();
     const owner = `owner-${randomUUID()}`;
     const repo = "no-bp-doc";
-    const sessionId = seedSession(owner);
+    const sessionId = await seedSession(owner);
 
     seedRepo(owner, repo, { isPrivate: false });
     // no seedBranchProtection — empty list
@@ -748,7 +748,7 @@ describe("GET /api/app/documents/:owner/:repo/permissions", () => {
     const server = createApiServer();
     const owner = `owner-${randomUUID()}`;
     const repo = "public-doc";
-    const sessionId = seedSession(owner);
+    const sessionId = await seedSession(owner);
 
     seedRepo(owner, repo, { isPrivate: false });
 
@@ -771,7 +771,7 @@ describe("GET /api/app/documents/:owner/:repo/permissions", () => {
     const server = createApiServer();
     const owner = `owner-${randomUUID()}`;
     const repo = "private-doc";
-    const sessionId = seedSession(owner);
+    const sessionId = await seedSession(owner);
 
     seedRepo(owner, repo, { isPrivate: true, isInternal: false });
 
@@ -798,7 +798,7 @@ describe("GET /api/app/documents/:owner/:repo/permissions", () => {
     const server = createApiServer();
     const owner = `owner-${randomUUID()}`;
     const repo = "internal-doc";
-    const sessionId = seedSession(owner);
+    const sessionId = await seedSession(owner);
 
     seedRepo(owner, repo, { isPrivate: false, isInternal: true });
 
@@ -832,7 +832,7 @@ describe("PUT /api/app/documents/:owner/:repo/permissions", () => {
     const repo = "shared-doc";
     seedRepo(owner, repo, { isPrivate: true });
     seedBranchProtection(owner, repo, { rule_name: "main" });
-    const collabSessionId = seedSession(collaborator);
+    const collabSessionId = await seedSession(collaborator);
 
     try {
       const response = await server.fetch(
@@ -857,7 +857,7 @@ describe("PUT /api/app/documents/:owner/:repo/permissions", () => {
     const server = createApiServer();
     const owner = `owner-${randomUUID()}`;
     const repo = "my-doc";
-    const sessionId = seedSession(owner);
+    const sessionId = await seedSession(owner);
     seedRepo(owner, repo, { isPrivate: true });
     seedBranchProtection(owner, repo, {
       rule_name: "main",
@@ -889,7 +889,7 @@ describe("PUT /api/app/documents/:owner/:repo/permissions", () => {
     const server = createApiServer();
     const owner = `owner-${randomUUID()}`;
     const repo = "my-doc";
-    const sessionId = seedSession(owner);
+    const sessionId = await seedSession(owner);
     seedRepo(owner, repo, { isPrivate: true });
     seedBranchProtection(owner, repo, { rule_name: "main" });
 
@@ -928,7 +928,7 @@ describe("PUT /api/app/documents/:owner/:repo/permissions", () => {
     const server = createApiServer();
     const owner = `owner-${randomUUID()}`;
     const repo = "my-doc";
-    const sessionId = seedSession(owner);
+    const sessionId = await seedSession(owner);
     seedRepo(owner, repo, { isPrivate: true });
     seedBranchProtection(owner, repo, { rule_name: "main" });
 
@@ -966,7 +966,7 @@ describe("PUT /api/app/documents/:owner/:repo/permissions", () => {
     const server = createApiServer();
     const owner = `owner-${randomUUID()}`;
     const repo = "my-doc";
-    const sessionId = seedSession(owner);
+    const sessionId = await seedSession(owner);
     seedRepo(owner, repo, { isPrivate: true });
     seedBranchProtection(owner, repo, { rule_name: "main" });
 
@@ -993,7 +993,7 @@ describe("PUT /api/app/documents/:owner/:repo/permissions", () => {
     const server = createApiServer();
     const owner = `owner-${randomUUID()}`;
     const repo = "my-doc";
-    const sessionId = seedSession(owner);
+    const sessionId = await seedSession(owner);
     seedRepo(owner, repo, { isPrivate: false });
     seedBranchProtection(owner, repo, { rule_name: "main" });
 
@@ -1020,7 +1020,7 @@ describe("PUT /api/app/documents/:owner/:repo/permissions", () => {
     const server = createApiServer();
     const owner = `owner-${randomUUID()}`;
     const repo = "my-doc";
-    const sessionId = seedSession(owner);
+    const sessionId = await seedSession(owner);
     seedRepo(owner, repo, { isPrivate: true });
     seedBranchProtection(owner, repo, {
       rule_name: "main",
@@ -1052,7 +1052,7 @@ describe("PUT /api/app/documents/:owner/:repo/permissions", () => {
     const server = createApiServer();
     const owner = `owner-${randomUUID()}`;
     const repo = "my-doc";
-    const sessionId = seedSession(owner);
+    const sessionId = await seedSession(owner);
     seedRepo(owner, repo, { isPrivate: true });
     seedBranchProtection(owner, repo, { rule_name: "main" });
 
@@ -1114,7 +1114,7 @@ describe("PUT /api/app/documents/:owner/:repo/permissions", () => {
     const server = createApiServer();
     const owner = `owner-${randomUUID()}`;
     const repo = "my-doc";
-    const sessionId = seedSession(owner);
+    const sessionId = await seedSession(owner);
     seedRepo(owner, repo, { isPrivate: true });
     seedBranchProtection(owner, repo, {
       rule_name: "main",
@@ -1146,7 +1146,7 @@ describe("PUT /api/app/documents/:owner/:repo/permissions", () => {
     const server = createApiServer();
     const owner = `owner-${randomUUID()}`;
     const repo = "my-doc";
-    const sessionId = seedSession(owner);
+    const sessionId = await seedSession(owner);
     seedRepo(owner, repo, { isPrivate: true });
     seedBranchProtection(owner, repo, {
       rule_name: "main",
@@ -1178,7 +1178,7 @@ describe("PUT /api/app/documents/:owner/:repo/permissions", () => {
     const server = createApiServer();
     const owner = `owner-${randomUUID()}`;
     const repo = "my-doc";
-    const sessionId = seedSession(owner);
+    const sessionId = await seedSession(owner);
     seedRepo(owner, repo, { isPrivate: true });
     seedBranchProtection(owner, repo, {
       rule_name: "main",
@@ -1218,7 +1218,7 @@ describe("PUT /api/app/documents/:owner/:repo/permissions", () => {
     const server = createApiServer();
     const owner = `owner-${randomUUID()}`;
     const repo = "my-doc";
-    const sessionId = seedSession(owner);
+    const sessionId = await seedSession(owner);
     seedRepo(owner, repo, { isPrivate: true });
     seedBranchProtection(owner, repo, {
       rule_name: "main",
@@ -1258,7 +1258,7 @@ describe("PUT /api/app/documents/:owner/:repo/permissions", () => {
     const server = createApiServer();
     const owner = `owner-${randomUUID()}`;
     const repo = "my-doc";
-    const sessionId = seedSession(owner);
+    const sessionId = await seedSession(owner);
     seedRepo(owner, repo, { isPrivate: true });
     seedBranchProtection(owner, repo, { rule_name: "main" });
 
@@ -1298,7 +1298,7 @@ describe("PUT /api/app/documents/:owner/:repo/permissions", () => {
     const server = createApiServer();
     const owner = `owner-${randomUUID()}`;
     const repo = "my-doc";
-    const sessionId = seedSession(owner);
+    const sessionId = await seedSession(owner);
     seedRepo(owner, repo, { isPrivate: true });
     seedBranchProtection(owner, repo, { rule_name: "main" });
 
@@ -1349,7 +1349,7 @@ describe("GET /api/app/documents/:owner/:repo/permissions - additional scenarios
     const server = createApiServer();
     const owner = `owner-${randomUUID()}`;
     const repo = "my-doc";
-    const sessionId = seedSession(owner);
+    const sessionId = await seedSession(owner);
 
     seedRepo(owner, repo, { isPrivate: true });
     seedBranchProtection(owner, repo, {
@@ -1388,7 +1388,7 @@ describe("GET /api/app/documents/:owner/:repo/permissions - additional scenarios
     const server = createApiServer();
     const owner = `owner-${randomUUID()}`;
     const repo = "my-doc";
-    const sessionId = seedSession(owner);
+    const sessionId = await seedSession(owner);
 
     seedRepo(owner, repo, { isPrivate: true });
     seedBranchProtection(owner, repo, { rule_name: "main" });
@@ -1434,7 +1434,7 @@ describe("GET /api/app/documents/:owner/:repo - public and private access", () =
     const repo = "public-doc";
 
     seedRepo(owner, repo, { isPrivate: false });
-    const nonOwnerSessionId = seedSession(nonOwner);
+    const nonOwnerSessionId = await seedSession(nonOwner);
 
     try {
       const response = await server.fetch(
@@ -1457,7 +1457,7 @@ describe("GET /api/app/documents/:owner/:repo - public and private access", () =
     const repo = "private-doc";
 
     seedRepo(owner, repo, { isPrivate: true });
-    const nonCollabSessionId = seedSession(nonCollaborator);
+    const nonCollabSessionId = await seedSession(nonCollaborator);
 
     // Override the mock fetch for this test to simulate Gitea returning 404
     // for a private repo when accessed by a non-collaborator

@@ -1,0 +1,70 @@
+# Copy to terraform.tfvars and fill in real values.
+# terraform.tfvars is gitignored — never commit it.
+#
+# Required values (no defaults — terraform will error if missing):
+
+# VPC shared with the Gitea EC2 host. Lambda and Aurora live in
+# dedicated private subnets created by subnets.tf (recommended): provide
+# two unused CIDRs inside the VPC's CIDR plus two distinct AZs and this
+# root will create the subnets + their own route table. Gitea's own
+# route table is left alone.
+vpc_id                    = "vpc-XXXXXXXXXXXXXXXXX"
+lambda_subnet_cidr_blocks = ["0.0.0.0/20", "0.0.0.0/20"]
+lambda_subnet_azs         = ["us-east-1a", "us-east-1b"]
+
+# Alternative: point at pre-existing subnets instead. Leave the two vars
+# above empty if you do this — but note the route table for those subnets
+# must not be shared with anything else, since nat.tf rewrites 0.0.0.0/0.
+# private_subnet_ids = ["subnet-XXXXXXXXXXXXXXXXX", "subnet-YYYYYYYYYYYYYYYYY"]
+
+# Gitea host the API talks to internally. Both come from the
+# `infra/compute/` outputs (`instance_id`, `security_group_id`).
+gitea_instance_id       = "i-XXXXXXXXXXXXXXXXX"
+gitea_security_group_id = "sg-XXXXXXXXXXXXXXXXX"
+
+# Public hostname + ACM cert in this region.
+# Cert must be issued in var.aws_region (HTTP APIs are regional — no
+# us-east-1 quirk like CloudFront has).
+api_domain_name     = "api.bindersnap.com"
+acm_certificate_arn = "arn:aws:acm:us-east-1:000000000000:certificate/00000000-0000-0000-0000-000000000000"
+
+# Origins the SPA is served from. CORS at the API Gateway layer
+# short-circuits preflights before invoking Lambda.
+cors_allowed_origins = [
+  "https://bindersnap.com",
+  "https://davidgraymi.github.io",
+]
+
+# ---------------------------------------------------------------------------
+# Optional overrides (defaults shown in comments — uncomment to change):
+# ---------------------------------------------------------------------------
+
+# aws_region          = "us-east-1"
+# project             = "bindersnap"
+# environment         = "prod"
+# image_tag           = "latest"           # CI overrides this per deploy
+# gitea_internal_port = 3000
+
+# Aurora capacity. min_capacity = 0 is true auto-pause (~$0 idle, 5-15s
+# wake-up on first request). Bump to 0.5 if a hot login path matters.
+# aurora_min_capacity   = 0
+# aurora_max_capacity   = 1
+# aurora_engine_version = "16.4"
+
+# Lambda sizing.
+# lambda_memory_mb            = 1024
+# lambda_timeout_seconds      = 29     # API Gateway HTTP API caps at 30s
+# lambda_reserved_concurrency = 10
+# lambda_log_retention_days   = 14
+
+# Route53 + NAT routing. Leave these defaults on the first apply — DNS
+# and the Gitea-as-NAT route are easier to wire up after the resources
+# exist (and after infra/compute is applied with lambda_subnet_cidrs
+# populated, which enables source/dest-check + MASQUERADE on Gitea).
+#
+# route53_zone_id        = "ZXXXXXXXXXXXXX"
+# enable_gitea_nat_route = true   # flip to true on the second apply
+#
+# Only set lambda_route_table_ids if you also set private_subnet_ids
+# above (i.e., you're bringing your own subnets):
+# lambda_route_table_ids = ["rtb-XXXXXXXXXXXXXXXXX"]

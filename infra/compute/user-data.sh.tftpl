@@ -13,8 +13,45 @@ install -d -m 0755 "$${APP_DIR}"
 
 # ---------- Install Docker + Compose plugin (AL2023) ----------
 
-dnf install -y awscli docker xfsprogs
+dnf install -y awscli docker xfsprogs iptables-services
 systemctl enable --now docker
+
+# ---------- Gitea-as-NAT for the api-service Lambda ----------
+# When var.lambda_subnet_cidrs is non-empty in Terraform, this host doubles as
+# the NAT for the Lambda's outbound traffic. Three pieces are needed:
+#   1. source_dest_check disabled on the ENI (set in Terraform)
+#   2. A default route in the Lambda subnets pointing at this ENI (set in
+#      infra/api-service/nat.tf)
+#   3. The two things below: IP forwarding in the kernel + a MASQUERADE rule
+#      that rewrites packets sourced from the Lambda CIDRs.
+#
+# The rules are persisted via iptables-services so they survive reboots. We
+# also write a sysctl drop-in so net.ipv4.ip_forward survives the next boot.
+
+%{ if length(lambda_subnet_cidrs) > 0 ~}
+install -m 0644 /dev/stdin /etc/sysctl.d/99-bindersnap-nat.conf <<'SYSCTL'
+net.ipv4.ip_forward = 1
+SYSCTL
+sysctl --system
+
+# Discover the primary outbound interface (the one carrying the default route).
+NAT_IFACE="$(ip -o -4 route show default | awk '{print $5; exit}')"
+if [ -z "$${NAT_IFACE}" ]; then
+  echo "WARNING: could not detect default-route interface; skipping NAT rules" >&2
+else
+%{ for cidr in lambda_subnet_cidrs ~}
+  iptables -t nat -C POSTROUTING -s ${cidr} -o "$${NAT_IFACE}" -j MASQUERADE 2>/dev/null \
+    || iptables -t nat -A POSTROUTING -s ${cidr} -o "$${NAT_IFACE}" -j MASQUERADE
+  iptables -C FORWARD -s ${cidr} -j ACCEPT 2>/dev/null \
+    || iptables -A FORWARD -s ${cidr} -j ACCEPT
+  iptables -C FORWARD -d ${cidr} -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null \
+    || iptables -A FORWARD -d ${cidr} -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+%{ endfor ~}
+  install -d -m 0755 /etc/sysconfig
+  iptables-save > /etc/sysconfig/iptables
+  systemctl enable iptables
+fi
+%{ endif ~}
 
 COMPOSE_ARCH="$(uname -m)"
 COMPOSE_VERSION="v2.37.3"

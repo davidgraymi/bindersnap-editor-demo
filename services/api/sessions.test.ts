@@ -25,27 +25,27 @@ describe("SessionStore", () => {
     store = makeStore();
   });
 
-  test("put then get returns the session", () => {
+  test("put then get returns the session", async () => {
     const session = makeSession();
-    store.put(session);
-    const result = store.get(session.id);
+    await store.put(session);
+    const result = await store.get(session.id);
     expect(result).toEqual(session);
   });
 
-  test("get on unknown id returns null", () => {
-    const result = store.get("nonexistent-id");
+  test("get on unknown id returns null", async () => {
+    const result = await store.get("nonexistent-id");
     expect(result).toBeNull();
   });
 
-  test("delete removes the session", () => {
+  test("delete removes the session", async () => {
     const session = makeSession();
-    store.put(session);
-    store.delete(session.id);
-    const result = store.get(session.id);
+    await store.put(session);
+    await store.delete(session.id);
+    const result = await store.get(session.id);
     expect(result).toBeNull();
   });
 
-  test("reap removes only expired sessions and returns them", () => {
+  test("reap removes only expired sessions and returns them", async () => {
     const now = Date.now();
     const expired = makeSession({
       id: "expired-session",
@@ -56,25 +56,25 @@ describe("SessionStore", () => {
       expiresAt: now + 60_000,
     });
 
-    store.put(expired);
-    store.put(future);
+    await store.put(expired);
+    await store.put(future);
 
-    const reaped = store.reap(now);
+    const reaped = await store.reap(now);
 
     expect(reaped).toHaveLength(1);
     expect(reaped[0].id).toBe("expired-session");
 
-    expect(store.get("expired-session")).toBeNull();
-    expect(store.get("future-session")).not.toBeNull();
+    expect(await store.get("expired-session")).toBeNull();
+    expect(await store.get("future-session")).not.toBeNull();
   });
 
-  test("reap returns empty array when nothing expired", () => {
+  test("reap returns empty array when nothing expired", async () => {
     const now = Date.now();
     const future = makeSession({ expiresAt: now + 60_000 });
-    store.put(future);
+    await store.put(future);
 
-    const reaped = store.reap(now);
+    const reaped = await store.reap(now);
     expect(reaped).toHaveLength(0);
-    expect(store.get(future.id)).not.toBeNull();
+    expect(await store.get(future.id)).not.toBeNull();
   });
 });

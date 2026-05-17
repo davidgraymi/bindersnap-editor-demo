@@ -20,7 +20,9 @@ function makeTempDbPath() {
   };
 }
 
-function captureStdout<T>(run: () => T): { result: T; output: string } {
+async function captureStdout<T>(
+  run: () => T | Promise<T>,
+): Promise<{ result: T; output: string }> {
   const writes: string[] = [];
   const originalWrite = process.stdout.write;
 
@@ -43,7 +45,7 @@ function captureStdout<T>(run: () => T): { result: T; output: string } {
   };
 
   try {
-    return { result: run(), output: writes.join("") };
+    return { result: await run(), output: writes.join("") };
   } finally {
     (process.stdout as { write: typeof process.stdout.write }).write =
       originalWrite;
@@ -56,9 +58,9 @@ const recentEnd = now - 1 * 24 * 60 * 60; // 1 day ago (within buffer)
 const expiredEnd = now - 4 * 24 * 60 * 60; // 4 days ago (past 3-day buffer)
 
 describe("SubscriptionStore", () => {
-  it("upserts and retrieves by username", () => {
+  it("upserts and retrieves by username", async () => {
     const store = makeStore();
-    store.upsert({
+    await store.upsert({
       username: "alice",
       stripeCustomerId: "cus_1",
       stripeSubscriptionId: "sub_1",
@@ -68,14 +70,14 @@ describe("SubscriptionStore", () => {
       cancelAt: null,
       updatedAt: Date.now(),
     });
-    const record = store.getByUsername("alice");
+    const record = await store.getByUsername("alice");
     expect(record?.status).toBe("active");
     expect(record?.stripeCustomerId).toBe("cus_1");
   });
 
-  it("upserts and retrieves by customer ID", () => {
+  it("upserts and retrieves by customer ID", async () => {
     const store = makeStore();
-    store.upsert({
+    await store.upsert({
       username: "bob",
       stripeCustomerId: "cus_2",
       stripeSubscriptionId: "sub_2",
@@ -85,13 +87,13 @@ describe("SubscriptionStore", () => {
       cancelAt: null,
       updatedAt: Date.now(),
     });
-    const record = store.getByCustomerId("cus_2");
+    const record = await store.getByCustomerId("cus_2");
     expect(record?.username).toBe("bob");
   });
 
-  it("updates on conflict", () => {
+  it("updates on conflict", async () => {
     const store = makeStore();
-    store.upsert({
+    await store.upsert({
       username: "carol",
       stripeCustomerId: "cus_3",
       stripeSubscriptionId: "sub_3",
@@ -101,7 +103,7 @@ describe("SubscriptionStore", () => {
       cancelAt: null,
       updatedAt: Date.now(),
     });
-    store.upsert({
+    await store.upsert({
       username: "carol",
       stripeCustomerId: "cus_3",
       stripeSubscriptionId: "sub_3",
@@ -111,13 +113,13 @@ describe("SubscriptionStore", () => {
       cancelAt: null,
       updatedAt: Date.now(),
     });
-    const record = store.getByUsername("carol");
+    const record = await store.getByUsername("carol");
     expect(record?.status).toBe("canceled");
   });
 
-  it("rebinds a username to a new stripe customer and clears the old customer lookup", () => {
+  it("rebinds a username to a new stripe customer and clears the old customer lookup", async () => {
     const store = makeStore();
-    store.upsert({
+    await store.upsert({
       username: "carol",
       stripeCustomerId: "cus_old",
       stripeSubscriptionId: "sub_old",
@@ -128,7 +130,7 @@ describe("SubscriptionStore", () => {
       updatedAt: 1,
     });
 
-    store.upsert({
+    await store.upsert({
       username: "carol",
       stripeCustomerId: "cus_new",
       stripeSubscriptionId: "sub_new",
@@ -139,16 +141,16 @@ describe("SubscriptionStore", () => {
       updatedAt: 2,
     });
 
-    expect(store.getByCustomerId("cus_old")).toBeNull();
+    expect(await store.getByCustomerId("cus_old")).toBeNull();
 
-    const rebound = store.getByCustomerId("cus_new");
+    const rebound = await store.getByCustomerId("cus_new");
     expect(rebound?.username).toBe("carol");
     expect(rebound?.stripeSubscriptionId).toBe("sub_new");
   });
 
-  it("replaces all persisted billing fields on username conflict", () => {
+  it("replaces all persisted billing fields on username conflict", async () => {
     const store = makeStore();
-    store.upsert({
+    await store.upsert({
       username: "drew",
       stripeCustomerId: "cus_drew_1",
       stripeSubscriptionId: "sub_drew_1",
@@ -159,7 +161,7 @@ describe("SubscriptionStore", () => {
       updatedAt: 10,
     });
 
-    store.upsert({
+    await store.upsert({
       username: "drew",
       stripeCustomerId: "cus_drew_2",
       stripeSubscriptionId: "sub_drew_2",
@@ -170,7 +172,7 @@ describe("SubscriptionStore", () => {
       updatedAt: 20,
     });
 
-    const record = store.getByUsername("drew");
+    const record = await store.getByUsername("drew");
     expect(record).toEqual({
       username: "drew",
       stripeCustomerId: "cus_drew_2",
@@ -183,14 +185,14 @@ describe("SubscriptionStore", () => {
     });
   });
 
-  it("returns null for unknown username", () => {
+  it("returns null for unknown username", async () => {
     const store = makeStore();
-    expect(store.getByUsername("nobody")).toBeNull();
+    expect(await store.getByUsername("nobody")).toBeNull();
   });
 
-  it("rejects rebinding an existing Stripe customer to a different username", () => {
+  it("rejects rebinding an existing Stripe customer to a different username", async () => {
     const store = makeStore();
-    store.upsert({
+    await store.upsert({
       username: "alice",
       stripeCustomerId: "cus_shared",
       stripeSubscriptionId: "sub_alice",
@@ -201,8 +203,8 @@ describe("SubscriptionStore", () => {
       updatedAt: 100,
     });
 
-    const { output } = captureStdout(() => {
-      expect(() =>
+    const { output } = await captureStdout(async () => {
+      await expect(
         store.upsert({
           username: "bob",
           stripeCustomerId: "cus_shared",
@@ -213,17 +215,17 @@ describe("SubscriptionStore", () => {
           cancelAt: null,
           updatedAt: 101,
         }),
-      ).toThrow(/already bound to alice/i);
+      ).rejects.toThrow(/already bound to alice/i);
     });
 
-    expect(store.getByCustomerId("cus_shared")?.username).toBe("alice");
-    expect(store.getByUsername("bob")).toBeNull();
+    expect((await store.getByCustomerId("cus_shared"))?.username).toBe("alice");
+    expect(await store.getByUsername("bob")).toBeNull();
     expect(output).toContain("Rejected Stripe customer rebind attempt");
     expect(output).toContain('"existingUsername":"alice"');
     expect(output).toContain('"attemptedUsername":"bob"');
   });
 
-  it("deduplicates legacy customer bindings during migration and recreates the unique index", () => {
+  it("deduplicates legacy customer bindings during migration and recreates the unique index", async () => {
     const tempDb = makeTempDbPath();
 
     try {
@@ -298,12 +300,12 @@ describe("SubscriptionStore", () => {
         );
       legacyDb.close();
 
-      const { result: store, output } = captureStdout(
+      const { result: store, output } = await captureStdout(
         () => new SubscriptionStore(tempDb.path),
       );
 
-      expect(store.getByUsername("alice")).toBeNull();
-      expect(store.getByCustomerId("cus_dup")).toEqual({
+      expect(await store.getByUsername("alice")).toBeNull();
+      expect(await store.getByCustomerId("cus_dup")).toEqual({
         username: "bob",
         stripeCustomerId: "cus_dup",
         stripeSubscriptionId: "sub_new",
@@ -351,9 +353,9 @@ describe("hasActiveSubscription — expiry logic", () => {
   //
   // For the expiry tests we import and call a fresh store directly.
 
-  it("active with future currentPeriodEnd → active", () => {
+  it("active with future currentPeriodEnd → active", async () => {
     const store = makeStore();
-    store.upsert({
+    await store.upsert({
       username: "u1",
       stripeCustomerId: "cus_u1",
       stripeSubscriptionId: "sub_u1",
@@ -363,7 +365,7 @@ describe("hasActiveSubscription — expiry logic", () => {
       cancelAt: null,
       updatedAt: Date.now(),
     });
-    const record = store.getByUsername("u1");
+    const record = await store.getByUsername("u1");
     expect(record?.status).toBe("active");
     // Verify the expiry guard logic directly:
     const bufferSeconds = 3 * 24 * 60 * 60;
@@ -373,9 +375,9 @@ describe("hasActiveSubscription — expiry logic", () => {
     expect(expired).toBe(false);
   });
 
-  it("active with currentPeriodEnd 4 days ago → expired (beyond 3-day buffer)", () => {
+  it("active with currentPeriodEnd 4 days ago → expired (beyond 3-day buffer)", async () => {
     const store = makeStore();
-    store.upsert({
+    await store.upsert({
       username: "u2",
       stripeCustomerId: "cus_u2",
       stripeSubscriptionId: "sub_u2",
@@ -385,7 +387,7 @@ describe("hasActiveSubscription — expiry logic", () => {
       cancelAt: null,
       updatedAt: Date.now(),
     });
-    const record = store.getByUsername("u2");
+    const record = await store.getByUsername("u2");
     const bufferSeconds = 3 * 24 * 60 * 60;
     const expired =
       record!.currentPeriodEnd !== null &&
@@ -393,9 +395,9 @@ describe("hasActiveSubscription — expiry logic", () => {
     expect(expired).toBe(true);
   });
 
-  it("active with currentPeriodEnd 1 day ago → still valid (within 3-day buffer)", () => {
+  it("active with currentPeriodEnd 1 day ago → still valid (within 3-day buffer)", async () => {
     const store = makeStore();
-    store.upsert({
+    await store.upsert({
       username: "u3",
       stripeCustomerId: "cus_u3",
       stripeSubscriptionId: "sub_u3",
@@ -405,7 +407,7 @@ describe("hasActiveSubscription — expiry logic", () => {
       cancelAt: null,
       updatedAt: Date.now(),
     });
-    const record = store.getByUsername("u3");
+    const record = await store.getByUsername("u3");
     const bufferSeconds = 3 * 24 * 60 * 60;
     const expired =
       record!.currentPeriodEnd !== null &&
@@ -413,9 +415,9 @@ describe("hasActiveSubscription — expiry logic", () => {
     expect(expired).toBe(false);
   });
 
-  it("active with null currentPeriodEnd → not expired", () => {
+  it("active with null currentPeriodEnd → not expired", async () => {
     const store = makeStore();
-    store.upsert({
+    await store.upsert({
       username: "u4",
       stripeCustomerId: "cus_u4",
       stripeSubscriptionId: "sub_u4",
@@ -425,7 +427,7 @@ describe("hasActiveSubscription — expiry logic", () => {
       cancelAt: null,
       updatedAt: Date.now(),
     });
-    const record = store.getByUsername("u4");
+    const record = await store.getByUsername("u4");
     const bufferSeconds = 3 * 24 * 60 * 60;
     const expired =
       record!.currentPeriodEnd !== null &&
@@ -433,9 +435,9 @@ describe("hasActiveSubscription — expiry logic", () => {
     expect(expired).toBe(false);
   });
 
-  it("trialing with future currentPeriodEnd → not expired", () => {
+  it("trialing with future currentPeriodEnd → not expired", async () => {
     const store = makeStore();
-    store.upsert({
+    await store.upsert({
       username: "u5",
       stripeCustomerId: "cus_u5",
       stripeSubscriptionId: "sub_u5",
@@ -445,7 +447,7 @@ describe("hasActiveSubscription — expiry logic", () => {
       cancelAt: null,
       updatedAt: Date.now(),
     });
-    const record = store.getByUsername("u5");
+    const record = await store.getByUsername("u5");
     expect(record?.status).toBe("trialing");
     const bufferSeconds = 3 * 24 * 60 * 60;
     const expired =
@@ -454,9 +456,9 @@ describe("hasActiveSubscription — expiry logic", () => {
     expect(expired).toBe(false);
   });
 
-  it("past_due status → not active regardless of period end", () => {
+  it("past_due status → not active regardless of period end", async () => {
     const store = makeStore();
-    store.upsert({
+    await store.upsert({
       username: "u6",
       stripeCustomerId: "cus_u6",
       stripeSubscriptionId: "sub_u6",
@@ -466,15 +468,15 @@ describe("hasActiveSubscription — expiry logic", () => {
       cancelAt: null,
       updatedAt: Date.now(),
     });
-    const record = store.getByUsername("u6");
+    const record = await store.getByUsername("u6");
     expect(record?.status === "active" || record?.status === "trialing").toBe(
       false,
     );
   });
 
-  it("canceled status → not active", () => {
+  it("canceled status → not active", async () => {
     const store = makeStore();
-    store.upsert({
+    await store.upsert({
       username: "u7",
       stripeCustomerId: "cus_u7",
       stripeSubscriptionId: "sub_u7",
@@ -484,23 +486,23 @@ describe("hasActiveSubscription — expiry logic", () => {
       cancelAt: null,
       updatedAt: Date.now(),
     });
-    const record = store.getByUsername("u7");
+    const record = await store.getByUsername("u7");
     expect(record?.status === "active" || record?.status === "trialing").toBe(
       false,
     );
   });
 
-  it("no record → not active", () => {
+  it("no record → not active", async () => {
     const store = makeStore();
-    expect(store.getByUsername("nonexistent")).toBeNull();
+    expect(await store.getByUsername("nonexistent")).toBeNull();
   });
 });
 
 describe("SubscriptionStore — cancel_at_period_end", () => {
-  it("persists cancelAtPeriodEnd=true and cancelAt timestamp", () => {
+  it("persists cancelAtPeriodEnd=true and cancelAt timestamp", async () => {
     const store = makeStore();
     const cancelTs = futureEnd;
-    store.upsert({
+    await store.upsert({
       username: "v1",
       stripeCustomerId: "cus_v1",
       stripeSubscriptionId: "sub_v1",
@@ -510,14 +512,14 @@ describe("SubscriptionStore — cancel_at_period_end", () => {
       cancelAt: cancelTs,
       updatedAt: Date.now(),
     });
-    const record = store.getByUsername("v1");
+    const record = await store.getByUsername("v1");
     expect(record?.cancelAtPeriodEnd).toBe(true);
     expect(record?.cancelAt).toBe(cancelTs);
   });
 
-  it("cancelAtPeriodEnd defaults to false when stored as 0", () => {
+  it("cancelAtPeriodEnd defaults to false when stored as 0", async () => {
     const store = makeStore();
-    store.upsert({
+    await store.upsert({
       username: "v2",
       stripeCustomerId: "cus_v2",
       stripeSubscriptionId: "sub_v2",
@@ -527,14 +529,14 @@ describe("SubscriptionStore — cancel_at_period_end", () => {
       cancelAt: null,
       updatedAt: Date.now(),
     });
-    const record = store.getByUsername("v2");
+    const record = await store.getByUsername("v2");
     expect(record?.cancelAtPeriodEnd).toBe(false);
     expect(record?.cancelAt).toBeNull();
   });
 
-  it("upsert clears cancelAtPeriodEnd when subscription renews", () => {
+  it("upsert clears cancelAtPeriodEnd when subscription renews", async () => {
     const store = makeStore();
-    store.upsert({
+    await store.upsert({
       username: "v3",
       stripeCustomerId: "cus_v3",
       stripeSubscriptionId: "sub_v3",
@@ -544,7 +546,7 @@ describe("SubscriptionStore — cancel_at_period_end", () => {
       cancelAt: futureEnd,
       updatedAt: Date.now(),
     });
-    store.upsert({
+    await store.upsert({
       username: "v3",
       stripeCustomerId: "cus_v3",
       stripeSubscriptionId: "sub_v3",
@@ -554,17 +556,17 @@ describe("SubscriptionStore — cancel_at_period_end", () => {
       cancelAt: null,
       updatedAt: Date.now(),
     });
-    const record = store.getByUsername("v3");
+    const record = await store.getByUsername("v3");
     expect(record?.cancelAtPeriodEnd).toBe(false);
     expect(record?.cancelAt).toBeNull();
   });
 });
 
 describe("SubscriptionStore — admin overrides", () => {
-  it("persists override reason and updater metadata", () => {
+  it("persists override reason and updater metadata", async () => {
     const store = makeStore();
 
-    store.putAccessOverride({
+    await store.putAccessOverride({
       username: "override-user",
       access: "grant",
       reason: "manual comp",
@@ -572,7 +574,7 @@ describe("SubscriptionStore — admin overrides", () => {
       updatedAt: 123,
     });
 
-    expect(store.getAccessOverride("override-user")).toEqual({
+    expect(await store.getAccessOverride("override-user")).toEqual({
       username: "override-user",
       access: "grant",
       reason: "manual comp",
@@ -581,10 +583,10 @@ describe("SubscriptionStore — admin overrides", () => {
     });
   });
 
-  it("revoke overrides Stripe-backed access until the override is removed", () => {
+  it("revoke overrides Stripe-backed access until the override is removed", async () => {
     const store = makeStore();
 
-    store.upsert({
+    await store.upsert({
       username: "stripe-user",
       stripeCustomerId: "cus_override",
       stripeSubscriptionId: "sub_override",
@@ -594,7 +596,7 @@ describe("SubscriptionStore — admin overrides", () => {
       cancelAt: null,
       updatedAt: 100,
     });
-    store.putAccessOverride({
+    await store.putAccessOverride({
       username: "stripe-user",
       access: "revoke",
       reason: "manual review hold",
@@ -602,7 +604,7 @@ describe("SubscriptionStore — admin overrides", () => {
       updatedAt: 200,
     });
 
-    expect(store.resolveAccess("stripe-user")).toEqual({
+    expect(await store.resolveAccess("stripe-user")).toEqual({
       username: "stripe-user",
       hasAccess: false,
       source: "admin_revoke",
@@ -618,9 +620,9 @@ describe("SubscriptionStore — admin overrides", () => {
       },
     });
 
-    store.deleteAccessOverride("stripe-user");
+    await store.deleteAccessOverride("stripe-user");
 
-    expect(store.resolveAccess("stripe-user")).toEqual({
+    expect(await store.resolveAccess("stripe-user")).toEqual({
       username: "stripe-user",
       hasAccess: true,
       source: "stripe",
@@ -631,10 +633,10 @@ describe("SubscriptionStore — admin overrides", () => {
     });
   });
 
-  it("lists known access states for Stripe-only and override-only users", () => {
+  it("lists known access states for Stripe-only and override-only users", async () => {
     const store = makeStore();
 
-    store.upsert({
+    await store.upsert({
       username: "stripe-only",
       stripeCustomerId: "cus_list",
       stripeSubscriptionId: "sub_list",
@@ -644,7 +646,7 @@ describe("SubscriptionStore — admin overrides", () => {
       cancelAt: null,
       updatedAt: 10,
     });
-    store.putAccessOverride({
+    await store.putAccessOverride({
       username: "override-only",
       access: "grant",
       reason: null,
@@ -652,7 +654,7 @@ describe("SubscriptionStore — admin overrides", () => {
       updatedAt: 20,
     });
 
-    expect(store.listKnownAccessStates()).toEqual(
+    expect(await store.listKnownAccessStates()).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           username: "override-only",

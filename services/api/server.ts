@@ -1,7 +1,9 @@
 import { randomUUID } from "crypto";
 
 import { config, type SessionCookieSameSite } from "./config";
+import { configureBackends } from "./db/configure";
 import { logger } from "./logger";
+import { runSessionReaper } from "./session-reaper";
 import { sessionStore, type SessionRecord } from "./sessions";
 import {
   subscriptionStore,
@@ -371,15 +373,17 @@ function parseCookies(req: Request): Map<string, string> {
   return parsed;
 }
 
-function getSessionFromRequest(req: Request): SessionRecord | null {
+async function getSessionFromRequest(
+  req: Request,
+): Promise<SessionRecord | null> {
   const sessionId = parseCookies(req).get(config.sessionCookieName);
   if (!sessionId) return null;
 
-  const session = sessionStore.get(sessionId);
+  const session = await sessionStore.get(sessionId);
   if (!session) return null;
 
   if (session.expiresAt <= Date.now()) {
-    sessionStore.delete(sessionId);
+    await sessionStore.delete(sessionId);
     void revokeUserToken(session);
     return null;
   }
@@ -552,7 +556,7 @@ async function resolveDocumentAccess(
   owner: string,
   repo: string,
 ): Promise<DocumentAccessContext | Response> {
-  const auth = requireSubscription(req, baseHeaders);
+  const auth = await requireSubscription(req, baseHeaders);
   if (!(auth instanceof Response)) {
     return {
       client: auth.client,
@@ -593,11 +597,11 @@ async function resolveDocumentAccess(
   }
 }
 
-function requireSession(
+async function requireSession(
   req: Request,
   baseHeaders: Headers,
-): { session: SessionRecord; client: GiteaClient } | Response {
-  const session = getSessionFromRequest(req);
+): Promise<{ session: SessionRecord; client: GiteaClient } | Response> {
+  const session = await getSessionFromRequest(req);
   if (!session) {
     return json(401, { error: "Unauthorized." }, baseHeaders);
   }
@@ -605,11 +609,11 @@ function requireSession(
   return { session, client: createSessionGiteaClient(session) };
 }
 
-function requireSubscription(
+async function requireSubscription(
   req: Request,
   baseHeaders: Headers,
-): { session: SessionRecord; client: GiteaClient } | Response {
-  const auth = requireSession(req, baseHeaders);
+): Promise<{ session: SessionRecord; client: GiteaClient } | Response> {
+  const auth = await requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
   if (config.bypassSubscriptionForUsers.includes(auth.session.username)) {
     logger.info("Subscription requirement bypassed for user", {
@@ -618,7 +622,7 @@ function requireSubscription(
     });
     return auth;
   }
-  if (!hasActiveSubscription(auth.session.username)) {
+  if (!(await hasActiveSubscription(auth.session.username))) {
     return json(402, { error: "Subscription required." }, baseHeaders);
   }
   return auth;
@@ -635,7 +639,7 @@ async function requireAdminSession(
     }
   | Response
 > {
-  const auth = requireSession(req, baseHeaders);
+  const auth = await requireSession(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -663,7 +667,7 @@ async function requireSubscriptionOrAdmin(
   req: Request,
   baseHeaders: Headers,
 ): Promise<{ session: SessionRecord; client: GiteaClient } | Response> {
-  const auth = requireSession(req, baseHeaders);
+  const auth = await requireSession(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -672,7 +676,7 @@ async function requireSubscriptionOrAdmin(
     return auth;
   }
 
-  if (hasActiveSubscription(auth.session.username)) {
+  if (await hasActiveSubscription(auth.session.username)) {
     return auth;
   }
 
@@ -684,17 +688,19 @@ async function requireSubscriptionOrAdmin(
   return json(402, { error: "Subscription required." }, baseHeaders);
 }
 
-function resolveSubscriptionAccessSource(
+async function resolveSubscriptionAccessSource(
   username: string,
-): "config_bypass" | "stripe" | "admin_grant" | "admin_revoke" | "none" {
+): Promise<
+  "config_bypass" | "stripe" | "admin_grant" | "admin_revoke" | "none"
+> {
   if (config.bypassSubscriptionForUsers.includes(username)) {
     return "config_bypass";
   }
 
-  return subscriptionStore.resolveAccess(username).source;
+  return (await subscriptionStore.resolveAccess(username)).source;
 }
 
-function resolveSubscriptionAccessState(username: string): {
+async function resolveSubscriptionAccessState(username: string): Promise<{
   hasAccess: boolean;
   source: "config_bypass" | "stripe" | "admin_grant" | "admin_revoke" | "none";
   status: string | null;
@@ -703,21 +709,22 @@ function resolveSubscriptionAccessState(username: string): {
   cancelAtPeriodEnd: boolean;
   cancelAt: number | null;
   override: SubscriptionAccessOverrideRecord | null;
-} {
+}> {
   if (config.bypassSubscriptionForUsers.includes(username)) {
     return {
       hasAccess: true,
       source: "config_bypass",
       status: "active",
-      stripeStatus: subscriptionStore.getByUsername(username)?.status ?? null,
+      stripeStatus:
+        (await subscriptionStore.getByUsername(username))?.status ?? null,
       currentPeriodEnd: null,
       cancelAtPeriodEnd: false,
       cancelAt: null,
-      override: subscriptionStore.getAccessOverride(username),
+      override: await subscriptionStore.getAccessOverride(username),
     };
   }
 
-  const access = subscriptionStore.resolveAccess(username);
+  const access = await subscriptionStore.resolveAccess(username);
   return {
     hasAccess: access.hasAccess,
     source: access.source,
@@ -1463,7 +1470,7 @@ async function createAuthenticatedSession(
   }
 
   const lifetime = buildSessionLifetime(rememberMe);
-  const session = createSession(
+  const session = await createSession(
     username,
     token,
     tokenName,
@@ -1627,12 +1634,12 @@ async function createGiteaUser(
   };
 }
 
-function createSession(
+async function createSession(
   username: string,
   giteaToken: string,
   giteaTokenName: string,
   expiresAt: number,
-): SessionRecord {
+): Promise<SessionRecord> {
   const now = Date.now();
   const session: SessionRecord = {
     id: randomUUID(),
@@ -1643,12 +1650,12 @@ function createSession(
     expiresAt,
   };
 
-  sessionStore.put(session);
+  await sessionStore.put(session);
   return session;
 }
 
 async function revokeAndDeleteSession(session: SessionRecord): Promise<void> {
-  sessionStore.delete(session.id);
+  await sessionStore.delete(session.id);
   await revokeUserToken(session).catch(() => undefined);
 }
 
@@ -1841,13 +1848,13 @@ async function handleLogout(
   req: Request,
   baseHeaders: Headers,
 ): Promise<Response> {
-  const session = getSessionFromRequest(req);
+  const session = await getSessionFromRequest(req);
   if (session) {
     logger.debug("Revoking session on logout", {
       username: session.username,
       clientIp: requestClientIp(req),
     });
-    sessionStore.delete(session.id);
+    await sessionStore.delete(session.id);
     await revokeUserToken(session);
   } else {
     logger.debug("Logout called with no active session", {
@@ -1866,7 +1873,7 @@ async function handleAuthMe(
   req: Request,
   baseHeaders: Headers,
 ): Promise<Response> {
-  const session = getSessionFromRequest(req);
+  const session = await getSessionFromRequest(req);
   if (!session) {
     logger.debug("Auth/me: no valid session found", {
       clientIp: requestClientIp(req),
@@ -1899,7 +1906,7 @@ async function handleDocuments(
   req: Request,
   baseHeaders: Headers,
 ): Promise<Response> {
-  const auth = requireSubscription(req, baseHeaders);
+  const auth = await requireSubscription(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -1981,7 +1988,7 @@ async function handleCreateDocument(
   req: Request,
   baseHeaders: Headers,
 ): Promise<Response> {
-  const auth = requireSubscription(req, baseHeaders);
+  const auth = await requireSubscription(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -2239,7 +2246,7 @@ async function handleDocumentVersions(
   owner: string,
   repo: string,
 ): Promise<Response> {
-  const auth = requireSubscription(req, baseHeaders);
+  const auth = await requireSubscription(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -2381,7 +2388,7 @@ async function handleDocumentReview(
   repo: string,
   prNumber: number,
 ): Promise<Response> {
-  const auth = requireSubscription(req, baseHeaders);
+  const auth = await requireSubscription(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -2440,7 +2447,7 @@ async function handleDocumentPublish(
   repo: string,
   prNumber: number,
 ): Promise<Response> {
-  const auth = requireSubscription(req, baseHeaders);
+  const auth = await requireSubscription(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -2672,10 +2679,10 @@ function accessStateUpdatedAt(access: EffectiveSubscriptionAccess): number {
   );
 }
 
-function buildAdminSubscriptionAccessEntry(
+async function buildAdminSubscriptionAccessEntry(
   user: Pick<RepoUserSummary, "login" | "full_name" | "email">,
 ) {
-  const accessState = resolveSubscriptionAccessState(user.login);
+  const accessState = await resolveSubscriptionAccessState(user.login);
 
   return {
     username: user.login,
@@ -2728,9 +2735,8 @@ async function handleAdminSubscriptionAccessList(
 
   if (query === "") {
     const offset = (page - 1) * limit;
-    const accessRows = subscriptionStore
-      .listKnownAccessStates()
-      .sort((left, right) => {
+    const accessRows = (await subscriptionStore.listKnownAccessStates()).sort(
+      (left, right) => {
         const updatedAtDiff =
           accessStateUpdatedAt(right) - accessStateUpdatedAt(left);
         if (updatedAtDiff !== 0) {
@@ -2738,14 +2744,17 @@ async function handleAdminSubscriptionAccessList(
         }
 
         return left.username.localeCompare(right.username);
-      });
+      },
+    );
     const hasMore = accessRows.length > offset + limit;
-    const users = accessRows.slice(offset, offset + limit).map((access) =>
-      buildAdminSubscriptionAccessEntry({
-        login: access.username,
-        full_name: "",
-        email: "",
-      }),
+    const users = await Promise.all(
+      accessRows.slice(offset, offset + limit).map((access) =>
+        buildAdminSubscriptionAccessEntry({
+          login: access.username,
+          full_name: "",
+          email: "",
+        }),
+      ),
     );
 
     return json(
@@ -2772,7 +2781,9 @@ async function handleAdminSubscriptionAccessList(
     return json(
       200,
       {
-        users: result.users.map(buildAdminSubscriptionAccessEntry),
+        users: await Promise.all(
+          result.users.map(buildAdminSubscriptionAccessEntry),
+        ),
         page: result.page,
         limit: result.limit,
         hasMore: result.hasMore,
@@ -2824,7 +2835,7 @@ async function handleAdminSubscriptionAccessUpdate(
   const reasonInput = readInputString(payload, null, "reason");
   const reason = reasonInput === "" ? null : reasonInput;
 
-  subscriptionStore.putAccessOverride({
+  await subscriptionStore.putAccessOverride({
     username,
     access,
     reason,
@@ -2835,7 +2846,7 @@ async function handleAdminSubscriptionAccessUpdate(
   return json(
     200,
     {
-      user: buildAdminSubscriptionAccessEntry({
+      user: await buildAdminSubscriptionAccessEntry({
         login: username,
         full_name: "",
         email: "",
@@ -2868,14 +2879,14 @@ async function handleAdminSubscriptionAccessDelete(
     );
   }
 
-  subscriptionStore.deleteAccessOverride(username);
+  await subscriptionStore.deleteAccessOverride(username);
 
   return json(
     200,
     {
       ok: true,
       username,
-      user: buildAdminSubscriptionAccessEntry({
+      user: await buildAdminSubscriptionAccessEntry({
         login: username,
         full_name: "",
         email: "",
@@ -2892,7 +2903,7 @@ async function handleAddCollaborator(
   repo: string,
   login: string,
 ): Promise<Response> {
-  const auth = requireSubscription(req, baseHeaders);
+  const auth = await requireSubscription(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -2962,7 +2973,7 @@ async function handleDeleteCollaborator(
   repo: string,
   login: string,
 ): Promise<Response> {
-  const auth = requireSubscription(req, baseHeaders);
+  const auth = await requireSubscription(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -2993,7 +3004,7 @@ async function handleGetDocumentPermissions(
   owner: string,
   repo: string,
 ): Promise<Response> {
-  const auth = requireSubscription(req, baseHeaders);
+  const auth = await requireSubscription(req, baseHeaders);
   if (auth instanceof Response) return auth;
   const { client, session } = auth;
 
@@ -3035,7 +3046,7 @@ async function handleUpdateDocumentPermissions(
   owner: string,
   repo: string,
 ): Promise<Response> {
-  const auth = requireSubscription(req, baseHeaders);
+  const auth = await requireSubscription(req, baseHeaders);
   if (auth instanceof Response) return auth;
   const { client, session } = auth;
 
@@ -3170,7 +3181,7 @@ async function handleStripeWebhook(
 
   logger.info("Stripe webhook received", { type, eventId });
 
-  if (eventId && webhookEventStore.isProcessed(eventId)) {
+  if (eventId && (await webhookEventStore.isProcessed(eventId))) {
     logger.info("Duplicate webhook event — skipping", { eventId, type });
     return json(200, { received: true }, baseHeaders);
   }
@@ -3178,7 +3189,7 @@ async function handleStripeWebhook(
   if (
     customerId &&
     eventCreated !== undefined &&
-    webhookEventStore.isOutOfOrder(customerId, eventCreated)
+    (await webhookEventStore.isOutOfOrder(customerId, eventCreated))
   ) {
     logger.info("Out-of-order webhook event — skipping", {
       eventId,
@@ -3187,7 +3198,7 @@ async function handleStripeWebhook(
       eventCreated,
     });
     if (eventId) {
-      webhookEventStore.markProcessed(
+      await webhookEventStore.markProcessed(
         eventId,
         type ?? "unknown",
         customerId,
@@ -3205,7 +3216,7 @@ async function handleStripeWebhook(
     if (username && customerId && subscriptionId) {
       try {
         const sub = await stripe.subscriptions.retrieve(subscriptionId);
-        subscriptionStore.upsert(
+        await subscriptionStore.upsert(
           buildStripeSubscriptionRecord(
             username,
             customerId,
@@ -3262,9 +3273,9 @@ async function handleStripeWebhook(
     const customerId = data.customer as string | undefined;
     const subscriptionId = data.id as string | undefined;
     if (customerId) {
-      const record = subscriptionStore.getByCustomerId(customerId);
+      const record = await subscriptionStore.getByCustomerId(customerId);
       if (record) {
-        subscriptionStore.upsert({
+        await subscriptionStore.upsert({
           ...record,
           stripeSubscriptionId: subscriptionId ?? record.stripeSubscriptionId,
           status:
@@ -3292,7 +3303,7 @@ async function handleStripeWebhook(
           },
         );
         if (reconciled) {
-          subscriptionStore.upsert(reconciled.record);
+          await subscriptionStore.upsert(reconciled.record);
           logger.info(
             "Reconciled missing subscription row from Stripe customer metadata",
             {
@@ -3317,9 +3328,9 @@ async function handleStripeWebhook(
   } else if (type === "invoice.payment_failed" && data) {
     const customerId = data.customer as string | undefined;
     if (customerId) {
-      const record = subscriptionStore.getByCustomerId(customerId);
+      const record = await subscriptionStore.getByCustomerId(customerId);
       if (record && record.status !== "canceled") {
-        subscriptionStore.upsert({
+        await subscriptionStore.upsert({
           ...record,
           status: "past_due",
           updatedAt: Date.now(),
@@ -3332,9 +3343,9 @@ async function handleStripeWebhook(
   } else if (type === "invoice.payment_succeeded" && data) {
     const customerId = data.customer as string | undefined;
     if (customerId) {
-      const record = subscriptionStore.getByCustomerId(customerId);
+      const record = await subscriptionStore.getByCustomerId(customerId);
       if (record && record.status === "past_due") {
-        subscriptionStore.upsert({
+        await subscriptionStore.upsert({
           ...record,
           status: "active",
           updatedAt: Date.now(),
@@ -3348,7 +3359,7 @@ async function handleStripeWebhook(
   }
 
   if (eventId) {
-    webhookEventStore.markProcessed(
+    await webhookEventStore.markProcessed(
       eventId,
       type ?? "unknown",
       customerId ?? null,
@@ -3363,13 +3374,13 @@ async function handleBillingStatus(
   req: Request,
   baseHeaders: Headers,
 ): Promise<Response> {
-  const auth = requireSession(req, baseHeaders);
+  const auth = await requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
 
   const { username } = auth.session;
 
   const priceInfo = await fetchStripePriceInfo();
-  const accessState = resolveSubscriptionAccessState(username);
+  const accessState = await resolveSubscriptionAccessState(username);
   return json(
     200,
     {
@@ -3391,7 +3402,7 @@ async function handleBillingCheckout(
   req: Request,
   baseHeaders: Headers,
 ): Promise<Response> {
-  const auth = requireSession(req, baseHeaders);
+  const auth = await requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
 
   const checkoutRateLimit = consumeCheckoutRateLimit(auth.session.username);
@@ -3409,7 +3420,7 @@ async function handleBillingCheckout(
     return json(503, { error: "Billing not configured." }, baseHeaders);
   }
 
-  const existingSubscription = subscriptionStore.getByUsername(
+  const existingSubscription = await subscriptionStore.getByUsername(
     auth.session.username,
   );
   const userEmail = await fetchSessionUserEmail(auth.session);
@@ -3469,11 +3480,11 @@ async function handleDevGrantSubscription(
     return json(404, { error: "Not found." }, baseHeaders);
   }
 
-  const auth = requireSession(req, baseHeaders);
+  const auth = await requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
 
   const { username } = auth.session;
-  subscriptionStore.upsert({
+  await subscriptionStore.upsert({
     username,
     stripeCustomerId: `cus_dev_${username}`,
     stripeSubscriptionId: `sub_dev_${username}`,
@@ -3487,8 +3498,8 @@ async function handleDevGrantSubscription(
   return json(200, { ok: true, username }, baseHeaders);
 }
 
-function buildLegacyAdminSubscriptionAccessState(username: string) {
-  const accessState = resolveSubscriptionAccessState(username);
+async function buildLegacyAdminSubscriptionAccessState(username: string) {
+  const accessState = await resolveSubscriptionAccessState(username);
 
   return {
     username,
@@ -3527,7 +3538,7 @@ async function handleAdminSubscriptionStatus(
 
   return json(
     200,
-    buildLegacyAdminSubscriptionAccessState(matchedUser.login),
+    await buildLegacyAdminSubscriptionAccessState(matchedUser.login),
     baseHeaders,
   );
 }
@@ -3555,7 +3566,7 @@ async function upsertLegacyAdminSubscriptionOverride(
     return json(404, { error: "User not found." }, baseHeaders);
   }
 
-  subscriptionStore.putAccessOverride({
+  await subscriptionStore.putAccessOverride({
     username: matchedUser.login,
     access,
     updatedBy: auth.currentUser.username,
@@ -3564,7 +3575,7 @@ async function upsertLegacyAdminSubscriptionOverride(
 
   return json(
     200,
-    buildLegacyAdminSubscriptionAccessState(matchedUser.login),
+    await buildLegacyAdminSubscriptionAccessState(matchedUser.login),
     baseHeaders,
   );
 }
@@ -3616,10 +3627,10 @@ async function handleBillingPortal(
   req: Request,
   baseHeaders: Headers,
 ): Promise<Response> {
-  const auth = requireSession(req, baseHeaders);
+  const auth = await requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
 
-  const record = subscriptionStore.getByUsername(auth.session.username);
+  const record = await subscriptionStore.getByUsername(auth.session.username);
   if (!record) {
     return json(404, { error: "No subscription found." }, baseHeaders);
   }
@@ -3657,13 +3668,12 @@ async function handleBillingPortal(
 
 async function cleanupExpiredSessions(): Promise<void> {
   const now = Date.now();
-  const expired = sessionStore.reap(now);
-
-  if (expired.length > 0) {
-    await Promise.allSettled(
-      expired.map((session) => revokeUserToken(session)),
-    );
-  }
+  await runSessionReaper({
+    sessionStore,
+    revoke: revokeUserToken,
+    now,
+    logger,
+  });
 
   for (const [key, entry] of authAttempts.entries()) {
     if (entry.resetAt <= now) {
@@ -3701,6 +3711,24 @@ export function createApiServer() {
         origin,
         clientIp,
       });
+
+      // Liveness probe: must respond before any auth/origin/HTTPS gate so an
+      // ALB target group on a private VPC can reach it without TLS. Returns
+      // 200 once the process accepts connections; deeper readiness (Gitea,
+      // DynamoDB, Postgres) will live on /readyz once those backends land.
+      if (pathname === "/healthz" && (method === "GET" || method === "HEAD")) {
+        const durationMs = Date.now() - startMs;
+        logger.info("Response sent", {
+          method,
+          path: pathname,
+          status: 200,
+          durationMs,
+        });
+        return new Response(method === "HEAD" ? null : "ok\n", {
+          status: 200,
+          headers: { "content-type": "text/plain; charset=utf-8" },
+        });
+      }
 
       const baseHeaders = corsHeaders(req);
       const transportError = enforceTransportSecurity(req, baseHeaders);
@@ -3982,14 +4010,18 @@ export function createApiServer() {
   });
 }
 
-export const server = import.meta.main ? createApiServer() : null;
-
-if (import.meta.main && server) {
+if (import.meta.main) {
+  // configureBackends must run before Bun.serve so the lazy stores resolve to
+  // the right backend on the first request, and so the schema-version probe
+  // can refuse to start the API against an unmigrated Postgres.
+  const chosen = await configureBackends();
+  const server = createApiServer();
   startCleanupTimer();
   logger.info("Bindersnap API listening", {
     url: `http://localhost:${server.port}`,
     port: server.port,
     env: config.nodeEnv,
+    dbBackend: chosen,
   });
   if (config.devFeaturesEnabled) {
     logger.warn(
