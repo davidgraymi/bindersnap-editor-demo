@@ -144,10 +144,8 @@ a `human-needed` issue instead.
 
 `services/api` handles login and signup. It mints a per-user Gitea token at
 login time, stores it in its SQLite session store, and sets an `HttpOnly`
-`bindersnap_session` cookie on the browser. The Gitea token is also returned in
-the login/me response body so the SPA can cache it in `sessionStorage` for
-`gitea-client` calls, but the primary auth path is always the session cookie.
-No bearer tokens in cookies. No Gitea credentials in `localStorage`.
+`bindersnap_session` cookie on the browser. The primary auth path is always the session cookie.
+No bearer tokens in cookies. No Gitea credentials in `sessionStorage` or `localStorage`.
 
 ### All data lives in Gitea. No secondary database.
 

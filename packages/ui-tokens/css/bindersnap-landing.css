@@ -150,34 +150,9 @@ body::after {
   gap: 0;
 }
 
-.nav-badge {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-family: var(--brand-font-mono);
-  font-size: 11px;
-  color: var(--bs-text-secondary);
-  background: var(--bs-surface-1);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-full);
-  padding: 5px 12px;
-  transition: var(--bs-mode-transition);
-}
-
-.nav-badge-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--brand-green);
-  animation: breathe 2.5s ease-in-out infinite;
-}
-
 .nav-cta-link {
-  background: var(--bs-text-primary);
-  color: var(--bs-page-bg) !important;
+  background: var(--brand-coral);
+  color: #fff !important;
   font-size: 13px;
   font-weight: var(--brand-weight-medium);
   padding: 9px 22px;
@@ -185,13 +160,13 @@ body::after {
   text-decoration: none;
   letter-spacing: 0.01em;
   transition:
-    opacity var(--brand-transition-base),
+    background var(--brand-transition-base),
     transform var(--brand-transition-fast);
 }
 
 .nav-cta-link:hover,
 .nav-cta-link:focus-visible {
-  opacity: 0.85;
+  background: var(--brand-coral-dark);
   transform: translateY(-1px);
 }
 
@@ -294,8 +269,8 @@ body::after {
 .chaos-pill-text {
   color: var(--bs-text-muted);
 }
-.chaos-pill-emoji {
-  font-size: 15px;
+.chaos-pill-icon {
+  color: var(--bs-text-muted);
 }
 
 /* Hero headline */
@@ -1297,6 +1272,22 @@ body::after {
   line-height: var(--brand-leading-normal);
 }
 
+.comp-security-link {
+  display: inline-flex;
+  align-items: center;
+  margin-top: var(--brand-space-6);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-label);
+  letter-spacing: var(--brand-tracking-wide);
+  color: var(--brand-coral);
+  text-decoration: none;
+  transition: opacity var(--brand-transition-base);
+}
+
+.comp-security-link:hover {
+  opacity: 0.75;
+}
+
 .cert-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1498,11 +1489,6 @@ body::after {
   background: var(--brand-coral-dark);
 }
 
-.cta-hint {
-  font-size: 12px;
-  color: var(--bs-text-faint);
-}
-
 .cta-success {
   display: none;
   flex-direction: column;
@@ -1647,13 +1633,6 @@ footer {
 }
 
 @media (max-width: 900px) {
-  .nav-badge {
-    position: static;
-    transform: none;
-    order: 3;
-    margin-top: var(--brand-space-2);
-  }
-
   .nav-inner {
     flex-wrap: wrap;
     justify-content: space-between;
