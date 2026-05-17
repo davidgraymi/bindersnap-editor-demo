@@ -18,9 +18,15 @@
 # in isolation.
 
 variable "lambda_route_table_ids" {
-  description = "Route table IDs of the Lambda subnets (var.private_subnet_ids). Default route 0.0.0.0/0 is set here pointing at the Gitea ENI. Leave empty to skip the route (e.g., on first apply before the Gitea-as-NAT side has landed)."
+  description = "Pre-existing route table IDs to write the 0.0.0.0/0 → Gitea ENI route into. Leave empty when using subnets.tf to create dedicated subnets (its route table is consumed automatically via local.effective_route_table_ids)."
   type        = list(string)
   default     = []
+}
+
+variable "enable_gitea_nat_route" {
+  description = "When true, writes 0.0.0.0/0 → Gitea ENI into local.effective_route_table_ids. Set false on the first apply so the subnets + route table exist before the route is written (the route alone is harmless but the corresponding Gitea-side changes in infra/compute must be applied first)."
+  type        = bool
+  default     = false
 }
 
 data "aws_instance" "gitea" {
@@ -28,9 +34,9 @@ data "aws_instance" "gitea" {
 }
 
 resource "aws_route" "lambda_egress_via_gitea" {
-  count = length(var.lambda_route_table_ids)
+  count = var.enable_gitea_nat_route ? length(local.effective_route_table_ids) : 0
 
-  route_table_id         = var.lambda_route_table_ids[count.index]
+  route_table_id         = local.effective_route_table_ids[count.index]
   destination_cidr_block = "0.0.0.0/0"
   network_interface_id   = data.aws_instance.gitea.network_interface_id
 }

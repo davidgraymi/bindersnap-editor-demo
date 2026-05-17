@@ -65,8 +65,9 @@ variable "vpc_id" {
 }
 
 variable "private_subnet_ids" {
-  description = "Private subnets where Lambda ENIs and Aurora live. Their default route (0.0.0.0/0) points at the Gitea ENI for outbound egress (see nat.tf)."
+  description = "Pre-existing private subnets to use for Lambda ENIs + Aurora. Leave empty to have this root create dedicated subnets via subnets.tf (recommended — see lambda_subnet_cidr_blocks)."
   type        = list(string)
+  default     = []
 }
 
 variable "gitea_instance_id" {

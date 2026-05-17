@@ -35,9 +35,9 @@ variable "lambda_timeout_seconds" {
 }
 
 variable "lambda_reserved_concurrency" {
-  description = "Reserved concurrency. Solo-dev cap; raise when needed."
+  description = "Reserved concurrency. -1 disables the reservation (function uses the account-wide unreserved pool). New AWS accounts cap regional concurrency at 10 with a 10-unit unreserved floor, so any positive reservation is rejected until the quota is raised. Default -1 for that reason; raise both the AWS quota and this value together once traffic justifies it."
   type        = number
-  default     = 10
+  default     = -1
 }
 
 variable "lambda_log_retention_days" {
@@ -51,11 +51,12 @@ variable "lambda_log_retention_days" {
 # is updated out-of-band by `aws lambda update-function-code` and we ignore
 # image_uri drift in `lifecycle.ignore_changes`.
 #
-# AWS publishes a public hello-world image at this URI; using it avoids a
-# chicken-and-egg dependency on the ECR repo having an image yet.
+# Container-image Lambdas can only pull from a private ECR repo in the same
+# account+region — `public.ecr.aws/...` is rejected. So the operator must
+# manually push a placeholder to `${ecr}:bootstrap` once, before the first
+# `terraform apply` reaches aws_lambda_function. See infra/api-service/README.md.
 locals {
-  bootstrap_image_uri = "public.ecr.aws/lambda/provided:al2023"
-  api_image_uri       = var.image_tag == "latest" || var.image_tag == "" ? local.bootstrap_image_uri : "${aws_ecr_repository.api.repository_url}:${var.image_tag}"
+  api_image_uri = var.image_tag == "latest" || var.image_tag == "" ? "${aws_ecr_repository.api.repository_url}:bootstrap" : "${aws_ecr_repository.api.repository_url}:${var.image_tag}"
 }
 
 resource "aws_cloudwatch_log_group" "api" {
@@ -76,7 +77,7 @@ resource "aws_lambda_function" "api" {
   reserved_concurrent_executions = var.lambda_reserved_concurrency
 
   vpc_config {
-    subnet_ids         = var.private_subnet_ids
+    subnet_ids         = local.effective_subnet_ids
     security_group_ids = [aws_security_group.lambda.id]
   }
 

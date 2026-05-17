@@ -42,7 +42,7 @@ variable "aurora_engine_version" {
 resource "aws_db_subnet_group" "api" {
   name        = "${local.name_prefix}-aurora"
   description = "Aurora subnet group for ${local.name_prefix}"
-  subnet_ids  = var.private_subnet_ids
+  subnet_ids  = local.effective_subnet_ids
 
   tags = local.common_tags
 }
