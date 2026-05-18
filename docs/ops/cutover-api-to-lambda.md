@@ -25,9 +25,11 @@ export PROD_INSTANCE_TAG="Project=bindersnap"
 export AURORA_SECRET_ARN="$(terraform -chdir=infra/api-service output -raw aurora_master_secret_arn)"
 export AURORA_HOST="$(terraform -chdir=infra/api-service output -raw aurora_endpoint)"
 export AURORA_DB="$(terraform -chdir=infra/api-service output -raw aurora_database_name)"
-export TOKEN_ENC_KEY="$(aws secretsmanager get-secret-value \
-  --secret-id "$(terraform -chdir=infra/api-service output -raw token_encryption_key_secret_arn)" \
-  --query SecretString --output text)"
+# Runtime secrets (including the token-encryption key) live in
+# infra/api-service/terraform.tfvars — see runtime-env.tf for why.
+# Pull TOKEN_ENC_KEY from there for the SQLite → Postgres copy:
+export TOKEN_ENC_KEY="$(grep -E '^token_encryption_key' \
+  infra/api-service/terraform.tfvars | sed -E 's/^[^=]*=[[:space:]]*"([^"]*)".*/\1/')"
 export SQLITE_LOCAL="$HOME/cutover/sessions.db"
 ```
 

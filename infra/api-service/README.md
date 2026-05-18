@@ -32,7 +32,7 @@ Terraform root for the `services/api` Lambda + API Gateway deployment. **Skeleto
 | `main.tf`            | Provider, backend, shared variables and locals                               | scaffold |
 | `ecr.tf`             | ECR repository for the Lambda container image                                | scaffold |
 | `aurora.tf`          | Aurora Serverless v2 Postgres — sessions, subscriptions, webhook idempotency | scaffold |
-| `secrets.tf`         | Secrets Manager + KMS for Stripe/Gitea/Postgres credentials                  | scaffold |
+| `runtime-env.tf`     | Lambda env vars (runtime secrets, Aurora URL assembly, extra knobs)          | scaffold |
 | `iam.tf`             | Lambda execution role                                                        | scaffold |
 | `security-groups.tf` | Lambda SG, Aurora SG, reciprocal Gitea ingress rule                          | scaffold |
 | `apigw.tf`           | API Gateway HTTP API + custom domain                                         | scaffold |
@@ -41,7 +41,7 @@ Terraform root for the `services/api` Lambda + API Gateway deployment. **Skeleto
 
 ## Apply order
 
-Once filled in, this root slots between `infra/compute/` and `infra/backups/` in `infra/apply-all.sh`. Apply order within this root: main → ecr → secrets → aurora → iam → security-groups → nat → lambda → apigw.
+Once filled in, this root slots between `infra/compute/` and `infra/backups/` in `infra/apply-all.sh`. Apply order within this root: main → ecr → aurora → iam → security-groups → nat → lambda → apigw. Runtime secrets are passed as Lambda env vars (see `runtime-env.tf`); the long-term plan is to migrate them back to AWS Secrets Manager with a small bootstrap module in `services/api` once a second operator is involved.
 
 ## Cold-start tradeoff
 

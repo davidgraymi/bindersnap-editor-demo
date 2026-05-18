@@ -6,10 +6,11 @@
 #     AWSLambdaBasicExecutionRole              # CloudWatch Logs
 #     AWSLambdaVPCAccessExecutionRole          # ENI mgmt for VPC attachment
 #
-#   Custom:
-#     secretsmanager:GetSecretValue            # scoped to this root's secrets
-#                                                + the RDS-managed master secret
-#     kms:Decrypt, kms:GenerateDataKey         # session_envelope CMK only
+# Runtime secrets are passed to Lambda as plain environment variables
+# (see runtime-env.tf for the trade-off discussion), so the function does
+# NOT need secretsmanager:GetSecretValue or kms:Decrypt at runtime. The
+# Aurora master secret is read at terraform-apply time by the operator's
+# credentials, not by Lambda.
 
 data "aws_iam_policy_document" "lambda_assume" {
   statement {
@@ -36,40 +37,4 @@ resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
 resource "aws_iam_role_policy_attachment" "lambda_vpc_access" {
   role       = aws_iam_role.lambda.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
-}
-
-data "aws_iam_policy_document" "lambda_secrets" {
-  statement {
-    effect  = "Allow"
-    actions = ["secretsmanager:GetSecretValue"]
-    resources = [
-      aws_secretsmanager_secret.stripe.arn,
-      aws_secretsmanager_secret.gitea.arn,
-      # Aurora's RDS-managed master-user secret.
-      aws_rds_cluster.api.master_user_secret[0].secret_arn,
-    ]
-  }
-}
-
-resource "aws_iam_role_policy" "lambda_secrets" {
-  name   = "${local.name_prefix}-secrets"
-  role   = aws_iam_role.lambda.id
-  policy = data.aws_iam_policy_document.lambda_secrets.json
-}
-
-data "aws_iam_policy_document" "lambda_kms" {
-  statement {
-    effect = "Allow"
-    actions = [
-      "kms:Decrypt",
-      "kms:GenerateDataKey",
-    ]
-    resources = [aws_kms_key.session_envelope.arn]
-  }
-}
-
-resource "aws_iam_role_policy" "lambda_kms" {
-  name   = "${local.name_prefix}-kms"
-  role   = aws_iam_role.lambda.id
-  policy = data.aws_iam_policy_document.lambda_kms.json
 }

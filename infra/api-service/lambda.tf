@@ -81,30 +81,11 @@ resource "aws_lambda_function" "api" {
     security_group_ids = [aws_security_group.lambda.id]
   }
 
+  # Runtime env vars (including all secrets) are assembled in
+  # runtime-env.tf. See that file for the rationale for using plain env
+  # vars instead of Secrets Manager.
   environment {
-    variables = {
-      # Lambda Web Adapter — see services/api/Dockerfile.
-      AWS_LWA_PORT        = "8787"
-      AWS_LWA_INVOKE_MODE = "BUFFERED"
-      PORT                = "8787"
-
-      # Backend selection — flips the API onto Postgres (issue #224).
-      BINDERSNAP_DB_BACKEND = "postgres"
-
-      # Aurora connection. Lambda fetches the password at cold-start from
-      # AURORA_MASTER_SECRET_ARN and assembles the URL; we only pass the
-      # non-secret pieces here.
-      BINDERSNAP_PG_HOST     = aws_rds_cluster.api.endpoint
-      BINDERSNAP_PG_PORT     = "5432"
-      BINDERSNAP_PG_DATABASE = aws_rds_cluster.api.database_name
-
-      # Secret ARNs — Lambda reads them via the IAM role; not the values
-      # themselves, so a console screenshot does not leak credentials.
-      AURORA_MASTER_SECRET_ARN     = aws_rds_cluster.api.master_user_secret[0].secret_arn
-      STRIPE_SECRET_ARN            = aws_secretsmanager_secret.stripe.arn
-      GITEA_SECRET_ARN             = aws_secretsmanager_secret.gitea.arn
-      SESSION_ENVELOPE_KMS_KEY_ARN = aws_kms_key.session_envelope.arn
-    }
+    variables = local.api_runtime_env
   }
 
   depends_on = [

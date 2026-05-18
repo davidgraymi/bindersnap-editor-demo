@@ -29,11 +29,42 @@ api_domain_name     = "api.bindersnap.com"
 acm_certificate_arn = "arn:aws:acm:us-east-1:000000000000:certificate/00000000-0000-0000-0000-000000000000"
 
 # Origins the SPA is served from. CORS at the API Gateway layer
-# short-circuits preflights before invoking Lambda.
+# short-circuits preflights before invoking Lambda. This same list is
+# also exported to the Lambda as BINDERSNAP_ALLOWED_ORIGINS.
 cors_allowed_origins = [
   "https://bindersnap.com",
   "https://davidgraymi.github.io",
 ]
+
+# ---------------------------------------------------------------------------
+# Runtime secrets — set on the Lambda as plain env vars.
+# See runtime-env.tf for the trade-off discussion (plain env vars vs.
+# Secrets Manager fetch at cold-start). Long-term plan: swap to Secrets
+# Manager once a second operator is in the picture.
+#
+# These ARE in tfstate. Keep the S3 backend bucket private + encrypted.
+# ---------------------------------------------------------------------------
+
+stripe_secret_key     = "sk_live_REPLACE_ME"
+stripe_webhook_secret = "whsec_REPLACE_ME"
+stripe_price_id       = "price_REPLACE_ME"
+
+gitea_service_token = "REPLACE_ME"
+
+# Base64-encoded 32 random bytes. Generate once with:
+#   openssl rand -base64 32
+# Changing this value invalidates every encrypted gitea_token in the
+# sessions table — users will have to re-authenticate.
+token_encryption_key = "REPLACE_ME"
+
+# Optional runtime tuning (defaults shown — uncomment to override):
+# session_cookie_domain    = ""         # empty = scope to API origin only
+# session_cookie_same_site = "Lax"      # Strict | Lax | None
+# user_email_domain        = "users.bindersnap.local"
+# extra_env = {
+#   # one-off knobs without a dedicated variable, e.g.:
+#   # BINDERSNAP_DEV_FEATURES = "false"
+# }
 
 # ---------------------------------------------------------------------------
 # Optional overrides (defaults shown in comments — uncomment to change):
