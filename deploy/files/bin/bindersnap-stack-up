@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Bring the Docker Compose stack up, force-recreating only when this deploy
+# actually changed the env file or a config file. Replaces the boot-time
+# bindersnap-compose.service + bindersnap-refresh-and-restart.service from
+# infra/compute/user-data.sh.tftpl (epic #302, phase #304); pyinfra now drives
+# the change detection and signals it through the state-dir markers below.
+set -euo pipefail
+
+APP_DIR="${APP_DIR:-/opt/bindersnap}"
+ENV_FILE="${ENV_FILE:-${APP_DIR}/.env.prod}"
+COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
+STATE_DIR="${STATE_DIR:-/run/bindersnap}"
+
+changed=0
+
+# pyinfra touches this marker when any uploaded config file changed this run.
+[ -f "${STATE_DIR}/config-changed" ] && changed=1
+
+# Compare the env-file hash captured before the SSM refresh with its hash now.
+before="$(cat "${STATE_DIR}/env-before" 2>/dev/null || echo none)"
+after="$(sha256sum "${ENV_FILE}" 2>/dev/null | awk '{print $1}' || true)"
+[ -z "${after}" ] && after=none
+[ "${before}" != "${after}" ] && changed=1
+
+cd "${APP_DIR}"
+docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" pull
+
+if [ "${changed}" -eq 1 ]; then
+  echo "Env or config changed — recreating the stack"
+  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d --build --force-recreate
+else
+  echo "Env and config unchanged — reconciling without recreate"
+  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d
+fi
+
+docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" ps

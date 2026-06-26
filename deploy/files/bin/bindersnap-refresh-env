@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# Render /opt/bindersnap/.env.prod from the SSM Parameter Store tree.
+# Ported verbatim from infra/compute/user-data.sh.tftpl (epic #302, phase #304).
+# The host's instance profile grants the SSM read; secrets are never printed and
+# the file is written 0600.
+set -euo pipefail
+
+APP_DIR="${APP_DIR:-/opt/bindersnap}"
+ENV_FILE="${ENV_FILE:-${APP_DIR}/.env.prod}"
+PARAMETER_PATH="${SSM_PARAMETER_PATH:-/bindersnap/prod}"
+TMP_FILE="$(mktemp "${ENV_FILE}.XXXXXX")"
+JSON_FILE="$(mktemp "${ENV_FILE}.json.XXXXXX")"
+BOOTSTRAP_TOKEN_PLACEHOLDER="BOOTSTRAP_WITH_scripts/bootstrap-gitea-service-account.ts"
+
+cleanup() {
+  rm -f "${TMP_FILE}" "${JSON_FILE}"
+}
+
+trap cleanup EXIT
+umask 077
+
+aws ssm get-parameters-by-path \
+  --path "${PARAMETER_PATH}" \
+  --recursive \
+  --with-decryption \
+  --output json \
+  >"${JSON_FILE}"
+
+python3 -c '
+import json
+import sys
+
+prefix = sys.argv[1].rstrip("/")
+bootstrap_placeholder = sys.argv[2]
+payload = json.load(sys.stdin)
+parameters = sorted(payload.get("Parameters", []), key=lambda item: item["Name"])
+
+if not parameters:
+    raise SystemExit(f"No SSM parameters found under {prefix}")
+
+token_value = None
+for item in parameters:
+    name = item["Name"]
+    if name == f"{prefix}/gitea_service_token":
+        token_value = item["Value"]
+        break
+
+for item in parameters:
+    name = item["Name"]
+    if not name.startswith(prefix + "/"):
+        continue
+    value = item["Value"]
+    if "\n" in value:
+        raise SystemExit(f"{name} contains a newline and cannot be written to a Docker env file")
+    env_name = name.rsplit("/", 1)[-1].replace("-", "_").upper()
+    if (
+        token_value
+        and token_value != bootstrap_placeholder
+        and env_name in {"GITEA_ADMIN_USER", "GITEA_ADMIN_PASS"}
+    ):
+        continue
+    print(f"{env_name}={value}")
+' "${PARAMETER_PATH}" "${BOOTSTRAP_TOKEN_PLACEHOLDER}" <"${JSON_FILE}" >"${TMP_FILE}"
+
+install -d -m 0755 "${APP_DIR}"
+install -m 0600 "${TMP_FILE}" "${ENV_FILE}"
+chmod 600 "${ENV_FILE}"
+if [ "$(id -u)" -eq 0 ]; then
+  chown root:root "${ENV_FILE}"
+fi

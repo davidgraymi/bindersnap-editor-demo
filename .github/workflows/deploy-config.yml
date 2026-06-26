@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - "config/**"
+      - "deploy/files/**"
   workflow_dispatch:
     inputs:
       publish_from_repo:
@@ -98,7 +98,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          aws s3 sync ./config/ "s3://${CONFIG_BUCKET}/" \
+          aws s3 sync ./deploy/files/ "s3://${CONFIG_BUCKET}/" \
             --exclude "*" \
             --include "docker-compose.prod.yml" \
             --include "Caddyfile.prod" \

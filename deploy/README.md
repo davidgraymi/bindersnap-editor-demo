@@ -6,8 +6,10 @@ flow (manual SSH, `infra/compute/user-data.sh.tftpl` bootstrap, and the S3
 config bucket). See epic
 [#302](https://github.com/davidgraymi/bindersnap-editor-demo/issues/302).
 
-> **Status:** Phase 1 (scaffold + connectivity). Host configuration operations
-> arrive in Phase 2 ([#304](https://github.com/davidgraymi/bindersnap-editor-demo/issues/304)).
+> **Status:** Phase 2 — `deploy.py` performs the full host configuration and the
+> runtime config now lives in `deploy/files/`. The GitHub Actions workflow that
+> runs this on every push to `main` arrives in Phase 3
+> ([#305](https://github.com/davidgraymi/bindersnap-editor-demo/issues/305)).
 
 ## How it connects
 
@@ -26,12 +28,29 @@ inbound port 22** and we store **no long-lived keys**. Every run:
 
 ## Layout
 
-| File                 | Purpose                                                 |
+| Path                 | Purpose                                                 |
 | -------------------- | ------------------------------------------------------- |
 | `inventory.py`       | Single prod host + SSH-over-SSM connection data         |
 | `deploy.py`          | The deployment itself (operations run against the host) |
+| `files/`             | Runtime config uploaded to the host (was `config/`)     |
+| `files/bin/`         | Host helper scripts (ported from `user-data.sh.tftpl`)  |
+| `files/scripts/`     | App scripts: `bindersnap` CLI + Gitea bootstrap         |
 | `bin/ssm-connect.sh` | Resolve instance, push ephemeral key, invoke pyinfra    |
 | `requirements.txt`   | Python toolchain (pyinfra, paramiko)                    |
+
+## What `deploy.py` does
+
+Each run is idempotent — a fresh host ends up running today's Docker Compose
+stack, and a re-run changes nothing unless config or secrets actually changed:
+
+1. install Docker, the AWS CLI and XFS tooling, plus the Compose plugin;
+2. format + mount the EBS data volume and point Docker's `data-root` at it;
+3. upload `files/` config and the `files/bin/` helper scripts to the host;
+4. refresh `/opt/bindersnap/.env.prod` from SSM Parameter Store (`0600`);
+5. log in to GHCR (if a token is present) and bootstrap the Gitea service token
+   on first run;
+6. `docker compose up -d`, force-recreating **only** when this run changed the
+   env file or a config file.
 
 ## Prerequisites
 

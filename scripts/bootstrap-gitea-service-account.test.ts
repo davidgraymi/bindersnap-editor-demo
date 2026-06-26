@@ -9,7 +9,7 @@ import {
   resolveBootstrapConfig,
   resolveServiceTokenScopes,
   resolveSsmParameterName,
-} from "../config/scripts/bootstrap-gitea-service-account";
+} from "../deploy/files/scripts/bootstrap-gitea-service-account";
 
 describe("bootstrap-gitea-service-account", () => {
   test("defaults to the minimum admin scope required by the API", () => {
