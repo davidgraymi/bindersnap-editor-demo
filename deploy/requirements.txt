@@ -1,0 +1,9 @@
+# Python toolchain for the pyinfra push-deployment pipeline (epic #302).
+#
+# Install into a local venv:
+#   python3 -m venv deploy/.venv && deploy/.venv/bin/pip install -r deploy/requirements.txt
+#
+# pyinfra ships with paramiko, but we depend on it directly in inventory.py
+# (paramiko.ProxyCommand) so it is pinned explicitly here.
+pyinfra~=3.1
+paramiko~=3.4
