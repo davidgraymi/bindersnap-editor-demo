@@ -13,14 +13,11 @@ STATE_DIR="${STATE_DIR:-/run/bindersnap}"
 
 changed=0
 
-# pyinfra touches this marker when any uploaded config file changed this run.
+# pyinfra drops these markers when an uploaded config file or the SSM-rendered
+# env file actually changed this run (via `_if=op.did_change`). Either one means
+# the stack must be force-recreated rather than just reconciled.
 [ -f "${STATE_DIR}/config-changed" ] && changed=1
-
-# Compare the env-file hash captured before the SSM refresh with its hash now.
-before="$(cat "${STATE_DIR}/env-before" 2>/dev/null || echo none)"
-after="$(sha256sum "${ENV_FILE}" 2>/dev/null | awk '{print $1}' || true)"
-[ -z "${after}" ] && after=none
-[ "${before}" != "${after}" ] && changed=1
+[ -f "${STATE_DIR}/env-changed" ] && changed=1
 
 cd "${APP_DIR}"
 docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" pull

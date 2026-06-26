@@ -13,7 +13,8 @@ Pipeline (top to bottom — pyinfra runs operations in definition order):
   4. start + enable Docker on the prepared storage
   5. upload the runtime config (compose / Caddy / litestream / Dockerfile) and
      the host helper scripts
-  6. refresh `/opt/bindersnap/.env.prod` from SSM Parameter Store
+  6. render `/opt/bindersnap/.env.prod` from SSM Parameter Store (read on the
+     control plane via boto3, uploaded with `files.put`)
   7. log in to GHCR (when a token is present on the control plane) and bootstrap
      the Gitea service token on first run
   8. `docker compose up -d`, force-recreating only when this run changed env or
@@ -23,13 +24,25 @@ Secrets never touch the repo: they live in SSM and land in `.env.prod` (0600)
 on the host at deploy time. The connection itself is SSH-over-SSM (see
 `inventory.py`).
 
+Secret reads on the control plane: as of the Phase 2 follow-up the SSM read for
+`.env.prod` happens here (in `deploy.py`) rather than on the host, so the env
+file is rendered with `files.put` and pyinfra's `did_change` drives the
+recreate decision for free. The trade-off — made deliberately — is that the SSM
+read now uses the *control plane's* credentials (CI's OIDC role / the operator's
+local AWS creds) instead of the host instance profile. The rendered content is
+held in memory (an `io.StringIO`), never written to a control-plane disk file,
+and lands on the host at `0600`.
+
 GHCR credentials (GHCR_TOKEN / GHCR_USER) are read from the control-plane
 environment at deploy time — in CI these come from GitHub Actions secrets; for
 local runs, export them before invoking pyinfra. If GHCR_TOKEN is unset the
 login step is skipped (public images only).
 """
 
+import io
 import os
+
+import boto3
 
 from pyinfra import config, host
 from pyinfra.api import FactBase
@@ -54,6 +67,11 @@ DATA_MOUNT = "/data"
 SSM_PARAMETER_PATH = os.environ.get("BINDERSNAP_SSM_PARAMETER_PATH", "/bindersnap/prod")
 AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
 
+# While the Gitea service token has not been minted yet, SSM holds this sentinel
+# instead of a real token. The bootstrap (first run) mints the real value; until
+# then the admin bootstrap creds must stay in `.env.prod` so the mint can run.
+BOOTSTRAP_TOKEN_PLACEHOLDER = "BOOTSTRAP_WITH_scripts/bootstrap-gitea-service-account.ts"
+
 # Docker Compose plugin: pinned to match the version the old user-data installed.
 COMPOSE_VERSION = "v2.37.3"
 COMPOSE_PLUGIN_DIR = "/usr/local/lib/docker/cli-plugins"
@@ -74,14 +92,73 @@ CONFIG_FILES = [
 ]
 
 # Host helper scripts uploaded to BIN_DIR.
-# EBS storage setup and GHCR login are now native pyinfra operations
-# (DataDevice fact + server.mount, and docker.login respectively)
-# and are no longer deployed as host scripts.
+# EBS storage setup, GHCR login and the SSM .env.prod render are now native
+# pyinfra operations (DataDevice fact + server.mount, docker.login, and a
+# control-plane boto3 read + files.put respectively) and are no longer deployed
+# as host scripts.
 HELPER_SCRIPTS = [
-    "bindersnap-refresh-env",
     "bindersnap-bootstrap-gitea",
     "bindersnap-stack-up",
 ]
+
+
+# ---------- Control-plane SSM render ----------
+
+def build_env_content(parameters: list[dict], parameter_path: str) -> str:
+    """Render Docker `.env.prod` content from raw SSM parameters.
+
+    Faithful port of the transform the old host-side refresh-env script
+    performed: parameters are sorted by name, each leaf becomes an upper-snake
+    env var, and the first-boot admin credentials are dropped once the Gitea
+    service token is a real value (no longer the bootstrap placeholder). Values
+    containing newlines are rejected — they cannot be expressed in a Docker env
+    file.
+    """
+    prefix = parameter_path.rstrip("/")
+    items = sorted(parameters, key=lambda item: item["Name"])
+    if not items:
+        raise SystemExit(f"No SSM parameters found under {prefix}")
+
+    token_value = None
+    for item in items:
+        if item["Name"] == f"{prefix}/gitea_service_token":
+            token_value = item["Value"]
+            break
+
+    lines = []
+    for item in items:
+        name = item["Name"]
+        if not name.startswith(prefix + "/"):
+            continue
+        value = item["Value"]
+        if "\n" in value:
+            raise SystemExit(
+                f"{name} contains a newline and cannot be written to a Docker env file"
+            )
+        env_name = name.rsplit("/", 1)[-1].replace("-", "_").upper()
+        if (
+            token_value
+            and token_value != BOOTSTRAP_TOKEN_PLACEHOLDER
+            and env_name in {"GITEA_ADMIN_USER", "GITEA_ADMIN_PASS"}
+        ):
+            continue
+        lines.append(f"{env_name}={value}")
+
+    return "\n".join(lines) + "\n"
+
+
+def render_env_file() -> str:
+    """Read the SSM Parameter Store tree on the control plane and render env content."""
+    client = boto3.client("ssm", region_name=AWS_REGION)
+    paginator = client.get_paginator("get_parameters_by_path")
+    parameters: list[dict] = []
+    for page in paginator.paginate(
+        Path=SSM_PARAMETER_PATH,
+        Recursive=True,
+        WithDecryption=True,
+    ):
+        parameters.extend(page.get("Parameters", []))
+    return build_env_content(parameters, SSM_PARAMETER_PATH)
 
 
 # ---------- Custom facts ----------
@@ -274,12 +351,34 @@ files.put(
     mode="0755",
 )
 
-# ---------- 6. Change detection: reset markers + flag config changes ----------
+# ---------- 6. Render .env.prod from SSM (control plane) ----------
 
+# Read the SSM tree here on the control plane and upload the rendered env file.
+# `files.put` of an in-memory buffer keeps the secrets off the control-plane
+# disk, lands them at 0600 on the host, and gives change detection for free:
+# `env_put.did_change` is the single signal for "secrets changed this run".
+env_put = files.put(
+    name="Render .env.prod from SSM Parameter Store",
+    src=io.StringIO(render_env_file()),
+    dest=ENV_FILE,
+    mode="0600",
+    add_deploy_dir=False,
+)
+
+# ---------- 7. Change detection: reset markers + flag config/env changes ----------
+
+# stack-up recreates the stack when either a config file or the env file changed
+# this run. pyinfra signals both through marker files dropped via `_if`, which is
+# delayed to execute time (unlike a prepare-time `if op.changed:`).
 files.directory(name="Ensure state dir", path=STATE_DIR, mode="0755")
 files.file(
     name="Reset config-changed marker",
     path=f"{STATE_DIR}/config-changed",
+    present=False,
+)
+files.file(
+    name="Reset env-changed marker",
+    path=f"{STATE_DIR}/env-changed",
     present=False,
 )
 
@@ -290,27 +389,13 @@ for _upload in config_uploads:
         _if=_upload.did_change,
     )
 
-# Snapshot the env-file hash before the SSM refresh rewrites it, so the stack-up
-# script can tell whether secrets actually changed.
 server.shell(
-    name="Snapshot env-file hash",
-    commands=[
-        f"mkdir -p {STATE_DIR}",
-        (
-            f"(sha256sum {ENV_FILE} 2>/dev/null | awk '{{print $1}}') "
-            f"> {STATE_DIR}/env-before || true; "
-            f"[ -s {STATE_DIR}/env-before ] || echo none > {STATE_DIR}/env-before"
-        ),
-    ],
+    name="Flag env change for recreate",
+    commands=[f"touch {STATE_DIR}/env-changed"],
+    _if=env_put.did_change,
 )
 
-# ---------- 7. Secrets, registry login, Gitea bootstrap ----------
-
-server.shell(
-    name="Refresh .env.prod from SSM Parameter Store",
-    commands=[f"{BIN_DIR}/bindersnap-refresh-env"],
-    _env={"SSM_PARAMETER_PATH": SSM_PARAMETER_PATH, "AWS_REGION": AWS_REGION},
-)
+# ---------- 8. Registry login + Gitea bootstrap ----------
 
 # GHCR credentials are supplied by the control plane (CI secret / local env var).
 # Native docker.login is idempotent: a no-op when the auth entry is already present.
@@ -324,13 +409,17 @@ if _ghcr_token:
         password=_ghcr_token,
     )
 
+# First run only: the bootstrap reads the placeholder token from the env file
+# rendered above, mints the real token, stores it back in SSM, and persists it
+# into .env.prod itself (refresh-env is no longer a host script). On every later
+# run the token is already real and the script exits early.
 server.shell(
     name="Bootstrap the Gitea service token (first run only)",
     commands=[f"{BIN_DIR}/bindersnap-bootstrap-gitea"],
     _env={"SSM_PARAMETER_PATH": SSM_PARAMETER_PATH, "AWS_REGION": AWS_REGION},
 )
 
-# ---------- 8. Bring the stack up (recreate only on change) ----------
+# ---------- 9. Bring the stack up (recreate only on change) ----------
 
 server.shell(
     name="Compose up (force-recreate only when changed)",

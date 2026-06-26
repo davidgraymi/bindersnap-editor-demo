@@ -100,4 +100,18 @@ aws ssm put-parameter \
   --overwrite \
   --region "${AWS_REGION}"
 
-/usr/local/bin/bindersnap-refresh-env
+# Persist the freshly minted token into .env.prod and drop the now-unneeded
+# first-boot admin credentials, matching what the control-plane SSM render
+# produces on every subsequent deploy. The host no longer ships a refresh-env
+# script, so this script reconciles the env file itself before the stack comes
+# up with the real token.
+umask 077
+TMP_ENV="$(mktemp "${ENV_FILE}.XXXXXX")"
+grep -v -E '^(GITEA_SERVICE_TOKEN|GITEA_ADMIN_USER|GITEA_ADMIN_PASS)=' \
+  "${ENV_FILE}" >"${TMP_ENV}" || true
+printf 'GITEA_SERVICE_TOKEN=%s\n' "${SERVICE_TOKEN}" >>"${TMP_ENV}"
+install -m 0600 "${TMP_ENV}" "${ENV_FILE}"
+rm -f "${TMP_ENV}"
+if [ "$(id -u)" -eq 0 ]; then
+  chown root:root "${ENV_FILE}"
+fi

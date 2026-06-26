@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { createHash } from "node:crypto";
 import {
   chmodSync,
   mkdirSync,
@@ -19,10 +18,6 @@ const stackUpPath = join(
   "bin",
   "bindersnap-stack-up",
 );
-
-function sha256(text: string) {
-  return createHash("sha256").update(text).digest("hex");
-}
 
 function makeWorkspace() {
   const root = mkdtempSync(join(tmpdir(), "bindersnap-stackup-"));
@@ -69,14 +64,9 @@ function runStackUp(workspace: ReturnType<typeof makeWorkspace>) {
 }
 
 describe("bindersnap-stack-up change detection", () => {
-  test("reconciles without recreate when env and config are unchanged", () => {
+  test("reconciles without recreate when no change markers are present", () => {
     const workspace = makeWorkspace();
-    // env-before matches the current env-file hash, and no config-changed marker.
-    writeFileSync(
-      join(workspace.stateDir, "env-before"),
-      `${sha256("API_TAG=test\n")}\n`,
-    );
-
+    // Neither the config-changed nor env-changed marker exists this run.
     try {
       const result = runStackUp(workspace);
       expect(result.exitCode).toBe(0);
@@ -93,10 +83,6 @@ describe("bindersnap-stack-up change detection", () => {
 
   test("force-recreates when a config file changed this run", () => {
     const workspace = makeWorkspace();
-    writeFileSync(
-      join(workspace.stateDir, "env-before"),
-      `${sha256("API_TAG=test\n")}\n`,
-    );
     // pyinfra drops this marker when an uploaded config file changed.
     writeFileSync(join(workspace.stateDir, "config-changed"), "");
 
@@ -111,28 +97,11 @@ describe("bindersnap-stack-up change detection", () => {
     }
   });
 
-  test("force-recreates when the env file changed since the snapshot", () => {
+  test("force-recreates when the SSM-rendered env file changed this run", () => {
     const workspace = makeWorkspace();
-    // Snapshot hash from before the SSM refresh differs from the current file.
-    writeFileSync(
-      join(workspace.stateDir, "env-before"),
-      `${sha256("API_TAG=previous\n")}\n`,
-    );
+    // pyinfra drops this marker when `files.put` of .env.prod reported a change.
+    writeFileSync(join(workspace.stateDir, "env-changed"), "");
 
-    try {
-      const result = runStackUp(workspace);
-      expect(result.exitCode).toBe(0);
-
-      const log = readFileSync(workspace.logPath, "utf8");
-      expect(log).toContain("up -d --build --force-recreate");
-    } finally {
-      rmSync(workspace.root, { force: true, recursive: true });
-    }
-  });
-
-  test("treats a first run (no prior env snapshot) as changed", () => {
-    const workspace = makeWorkspace();
-    // No env-before file at all → defaults to "none" → changed.
     try {
       const result = runStackUp(workspace);
       expect(result.exitCode).toBe(0);
@@ -162,9 +131,8 @@ describe("deploy.py wiring", () => {
     }
   });
 
-  test("deploys remaining host helper scripts (refresh-env, bootstrap-gitea, stack-up)", () => {
+  test("deploys remaining host helper scripts (bootstrap-gitea, stack-up)", () => {
     for (const script of [
-      "bindersnap-refresh-env",
       "bindersnap-bootstrap-gitea",
       "bindersnap-stack-up",
     ]) {
@@ -187,17 +155,19 @@ describe("deploy.py wiring", () => {
     expect(deployScript).not.toContain("bindersnap-setup-storage");
   });
 
-  test("snapshots the env hash before refreshing from SSM", () => {
-    const snapshotIndex = deployScript.indexOf("Snapshot env-file hash");
-    const refreshIndex = deployScript.indexOf("Refresh .env.prod from SSM");
-    expect(snapshotIndex).toBeGreaterThan(-1);
-    expect(refreshIndex).toBeGreaterThan(-1);
-    // The snapshot must run before the refresh that overwrites the file.
-    expect(snapshotIndex).toBeLessThan(refreshIndex);
+  test("renders .env.prod from SSM on the control plane (no refresh-env shell script)", () => {
+    // Control-plane boto3 read + files.put, not a host-side refresh script.
+    expect(deployScript).toContain("boto3");
+    expect(deployScript).toContain("get_parameters_by_path");
+    expect(deployScript).toContain("render_env_file");
+    expect(deployScript).toContain("env_put = files.put");
+    expect(deployScript).not.toContain("bindersnap-refresh-env");
   });
 
-  test("flags config changes for a conditional recreate", () => {
+  test("flags config and env changes for a conditional recreate", () => {
     expect(deployScript).toContain("did_change");
     expect(deployScript).toContain("config-changed");
+    expect(deployScript).toContain("env-changed");
+    expect(deployScript).toContain("env_put.did_change");
   });
 });

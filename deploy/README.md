@@ -46,7 +46,9 @@ stack, and a re-run changes nothing unless config or secrets actually changed:
 1. install Docker, the AWS CLI and XFS tooling, plus the Compose plugin;
 2. format + mount the EBS data volume and point Docker's `data-root` at it;
 3. upload `files/` config and the `files/bin/` helper scripts to the host;
-4. refresh `/opt/bindersnap/.env.prod` from SSM Parameter Store (`0600`);
+4. render `/opt/bindersnap/.env.prod` (`0600`) from SSM Parameter Store — the
+   SSM read happens on the control plane (boto3) and the file is uploaded with
+   `files.put`, so pyinfra's change detection drives the recreate decision;
 5. log in to GHCR (if a token is present) and bootstrap the Gitea service token
    on first run;
 6. `docker compose up -d`, force-recreating **only** when this run changed the
@@ -88,6 +90,8 @@ Override defaults with env vars: `AWS_REGION`, `BINDERSNAP_INSTANCE_ID`
 ## Security notes
 
 - No SSH key material is ever written to the repo (`.gitignore` enforces this).
-- Secrets continue to live in AWS Parameter Store; pyinfra reads them on the
-  host at deploy time and writes `/opt/bindersnap/.env.prod` with `0600` perms
-  (Phase 2). They are never printed or committed.
+- Secrets continue to live in AWS Parameter Store. `deploy.py` reads them on the
+  control plane (CI's OIDC role / the operator's AWS creds), holds the rendered
+  env content in memory, and uploads `/opt/bindersnap/.env.prod` with `0600`
+  perms. They are never written to a control-plane disk file, printed, or
+  committed.
