@@ -26,12 +26,12 @@ inbound port 22** and we store **no long-lived keys**. Every run:
 
 ## Layout
 
-| File                  | Purpose                                                        |
-| --------------------- | ------------------------------------------------------------- |
-| `inventory.py`        | Single prod host + SSH-over-SSM connection data               |
-| `deploy.py`           | The deployment itself (operations run against the host)       |
-| `bin/ssm-connect.sh`  | Resolve instance, push ephemeral key, invoke pyinfra          |
-| `requirements.txt`    | Python toolchain (pyinfra, paramiko)                          |
+| File                 | Purpose                                                 |
+| -------------------- | ------------------------------------------------------- |
+| `inventory.py`       | Single prod host + SSH-over-SSM connection data         |
+| `deploy.py`          | The deployment itself (operations run against the host) |
+| `bin/ssm-connect.sh` | Resolve instance, push ephemeral key, invoke pyinfra    |
+| `requirements.txt`   | Python toolchain (pyinfra, paramiko)                    |
 
 ## Prerequisites
 
