@@ -8,6 +8,9 @@ on:
       - "CHANGELOG.md"
       - "package.json"
       - "bun.lock"
+      # Infra/deploy-only changes never affect the static SPA — don't republish.
+      - "deploy/**"
+      - "infra/**"
   workflow_dispatch:
 
 permissions:
