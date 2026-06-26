@@ -162,16 +162,29 @@ describe("deploy.py wiring", () => {
     }
   });
 
-  test("ports each host helper script", () => {
+  test("deploys remaining host helper scripts (refresh-env, bootstrap-gitea, stack-up)", () => {
     for (const script of [
-      "bindersnap-setup-storage",
       "bindersnap-refresh-env",
-      "bindersnap-ghcr-login",
       "bindersnap-bootstrap-gitea",
       "bindersnap-stack-up",
     ]) {
       expect(deployScript).toContain(script);
     }
+  });
+
+  test("uses native docker.login for GHCR (no ghcr-login shell script)", () => {
+    expect(deployScript).toContain("docker.login");
+    expect(deployScript).toContain("ghcr.io");
+    expect(deployScript).toContain("GHCR_TOKEN");
+    expect(deployScript).not.toContain("bindersnap-ghcr-login");
+  });
+
+  test("uses native pyinfra ops for storage setup (no setup-storage shell script)", () => {
+    expect(deployScript).toContain("DataDevice");
+    expect(deployScript).toContain("BlockDeviceFilesystem");
+    expect(deployScript).toContain("daemon.json");
+    expect(deployScript).toContain("daemon_put.did_change");
+    expect(deployScript).not.toContain("bindersnap-setup-storage");
   });
 
   test("snapshots the env hash before refreshing from SSM", () => {
