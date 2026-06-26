@@ -10,6 +10,10 @@ on:
       - "CHANGELOG.md"
       - "package.json"
       - "bun.lock"
+      # Infra/deploy-only changes are validated on the PR itself (pull_request
+      # has no path filter); skip the redundant re-run on the main push.
+      - "deploy/**"
+      - "infra/**"
   workflow_dispatch:
 
 permissions:

@@ -1,0 +1,8 @@
+# Never commit SSH key material, local virtualenvs or bytecode caches.
+.venv/
+__pycache__/
+*.pyc
+*.pem
+id_ed25519*
+id_rsa*
+*.pub

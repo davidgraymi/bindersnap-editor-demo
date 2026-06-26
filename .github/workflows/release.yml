@@ -8,6 +8,9 @@ on:
       - "CHANGELOG.md"
       - "package.json"
       - "bun.lock"
+      # Infra/deploy-only changes don't ship app code — don't cut a release.
+      - "deploy/**"
+      - "infra/**"
 
 concurrency:
   group: release
