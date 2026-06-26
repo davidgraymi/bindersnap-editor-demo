@@ -170,4 +170,23 @@ describe("deploy.py wiring", () => {
     expect(deployScript).toContain("env-changed");
     expect(deployScript).toContain("env_put.did_change");
   });
+
+  test("validates compose + custom Caddy build before any compose up", () => {
+    const validateIndex = deployScript.indexOf(
+      "Validate compose config + custom Caddy build",
+    );
+    const bootstrapIndex = deployScript.indexOf(
+      "Bootstrap the Gitea service token",
+    );
+    const stackUpIndex = deployScript.indexOf(
+      "Compose up (force-recreate only when changed)",
+    );
+
+    expect(validateIndex).toBeGreaterThan(-1);
+    expect(deployScript).toContain("config -q");
+    expect(deployScript).toContain("caddy validate");
+    // The gate must run before the first `up` (bootstrap) and the stack-up.
+    expect(validateIndex).toBeLessThan(bootstrapIndex);
+    expect(validateIndex).toBeLessThan(stackUpIndex);
+  });
 });

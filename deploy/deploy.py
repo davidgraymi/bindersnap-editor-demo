@@ -15,9 +15,10 @@ Pipeline (top to bottom — pyinfra runs operations in definition order):
      the host helper scripts
   6. render `/opt/bindersnap/.env.prod` from SSM Parameter Store (read on the
      control plane via boto3, uploaded with `files.put`)
-  7. log in to GHCR (when a token is present on the control plane) and bootstrap
+  7. validate the compose config + custom Caddy build before any `up` (gate)
+  8. log in to GHCR (when a token is present on the control plane) and bootstrap
      the Gitea service token on first run
-  8. `docker compose up -d`, force-recreating only when this run changed env or
+  9. `docker compose up -d`, force-recreating only when this run changed env or
      config
 
 Secrets never touch the repo: they live in SSM and land in `.env.prod` (0600)
@@ -76,6 +77,11 @@ BOOTSTRAP_TOKEN_PLACEHOLDER = "BOOTSTRAP_WITH_scripts/bootstrap-gitea-service-ac
 COMPOSE_VERSION = "v2.37.3"
 COMPOSE_PLUGIN_DIR = "/usr/local/lib/docker/cli-plugins"
 COMPOSE_PLUGIN_PATH = f"{COMPOSE_PLUGIN_DIR}/docker-compose"
+
+# Local tag for the custom Caddy image built during the pre-`up` validation gate.
+# Production Caddy uses the rate-limit module, so the Caddyfile can only be
+# validated against the custom build, not the stock caddy image.
+CADDY_VALIDATE_IMAGE = "bindersnap-caddy-validate:local"
 
 # Local source tree: `deploy/files/` is the single source of truth for the host.
 _FILES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "files")
@@ -395,7 +401,27 @@ server.shell(
     _if=env_put.did_change,
 )
 
-# ---------- 8. Registry login + Gitea bootstrap ----------
+# ---------- 8. Validate config before any compose up ----------
+
+# Pre-`up` gate: abort the deploy before touching the running stack if the
+# compose file (interpolated with the rendered env) or the custom Caddy build is
+# invalid. Folds in the checks the retiring `bindersnap stack validate` host CLI
+# performed — deploy.py shipped no config validation before this. Runs after the
+# env + config are on the host and Docker is up, but before the first `up` (which
+# happens in the Gitea bootstrap below on a first run).
+server.shell(
+    name="Validate compose config + custom Caddy build",
+    commands=[
+        f"cd {APP_DIR} && docker compose --env-file {ENV_FILE} "
+        f"-f {COMPOSE_FILE} config -q",
+        f"docker build -q -t {CADDY_VALIDATE_IMAGE} "
+        f"-f {APP_DIR}/Dockerfile.caddy {APP_DIR}",
+        f"docker run --rm -v {APP_DIR}/Caddyfile.prod:/etc/caddy/Caddyfile:ro "
+        f"{CADDY_VALIDATE_IMAGE} caddy validate --config /etc/caddy/Caddyfile",
+    ],
+)
+
+# ---------- 9. Registry login + Gitea bootstrap ----------
 
 # GHCR credentials are supplied by the control plane (CI secret / local env var).
 # Native docker.login is idempotent: a no-op when the auth entry is already present.
@@ -419,7 +445,7 @@ server.shell(
     _env={"SSM_PARAMETER_PATH": SSM_PARAMETER_PATH, "AWS_REGION": AWS_REGION},
 )
 
-# ---------- 9. Bring the stack up (recreate only on change) ----------
+# ---------- 10. Bring the stack up (recreate only on change) ----------
 
 server.shell(
     name="Compose up (force-recreate only when changed)",
