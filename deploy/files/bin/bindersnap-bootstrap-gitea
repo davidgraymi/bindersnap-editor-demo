@@ -105,11 +105,21 @@ aws ssm put-parameter \
 # produces on every subsequent deploy. The host no longer ships a refresh-env
 # script, so this script reconciles the env file itself before the stack comes
 # up with the real token.
+#
+# Replace the GITEA_SERVICE_TOKEN value *in place* (rather than stripping it and
+# re-appending) so the file stays byte-identical to the control-plane render: the
+# render sorts by SSM name, and this env file is that render with the token at its
+# sorted position. Appending at the end would reorder the line and make the next
+# deploy's `files.put` see a spurious diff, force-recreating the stack for nothing.
+# awk passes the token via ENVIRON so any value (slashes, ampersands) is safe.
 umask 077
 TMP_ENV="$(mktemp "${ENV_FILE}.XXXXXX")"
-grep -v -E '^(GITEA_SERVICE_TOKEN|GITEA_ADMIN_USER|GITEA_ADMIN_PASS)=' \
-  "${ENV_FILE}" >"${TMP_ENV}" || true
-printf 'GITEA_SERVICE_TOKEN=%s\n' "${SERVICE_TOKEN}" >>"${TMP_ENV}"
+SERVICE_TOKEN="${SERVICE_TOKEN}" awk '
+  /^GITEA_ADMIN_USER=/ { next }
+  /^GITEA_ADMIN_PASS=/ { next }
+  /^GITEA_SERVICE_TOKEN=/ { print "GITEA_SERVICE_TOKEN=" ENVIRON["SERVICE_TOKEN"]; next }
+  { print }
+' "${ENV_FILE}" >"${TMP_ENV}"
 install -m 0600 "${TMP_ENV}" "${ENV_FILE}"
 rm -f "${TMP_ENV}"
 if [ "$(id -u)" -eq 0 ]; then

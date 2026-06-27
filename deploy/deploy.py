@@ -203,6 +203,25 @@ class BlockDeviceFilesystem(FactBase[str]):
         return "".join(output).strip()
 
 
+class ComposePluginVersion(FactBase[str]):
+    """Installed Docker Compose plugin version (e.g. ``v2.37.3``), '' if absent.
+
+    Normalised with a leading ``v`` so it can be compared directly against
+    ``COMPOSE_VERSION``. ``files.download`` is idempotent only on the file's
+    existence, so without this gate a bump of ``COMPOSE_VERSION`` would never
+    re-install — the pin would be silently ineffective on upgrades.
+    """
+
+    def command(self, path: str) -> str:
+        return f"{path} version --short 2>/dev/null || true"
+
+    def process(self, output: list[str]) -> str:
+        version = "".join(output).strip()
+        if version and not version.startswith("v"):
+            version = f"v{version}"
+        return version
+
+
 # ---------- 1. System packages ----------
 
 dnf.packages(
@@ -224,15 +243,19 @@ files.directory(
     mode="0755",
 )
 
-files.download(
-    name="Install the Docker Compose plugin",
-    src=(
-        "https://github.com/docker/compose/releases/download/"
-        f"{COMPOSE_VERSION}/docker-compose-linux-{_arch}"
-    ),
-    dest=COMPOSE_PLUGIN_PATH,
-    mode="0755",
-)
+# files.download only checks whether the destination exists, so gate it on the
+# installed version: this re-installs when COMPOSE_VERSION is bumped and is a
+# no-op once the pinned version is in place.
+if host.get_fact(ComposePluginVersion, COMPOSE_PLUGIN_PATH) != COMPOSE_VERSION:
+    files.download(
+        name="Install the Docker Compose plugin",
+        src=(
+            "https://github.com/docker/compose/releases/download/"
+            f"{COMPOSE_VERSION}/docker-compose-linux-{_arch}"
+        ),
+        dest=COMPOSE_PLUGIN_PATH,
+        mode="0755",
+    )
 
 # ---------- 3. EBS data volume + Docker data-root ----------
 
@@ -324,15 +347,15 @@ systemd.service(
 
 # ---------- 5. Upload runtime config + app scripts ----------
 
-config_uploads = [
-    files.put(
+config_uploads = {
+    _name: files.put(
         name=f"Upload {_name}",
         src=os.path.join(_FILES, _name),
         dest=f"{APP_DIR}/{_name}",
         mode="0644",
     )
     for _name in CONFIG_FILES
-]
+}
 
 # The Gitea bootstrap mints its token by running this script inside a bun
 # container mounted at APP_DIR, so it must live under APP_DIR/scripts.
@@ -388,7 +411,7 @@ files.file(
     present=False,
 )
 
-for _upload in config_uploads:
+for _upload in config_uploads.values():
     server.shell(
         name="Flag config change for recreate",
         commands=[f"touch {STATE_DIR}/config-changed"],
@@ -409,16 +432,33 @@ server.shell(
 # performed — deploy.py shipped no config validation before this. Runs after the
 # env + config are on the host and Docker is up, but before the first `up` (which
 # happens in the Gitea bootstrap below on a first run).
+#
+# Each half is gated on `did_change` of exactly its inputs: an unchanged deploy
+# skips the gate because the running config was already validated on the run that
+# last changed it (and on a first run everything changed, so it always runs). The
+# Caddy half in particular is a full image build + container run, so skipping it
+# when neither the Dockerfile nor the Caddyfile moved avoids that work every run.
 server.shell(
-    name="Validate compose config + custom Caddy build",
+    name="Validate compose config",
     commands=[
         f"cd {APP_DIR} && docker compose --env-file {ENV_FILE} "
         f"-f {COMPOSE_FILE} config -q",
+    ],
+    _if=lambda: config_uploads[COMPOSE_FILE].did_change() or env_put.did_change(),
+)
+
+server.shell(
+    name="Validate custom Caddy build",
+    commands=[
         f"docker build -q -t {CADDY_VALIDATE_IMAGE} "
         f"-f {APP_DIR}/Dockerfile.caddy {APP_DIR}",
         f"docker run --rm -v {APP_DIR}/Caddyfile.prod:/etc/caddy/Caddyfile:ro "
         f"{CADDY_VALIDATE_IMAGE} caddy validate --config /etc/caddy/Caddyfile",
     ],
+    _if=lambda: (
+        config_uploads["Dockerfile.caddy"].did_change()
+        or config_uploads["Caddyfile.prod"].did_change()
+    ),
 )
 
 # ---------- 9. Registry login + Gitea bootstrap ----------
