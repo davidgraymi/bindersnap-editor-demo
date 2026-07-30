@@ -26,7 +26,7 @@ describe("config-as-code deploy wiring", () => {
     expect(configDeployWorkflow).toContain("BINDERSNAP_CONFIG_BUCKET");
     expect(configDeployWorkflow).toContain("publish_from_repo");
     expect(configDeployWorkflow).toContain(
-      'aws s3 sync ./config/ "s3://${CONFIG_BUCKET}/"',
+      'aws s3 sync ./deploy/files/ "s3://${CONFIG_BUCKET}/"',
     );
     expect(configDeployWorkflow).toContain(
       '--include "docker-compose.prod.yml"',

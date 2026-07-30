@@ -69,12 +69,12 @@ locals {
   # Map of S3 object key → local file path. Add new entries here when
   # introducing new config files that must land on the host.
   config_files = {
-    "docker-compose.prod.yml"                    = "${local.repo_root}/config/docker-compose.prod.yml"
-    "Caddyfile.prod"                             = "${local.repo_root}/config/Caddyfile.prod"
-    "litestream.yml"                             = "${local.repo_root}/config/litestream.yml"
-    "Dockerfile.caddy"                           = "${local.repo_root}/config/Dockerfile.caddy"
-    "scripts/bindersnap"                         = "${local.repo_root}/config/scripts/bindersnap"
-    "scripts/bootstrap-gitea-service-account.ts" = "${local.repo_root}/config/scripts/bootstrap-gitea-service-account.ts"
+    "docker-compose.prod.yml"                    = "${local.repo_root}/deploy/files/docker-compose.prod.yml"
+    "Caddyfile.prod"                             = "${local.repo_root}/deploy/files/Caddyfile.prod"
+    "litestream.yml"                             = "${local.repo_root}/deploy/files/litestream.yml"
+    "Dockerfile.caddy"                           = "${local.repo_root}/deploy/files/Dockerfile.caddy"
+    "scripts/bindersnap"                         = "${local.repo_root}/deploy/files/scripts/bindersnap"
+    "scripts/bootstrap-gitea-service-account.ts" = "${local.repo_root}/deploy/files/scripts/bootstrap-gitea-service-account.ts"
   }
 
   common_tags = {

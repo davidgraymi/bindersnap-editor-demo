@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
-const composeFile = readFileSync("config/docker-compose.prod.yml", "utf8");
+const composeFile = readFileSync(
+  "deploy/files/docker-compose.prod.yml",
+  "utf8",
+);
 const envExample = readFileSync(".env.prod.example", "utf8");
 const readme = readFileSync("README.md", "utf8");
 const secretsTerraform = readFileSync("infra/secrets/main.tf", "utf8");

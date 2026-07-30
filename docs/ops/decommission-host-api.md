@@ -42,11 +42,11 @@ aws ssm start-session --target "$INSTANCE_ID" \
                         aws s3 cp /tmp/sessions.db.final s3://bindersnap-incident-scratch/decommission/sessions.db.$(date -u +%Y%m%d)"
 ```
 
-## Step 2 — Edit `config/docker-compose.prod.yml`
+## Step 2 — Edit `deploy/files/docker-compose.prod.yml`
 
 Remove the `api` service definition and every reference to it.
 
-Concretely, three edits in `config/docker-compose.prod.yml`:
+Concretely, three edits in `deploy/files/docker-compose.prod.yml`:
 
 1. Delete the entire `api:` service block (currently lines 72–105).
 2. In `caddy.depends_on`, remove the `api: { condition: service_started }` entry. Caddy's `api.bindersnap.com` site block (see Step 3) is being removed; once that's gone, Caddy has no reason to wait on the API.
@@ -54,13 +54,13 @@ Concretely, three edits in `config/docker-compose.prod.yml`:
 
 The `api-data` named volume can stay defined for one more deploy cycle so the `docker compose down` in Step 5 cleans it up explicitly; remove it on the next commit after.
 
-## Step 3 — Edit `config/Caddyfile.prod`
+## Step 3 — Edit `deploy/files/Caddyfile.prod`
 
 Delete the entire `api.bindersnap.com { … }` site block (currently lines 31–55, including the `rate_limit` zone and the `reverse_proxy api:8787` directive). `api.bindersnap.com` now resolves to API Gateway via DNS (see Step 6 of the cutover runbook) — Caddy doesn't need to know about it.
 
 If `import security_headers` is only referenced by this block, leave the snippet defined; it remains used by the apex `bindersnap.com` block.
 
-## Step 4 — Edit `config/litestream.yml`
+## Step 4 — Edit `deploy/files/litestream.yml`
 
 Remove the `/data/api/sessions.db` entry. Postgres backups are handled by Aurora's automated snapshot + `infra/backups/`; Litestream no longer needs to replicate the SQLite file.
 
@@ -75,7 +75,7 @@ Two edits in `infra/compute/user-data.sh.tftpl`:
 
 The API-specific SSM keys (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`, `BINDERSNAP_GITEA_SERVICE_TOKEN`, etc.) **stay in SSM** — the Lambda still consumes them. Only their delivery onto the host's `.env.prod` becomes dead code, but the refresh script is generic and doesn't need to be changed.
 
-Commit and push these three edits in one PR. The config deploy workflow will sync `config/` to S3 and the periodic `bindersnap-refresh-and-restart.timer` will re-pull and reconcile compose within 6 hours — or trigger it immediately:
+Commit and push these three edits in one PR. The config deploy workflow will sync `deploy/files/` to S3 and the periodic `bindersnap-refresh-and-restart.timer` will re-pull and reconcile compose within 6 hours — or trigger it immediately:
 
 ```bash
 aws ssm send-command --instance-ids "$INSTANCE_ID" \
@@ -122,4 +122,4 @@ The compose service was the only writer; with it gone the group is dead.
 
 - `docs/ops/cutover-api-to-lambda.md` — the cutover this decommission follows.
 - `infra/api-service/` — the new home for the API tier.
-- `config/docker-compose.prod.yml`, `config/Caddyfile.prod`, `config/litestream.yml`, `infra/compute/user-data.sh.tftpl` — the four files this runbook edits.
+- `deploy/files/docker-compose.prod.yml`, `deploy/files/Caddyfile.prod`, `deploy/files/litestream.yml`, `infra/compute/user-data.sh.tftpl` — the four files this runbook edits.

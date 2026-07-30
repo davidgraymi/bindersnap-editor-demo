@@ -85,14 +85,14 @@ bootstrap_service_token_via_ssm() {
   fi
 
   script_b64="$(
-    base64 <"${SCRIPT_DIR}/../config/scripts/bootstrap-gitea-service-account.ts" | tr -d '\n'
+    base64 <"${SCRIPT_DIR}/../deploy/files/scripts/bootstrap-gitea-service-account.ts" | tr -d '\n'
   )"
   caddyfile_b64="$(
-    base64 <"${SCRIPT_DIR}/../config/Caddyfile.prod" | tr -d '\n'
+    base64 <"${SCRIPT_DIR}/../deploy/files/Caddyfile.prod" | tr -d '\n'
   )"
   commands_file="$(mktemp)"
 
-  bun "${SCRIPT_DIR}/../config/scripts/bootstrap-gitea-service-account.ts" \
+  bun "${SCRIPT_DIR}/../deploy/files/scripts/bootstrap-gitea-service-account.ts" \
     print-ssm-commands \
     --script-b64 "${script_b64}" \
     --caddyfile-b64 "${caddyfile_b64}" \
