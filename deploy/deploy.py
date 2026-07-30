@@ -42,6 +42,7 @@ login step is skipped (public images only).
 
 import io
 import os
+import sys
 
 import boto3
 
@@ -49,6 +50,13 @@ from pyinfra import config, host
 from pyinfra.api import FactBase
 from pyinfra.facts.server import Arch
 from pyinfra.operations import dnf, docker, files, server, systemd
+
+# pyinfra is invoked from the repo root (`pyinfra deploy/inventory.py
+# deploy/deploy.py`), so this file's own directory is not guaranteed to be on
+# sys.path. Add it before importing the sibling render helper.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from env_render import build_env_content  # noqa: E402
 
 # Every operation needs root on the host; the deploy user (ec2-user) has
 # passwordless sudo on AL2023.
@@ -68,10 +76,9 @@ DATA_MOUNT = "/data"
 SSM_PARAMETER_PATH = os.environ.get("BINDERSNAP_SSM_PARAMETER_PATH", "/bindersnap/prod")
 AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
 
-# While the Gitea service token has not been minted yet, SSM holds this sentinel
-# instead of a real token. The bootstrap (first run) mints the real value; until
-# then the admin bootstrap creds must stay in `.env.prod` so the mint can run.
-BOOTSTRAP_TOKEN_PLACEHOLDER = "BOOTSTRAP_WITH_scripts/bootstrap-gitea-service-account.ts"
+# BOOTSTRAP_TOKEN_PLACEHOLDER and the `.env.prod` render live in env_render.py
+# (imported above) so they carry no import-time side effects and can be unit
+# tested in isolation.
 
 # Docker Compose plugin: pinned to match the version the old user-data installed.
 COMPOSE_VERSION = "v2.37.3"
@@ -109,49 +116,6 @@ HELPER_SCRIPTS = [
 
 
 # ---------- Control-plane SSM render ----------
-
-def build_env_content(parameters: list[dict], parameter_path: str) -> str:
-    """Render Docker `.env.prod` content from raw SSM parameters.
-
-    Faithful port of the transform the old host-side refresh-env script
-    performed: parameters are sorted by name, each leaf becomes an upper-snake
-    env var, and the first-boot admin credentials are dropped once the Gitea
-    service token is a real value (no longer the bootstrap placeholder). Values
-    containing newlines are rejected — they cannot be expressed in a Docker env
-    file.
-    """
-    prefix = parameter_path.rstrip("/")
-    items = sorted(parameters, key=lambda item: item["Name"])
-    if not items:
-        raise SystemExit(f"No SSM parameters found under {prefix}")
-
-    token_value = None
-    for item in items:
-        if item["Name"] == f"{prefix}/gitea_service_token":
-            token_value = item["Value"]
-            break
-
-    lines = []
-    for item in items:
-        name = item["Name"]
-        if not name.startswith(prefix + "/"):
-            continue
-        value = item["Value"]
-        if "\n" in value:
-            raise SystemExit(
-                f"{name} contains a newline and cannot be written to a Docker env file"
-            )
-        env_name = name.rsplit("/", 1)[-1].replace("-", "_").upper()
-        if (
-            token_value
-            and token_value != BOOTSTRAP_TOKEN_PLACEHOLDER
-            and env_name in {"GITEA_ADMIN_USER", "GITEA_ADMIN_PASS"}
-        ):
-            continue
-        lines.append(f"{env_name}={value}")
-
-    return "\n".join(lines) + "\n"
-
 
 def render_env_file() -> str:
     """Read the SSM Parameter Store tree on the control plane and render env content."""

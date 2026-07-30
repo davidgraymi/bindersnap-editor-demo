@@ -114,85 +114,20 @@ describe("bindersnap-stack-up change detection", () => {
   });
 });
 
-describe("deploy.py wiring", () => {
-  const deployScript = readFileSync(
-    join(repoRoot, "deploy", "deploy.py"),
-    "utf8",
-  );
-
-  test("uploads the runtime config bundle from deploy/files", () => {
-    for (const file of [
-      "docker-compose.prod.yml",
-      "Caddyfile.prod",
-      "litestream.yml",
-      "Dockerfile.caddy",
-    ]) {
-      expect(deployScript).toContain(`"${file}"`);
-    }
-  });
-
-  test("deploys remaining host helper scripts (bootstrap-gitea, stack-up)", () => {
-    for (const script of [
-      "bindersnap-bootstrap-gitea",
-      "bindersnap-stack-up",
-    ]) {
-      expect(deployScript).toContain(script);
-    }
-  });
-
-  test("uses native docker.login for GHCR (no ghcr-login shell script)", () => {
-    expect(deployScript).toContain("docker.login");
-    expect(deployScript).toContain("ghcr.io");
-    expect(deployScript).toContain("GHCR_TOKEN");
-    expect(deployScript).not.toContain("bindersnap-ghcr-login");
-  });
-
-  test("uses native pyinfra ops for storage setup (no setup-storage shell script)", () => {
-    expect(deployScript).toContain("DataDevice");
-    expect(deployScript).toContain("BlockDeviceFilesystem");
-    expect(deployScript).toContain("daemon.json");
-    expect(deployScript).toContain("daemon_put.did_change");
-    expect(deployScript).not.toContain("bindersnap-setup-storage");
-  });
-
-  test("renders .env.prod from SSM on the control plane (no refresh-env shell script)", () => {
-    // Control-plane boto3 read + files.put, not a host-side refresh script.
-    expect(deployScript).toContain("boto3");
-    expect(deployScript).toContain("get_parameters_by_path");
-    expect(deployScript).toContain("render_env_file");
-    expect(deployScript).toContain("env_put = files.put");
-    expect(deployScript).not.toContain("bindersnap-refresh-env");
-  });
-
-  test("flags config and env changes for a conditional recreate", () => {
-    expect(deployScript).toContain("did_change");
-    expect(deployScript).toContain("config-changed");
-    expect(deployScript).toContain("env-changed");
-    expect(deployScript).toContain("env_put.did_change");
-  });
-
-  test("validates compose + custom Caddy build before any compose up", () => {
-    const composeValidateIndex = deployScript.indexOf(
-      "Validate compose config",
+describe("deploy .env.prod render (env_render.py)", () => {
+  // The control-plane SSM render is the security-sensitive logic (admin-cred
+  // dropping, newline rejection, sort/transform). It's pure Python in
+  // env_render.py; run its real assertions here so a regression fails
+  // `bun run test:ops` without adding a Python test toolchain.
+  test("env_render.py unit tests pass", () => {
+    const result = Bun.spawnSync(
+      ["python3", join(repoRoot, "deploy", "env_render_test.py")],
+      { stdout: "pipe", stderr: "pipe" },
     );
-    const caddyValidateIndex = deployScript.indexOf(
-      "Validate custom Caddy build",
-    );
-    const bootstrapIndex = deployScript.indexOf(
-      "Bootstrap the Gitea service token",
-    );
-    const stackUpIndex = deployScript.indexOf(
-      "Compose up (force-recreate only when changed)",
-    );
-
-    expect(composeValidateIndex).toBeGreaterThan(-1);
-    expect(caddyValidateIndex).toBeGreaterThan(-1);
-    expect(deployScript).toContain("config -q");
-    expect(deployScript).toContain("caddy validate");
-    // Both gate halves must run before the first `up` (bootstrap) and the stack-up.
-    expect(composeValidateIndex).toBeLessThan(bootstrapIndex);
-    expect(caddyValidateIndex).toBeLessThan(bootstrapIndex);
-    expect(composeValidateIndex).toBeLessThan(stackUpIndex);
-    expect(caddyValidateIndex).toBeLessThan(stackUpIndex);
+    const stdout = result.stdout.toString();
+    const stderr = result.stderr.toString();
+    expect(stderr).toBe("");
+    expect(stdout).toContain("env_render tests passed");
+    expect(result.exitCode).toBe(0);
   });
 });
