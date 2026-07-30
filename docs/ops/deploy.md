@@ -4,7 +4,7 @@ Production now has three deploy surfaces:
 
 1. [`../../.github/workflows/pages.yml`](../../.github/workflows/pages.yml) publishes the unified SPA to GitHub Pages at `https://bindersnap.com`.
 2. [`../../.github/workflows/deploy-config.yml`](../../.github/workflows/deploy-config.yml) publishes the runtime config bundle to `s3://${BINDERSNAP_CONFIG_BUCKET}/` and applies it on the EC2 host over AWS OIDC + SSM.
-3. [`../../.github/workflows/deploy.yml`](../../.github/workflows/deploy.yml) builds and deploys the API image over AWS OIDC + SSM.
+3. [`../../.github/workflows/deploy-pyinfra.yml`](../../.github/workflows/deploy-pyinfra.yml) drives the full production host with pyinfra over an SSH-through-SSM tunnel on every push to `main`. See [`../../deploy/README.md`](../../deploy/README.md).
 
 Both production host workflows assume the AWS role provisioned by [`../../infra/ci/oidc.tf`](../../infra/ci/oidc.tf).
 
@@ -51,21 +51,32 @@ On pushes to `main` that touch any of those files, the workflow:
 
 The workflow also supports manual `workflow_dispatch`. Leave `publish_from_repo=true` for a normal re-apply, or set `publish_from_repo=false` to apply whatever object versions are already in S3 without overwriting them from the current repo state.
 
-## API Deploy Workflow
+## pyinfra Deploy Workflow
 
-The API workflow keeps the AWS-backed deploy path for `services/api`.
+`deploy-pyinfra.yml` replaces the old SSM `send-command` deploy (`deploy.yml`,
+removed in Phase 3, [#305](https://github.com/davidgraymi/bindersnap-editor-demo/issues/305)).
 
-What it does:
+What it does on every push to `main`:
 
 1. runs the API and ops unit suites
-2. builds and publishes `ghcr.io/davidgraymi/bindersnap-api:${GITHUB_SHA}`
-3. on tag pushes or manual dispatch, uses SSM Run Command to:
-   - update `API_TAG` in `/opt/bindersnap/.env.prod`
-   - pull the pinned API image
-   - restart the API with `docker-compose.prod.yml`
-   - print container status back into the workflow logs
+2. installs Python + the `deploy/requirements.txt` toolchain + the Session Manager plugin
+3. assumes the production deploy role over GitHub OIDC
+4. runs `deploy/bin/ssm-connect.sh`, which resolves the tagged host, pushes an
+   ephemeral EC2 Instance Connect key, tunnels SSH through `aws ssm start-session`,
+   and runs `pyinfra deploy/inventory.py deploy/deploy.py`
 
-The workflow does not use SSH and does not require long-lived AWS keys in GitHub.
+`deploy.py` is idempotent: it installs Docker, mounts the EBS data volume,
+uploads the `deploy/files/` runtime config, renders `.env.prod` from SSM
+Parameter Store (read on the control plane), validates the compose + Caddy config,
+and brings the stack up — force-recreating only when config or secrets changed.
+
+Trigger a manual dry run with `workflow_dispatch` and `dry_run=true` (passes
+`--dry` to pyinfra: it reports changes without applying them). The connection
+uses no inbound port 22 and no long-lived AWS keys.
+
+> The S3 config-as-code path (`deploy-config.yml`, `infra/config-bucket/`) is
+> retired separately in Phase 4 ([#306](https://github.com/davidgraymi/bindersnap-editor-demo/issues/306));
+> its sections below remain accurate until then.
 
 ## GitHub Configuration
 
@@ -126,16 +137,13 @@ or the production API deploy path.
 
 ## Rollback
 
-The rollback path is a manual run of the API deploy workflow:
+The pyinfra deploy always applies the stack as defined at the deployed commit,
+so the primary rollback path is to revert in git: revert the offending commit on
+`main` (or run `deploy-pyinfra.yml` via `workflow_dispatch` selecting an earlier
+ref) and let the resulting deploy re-apply the known-good stack.
 
-1. Open the `Deploy Production` workflow in GitHub Actions.
-2. Choose `Run workflow`.
-3. Set `api_tag` to a previously published commit SHA.
-4. Run the workflow.
-
-That dispatch updates `API_TAG` in `/opt/bindersnap/.env.prod`, pulls the older image, and restarts only the API service.
-
-If GitHub Actions is unavailable, the manual fallback on the instance is:
+If GitHub Actions is unavailable, the manual fallback on the instance pins the
+API image directly:
 
 ```bash
 cd /opt/bindersnap
@@ -188,7 +196,7 @@ After the copy completes:
 - `dist/404.html` matches `dist/index.html` so deep links load the SPA shell.
 - A push to `main` touching a tracked runtime config file triggers `Deploy Production Config`, publishes to `s3://${BINDERSNAP_CONFIG_BUCKET}/`, and waits for `bindersnap config sync && bindersnap stack validate && bindersnap stack restart` to succeed on the host.
 - Setting `publish_from_repo=false` on `Deploy Production Config` reapplies the existing S3 object versions instead of overwriting them from the current checkout.
-- A forced test failure prevents the API deploy job from running.
-- The API workflow log prints SSM stdout and stderr from the remote deploy command.
-- A manual `api_tag` rollback returns the API to the selected SHA.
+- A forced test failure prevents the pyinfra deploy job from running.
+- `deploy-pyinfra.yml` with `dry_run=true` reports pyinfra changes without applying them.
+- Reverting a commit on `main` re-applies the prior known-good stack via pyinfra.
 - The integration suite includes `tests/stripe-webhook-caddy.pw.ts`, which posts a signed event through the local Caddy proxy and expects `{"received":true}`.

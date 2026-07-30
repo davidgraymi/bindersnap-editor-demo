@@ -6,10 +6,11 @@ flow (manual SSH, `infra/compute/user-data.sh.tftpl` bootstrap, and the S3
 config bucket). See epic
 [#302](https://github.com/davidgraymi/bindersnap-editor-demo/issues/302).
 
-> **Status:** Phase 2 — `deploy.py` performs the full host configuration and the
-> runtime config now lives in `deploy/files/`. The GitHub Actions workflow that
-> runs this on every push to `main` arrives in Phase 3
-> ([#305](https://github.com/davidgraymi/bindersnap-editor-demo/issues/305)).
+> **Status:** Phase 3 — `.github/workflows/deploy-pyinfra.yml` runs this deploy
+> on every push to `main` (OIDC into the deploy role, SSH-over-SSM tunnel). The
+> old SSM `send-command` workflow (`deploy.yml`) is removed. The S3 config-as-code
+> path (`deploy-config.yml`, `infra/config-bucket/`) is retired separately in
+> Phase 4 ([#306](https://github.com/davidgraymi/bindersnap-editor-demo/issues/306)).
 
 ## How it connects
 
@@ -63,10 +64,11 @@ stack, and a re-run changes nothing unless config or secrets actually changed:
   - `ec2-instance-connect:SendSSHPublicKey`
   - `ssm:StartSession` on the `AWS-StartSSHSession` document and the instance
 
-> The OIDC deploy role does **not** yet grant `StartSession` /
-> `SendSSHPublicKey` — those IAM additions land with the CI workflow in Phase 3
-> ([#305](https://github.com/davidgraymi/bindersnap-editor-demo/issues/305)).
-> Until then, run locally with a profile that has them.
+> The OIDC deploy role grants these as of Phase 3 (`infra/ci/oidc.tf`):
+> `ssm:StartSession` on the `AWS-StartSSHSession` document + the tagged instance,
+> `ec2:DescribeInstances`, `ec2-instance-connect:SendSSHPublicKey`, plus the
+> control-plane `ssm:GetParametersByPath` + `kms:Decrypt` needed to render
+> `.env.prod`. Apply `infra/ci` after upgrading so CI can assume the widened role.
 
 ## Usage
 
