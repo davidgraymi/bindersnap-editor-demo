@@ -8,6 +8,10 @@ Production now has three deploy surfaces:
 
 Both production host workflows assume the AWS role provisioned by [`../../infra/ci/oidc.tf`](../../infra/ci/oidc.tf).
 
+> **Deploy failing or a bad change shipped?** See the break-glass runbook:
+> [`break-glass.md`](break-glass.md) — recover the host directly over SSM without
+> the CI pipeline.
+
 ## GitHub Pages SPA
 
 Pushes to `main` build `apps/app/index.html` directly into `dist/`, then the workflow:
