@@ -11,7 +11,9 @@ here for the live render; the unit tests import it in isolation.
 BOOTSTRAP_TOKEN_PLACEHOLDER = "BOOTSTRAP_WITH_scripts/bootstrap-gitea-service-account.ts"
 
 
-def build_env_content(parameters: list[dict], parameter_path: str) -> str:
+def build_env_content(
+    parameters: list[dict], parameter_path: str, api_tag: str | None = None
+) -> str:
     """Render Docker `.env.prod` content from raw SSM parameters.
 
     Faithful port of the transform the old host-side refresh-env script
@@ -20,6 +22,14 @@ def build_env_content(parameters: list[dict], parameter_path: str) -> str:
     service token is a real value (no longer the bootstrap placeholder). Values
     containing newlines are rejected — they cannot be expressed in a Docker env
     file.
+
+    ``api_tag`` is the immutable API image tag the deploy wants to pin (issue
+    #313 — the commit SHA in CI, so ``docker-compose.prod.yml`` runs
+    ``bindersnap-api:<sha>`` instead of mutable ``:latest``). It is emitted as
+    an ``API_TAG`` line **only when SSM does not already carry an ``api_tag``
+    leaf**: a manually-set ``/bindersnap/prod/api_tag`` is the break-glass
+    permanent-pin / rollback lever (see ``docs/ops/break-glass.md``) and must
+    win over the per-deploy default so a pinned rollback survives redeploys.
     """
     prefix = parameter_path.rstrip("/")
     items = sorted(parameters, key=lambda item: item["Name"])
@@ -33,6 +43,7 @@ def build_env_content(parameters: list[dict], parameter_path: str) -> str:
             break
 
     lines = []
+    has_ssm_api_tag = False
     for item in items:
         name = item["Name"]
         if not name.startswith(prefix + "/"):
@@ -43,6 +54,8 @@ def build_env_content(parameters: list[dict], parameter_path: str) -> str:
                 f"{name} contains a newline and cannot be written to a Docker env file"
             )
         env_name = name.rsplit("/", 1)[-1].replace("-", "_").upper()
+        if env_name == "API_TAG":
+            has_ssm_api_tag = True
         if (
             token_value
             and token_value != BOOTSTRAP_TOKEN_PLACEHOLDER
@@ -50,5 +63,12 @@ def build_env_content(parameters: list[dict], parameter_path: str) -> str:
         ):
             continue
         lines.append(f"{env_name}={value}")
+
+    # Pin the per-deploy image tag unless SSM already pins one (the break-glass
+    # override). "\n" in a tag can't be expressed in a Docker env file.
+    if api_tag and not has_ssm_api_tag:
+        if "\n" in api_tag:
+            raise SystemExit("api_tag contains a newline and cannot be pinned")
+        lines.append(f"API_TAG={api_tag}")
 
     return "\n".join(lines) + "\n"

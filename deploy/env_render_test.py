@@ -106,6 +106,46 @@ def test_values_with_special_chars_pass_through_verbatim():
     assert content == "DB_URL=postgres://u:p@h:5432/db?x=1\n", repr(content)
 
 
+def test_pins_api_tag_when_provided_and_absent_from_ssm():
+    # The per-deploy image pin (issue #313): CI passes the commit SHA and it
+    # lands as an API_TAG line so compose runs the immutable tag, not :latest.
+    content = build_env_content(
+        [_param("gitea_service_token", "real-token")],
+        PATH,
+        api_tag="abc123",
+    )
+    lines = content.splitlines()
+    assert "API_TAG=abc123" in lines, content
+
+
+def test_ssm_api_tag_overrides_the_per_deploy_pin():
+    # A manually-set /bindersnap/prod/api_tag is the break-glass rollback lever;
+    # it must win over the per-deploy default and appear exactly once.
+    content = build_env_content(
+        [_param("api_tag", "good-sha"), _param("gitea_service_token", "real-token")],
+        PATH,
+        api_tag="head-sha",
+    )
+    lines = content.splitlines()
+    assert "API_TAG=good-sha" in lines, content
+    assert "API_TAG=head-sha" not in lines, content
+    assert sum(1 for line in lines if line.startswith("API_TAG=")) == 1, content
+
+
+def test_no_api_tag_line_when_none_provided():
+    content = build_env_content([_param("gitea_service_token", "real-token")], PATH)
+    assert "API_TAG=" not in content, content
+
+
+def test_rejects_api_tag_with_newline():
+    try:
+        build_env_content([_param("some_key", "v")], PATH, api_tag="a\nb")
+    except SystemExit as exc:
+        assert "newline" in str(exc), exc
+    else:
+        raise AssertionError("expected SystemExit for an api_tag containing a newline")
+
+
 def main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for test in tests:

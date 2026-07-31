@@ -70,6 +70,9 @@ services:
       start_period: 30s
 
   api:
+    # API_TAG is pinned to the deployed commit's SHA by the pyinfra deploy
+    # (issue #313); it renders into .env.prod. `:latest` is only the fallback
+    # for a host that predates the pin or a manual `docker compose` invocation.
     image: ghcr.io/davidgraymi/bindersnap-api:${API_TAG:-latest}
     container_name: bindersnap-api-prod
     restart: unless-stopped

@@ -20,11 +20,16 @@ on:
         required: false
         default: false
         type: boolean
+      api_tag:
+        description: "Roll back: deploy this pre-built API image tag (a commit SHA) instead of this commit's. Skips the build; the image must already exist in GHCR."
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
   id-token: write # OIDC federation into the deploy role
-  packages: read # pull the private API image from GHCR during compose up
+  packages: write # build.yml pushes the pinned API image; deploy pulls it during compose up
 
 concurrency:
   group: deploy-production
@@ -67,13 +72,38 @@ jobs:
       - name: Run API and ops test suite
         run: bun run test:ops
 
+  # Build (and push) the API image for the exact commit being deployed so the
+  # pinned `bindersnap-api:<sha>` tag is guaranteed present before the deploy
+  # pulls it (issue #313). This removes the race with release.yml/build-api.yml:
+  # the deploy no longer depends on a mutable `:latest` that some other workflow
+  # may not have pushed yet. Skipped on a rollback dispatch (api_tag set), where
+  # the target image already exists in GHCR.
+  build:
+    name: Build API Image
+    needs:
+      - test
+    if: ${{ github.event.inputs.api_tag == '' }}
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build-api.yml
+    with:
+      ref: ${{ github.sha }}
+      sha: ${{ github.sha }}
+
   deploy:
     name: Deploy
     runs-on: ubuntu-24.04
     needs:
       - test
+      - build
+    # build is skipped on a rollback dispatch; still deploy as long as nothing
+    # actually failed and the test gate passed.
+    if: >-
+      ${{ always()
+        && needs.test.result == 'success'
+        && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
     timeout-minutes: 30
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -132,6 +162,11 @@ jobs:
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+          # Pin the API image to an immutable tag (issue #313). Normal deploys
+          # pin this commit's SHA (built by the build job above); a rollback
+          # dispatch pins the operator-supplied api_tag instead. deploy.py emits
+          # this as the API_TAG line in .env.prod unless SSM already overrides it.
+          BINDERSNAP_API_TAG: ${{ github.event.inputs.api_tag != '' && github.event.inputs.api_tag || github.sha }}
         run: |
           set -euo pipefail
 

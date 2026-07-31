@@ -76,6 +76,12 @@ DATA_MOUNT = "/data"
 SSM_PARAMETER_PATH = os.environ.get("BINDERSNAP_SSM_PARAMETER_PATH", "/bindersnap/prod")
 AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
 
+# Immutable API image tag to pin this deploy to (issue #313). CI passes the
+# commit SHA so the stack runs `bindersnap-api:<sha>` deterministically instead
+# of mutable `:latest`; empty means fall back to the compose default (`:latest`)
+# or an `api_tag` override already in SSM.
+API_TAG = os.environ.get("BINDERSNAP_API_TAG", "").strip() or None
+
 # BOOTSTRAP_TOKEN_PLACEHOLDER and the `.env.prod` render live in env_render.py
 # (imported above) so they carry no import-time side effects and can be unit
 # tested in isolation.
@@ -128,7 +134,7 @@ def render_env_file() -> str:
         WithDecryption=True,
     ):
         parameters.extend(page.get("Parameters", []))
-    return build_env_content(parameters, SSM_PARAMETER_PATH)
+    return build_env_content(parameters, SSM_PARAMETER_PATH, api_tag=API_TAG)
 
 
 # ---------- Custom facts ----------
