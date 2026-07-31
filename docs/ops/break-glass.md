@@ -77,7 +77,8 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml ps api
 ## 4. Make the rollback survive the next deploy
 
 `.env.prod` is rendered from the SSM tree, and `env_render.py` emits an
-`API_TAG` line for any `api_tag` leaf it finds. Set one:
+`API_TAG` line for any `api_tag` leaf it finds. An SSM `api_tag` **overrides**
+the per-deploy SHA pin, so it survives every subsequent push. Set one:
 
 ```bash
 aws ssm put-parameter \
@@ -90,7 +91,13 @@ aws ssm put-parameter \
 Now every deploy pins that SHA until you change or delete the parameter. This is
 "shadow" config (not tracked in `infra/secrets`) — for a permanent pin, add
 `api_tag` to `infra/secrets/main.tf`; to un-pin, `aws ssm delete-parameter
---name /bindersnap/prod/api_tag` (reverts to `:latest`).
+--name /bindersnap/prod/api_tag` (reverts to the normal per-deploy pin: the
+deployed commit's `:<sha>`).
+
+> For a **one-off** rollback that does _not_ need to survive future pushes,
+> prefer the normal deploy path instead of an SSM edit: run the
+> `Deploy Production (pyinfra)` workflow with the `api_tag` input set to the
+> last-good SHA (see `deploy/README.md` → "API image pinning & rollback").
 
 ## 5. Roll back the config / full stack definition
 

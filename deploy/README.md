@@ -49,7 +49,11 @@ stack, and a re-run changes nothing unless config or secrets actually changed:
 3. upload `files/` config and the `files/bin/` helper scripts to the host;
 4. render `/opt/bindersnap/.env.prod` (`0600`) from SSM Parameter Store — the
    SSM read happens on the control plane (boto3) and the file is uploaded with
-   `files.put`, so pyinfra's change detection drives the recreate decision;
+   `files.put`, so pyinfra's change detection drives the recreate decision. The
+   render also pins the API image tag: `BINDERSNAP_API_TAG` (the deployed
+   commit's SHA in CI) becomes the `API_TAG` line so compose runs the immutable
+   `bindersnap-api:<sha>` instead of mutable `:latest` — unless SSM already
+   carries an `api_tag` override (the break-glass permanent pin), which wins;
 5. log in to GHCR (if a token is present) and bootstrap the Gitea service token
    on first run;
 6. `docker compose up -d`, force-recreating **only** when this run changed the
@@ -87,7 +91,22 @@ deploy/bin/ssm-connect.sh --dry
 
 Override defaults with env vars: `AWS_REGION`, `BINDERSNAP_INSTANCE_ID`
 (skip tag lookup), `BINDERSNAP_SSH_USER`, `BINDERSNAP_INSTANCE_TAG_KEY`,
-`BINDERSNAP_INSTANCE_TAG_VALUE`.
+`BINDERSNAP_INSTANCE_TAG_VALUE`, `BINDERSNAP_API_TAG` (pin a specific API image
+tag; defaults to `:latest` for a local run with no tag).
+
+## API image pinning & rollback
+
+Every push to `main` builds and pushes `ghcr.io/davidgraymi/bindersnap-api:<sha>`
+(the `build` job in `deploy-pyinfra.yml`, before the deploy pulls it) and pins
+the running API to that immutable SHA — no dependency on mutable `:latest`, and
+no race with `release.yml`/`build-api.yml`.
+
+To **roll back** to a previous API build through the normal deploy path, run the
+`Deploy Production (pyinfra)` workflow via **Run workflow** (`workflow_dispatch`)
+and set the `api_tag` input to the last-good commit SHA. That deploy skips the
+build (the image already exists in GHCR) and pins `API_TAG=<sha>`. For a pin
+that must survive every subsequent push (not just one deploy), set the SSM
+`api_tag` override instead — see `docs/ops/break-glass.md` step 4.
 
 ## Security notes
 
