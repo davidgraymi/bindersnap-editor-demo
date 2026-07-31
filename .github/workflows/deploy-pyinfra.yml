@@ -29,7 +29,7 @@ on:
 permissions:
   contents: read
   id-token: write # OIDC federation into the deploy role
-  packages: write # build.yml pushes the pinned API image; deploy pulls it during compose up
+  packages: read # deploy pulls the private API image; only the build job needs write (set on that job)
 
 concurrency:
   group: deploy-production
