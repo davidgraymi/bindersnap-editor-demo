@@ -1,0 +1,144 @@
+name: Deploy Production (pyinfra)
+
+# Phase 3 of the serverless→EC2 migration (epic #302, issue #305). Every push to
+# main drives the production host with pyinfra over an SSH-tunnelled-through-SSM
+# transport. This replaces the retired deploy.yml / deploy-config.yml pair, which
+# shelled `docker compose` out via SSM `send-command` and synced config from S3.
+#
+# The connection model lives in deploy/README.md and deploy/bin/ssm-connect.sh:
+# resolve the instance by tag, push an ephemeral EC2 Instance Connect key, tunnel
+# SSH through `aws ssm start-session`, then run `pyinfra inventory.py deploy.py`.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run pyinfra in --dry mode (report changes, apply nothing)"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  id-token: write # OIDC federation into the deploy role
+  packages: read # pull the private API image from GHCR during compose up
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION != '' && vars.AWS_REGION || 'us-east-1' }}
+  DEPLOY_ROLE_ARN: ${{ vars.BINDERSNAP_DEPLOY_ROLE_ARN }}
+  # ssm-connect.sh resolves the target host from these tag env vars (default
+  # Project=bindersnap). Kept aligned with the retired deploy workflows' vars.
+  BINDERSNAP_INSTANCE_TAG_KEY: ${{ vars.BINDERSNAP_DEPLOY_TARGET_TAG_KEY != '' && vars.BINDERSNAP_DEPLOY_TARGET_TAG_KEY || 'Project' }}
+  BINDERSNAP_INSTANCE_TAG_VALUE: ${{ vars.BINDERSNAP_DEPLOY_TARGET_TAG_VALUE != '' && vars.BINDERSNAP_DEPLOY_TARGET_TAG_VALUE || 'bindersnap' }}
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: ".bun-version"
+
+      - name: Restore Bun cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('.bun-version') }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-${{ hashFiles('.bun-version') }}-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run API and ops test suite
+        run: bun run test:ops
+
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-24.04
+    needs:
+      - test
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate deploy configuration
+        run: |
+          set -euo pipefail
+
+          missing=0
+          for var_name in DEPLOY_ROLE_ARN AWS_REGION BINDERSNAP_INSTANCE_TAG_KEY BINDERSNAP_INSTANCE_TAG_VALUE; do
+            value="${!var_name:-}"
+            if [ -z "${value}" ]; then
+              echo "::error title=Missing workflow configuration::${var_name} is not set"
+              missing=1
+            fi
+          done
+
+          if [ "${missing}" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pyinfra toolchain
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install -r deploy/requirements.txt
+
+      - name: Install the Session Manager plugin
+        run: |
+          set -euo pipefail
+          curl -fsSL \
+            "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" \
+            -o /tmp/session-manager-plugin.deb
+          sudo dpkg -i /tmp/session-manager-plugin.deb
+          session-manager-plugin --version
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ env.DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          # Prefix must stay aligned with the deploy role name: SSM session IDs
+          # inherit the role-session-name, and the role's TerminateSession policy
+          # scopes to session/bindersnap-deploy-*.
+          role-session-name: bindersnap-deploy-${{ github.run_id }}
+
+      - name: Deploy with pyinfra
+        env:
+          # deploy.py logs in to GHCR on the control plane so the host can pull
+          # the private API image; skipped automatically when GHCR_TOKEN is empty.
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: |
+          set -euo pipefail
+
+          args=()
+          if [ "${DRY_RUN}" = "true" ]; then
+            args+=(--dry)
+            echo "Running pyinfra in dry-run mode (no changes will be applied)"
+          fi
+
+          deploy/bin/ssm-connect.sh "${args[@]}"

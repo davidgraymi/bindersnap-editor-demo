@@ -54,7 +54,7 @@ bindersnap-editor-demo/
 │
 ├── server.ts                       ← Bun dev/prod server (serves the SPA)
 ├── docs/                           ← Brand assets and ADRs
-├── .github/workflows/              ← CI/CD pipelines (pages.yml, deploy.yml)
+├── .github/workflows/              ← CI/CD pipelines (pages.yml, deploy-pyinfra.yml)
 ├── .claude/                        ← Claude agent definitions
 ├── AGENTS.md                       ← This file
 ├── docker-compose.yml              ← Local dev stack (Gitea + Hocuspocus + app)
@@ -122,12 +122,12 @@ See `tests/README.md` for full usage.
 
 ### Deployment
 
-| Component  | Host           | How deployed                         |
-| ---------- | -------------- | ------------------------------------ |
-| SPA        | GitHub Pages   | `pages.yml` on push to `main`        |
-| API        | EC2 via Docker | `deploy.yml` via AWS SSM on tag push |
-| Gitea      | Same EC2 host  | `docker-compose.prod.yml`            |
-| Hocuspocus | Same EC2 host  | `docker-compose.prod.yml`            |
+| Component  | Host           | How deployed                                                          |
+| ---------- | -------------- | --------------------------------------------------------------------- |
+| SPA        | GitHub Pages   | `pages.yml` on push to `main`                                         |
+| API        | EC2 via Docker | `deploy-pyinfra.yml` (pyinfra over SSH-through-SSM) on push to `main` |
+| Gitea      | Same EC2 host  | `docker-compose.prod.yml`                                             |
+| Hocuspocus | Same EC2 host  | `docker-compose.prod.yml`                                             |
 
 The SPA is built with `BUN_PUBLIC_API_BASE_URL=https://api.bindersnap.com`
 baked in at compile time. Locally, this is `http://localhost:8787`.

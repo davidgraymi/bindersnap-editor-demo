@@ -57,6 +57,30 @@ variable "ssm_document_name" {
   default     = "AWS-RunShellScript"
 }
 
+variable "ssh_session_document_name" {
+  description = "SSM document the pyinfra deploy tunnels SSH through (deploy/bin/ssm-connect.sh)"
+  type        = string
+  default     = "AWS-StartSSHSession"
+}
+
+variable "ssh_os_user" {
+  description = "OS user the deploy pushes an ephemeral EC2 Instance Connect key for"
+  type        = string
+  default     = "ec2-user"
+}
+
+variable "ssm_parameter_path" {
+  description = "SSM Parameter Store prefix deploy.py reads on the control plane to render .env.prod. Must match infra/secrets ssm_parameter_path."
+  type        = string
+  default     = "/bindersnap/prod"
+}
+
+variable "ssm_kms_key_alias" {
+  description = "Alias of the KMS key encrypting the production SSM parameters. Must match infra/secrets aws_kms_alias.ssm."
+  type        = string
+  default     = "alias/bindersnap-prod-ssm"
+}
+
 variable "instance_tag_key" {
   description = "Tag key used to target the production instance over SSM"
   type        = string
@@ -91,7 +115,20 @@ data "aws_caller_identity" "current" {}
 
 data "aws_partition" "current" {}
 
+# The pyinfra deploy renders .env.prod on the control plane by reading the
+# production SSM parameters, which are SecureStrings encrypted with this key
+# (provisioned in infra/secrets). Resolve it by alias so the two modules stay
+# decoupled — no cross-module remote state wiring needed.
+data "aws_kms_alias" "ssm" {
+  name = var.ssm_kms_key_alias
+}
+
 locals {
+  ssm_parameter_path = trimsuffix(var.ssm_parameter_path, "/")
+
+  ssm_parameter_arn_base   = "arn:${data.aws_partition.current.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${local.ssm_parameter_path}"
+  ssm_parameter_arn_prefix = "${local.ssm_parameter_arn_base}/*"
+
   github_subs = [
     "repo:${var.github_owner}/${var.github_repository}:ref:refs/heads/${var.github_branch}",
     "repo:${var.github_owner}/${var.github_repository}:ref:refs/tags/*",
@@ -196,6 +233,122 @@ data "aws_iam_policy_document" "deploy" {
     ]
 
     resources = ["*"]
+  }
+
+  # ---------- deploy-pyinfra.yml: SSH-over-SSM tunnel + control-plane env render ----------
+
+  statement {
+    # DescribeInstances resolves the target host by tag and reads its AZ for the
+    # EC2 Instance Connect push. It does not support resource-level scoping.
+    sid    = "ResolveDeployTarget"
+    effect = "Allow"
+
+    actions = [
+      "ec2:DescribeInstances",
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    # Push the ~60s ephemeral SSH key onto the tagged host for the deploy user.
+    sid    = "PushEphemeralSshKey"
+    effect = "Allow"
+
+    actions = [
+      "ec2-instance-connect:SendSSHPublicKey",
+    ]
+
+    resources = [
+      "arn:${data.aws_partition.current.partition}:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*",
+    ]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:ResourceTag/${var.instance_tag_key}"
+      values   = [var.instance_tag_value]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "ec2:osuser"
+      values   = [var.ssh_os_user]
+    }
+  }
+
+  statement {
+    # Open the SSH-over-SSM tunnel via the AWS-StartSSHSession document against
+    # the tagged host. AWS-managed documents carry no account ID in their ARN.
+    sid    = "StartSshTunnelSession"
+    effect = "Allow"
+
+    actions = [
+      "ssm:StartSession",
+    ]
+
+    resources = [
+      "arn:${data.aws_partition.current.partition}:ssm:${var.aws_region}::document/${var.ssh_session_document_name}",
+      "arn:${data.aws_partition.current.partition}:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*",
+    ]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:ResourceTag/${var.instance_tag_key}"
+      values   = [var.instance_tag_value]
+    }
+  }
+
+  statement {
+    # The session-manager-plugin tears the tunnel down on exit; scope termination
+    # to sessions this role opened.
+    sid    = "TerminateOwnSshSession"
+    effect = "Allow"
+
+    actions = [
+      "ssm:TerminateSession",
+      "ssm:ResumeSession",
+    ]
+
+    resources = [
+      "arn:${data.aws_partition.current.partition}:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:session/${var.deploy_role_name}-*",
+    ]
+  }
+
+  statement {
+    # deploy.py reads the production parameter tree on the control plane (boto3)
+    # to render .env.prod, then uploads it to the host at 0600.
+    sid    = "ReadProdParameters"
+    effect = "Allow"
+
+    actions = [
+      "ssm:GetParametersByPath",
+    ]
+
+    resources = [
+      local.ssm_parameter_arn_base,
+      local.ssm_parameter_arn_prefix,
+    ]
+  }
+
+  statement {
+    # Decrypt the SecureString parameters read above, scoped to SSM-mediated use.
+    sid    = "DecryptProdParameters"
+    effect = "Allow"
+
+    actions = [
+      "kms:Decrypt",
+      "kms:DescribeKey",
+    ]
+
+    resources = [
+      data.aws_kms_alias.ssm.target_key_arn,
+    ]
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["ssm.${var.aws_region}.amazonaws.com"]
+    }
   }
 
   statement {
