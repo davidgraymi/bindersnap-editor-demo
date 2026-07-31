@@ -473,29 +473,17 @@ When generating new pages, components, or templates:
 
 ## GitHub Agent Workflow Policy
 
-This repository uses a strict MCP-first workflow for all GitHub API actions.
-Agents must follow this policy exactly.
+This repository uses either `gh` CLI or an MCP tool.
 
 ### Tool mapping
 
 - Read: `issue_read`, `pull_request_read`, `list_issues`, `list_pull_requests`
 - Write: `create_branch`, `create_or_update_file`, `create_pull_request`, `update_pull_request`, `add_issue_comment`, `pull_request_review_write`
 
-Every PR must include workflow evidence (issue read method, branch creation method, commit SHA, PR creation method, any fallbacks used).
-
-### Allowed fallback
-
-`gh` CLI is fallback-only. Use it only if:
-
-- The required MCP tool is unavailable, or
-- The MCP call fails for a non-user-actionable reason
-
-When fallback is used, document the MCP tool name, the exact failure message, and the `gh` command used as fallback.
-
 ### Git ownership split
 
 - Use local `git` for working tree operations (edit, stage, commit, diff)
-- Use MCP for GitHub API operations (issue, branch, PR, comments, reviews)
+- Use `gh` or MCP for GitHub API operations (issue, branch, PR, comments, reviews)
 
 ---
 
