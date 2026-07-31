@@ -139,6 +139,11 @@ jobs:
           if [ "${DRY_RUN}" = "true" ]; then
             args+=(--dry)
             echo "Running pyinfra in dry-run mode (no changes will be applied)"
+          else
+            # CI has no TTY: auto-approve so pyinfra doesn't block on its
+            # "Press enter to execute..." confirmation prompt (EOFError). Kept
+            # out of ssm-connect.sh so local operator runs still confirm.
+            args+=(-y)
           fi
 
           deploy/bin/ssm-connect.sh "${args[@]}"
