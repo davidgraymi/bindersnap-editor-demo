@@ -276,10 +276,14 @@ data "aws_iam_policy_document" "deploy" {
     }
   }
 
+  # StartSession authorizes the target instance and the session document
+  # separately, so they must be split across two statements: the instance is
+  # tag-scoped, but the AWS-managed document carries no tags — folding both under
+  # the tag condition makes the condition fail for the document and denies the
+  # whole StartSession call (the tunnel then fails with "No existing session").
   statement {
-    # Open the SSH-over-SSM tunnel via the AWS-StartSSHSession document against
-    # the tagged host. AWS-managed documents carry no account ID in their ARN.
-    sid    = "StartSshTunnelSession"
+    # Open the SSH-over-SSM tunnel against the tagged host.
+    sid    = "StartSshTunnelSessionOnInstance"
     effect = "Allow"
 
     actions = [
@@ -287,7 +291,6 @@ data "aws_iam_policy_document" "deploy" {
     ]
 
     resources = [
-      "arn:${data.aws_partition.current.partition}:ssm:${var.aws_region}::document/${var.ssh_session_document_name}",
       "arn:${data.aws_partition.current.partition}:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*",
     ]
 
@@ -296,6 +299,22 @@ data "aws_iam_policy_document" "deploy" {
       variable = "aws:ResourceTag/${var.instance_tag_key}"
       values   = [var.instance_tag_value]
     }
+  }
+
+  statement {
+    # Allow the AWS-StartSSHSession document itself. AWS-managed documents carry
+    # no account ID in their ARN and no tags, so this statement is unconditioned;
+    # the instance scoping above is what constrains which host can be reached.
+    sid    = "StartSshTunnelSessionDocument"
+    effect = "Allow"
+
+    actions = [
+      "ssm:StartSession",
+    ]
+
+    resources = [
+      "arn:${data.aws_partition.current.partition}:ssm:${var.aws_region}::document/${var.ssh_session_document_name}",
+    ]
   }
 
   statement {
