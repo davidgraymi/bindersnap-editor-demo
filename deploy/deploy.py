@@ -20,6 +20,9 @@ Pipeline (top to bottom — pyinfra runs operations in definition order):
      the Gitea service token on first run
   9. `docker compose up -d`, force-recreating only when this run changed env or
      config
+ 10. install + configure the CloudWatch agent (disk/memory metrics for the
+     monitoring module's alarms — moved here from the Terraform user-data in
+     phase 4, issue #306)
 
 Secrets never touch the repo: they live in SSM and land in `.env.prod` (0600)
 on the host at deploy time. The connection itself is SSH-over-SSM (see
@@ -460,4 +463,31 @@ server.shell(
 server.shell(
     name="Compose up (force-recreate only when changed)",
     commands=[f"{BIN_DIR}/bindersnap-stack-up"],
+)
+
+# ---------- 11. CloudWatch agent (disk + memory metrics) ----------
+
+# The monitoring module's disk/memory alarms read the Bindersnap namespace this
+# agent publishes. Host configuration is owned here, not by Terraform user-data.
+CLOUDWATCH_AGENT_CONFIG = "/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json"
+
+dnf.packages(
+    name="Install the CloudWatch agent",
+    packages=["amazon-cloudwatch-agent"],
+)
+
+cloudwatch_config_put = files.put(
+    name="Upload CloudWatch agent config",
+    src=os.path.join(_FILES, "cloudwatch-agent-config.json"),
+    dest=CLOUDWATCH_AGENT_CONFIG,
+    mode="0644",
+)
+
+server.shell(
+    name="Apply CloudWatch agent config",
+    commands=[
+        "amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 "
+        f"-c file:{CLOUDWATCH_AGENT_CONFIG} -s",
+    ],
+    _if=cloudwatch_config_put.did_change,
 )

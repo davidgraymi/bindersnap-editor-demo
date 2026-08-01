@@ -8,10 +8,6 @@ const composeFile = readFileSync(
 const envExample = readFileSync(".env.prod.example", "utf8");
 const readme = readFileSync("README.md", "utf8");
 const secretsTerraform = readFileSync("infra/secrets/main.tf", "utf8");
-const userData = readFileSync(
-  "infra/compute/user-data.sh.tftpl",
-  "utf8",
-).replaceAll("$${", "${");
 const giteaServiceTokenKey = ["GITEA", "SERVICE", "TOKEN"].join("_");
 const giteaSecretKeyKey = ["GITEA", "SECRET", "KEY"].join("_");
 const giteaInternalTokenKey = ["GITEA", "INTERNAL", "TOKEN"].join("_");
@@ -45,34 +41,6 @@ describe("SSM Parameter Store production wiring", () => {
     expect(secretsTerraform).toContain("kms:EncryptionContext:PARAMETER_ARN");
     expect(secretsTerraform).toContain('variable "ec2_instance_role_name"');
     expect(secretsTerraform).not.toContain('resources = ["*"]');
-  });
-
-  test("boot-time setup refreshes the env file before compose starts", () => {
-    expect(userData).toContain("aws ssm get-parameters-by-path");
-    expect(userData).toContain('APP_DIR="${APP_DIR:-/opt/bindersnap}"');
-    expect(userData).toContain('ENV_FILE="${ENV_FILE:-${APP_DIR}/.env.prod}"');
-    expect(userData).toContain("chmod 600");
-    expect(userData).toContain("chown root:root");
-    expect(userData).toContain("bindersnap-refresh-env.service");
-    expect(userData).toContain("bindersnap-bootstrap-gitea.service");
-    expect(userData).toContain(
-      "BOOTSTRAP_WITH_scripts/bootstrap-gitea-service-account.ts",
-    );
-    expect(userData).toContain(
-      'docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d gitea',
-    );
-    expect(userData).toContain("gitea --config");
-    expect(userData).toContain('docker exec --user "${GITEA_EXEC_USER}"');
-    expect(userData).toContain("admin user create");
-    expect(userData).toContain("admin user change-password");
-    expect(userData).toContain(
-      "bun scripts/bootstrap-gitea-service-account.ts mint-token",
-    );
-    expect(userData).toContain("aws ssm put-parameter");
-    expect(userData).toContain("bindersnap-compose.service");
-    expect(userData).toContain(
-      "docker compose --env-file ${ENV_FILE} -f ${COMPOSE_FILE} up -d",
-    );
   });
 
   test("documents the generated env schema and no longer instructs a checked-in prod env workflow", () => {

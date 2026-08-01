@@ -1,12 +1,11 @@
 # Production Deploys
 
-Production now has three deploy surfaces:
+Production now has two deploy surfaces:
 
 1. [`../../.github/workflows/pages.yml`](../../.github/workflows/pages.yml) publishes the unified SPA to GitHub Pages at `https://bindersnap.com`.
-2. [`../../.github/workflows/deploy-config.yml`](../../.github/workflows/deploy-config.yml) publishes the runtime config bundle to `s3://${BINDERSNAP_CONFIG_BUCKET}/` and applies it on the EC2 host over AWS OIDC + SSM.
-3. [`../../.github/workflows/deploy-pyinfra.yml`](../../.github/workflows/deploy-pyinfra.yml) drives the full production host with pyinfra over an SSH-through-SSM tunnel on every push to `main`. See [`../../deploy/README.md`](../../deploy/README.md).
+2. [`../../.github/workflows/deploy-pyinfra.yml`](../../.github/workflows/deploy-pyinfra.yml) drives the full production host with pyinfra over an SSH-through-SSM tunnel on every push to `main`. See [`../../deploy/README.md`](../../deploy/README.md).
 
-Both production host workflows assume the AWS role provisioned by [`../../infra/ci/oidc.tf`](../../infra/ci/oidc.tf).
+The production host workflow assumes the AWS role provisioned by [`../../infra/ci/oidc.tf`](../../infra/ci/oidc.tf).
 
 > **Deploy failing or a bad change shipped?** See the break-glass runbook:
 > [`break-glass.md`](break-glass.md) — recover the host directly over SSM without
@@ -29,32 +28,6 @@ The published app is the single SPA:
 
 Repository settings must point GitHub Pages at `GitHub Actions`, and the custom domain must be `bindersnap.com`.
 
-## Config Deploy Workflow
-
-The config workflow keeps `/opt/bindersnap` on the running host aligned with the tracked repo bundle:
-
-- `docker-compose.prod.yml`
-- `Caddyfile.prod`
-- `litestream.yml`
-- `Dockerfile.caddy`
-- `scripts/bindersnap`
-- `scripts/bootstrap-gitea-service-account.ts`
-
-On pushes to `main` that touch any of those files, the workflow:
-
-1. runs the ops suite
-2. assumes the production deploy role over GitHub OIDC
-3. uploads the tracked bundle to `s3://${BINDERSNAP_CONFIG_BUCKET}/`
-4. sends an SSM Run Command that bootstraps the host CLI if needed, then runs:
-   - `bindersnap config sync`
-   - `bindersnap stack validate`
-   - `bindersnap stack restart`
-5. waits for the SSM invocation to finish and fails the workflow if the host validation or restart fails
-
-`bindersnap stack validate` checks `docker compose ... config -q` and validates `Caddyfile.prod` using the repo's custom `Dockerfile.caddy` build, which includes the `rate_limit` module used in production.
-
-The workflow also supports manual `workflow_dispatch`. Leave `publish_from_repo=true` for a normal re-apply, or set `publish_from_repo=false` to apply whatever object versions are already in S3 without overwriting them from the current repo state.
-
 ## pyinfra Deploy Workflow
 
 `deploy-pyinfra.yml` replaces the old SSM `send-command` deploy (`deploy.yml`,
@@ -72,22 +45,24 @@ What it does on every push to `main`:
 `deploy.py` is idempotent: it installs Docker, mounts the EBS data volume,
 uploads the `deploy/files/` runtime config, renders `.env.prod` from SSM
 Parameter Store (read on the control plane), validates the compose + Caddy config,
-and brings the stack up — force-recreating only when config or secrets changed.
+brings the stack up — force-recreating only when config or secrets changed —
+and configures the CloudWatch agent for disk/memory metrics.
 
 Trigger a manual dry run with `workflow_dispatch` and `dry_run=true` (passes
 `--dry` to pyinfra: it reports changes without applying them). The connection
 uses no inbound port 22 and no long-lived AWS keys.
 
-> The S3 config-as-code path (`deploy-config.yml`, `infra/config-bucket/`) is
-> retired separately in Phase 4 ([#306](https://github.com/davidgraymi/bindersnap-editor-demo/issues/306));
-> its sections below remain accurate until then.
+> The S3 config-as-code path (`deploy-config.yml`, `infra/config-bucket/`) was
+> retired in Phase 4 ([#306](https://github.com/davidgraymi/bindersnap-editor-demo/issues/306)):
+> pyinfra is the only path that configures the host, and Terraform user-data
+> does nothing beyond confirming the SSM agent (plus the Gitea-as-NAT plumbing
+> that leaves with the serverless stack in Phase 5).
 
 ## GitHub Configuration
 
 Required repository variables:
 
 - `BINDERSNAP_DEPLOY_ROLE_ARN`: IAM role ARN output by `infra/ci/oidc.tf`
-- `BINDERSNAP_CONFIG_BUCKET`: config bucket name (for example `bindersnap-config`)
 
 Optional variables:
 
@@ -101,19 +76,14 @@ Do not add a GitHub Environment to the API deploy job unless you also change the
 
 ## EC2 Prerequisites
 
-The target instance must already satisfy these conditions:
+The target instance requires no pre-configuration beyond what Terraform
+provisions — the pyinfra deploy installs Docker, mounts the data volume, and
+lays down all config on a fresh host. The remaining prerequisites are:
 
-- It is managed by AWS Systems Manager.
+- It is managed by AWS Systems Manager (the SSM agent ships with AL2023).
 - It matches the deploy target tag used by the workflow.
-- `/opt/bindersnap` contains the runtime bundle seeded by `user-data.sh.tftpl` on first boot, including `docker-compose.prod.yml`, `Caddyfile.prod`, `litestream.yml`, `Dockerfile.caddy`, and `scripts/bindersnap`.
-- `/usr/local/bin/bindersnap` exists, or the legacy `/usr/local/bin/bindersnap-sync-config` helper still exists so the config workflow can bootstrap the CLI onto older hosts.
-- `/opt/bindersnap/.env.prod` exists (generated from SSM Parameter Store by the `bindersnap-refresh-env` systemd service at boot).
-- `infra/secrets/terraform.tfvars` provided `gitea_admin_user` and `gitea_admin_pass` so the first boot can mint `/bindersnap/prod/gitea_service_token` automatically before the API starts.
-- `infra/apply-all.sh apply` can reach the instance through AWS Systems Manager so it can run the bootstrap flow remotely on existing instances after the secrets module updates.
-- Docker and the Compose plugin are installed (handled by `user-data.sh.tftpl`).
-- The host can pull `ghcr.io/davidgraymi/bindersnap-api` (if the package is private, add `ghcr_token` and optionally `ghcr_user` to the SSM parameters under `/bindersnap/prod/`).
-
-The SSM command uses the same production compose contract documented in [`../../README.md`](../../README.md) and established by [`../../infra/compute/user-data.sh.tftpl`](../../infra/compute/user-data.sh.tftpl).
+- `infra/secrets/terraform.tfvars` provided `gitea_admin_user` and `gitea_admin_pass` so the first deploy can mint `/bindersnap/prod/gitea_service_token` automatically before the API starts.
+- The host can pull `ghcr.io/davidgraymi/bindersnap-api` (if the package is private, set the `GHCR_TOKEN` GitHub Actions secret so the deploy performs the registry login).
 
 ## Stripe Webhook Verification
 
@@ -176,30 +146,16 @@ docker compose --env-file /opt/bindersnap/.env.prod -f docker-compose.prod.yml p
 docker compose --env-file /opt/bindersnap/.env.prod -f docker-compose.prod.yml up -d api
 ```
 
-For config-only rollback, copy the prior object version back into place, then run the config workflow with `publish_from_repo=false` so it applies the bucket contents without re-uploading the current repo files:
-
-```bash
-CONFIG_BUCKET=your-config-bucket
-
-aws s3api copy-object \
-  --bucket "${CONFIG_BUCKET}" \
-  --copy-source "${CONFIG_BUCKET}/<file>?versionId=<prior-version-id>" \
-  --key <file>
-```
-
-After the copy completes:
-
-1. Open the `Deploy Production Config` workflow in GitHub Actions.
-2. Choose `Run workflow`.
-3. Set `publish_from_repo` to `false`.
-4. Run the workflow so the host re-syncs from S3 and reruns validation before restart.
+Config rollback is the same git revert: `deploy/files/` is the single source of
+truth for runtime config, so reverting the offending commit and letting
+`deploy-pyinfra.yml` run re-applies the prior config (and force-recreates the
+stack because the files changed).
 
 ## Validation Checklist
 
 - A push to `main` publishes the SPA to GitHub Pages from `dist/`.
 - `dist/404.html` matches `dist/index.html` so deep links load the SPA shell.
-- A push to `main` touching a tracked runtime config file triggers `Deploy Production Config`, publishes to `s3://${BINDERSNAP_CONFIG_BUCKET}/`, and waits for `bindersnap config sync && bindersnap stack validate && bindersnap stack restart` to succeed on the host.
-- Setting `publish_from_repo=false` on `Deploy Production Config` reapplies the existing S3 object versions instead of overwriting them from the current checkout.
+- A push to `main` triggers `deploy-pyinfra.yml`, which validates the compose + Caddy config on the host before bringing the stack up.
 - A forced test failure prevents the pyinfra deploy job from running.
 - `deploy-pyinfra.yml` with `dry_run=true` reports pyinfra changes without applying them.
 - Reverting a commit on `main` re-applies the prior known-good stack via pyinfra.

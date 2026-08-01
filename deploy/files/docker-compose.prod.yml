@@ -1,8 +1,8 @@
 # Bindersnap production stack (EC2 deployment)
 # Run on the EC2 host: docker compose -f docker-compose.prod.yml --env-file /opt/bindersnap/.env.prod up -d
 #
-# The /opt/bindersnap/.env.prod file is generated at boot from
-# /bindersnap/prod/* in SSM Parameter Store by infra/compute/user-data.sh.tftpl.
+# The /opt/bindersnap/.env.prod file is rendered on every pyinfra deploy
+# (deploy/deploy.py) from /bindersnap/prod/* in SSM Parameter Store.
 # For local dry runs, point --env-file at a copy of .env.prod.example.
 #
 # This file is standalone — it does NOT extend docker-compose.yml.
