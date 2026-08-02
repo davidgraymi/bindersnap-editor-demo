@@ -60,20 +60,13 @@ jobs:
       - name: Push release commit (no tag yet)
         run: git push origin main
 
-  build:
-    name: Build API Image
-    needs: bump
-    permissions:
-      contents: read
-      packages: write
-    uses: ./.github/workflows/build-api.yml
-    with:
-      ref: ${{ needs.bump.outputs.sha }}
-      sha: ${{ needs.bump.outputs.sha }}
-
+  # No API image build here: the release-bump commit carries [skip ci], so it
+  # is never deployed — production runs the pre-bump commit's image, which
+  # deploy-pyinfra.yml builds itself (issue #313). A release-SHA image would
+  # never be pulled by anything.
   tag:
     name: Push Version Tag
-    needs: [bump, build]
+    needs: bump
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:

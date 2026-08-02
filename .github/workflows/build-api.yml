@@ -1,5 +1,9 @@
 name: Build API Image
 
+# Reusable build for the API container image (GHCR). Sole production caller is
+# deploy-pyinfra.yml, which builds the exact commit being deployed (issue #313).
+# workflow_dispatch remains for ad-hoc builds (e.g. pre-seeding a rollback tag).
+
 on:
   workflow_call:
     inputs:

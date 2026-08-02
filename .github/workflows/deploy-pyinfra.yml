@@ -74,10 +74,10 @@ jobs:
 
   # Build (and push) the API image for the exact commit being deployed so the
   # pinned `bindersnap-api:<sha>` tag is guaranteed present before the deploy
-  # pulls it (issue #313). This removes the race with release.yml/build-api.yml:
-  # the deploy no longer depends on a mutable `:latest` that some other workflow
-  # may not have pushed yet. Skipped on a rollback dispatch (api_tag set), where
-  # the target image already exists in GHCR.
+  # pulls it (issue #313). This is the only place the API image is built for
+  # production; `:latest` is pushed alongside as a local-dev fallback only.
+  # Skipped on a rollback dispatch (api_tag set), where the target image
+  # already exists in GHCR.
   build:
     name: Build API Image
     needs:
