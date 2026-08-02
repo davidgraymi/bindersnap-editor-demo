@@ -1,5 +1,13 @@
-import { Database } from "bun:sqlite";
+import { asc, count, desc, eq, gt, sql } from "drizzle-orm";
+import { union } from "drizzle-orm/sqlite-core";
 import { config } from "./config";
+import { openSqliteDb, type SqliteDb } from "./db/client";
+import {
+  processedWebhookEvents,
+  subscriptionAccessOverrides,
+  subscriptions,
+  webhookCustomerState,
+} from "./db/schema";
 import { logger } from "./logger";
 
 export interface SubscriptionRecord {
@@ -29,59 +37,6 @@ export interface EffectiveSubscriptionAccess {
   source: "stripe" | "admin_grant" | "admin_revoke" | "none";
   subscription: SubscriptionRecord | null;
   override: SubscriptionAccessOverrideRecord | null;
-}
-
-interface SubscriptionRow {
-  username: string;
-  stripe_customer_id: string;
-  stripe_subscription_id: string;
-  status: string;
-  current_period_end: number | null;
-  cancel_at_period_end: number;
-  cancel_at: number | null;
-  updated_at: number;
-}
-
-interface DuplicateCustomerRow {
-  stripe_customer_id: string;
-  duplicate_count: number;
-}
-
-interface SubscriptionAccessOverrideRow {
-  username: string;
-  access: SubscriptionAccessOverrideValue;
-  reason: string | null;
-  updated_by: string;
-  updated_at: number;
-}
-
-interface SubscriptionRowWithRowId extends SubscriptionRow {
-  rowid: number;
-}
-
-function rowToRecord(row: SubscriptionRow): SubscriptionRecord {
-  return {
-    username: row.username,
-    stripeCustomerId: row.stripe_customer_id,
-    stripeSubscriptionId: row.stripe_subscription_id,
-    status: row.status,
-    currentPeriodEnd: row.current_period_end,
-    cancelAtPeriodEnd: row.cancel_at_period_end === 1,
-    cancelAt: row.cancel_at,
-    updatedAt: row.updated_at,
-  };
-}
-
-function rowToOverride(
-  row: SubscriptionAccessOverrideRow,
-): SubscriptionAccessOverrideRecord {
-  return {
-    username: row.username,
-    access: row.access,
-    reason: row.reason,
-    updatedBy: row.updated_by,
-    updatedAt: row.updated_at,
-  };
 }
 
 function hasStripeBackedAccess(record: SubscriptionRecord | null): boolean {
@@ -144,53 +99,31 @@ export class SubscriptionCustomerConflictError extends Error {
 }
 
 export class SubscriptionStore implements SubscriptionBackend {
-  private db: Database;
+  private db: SqliteDb;
 
   constructor(path: string = config.sessionsDbPath) {
-    this.db = new Database(path);
-    this.db.exec("PRAGMA journal_mode=WAL");
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS subscriptions (
-        username TEXT PRIMARY KEY,
-        stripe_customer_id TEXT NOT NULL,
-        stripe_subscription_id TEXT NOT NULL,
-        status TEXT NOT NULL,
-        current_period_end INTEGER,
-        cancel_at_period_end INTEGER NOT NULL DEFAULT 0,
-        cancel_at INTEGER,
-        updated_at INTEGER NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS subscription_access_overrides (
-        username TEXT PRIMARY KEY,
-        access TEXT NOT NULL CHECK (access IN ('grant', 'revoke')),
-        reason TEXT,
-        updated_by TEXT NOT NULL,
-        updated_at INTEGER NOT NULL
-      );
-    `);
+    this.db = openSqliteDb(path);
     this.enforceUniqueCustomerBindings();
   }
 
   async getByUsername(username: string): Promise<SubscriptionRecord | null> {
     const row = this.db
-      .query<
-        SubscriptionRow,
-        [string]
-      >("SELECT * FROM subscriptions WHERE username = ?")
-      .get(username);
-    return row ? rowToRecord(row) : null;
+      .select()
+      .from(subscriptions)
+      .where(eq(subscriptions.username, username))
+      .get();
+    return row ?? null;
   }
 
   async getByCustomerId(
     customerId: string,
   ): Promise<SubscriptionRecord | null> {
     const row = this.db
-      .query<
-        SubscriptionRow,
-        [string]
-      >("SELECT * FROM subscriptions WHERE stripe_customer_id = ?")
-      .get(customerId);
-    return row ? rowToRecord(row) : null;
+      .select()
+      .from(subscriptions)
+      .where(eq(subscriptions.stripeCustomerId, customerId))
+      .get();
+    return row ?? null;
   }
 
   async upsert(record: SubscriptionRecord): Promise<void> {
@@ -216,86 +149,57 @@ export class SubscriptionStore implements SubscriptionBackend {
     }
 
     this.db
-      .query<
-        void,
-        [
-          string,
-          string,
-          string,
-          string,
-          number | null,
-          number,
-          number | null,
-          number,
-        ]
-      >(
-        `INSERT INTO subscriptions (username, stripe_customer_id, stripe_subscription_id, status, current_period_end, cancel_at_period_end, cancel_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(username) DO UPDATE SET
-           stripe_customer_id = excluded.stripe_customer_id,
-           stripe_subscription_id = excluded.stripe_subscription_id,
-           status = excluded.status,
-           current_period_end = excluded.current_period_end,
-           cancel_at_period_end = excluded.cancel_at_period_end,
-           cancel_at = excluded.cancel_at,
-           updated_at = excluded.updated_at`,
-      )
-      .run(
-        record.username,
-        record.stripeCustomerId,
-        record.stripeSubscriptionId,
-        record.status,
-        record.currentPeriodEnd,
-        record.cancelAtPeriodEnd ? 1 : 0,
-        record.cancelAt,
-        record.updatedAt,
-      );
+      .insert(subscriptions)
+      .values(record)
+      .onConflictDoUpdate({
+        target: subscriptions.username,
+        set: {
+          stripeCustomerId: record.stripeCustomerId,
+          stripeSubscriptionId: record.stripeSubscriptionId,
+          status: record.status,
+          currentPeriodEnd: record.currentPeriodEnd,
+          cancelAtPeriodEnd: record.cancelAtPeriodEnd,
+          cancelAt: record.cancelAt,
+          updatedAt: record.updatedAt,
+        },
+      })
+      .run();
   }
 
   async getAccessOverride(
     username: string,
   ): Promise<SubscriptionAccessOverrideRecord | null> {
     const row = this.db
-      .query<
-        SubscriptionAccessOverrideRow,
-        [string]
-      >("SELECT * FROM subscription_access_overrides WHERE username = ?")
-      .get(username);
-    return row ? rowToOverride(row) : null;
+      .select()
+      .from(subscriptionAccessOverrides)
+      .where(eq(subscriptionAccessOverrides.username, username))
+      .get();
+    return row ?? null;
   }
 
   async putAccessOverride(
     record: SubscriptionAccessOverrideRecord,
   ): Promise<void> {
     this.db
-      .query<
-        void,
-        [string, SubscriptionAccessOverrideValue, string | null, string, number]
-      >(
-        `INSERT INTO subscription_access_overrides (username, access, reason, updated_by, updated_at)
-         VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT(username) DO UPDATE SET
-           access = excluded.access,
-           reason = excluded.reason,
-           updated_by = excluded.updated_by,
-           updated_at = excluded.updated_at`,
-      )
-      .run(
-        record.username,
-        record.access,
-        record.reason,
-        record.updatedBy,
-        record.updatedAt,
-      );
+      .insert(subscriptionAccessOverrides)
+      .values(record)
+      .onConflictDoUpdate({
+        target: subscriptionAccessOverrides.username,
+        set: {
+          access: record.access,
+          reason: record.reason,
+          updatedBy: record.updatedBy,
+          updatedAt: record.updatedAt,
+        },
+      })
+      .run();
   }
 
   async deleteAccessOverride(username: string): Promise<void> {
     this.db
-      .query<
-        void,
-        [string]
-      >("DELETE FROM subscription_access_overrides WHERE username = ?")
-      .run(username);
+      .delete(subscriptionAccessOverrides)
+      .where(eq(subscriptionAccessOverrides.username, username))
+      .run();
   }
 
   async resolveAccess(username: string): Promise<EffectiveSubscriptionAccess> {
@@ -342,15 +246,13 @@ export class SubscriptionStore implements SubscriptionBackend {
   }
 
   async listKnownAccessStates(): Promise<EffectiveSubscriptionAccess[]> {
-    const usernames = this.db
-      .query<{ username: string }, []>(
-        `SELECT username
-         FROM subscriptions
-         UNION
-         SELECT username
-         FROM subscription_access_overrides
-         ORDER BY username COLLATE NOCASE ASC`,
-      )
+    const usernames = union(
+      this.db.select({ username: subscriptions.username }).from(subscriptions),
+      this.db
+        .select({ username: subscriptionAccessOverrides.username })
+        .from(subscriptionAccessOverrides),
+    )
+      .orderBy(sql`username COLLATE NOCASE ASC`)
       .all()
       .map((row) => row.username);
 
@@ -359,93 +261,77 @@ export class SubscriptionStore implements SubscriptionBackend {
     );
   }
 
+  // Legacy data hygiene: dedupe rows that predate the unique customer
+  // binding, then (re)create the unique index. Must stay out of the drizzle
+  // migrations — a unique index in the baseline would fail against a legacy
+  // database that still holds duplicates.
   private enforceUniqueCustomerBindings(): void {
-    this.db.exec("BEGIN IMMEDIATE");
+    this.db.transaction(
+      (tx) => {
+        const duplicates = tx
+          .select({
+            stripeCustomerId: subscriptions.stripeCustomerId,
+            duplicateCount: count(),
+          })
+          .from(subscriptions)
+          .groupBy(subscriptions.stripeCustomerId)
+          .having(gt(count(), 1))
+          .all();
 
-    try {
-      const duplicates = this.db
-        .query<DuplicateCustomerRow, []>(
-          `SELECT stripe_customer_id, COUNT(*) AS duplicate_count
-           FROM subscriptions
-           GROUP BY stripe_customer_id
-           HAVING COUNT(*) > 1`,
-        )
-        .all();
+        for (const duplicate of duplicates) {
+          const rows = tx
+            .select()
+            .from(subscriptions)
+            .where(
+              eq(subscriptions.stripeCustomerId, duplicate.stripeCustomerId),
+            )
+            .orderBy(desc(subscriptions.updatedAt), asc(subscriptions.username))
+            .all();
 
-      for (const duplicate of duplicates) {
-        const rows = this.db
-          .query<SubscriptionRowWithRowId, [string]>(
-            `SELECT rowid, *
-             FROM subscriptions
-             WHERE stripe_customer_id = ?
-             ORDER BY updated_at DESC, username ASC`,
-          )
-          .all(duplicate.stripe_customer_id);
+          const [keptRow, ...removedRows] = rows;
+          if (!keptRow || removedRows.length === 0) continue;
 
-        const [keptRow, ...removedRows] = rows;
-        if (!keptRow || removedRows.length === 0) continue;
+          logger.error(
+            "Deduplicating legacy Stripe customer bindings during subscription migration",
+            {
+              stripeCustomerId: duplicate.stripeCustomerId,
+              keptUsername: keptRow.username,
+              removedUsernames: removedRows.map((row) => row.username),
+              duplicateCount: duplicate.duplicateCount,
+            },
+          );
 
-        logger.error(
-          "Deduplicating legacy Stripe customer bindings during subscription migration",
-          {
-            stripeCustomerId: duplicate.stripe_customer_id,
-            keptUsername: keptRow.username,
-            removedUsernames: removedRows.map((row) => row.username),
-            duplicateCount: duplicate.duplicate_count,
-          },
-        );
-
-        for (const row of removedRows) {
-          this.db
-            .query<
-              void,
-              [string]
-            >("DELETE FROM subscriptions WHERE username = ?")
-            .run(row.username);
+          for (const row of removedRows) {
+            tx.delete(subscriptions)
+              .where(eq(subscriptions.username, row.username))
+              .run();
+          }
         }
-      }
 
-      this.db.exec("DROP INDEX IF EXISTS idx_subscriptions_customer");
-      this.db.exec(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_subscriptions_customer ON subscriptions(stripe_customer_id)",
-      );
-      this.db.exec("COMMIT");
-    } catch (error) {
-      this.db.exec("ROLLBACK");
-      throw error;
-    }
+        tx.run(sql`DROP INDEX IF EXISTS idx_subscriptions_customer`);
+        tx.run(
+          sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_subscriptions_customer ON subscriptions(stripe_customer_id)`,
+        );
+      },
+      { behavior: "immediate" },
+    );
   }
 }
 
 export class WebhookEventStore implements WebhookEventBackend {
-  private db: Database;
+  private db: SqliteDb;
 
   constructor(path: string = config.sessionsDbPath) {
-    this.db = new Database(path);
-    this.db.exec("PRAGMA journal_mode=WAL");
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS processed_webhook_events (
-        event_id TEXT PRIMARY KEY,
-        event_type TEXT NOT NULL,
-        customer_id TEXT,
-        created_at INTEGER NOT NULL,
-        processed_at INTEGER NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS webhook_customer_state (
-        customer_id TEXT PRIMARY KEY,
-        last_event_created_at INTEGER NOT NULL
-      );
-    `);
+    this.db = openSqliteDb(path);
   }
 
   async isProcessed(eventId: string): Promise<boolean> {
     const row = this.db
-      .query<
-        { event_id: string },
-        [string]
-      >("SELECT event_id FROM processed_webhook_events WHERE event_id = ?")
-      .get(eventId);
-    return row !== null;
+      .select({ eventId: processedWebhookEvents.eventId })
+      .from(processedWebhookEvents)
+      .where(eq(processedWebhookEvents.eventId, eventId))
+      .get();
+    return row !== undefined;
   }
 
   async isOutOfOrder(
@@ -453,13 +339,14 @@ export class WebhookEventStore implements WebhookEventBackend {
     eventCreated: number,
   ): Promise<boolean> {
     const row = this.db
-      .query<
-        { last_event_created_at: number },
-        [string]
-      >("SELECT last_event_created_at FROM webhook_customer_state WHERE customer_id = ?")
-      .get(customerId);
+      .select({
+        lastEventCreatedAt: webhookCustomerState.lastEventCreatedAt,
+      })
+      .from(webhookCustomerState)
+      .where(eq(webhookCustomerState.customerId, customerId))
+      .get();
     if (!row) return false;
-    return eventCreated < row.last_event_created_at;
+    return eventCreated < row.lastEventCreatedAt;
   }
 
   async markProcessed(
@@ -469,21 +356,28 @@ export class WebhookEventStore implements WebhookEventBackend {
     eventCreated: number,
   ): Promise<void> {
     this.db
-      .query<void, [string, string, string | null, number, number]>(
-        `INSERT OR IGNORE INTO processed_webhook_events (event_id, event_type, customer_id, created_at, processed_at)
-         VALUES (?, ?, ?, ?, ?)`,
-      )
-      .run(eventId, eventType, customerId, eventCreated, Date.now());
+      .insert(processedWebhookEvents)
+      .values({
+        eventId,
+        eventType,
+        customerId,
+        createdAt: eventCreated,
+        processedAt: Date.now(),
+      })
+      .onConflictDoNothing()
+      .run();
 
     if (customerId !== null) {
       this.db
-        .query<void, [string, number]>(
-          `INSERT INTO webhook_customer_state (customer_id, last_event_created_at)
-           VALUES (?, ?)
-           ON CONFLICT(customer_id) DO UPDATE SET
-             last_event_created_at = MAX(last_event_created_at, excluded.last_event_created_at)`,
-        )
-        .run(customerId, eventCreated);
+        .insert(webhookCustomerState)
+        .values({ customerId, lastEventCreatedAt: eventCreated })
+        .onConflictDoUpdate({
+          target: webhookCustomerState.customerId,
+          set: {
+            lastEventCreatedAt: sql`MAX(last_event_created_at, excluded.last_event_created_at)`,
+          },
+        })
+        .run();
     }
   }
 }
