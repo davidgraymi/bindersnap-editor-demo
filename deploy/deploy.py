@@ -437,7 +437,10 @@ server.shell(
 # ---------- 9. Registry login + Gitea bootstrap ----------
 
 # GHCR credentials are supplied by the control plane (CI secret / local env var).
-# Native docker.login is idempotent: a no-op when the auth entry is already present.
+# force=True: docker.login's idempotency check only looks for an existing auth
+# entry for the server, but CI's GITHUB_TOKEN is minted per run and expires when
+# the run ends — a skipped login leaves an expired token and the image pull
+# fails with "denied".
 _ghcr_token = os.environ.get("GHCR_TOKEN", "")
 _ghcr_user = os.environ.get("GHCR_USER", "davidgraymi")
 if _ghcr_token:
@@ -446,6 +449,7 @@ if _ghcr_token:
         server="ghcr.io",
         username=_ghcr_user,
         password=_ghcr_token,
+        force=True,
     )
 
 # First run only: the bootstrap reads the placeholder token from the env file
