@@ -194,7 +194,6 @@ echo "=== Bindersnap infrastructure: ${ACTION} ==="
 
 # --- Plan mode: each module plans independently using its own tfvars ---
 if [[ "$ACTION" == "plan" ]]; then
-  tf_run "config-bucket"
   tf_run "compute"
   tf_run "secrets"
   tf_run "backups"
@@ -209,15 +208,8 @@ fi
 
 # --- Apply mode: chain modules, wire outputs forward ---
 
-# 1. Config bucket — seed S3 before the instance boots so first-boot sync succeeds.
-#    IAM policy attachment is skipped here (no instance role yet); a second pass
-#    below attaches it once compute has created the role.
-tf_run "config-bucket"
-
-CONFIG_BUCKET="$(tf_output config-bucket config_bucket_name)"
-echo "  Config bucket outputs: bucket=${CONFIG_BUCKET}"
-
-# 2. Compute (no upstream deps beyond the populated S3 bucket above)
+# 1. Compute (no upstream deps — host configuration is applied by the pyinfra
+#    deploy after the instance exists, not by Terraform)
 tf_run "compute"
 
 INSTANCE_ID="$(tf_output compute instance_id)"
@@ -234,7 +226,7 @@ fi
 
 echo "  Compute outputs: instance=${INSTANCE_ID} role=${INSTANCE_ROLE} volume=${DATA_VOLUME_ID}"
 
-# 3. Secrets (needs instance role for policy attachment)
+# 2. Secrets (needs instance role for policy attachment)
 tf_run "secrets" "ec2_instance_role_name=${INSTANCE_ROLE}"
 
 SSM_PATH="$(tf_output secrets ssm_parameter_path)"
@@ -246,11 +238,7 @@ else
   echo "  Gitea service token already bootstrapped — skipping remote bootstrap."
 fi
 
-# 4. Config bucket (second pass) — attach the read policy to the instance role now
-#    that compute has created it. Object uploads are a no-op (etags unchanged).
-tf_run "config-bucket" "ec2_instance_role_name=${INSTANCE_ROLE}"
-
-# 5. Backups (needs instance role + volume ID)
+# 3. Backups (needs instance role + volume ID)
 tf_run "backups" \
   "ec2_instance_role_name=${INSTANCE_ROLE}" \
   "gitea_data_volume_id=${DATA_VOLUME_ID}"
@@ -258,10 +246,10 @@ tf_run "backups" \
 LITESTREAM_BUCKET="$(tf_output backups litestream_bucket_name)"
 echo "  Backups outputs: litestream_bucket=${LITESTREAM_BUCKET}"
 
-# 6. Monitoring (needs instance ID)
+# 4. Monitoring (needs instance ID)
 tf_run "monitoring" "instance_id=${INSTANCE_ID}"
 
-# 7. CI (SPA bucket + CloudFront dist come from tfvars — no upstream module yet)
+# 5. CI (SPA bucket + CloudFront dist come from tfvars — no upstream module yet)
 tf_run "ci"
 
 echo ""

@@ -4,59 +4,18 @@ set -euo pipefail
 APP_DIR="${APP_DIR:-/opt/bindersnap}"
 ENV_FILE="${ENV_FILE:-${APP_DIR}/.env.prod}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
-CONFIG_BUCKET="${CONFIG_BUCKET:-}"
-BIN_DIR="${BIN_DIR:-/usr/local/bin}"
 GHCR_LOGIN_CMD="${GHCR_LOGIN_CMD:-bindersnap-ghcr-login}"
 CADDY_VALIDATE_IMAGE="${CADDY_VALIDATE_IMAGE:-bindersnap-caddy-validate:local}"
+
+# Config lands on the host via the pyinfra deploy (deploy/deploy.py); the old
+# `config sync` from the retired S3 config bucket is gone (#306).
 
 usage() {
   cat <<'EOF'
 Usage:
-  bindersnap config sync
   bindersnap stack validate
   bindersnap stack restart
 EOF
-}
-
-require_config_bucket() {
-  if [ -z "${CONFIG_BUCKET}" ]; then
-    echo "CONFIG_BUCKET is required" >&2
-    exit 1
-  fi
-}
-
-install_self() {
-  local script_path="${APP_DIR}/scripts/bindersnap"
-
-  if [ -f "${script_path}" ]; then
-    install -d -m 0755 "${BIN_DIR}"
-    install -m 0755 "${script_path}" "${BIN_DIR}/bindersnap"
-  fi
-}
-
-config_sync() {
-  require_config_bucket
-
-  install -d -m 0755 "${APP_DIR}" "${APP_DIR}/scripts"
-
-  aws s3 sync "s3://${CONFIG_BUCKET}/" "${APP_DIR}/" --exact-timestamps \
-    --exclude "*" \
-    --include "docker-compose.prod.yml" \
-    --include "Caddyfile.prod" \
-    --include "litestream.yml" \
-    --include "Dockerfile.caddy" \
-    --include "scripts/bindersnap" \
-    --include "scripts/bootstrap-gitea-service-account.ts"
-
-  chmod 0644 \
-    "${APP_DIR}/docker-compose.prod.yml" \
-    "${APP_DIR}/Caddyfile.prod" \
-    "${APP_DIR}/litestream.yml" \
-    "${APP_DIR}/Dockerfile.caddy" \
-    "${APP_DIR}/scripts/bootstrap-gitea-service-account.ts" 2>/dev/null || true
-  chmod 0755 "${APP_DIR}/scripts/bindersnap" 2>/dev/null || true
-
-  install_self
 }
 
 stack_validate() {
@@ -90,9 +49,6 @@ main() {
   local action="${2:-}"
 
   case "${group}:${action}" in
-    config:sync)
-      config_sync
-      ;;
     stack:validate)
       stack_validate
       ;;

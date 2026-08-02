@@ -98,18 +98,6 @@ variable "allowed_ssh_cidrs" {
   default     = []
 }
 
-variable "ssm_parameter_path" {
-  description = "SSM path prefix for the env refresh script (must match secrets module)"
-  type        = string
-  default     = "/bindersnap/prod"
-}
-
-variable "config_bucket_name" {
-  description = "S3 bucket holding the config-as-code files (docker-compose.prod.yml, Caddyfile.prod, litestream.yml, etc.). Defaults to bindersnap-config; the host syncs from this bucket on boot and on the refresh timer."
-  type        = string
-  default     = "bindersnap-config"
-}
-
 variable "lambda_subnet_cidrs" {
   description = "CIDR blocks of the private subnets used by the api-service Lambda. The Gitea instance acts as a NAT for these subnets: source/dest check is disabled on its ENI, the kernel forwards IPv4 packets, and an iptables MASQUERADE rule rewrites packets sourced from these CIDRs. Leave empty until the api-service root is being applied — the host runs normally with an empty list."
   type        = list(string)
@@ -318,9 +306,9 @@ resource "aws_instance" "app" {
   # whose source/destination IP does not match the ENI's address.
   source_dest_check = length(var.lambda_subnet_cidrs) == 0
 
+  # Host configuration is owned by deploy/ (pyinfra). User-data only confirms
+  # the SSM agent and, while the serverless stack exists, sets up Gitea-as-NAT.
   user_data_base64 = base64gzip(templatefile("${path.module}/user-data.sh.tftpl", {
-    ssm_parameter_path  = var.ssm_parameter_path
-    config_bucket_name  = var.config_bucket_name
     lambda_subnet_cidrs = var.lambda_subnet_cidrs
   }))
   user_data_replace_on_change = false

@@ -93,12 +93,6 @@ variable "instance_tag_value" {
   default     = "bindersnap"
 }
 
-variable "config_bucket_name" {
-  description = "S3 bucket that stores the runtime config bundle applied by the production config deploy workflow"
-  type        = string
-  default     = "bindersnap-config"
-}
-
 variable "api_ecr_repository_name" {
   description = "ECR repository pushed to by deploy-api.yml. Must match infra/api-service ecr.tf."
   type        = string
@@ -368,33 +362,6 @@ data "aws_iam_policy_document" "deploy" {
       variable = "kms:ViaService"
       values   = ["ssm.${var.aws_region}.amazonaws.com"]
     }
-  }
-
-  statement {
-    sid    = "PublishRuntimeConfigBundle"
-    effect = "Allow"
-
-    actions = [
-      "s3:ListBucket",
-      "s3:GetBucketLocation",
-    ]
-
-    resources = [
-      "arn:${data.aws_partition.current.partition}:s3:::${var.config_bucket_name}",
-    ]
-  }
-
-  statement {
-    sid    = "WriteRuntimeConfigObjects"
-    effect = "Allow"
-
-    actions = [
-      "s3:PutObject",
-    ]
-
-    resources = [
-      "arn:${data.aws_partition.current.partition}:s3:::${var.config_bucket_name}/*",
-    ]
   }
 
   # ---------- deploy-api.yml: ECR push + Lambda update + invoke ----------
