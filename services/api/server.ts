@@ -1,7 +1,6 @@
 import { randomUUID } from "crypto";
 
 import { config, type SessionCookieSameSite } from "./config";
-import { configureBackends } from "./db/configure";
 import { logger } from "./logger";
 import { runSessionReaper } from "./session-reaper";
 import { sessionStore, type SessionRecord } from "./sessions";
@@ -3712,10 +3711,9 @@ export function createApiServer() {
         clientIp,
       });
 
-      // Liveness probe: must respond before any auth/origin/HTTPS gate so an
-      // ALB target group on a private VPC can reach it without TLS. Returns
-      // 200 once the process accepts connections; deeper readiness (Gitea,
-      // DynamoDB, Postgres) will live on /readyz once those backends land.
+      // Liveness probe: must respond before any auth/origin/HTTPS gate.
+      // Returns 200 once the process accepts connections; deeper readiness
+      // (e.g. Gitea reachability) would live on /readyz if it lands.
       if (pathname === "/healthz" && (method === "GET" || method === "HEAD")) {
         const durationMs = Date.now() - startMs;
         logger.info("Response sent", {
@@ -4011,17 +4009,12 @@ export function createApiServer() {
 }
 
 if (import.meta.main) {
-  // configureBackends must run before Bun.serve so the lazy stores resolve to
-  // the right backend on the first request, and so the schema-version probe
-  // can refuse to start the API against an unmigrated Postgres.
-  const chosen = await configureBackends();
   const server = createApiServer();
   startCleanupTimer();
   logger.info("Bindersnap API listening", {
     url: `http://localhost:${server.port}`,
     port: server.port,
     env: config.nodeEnv,
-    dbBackend: chosen,
   });
   if (config.devFeaturesEnabled) {
     logger.warn(

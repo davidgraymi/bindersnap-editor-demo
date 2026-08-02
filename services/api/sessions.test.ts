@@ -62,7 +62,7 @@ describe("SessionStore", () => {
     const reaped = await store.reap(now);
 
     expect(reaped).toHaveLength(1);
-    expect(reaped[0].id).toBe("expired-session");
+    expect(reaped[0]!.id).toBe("expired-session");
 
     expect(await store.get("expired-session")).toBeNull();
     expect(await store.get("future-session")).not.toBeNull();

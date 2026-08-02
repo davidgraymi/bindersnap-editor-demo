@@ -1,102 +1,65 @@
-import {
-  pgTable,
-  text,
-  bigint,
-  boolean,
-  index,
-  uniqueIndex,
-  integer,
-  customType,
-} from "drizzle-orm/pg-core";
+import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
-// Postgres bytea, surfaced as a Buffer in TypeScript. Used for the envelope-
-// encrypted gitea_token blobs in `sessions`. postgres-js handles the binary
-// transport natively; drizzle just needs to know the column type name.
-export const bytea = customType<{ data: Buffer; default: false }>({
-  dataType() {
-    return "bytea";
-  },
-});
-
-// Single source of truth for the API service's Postgres schema.
-// Mirrors the SQLite shapes in services/api/sessions.ts and subscriptions.ts.
+// Canonical schema for the API's SQLite database (one file on the EBS data
+// volume, BINDERSNAP_SESSIONS_DB_PATH). drizzle-kit generates migrations from
+// this file (`bun run db:generate`); the stores apply them on open via
+// db/client.ts.
 //
-// Numeric "*_at" columns are Unix milliseconds (sessions) or Unix seconds
-// (Stripe webhook + subscription timestamps), preserved verbatim from the
-// SQLite columns so the migration script is a straight value copy.
+// Two deliberate deviations between this schema and the generated SQL:
+//   - The 0000 baseline is hand-edited to use IF NOT EXISTS DDL so it
+//     no-ops against a production database that predates drizzle (the
+//     tables were originally created inline by the stores).
+//   - The unique index on subscriptions.stripe_customer_id is NOT part of
+//     any migration. SubscriptionStore.enforceUniqueCustomerBindings()
+//     creates it after deduplicating legacy rows — a unique index in the
+//     baseline would fail on a legacy database that still holds duplicates.
 
-export const sessions = pgTable(
+export const sessions = sqliteTable(
   "sessions",
   {
     id: text("id").primaryKey(),
     username: text("username").notNull(),
-    // Envelope-encrypted token at rest. `gitea_token_ciphertext` holds the
-    // gitea_token sealed with a per-session DEK; `gitea_token_dek` holds that
-    // DEK wrapped by the master key (KMS CMK in prod, BINDERSNAP_TOKEN_ENCRYPTION_KEY
-    // in local/dev). See services/api/token-crypto.ts.
-    giteaTokenCiphertext: bytea("gitea_token_ciphertext").notNull(),
-    giteaTokenDek: bytea("gitea_token_dek").notNull(),
+    giteaToken: text("gitea_token").notNull(),
     giteaTokenName: text("gitea_token_name").notNull(),
-    createdAt: bigint("created_at", { mode: "number" }).notNull(),
-    expiresAt: bigint("expires_at", { mode: "number" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+    expiresAt: integer("expires_at").notNull(),
   },
-  (table) => ({
-    expiresIdx: index("idx_sessions_expires").on(table.expiresAt),
-  }),
+  (table) => [index("idx_sessions_expires").on(table.expiresAt)],
 );
 
-export const subscriptions = pgTable(
-  "subscriptions",
-  {
-    username: text("username").primaryKey(),
-    stripeCustomerId: text("stripe_customer_id").notNull(),
-    stripeSubscriptionId: text("stripe_subscription_id").notNull(),
-    status: text("status").notNull(),
-    currentPeriodEnd: bigint("current_period_end", { mode: "number" }),
-    cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
-    cancelAt: bigint("cancel_at", { mode: "number" }),
-    updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
-  },
-  (table) => ({
-    customerIdx: uniqueIndex("idx_subscriptions_customer").on(
-      table.stripeCustomerId,
-    ),
-  }),
-);
+export const subscriptions = sqliteTable("subscriptions", {
+  username: text("username").primaryKey(),
+  stripeCustomerId: text("stripe_customer_id").notNull(),
+  stripeSubscriptionId: text("stripe_subscription_id").notNull(),
+  status: text("status").notNull(),
+  currentPeriodEnd: integer("current_period_end"),
+  cancelAtPeriodEnd: integer("cancel_at_period_end", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  cancelAt: integer("cancel_at"),
+  updatedAt: integer("updated_at").notNull(),
+});
 
-export const subscriptionAccessOverrides = pgTable(
+export const subscriptionAccessOverrides = sqliteTable(
   "subscription_access_overrides",
   {
     username: text("username").primaryKey(),
     access: text("access", { enum: ["grant", "revoke"] }).notNull(),
     reason: text("reason"),
     updatedBy: text("updated_by").notNull(),
-    updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
+    updatedAt: integer("updated_at").notNull(),
   },
 );
 
-export const processedWebhookEvents = pgTable("processed_webhook_events", {
+export const processedWebhookEvents = sqliteTable("processed_webhook_events", {
   eventId: text("event_id").primaryKey(),
   eventType: text("event_type").notNull(),
   customerId: text("customer_id"),
-  createdAt: bigint("created_at", { mode: "number" }).notNull(),
-  processedAt: bigint("processed_at", { mode: "number" }).notNull(),
+  createdAt: integer("created_at").notNull(),
+  processedAt: integer("processed_at").notNull(),
 });
 
-export const webhookCustomerState = pgTable("webhook_customer_state", {
+export const webhookCustomerState = sqliteTable("webhook_customer_state", {
   customerId: text("customer_id").primaryKey(),
-  lastEventCreatedAt: bigint("last_event_created_at", {
-    mode: "number",
-  }).notNull(),
-});
-
-// Tracks the schema version the database has been migrated to. The migration
-// runner inserts/updates this row after each migration applies cleanly. The
-// API queries it at startup and refuses to run on a mismatch.
-//
-// `id = 1` is enforced so this is a singleton row; we never store history here.
-export const schemaVersions = pgTable("schema_versions", {
-  id: integer("id").primaryKey(),
-  version: text("version").notNull(),
-  appliedAt: bigint("applied_at", { mode: "number" }).notNull(),
+  lastEventCreatedAt: integer("last_event_created_at").notNull(),
 });

@@ -17,9 +17,9 @@ export interface SessionReaperResult {
   revokeErrors: number;
 }
 
-// Extracted from server.ts's in-process cleanup loop so the same logic can run
-// out-of-process (scheduled Lambda via EventBridge, see #224). The Postgres
-// session table has no native TTL — something has to call this on a schedule.
+// Extracted from server.ts's in-process cleanup loop so the reap-and-revoke
+// logic is testable on its own. The session table has no native TTL —
+// something has to call this on a schedule.
 //
 // Behavior:
 //   - Deletes expired session rows in a single round-trip (backend-specific).

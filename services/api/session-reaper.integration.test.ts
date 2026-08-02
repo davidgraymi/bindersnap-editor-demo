@@ -1,28 +1,15 @@
-// Integration tests for the session reaper composed with a real
-// SessionBackend implementation. The unit tests in session-reaper.test.ts
+// Integration tests for the session reaper composed with the real
+// SessionStore (in-memory SQLite). The unit tests in session-reaper.test.ts
 // cover orchestration with a mock backend; these exercise the actual
-// SQL/round-trips:
+// SQL round-trips:
 //
-//   - real SessionStore (in-memory SQLite) — always runs
-//   - real PostgresSessionBackend — runs only when BINDERSNAP_TEST_DATABASE_URL
-//     is set, since we don't carry a PGlite dep yet. The local Compose stack
-//     and CI can opt in.
-//
-// What "integration" means here:
 //   - rows are actually inserted via the backend's put() path,
 //   - reap() actually deletes them in SQL,
-//   - the reaper calls revoke() with whatever the backend hands back
-//     (important for Postgres, where the token is decrypted from the
-//     envelope on its way out).
+//   - the reaper calls revoke() with whatever the backend hands back.
 
-import { describe, test, expect, beforeEach, afterAll } from "bun:test";
-import postgres from "postgres";
-import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
-import { sql } from "drizzle-orm";
+import { describe, test, expect, beforeEach } from "bun:test";
 import { runSessionReaper } from "./session-reaper";
 import { SessionStore, type SessionRecord } from "./sessions";
-import { PostgresSessionBackend } from "./db/postgres-sessions";
-import { LocalTokenCrypto } from "./token-crypto";
 
 function makeSession(overrides: Partial<SessionRecord> = {}): SessionRecord {
   const now = 1_700_000_000_000;
@@ -144,77 +131,5 @@ describe("session reaper × SessionStore (SQLite, integration)", () => {
     });
     expect(result.reaped).toBe(1);
     expect(await store.get("boundary")).toBeNull();
-  });
-});
-
-const POSTGRES_URL = process.env.BINDERSNAP_TEST_DATABASE_URL;
-const describePg = POSTGRES_URL ? describe : describe.skip;
-
-describePg("session reaper × PostgresSessionBackend (integration)", () => {
-  // Skip-when-env-unset pattern: gives the local Compose stack and CI a path
-  // to exercise the production backend without forcing every contributor to
-  // run Postgres. CI sets BINDERSNAP_TEST_DATABASE_URL against a throwaway db.
-  let client: ReturnType<typeof postgres>;
-  let db: PostgresJsDatabase;
-  let backend: PostgresSessionBackend;
-
-  beforeEach(async () => {
-    client = postgres(POSTGRES_URL!, { max: 2, prepare: false });
-    db = drizzle(client);
-    // Tests are responsible for a clean slate. The migration runner is the
-    // canonical schema source; we assume it has been run against the test DB.
-    await db.execute(sql`TRUNCATE TABLE sessions`);
-    const masterKey = Buffer.alloc(32, 0xab);
-    backend = new PostgresSessionBackend(new LocalTokenCrypto(masterKey), db);
-  });
-
-  afterAll(async () => {
-    await client?.end({ timeout: 5 });
-  });
-
-  test("reaps only expired rows and decrypts tokens for revoke", async () => {
-    const live = makeSession({ id: "pg-live", expiresAt: 10_000 });
-    const expired = makeSession({
-      id: "pg-expired",
-      username: "dora",
-      giteaToken: "tok_pg_secret",
-      expiresAt: 1_000,
-    });
-    await backend.put(live);
-    await backend.put(expired);
-
-    const handed: SessionRecord[] = [];
-    const result = await runSessionReaper({
-      sessionStore: backend,
-      revoke: async (s) => {
-        handed.push(s);
-      },
-      now: 5_000,
-    });
-
-    expect(result).toEqual({ reaped: 1, revokeErrors: 0 });
-    expect(handed).toHaveLength(1);
-    expect(handed[0]!.id).toBe("pg-expired");
-    // Critical: the reaper must hand the *decrypted* token to revoke, not the
-    // ciphertext blob. Otherwise the Gitea DELETE would never authenticate.
-    expect(handed[0]!.giteaToken).toBe("tok_pg_secret");
-    expect(await backend.get("pg-live")).not.toBeNull();
-    expect(await backend.get("pg-expired")).toBeNull();
-  });
-
-  test("revoke failure still removes the row (DELETE ... RETURNING semantics)", async () => {
-    const sess = makeSession({ id: "pg-rev-fail", expiresAt: 1_000 });
-    await backend.put(sess);
-
-    const result = await runSessionReaper({
-      sessionStore: backend,
-      revoke: async () => {
-        throw new Error("gitea 500");
-      },
-      now: 5_000,
-    });
-
-    expect(result).toEqual({ reaped: 1, revokeErrors: 1 });
-    expect(await backend.get("pg-rev-fail")).toBeNull();
   });
 });

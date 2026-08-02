@@ -1,6 +1,5 @@
 export type LogLevel = "debug" | "info" | "warn" | "error";
 export type SessionCookieSameSite = "Strict" | "Lax" | "None";
-export type DbBackend = "sqlite" | "postgres";
 
 // The complete configuration of the API server.
 export interface ApiConfig {
@@ -33,9 +32,6 @@ export interface ApiConfig {
   sessionCookieDomain: string | null;
   sessionCookieSameSite: SessionCookieSameSite;
   sessionsDbPath: string;
-  dbBackend: DbBackend;
-  databaseUrl: string;
-  tokenEncryptionKey: string;
   logLevel: LogLevel;
 }
 
@@ -73,9 +69,6 @@ const STRING_ENV: Record<string, StringSpec> = {
   BINDERSNAP_SESSION_COOKIE_DOMAIN: { default: "" },
   BINDERSNAP_SESSION_COOKIE_SAME_SITE: { default: "Lax" },
   BINDERSNAP_SESSIONS_DB_PATH: { default: "/var/lib/bindersnap/sessions.db" },
-  BINDERSNAP_DB_BACKEND: { default: "sqlite" },
-  BINDERSNAP_DATABASE_URL: { default: "" },
-  BINDERSNAP_TOKEN_ENCRYPTION_KEY: { default: "" },
   LOG_LEVEL: { default: "" },
 };
 
@@ -254,62 +247,6 @@ function resolveCookieSameSite(
   }
 }
 
-function resolveDbBackend(
-  env: NodeJS.ProcessEnv,
-  isProduction: boolean,
-): DbBackend {
-  const raw = parseString(env, "BINDERSNAP_DB_BACKEND", isProduction);
-  switch (raw.toLowerCase()) {
-    case "":
-    case "sqlite":
-      return "sqlite";
-    case "postgres":
-    case "postgresql":
-      return "postgres";
-    default:
-      throw new Error(
-        "BINDERSNAP_DB_BACKEND must be one of sqlite or postgres.",
-      );
-  }
-}
-
-function resolveDatabaseUrl(
-  env: NodeJS.ProcessEnv,
-  isProduction: boolean,
-  backend: DbBackend,
-): string {
-  const value = parseString(env, "BINDERSNAP_DATABASE_URL", isProduction);
-  if (backend === "postgres" && value === "") {
-    throw new Error(
-      "BINDERSNAP_DATABASE_URL is required when BINDERSNAP_DB_BACKEND=postgres.",
-    );
-  }
-  return value;
-}
-
-// Master key for token-at-rest envelope encryption. Required whenever the
-// Postgres backend is selected; ignored when running the SQLite backend on the
-// local-dev host. Value is the base64 encoding of 32 random bytes (e.g.,
-// `openssl rand -base64 32`); the LocalTokenCrypto constructor enforces the
-// decoded length.
-function resolveTokenEncryptionKey(
-  env: NodeJS.ProcessEnv,
-  isProduction: boolean,
-  backend: DbBackend,
-): string {
-  const value = parseString(
-    env,
-    "BINDERSNAP_TOKEN_ENCRYPTION_KEY",
-    isProduction,
-  );
-  if (backend === "postgres" && value === "") {
-    throw new Error(
-      "BINDERSNAP_TOKEN_ENCRYPTION_KEY is required when BINDERSNAP_DB_BACKEND=postgres.",
-    );
-  }
-  return value;
-}
-
 function resolveLogLevel(
   env: NodeJS.ProcessEnv,
   isProduction: boolean,
@@ -374,8 +311,6 @@ export function initializeConfig(
   );
 
   validateProductionOrigins(isProduction, allowedOriginsRaw, appOriginRaw);
-
-  const dbBackend = resolveDbBackend(resolvedEnv, isProduction);
 
   return {
     nodeEnv,
@@ -483,13 +418,6 @@ export function initializeConfig(
       resolvedEnv,
       "BINDERSNAP_SESSIONS_DB_PATH",
       isProduction,
-    ),
-    dbBackend: dbBackend,
-    databaseUrl: resolveDatabaseUrl(resolvedEnv, isProduction, dbBackend),
-    tokenEncryptionKey: resolveTokenEncryptionKey(
-      resolvedEnv,
-      isProduction,
-      dbBackend,
     ),
     logLevel: resolveLogLevel(resolvedEnv, isProduction),
   };

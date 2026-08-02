@@ -1,57 +1,21 @@
-import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
-import { config } from "../config";
+import { Database } from "bun:sqlite";
+import { drizzle, type BunSQLiteDatabase } from "drizzle-orm/bun-sqlite";
+import { migrate } from "drizzle-orm/bun-sqlite/migrator";
+import { join } from "node:path";
 
-// Lazy Postgres connection used by the runtime backends in this directory.
-// One connection pool per process; created on first call.
-//
-// The connection string is read from BINDERSNAP_DATABASE_URL (via config),
-// which is only consulted when BINDERSNAP_DB_BACKEND=postgres.
+const MIGRATIONS_FOLDER = join(import.meta.dir, "migrations");
 
-let client: ReturnType<typeof postgres> | null = null;
-let db: PostgresJsDatabase | null = null;
+export type SqliteDb = BunSQLiteDatabase;
 
-export interface PostgresClientOptions {
-  url?: string;
-  max?: number;
-}
-
-export function getPostgresDb(
-  options: PostgresClientOptions = {},
-): PostgresJsDatabase {
-  if (db) return db;
-  const url = options.url ?? config.databaseUrl;
-  if (!url) {
-    throw new Error(
-      "BINDERSNAP_DATABASE_URL is required when BINDERSNAP_DB_BACKEND=postgres.",
-    );
-  }
-  client = postgres(url, { max: options.max ?? 10, prepare: false });
-  db = drizzle(client);
+// Opens the SQLite file behind bun:sqlite, wraps it in drizzle, and brings the
+// schema up to date. Each store opens its own connection (WAL makes that safe
+// within one process) and migrate() is idempotent — it consults the
+// __drizzle_migrations journal and applies only what's missing, so calling
+// this from every store constructor is cheap.
+export function openSqliteDb(path: string): SqliteDb {
+  const sqlite = new Database(path);
+  sqlite.exec("PRAGMA journal_mode=WAL");
+  const db = drizzle(sqlite);
+  migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });
   return db;
-}
-
-// Test-only: install a pre-built drizzle DB and underlying client so tests can
-// share one connection across backends without paying connection cost per test.
-export function __setPostgresDbForTests(
-  newDb: PostgresJsDatabase,
-  newClient: ReturnType<typeof postgres>,
-): void {
-  client = newClient;
-  db = newDb;
-}
-
-export async function closePostgresDb(): Promise<void> {
-  if (client) {
-    await client.end({ timeout: 5 });
-    client = null;
-    db = null;
-  }
-}
-
-// Test-only: reset the module-level singletons so tests can supply their own
-// connection. Not exported through the API surface.
-export function __resetPostgresDbForTests(): void {
-  client = null;
-  db = null;
 }
