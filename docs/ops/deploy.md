@@ -55,8 +55,9 @@ uses no inbound port 22 and no long-lived AWS keys.
 > The S3 config-as-code path (`deploy-config.yml`, `infra/config-bucket/`) was
 > retired in Phase 4 ([#306](https://github.com/davidgraymi/bindersnap-editor-demo/issues/306)):
 > pyinfra is the only path that configures the host, and Terraform user-data
-> does nothing beyond confirming the SSM agent (plus the Gitea-as-NAT plumbing
-> that leaves with the serverless stack in Phase 5).
+> does nothing beyond confirming the SSM agent. The serverless stack
+> (Lambda/Aurora/API Gateway and the Gitea-as-NAT plumbing) was removed in
+> Phase 5 ([#307](https://github.com/davidgraymi/bindersnap-editor-demo/issues/307)).
 
 ## GitHub Configuration
 

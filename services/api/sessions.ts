@@ -10,10 +10,8 @@ export interface SessionRecord {
   expiresAt: number;
 }
 
-// Backend-agnostic interface for the session store. Implementations may be
-// SQLite (current), Postgres (planned, see #224), or in-memory (tests).
-// Async because the Postgres backend is async; SQLite wraps sync calls in
-// Promise.resolve to satisfy the interface.
+// Interface for the session store: SQLite in production (on the EBS data
+// volume), in-memory for tests. Async so callers never assume a sync backend.
 export interface SessionBackend {
   get(id: string): Promise<SessionRecord | null>;
   put(session: SessionRecord): Promise<void>;
@@ -111,22 +109,14 @@ export class SessionStore implements SessionBackend {
   }
 }
 
-// Factory used by the lazy singleton. Override (e.g., from a future
-// dynamodb-backed module) to swap the production backend at startup.
-export type SessionBackendFactory = () => SessionBackend;
-
-let sessionBackendFactory: SessionBackendFactory = () => new SessionStore();
-
-export function setSessionBackendFactory(factory: SessionBackendFactory): void {
-  sessionBackendFactory = factory;
-}
-
+// Lazy wrapper so importing this module never opens the SQLite file; the DB
+// is created on first use.
 class LazySessionStore implements SessionBackend {
   private _store: SessionBackend | null = null;
 
   private get store(): SessionBackend {
     if (!this._store) {
-      this._store = sessionBackendFactory();
+      this._store = new SessionStore();
     }
     return this._store;
   }

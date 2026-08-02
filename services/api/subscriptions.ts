@@ -101,11 +101,9 @@ function hasStripeBackedAccess(record: SubscriptionRecord | null): boolean {
   return true;
 }
 
-// Backend-agnostic interface for the Stripe-bound subscription + admin override
-// store. SQLite today; intended target is Aurora Serverless v2 Postgres (see
-// #224 plan-verification comment) because access patterns include
-// secondary-index lookup, UNION across two tables, and a uniqueness invariant
-// enforced via transaction.
+// Interface for the Stripe-bound subscription + admin override store.
+// SQLite on the EBS data volume; async so callers never assume a sync
+// backend.
 export interface SubscriptionBackend {
   getByUsername(username: string): Promise<SubscriptionRecord | null>;
   getByCustomerId(customerId: string): Promise<SubscriptionRecord | null>;
@@ -119,8 +117,8 @@ export interface SubscriptionBackend {
   listKnownAccessStates(): Promise<EffectiveSubscriptionAccess[]>;
 }
 
-// Backend-agnostic interface for Stripe webhook idempotency + ordering checks.
-// SQLite today; Postgres planned — pure key-value with TTL.
+// Interface for Stripe webhook idempotency + ordering checks — pure
+// key-value with TTL.
 export interface WebhookEventBackend {
   isProcessed(eventId: string): Promise<boolean>;
   isOutOfOrder(customerId: string, eventCreated: number): Promise<boolean>;
@@ -490,23 +488,14 @@ export class WebhookEventStore implements WebhookEventBackend {
   }
 }
 
-export type WebhookEventBackendFactory = () => WebhookEventBackend;
-
-let webhookEventBackendFactory: WebhookEventBackendFactory = () =>
-  new WebhookEventStore();
-
-export function setWebhookEventBackendFactory(
-  factory: WebhookEventBackendFactory,
-): void {
-  webhookEventBackendFactory = factory;
-}
-
+// Lazy wrapper so importing this module never opens the SQLite file; the DB
+// is created on first use.
 class LazyWebhookEventStore implements WebhookEventBackend {
   private _store: WebhookEventBackend | null = null;
 
   private get store(): WebhookEventBackend {
     if (!this._store) {
-      this._store = webhookEventBackendFactory();
+      this._store = new WebhookEventStore();
     }
     return this._store;
   }
@@ -536,23 +525,12 @@ class LazyWebhookEventStore implements WebhookEventBackend {
 
 export const webhookEventStore = new LazyWebhookEventStore();
 
-export type SubscriptionBackendFactory = () => SubscriptionBackend;
-
-let subscriptionBackendFactory: SubscriptionBackendFactory = () =>
-  new SubscriptionStore();
-
-export function setSubscriptionBackendFactory(
-  factory: SubscriptionBackendFactory,
-): void {
-  subscriptionBackendFactory = factory;
-}
-
 class LazySubscriptionStore implements SubscriptionBackend {
   private _store: SubscriptionBackend | null = null;
 
   private get store(): SubscriptionBackend {
     if (!this._store) {
-      this._store = subscriptionBackendFactory();
+      this._store = new SubscriptionStore();
     }
     return this._store;
   }

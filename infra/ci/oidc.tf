@@ -93,18 +93,6 @@ variable "instance_tag_value" {
   default     = "bindersnap"
 }
 
-variable "api_ecr_repository_name" {
-  description = "ECR repository pushed to by deploy-api.yml. Must match infra/api-service ecr.tf."
-  type        = string
-  default     = "bindersnap-prod-api"
-}
-
-variable "api_lambda_function_name" {
-  description = "Lambda function name updated by deploy-api.yml. Must match infra/api-service lambda.tf."
-  type        = string
-  default     = "bindersnap-prod-api"
-}
-
 data "aws_caller_identity" "current" {}
 
 data "aws_partition" "current" {}
@@ -362,56 +350,6 @@ data "aws_iam_policy_document" "deploy" {
       variable = "kms:ViaService"
       values   = ["ssm.${var.aws_region}.amazonaws.com"]
     }
-  }
-
-  # ---------- deploy-api.yml: ECR push + Lambda update + invoke ----------
-
-  statement {
-    sid    = "EcrAuth"
-    effect = "Allow"
-
-    # GetAuthorizationToken does not support resource-level scoping.
-    actions = [
-      "ecr:GetAuthorizationToken",
-    ]
-
-    resources = ["*"]
-  }
-
-  statement {
-    sid    = "EcrPushApiImage"
-    effect = "Allow"
-
-    actions = [
-      "ecr:BatchCheckLayerAvailability",
-      "ecr:BatchGetImage",
-      "ecr:CompleteLayerUpload",
-      "ecr:DescribeImages",
-      "ecr:GetDownloadUrlForLayer",
-      "ecr:InitiateLayerUpload",
-      "ecr:PutImage",
-      "ecr:UploadLayerPart",
-    ]
-
-    resources = [
-      "arn:${data.aws_partition.current.partition}:ecr:${var.aws_region}:${data.aws_caller_identity.current.account_id}:repository/${var.api_ecr_repository_name}",
-    ]
-  }
-
-  statement {
-    sid    = "LambdaUpdateApiFunction"
-    effect = "Allow"
-
-    actions = [
-      "lambda:GetFunction",
-      "lambda:GetFunctionConfiguration",
-      "lambda:InvokeFunction",
-      "lambda:UpdateFunctionCode",
-    ]
-
-    resources = [
-      "arn:${data.aws_partition.current.partition}:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:${var.api_lambda_function_name}",
-    ]
   }
 }
 

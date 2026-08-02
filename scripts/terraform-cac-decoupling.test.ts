@@ -4,10 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 const computeTerraform = readFileSync("infra/compute/main.tf", "utf8");
 const ciTerraform = readFileSync("infra/ci/oidc.tf", "utf8");
 const applyAll = readFileSync("infra/apply-all.sh", "utf8");
-const userData = readFileSync(
-  "infra/compute/user-data.sh.tftpl",
-  "utf8",
-).replaceAll("$${", "${");
+const userData = readFileSync("infra/compute/user-data.sh", "utf8");
 const deployPy = readFileSync("deploy/deploy.py", "utf8");
 
 describe("Terraform is decoupled from configuration-as-code (#306)", () => {
@@ -24,10 +21,10 @@ describe("Terraform is decoupled from configuration-as-code (#306)", () => {
     expect(ciTerraform).not.toContain("s3:PutObject");
   });
 
-  test("user-data carries no host configuration — only the SSM agent check and Gitea-as-NAT", () => {
+  test("user-data carries no host configuration — only the SSM agent check", () => {
     expect(userData).toContain("amazon-ssm-agent");
-    // Gitea-as-NAT stays until the serverless stack is removed in phase 5.
-    expect(userData).toContain("MASQUERADE");
+    // Gitea-as-NAT left with the serverless stack (#307).
+    expect(userData).not.toContain("MASQUERADE");
 
     expect(userData).not.toContain("dnf install -y awscli docker");
     expect(userData).not.toContain("mkfs.xfs");

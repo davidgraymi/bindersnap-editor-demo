@@ -98,17 +98,6 @@ variable "allowed_ssh_cidrs" {
   default     = []
 }
 
-variable "lambda_subnet_cidrs" {
-  description = "CIDR blocks of the private subnets used by the api-service Lambda. The Gitea instance acts as a NAT for these subnets: source/dest check is disabled on its ENI, the kernel forwards IPv4 packets, and an iptables MASQUERADE rule rewrites packets sourced from these CIDRs. Leave empty until the api-service root is being applied — the host runs normally with an empty list."
-  type        = list(string)
-  default     = []
-
-  validation {
-    condition     = alltrue([for c in var.lambda_subnet_cidrs : can(cidrnetmask(c))])
-    error_message = "lambda_subnet_cidrs must contain valid IPv4 CIDR blocks."
-  }
-}
-
 # ---------- Data sources ----------
 
 # Auto-discover latest AL2023 ARM64 AMI if not pinned
@@ -215,19 +204,6 @@ resource "aws_vpc_security_group_egress_rule" "all" {
   ip_protocol       = "-1"
 }
 
-# Gitea-as-NAT: accept inbound from Lambda subnet CIDRs on any port so packets
-# routed through this ENI on their way to the public internet are not dropped
-# by the SG. Egress is unrestricted (rule above) so the MASQUERADE'd outbound
-# leg leaves freely.
-resource "aws_vpc_security_group_ingress_rule" "lambda_nat" {
-  count = length(var.lambda_subnet_cidrs)
-
-  security_group_id = aws_security_group.app.id
-  description       = "Gitea-as-NAT: forwarded traffic from Lambda subnet ${var.lambda_subnet_cidrs[count.index]}"
-  cidr_ipv4         = var.lambda_subnet_cidrs[count.index]
-  ip_protocol       = "-1"
-}
-
 # ---------- IAM Instance Profile ----------
 
 data "aws_iam_policy_document" "ec2_assume" {
@@ -301,16 +277,9 @@ resource "aws_instance" "app" {
   iam_instance_profile   = aws_iam_instance_profile.instance.name
   key_name               = var.key_pair_name
 
-  # Required for Gitea-as-NAT: the kernel forwards packets sourced from
-  # var.lambda_subnet_cidrs out via this ENI, so AWS must not drop frames
-  # whose source/destination IP does not match the ENI's address.
-  source_dest_check = length(var.lambda_subnet_cidrs) == 0
-
   # Host configuration is owned by deploy/ (pyinfra). User-data only confirms
-  # the SSM agent and, while the serverless stack exists, sets up Gitea-as-NAT.
-  user_data_base64 = base64gzip(templatefile("${path.module}/user-data.sh.tftpl", {
-    lambda_subnet_cidrs = var.lambda_subnet_cidrs
-  }))
+  # the SSM agent is running so a fresh host is reachable over SSH-through-SSM.
+  user_data_base64            = base64gzip(file("${path.module}/user-data.sh"))
   user_data_replace_on_change = false
 
   metadata_options {
@@ -377,9 +346,4 @@ output "data_volume_id" {
 output "eip_allocation_id" {
   description = "Elastic IP allocation ID (for Route53 A records)"
   value       = aws_eip.app.id
-}
-
-output "primary_network_interface_id" {
-  description = "Primary ENI of the Gitea instance. Consumed by infra/api-service to route 0.0.0.0/0 from Lambda subnets at this ENI (Gitea-as-NAT)."
-  value       = aws_instance.app.primary_network_interface_id
 }
