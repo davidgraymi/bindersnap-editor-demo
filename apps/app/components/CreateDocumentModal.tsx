@@ -13,11 +13,7 @@ interface CreateDocumentModalProps {
 }
 
 type CreateDocumentStatus =
-  | "idle"
-  | "checking-repo"
-  | InitialDocumentUploadStep
-  | "done"
-  | "error";
+  "idle" | "checking-repo" | InitialDocumentUploadStep | "done" | "error";
 
 function stripExtension(fileName: string): string {
   const cleanName = fileName.split(/[\\/]/).pop() ?? fileName;

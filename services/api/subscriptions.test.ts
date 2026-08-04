@@ -323,10 +323,9 @@ describe("SubscriptionStore", () => {
 
       const migratedDb = new Database(tempDb.path, { readonly: true });
       const indexes = migratedDb
-        .query<
-          { name: string; unique: number },
-          []
-        >("PRAGMA index_list(subscriptions)")
+        .query<{ name: string; unique: number }, []>(
+          "PRAGMA index_list(subscriptions)",
+        )
         .all();
       migratedDb.close();
 

@@ -136,11 +136,9 @@ let originalMutationObserver: typeof globalThis.MutationObserver | undefined;
 let originalPopStateEvent: typeof globalThis.PopStateEvent | undefined;
 let originalEvent: typeof globalThis.Event | undefined;
 let originalRequestAnimationFrame:
-  | typeof globalThis.requestAnimationFrame
-  | undefined;
+  typeof globalThis.requestAnimationFrame | undefined;
 let originalCancelAnimationFrame:
-  | typeof globalThis.cancelAnimationFrame
-  | undefined;
+  typeof globalThis.cancelAnimationFrame | undefined;
 
 function installDom(pathname = "/") {
   const dom = new JSDOM("<!doctype html><html><body></body></html>", {

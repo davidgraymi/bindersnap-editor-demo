@@ -1376,8 +1376,7 @@ async function findUsernameByEmail(email: string): Promise<LoginResolution> {
     }
 
     const payload = (await response.json().catch(() => null)) as
-      | GiteaEmailRecord[]
-      | null;
+      GiteaEmailRecord[] | null;
     if (!Array.isArray(payload)) {
       return {
         kind: "unavailable",
