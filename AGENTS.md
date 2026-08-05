@@ -23,8 +23,15 @@ bindersnap-editor-demo/
 │       ├── routes.ts               ← Client-side route definitions
 │       └── components/             ← App shell, landing page, document UI
 │
-├── infra/                          ← Infrastructure as code
-│   ├── compute/                    ← EC2 Terraform for API host
+├── deploy/                         ← CONFIGURATION AS CODE (pyinfra push deploy)
+│   ├── deploy.py                   ← The production deployment itself
+│   ├── inventory.py                ← Single prod host + SSH-over-SSM connection
+│   ├── files/                      ← Runtime config uploaded to the host
+│   ├── bin/ssm-connect.sh          ← Ephemeral key + SSM tunnel, then pyinfra
+│   └── README.md                   ← Read before touching production config
+│
+├── infra/                          ← INFRASTRUCTURE AS CODE (Terraform only)
+│   ├── compute/                    ← EC2 Terraform for the app host
 │   ├── backups/                    ← DLM snapshot policy
 │   ├── ci/                         ← GitHub Actions OIDC role
 │   ├── secrets/                    ← AWS Secrets Manager
@@ -122,15 +129,54 @@ See `tests/README.md` for full usage.
 
 ### Deployment
 
+Everything except the SPA runs as Docker Compose services on **one EC2 host**,
+deployed by **pushing with pyinfra** from GitHub Actions. There is no serverless
+stack: Lambda, Aurora, API Gateway and the Gitea-as-NAT plumbing were removed
+(epic #302). See `docs/adr/0003-single-ec2-host-pyinfra-push-deploys.md`.
+
 | Component  | Host           | How deployed                                                          |
 | ---------- | -------------- | --------------------------------------------------------------------- |
 | SPA        | GitHub Pages   | `pages.yml` on push to `main`                                         |
 | API        | EC2 via Docker | `deploy-pyinfra.yml` (pyinfra over SSH-through-SSM) on push to `main` |
-| Gitea      | Same EC2 host  | `docker-compose.prod.yml`                                             |
-| Hocuspocus | Same EC2 host  | `docker-compose.prod.yml`                                             |
+| Gitea      | Same EC2 host  | `docker-compose.prod.yml`, same pyinfra run                           |
+| Hocuspocus | Same EC2 host  | `docker-compose.prod.yml`, same pyinfra run                           |
+| Caddy      | Same EC2 host  | `docker-compose.prod.yml`, same pyinfra run                           |
 
 The SPA is built with `BUN_PUBLIC_API_BASE_URL=https://api.bindersnap.com`
 baked in at compile time. Locally, this is `http://localhost:8787`.
+
+**How a production deploy runs.** On every push to `main`,
+`deploy-pyinfra.yml` runs the unit suites, builds and pushes
+`ghcr.io/davidgraymi/bindersnap-api:<sha>`, assumes the OIDC deploy role, then
+runs `deploy/bin/ssm-connect.sh`. That script resolves the instance by tag,
+pushes a ~60-second ephemeral key with EC2 Instance Connect, tunnels SSH through
+`aws ssm start-session`, and runs `pyinfra deploy/inventory.py deploy/deploy.py`.
+**There is no inbound port 22 and no long-lived key material anywhere in this
+path.** `deploy.py` is idempotent: it installs Docker, mounts the EBS volume,
+uploads `deploy/files/`, renders `/opt/bindersnap/.env.prod` from SSM Parameter
+Store, and force-recreates the stack only when config or secrets actually
+changed.
+
+Rollback is `git revert` on `main` (the deploy re-applies the prior stack), or a
+`workflow_dispatch` run with an explicit `api_tag`. Each deploy pins `API_TAG`
+to the deployed commit's SHA — never mutable `:latest`.
+
+**Terraform provisions; pyinfra configures.** These do not overlap:
+
+- Anything about the _host's contents_ — packages, config files, secrets,
+  containers, the CloudWatch agent — belongs in `deploy/`. Adding a config file
+  is a commit to `deploy/files/`, not an infrastructure change.
+- Anything about _AWS resources_ — instance, volumes, IAM, networking, backups,
+  monitoring, Parameter Store — belongs in `infra/`.
+- `infra/compute/user-data.sh` does exactly one thing: confirm the SSM agent is
+  running. Do not add bootstrap logic to it, and do not reintroduce a config
+  bucket. If you find yourself editing Terraform to change how the app is
+  configured, you are in the wrong directory.
+
+Read `deploy/README.md` before changing anything under `deploy/`, and
+`docs/ops/deploy.md` for the pipeline, required GitHub variables, and rollback.
+`docs/ops/break-glass.md` covers recovering the host over SSM when CI is
+unavailable.
 
 ---
 
@@ -174,6 +220,18 @@ before any API call.
 
 See `docs/adr/0001-external-file-workflow-contract.md` for the full
 upload/review/publish contract. **That ADR is law for the file vault workflow.**
+
+### Production is one EC2 host, deployed by pushing with pyinfra.
+
+No serverless. The backend is a Docker Compose stack on a single EC2 instance,
+and `deploy/` is the only thing that configures it. Do not add a Lambda, an
+Aurora cluster, an API Gateway, a config bucket, or a bootstrap script to
+Terraform user-data. Do not add a pull agent to the host. Deployment logic goes
+in `deploy/deploy.py`, in Python, in version control.
+
+See `docs/adr/0003-single-ec2-host-pyinfra-push-deploys.md`. Note that
+`docs/adr/0002-mvp-backend-aws-s3-dynamodb-cognito.md` describes an
+AWS-native backend that was **reversed** — it is history, not guidance.
 
 ### The MVP is a document repository, not an editor.
 
@@ -489,9 +547,9 @@ This repository uses either `gh` CLI or an MCP tool.
 
 ## Production Security Rules
 
-These apply to any changes touching `docker-compose.prod.yml`, `Caddyfile.prod`, or EC2 deployment:
+These apply to any changes touching `deploy/`, `deploy/files/docker-compose.prod.yml`, `deploy/files/Caddyfile.prod`, or EC2 deployment:
 
-1. **Never hardcode credentials.** All secrets (`GITEA_ADMIN_PASS`, `GITEA_SECRET_KEY`, `BINDERSNAP_GITEA_SERVICE_TOKEN`, etc.) must come from environment variables, loaded from `.env.prod` on the server. `.env.prod` is in `.gitignore` and must never be committed.
+1. **Never hardcode credentials.** All secrets (`GITEA_ADMIN_PASS`, `GITEA_SECRET_KEY`, `BINDERSNAP_GITEA_SERVICE_TOKEN`, etc.) must come from environment variables in `/opt/bindersnap/.env.prod`, which `deploy.py` renders on every run from `/bindersnap/prod/*` in SSM Parameter Store. The SSM read happens on the control plane and the file is uploaded `0600` — secrets are never written to a control-plane disk file, printed, or committed. Never commit an `.env.prod`; it is in `.gitignore`.
 2. **Registration is disabled in prod.** `GITEA__service__DISABLE_REGISTRATION=true` is non-negotiable for production. Dev compose may differ.
 3. **`INSTALL_LOCK=true` in prod.** Prevents Gitea setup wizard from re-running after first boot.
 4. **Rotate credentials on first deploy.** Generate with `openssl rand -base64 20` for passwords and `openssl rand -base64 32` for secret keys.
