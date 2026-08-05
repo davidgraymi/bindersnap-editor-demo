@@ -6,11 +6,7 @@ type PullRequest = components["schemas"]["PullRequest"];
 type PullReview = components["schemas"]["PullReview"];
 
 export type ApprovalState =
-  | "working"
-  | "in_review"
-  | "changes_requested"
-  | "approved"
-  | "published";
+  "working" | "in_review" | "changes_requested" | "approved" | "published";
 
 export interface PullRequestWithApprovalState extends PullRequest {
   approvalState: ApprovalState;

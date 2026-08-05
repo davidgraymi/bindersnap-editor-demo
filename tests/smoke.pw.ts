@@ -216,7 +216,9 @@ test.describe("app shell routes", () => {
         `.app-topnav-avatar[aria-label="User: ${GITEA_ADMIN_USER}"]`,
       ),
     ).toBeVisible();
-    await expect(page.getByRole("button", { name: "Documents" })).toBeVisible();
+    await expect(
+      page.locator(".app-topnav-link", { hasText: "Documents" }),
+    ).toBeVisible();
   });
 
   test("deep links still resolve inside the SPA shell", async ({ page }) => {

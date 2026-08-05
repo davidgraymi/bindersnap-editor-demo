@@ -325,11 +325,11 @@ test("createInitialDocumentUpload creates the repo, bootstraps main, and opens a
   class MockFileReader {
     result: string | ArrayBuffer | null = null;
     onload:
-      | ((this: FileReader, ev: ProgressEvent<FileReader>) => unknown)
-      | null = null;
+      ((this: FileReader, ev: ProgressEvent<FileReader>) => unknown) | null =
+      null;
     onerror:
-      | ((this: FileReader, ev: ProgressEvent<FileReader>) => unknown)
-      | null = null;
+      ((this: FileReader, ev: ProgressEvent<FileReader>) => unknown) | null =
+      null;
 
     readAsDataURL() {
       this.result = "data:application/octet-stream;base64,aGVsbG8gd29ybGQ=";

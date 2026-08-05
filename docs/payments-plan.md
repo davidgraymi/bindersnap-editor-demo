@@ -339,12 +339,7 @@ const [currentPeriodEnd, setCurrentPeriodEnd] = useState<number | null>(null);
 
 ```ts
 type AuthView =
-  | "loading"
-  | "callback"
-  | "landing"
-  | "login"
-  | "billing"
-  | "app";
+  "loading" | "callback" | "landing" | "login" | "billing" | "app";
 ```
 
 **Update `refreshSession`** — after `setUser(nextSession?.user ?? null)`, if user is non-null:
