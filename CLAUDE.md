@@ -34,21 +34,41 @@ bun run down          # Tear down
 
 Test files live alongside source as `*.test.ts`. TypeScript strict mode is the linter.
 
+Production deploys run themselves — `deploy-pyinfra.yml` on every push to `main`.
+To drive one by hand (Python, not Bun):
+
+```bash
+python3 -m venv deploy/.venv
+deploy/.venv/bin/pip install -r deploy/requirements.txt
+source deploy/.venv/bin/activate
+
+deploy/bin/ssm-connect.sh --dry   # report changes without applying
+deploy/bin/ssm-connect.sh         # apply
+```
+
 ---
 
 ## Architecture
 
 Bun monorepo — one SPA, shared packages, backend services.
 
-| Directory              | Purpose                                    |
-| ---------------------- | ------------------------------------------ |
-| `apps/app/`            | Unified SPA → GitHub Pages                 |
-| `packages/ui-tokens/`  | CSS design tokens (single source of truth) |
-| `packages/utils/`      | Shared utilities                           |
-| `services/api/`        | Auth + data BFF (port 8787)                |
-| `services/hocuspocus/` | Yjs WebSocket collaboration server         |
+| Directory              | Purpose                                     |
+| ---------------------- | ------------------------------------------- |
+| `apps/app/`            | Unified SPA → GitHub Pages                  |
+| `packages/ui-tokens/`  | CSS design tokens (single source of truth)  |
+| `packages/utils/`      | Shared utilities                            |
+| `services/api/`        | Auth + data BFF (port 8787)                 |
+| `services/hocuspocus/` | Yjs WebSocket collaboration server          |
+| `deploy/`              | Configuration as code (pyinfra push deploy) |
+| `infra/`               | Infrastructure as code (Terraform only)     |
 
 **Path aliases:** `@editor/*`, `@gitea/*`, `@ui/*`, `@utils/*`
+
+Production is **one EC2 host** running the `docker-compose.prod.yml` stack (API,
+Gitea, Hocuspocus, Caddy, Litestream). `deploy/deploy.py` configures it over an
+SSH-through-SSM tunnel on every push to `main`; Terraform only provisions AWS
+resources. See `docs/adr/0003-single-ec2-host-pyinfra-push-deploys.md` and
+`deploy/README.md`.
 
 ---
 
@@ -65,3 +85,5 @@ Settled. Do not reopen. If a task requires violating one, open a `human-needed` 
 4. **Two independent workflows.** File vault (external uploads) and inline editor are separate. Do not conflate them.
 
 5. **Editor UI changes need a flag.** If you change `packages/editor/` visuals, note it in your PR — the landing demo embed requires a manual `bun run sync-demo`.
+
+6. **`deploy/` configures the host; Terraform does not.** No serverless (no Lambda, Aurora, or API Gateway), no config bucket, no bootstrap logic in `user-data.sh`. Host config changes are commits to `deploy/`.

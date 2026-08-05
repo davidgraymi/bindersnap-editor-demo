@@ -112,6 +112,42 @@ bun run up
 
 See [`tests/README.md`](tests/README.md) for full workflow details.
 
+## Deployment
+
+Two surfaces, both triggered by a push to `main`:
+
+| What                                      | Where                     | Workflow                                                     |
+| ----------------------------------------- | ------------------------- | ------------------------------------------------------------ |
+| SPA                                       | GitHub Pages              | [`pages.yml`](.github/workflows/pages.yml)                   |
+| API, Gitea, Hocuspocus, Caddy, Litestream | One EC2 host, via Compose | [`deploy-pyinfra.yml`](.github/workflows/deploy-pyinfra.yml) |
+
+The backend is a single EC2 instance, not a serverless stack. Its entire
+configuration lives in [`deploy/`](deploy/README.md) as a
+[pyinfra](https://pyinfra.com/) script. GitHub Actions **pushes** the deploy: it
+assumes an OIDC role, pushes a ~60-second ephemeral key with EC2 Instance
+Connect, tunnels SSH through `aws ssm start-session`, and runs
+`pyinfra deploy/inventory.py deploy/deploy.py`. The host has **no inbound port
+22** and there are **no long-lived keys**.
+
+`deploy.py` is idempotent — a fresh host converges to the current stack with no
+pre-configuration, and a re-run changes nothing unless config or secrets
+changed. Terraform under [`infra/`](infra/) provisions AWS resources only; it
+does not configure the host.
+
+Run it yourself (dry run applies nothing):
+
+```bash
+python3 -m venv deploy/.venv
+deploy/.venv/bin/pip install -r deploy/requirements.txt
+source deploy/.venv/bin/activate
+
+deploy/bin/ssm-connect.sh --dry
+```
+
+- Pipeline details, required GitHub variables, rollback: [`docs/ops/deploy.md`](docs/ops/deploy.md)
+- Recovering the host when CI is down: [`docs/ops/break-glass.md`](docs/ops/break-glass.md)
+- Why it is built this way: [`docs/adr/0003-single-ec2-host-pyinfra-push-deploys.md`](docs/adr/0003-single-ec2-host-pyinfra-push-deploys.md)
+
 ## Production Secrets
 
 Production no longer relies on a repo-side `.env.prod`. The pyinfra deploy
@@ -178,28 +214,35 @@ it from the production app host or an equivalent recovery environment.
 
 ## Production API Image
 
-The production API service now runs from a published GHCR image instead of a
-source bind mount. Build and publish happens in
-`.github/workflows/build-api.yml`, which pushes:
+The production API service runs from a published GHCR image instead of a source
+bind mount. `deploy-pyinfra.yml` calls the reusable
+`.github/workflows/build-api.yml` for the exact commit being deployed, which
+pushes:
 
 - `ghcr.io/davidgraymi/bindersnap-api:${GITHUB_SHA}`
 - `ghcr.io/davidgraymi/bindersnap-api:latest`
 
-Production hosts pull the image selected by `API_TAG` in
-`/opt/bindersnap/.env.prod`.
-On the EC2 host that value normally lives in `/opt/bindersnap/.env.prod`, which
-is generated from SSM at boot and can be regenerated for secret rotation.
+The host pulls the image selected by `API_TAG` in `/opt/bindersnap/.env.prod`.
+The deploy pins that to the deployed commit's SHA — the immutable tag, not
+mutable `:latest`. Normal rollback is a `git revert` on `main`, or running
+`deploy-pyinfra.yml` via **Run workflow** with the `api_tag` input set to a
+last-good SHA. For a pin that survives subsequent pushes, set the SSM `api_tag`
+override (see [`docs/ops/break-glass.md`](docs/ops/break-glass.md)).
 
-To deploy the currently selected API tag:
+The commands below are the manual fallback for when GitHub Actions is
+unavailable — the normal path is a deploy. To deploy the currently selected API
+tag by hand on the host:
 
 ```bash
+cd /opt/bindersnap
 docker compose -f docker-compose.prod.yml --env-file /opt/bindersnap/.env.prod pull api
 docker compose -f docker-compose.prod.yml --env-file /opt/bindersnap/.env.prod up -d api
 ```
 
-To roll back, set `API_TAG` to a previous commit SHA in
+To roll back by hand, set `API_TAG` to a previous commit SHA in
 `/opt/bindersnap/.env.prod`, then run the same `pull` and `up -d api` commands
-again.
+again. Note that the next pyinfra deploy re-renders `.env.prod` and undoes a
+hand-edited pin — use the SSM override for anything that must persist.
 
 The end-to-end production deploy workflow, required GitHub variables, and the
 GitHub Actions rollback path are documented in

@@ -58,6 +58,8 @@ uses no inbound port 22 and no long-lived AWS keys.
 > does nothing beyond confirming the SSM agent. The serverless stack
 > (Lambda/Aurora/API Gateway and the Gitea-as-NAT plumbing) was removed in
 > Phase 5 ([#307](https://github.com/davidgraymi/bindersnap-editor-demo/issues/307)).
+> The rationale for the whole model is recorded in
+> [`../adr/0003-single-ec2-host-pyinfra-push-deploys.md`](../adr/0003-single-ec2-host-pyinfra-push-deploys.md).
 
 ## GitHub Configuration
 

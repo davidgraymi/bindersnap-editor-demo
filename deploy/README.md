@@ -6,12 +6,16 @@ flow (manual SSH, `infra/compute/user-data.sh.tftpl` bootstrap, and the S3
 config bucket). See epic
 [#302](https://github.com/davidgraymi/bindersnap-editor-demo/issues/302).
 
-> **Status:** Phase 4 — `.github/workflows/deploy-pyinfra.yml` runs this deploy
-> on every push to `main` (OIDC into the deploy role, SSH-over-SSM tunnel). The
-> old SSM `send-command` workflow (`deploy.yml`) and the S3 config-as-code path
+> **Status:** live. `.github/workflows/deploy-pyinfra.yml` runs this deploy on
+> every push to `main` (OIDC into the deploy role, SSH-over-SSM tunnel). The old
+> SSM `send-command` workflow (`deploy.yml`), the S3 config-as-code path
 > (`deploy-config.yml`, `infra/config-bucket/`,
-> [#306](https://github.com/davidgraymi/bindersnap-editor-demo/issues/306)) are
-> both removed: this directory is the only thing that configures the host.
+> [#306](https://github.com/davidgraymi/bindersnap-editor-demo/issues/306)) and
+> the serverless stack (Lambda/Aurora/API Gateway,
+> [#307](https://github.com/davidgraymi/bindersnap-editor-demo/issues/307)) are
+> all removed: this directory is the only thing that configures the host. The
+> rationale is recorded in
+> [`../docs/adr/0003-single-ec2-host-pyinfra-push-deploys.md`](../docs/adr/0003-single-ec2-host-pyinfra-push-deploys.md).
 
 ## How it connects
 

@@ -1,8 +1,16 @@
 # ADR 0002: MVP Backend — AWS S3 + DynamoDB + Cognito (Replaces Gitea)
 
-Status: Accepted  
+Status: **Superseded by [ADR 0003](0003-single-ec2-host-pyinfra-push-deploys.md)** — kept for history  
 Date: 2026-04-02  
 Supersedes: ADR 0001 (git primitives are replaced by DynamoDB/S3 equivalents; role model and workflow states are preserved)
+
+> **This ADR does not describe the running system.** The migration off Gitea was
+> never completed: only a partial serverless stack (Lambda + Aurora + API
+> Gateway) was built, and it was removed by
+> [epic #302](https://github.com/davidgraymi/bindersnap-editor-demo/issues/302).
+> Gitea remains the only datastore and ADR 0001 remains the workflow contract.
+> See ADR 0003 for the current backend and deployment model. Read the below as a
+> record of a direction that was reversed, not as guidance.
 
 ## Context
 
