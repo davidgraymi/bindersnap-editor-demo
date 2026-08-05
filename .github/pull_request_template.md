@@ -11,7 +11,3 @@ Describe the change and why it is needed.
 
 - [ ] Local validation/tests run (list commands below)
 - Commands run:
-
-## Merge Gate
-
-- [ ] Any fallback is explicitly documented and justified
