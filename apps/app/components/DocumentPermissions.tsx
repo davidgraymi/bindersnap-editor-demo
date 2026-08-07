@@ -196,8 +196,10 @@ export function DocumentPermissions({
   const [currentUserPermission, setCurrentUserPermission] = useState<
     string | null
   >(null);
-  const isOwner =
-    currentUsername === owner || currentUserPermission === "owner";
+  const canEdit =
+    currentUsername === owner ||
+    currentUserPermission === "owner" ||
+    currentUserPermission === "admin";
 
   useEffect(() => {
     setLoading(true);
@@ -266,7 +268,7 @@ export function DocumentPermissions({
     }
   }
 
-  const disabled = !isOwner || saving;
+  const disabled = !canEdit || saving;
 
   if (loading) {
     return (
@@ -289,10 +291,10 @@ export function DocumentPermissions({
 
   return (
     <div className="perms-page">
-      {!isOwner && (
+      {!canEdit && (
         <div className="perms-notice">
-          Only the document owner can change permissions. You can view these
-          settings but cannot modify them.
+          Only the document owner or an admin can change permissions. You can
+          view these settings but cannot modify them.
         </div>
       )}
 
@@ -504,7 +506,7 @@ export function DocumentPermissions({
         </div>
 
         {/* Footer */}
-        {isOwner && (
+        {canEdit && (
           <div className="perms-footer">
             <div className="perms-footer-messages">
               {saveError && (

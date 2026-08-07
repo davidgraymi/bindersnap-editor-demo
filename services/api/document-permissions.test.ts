@@ -38,6 +38,7 @@ let giteaUsersByLogin = new Map<string, MockedGiteaUser>();
 let giteaLoginsByToken = new Map<string, string>();
 let reposByKey = new Map<string, MockedRepo>();
 let branchProtectionsByRepoKey = new Map<string, MockedBranchProtection[]>();
+let collaboratorPermissionsByRepoKey = new Map<string, Map<string, string>>();
 
 function repoKey(owner: string, repo: string): string {
   return `${owner}/${repo}`;
@@ -64,6 +65,7 @@ beforeEach(() => {
   giteaLoginsByToken = new Map();
   reposByKey = new Map();
   branchProtectionsByRepoKey = new Map();
+  collaboratorPermissionsByRepoKey = new Map();
 
   globalThis.fetch = (async (input, init) => {
     const requestUrl =
@@ -184,6 +186,10 @@ beforeEach(() => {
           headers: { "Content-Type": "application/json" },
         });
       }
+      const authHeader = headers.get("Authorization") ?? "";
+      const token = authHeader.startsWith("token ") ? authHeader.slice(6) : "";
+      const requester = giteaLoginsByToken.get(token) ?? "";
+      const isRepoOwner = requester === repoMatch[1];
       return new Response(
         JSON.stringify({
           id: 1,
@@ -191,7 +197,7 @@ beforeEach(() => {
           full_name: key,
           private: repo.private,
           internal: repo.internal,
-          permissions: { admin: true, push: true, pull: true },
+          permissions: { admin: isRepoOwner, push: isRepoOwner, pull: true },
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
@@ -275,6 +281,30 @@ beforeEach(() => {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
+    }
+
+    // Gitea: GET /api/v1/repos/{owner}/{repo}/collaborators/{user}/permission
+    const collabPermMatch = url.pathname.match(
+      /^\/api\/v1\/repos\/([^/]+)\/([^/]+)\/collaborators\/([^/]+)\/permission$/,
+    );
+    if (collabPermMatch && method === "GET") {
+      const key = repoKey(collabPermMatch[1]!, collabPermMatch[2]!);
+      const login = collabPermMatch[3]!;
+      const permission = collaboratorPermissionsByRepoKey.get(key)?.get(login);
+      if (!permission) {
+        return new Response(JSON.stringify({ message: "Not found" }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(
+        JSON.stringify({
+          permission,
+          role_name: permission,
+          user: { id: 1, login, full_name: "", email: "", avatar_url: "" },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
     }
 
     // Gitea: GET /api/v1/repos/{owner}/{repo}/collaborators/{user} — return 404 (no collaborators setup)
@@ -365,6 +395,19 @@ function seedBranchProtection(
       ...rule,
     },
   ]);
+}
+
+function seedCollaboratorPermission(
+  owner: string,
+  repo: string,
+  login: string,
+  permission: string,
+): void {
+  const key = repoKey(owner, repo);
+  const existing =
+    collaboratorPermissionsByRepoKey.get(key) ?? new Map<string, string>();
+  existing.set(login, permission);
+  collaboratorPermissionsByRepoKey.set(key, existing);
 }
 
 function makeRequest(
@@ -848,6 +891,69 @@ describe("PUT /api/app/documents/:owner/:repo/permissions", () => {
       expect(response.status).toBe(403);
       const body = (await response.json()) as { error: string };
       expect(body.error).toMatch(/owner/i);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("an admin collaborator can change permissions", async () => {
+    const server = createApiServer();
+    const owner = `owner-${randomUUID()}`;
+    const admin = `admin-${randomUUID()}`;
+    const repo = "shared-doc";
+    seedRepo(owner, repo, { isPrivate: true });
+    seedBranchProtection(owner, repo, {
+      rule_name: "main",
+      required_approvals: 1,
+    });
+    seedCollaboratorPermission(owner, repo, admin, "admin");
+    const adminSessionId = await seedSession(admin);
+
+    try {
+      const response = await server.fetch(
+        makeRequest(
+          `/api/app/documents/${owner}/${repo}/permissions`,
+          adminSessionId,
+          {
+            method: "PUT",
+            body: { requiredApprovals: 3 },
+          },
+        ),
+      );
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as {
+        branchProtection: { requiredApprovals: number } | null;
+      };
+      expect(body.branchProtection?.requiredApprovals).toBe(3);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("a write collaborator cannot change permissions", async () => {
+    const server = createApiServer();
+    const owner = `owner-${randomUUID()}`;
+    const writer = `writer-${randomUUID()}`;
+    const repo = "shared-doc";
+    seedRepo(owner, repo, { isPrivate: true });
+    seedBranchProtection(owner, repo, { rule_name: "main" });
+    seedCollaboratorPermission(owner, repo, writer, "write");
+    const writerSessionId = await seedSession(writer);
+
+    try {
+      const response = await server.fetch(
+        makeRequest(
+          `/api/app/documents/${owner}/${repo}/permissions`,
+          writerSessionId,
+          {
+            method: "PUT",
+            body: { blockOnUnresolvedThreads: true },
+          },
+        ),
+      );
+      expect(response.status).toBe(403);
+      const body = (await response.json()) as { error: string };
+      expect(body.error).toMatch(/owner or an admin/i);
     } finally {
       server.stop(true);
     }

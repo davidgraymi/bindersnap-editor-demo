@@ -3243,12 +3243,26 @@ async function handleUpdateDocumentPermissions(
   if (auth instanceof Response) return auth;
   const { client, session } = auth;
 
+  // Changing review policy or branch protection is a governance action:
+  // the owner and admin collaborators may do it, write access is not enough.
   if (session.username !== owner) {
-    return json(
-      403,
-      { error: "Only the document owner can change permissions." },
-      baseHeaders,
-    );
+    const permission = await resolveCurrentUserPermission(
+      client,
+      owner,
+      repo,
+      session.username,
+    ).catch(() => null);
+
+    if (permission?.access !== "admin" && permission?.access !== "owner") {
+      return json(
+        403,
+        {
+          error:
+            "Only the document owner or an admin collaborator can change permissions.",
+        },
+        baseHeaders,
+      );
+    }
   }
 
   const payload = await readJsonBody(req);
