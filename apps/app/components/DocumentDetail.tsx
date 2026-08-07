@@ -4,6 +4,7 @@ import type {
   PullRequestWithApprovalState,
   DocTag,
   RepoBranchProtection,
+  ReviewSettings,
   UploadResult,
 } from "../api";
 import {
@@ -13,6 +14,7 @@ import {
   submitDocumentReview,
 } from "../api";
 import { DocumentCollaborators } from "./DocumentCollaborators";
+import { ReviewDiscussion } from "./ReviewDiscussion";
 import { DocumentPermissions } from "./DocumentPermissions";
 import { UploadModal } from "./UploadModal";
 
@@ -229,6 +231,14 @@ export function DocumentDetail({
     useState<RepoBranchProtection | null>(null);
   const [canonicalFileInfo, setCanonicalFileInfo] =
     useState<CanonicalFileInfo | null>(null);
+  const [reviewSettings, setReviewSettings] = useState<ReviewSettings | null>(
+    null,
+  );
+  // Unresolved thread count per pull request, reported by the discussion panel
+  // so the publish button reflects the gate without an extra round trip.
+  const [unresolvedByPR, setUnresolvedByPR] = useState<Record<number, number>>(
+    {},
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -250,6 +260,7 @@ export function DocumentDetail({
       setTags(detail.tags);
       setOpenPRs(detail.openPullRequests);
       setBranchProtection(detail.branchProtection);
+      setReviewSettings(detail.reviewSettings ?? null);
       setCanonicalFileInfo(detail.canonicalFile);
     } catch (err) {
       const message =
@@ -567,6 +578,12 @@ export function DocumentDetail({
                         branchProtection,
                       );
                       const mergeReady = pr.approvalState === "approved";
+                      // The server enforces this too; the disabled button just
+                      // avoids a pointless round trip that ends in a 409.
+                      const blocksOnThreads =
+                        reviewSettings?.blockOnUnresolvedThreads ?? false;
+                      const threadsBlockPublish =
+                        blocksOnThreads && (unresolvedByPR[prNum] ?? 0) > 0;
                       const ownSubmission = isOwnSubmission(
                         currentUser,
                         pr.user?.login,
@@ -733,12 +750,32 @@ export function DocumentDetail({
                             </p>
                           ) : null}
 
+                          <ReviewDiscussion
+                            owner={owner}
+                            repo={repo}
+                            pullNumber={prNum}
+                            canParticipate={!isAnonymous}
+                            blockOnUnresolvedThreads={blocksOnThreads}
+                            onSummaryChange={(next) =>
+                              setUnresolvedByPR((prev) =>
+                                prev[prNum] === next.unresolvedCount
+                                  ? prev
+                                  : { ...prev, [prNum]: next.unresolvedCount },
+                              )
+                            }
+                          />
+
                           {mergePerms.allowed && mergeReady ? (
                             <div className="vault-pr-actions">
                               <button
                                 className="bs-btn bs-btn-primary vault-pr-publish-btn"
                                 type="button"
-                                disabled={isSubmitting}
+                                disabled={isSubmitting || threadsBlockPublish}
+                                title={
+                                  threadsBlockPublish
+                                    ? "Resolve every discussion thread before publishing."
+                                    : undefined
+                                }
                                 onClick={() => void handleMerge(prNum)}
                               >
                                 {isSubmitting

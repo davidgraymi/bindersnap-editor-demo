@@ -10,7 +10,10 @@ import {
 } from "./schemas/auth";
 import {
   CollaboratorListPayloadSchema,
+  CreateDiscussionBodySchema,
+  DiscussionSummarySchema,
   DocumentDetailPayloadSchema,
+  ResolveDiscussionBodySchema,
   DocumentPermissionsPayloadSchema,
   InitialDocumentUploadResultSchema,
   PublishDocumentBodySchema,
@@ -52,6 +55,7 @@ registry.register(
   "DocumentPermissionsPayload",
   DocumentPermissionsPayloadSchema,
 );
+registry.register("DiscussionSummary", DiscussionSummarySchema);
 registry.register("SearchUsersPayload", SearchUsersPayloadSchema);
 registry.register("BillingStatusPayload", BillingStatusPayloadSchema);
 registry.register(
@@ -383,6 +387,88 @@ registry.registerPath({
   },
   responses: {
     204: { description: "Review submitted" },
+  },
+});
+
+const discussionParams = z.object({
+  owner: z.string(),
+  repo: z.string(),
+  pullNumber: z.string(),
+});
+
+const threadParams = discussionParams.extend({ threadId: z.string() });
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/documents/{owner}/{repo}/pull-requests/{pullNumber}/discussions",
+  operationId: "listDocumentDiscussions",
+  tags: ["documents"],
+  request: { params: discussionParams },
+  responses: {
+    200: {
+      description: "Review discussion threads",
+      content: { "application/json": { schema: DiscussionSummarySchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/documents/{owner}/{repo}/pull-requests/{pullNumber}/discussions",
+  operationId: "createDocumentDiscussion",
+  tags: ["documents"],
+  request: {
+    params: discussionParams,
+    body: {
+      required: true,
+      content: { "application/json": { schema: CreateDiscussionBodySchema } },
+    },
+  },
+  responses: {
+    201: {
+      description: "Thread started",
+      content: { "application/json": { schema: DiscussionSummarySchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/documents/{owner}/{repo}/pull-requests/{pullNumber}/discussions/{threadId}/comments",
+  operationId: "replyToDocumentDiscussion",
+  tags: ["documents"],
+  request: {
+    params: threadParams,
+    body: {
+      required: true,
+      content: { "application/json": { schema: CreateDiscussionBodySchema } },
+    },
+  },
+  responses: {
+    201: {
+      description: "Reply posted",
+      content: { "application/json": { schema: DiscussionSummarySchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/documents/{owner}/{repo}/pull-requests/{pullNumber}/discussions/{threadId}/resolve",
+  operationId: "resolveDocumentDiscussion",
+  tags: ["documents"],
+  request: {
+    params: threadParams,
+    body: {
+      required: true,
+      content: { "application/json": { schema: ResolveDiscussionBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Thread status updated",
+      content: { "application/json": { schema: DiscussionSummarySchema } },
+    },
   },
 });
 

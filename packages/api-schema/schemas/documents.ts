@@ -14,8 +14,67 @@ export const RepoBranchProtectionSchema = z.object({
   mergeWhitelistUsernames: z.array(z.string()),
   mergeWhitelistTeams: z.array(z.string()),
   blockOnRejectedReviews: z.boolean(),
+  dismissStaleApprovals: z.boolean(),
 });
 export type RepoBranchProtection = z.infer<typeof RepoBranchProtectionSchema>;
+
+export const ReviewSettingsSchema = z.object({
+  blockOnUnresolvedThreads: z.boolean(),
+});
+export type ReviewSettings = z.infer<typeof ReviewSettingsSchema>;
+
+export const DiscussionAuthorSchema = z.object({
+  login: z.string(),
+  fullName: z.string(),
+  avatarUrl: z.string(),
+});
+
+export const DiscussionCommentSchema = z.object({
+  id: z.number(),
+  threadId: z.string(),
+  author: DiscussionAuthorSchema,
+  body: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  htmlUrl: z.string(),
+});
+
+export const DiscussionResolutionEventSchema = z.object({
+  id: z.number(),
+  actor: DiscussionAuthorSchema,
+  resolved: z.boolean(),
+  at: z.string(),
+});
+
+export const DiscussionThreadSchema = z.object({
+  id: z.string(),
+  origin: z.enum(["bindersnap", "external"]),
+  comments: z.array(DiscussionCommentSchema),
+  events: z.array(DiscussionResolutionEventSchema),
+  resolved: z.boolean(),
+  resolvedBy: DiscussionAuthorSchema.nullable(),
+  resolvedAt: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type DiscussionThread = z.infer<typeof DiscussionThreadSchema>;
+
+export const DiscussionSummarySchema = z.object({
+  threads: z.array(DiscussionThreadSchema),
+  totalCount: z.number(),
+  unresolvedCount: z.number(),
+});
+export type DiscussionSummary = z.infer<typeof DiscussionSummarySchema>;
+
+export const CreateDiscussionBodySchema = z.object({
+  body: z.string(),
+});
+export type CreateDiscussionBody = z.infer<typeof CreateDiscussionBodySchema>;
+
+export const ResolveDiscussionBodySchema = z.object({
+  resolved: z.boolean(),
+});
+export type ResolveDiscussionBody = z.infer<typeof ResolveDiscussionBodySchema>;
 
 export const CanonicalFileInfoSchema = z.object({
   storedFileName: z.string(),
@@ -71,6 +130,7 @@ export const DocumentDetailPayloadSchema = z.object({
   openPullRequests: z.array(PullRequestWithApprovalStateSchema),
   uploadPullRequests: z.array(PullRequestWithApprovalStateSchema),
   branchProtection: RepoBranchProtectionSchema.nullable(),
+  reviewSettings: ReviewSettingsSchema.nullable().optional(),
   canonicalFile: CanonicalFileInfoSchema.nullable(),
   currentUserPermission: RepoCollaboratorPermissionSummarySchema.nullable(),
 });
@@ -115,6 +175,7 @@ export const DocumentPermissionsPayloadSchema = z.object({
   isInternal: z.boolean(),
   currentUserPermission:
     RepoCollaboratorPermissionSummarySchema.nullable().optional(),
+  reviewSettings: ReviewSettingsSchema.nullable().optional(),
 });
 export type DocumentPermissionsPayload = z.infer<
   typeof DocumentPermissionsPayloadSchema
@@ -129,6 +190,8 @@ export const UpdatePermissionsBodySchema = z.object({
   mergeWhitelistUsernames: z.array(z.string()).optional(),
   mergeWhitelistTeams: z.array(z.string()).optional(),
   blockOnRejectedReviews: z.boolean().optional(),
+  dismissStaleApprovals: z.boolean().optional(),
+  blockOnUnresolvedThreads: z.boolean().optional(),
   isPrivate: z.boolean().optional(),
   isInternal: z.boolean().optional(),
 });

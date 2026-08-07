@@ -105,6 +105,9 @@ directly.
 - `GET /api/app/documents/:owner/:repo` — document detail
 - `POST /api/app/documents/:owner/:repo/versions` — upload new version
 - `POST /api/app/documents/:owner/:repo/pull-requests/:n/reviews` — submit review
+- `GET/POST /api/app/documents/:owner/:repo/pull-requests/:n/discussions` — review threads
+- `POST /api/app/documents/:owner/:repo/pull-requests/:n/discussions/:threadId/comments` — reply
+- `POST /api/app/documents/:owner/:repo/pull-requests/:n/discussions/:threadId/resolve` — resolve/unresolve
 - `POST /api/app/documents/:owner/:repo/pull-requests/:n/publish` — merge + tag
 - `GET /api/app/documents/:owner/:repo/download` — proxy file download
 - `GET/PUT/DELETE /api/app/documents/:owner/:repo/collaborators/:user` — manage access
@@ -204,6 +207,22 @@ SQLite session store, which holds only session → Gitea token mappings.
 The consequence: reading app state means calling the Gitea API. This is
 intentional. Do not introduce a local cache, a Postgres instance, or any
 persistence layer that duplicates Gitea state.
+
+**Review threads** follow the same rule. Gitea has no thread primitive (its
+review comments are anchored to a file path and line, which is meaningless for
+a binary .docx), so threads are modelled as pull-request issue comments
+carrying a trailing `<!-- bindersnap:v1 ... -->` marker. Resolution is an
+**append-only event log** — resolving posts a new comment rather than editing
+the root — because an audit product must never lose the history of who
+reopened a concern. See `services/api/gitea-client/discussions.ts`.
+
+**Per-document review policy** lives in `.bindersnap/config.json` on a
+dedicated `bindersnap-config` branch (`reviewSettings.ts`), so policy changes
+are commits with an author and a timestamp. It is a side branch because `main`
+is protected with `enable_push: false` on every document repo. The companion
+"reset approvals on a new version" setting maps onto Gitea's native
+`dismiss_stale_approvals` branch protection flag and lives there instead, so
+Gitea enforces it during merge.
 
 ### File uploads flow browser → BFF → Gitea.
 

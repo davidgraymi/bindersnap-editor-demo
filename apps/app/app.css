@@ -4635,3 +4635,204 @@ input {
     align-items: flex-start;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Review discussion
+   Threaded conversation on a pending version, modelled on the GitHub/GitLab
+   review pattern: every comment belongs to a thread, and threads are resolved
+   rather than deleted.
+   --------------------------------------------------------------------------- */
+
+.discussion-panel {
+  margin-top: var(--brand-space-4);
+  padding-top: var(--brand-space-4);
+  border-top: 1px solid var(--bs-rule);
+  display: grid;
+  gap: var(--brand-space-3);
+}
+
+.discussion-panel-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--brand-space-3);
+  flex-wrap: wrap;
+}
+
+.discussion-panel-title {
+  margin: 0;
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-sm);
+  font-weight: 500;
+  color: var(--bs-text-primary);
+}
+
+.discussion-panel-count {
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-xs);
+  color: var(--bs-text-muted);
+}
+
+.discussion-gate-notice {
+  margin: 0;
+  padding: var(--brand-space-2) var(--brand-space-3);
+  background: var(--bs-coral-dim);
+  border-radius: var(--brand-radius-sm);
+  color: var(--brand-coral-dark);
+  font-size: var(--brand-text-xs);
+}
+
+.discussion-threads {
+  display: grid;
+  gap: var(--brand-space-3);
+}
+
+.discussion-thread {
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-page-bg);
+  padding: var(--brand-space-3);
+  display: grid;
+  gap: var(--brand-space-3);
+}
+
+.discussion-thread-resolved {
+  opacity: 0.75;
+}
+
+.discussion-thread-header {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  flex-wrap: wrap;
+}
+
+.discussion-thread-status {
+  padding: 2px var(--brand-space-2);
+  border-radius: var(--brand-radius-sm);
+  background: rgba(217, 119, 6, 0.12);
+  color: #b45309;
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.discussion-thread-status-resolved {
+  background: var(--brand-green-dim);
+  color: var(--brand-green);
+}
+
+.discussion-thread-resolved-by,
+.discussion-thread-external {
+  font-size: var(--brand-text-xs);
+  color: var(--bs-text-muted);
+}
+
+.discussion-thread-external {
+  font-family: var(--brand-font-mono);
+  padding: 2px var(--brand-space-2);
+  border: 1px dashed var(--bs-rule);
+  border-radius: var(--brand-radius-sm);
+}
+
+.discussion-thread-header-actions {
+  margin-left: auto;
+  display: flex;
+  gap: var(--brand-space-2);
+}
+
+.discussion-btn-sm {
+  padding: 4px var(--brand-space-3);
+  font-size: var(--brand-text-xs);
+}
+
+.discussion-comments {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--brand-space-3);
+}
+
+.discussion-comment {
+  display: flex;
+  gap: var(--brand-space-3);
+  align-items: flex-start;
+}
+
+.discussion-avatar {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: var(--brand-radius-full);
+  object-fit: cover;
+}
+
+.discussion-avatar-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bs-surface-2);
+  color: var(--bs-text-muted);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-xs);
+}
+
+.discussion-comment-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.discussion-comment-meta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--brand-space-2);
+  flex-wrap: wrap;
+}
+
+.discussion-comment-author {
+  font-size: var(--brand-text-sm);
+  font-weight: 500;
+  color: var(--bs-text-primary);
+}
+
+.discussion-comment-time {
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-xs);
+  color: var(--bs-text-muted);
+}
+
+.discussion-comment-body {
+  margin-top: 2px;
+  font-size: var(--brand-text-sm);
+  color: var(--bs-text-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.discussion-reply-trigger {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--bs-text-muted);
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-sm);
+  cursor: pointer;
+}
+
+.discussion-reply-trigger:hover {
+  color: var(--brand-coral);
+}
+
+.discussion-reply-form,
+.discussion-new-thread {
+  display: grid;
+  gap: var(--brand-space-3);
+}
+
+.discussion-reply-actions {
+  display: flex;
+  gap: var(--brand-space-3);
+}
