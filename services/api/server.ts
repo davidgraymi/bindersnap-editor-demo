@@ -25,6 +25,16 @@ import {
   type GiteaClient,
 } from "./gitea-client/client";
 import {
+  createDiscussionThread,
+  listDiscussions,
+  replyToDiscussion,
+  setDiscussionResolution,
+} from "./gitea-client/discussions";
+import {
+  getReviewSettings,
+  updateReviewSettings,
+} from "./gitea-client/reviewSettings";
+import {
   addRepoCollaborator,
   bootstrapEmptyMainBranch,
   createDocTag,
@@ -2173,16 +2183,18 @@ async function handleDocumentDetail(
       },
     );
 
-    const [tags, openPullRequests, branchProtection] = await Promise.all([
-      listDocTags(client, owner, repo),
-      listPullRequests({
-        client,
-        owner,
-        repo,
-        state: "open",
-      }),
-      getRepoBranchProtection(client, owner, repo, "main").catch(() => null),
-    ]);
+    const [tags, openPullRequests, branchProtection, reviewSettings] =
+      await Promise.all([
+        listDocTags(client, owner, repo),
+        listPullRequests({
+          client,
+          owner,
+          repo,
+          state: "open",
+        }),
+        getRepoBranchProtection(client, owner, repo, "main").catch(() => null),
+        getReviewSettings({ client, owner, repo }).catch(() => null),
+      ]);
 
     const latestTag = tags[0] ?? null;
     const uploadPullRequests = openPullRequests
@@ -2224,6 +2236,7 @@ async function handleDocumentDetail(
         openPullRequests,
         uploadPullRequests,
         branchProtection,
+        reviewSettings,
         canonicalFile,
         currentUserPermission,
       },
@@ -2438,6 +2451,158 @@ async function handleDocumentReview(
   }
 }
 
+async function handleListDiscussions(
+  req: Request,
+  baseHeaders: Headers,
+  owner: string,
+  repo: string,
+  prNumber: number,
+): Promise<Response> {
+  const access = await resolveDocumentAccess(req, baseHeaders, owner, repo);
+  if (access instanceof Response) {
+    return access;
+  }
+
+  try {
+    const discussions = await listDiscussions({
+      client: access.client,
+      owner,
+      repo,
+      pullNumber: prNumber,
+    });
+    return json(200, discussions, baseHeaders);
+  } catch (err) {
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to load review discussion.",
+    );
+  }
+}
+
+async function handleCreateDiscussionThread(
+  req: Request,
+  baseHeaders: Headers,
+  owner: string,
+  repo: string,
+  prNumber: number,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) {
+    return auth;
+  }
+
+  const payload = (await readJsonBody(req)) ?? null;
+  const form = payload ? null : await readMultipartBody(req);
+  const body = readInputString(payload, form, "body");
+
+  if (!body.trim()) {
+    return json(400, { error: "A comment body is required." }, baseHeaders);
+  }
+
+  try {
+    const discussions = await createDiscussionThread({
+      client: auth.client,
+      owner,
+      repo,
+      pullNumber: prNumber,
+      body,
+    });
+    return json(201, discussions, baseHeaders);
+  } catch (err) {
+    return responseFromError(err, baseHeaders, "Unable to start a thread.");
+  }
+}
+
+async function handleReplyToDiscussion(
+  req: Request,
+  baseHeaders: Headers,
+  owner: string,
+  repo: string,
+  prNumber: number,
+  threadId: string,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) {
+    return auth;
+  }
+
+  const payload = (await readJsonBody(req)) ?? null;
+  const form = payload ? null : await readMultipartBody(req);
+  const body = readInputString(payload, form, "body");
+
+  if (!body.trim()) {
+    return json(400, { error: "A comment body is required." }, baseHeaders);
+  }
+
+  try {
+    const discussions = await replyToDiscussion({
+      client: auth.client,
+      owner,
+      repo,
+      pullNumber: prNumber,
+      threadId,
+      body,
+    });
+    return json(201, discussions, baseHeaders);
+  } catch (err) {
+    return responseFromError(err, baseHeaders, "Unable to post the reply.");
+  }
+}
+
+async function handleResolveDiscussion(
+  req: Request,
+  baseHeaders: Headers,
+  owner: string,
+  repo: string,
+  prNumber: number,
+  threadId: string,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) {
+    return auth;
+  }
+
+  const payload = (await readJsonBody(req)) ?? null;
+  const form = payload ? null : await readMultipartBody(req);
+  const resolvedRaw = payload
+    ? payload.resolved
+    : readInputString(null, form, "resolved");
+
+  // Require an explicit value. Defaulting a malformed request to `false` would
+  // silently reopen a resolved thread and write a bogus event into the record.
+  const resolved =
+    typeof resolvedRaw === "boolean"
+      ? resolvedRaw
+      : resolvedRaw === "true"
+        ? true
+        : resolvedRaw === "false"
+          ? false
+          : null;
+
+  if (resolved === null) {
+    return json(400, { error: "resolved must be true or false." }, baseHeaders);
+  }
+
+  try {
+    const discussions = await setDiscussionResolution({
+      client: auth.client,
+      owner,
+      repo,
+      pullNumber: prNumber,
+      threadId,
+      resolved,
+    });
+    return json(200, discussions, baseHeaders);
+  } catch (err) {
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to update the thread status.",
+    );
+  }
+}
+
 async function handleDocumentPublish(
   req: Request,
   baseHeaders: Headers,
@@ -2472,6 +2637,34 @@ async function handleDocumentPublish(
   );
 
   try {
+    // Enforce "resolve every thread before publishing". Gitea has no
+    // equivalent of GitHub's required conversation resolution, so the gate
+    // lives here — the BFF is the only path to a merge, so this cannot be
+    // bypassed from the browser. Checked before the merge, never after.
+    const reviewSettings = await getReviewSettings({ client, owner, repo });
+    if (reviewSettings.blockOnUnresolvedThreads) {
+      const discussions = await listDiscussions({
+        client,
+        owner,
+        repo,
+        pullNumber: prNumber,
+      });
+
+      if (discussions.unresolvedCount > 0) {
+        return json(
+          409,
+          {
+            error:
+              discussions.unresolvedCount === 1
+                ? "This version has 1 unresolved discussion thread. Resolve it before publishing."
+                : `This version has ${discussions.unresolvedCount} unresolved discussion threads. Resolve them before publishing.`,
+            unresolvedCount: discussions.unresolvedCount,
+          },
+          baseHeaders,
+        );
+      }
+    }
+
     await mergeOrResolveConflicts({
       client,
       owner,
@@ -3007,7 +3200,7 @@ async function handleGetDocumentPermissions(
   const { client, session } = auth;
 
   try {
-    const [branchProtection, repoInfo, currentUserPermission] =
+    const [branchProtection, repoInfo, currentUserPermission, reviewSettings] =
       await Promise.all([
         getRepoBranchProtection(client, owner, repo, "main").catch(() => null),
         getRepoInfo({ client, owner, repo }),
@@ -3017,6 +3210,7 @@ async function handleGetDocumentPermissions(
           repo,
           session.username,
         ).catch(() => null),
+        getReviewSettings({ client, owner, repo }).catch(() => null),
       ]);
 
     return json(
@@ -3026,6 +3220,7 @@ async function handleGetDocumentPermissions(
         isPrivate: repoInfo.isPrivate,
         isInternal: repoInfo.isInternal,
         currentUserPermission,
+        reviewSettings,
       },
       baseHeaders,
     );
@@ -3086,6 +3281,14 @@ async function handleUpdateDocumentPermissions(
     : undefined;
   const isPrivate =
     typeof payload?.isPrivate === "boolean" ? payload.isPrivate : undefined;
+  const dismissStaleApprovals =
+    typeof payload?.dismissStaleApprovals === "boolean"
+      ? payload.dismissStaleApprovals
+      : undefined;
+  const blockOnUnresolvedThreads =
+    typeof payload?.blockOnUnresolvedThreads === "boolean"
+      ? payload.blockOnUnresolvedThreads
+      : undefined;
 
   try {
     const updates: Array<Promise<unknown>> = [];
@@ -3095,7 +3298,8 @@ async function handleUpdateDocumentPermissions(
       enableApprovalsWhitelist !== undefined ||
       approvalsWhitelistUsernames !== undefined ||
       enableMergeWhitelist !== undefined ||
-      mergeWhitelistUsernames !== undefined;
+      mergeWhitelistUsernames !== undefined ||
+      dismissStaleApprovals !== undefined;
 
     if (hasBranchUpdate) {
       updates.push(
@@ -3109,6 +3313,7 @@ async function handleUpdateDocumentPermissions(
           approvalsWhitelistUsernames,
           enableMergeWhitelist,
           mergeWhitelistUsernames,
+          dismissStaleApprovals,
         }),
       );
     }
@@ -3117,11 +3322,24 @@ async function handleUpdateDocumentPermissions(
       updates.push(updateRepoVisibility({ client, owner, repo, isPrivate }));
     }
 
+    if (blockOnUnresolvedThreads !== undefined) {
+      updates.push(
+        updateReviewSettings({
+          client,
+          owner,
+          repo,
+          settings: { blockOnUnresolvedThreads },
+          actor: session.username,
+        }),
+      );
+    }
+
     await Promise.all(updates);
 
-    const [branchProtection, repoInfo] = await Promise.all([
+    const [branchProtection, repoInfo, reviewSettings] = await Promise.all([
       getRepoBranchProtection(client, owner, repo, "main").catch(() => null),
       getRepoInfo({ client, owner, repo }),
+      getReviewSettings({ client, owner, repo }).catch(() => null),
     ]);
 
     return json(
@@ -3130,6 +3348,7 @@ async function handleUpdateDocumentPermissions(
         branchProtection,
         isPrivate: repoInfo.isPrivate,
         isInternal: repoInfo.isInternal,
+        reviewSettings,
       },
       baseHeaders,
     );
@@ -3829,6 +4048,15 @@ export function createApiServer() {
         const publishMatch = pathname.match(
           /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/publish$/,
         );
+        const discussionsMatch = pathname.match(
+          /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/discussions$/,
+        );
+        const discussionRepliesMatch = pathname.match(
+          /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/discussions\/([^/]+)\/comments$/,
+        );
+        const discussionResolveMatch = pathname.match(
+          /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/discussions\/([^/]+)\/resolve$/,
+        );
         const downloadMatch = pathname.match(
           /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/download$/,
         );
@@ -3875,6 +4103,40 @@ export function createApiServer() {
             decodePathParam(publishMatch[1] ?? ""),
             decodePathParam(publishMatch[2] ?? ""),
             Number.parseInt(publishMatch[3] ?? "", 10),
+          );
+        } else if (discussionsMatch && method === "GET") {
+          response = await handleListDiscussions(
+            req,
+            baseHeaders,
+            decodePathParam(discussionsMatch[1] ?? ""),
+            decodePathParam(discussionsMatch[2] ?? ""),
+            Number.parseInt(discussionsMatch[3] ?? "", 10),
+          );
+        } else if (discussionsMatch && method === "POST") {
+          response = await handleCreateDiscussionThread(
+            req,
+            baseHeaders,
+            decodePathParam(discussionsMatch[1] ?? ""),
+            decodePathParam(discussionsMatch[2] ?? ""),
+            Number.parseInt(discussionsMatch[3] ?? "", 10),
+          );
+        } else if (discussionRepliesMatch && method === "POST") {
+          response = await handleReplyToDiscussion(
+            req,
+            baseHeaders,
+            decodePathParam(discussionRepliesMatch[1] ?? ""),
+            decodePathParam(discussionRepliesMatch[2] ?? ""),
+            Number.parseInt(discussionRepliesMatch[3] ?? "", 10),
+            decodePathParam(discussionRepliesMatch[4] ?? ""),
+          );
+        } else if (discussionResolveMatch && method === "POST") {
+          response = await handleResolveDiscussion(
+            req,
+            baseHeaders,
+            decodePathParam(discussionResolveMatch[1] ?? ""),
+            decodePathParam(discussionResolveMatch[2] ?? ""),
+            Number.parseInt(discussionResolveMatch[3] ?? "", 10),
+            decodePathParam(discussionResolveMatch[4] ?? ""),
           );
         } else if (downloadMatch && method === "GET") {
           response = await handleDocumentDownload(

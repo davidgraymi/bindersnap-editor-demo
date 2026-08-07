@@ -187,6 +187,9 @@ export function DocumentPermissions({
   >([]);
   const [enableMergeWhitelist, setEnableMergeWhitelist] = useState(false);
   const [mergeWhitelistUsers, setMergeWhitelistUsers] = useState<string[]>([]);
+  const [dismissStaleApprovals, setDismissStaleApprovals] = useState(false);
+  const [blockOnUnresolvedThreads, setBlockOnUnresolvedThreads] =
+    useState(false);
   const [isPrivate, setIsPrivate] = useState(true);
   const [isInternal, setIsInternal] = useState(false);
 
@@ -223,6 +226,10 @@ export function DocumentPermissions({
     setApprovalsWhitelistUsers(bp?.approvalsWhitelistUsernames ?? []);
     setEnableMergeWhitelist(bp?.enableMergeWhitelist ?? false);
     setMergeWhitelistUsers(bp?.mergeWhitelistUsernames ?? []);
+    setDismissStaleApprovals(bp?.dismissStaleApprovals ?? false);
+    setBlockOnUnresolvedThreads(
+      data.reviewSettings?.blockOnUnresolvedThreads ?? false,
+    );
     setIsPrivate(data.isPrivate);
     setIsInternal(data.isInternal);
     setCurrentUserPermission(data.currentUserPermission?.access ?? null);
@@ -244,6 +251,8 @@ export function DocumentPermissions({
         mergeWhitelistUsernames: enableMergeWhitelist
           ? mergeWhitelistUsers
           : [],
+        dismissStaleApprovals,
+        blockOnUnresolvedThreads,
         isPrivate,
       });
       applyPayload(data);
@@ -347,6 +356,52 @@ export function DocumentPermissions({
               />
             </div>
           )}
+
+          <div className="perms-row perms-row--split">
+            <div className="perms-row-main">
+              <label className="perms-row-label" htmlFor="dismiss-stale">
+                Reset approvals when a new version is uploaded
+              </label>
+              <p className="perms-row-hint">
+                Existing approvals are discarded whenever the version under
+                review changes, so nobody can approve one file and publish
+                another.
+              </p>
+            </div>
+            <input
+              id="dismiss-stale"
+              type="checkbox"
+              className="perms-checkbox"
+              checked={dismissStaleApprovals}
+              disabled={disabled}
+              onChange={(e) => setDismissStaleApprovals(e.target.checked)}
+            />
+          </div>
+        </div>
+
+        {/* Discussion Rules */}
+        <div className="perms-group">
+          <p className="perms-group-heading">Discussion Rules</p>
+
+          <div className="perms-row perms-row--split">
+            <div className="perms-row-main">
+              <label className="perms-row-label" htmlFor="block-unresolved">
+                Block publishing while threads are unresolved
+              </label>
+              <p className="perms-row-hint">
+                A version cannot become official until every review thread on it
+                has been resolved.
+              </p>
+            </div>
+            <input
+              id="block-unresolved"
+              type="checkbox"
+              className="perms-checkbox"
+              checked={blockOnUnresolvedThreads}
+              disabled={disabled}
+              onChange={(e) => setBlockOnUnresolvedThreads(e.target.checked)}
+            />
+          </div>
         </div>
 
         {/* Publish Rules */}

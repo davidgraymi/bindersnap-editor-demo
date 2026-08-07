@@ -478,6 +478,7 @@ function normalizeBranchProtection(
     mergeWhitelistUsernames: raw.merge_whitelist_usernames ?? [],
     mergeWhitelistTeams: raw.merge_whitelist_teams ?? [],
     blockOnRejectedReviews: raw.block_on_rejected_reviews ?? false,
+    dismissStaleApprovals: raw.dismiss_stale_approvals ?? false,
   };
 }
 
@@ -604,6 +605,12 @@ export interface RepoBranchProtection {
   mergeWhitelistUsernames: string[];
   mergeWhitelistTeams: string[];
   blockOnRejectedReviews: boolean;
+  /**
+   * When true, Gitea discards every existing approval as soon as a new commit
+   * lands on the pull request's head branch, forcing re-review of the version
+   * that actually gets published.
+   */
+  dismissStaleApprovals: boolean;
 }
 
 export async function getRepoBranchProtection(
@@ -667,6 +674,7 @@ export interface UpdateRepoBranchProtectionParams {
   approvalsWhitelistUsernames?: string[];
   enableMergeWhitelist?: boolean;
   mergeWhitelistUsernames?: string[];
+  dismissStaleApprovals?: boolean;
 }
 
 export async function updateRepoBranchProtection(
@@ -684,6 +692,8 @@ export async function updateRepoBranchProtection(
     body.enable_merge_whitelist = rest.enableMergeWhitelist;
   if (rest.mergeWhitelistUsernames !== undefined)
     body.merge_whitelist_usernames = rest.mergeWhitelistUsernames;
+  if (rest.dismissStaleApprovals !== undefined)
+    body.dismiss_stale_approvals = rest.dismissStaleApprovals;
 
   const protection = await unwrap(
     client.PATCH("/repos/{owner}/{repo}/branch_protections/{name}", {

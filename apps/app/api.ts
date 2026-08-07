@@ -13,6 +13,7 @@ import * as AdminClient from "../../packages/api-client/admin/admin";
 import type { SessionAuthState } from "../../packages/api-schema/schemas/auth";
 import type {
   CollaboratorListPayload,
+  DiscussionSummary,
   DocumentDetailPayload,
   DocumentPermissionsPayload,
   InitialDocumentUploadResult,
@@ -36,11 +37,14 @@ export type {
 } from "../../packages/api-schema/schemas/auth";
 export type {
   CollaboratorListPayload,
+  DiscussionSummary,
+  DiscussionThread,
   DocumentDetailPayload,
   DocumentPermissionsPayload,
   WorkspaceDocumentSummary,
   InitialDocumentUploadResult,
   PullRequestWithApprovalState,
+  ReviewSettings,
   UploadResult,
 } from "../../packages/api-schema/schemas/documents";
 export type {
@@ -366,6 +370,8 @@ export async function updateDocumentPermissions(
     approvalsWhitelistUsernames?: string[];
     enableMergeWhitelist?: boolean;
     mergeWhitelistUsernames?: string[];
+    dismissStaleApprovals?: boolean;
+    blockOnUnresolvedThreads?: boolean;
     isPrivate?: boolean;
   },
 ): Promise<DocumentPermissionsPayload> {
@@ -401,6 +407,96 @@ export async function submitDocumentReview(
   } catch (error) {
     handlePaymentRequired(
       `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/reviews`,
+      error,
+    );
+  }
+}
+
+export async function listDocumentDiscussions(
+  owner: string,
+  repo: string,
+  pullNumber: number,
+): Promise<DiscussionSummary> {
+  try {
+    const response = await DocumentsClient.listDocumentDiscussions(
+      owner,
+      repo,
+      String(pullNumber),
+    );
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/discussions`,
+      error,
+    );
+  }
+}
+
+export async function createDocumentDiscussion(
+  owner: string,
+  repo: string,
+  pullNumber: number,
+  body: string,
+): Promise<DiscussionSummary> {
+  try {
+    const response = await DocumentsClient.createDocumentDiscussion(
+      owner,
+      repo,
+      String(pullNumber),
+      { body },
+    );
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/discussions`,
+      error,
+    );
+  }
+}
+
+export async function replyToDocumentDiscussion(
+  owner: string,
+  repo: string,
+  pullNumber: number,
+  threadId: string,
+  body: string,
+): Promise<DiscussionSummary> {
+  try {
+    const response = await DocumentsClient.replyToDocumentDiscussion(
+      owner,
+      repo,
+      String(pullNumber),
+      threadId,
+      { body },
+    );
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/discussions/${threadId}/comments`,
+      error,
+    );
+  }
+}
+
+export async function resolveDocumentDiscussion(
+  owner: string,
+  repo: string,
+  pullNumber: number,
+  threadId: string,
+  resolved: boolean,
+): Promise<DiscussionSummary> {
+  try {
+    const response = await DocumentsClient.resolveDocumentDiscussion(
+      owner,
+      repo,
+      String(pullNumber),
+      threadId,
+      { resolved },
+    );
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/discussions/${threadId}/resolve`,
       error,
     );
   }

@@ -99,11 +99,11 @@
             </h1>
 
             <p class="hero-sub">
-              Bindersnap is the document tool your team will actually use
-              &mdash;
-              <strong>as easy as Word, as collaborative as Notion,</strong>
-              with GitHub-style version control and a real approval trail. No
-              more reply-all nightmares.
+              Bindersnap keeps
+              <strong>a complete approval trail on every document</strong>
+              &mdash; who reviewed it, who signed off, and exactly which version
+              they approved. Approved versions lock, so nothing changes without
+              a new review.
             </p>
 
             <div class="hero-form-wrap" id="hero-area">
@@ -150,29 +150,124 @@
                   <span></span><span></span><span></span>
                 </div>
                 <div class="mockup-bar">
-                  Q4 Vendor Agreement &middot; In Review
+                  Q4 Vendor Agreement &middot; v3 &middot; Approved
                 </div>
               </div>
-              <div class="mockup-editor">
-                <div
-                  id="editor-demo-root"
-                  class="editor-demo-root"
-                  aria-label="Editor demo"
-                >
-                  <div class="editor-loading">
-                    <div class="editor-loading-text">
-                      Click to load the editor
-                    </div>
-                    <button class="editor-load-btn" id="editor-load-btn">
-                      Load Editor
-                    </button>
+              <div class="mockup-audit" aria-label="Approval trail example">
+                <div class="audit-main">
+                  <div class="audit-label">Version history</div>
+                  <ol class="version-track">
+                    <li class="version-step">
+                      <span class="version-node" aria-hidden="true"></span>
+                      <span class="version-id">v1</span>
+                      <span class="version-desc"
+                        >Initial draft &mdash; Sarah Kwan</span
+                      >
+                      <span class="version-time">Oct 02 &middot; 09:14</span>
+                      <span class="version-state">Superseded</span>
+                    </li>
+                    <li class="version-step">
+                      <span class="version-node" aria-hidden="true"></span>
+                      <span class="version-id">v2</span>
+                      <span class="version-desc"
+                        >Payment terms revised &mdash; Sarah Kwan</span
+                      >
+                      <span class="version-time">Oct 09 &middot; 14:37</span>
+                      <span class="version-state">Superseded</span>
+                    </li>
+                    <li class="version-step is-current">
+                      <span class="version-node" aria-hidden="true"></span>
+                      <span class="version-id">v3</span>
+                      <span class="version-desc"
+                        >Vendor redlines accepted &mdash; Sarah Kwan</span
+                      >
+                      <span class="version-time">Oct 14 &middot; 16:02</span>
+                      <span class="version-state is-approved">
+                        <span
+                          class="landing-lucide-icon"
+                          data-lucide-icon="lock"
+                          data-lucide-size="12"
+                          data-lucide-stroke-width="1.75"
+                          aria-hidden="true"
+                        ></span>
+                        Approved &middot; Locked
+                      </span>
+                    </li>
+                  </ol>
+                  <div class="audit-threads">
+                    <span class="audit-chip is-resolved">
+                      <span
+                        class="landing-lucide-icon"
+                        data-lucide-icon="check"
+                        data-lucide-size="12"
+                        data-lucide-stroke-width="2"
+                        aria-hidden="true"
+                      ></span>
+                      3 discussion threads resolved
+                    </span>
+                    <span class="audit-chip">0 open</span>
                   </div>
                 </div>
-                <noscript>
-                  <div class="editor-fallback">
-                    This demo requires JavaScript enabled to render the editor.
+
+                <div class="audit-side">
+                  <div class="audit-label">Approvals</div>
+                  <ul class="approver-list">
+                    <li class="approver">
+                      <span class="approver-avatar" aria-hidden="true">PN</span>
+                      <span class="approver-id">
+                        <span class="approver-name">Priya Nair</span>
+                        <span class="approver-role"
+                          >Compliance &middot; designated reviewer</span
+                        >
+                      </span>
+                      <span class="approver-mark">
+                        <span
+                          class="landing-lucide-icon"
+                          data-lucide-icon="badge-check"
+                          data-lucide-size="14"
+                          data-lucide-stroke-width="1.75"
+                          aria-hidden="true"
+                        ></span>
+                        <span class="approver-time">Oct 14 &middot; 16:41</span>
+                      </span>
+                    </li>
+                    <li class="approver">
+                      <span class="approver-avatar" aria-hidden="true">MH</span>
+                      <span class="approver-id">
+                        <span class="approver-name">Marcus Hale</span>
+                        <span class="approver-role"
+                          >Finance &middot; designated reviewer</span
+                        >
+                      </span>
+                      <span class="approver-mark">
+                        <span
+                          class="landing-lucide-icon"
+                          data-lucide-icon="badge-check"
+                          data-lucide-size="14"
+                          data-lucide-stroke-width="1.75"
+                          aria-hidden="true"
+                        ></span>
+                        <span class="approver-time">Oct 14 &middot; 17:08</span>
+                      </span>
+                    </li>
+                  </ul>
+                  <div class="audit-gate">
+                    <button class="audit-approve-btn" type="button" disabled>
+                      Approve v3
+                    </button>
+                    <p class="audit-gate-note">
+                      <span
+                        class="landing-lucide-icon"
+                        data-lucide-icon="lock"
+                        data-lucide-size="12"
+                        data-lucide-stroke-width="1.75"
+                        aria-hidden="true"
+                      ></span>
+                      Only designated reviewers can approve. You have view
+                      access.
+                    </p>
                   </div>
-                </noscript>
+                </div>
               </div>
             </div>
           </div>
@@ -286,29 +381,31 @@
               <div class="eyebrow-tag">The Solution</div>
             </div>
             <h2 class="features-title reveal">
-              One tool that handles the whole process
+              The approval trail is the product
             </h2>
             <p class="features-subtitle reveal">
-              Familiar to write in. Built for teams. Airtight on accountability.
+              Airtight on accountability first. Built for teams. Familiar to
+              write in.
             </p>
 
             <div class="features-grid">
               <div class="feat reveal reveal-d1">
-                <div class="feat-tag">Write</div>
+                <div class="feat-tag">Approve</div>
                 <div class="feat-icon">
                   <span
                     class="landing-lucide-icon"
-                    data-lucide-icon="pencil-line"
+                    data-lucide-icon="badge-check"
                     data-lucide-size="22"
                     data-lucide-stroke-width="1.8"
                     aria-hidden="true"
                   ></span>
                 </div>
-                <h3>Familiar as Word</h3>
+                <h3>Version Control Like GitHub</h3>
                 <p>
-                  A rich document editor your whole team can use without a
-                  training session. If they can use Word, they can use
-                  Bindersnap &mdash; on day one.
+                  Every change is tracked. Every approval is logged to an
+                  append-only audit log. Only designated reviewers can sign off,
+                  and an approved version locks &mdash; change it and you get a
+                  new version to review.
                 </p>
               </div>
 
@@ -325,28 +422,28 @@
                 </div>
                 <h3>Real-Time Like Notion</h3>
                 <p>
-                  Everyone edits in the same document, at the same time, with
-                  live presence and inline comments. No more emailing
-                  attachments back and forth.
+                  Everyone works in the same document, at the same time, with
+                  live presence and threaded review comments. The discussion
+                  stays attached to the version it was raised against.
                 </p>
               </div>
 
               <div class="feat reveal reveal-d3">
-                <div class="feat-tag">Approve</div>
+                <div class="feat-tag">Write</div>
                 <div class="feat-icon">
                   <span
                     class="landing-lucide-icon"
-                    data-lucide-icon="clock-3"
+                    data-lucide-icon="pencil-line"
                     data-lucide-size="22"
                     data-lucide-stroke-width="1.8"
                     aria-hidden="true"
                   ></span>
                 </div>
-                <h3>Version Control Like GitHub</h3>
+                <h3>Familiar as Word</h3>
                 <p>
-                  Every change is tracked. Every approval is logged. Propose
-                  changes as pull requests, get explicit sign-off, and know
-                  exactly who approved what &mdash; and when.
+                  Write here or upload the file you already have. Either way it
+                  enters the same review and sign-off trail &mdash; no training
+                  session required.
                 </p>
               </div>
             </div>
@@ -479,6 +576,130 @@
                     <span>Approvals are locked and tamper-proof</span>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- REVIEW DISCUSSIONS -->
+        <section class="section-review">
+          <div class="review-inner">
+            <div class="review-header reveal">
+              <div class="eyebrow-tag">Review Discussions</div>
+              <h2>Nothing gets published<br />with a question still open.</h2>
+              <p>
+                Peer review happens in the document, not in a mailbox. Every
+                comment is a thread, and every thread has to land somewhere
+                before a version can go out.
+              </p>
+            </div>
+
+            <div class="review-grid">
+              <div class="review-card reveal reveal-d1">
+                <div class="review-card-icon">
+                  <span
+                    class="landing-lucide-icon"
+                    data-lucide-icon="users"
+                    data-lucide-size="16"
+                    data-lucide-stroke-width="1.8"
+                    aria-hidden="true"
+                  ></span>
+                </div>
+                <div class="review-card-tag">Threaded</div>
+                <h3>Every comment is a thread</h3>
+                <p>
+                  A reviewer raises a point, the author replies underneath, and
+                  the whole exchange stays attached to the version it was raised
+                  against.
+                </p>
+              </div>
+
+              <div class="review-card reveal reveal-d2">
+                <div class="review-card-icon">
+                  <span
+                    class="landing-lucide-icon"
+                    data-lucide-icon="check"
+                    data-lucide-size="16"
+                    data-lucide-stroke-width="1.8"
+                    aria-hidden="true"
+                  ></span>
+                </div>
+                <div class="review-card-tag">Resolved</div>
+                <h3>Open threads block publishing</h3>
+                <p>
+                  A version cannot be published while a thread is still open. No
+                  feedback quietly disappears between drafts.
+                </p>
+              </div>
+
+              <div class="review-card reveal reveal-d3">
+                <div class="review-card-icon">
+                  <span
+                    class="landing-lucide-icon"
+                    data-lucide-icon="shield"
+                    data-lucide-size="16"
+                    data-lucide-stroke-width="1.8"
+                    aria-hidden="true"
+                  ></span>
+                </div>
+                <div class="review-card-tag">Re-reviewed</div>
+                <h3>A new version resets approvals</h3>
+                <p>
+                  Upload a revision and earlier sign-offs clear. Designated
+                  reviewers approve the version they actually read &mdash; never
+                  the one before it.
+                </p>
+              </div>
+            </div>
+
+            <a class="review-link reveal" href="#signup"
+              >Bring threaded review to your documents &rarr;</a
+            >
+          </div>
+        </section>
+
+        <!-- AUTHORING SURFACE -->
+        <section class="section-authoring">
+          <div class="authoring-inner">
+            <div class="authoring-header reveal">
+              <div class="eyebrow-tag">The Authoring Surface</div>
+              <h2>Where the words happen.</h2>
+              <p>
+                Documents written inside Bindersnap use the same editor your
+                team already expects &mdash; and every version it produces
+                enters the same approval trail. Have a look.
+              </p>
+            </div>
+
+            <div class="authoring-mockup reveal reveal-d1">
+              <div class="mockup-chrome">
+                <div class="mockup-dots">
+                  <span></span><span></span><span></span>
+                </div>
+                <div class="mockup-bar">
+                  Q4 Vendor Agreement &middot; Draft v4
+                </div>
+              </div>
+              <div class="mockup-editor">
+                <div
+                  id="editor-demo-root"
+                  class="editor-demo-root"
+                  aria-label="Editor demo"
+                >
+                  <div class="editor-loading">
+                    <div class="editor-loading-text">
+                      Click to load the editor
+                    </div>
+                    <button class="editor-load-btn" id="editor-load-btn">
+                      Load Editor
+                    </button>
+                  </div>
+                </div>
+                <noscript>
+                  <div class="editor-fallback">
+                    This demo requires JavaScript enabled to render the editor.
+                  </div>
+                </noscript>
               </div>
             </div>
           </div>

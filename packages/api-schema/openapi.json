@@ -561,6 +561,9 @@
               },
               "blockOnRejectedReviews": {
                 "type": "boolean"
+              },
+              "dismissStaleApprovals": {
+                "type": "boolean"
               }
             },
             "required": [
@@ -571,7 +574,20 @@
               "enableMergeWhitelist",
               "mergeWhitelistUsernames",
               "mergeWhitelistTeams",
-              "blockOnRejectedReviews"
+              "blockOnRejectedReviews",
+              "dismissStaleApprovals"
+            ]
+          },
+          "reviewSettings": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "blockOnUnresolvedThreads": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "blockOnUnresolvedThreads"
             ]
           },
           "canonicalFile": {
@@ -936,6 +952,9 @@
               },
               "blockOnRejectedReviews": {
                 "type": "boolean"
+              },
+              "dismissStaleApprovals": {
+                "type": "boolean"
               }
             },
             "required": [
@@ -946,7 +965,8 @@
               "enableMergeWhitelist",
               "mergeWhitelistUsernames",
               "mergeWhitelistTeams",
-              "blockOnRejectedReviews"
+              "blockOnRejectedReviews",
+              "dismissStaleApprovals"
             ]
           },
           "isPrivate": {
@@ -1011,12 +1031,198 @@
               "roleName",
               "user"
             ]
+          },
+          "reviewSettings": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "blockOnUnresolvedThreads": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "blockOnUnresolvedThreads"
+            ]
           }
         },
         "required": [
           "branchProtection",
           "isPrivate",
           "isInternal"
+        ]
+      },
+      "DiscussionSummary": {
+        "type": "object",
+        "properties": {
+          "threads": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "origin": {
+                  "type": "string",
+                  "enum": [
+                    "bindersnap",
+                    "external"
+                  ]
+                },
+                "comments": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "number"
+                      },
+                      "threadId": {
+                        "type": "string"
+                      },
+                      "author": {
+                        "type": "object",
+                        "properties": {
+                          "login": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "avatarUrl": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "login",
+                          "fullName",
+                          "avatarUrl"
+                        ]
+                      },
+                      "body": {
+                        "type": "string"
+                      },
+                      "createdAt": {
+                        "type": "string"
+                      },
+                      "updatedAt": {
+                        "type": "string"
+                      },
+                      "htmlUrl": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "threadId",
+                      "author",
+                      "body",
+                      "createdAt",
+                      "updatedAt",
+                      "htmlUrl"
+                    ]
+                  }
+                },
+                "events": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "number"
+                      },
+                      "actor": {
+                        "type": "object",
+                        "properties": {
+                          "login": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "avatarUrl": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "login",
+                          "fullName",
+                          "avatarUrl"
+                        ]
+                      },
+                      "resolved": {
+                        "type": "boolean"
+                      },
+                      "at": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "actor",
+                      "resolved",
+                      "at"
+                    ]
+                  }
+                },
+                "resolved": {
+                  "type": "boolean"
+                },
+                "resolvedBy": {
+                  "type": "object",
+                  "nullable": true,
+                  "properties": {
+                    "login": {
+                      "type": "string"
+                    },
+                    "fullName": {
+                      "type": "string"
+                    },
+                    "avatarUrl": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "login",
+                    "fullName",
+                    "avatarUrl"
+                  ]
+                },
+                "resolvedAt": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "createdAt": {
+                  "type": "string"
+                },
+                "updatedAt": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "origin",
+                "comments",
+                "events",
+                "resolved",
+                "resolvedBy",
+                "resolvedAt",
+                "createdAt",
+                "updatedAt"
+              ]
+            }
+          },
+          "totalCount": {
+            "type": "number"
+          },
+          "unresolvedCount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "threads",
+          "totalCount",
+          "unresolvedCount"
         ]
       },
       "SearchUsersPayload": {
@@ -2177,6 +2383,9 @@
                         },
                         "blockOnRejectedReviews": {
                           "type": "boolean"
+                        },
+                        "dismissStaleApprovals": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
@@ -2187,7 +2396,20 @@
                         "enableMergeWhitelist",
                         "mergeWhitelistUsernames",
                         "mergeWhitelistTeams",
-                        "blockOnRejectedReviews"
+                        "blockOnRejectedReviews",
+                        "dismissStaleApprovals"
+                      ]
+                    },
+                    "reviewSettings": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "blockOnUnresolvedThreads": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "blockOnUnresolvedThreads"
                       ]
                     },
                     "canonicalFile": {
@@ -2491,6 +2713,9 @@
                         },
                         "blockOnRejectedReviews": {
                           "type": "boolean"
+                        },
+                        "dismissStaleApprovals": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
@@ -2501,7 +2726,8 @@
                         "enableMergeWhitelist",
                         "mergeWhitelistUsernames",
                         "mergeWhitelistTeams",
-                        "blockOnRejectedReviews"
+                        "blockOnRejectedReviews",
+                        "dismissStaleApprovals"
                       ]
                     },
                     "isPrivate": {
@@ -2565,6 +2791,18 @@
                         "permissionLabel",
                         "roleName",
                         "user"
+                      ]
+                    },
+                    "reviewSettings": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "blockOnUnresolvedThreads": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "blockOnUnresolvedThreads"
                       ]
                     }
                   },
@@ -2645,6 +2883,12 @@
                   "blockOnRejectedReviews": {
                     "type": "boolean"
                   },
+                  "dismissStaleApprovals": {
+                    "type": "boolean"
+                  },
+                  "blockOnUnresolvedThreads": {
+                    "type": "boolean"
+                  },
                   "isPrivate": {
                     "type": "boolean"
                   },
@@ -2703,6 +2947,9 @@
                         },
                         "blockOnRejectedReviews": {
                           "type": "boolean"
+                        },
+                        "dismissStaleApprovals": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
@@ -2713,7 +2960,8 @@
                         "enableMergeWhitelist",
                         "mergeWhitelistUsernames",
                         "mergeWhitelistTeams",
-                        "blockOnRejectedReviews"
+                        "blockOnRejectedReviews",
+                        "dismissStaleApprovals"
                       ]
                     },
                     "isPrivate": {
@@ -2777,6 +3025,18 @@
                         "permissionLabel",
                         "roleName",
                         "user"
+                      ]
+                    },
+                    "reviewSettings": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "blockOnUnresolvedThreads": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "blockOnUnresolvedThreads"
                       ]
                     }
                   },
@@ -3206,6 +3466,942 @@
         "responses": {
           "204": {
             "description": "Review submitted"
+          }
+        }
+      }
+    },
+    "/api/app/documents/{owner}/{repo}/pull-requests/{pullNumber}/discussions": {
+      "get": {
+        "operationId": "listDocumentDiscussions",
+        "tags": [
+          "documents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "owner",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "repo",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "pullNumber",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Review discussion threads",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "threads": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "origin": {
+                            "type": "string",
+                            "enum": [
+                              "bindersnap",
+                              "external"
+                            ]
+                          },
+                          "comments": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "number"
+                                },
+                                "threadId": {
+                                  "type": "string"
+                                },
+                                "author": {
+                                  "type": "object",
+                                  "properties": {
+                                    "login": {
+                                      "type": "string"
+                                    },
+                                    "fullName": {
+                                      "type": "string"
+                                    },
+                                    "avatarUrl": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "login",
+                                    "fullName",
+                                    "avatarUrl"
+                                  ]
+                                },
+                                "body": {
+                                  "type": "string"
+                                },
+                                "createdAt": {
+                                  "type": "string"
+                                },
+                                "updatedAt": {
+                                  "type": "string"
+                                },
+                                "htmlUrl": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "threadId",
+                                "author",
+                                "body",
+                                "createdAt",
+                                "updatedAt",
+                                "htmlUrl"
+                              ]
+                            }
+                          },
+                          "events": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "number"
+                                },
+                                "actor": {
+                                  "type": "object",
+                                  "properties": {
+                                    "login": {
+                                      "type": "string"
+                                    },
+                                    "fullName": {
+                                      "type": "string"
+                                    },
+                                    "avatarUrl": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "login",
+                                    "fullName",
+                                    "avatarUrl"
+                                  ]
+                                },
+                                "resolved": {
+                                  "type": "boolean"
+                                },
+                                "at": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "actor",
+                                "resolved",
+                                "at"
+                              ]
+                            }
+                          },
+                          "resolved": {
+                            "type": "boolean"
+                          },
+                          "resolvedBy": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "login": {
+                                "type": "string"
+                              },
+                              "fullName": {
+                                "type": "string"
+                              },
+                              "avatarUrl": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "login",
+                              "fullName",
+                              "avatarUrl"
+                            ]
+                          },
+                          "resolvedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "origin",
+                          "comments",
+                          "events",
+                          "resolved",
+                          "resolvedBy",
+                          "resolvedAt",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    },
+                    "totalCount": {
+                      "type": "number"
+                    },
+                    "unresolvedCount": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "threads",
+                    "totalCount",
+                    "unresolvedCount"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createDocumentDiscussion",
+        "tags": [
+          "documents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "owner",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "repo",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "pullNumber",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "body": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "body"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Thread started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "threads": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "origin": {
+                            "type": "string",
+                            "enum": [
+                              "bindersnap",
+                              "external"
+                            ]
+                          },
+                          "comments": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "number"
+                                },
+                                "threadId": {
+                                  "type": "string"
+                                },
+                                "author": {
+                                  "type": "object",
+                                  "properties": {
+                                    "login": {
+                                      "type": "string"
+                                    },
+                                    "fullName": {
+                                      "type": "string"
+                                    },
+                                    "avatarUrl": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "login",
+                                    "fullName",
+                                    "avatarUrl"
+                                  ]
+                                },
+                                "body": {
+                                  "type": "string"
+                                },
+                                "createdAt": {
+                                  "type": "string"
+                                },
+                                "updatedAt": {
+                                  "type": "string"
+                                },
+                                "htmlUrl": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "threadId",
+                                "author",
+                                "body",
+                                "createdAt",
+                                "updatedAt",
+                                "htmlUrl"
+                              ]
+                            }
+                          },
+                          "events": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "number"
+                                },
+                                "actor": {
+                                  "type": "object",
+                                  "properties": {
+                                    "login": {
+                                      "type": "string"
+                                    },
+                                    "fullName": {
+                                      "type": "string"
+                                    },
+                                    "avatarUrl": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "login",
+                                    "fullName",
+                                    "avatarUrl"
+                                  ]
+                                },
+                                "resolved": {
+                                  "type": "boolean"
+                                },
+                                "at": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "actor",
+                                "resolved",
+                                "at"
+                              ]
+                            }
+                          },
+                          "resolved": {
+                            "type": "boolean"
+                          },
+                          "resolvedBy": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "login": {
+                                "type": "string"
+                              },
+                              "fullName": {
+                                "type": "string"
+                              },
+                              "avatarUrl": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "login",
+                              "fullName",
+                              "avatarUrl"
+                            ]
+                          },
+                          "resolvedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "origin",
+                          "comments",
+                          "events",
+                          "resolved",
+                          "resolvedBy",
+                          "resolvedAt",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    },
+                    "totalCount": {
+                      "type": "number"
+                    },
+                    "unresolvedCount": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "threads",
+                    "totalCount",
+                    "unresolvedCount"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/documents/{owner}/{repo}/pull-requests/{pullNumber}/discussions/{threadId}/comments": {
+      "post": {
+        "operationId": "replyToDocumentDiscussion",
+        "tags": [
+          "documents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "owner",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "repo",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "pullNumber",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "threadId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "body": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "body"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Reply posted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "threads": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "origin": {
+                            "type": "string",
+                            "enum": [
+                              "bindersnap",
+                              "external"
+                            ]
+                          },
+                          "comments": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "number"
+                                },
+                                "threadId": {
+                                  "type": "string"
+                                },
+                                "author": {
+                                  "type": "object",
+                                  "properties": {
+                                    "login": {
+                                      "type": "string"
+                                    },
+                                    "fullName": {
+                                      "type": "string"
+                                    },
+                                    "avatarUrl": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "login",
+                                    "fullName",
+                                    "avatarUrl"
+                                  ]
+                                },
+                                "body": {
+                                  "type": "string"
+                                },
+                                "createdAt": {
+                                  "type": "string"
+                                },
+                                "updatedAt": {
+                                  "type": "string"
+                                },
+                                "htmlUrl": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "threadId",
+                                "author",
+                                "body",
+                                "createdAt",
+                                "updatedAt",
+                                "htmlUrl"
+                              ]
+                            }
+                          },
+                          "events": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "number"
+                                },
+                                "actor": {
+                                  "type": "object",
+                                  "properties": {
+                                    "login": {
+                                      "type": "string"
+                                    },
+                                    "fullName": {
+                                      "type": "string"
+                                    },
+                                    "avatarUrl": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "login",
+                                    "fullName",
+                                    "avatarUrl"
+                                  ]
+                                },
+                                "resolved": {
+                                  "type": "boolean"
+                                },
+                                "at": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "actor",
+                                "resolved",
+                                "at"
+                              ]
+                            }
+                          },
+                          "resolved": {
+                            "type": "boolean"
+                          },
+                          "resolvedBy": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "login": {
+                                "type": "string"
+                              },
+                              "fullName": {
+                                "type": "string"
+                              },
+                              "avatarUrl": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "login",
+                              "fullName",
+                              "avatarUrl"
+                            ]
+                          },
+                          "resolvedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "origin",
+                          "comments",
+                          "events",
+                          "resolved",
+                          "resolvedBy",
+                          "resolvedAt",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    },
+                    "totalCount": {
+                      "type": "number"
+                    },
+                    "unresolvedCount": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "threads",
+                    "totalCount",
+                    "unresolvedCount"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/documents/{owner}/{repo}/pull-requests/{pullNumber}/discussions/{threadId}/resolve": {
+      "post": {
+        "operationId": "resolveDocumentDiscussion",
+        "tags": [
+          "documents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "owner",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "repo",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "pullNumber",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "threadId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "resolved": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "resolved"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Thread status updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "threads": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "origin": {
+                            "type": "string",
+                            "enum": [
+                              "bindersnap",
+                              "external"
+                            ]
+                          },
+                          "comments": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "number"
+                                },
+                                "threadId": {
+                                  "type": "string"
+                                },
+                                "author": {
+                                  "type": "object",
+                                  "properties": {
+                                    "login": {
+                                      "type": "string"
+                                    },
+                                    "fullName": {
+                                      "type": "string"
+                                    },
+                                    "avatarUrl": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "login",
+                                    "fullName",
+                                    "avatarUrl"
+                                  ]
+                                },
+                                "body": {
+                                  "type": "string"
+                                },
+                                "createdAt": {
+                                  "type": "string"
+                                },
+                                "updatedAt": {
+                                  "type": "string"
+                                },
+                                "htmlUrl": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "threadId",
+                                "author",
+                                "body",
+                                "createdAt",
+                                "updatedAt",
+                                "htmlUrl"
+                              ]
+                            }
+                          },
+                          "events": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "number"
+                                },
+                                "actor": {
+                                  "type": "object",
+                                  "properties": {
+                                    "login": {
+                                      "type": "string"
+                                    },
+                                    "fullName": {
+                                      "type": "string"
+                                    },
+                                    "avatarUrl": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "login",
+                                    "fullName",
+                                    "avatarUrl"
+                                  ]
+                                },
+                                "resolved": {
+                                  "type": "boolean"
+                                },
+                                "at": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "actor",
+                                "resolved",
+                                "at"
+                              ]
+                            }
+                          },
+                          "resolved": {
+                            "type": "boolean"
+                          },
+                          "resolvedBy": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "login": {
+                                "type": "string"
+                              },
+                              "fullName": {
+                                "type": "string"
+                              },
+                              "avatarUrl": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "login",
+                              "fullName",
+                              "avatarUrl"
+                            ]
+                          },
+                          "resolvedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "origin",
+                          "comments",
+                          "events",
+                          "resolved",
+                          "resolvedBy",
+                          "resolvedAt",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    },
+                    "totalCount": {
+                      "type": "number"
+                    },
+                    "unresolvedCount": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "threads",
+                    "totalCount",
+                    "unresolvedCount"
+                  ]
+                }
+              }
+            }
           }
         }
       }
