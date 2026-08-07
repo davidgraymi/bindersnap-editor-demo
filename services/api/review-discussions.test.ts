@@ -317,6 +317,29 @@ describe("review discussion routes", () => {
     }
   });
 
+  test("an invalid thread id in the URL yields 400, not 500", async () => {
+    // Regression: GiteaApiError(0) used to reach json(0, …), which Response()
+    // rejects, turning a malformed-request error into a crash and a 500.
+    const server = createApiServer();
+    const session = await seedSession(OWNER);
+
+    try {
+      const response = await server.fetch(
+        request(
+          `${DISCUSSIONS}/${encodeURIComponent("not a!valid*id")}/comments`,
+          session,
+          {
+            method: "POST",
+            body: { body: "Reply to a bogus thread." },
+          },
+        ),
+      );
+      expect(response.status).toBe(400);
+    } finally {
+      server.stop(true);
+    }
+  });
+
   test("replies attach to the thread and resolving clears the count", async () => {
     const server = createApiServer();
     const session = await seedSession(OWNER);

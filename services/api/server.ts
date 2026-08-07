@@ -1200,7 +1200,10 @@ function responseFromError(
   fallback: string,
 ): Response {
   if (err instanceof GiteaApiError) {
-    const status = err.status;
+    // Status 0 marks an error detected on our side (input validation, missing
+    // data) rather than an HTTP status from Gitea. Response() rejects 0, and
+    // these are request-shaped problems, so surface them as 400.
+    const status = err.status === 0 ? 400 : err.status;
     if (status >= 500) {
       logger.error("Gitea API error (5xx)", {
         status,

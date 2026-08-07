@@ -87,7 +87,7 @@ function Thread({
 }: {
   thread: DiscussionThread;
   canParticipate: boolean;
-  onReply: (threadId: string, body: string) => Promise<void>;
+  onReply: (threadId: string, body: string) => Promise<boolean>;
   onToggleResolved: (threadId: string, resolved: boolean) => Promise<void>;
   busy: boolean;
 }) {
@@ -107,7 +107,10 @@ function Thread({
   async function submitReply() {
     const body = replyBody.trim();
     if (!body) return;
-    await onReply(thread.id, body);
+    // Keep the draft and the open reply box when the post fails, so an error
+    // never costs the user the text they wrote.
+    const posted = await onReply(thread.id, body);
+    if (!posted) return;
     setReplyBody("");
     setReplyOpen(false);
   }
@@ -298,13 +301,17 @@ export function ReviewDiscussion({
     };
   }, [owner, repo, pullNumber, apply]);
 
-  async function run(action: () => Promise<DiscussionSummary>) {
+  async function run(
+    action: () => Promise<DiscussionSummary>,
+  ): Promise<boolean> {
     setBusy(true);
     setError(null);
     try {
       apply(await action());
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
+      return false;
     } finally {
       setBusy(false);
     }
@@ -364,8 +371,8 @@ export function ReviewDiscussion({
                   thread={thread}
                   canParticipate={canParticipate}
                   busy={busy}
-                  onReply={async (threadId, body) => {
-                    await run(() =>
+                  onReply={(threadId, body) =>
+                    run(() =>
                       replyToDocumentDiscussion(
                         owner,
                         repo,
@@ -373,8 +380,8 @@ export function ReviewDiscussion({
                         threadId,
                         body,
                       ),
-                    );
-                  }}
+                    )
+                  }
                   onToggleResolved={async (threadId, resolved) => {
                     await run(() =>
                       resolveDocumentDiscussion(
