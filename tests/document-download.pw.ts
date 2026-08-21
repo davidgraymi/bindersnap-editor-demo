@@ -32,6 +32,7 @@ import {
   installMemorySessionStorage,
   makeClient,
   navigateToDocument,
+  openDocumentChange,
   openDocumentTab,
   openNewDocumentModal,
   pollUntil,
@@ -156,8 +157,8 @@ test.describe("Document download", () => {
     await signInAsAlice(page);
     await navigateToDocument(page, cardSearchText);
 
-    // Reviewing lives on its own tab now
-    await openDocumentTab(page, "Changes");
+    // Each change has its own page; the review controls live there.
+    await openDocumentChange(page);
 
     // The Publish button must appear now that the PR is approved
     await expect(
@@ -277,7 +278,7 @@ test.describe("Document download", () => {
     await navigateToDocument(page, cardSearchText);
 
     // Publish v2
-    await openDocumentTab(page, "Changes");
+    await openDocumentChange(page);
     await expect(
       page.getByRole("button", {
         name: "Publish as Official Version",

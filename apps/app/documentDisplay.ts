@@ -81,9 +81,12 @@ export function getApprovalStateBadgeClass(state: string): string {
 }
 
 /**
- * The one-line answer to "where does this document stand right now?" — the
- * question the whole page exists to answer, so it is derived once and shown in
- * the header rather than inferred from three separate cards.
+ * The one-line answer to "where does this document stand right now?"
+ *
+ * A document page has room to say that a version is published *and* another is
+ * in review; a row in a list does not, so a list has to pick one word. This
+ * picks it, worst news first: an open change asking for work outranks an open
+ * change that is ready, which outranks anything already on the record.
  */
 export function resolveDocumentStatus(params: {
   hasPublishedVersion: boolean;
@@ -99,6 +102,22 @@ export function resolveDocumentStatus(params: {
   return hasPublishedVersion ? "published" : "draft";
 }
 
+/**
+ * The same question, asked of a row in the workspace document list.
+ *
+ * Structurally typed rather than importing `WorkspaceDocumentSummary`, so this
+ * module stays free of schema imports and testable with a plain object.
+ */
+export function resolveWorkspaceDocumentStatus(doc: {
+  latestTag: unknown | null;
+  pendingPRs: { approvalState: string }[];
+}): DocumentStatus {
+  return resolveDocumentStatus({
+    hasPublishedVersion: doc.latestTag !== null,
+    openApprovalStates: doc.pendingPRs.map((pr) => pr.approvalState),
+  });
+}
+
 export function getDocumentStatusLabel(status: DocumentStatus): string {
   switch (status) {
     case "published":
@@ -110,7 +129,7 @@ export function getDocumentStatusLabel(status: DocumentStatus): string {
     case "in_review":
       return "In review";
     default:
-      return "No version yet";
+      return "Draft";
   }
 }
 

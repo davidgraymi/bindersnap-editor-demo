@@ -655,14 +655,17 @@ input {
 }
 
 /* Header — the one part of the page that never changes as you move
-   between tabs, so you always know which document you are looking at. */
+   between tabs, so you always know which document you are looking at.
+   It sits on the page rather than inside a card: a floating box that
+   resizes under you is the thing this page was accused of. */
 .doc-header {
   display: grid;
   gap: var(--brand-space-5);
-  padding: var(--brand-space-6) var(--brand-space-6) 0;
-  background: var(--bs-surface-1);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-xl);
+  padding: 0;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--bs-rule);
+  border-radius: 0;
 }
 
 .doc-header-top {
@@ -743,48 +746,21 @@ input {
   align-items: center;
 }
 
-/* Status pill — the answer to "where does this stand?" */
-.doc-status {
+/* Official version — a fact, not a status. "Published" and "In review" are
+   both true at once whenever a new version is under review, so the header
+   states the version on record and leaves the verdicts to the Changes tab. */
+.doc-version-pill {
   display: inline-flex;
   align-items: center;
-  gap: var(--brand-space-2);
   padding: var(--brand-space-1) var(--brand-space-3);
+  border: 1px solid var(--bs-rule);
   border-radius: var(--brand-radius-full);
+  background: var(--bs-surface-2);
+  color: var(--bs-text-secondary);
   font-family: var(--brand-font-mono);
   font-size: var(--brand-text-xs);
   font-weight: var(--brand-weight-medium);
   letter-spacing: var(--brand-tracking-wide);
-  text-transform: uppercase;
-  background: var(--bs-surface-2);
-  color: var(--bs-text-muted);
-}
-
-.doc-status::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  border-radius: var(--brand-radius-full);
-  background: currentColor;
-}
-
-.doc-status--published {
-  background: var(--brand-green-dim);
-  color: var(--brand-green);
-}
-
-.doc-status--approved {
-  background: var(--brand-green-dim);
-  color: var(--brand-green);
-}
-
-.doc-status--in_review {
-  background: rgba(217, 119, 6, 0.12);
-  color: #b45309;
-}
-
-.doc-status--changes_requested {
-  background: var(--bs-coral-dim);
-  color: var(--brand-coral-dark);
 }
 
 /* Tabs — GitHub's repo bar, in Bindersnap's voice. */
@@ -792,9 +768,8 @@ input {
   display: flex;
   flex-wrap: wrap;
   gap: var(--brand-space-1);
-  border-top: 1px solid var(--bs-rule-warm);
-  margin: 0 calc(var(--brand-space-6) * -1);
-  padding: 0 var(--brand-space-4);
+  margin: 0 0 -1px;
+  padding: 0;
 }
 
 .doc-tab {
@@ -1221,40 +1196,190 @@ input {
   gap: var(--brand-space-2);
 }
 
-/* Changes tab */
-.doc-changes {
+/* Changes tab — an index of open changes. One row each; the review itself
+   lives on its own page, so reaching #3 never means scrolling past #10. */
+.change-list {
   display: grid;
   gap: var(--brand-space-4);
 }
 
-.doc-change {
-  display: grid;
-  gap: var(--brand-space-3);
-  padding: var(--brand-space-5);
-}
-
-.doc-change-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--brand-space-4);
-}
-
-.doc-change-heading {
+.change-list-header {
   display: grid;
   gap: var(--brand-space-1);
+}
+
+.change-list-title {
+  margin: 0;
+  font-family: var(--brand-font-serif);
+  font-size: var(--brand-text-h3);
+}
+
+.change-list-note {
+  margin: 0;
+  max-width: 70ch;
+  font-size: var(--brand-text-sm);
+  color: var(--bs-text-muted);
+}
+
+.change-list-rows {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+  background: var(--bs-surface-1);
+  overflow: hidden;
+}
+
+.change-row + .change-row {
+  border-top: 1px solid var(--bs-rule-warm);
+}
+
+.change-row-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-3);
+  padding: var(--brand-space-4);
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--brand-transition-base);
+}
+
+.change-row-btn:hover,
+.change-row-btn:focus-visible {
+  background: var(--bs-surface-2);
+  outline: none;
+}
+
+.change-row-icon {
+  flex: none;
+  color: var(--bs-text-faint);
+}
+
+.change-row-main {
+  display: grid;
+  gap: var(--brand-space-1);
+  flex: 1 1 auto;
   min-width: 0;
 }
 
-.doc-change-meta {
+.change-row-title {
+  font-size: var(--brand-text-body);
+  font-weight: var(--brand-weight-medium);
+  color: var(--bs-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.change-row-meta {
+  font-size: var(--brand-text-sm);
+  color: var(--bs-text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* One change, on its own page. */
+.change-detail {
+  display: grid;
+  gap: var(--brand-space-5);
+}
+
+.change-detail-header {
+  display: grid;
+  gap: var(--brand-space-2);
+  padding-bottom: var(--brand-space-4);
+  border-bottom: 1px solid var(--bs-rule);
+}
+
+.change-detail-back {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--bs-text-muted);
+  cursor: pointer;
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-label);
+  letter-spacing: var(--brand-tracking-wide);
+  text-transform: uppercase;
+  transition: color var(--brand-transition-base);
+}
+
+.change-detail-back:hover,
+.change-detail-back:focus-visible {
+  color: var(--bs-text-primary);
+}
+
+.change-detail-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--brand-space-3);
+}
+
+.change-detail-title {
+  margin: 0;
+  font-family: var(--brand-font-serif);
+  font-size: var(--brand-text-h3);
+  line-height: var(--brand-leading-tight);
+  overflow-wrap: anywhere;
+}
+
+.change-detail-number {
+  margin-left: var(--brand-space-2);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-body);
+  font-weight: var(--brand-weight-regular);
+  color: var(--bs-text-faint);
+}
+
+.change-detail-meta {
   margin: 0;
   font-size: var(--brand-text-sm);
   color: var(--bs-text-muted);
 }
 
-.doc-change-number {
+.change-detail-material,
+.change-detail-decision {
+  display: grid;
+  gap: var(--brand-space-2);
+}
+
+.change-detail-section-title {
+  margin: 0;
   font-family: var(--brand-font-mono);
-  color: var(--bs-text-faint);
+  font-size: var(--brand-text-label);
+  letter-spacing: var(--brand-tracking-wide);
+  text-transform: uppercase;
+  color: var(--brand-coral);
+}
+
+.change-detail-section-note {
+  margin: 0 0 var(--brand-space-2);
+  max-width: 70ch;
+  font-size: var(--brand-text-sm);
+  color: var(--bs-text-muted);
+}
+
+/* The file under review scrolls inside its own frame. Approving is the point
+   of this page, so the buttons must never be a thousand pixels down. */
+.change-detail-material .doc-preview-body {
+  max-height: 60vh;
+  overflow: auto;
+}
+
+.change-detail-section-note code {
+  padding: 1px var(--brand-space-1);
+  border-radius: var(--brand-radius-xs);
+  background: var(--bs-surface-2);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-xs);
 }
 
 .doc-empty {
@@ -1549,13 +1674,7 @@ input {
 }
 
 @media (max-width: 720px) {
-  .doc-header {
-    padding: var(--brand-space-5) var(--brand-space-4) 0;
-  }
-
   .doc-tabs {
-    margin: 0 calc(var(--brand-space-4) * -1);
-    padding: 0 var(--brand-space-2);
     overflow-x: auto;
     flex-wrap: nowrap;
   }
@@ -3279,6 +3398,12 @@ input {
   flex: none;
   min-height: 0;
   overflow-y: visible;
+  /* Without an explicit track the single implicit column is `auto`, which
+     sizes to its content — so every page (and every tab within a page) got a
+     different width and the whole layout jumped sideways on each click.
+     Pinning the track to the full area makes `.app-page-shell`'s max-width
+     and auto margins the only thing deciding where the content sits. */
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .app-main--page {
@@ -3286,6 +3411,10 @@ input {
 }
 
 .app-page-shell {
+  /* `width: 100%` is load-bearing. Without it the auto margins make this a
+     fit-content box, so the column width — and with it the whole page — was
+     decided by whatever the active tab happened to render. */
+  width: 100%;
   max-width: 1040px;
   margin: 0 auto;
   padding: var(--brand-space-8) var(--brand-space-8) var(--brand-space-12);
@@ -3974,6 +4103,10 @@ input {
   color: #f59e0b;
 }
 
+/* Published is the version on record; approved is a change cleared to become
+   one. Both are good news, so both are green — the label carries the
+   difference. */
+.dash-doc-badge--published,
 .dash-doc-badge--approved {
   background: var(--brand-green-dim);
   color: var(--brand-green);
@@ -5147,6 +5280,7 @@ input {
   color: #fbbf24;
 }
 
+.docs-status-badge--published,
 .docs-status-badge--approved {
   background: rgba(22, 163, 74, 0.1);
   color: var(--brand-green);

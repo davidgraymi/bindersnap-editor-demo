@@ -59,6 +59,32 @@ test("getRoute maps the changes and history tabs", () => {
   });
 });
 
+test("getRoute gives every change its own page", () => {
+  expect(getRoute("/docs/alice/quarterly-report/changes/7")).toEqual({
+    kind: "document",
+    owner: "alice",
+    repo: "quarterly-report",
+    tab: "changes",
+    changeNumber: 7,
+  });
+
+  expect(
+    routeToPath({
+      kind: "document",
+      owner: "alice",
+      repo: "quarterly-report",
+      tab: "changes",
+      changeNumber: 7,
+    }),
+  ).toBe("/docs/alice/quarterly-report/changes/7");
+});
+
+test("a non-numeric change segment is not a change page", () => {
+  expect(getRoute("/docs/alice/quarterly-report/changes/latest")).toEqual({
+    kind: "home",
+  });
+});
+
 test("getRoute falls back to home for an unknown document tab", () => {
   expect(getRoute("/docs/alice/quarterly-report/nonsense")).toEqual({
     kind: "home",

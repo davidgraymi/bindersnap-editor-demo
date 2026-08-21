@@ -14,6 +14,11 @@ import {
 } from "lucide-react";
 
 import { getWorkspaceDocuments, type WorkspaceDocumentSummary } from "../api";
+import {
+  getDocumentStatusLabel,
+  resolveWorkspaceDocumentStatus,
+  type DocumentStatus,
+} from "../documentDisplay";
 import { BindersnapLogoMark } from "./BindersnapLogoMark";
 
 interface HomePageProps {
@@ -77,47 +82,18 @@ function getTodayLabel(): string {
   });
 }
 
-function getDocStatus(
-  doc: WorkspaceDocumentSummary,
-): "in_review" | "approved" | "changes_requested" | "draft" {
-  const first = doc.pendingPRs[0];
-  if (first) {
-    const s = first.approvalState;
-    if (s === "in_review" || s === "changes_requested" || s === "approved") {
-      return s;
-    }
-  }
-  if (doc.latestTag) return "approved";
-  return "draft";
-}
-
-function getStatusBadgeClass(
-  status: "in_review" | "approved" | "changes_requested" | "draft",
-): string {
+function getStatusBadgeClass(status: DocumentStatus): string {
   switch (status) {
     case "in_review":
       return "dash-doc-badge dash-doc-badge--review";
+    case "published":
+      return "dash-doc-badge dash-doc-badge--published";
     case "approved":
       return "dash-doc-badge dash-doc-badge--approved";
     case "changes_requested":
       return "dash-doc-badge dash-doc-badge--changes";
     default:
       return "dash-doc-badge dash-doc-badge--draft";
-  }
-}
-
-function getStatusLabel(
-  status: "in_review" | "approved" | "changes_requested" | "draft",
-): string {
-  switch (status) {
-    case "in_review":
-      return "In Review";
-    case "approved":
-      return "Approved";
-    case "changes_requested":
-      return "Changes Requested";
-    default:
-      return "Draft";
   }
 }
 
@@ -482,7 +458,7 @@ export function HomePage({
               <div className="dash-empty">No documents yet.</div>
             ) : (
               recentDocs.map((doc) => {
-                const status = getDocStatus(doc);
+                const status = resolveWorkspaceDocumentStatus(doc);
                 const firstPR = doc.pendingPRs[0];
                 const submitter = firstPR?.user?.login ?? doc.repo.owner.login;
                 const updatedTime = formatRelativeTime(doc.repo.updated_at);
@@ -534,7 +510,7 @@ export function HomePage({
 
                     <span className={getStatusBadgeClass(status)}>
                       <span className="dash-badge-dot" aria-hidden="true" />
-                      {getStatusLabel(status)}
+                      {getDocumentStatusLabel(status)}
                     </span>
                   </div>
                 );

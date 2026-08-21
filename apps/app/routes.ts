@@ -14,6 +14,11 @@ export type AppRoute =
       owner: string;
       repo: string;
       tab: DocumentTab;
+      /**
+       * One change, on its own page. Only ever set on the `changes` tab —
+       * reviewing #3 should not mean scrolling past #4 through #10.
+       */
+      changeNumber?: number;
     };
 
 /**
@@ -81,6 +86,19 @@ export function getRoute(pathname: string): AppRoute {
     return { kind: "billing" };
   }
 
+  const changeMatch = normalizedPath.match(
+    /^\/docs\/([^/]+)\/([^/]+)\/changes\/(\d+)$/,
+  );
+  if (changeMatch) {
+    return {
+      kind: "document",
+      owner: changeMatch[1]!,
+      repo: changeMatch[2]!,
+      tab: "changes",
+      changeNumber: Number(changeMatch[3]),
+    };
+  }
+
   const docTabMatch = normalizedPath.match(
     /^\/docs\/([^/]+)\/([^/]+)\/([^/]+)$/,
   );
@@ -124,6 +142,9 @@ export function routeToPath(route: AppRoute): string {
     case "document": {
       const base = `/docs/${route.owner}/${route.repo}`;
       if (route.tab === "overview") return base;
+      if (route.tab === "changes" && route.changeNumber !== undefined) {
+        return `${base}/changes/${route.changeNumber}`;
+      }
       return `${base}/${DOCUMENT_TAB_PATHS[route.tab]}`;
     }
     case "documents":

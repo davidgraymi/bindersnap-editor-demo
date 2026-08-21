@@ -31,6 +31,7 @@ import {
   installMemorySessionStorage,
   makeClient,
   navigateToDocument,
+  openDocumentChange,
   openDocumentTab,
   openNewDocumentModal,
   pollUntil,
@@ -156,8 +157,8 @@ test.describe("UI document version upload flow", () => {
     await signInAsAlice(page);
     await navigateToDocument(page, cardSearchText);
 
-    // Reviewing lives on its own tab now
-    await openDocumentTab(page, "Changes");
+    // Each change has its own page; the review controls live there.
+    await openDocumentChange(page);
 
     // The Publish button should be visible (PR is approved and alice can merge)
     await expect(
@@ -261,7 +262,7 @@ test.describe("UI document version upload flow", () => {
     await navigateToDocument(page, cardSearchText);
 
     // Publish
-    await openDocumentTab(page, "Changes");
+    await openDocumentChange(page);
     await expect(
       page.getByRole("button", {
         name: "Publish as Official Version",

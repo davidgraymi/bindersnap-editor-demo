@@ -1,10 +1,6 @@
-import { useState } from "react";
+import { GitPullRequest } from "lucide-react";
 
-import type {
-  PullRequestWithApprovalState,
-  RepoBranchProtection,
-} from "../api";
-import { publishDocument, submitDocumentReview } from "../api";
+import type { PullRequestWithApprovalState } from "../api";
 import {
   capitalizeFirst,
   formatDate,
@@ -12,190 +8,28 @@ import {
   getApprovalStateLabel,
   parseSubmissionSummary,
 } from "../documentDisplay";
-import { ReviewDiscussion } from "./ReviewDiscussion";
 
 interface DocumentChangesProps {
-  owner: string;
-  repo: string;
-  currentUser: string;
   isAnonymous: boolean;
   openPullRequests: PullRequestWithApprovalState[];
-  branchProtection: RepoBranchProtection | null;
-  blockOnUnresolvedThreads: boolean;
   nextVersion: number;
-  documentName: string;
-  onChanged: () => void | Promise<void>;
+  onOpenChange: (pullNumber: number) => void;
   onSubmitVersion: () => void;
 }
 
-interface PRActionState {
-  status: "idle" | "submitting" | "error";
-  error: string | null;
-  changesComment: string;
-  showChangesForm: boolean;
-  showApproveConfirm: boolean;
-}
-
-const DEFAULT_PR_ACTION_STATE: PRActionState = {
-  status: "idle",
-  error: null,
-  changesComment: "",
-  showChangesForm: false,
-  showApproveConfirm: false,
-};
-
-function readActionError(err: unknown, fallback: string): string {
-  return err instanceof Error ? err.message : fallback;
-}
-
-function canUserReview(
-  currentUser: string,
-  prAuthor: string | undefined,
-  protection: RepoBranchProtection | null,
-): { allowed: boolean; reason: string | null } {
-  if (currentUser === prAuthor) {
-    // Rendered separately as a callout, not as a denial.
-    return { allowed: false, reason: null };
-  }
-  if (
-    protection?.enableApprovalsWhitelist &&
-    protection.approvalsWhitelistUsernames.length > 0 &&
-    !protection.approvalsWhitelistUsernames.includes(currentUser)
-  ) {
-    return {
-      allowed: false,
-      reason: "Your account is not authorized to approve this document.",
-    };
-  }
-  return { allowed: true, reason: null };
-}
-
-function canUserMerge(
-  currentUser: string,
-  protection: RepoBranchProtection | null,
-): { allowed: boolean; reason: string | null } {
-  if (
-    protection?.enableMergeWhitelist &&
-    protection.mergeWhitelistUsernames.length > 0 &&
-    !protection.mergeWhitelistUsernames.includes(currentUser)
-  ) {
-    return {
-      allowed: false,
-      reason: "Your account is not authorized to publish this document.",
-    };
-  }
-  return { allowed: true, reason: null };
-}
-
 /**
- * Every version waiting on a decision, and the controls to make it.
+ * The index of everything waiting on a decision.
  *
- * This used to share the document page with the preview and the version list,
- * which meant approving something happened in a column next to two other
- * columns. Reviewing is its own job, so it gets its own tab.
+ * A list, not a stack of open reviews: each change gets its own page, so
+ * reaching #3 never means scrolling past #4 through #10.
  */
 export function DocumentChanges({
-  owner,
-  repo,
-  currentUser,
   isAnonymous,
   openPullRequests,
-  branchProtection,
-  blockOnUnresolvedThreads,
   nextVersion,
-  documentName,
-  onChanged,
+  onOpenChange,
   onSubmitVersion,
 }: DocumentChangesProps) {
-  const [actionStates, setActionStates] = useState<
-    Record<number, PRActionState>
-  >({});
-  const [unresolvedByPR, setUnresolvedByPR] = useState<Record<number, number>>(
-    {},
-  );
-
-  function getActionState(pullNumber: number): PRActionState {
-    return actionStates[pullNumber] ?? DEFAULT_PR_ACTION_STATE;
-  }
-
-  function updateActionState(
-    pullNumber: number,
-    update: Partial<PRActionState>,
-  ) {
-    setActionStates((prev) => ({
-      ...prev,
-      [pullNumber]: {
-        ...(prev[pullNumber] ?? DEFAULT_PR_ACTION_STATE),
-        ...update,
-      },
-    }));
-  }
-
-  async function handleApprove(pullNumber: number) {
-    updateActionState(pullNumber, { status: "submitting", error: null });
-    try {
-      await submitDocumentReview(
-        owner,
-        repo,
-        pullNumber,
-        "APPROVE",
-        "APPROVED",
-      );
-      updateActionState(pullNumber, { status: "idle" });
-      await onChanged();
-    } catch (err) {
-      updateActionState(pullNumber, {
-        status: "error",
-        error: readActionError(err, "Failed to submit approval."),
-      });
-    }
-  }
-
-  async function handleRequestChanges(pullNumber: number) {
-    const comment = getActionState(pullNumber).changesComment.trim();
-    if (!comment) {
-      updateActionState(pullNumber, {
-        error: "Enter a comment describing the required changes.",
-      });
-      return;
-    }
-    updateActionState(pullNumber, { status: "submitting", error: null });
-    try {
-      await submitDocumentReview(
-        owner,
-        repo,
-        pullNumber,
-        "REQUEST_CHANGES",
-        comment,
-      );
-      updateActionState(pullNumber, {
-        status: "idle",
-        showChangesForm: false,
-        changesComment: "",
-      });
-      await onChanged();
-    } catch (err) {
-      updateActionState(pullNumber, {
-        status: "error",
-        error: readActionError(err, "Failed to request changes."),
-      });
-    }
-  }
-
-  async function handlePublish(pullNumber: number) {
-    updateActionState(pullNumber, { status: "submitting", error: null });
-    try {
-      await publishDocument(owner, repo, pullNumber, nextVersion);
-      updateActionState(pullNumber, { status: "idle" });
-      await onChanged();
-    } catch (err) {
-      updateActionState(pullNumber, {
-        status: "error",
-        error: readActionError(err, "Failed to publish document."),
-      });
-    }
-  }
-
   if (openPullRequests.length === 0) {
     return (
       <section className="bs-card doc-empty">
@@ -218,209 +52,60 @@ export function DocumentChanges({
   }
 
   return (
-    <div className="doc-changes">
-      {openPullRequests.map((pr) => {
-        const prNum = pr.number ?? 0;
-        const actionState = getActionState(prNum);
-        const isSubmitting = actionState.status === "submitting";
-        const reviewPerms = canUserReview(
-          currentUser,
-          pr.user?.login,
-          branchProtection,
-        );
-        const mergePerms = canUserMerge(currentUser, branchProtection);
-        const mergeReady = pr.approvalState === "approved";
-        // The server enforces this too; the disabled button just avoids a
-        // pointless round trip that ends in a 409.
-        const threadsBlockPublish =
-          blockOnUnresolvedThreads && (unresolvedByPR[prNum] ?? 0) > 0;
-        const ownSubmission = currentUser === pr.user?.login;
-        const summary = parseSubmissionSummary(pr.body);
-        const submitter = pr.user?.login
-          ? capitalizeFirst(pr.user.login)
-          : "Someone";
-        const submittedDate = pr.created_at ? formatDate(pr.created_at) : null;
+    <section className="change-list" aria-label="Open changes">
+      <header className="change-list-header">
+        <h2 className="change-list-title">
+          {openPullRequests.length} change
+          {openPullRequests.length === 1 ? "" : "s"} waiting on a decision
+        </h2>
+        <p className="change-list-note">
+          Open one to read the submitted file, download it, and record your
+          decision.
+        </p>
+      </header>
 
-        return (
-          <article className="bs-card vault-pr-item doc-change" key={pr.number}>
-            <header className="doc-change-header">
-              <div className="doc-change-heading">
-                <h3 className="vault-pr-title">
-                  {summary ?? `Submitted by ${submitter}`}
-                </h3>
-                <p className="doc-change-meta">
-                  <span className="doc-change-number">#{prNum}</span>
-                  {submittedDate
-                    ? ` · Submitted by ${submitter} on ${submittedDate}`
-                    : ` · Submitted by ${submitter}`}
-                  {` · Becomes v${nextVersion} when published`}
-                </p>
-              </div>
-              <span className={getApprovalStateBadgeClass(pr.approvalState)}>
-                {getApprovalStateLabel(pr.approvalState)}
-              </span>
-            </header>
+      <ul className="change-list-rows">
+        {openPullRequests.map((pr) => {
+          const prNum = pr.number ?? 0;
+          const submitter = pr.user?.login
+            ? capitalizeFirst(pr.user.login)
+            : "Someone";
+          const submittedDate = pr.created_at
+            ? formatDate(pr.created_at)
+            : null;
 
-            {ownSubmission ? (
-              <p className="vault-pr-own-notice">
-                ℹ You submitted this version — waiting on other reviewers to
-                approve.
-              </p>
-            ) : reviewPerms.allowed ? (
-              <div className="vault-pr-actions">
-                {actionState.showApproveConfirm ? (
-                  <div className="vault-pr-confirm">
-                    <p className="vault-pr-confirm-heading">
-                      Approve version {nextVersion} of {documentName}?
-                    </p>
-                    <p className="vault-pr-confirm-sub">
-                      This approval will be recorded with your name and
-                      timestamp.
-                    </p>
-                    <div className="vault-pr-confirm-actions">
-                      <button
-                        className="bs-btn bs-btn-primary"
-                        type="button"
-                        disabled={isSubmitting}
-                        onClick={() => {
-                          updateActionState(prNum, {
-                            showApproveConfirm: false,
-                          });
-                          void handleApprove(prNum);
-                        }}
-                      >
-                        {isSubmitting ? "Submitting…" : "Confirm Approval"}
-                      </button>
-                      <button
-                        className="bs-btn bs-btn-secondary"
-                        type="button"
-                        disabled={isSubmitting}
-                        onClick={() =>
-                          updateActionState(prNum, {
-                            showApproveConfirm: false,
-                          })
-                        }
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    className="bs-btn bs-btn-primary"
-                    type="button"
-                    disabled={isSubmitting}
-                    onClick={() =>
-                      updateActionState(prNum, { showApproveConfirm: true })
-                    }
-                  >
-                    Approve
-                  </button>
-                )}
-
-                {actionState.showChangesForm ? (
-                  <div className="vault-pr-comment-form">
-                    <textarea
-                      className="vault-pr-comment-input"
-                      placeholder="Describe what needs to change…"
-                      value={actionState.changesComment}
-                      rows={3}
-                      disabled={isSubmitting}
-                      onChange={(e) =>
-                        updateActionState(prNum, {
-                          changesComment: e.target.value,
-                          error: null,
-                        })
-                      }
-                    />
-                    <div className="vault-pr-comment-actions">
-                      <button
-                        className="bs-btn bs-btn-secondary"
-                        type="button"
-                        disabled={isSubmitting}
-                        onClick={() => void handleRequestChanges(prNum)}
-                      >
-                        {isSubmitting ? "Submitting…" : "Send Feedback"}
-                      </button>
-                      <button
-                        className="bs-btn bs-btn-secondary"
-                        type="button"
-                        disabled={isSubmitting}
-                        onClick={() =>
-                          updateActionState(prNum, {
-                            showChangesForm: false,
-                            changesComment: "",
-                            error: null,
-                          })
-                        }
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    className="bs-btn bs-btn-secondary"
-                    type="button"
-                    disabled={isSubmitting}
-                    onClick={() =>
-                      updateActionState(prNum, {
-                        showChangesForm: true,
-                        error: null,
-                      })
-                    }
-                  >
-                    Request Changes
-                  </button>
-                )}
-              </div>
-            ) : reviewPerms.reason ? (
-              <p className="vault-pr-notice">{reviewPerms.reason}</p>
-            ) : null}
-
-            <ReviewDiscussion
-              owner={owner}
-              repo={repo}
-              pullNumber={prNum}
-              canParticipate={!isAnonymous}
-              blockOnUnresolvedThreads={blockOnUnresolvedThreads}
-              onSummaryChange={(next) =>
-                setUnresolvedByPR((prev) =>
-                  prev[prNum] === next.unresolvedCount
-                    ? prev
-                    : { ...prev, [prNum]: next.unresolvedCount },
-                )
-              }
-            />
-
-            {mergePerms.allowed && mergeReady ? (
-              <div className="vault-pr-actions">
-                <button
-                  className="bs-btn bs-btn-primary vault-pr-publish-btn"
-                  type="button"
-                  disabled={isSubmitting || threadsBlockPublish}
-                  title={
-                    threadsBlockPublish
-                      ? "Resolve every discussion thread before publishing."
-                      : undefined
-                  }
-                  onClick={() => void handlePublish(prNum)}
-                >
-                  {isSubmitting ? "Publishing…" : "Publish as Official Version"}
-                </button>
-              </div>
-            ) : mergeReady && !mergePerms.allowed ? (
-              <p className="vault-pr-notice">{mergePerms.reason}</p>
-            ) : null}
-
-            {actionState.error ? (
-              <p className="vault-pr-error" role="alert">
-                {actionState.error}
-              </p>
-            ) : null}
-          </article>
-        );
-      })}
-    </div>
+          return (
+            <li className="change-row" key={prNum}>
+              <button
+                className="change-row-btn"
+                type="button"
+                onClick={() => onOpenChange(prNum)}
+              >
+                <GitPullRequest
+                  className="change-row-icon"
+                  size={16}
+                  strokeWidth={1.5}
+                  aria-hidden="true"
+                />
+                <span className="change-row-main">
+                  <span className="change-row-title">
+                    {parseSubmissionSummary(pr.body) ??
+                      `Submitted by ${submitter}`}
+                  </span>
+                  <span className="change-row-meta">
+                    #{prNum} · Submitted by {submitter}
+                    {submittedDate ? ` on ${submittedDate}` : ""} · Becomes v
+                    {nextVersion} when published
+                  </span>
+                </span>
+                <span className={getApprovalStateBadgeClass(pr.approvalState)}>
+                  {getApprovalStateLabel(pr.approvalState)}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }

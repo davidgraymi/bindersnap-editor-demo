@@ -348,12 +348,24 @@ export function AppShell({
                 repo={route.repo}
                 uploaderSlug={user?.username ?? "unknown"}
                 activeView={route.tab}
+                activeChangeNumber={route.changeNumber ?? null}
                 onTabChange={(tab) =>
                   onNavigate({
                     kind: "document",
                     owner: route.owner,
                     repo: route.repo,
                     tab,
+                  })
+                }
+                onOpenChange={(pullNumber) =>
+                  onNavigate({
+                    kind: "document",
+                    owner: route.owner,
+                    repo: route.repo,
+                    tab: "changes",
+                    ...(pullNumber === null
+                      ? {}
+                      : { changeNumber: pullNumber }),
                   })
                 }
                 onBack={() => onNavigate({ kind: "workspace" })}

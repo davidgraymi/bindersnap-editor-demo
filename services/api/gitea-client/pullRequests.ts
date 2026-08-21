@@ -114,6 +114,10 @@ function withApprovalState(
 ): PullRequestWithApprovalState {
   return {
     ...pullRequest,
+    // The branch the submitted version lives on. Declared in the response
+    // contract but never populated, which left the browser with no ref to
+    // read or download the file under review from.
+    branchName: pullRequest.head?.ref ?? "",
     approvalState: resolveApprovalState(pullRequest, reviews),
   };
 }

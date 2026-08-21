@@ -1121,13 +1121,18 @@ async function resolveLatestUploadRef(
     state: "open",
   });
 
-  const uploadPullRequests = pullRequests
-    .filter((pullRequest) =>
-      (pullRequest.head?.ref ?? "").startsWith("upload/"),
-    )
-    .sort((left, right) => (right.number ?? 0) - (left.number ?? 0));
+  const newestFirst = [...pullRequests].sort(
+    (left, right) => (right.number ?? 0) - (left.number ?? 0),
+  );
 
-  return uploadPullRequests[0]?.head?.ref ?? null;
+  const uploadPullRequests = newestFirst.filter((pullRequest) =>
+    (pullRequest.head?.ref ?? "").startsWith("upload/"),
+  );
+
+  // A document whose first version is still under review has no file on
+  // `main` at all. Bindersnap's own uploads win, but any open branch beats
+  // telling the reviewer there is no file to read.
+  return uploadPullRequests[0]?.head?.ref ?? newestFirst[0]?.head?.ref ?? null;
 }
 
 function readInputString(
