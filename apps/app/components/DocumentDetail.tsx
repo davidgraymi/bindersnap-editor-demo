@@ -16,10 +16,9 @@ import {
   formatDate,
   formatDocumentName,
   getApprovalStateLabel,
-  getDocumentStatusLabel,
   parseSubmissionSummary,
-  resolveDocumentStatus,
 } from "../documentDisplay";
+import { DocumentChangeDetail } from "./DocumentChangeDetail";
 import { DocumentChanges } from "./DocumentChanges";
 import { DocumentCollaborators } from "./DocumentCollaborators";
 import { DocumentHistory } from "./DocumentHistory";
@@ -32,7 +31,10 @@ interface DocumentDetailProps {
   repo: string;
   uploaderSlug: string | null;
   activeView: DocumentTab;
+  /** Which change has its own page open, or null for the change list. */
+  activeChangeNumber: number | null;
   onTabChange: (tab: DocumentTab) => void;
+  onOpenChange: (pullNumber: number | null) => void;
   onBack: () => void;
 }
 
@@ -63,16 +65,18 @@ function triggerBrowserDownload(blob: Blob, fileName: string): void {
  * The document workspace.
  *
  * One document, five views: what it says now, what is waiting on a decision,
- * how it got here, who can see it, and how it gets approved. The header carries
- * the answer to "where does this stand?" and never changes as you move between
- * tabs, so you always know which document you are looking at.
+ * how it got here, who can see it, and how it gets approved. The header names
+ * the document and the version on record, and holds still at the same width on
+ * every tab — it is a page, not a stack of boxes that resize under you.
  */
 export function DocumentDetail({
   owner,
   repo,
   uploaderSlug,
   activeView,
+  activeChangeNumber,
   onTabChange,
+  onOpenChange,
   onBack,
 }: DocumentDetailProps) {
   const [tags, setTags] = useState<DocTag[]>([]);
@@ -128,10 +132,10 @@ export function DocumentDetail({
   const documentName = formatDocumentName(repo);
   const latestTag = tags.length > 0 ? tags[0] : null;
   const nextVersion = (latestTag?.version ?? 0) + 1;
-  const status = resolveDocumentStatus({
-    hasPublishedVersion: latestTag !== null,
-    openApprovalStates: openPRs.map((pr) => pr.approvalState),
-  });
+  const activeChange =
+    activeChangeNumber === null
+      ? null
+      : (openPRs.find((pr) => pr.number === activeChangeNumber) ?? null);
 
   /**
    * Save a version to disk. `loaded` lets a caller that already holds the
@@ -239,15 +243,18 @@ export function DocumentDetail({
             </p>
             <h1 className="doc-header-title">{documentName}</h1>
             <div className="doc-header-facts">
-              <span className={`doc-status doc-status--${status}`}>
-                {getDocumentStatusLabel(status)}
+              {/* The official version, not a status. A document can have v3
+                  published and v4 in review at the same time, so a single
+                  status word here was always going to be a lie. */}
+              <span className="doc-version-pill">
+                {latestTag ? `v${latestTag.version}` : "No version yet"}
               </span>
               {latestTag ? (
                 <span className="doc-header-fact">
-                  v{latestTag.version} approved {formatDate(latestTag.created)}
+                  Approved {formatDate(latestTag.created)}
                 </span>
               ) : (
-                <span className="doc-header-fact">No approved version yet</span>
+                <span className="doc-header-fact">Nothing published yet</span>
               )}
               {canonicalFileInfo ? (
                 <span className="doc-header-fact doc-header-file">
@@ -316,21 +323,40 @@ export function DocumentDetail({
             currentUsername={currentUser}
           />
         </div>
-      ) : activeView === "changes" ? (
+      ) : activeView === "changes" && activeChange ? (
         <div className="document-detail-tab-panel">
-          <DocumentChanges
+          <DocumentChangeDetail
             owner={owner}
             repo={repo}
             currentUser={currentUser}
             isAnonymous={isAnonymous}
-            openPullRequests={openPRs}
+            pullRequest={activeChange}
             branchProtection={branchProtection}
             blockOnUnresolvedThreads={
               reviewSettings?.blockOnUnresolvedThreads ?? false
             }
             nextVersion={nextVersion}
             documentName={documentName}
+            fileName={canonicalFileInfo?.downloadFileName ?? null}
+            downloading={downloadState.ref === activeChange.branchName}
+            onDownload={(gitRef, loaded) => void handleDownload(gitRef, loaded)}
             onChanged={loadDocumentData}
+            onBackToList={() => onOpenChange(null)}
+          />
+        </div>
+      ) : activeView === "changes" ? (
+        <div className="document-detail-tab-panel">
+          {activeChangeNumber !== null ? (
+            <p className="vault-pr-notice">
+              Change #{activeChangeNumber} is not open on this document. It may
+              have been published or withdrawn.
+            </p>
+          ) : null}
+          <DocumentChanges
+            isAnonymous={isAnonymous}
+            openPullRequests={openPRs}
+            nextVersion={nextVersion}
+            onOpenChange={onOpenChange}
             onSubmitVersion={() => setShowUploadModal(true)}
           />
         </div>
@@ -436,7 +462,7 @@ export function DocumentDetail({
                         <button
                           className="doc-rail-link"
                           type="button"
-                          onClick={() => onTabChange("changes")}
+                          onClick={() => onOpenChange(pr.number ?? null)}
                         >
                           <span className="doc-rail-link-title">
                             {parseSubmissionSummary(pr.body) ??
