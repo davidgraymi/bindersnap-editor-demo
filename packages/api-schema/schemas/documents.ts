@@ -224,3 +224,50 @@ export const AddCollaboratorBodySchema = z.object({
   permission: z.enum(["read", "write", "admin"]),
 });
 export type AddCollaboratorBody = z.infer<typeof AddCollaboratorBodySchema>;
+
+/**
+ * The approval record for one published version: who signed off, what they
+ * said, and when. This is the audit trail the product exists to produce, so
+ * every review is reported — including stale and dismissed ones.
+ */
+export const VersionReviewSchema = z.object({
+  id: z.number(),
+  author: DiscussionAuthorSchema,
+  state: z.enum(["approved", "changes_requested", "commented", "other"]),
+  body: z.string(),
+  submittedAt: z.string(),
+  stale: z.boolean(),
+  dismissed: z.boolean(),
+});
+export type VersionReview = z.infer<typeof VersionReviewSchema>;
+
+export const VersionSubmissionSchema = z.object({
+  number: z.number(),
+  title: z.string(),
+  body: z.string(),
+  submittedBy: z.string(),
+  submittedAt: z.string(),
+  mergedAt: z.string().nullable(),
+  mergedBy: z.string().nullable(),
+});
+export type VersionSubmission = z.infer<typeof VersionSubmissionSchema>;
+
+export const DocumentVersionRecordSchema = z.object({
+  version: z.number(),
+  tagName: z.string(),
+  sha: z.string(),
+  createdAt: z.string(),
+  /** Null when the version predates PR-based publishing or the PR was pruned. */
+  submission: VersionSubmissionSchema.nullable(),
+  reviews: z.array(VersionReviewSchema),
+  discussionCount: z.number(),
+});
+export type DocumentVersionRecord = z.infer<typeof DocumentVersionRecordSchema>;
+
+export const DocumentHistoryPayloadSchema = z.object({
+  versions: z.array(DocumentVersionRecordSchema),
+  canonicalFile: CanonicalFileInfoSchema.nullable(),
+});
+export type DocumentHistoryPayload = z.infer<
+  typeof DocumentHistoryPayloadSchema
+>;

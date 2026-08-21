@@ -409,6 +409,53 @@ export async function navigateToDocument(
   await expect(page.locator(".vault-detail")).toBeVisible({ timeout: 10_000 });
 }
 
+/** The tabs across the top of the document workspace. */
+export type DocumentWorkspaceTab =
+  "Document" | "Changes" | "History" | "Team" | "Settings";
+
+/**
+ * Switch to one of the document workspace tabs.
+ *
+ * The Changes and History tabs carry a count in their accessible name
+ * ("Changes 2"), so the match is anchored on the label rather than exact.
+ */
+export async function openDocumentTab(
+  page: Page,
+  tab: DocumentWorkspaceTab,
+): Promise<void> {
+  const control = page.getByRole("tab", { name: new RegExp(`^${tab}`) });
+  await expect(control).toBeVisible({ timeout: 15_000 });
+  await control.click();
+}
+
+/** Assert the header reports version `version` as the official record. */
+export async function expectPublishedVersion(
+  page: Page,
+  version: number,
+  timeout = 30_000,
+): Promise<void> {
+  await expect(page.locator(".doc-header-facts")).toContainText(
+    `v${version} approved`,
+    { timeout },
+  );
+}
+
+/** Assert how many changes are waiting on a decision, per the Changes tab. */
+export async function expectOpenChangeCount(
+  page: Page,
+  count: number,
+  timeout = 30_000,
+): Promise<void> {
+  const tab = page.getByRole("tab", { name: /^Changes/ });
+  if (count === 0) {
+    await expect(tab.locator(".doc-tab-count")).toHaveCount(0, { timeout });
+    return;
+  }
+  await expect(tab.locator(".doc-tab-count")).toHaveText(String(count), {
+    timeout,
+  });
+}
+
 export async function waitForNoPendingReviews(
   page: Page,
   cardSearchText: string,
@@ -417,7 +464,7 @@ export async function waitForNoPendingReviews(
 ): Promise<void> {
   const deadline = Date.now() + totalMs;
   let lastAlertText: string | null = null;
-  // New UI uses "No pending approvals" heading (was "No pending reviews")
+  // The Changes tab shows this once nothing is waiting on a decision.
   const noPendingHeading = page.getByRole("heading", {
     name: "No pending approvals",
   });
@@ -427,6 +474,9 @@ export async function waitForNoPendingReviews(
   });
 
   while (Date.now() < deadline) {
+    // Reviewing happens on the Changes tab, so make sure we are on it.
+    await openDocumentTab(page, "Changes").catch(() => undefined);
+
     // New UI: publish button is "Publish as Official Version"
     const publishButton = page.getByRole("button", {
       name: "Publish as Official Version",
@@ -467,6 +517,7 @@ export async function waitForNoPendingReviews(
       .getByRole("heading", { name: "Loading document details..." })
       .waitFor({ state: "hidden", timeout: 30_000 })
       .catch(() => undefined);
+    await openDocumentTab(page, "Changes").catch(() => undefined);
 
     const isVisible = await noPendingHeading
       .isVisible({ timeout: 3_000 })

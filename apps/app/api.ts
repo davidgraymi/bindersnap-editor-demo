@@ -15,6 +15,7 @@ import type {
   CollaboratorListPayload,
   DiscussionSummary,
   DocumentDetailPayload,
+  DocumentHistoryPayload,
   DocumentPermissionsPayload,
   InitialDocumentUploadResult,
   UploadResult,
@@ -40,12 +41,16 @@ export type {
   DiscussionSummary,
   DiscussionThread,
   DocumentDetailPayload,
+  DocumentHistoryPayload,
   DocumentPermissionsPayload,
+  DocumentVersionRecord,
   WorkspaceDocumentSummary,
   InitialDocumentUploadResult,
   PullRequestWithApprovalState,
   ReviewSettings,
   UploadResult,
+  VersionReview,
+  VersionSubmission,
 } from "../../packages/api-schema/schemas/documents";
 export type {
   AdminSubscriptionAccessListPayload,
@@ -211,6 +216,18 @@ export async function getDocumentDetail(
     return response.data;
   } catch (error) {
     handlePaymentRequired(`/api/app/documents/${owner}/${repo}`, error);
+  }
+}
+
+export async function getDocumentHistory(
+  owner: string,
+  repo: string,
+): Promise<DocumentHistoryPayload> {
+  try {
+    const response = await DocumentsClient.getDocumentHistory(owner, repo);
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(`/api/app/documents/${owner}/${repo}/history`, error);
   }
 }
 

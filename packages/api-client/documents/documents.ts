@@ -13,6 +13,7 @@ import type {
   CreateDocumentDiscussionBody,
   DownloadDocumentParams,
   GetDocumentDetail200,
+  GetDocumentHistory200,
   GetDocumentPermissions200,
   ListDocumentCollaborators200,
   ListDocumentCollaboratorsParams,
@@ -140,6 +141,40 @@ export const getDocumentDetail = async (owner: string,
     repo: string, options?: Parameters<typeof customFetch>[1]): Promise<getDocumentDetailResponse> => {
 
   return customFetch<getDocumentDetailResponse>(getGetDocumentDetailUrl(owner,repo),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type getDocumentHistoryResponse200 = {
+  data: GetDocumentHistory200
+  status: 200
+}
+
+export type getDocumentHistoryResponseSuccess = (getDocumentHistoryResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getDocumentHistoryResponse = (getDocumentHistoryResponseSuccess)
+
+export const getGetDocumentHistoryUrl = (owner: string,
+    repo: string,) => {
+
+
+
+
+  return `/api/app/documents/${owner}/${repo}/history`
+}
+
+export const getDocumentHistory = async (owner: string,
+    repo: string, options?: Parameters<typeof customFetch>[1]): Promise<getDocumentHistoryResponse> => {
+
+  return customFetch<getDocumentHistoryResponse>(getGetDocumentHistoryUrl(owner,repo),
   {
     ...options,
     method: 'GET'

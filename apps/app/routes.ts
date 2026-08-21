@@ -13,8 +13,23 @@ export type AppRoute =
       kind: "document";
       owner: string;
       repo: string;
-      tab: "overview" | "collaborators" | "permissions";
+      tab: DocumentTab;
     };
+
+/**
+ * The document workspace tabs. `overview` is the document itself and owns the
+ * bare `/docs/:owner/:repo` path; every other tab is a suffix so any view can
+ * be linked to, bookmarked, and reloaded.
+ */
+export type DocumentTab =
+  "overview" | "changes" | "history" | "collaborators" | "permissions";
+
+const DOCUMENT_TAB_PATHS: Record<Exclude<DocumentTab, "overview">, string> = {
+  changes: "changes",
+  history: "history",
+  collaborators: "collaborators",
+  permissions: "permissions",
+};
 
 function normalizePathname(pathname: string): string {
   if (!pathname || pathname === "/") {
@@ -66,28 +81,23 @@ export function getRoute(pathname: string): AppRoute {
     return { kind: "billing" };
   }
 
-  const permissionsMatch = normalizedPath.match(
-    /^\/docs\/([^/]+)\/([^/]+)\/permissions$/,
+  const docTabMatch = normalizedPath.match(
+    /^\/docs\/([^/]+)\/([^/]+)\/([^/]+)$/,
   );
-  if (permissionsMatch) {
-    return {
-      kind: "document",
-      owner: permissionsMatch[1]!,
-      repo: permissionsMatch[2]!,
-      tab: "permissions",
-    };
-  }
+  if (docTabMatch) {
+    const segment = docTabMatch[3]!;
+    const tab = (
+      Object.keys(DOCUMENT_TAB_PATHS) as Exclude<DocumentTab, "overview">[]
+    ).find((candidate) => DOCUMENT_TAB_PATHS[candidate] === segment);
 
-  const collaboratorsMatch = normalizedPath.match(
-    /^\/docs\/([^/]+)\/([^/]+)\/collaborators$/,
-  );
-  if (collaboratorsMatch) {
-    return {
-      kind: "document",
-      owner: collaboratorsMatch[1]!,
-      repo: collaboratorsMatch[2]!,
-      tab: "collaborators",
-    };
+    if (tab) {
+      return {
+        kind: "document",
+        owner: docTabMatch[1]!,
+        repo: docTabMatch[2]!,
+        tab,
+      };
+    }
   }
 
   const docMatch = normalizedPath.match(/^\/docs\/([^/]+)\/([^/]+)$/);
@@ -111,12 +121,11 @@ export function routeToPath(route: AppRoute): string {
       return "/signup";
     case "callback":
       return "/auth/callback";
-    case "document":
-      if (route.tab === "collaborators")
-        return `/docs/${route.owner}/${route.repo}/collaborators`;
-      if (route.tab === "permissions")
-        return `/docs/${route.owner}/${route.repo}/permissions`;
-      return `/docs/${route.owner}/${route.repo}`;
+    case "document": {
+      const base = `/docs/${route.owner}/${route.repo}`;
+      if (route.tab === "overview") return base;
+      return `${base}/${DOCUMENT_TAB_PATHS[route.tab]}`;
+    }
     case "documents":
       return "/documents";
     case "inbox":

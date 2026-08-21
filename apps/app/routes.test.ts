@@ -43,6 +43,48 @@ test("getRoute preserves document detail routes", () => {
   });
 });
 
+test("getRoute maps the changes and history tabs", () => {
+  expect(getRoute("/docs/alice/quarterly-report/changes")).toEqual({
+    kind: "document",
+    owner: "alice",
+    repo: "quarterly-report",
+    tab: "changes",
+  });
+
+  expect(getRoute("/docs/alice/quarterly-report/history")).toEqual({
+    kind: "document",
+    owner: "alice",
+    repo: "quarterly-report",
+    tab: "history",
+  });
+});
+
+test("getRoute falls back to home for an unknown document tab", () => {
+  expect(getRoute("/docs/alice/quarterly-report/nonsense")).toEqual({
+    kind: "home",
+  });
+});
+
+test("routeToPath round-trips every document tab", () => {
+  const tabs = [
+    "overview",
+    "changes",
+    "history",
+    "collaborators",
+    "permissions",
+  ] as const;
+
+  for (const tab of tabs) {
+    const route = {
+      kind: "document",
+      owner: "alice",
+      repo: "quarterly-report",
+      tab,
+    } as const;
+    expect(getRoute(routeToPath(route))).toEqual(route);
+  }
+});
+
 test("getRoute maps permissions path with URL-encoded owner/repo", () => {
   expect(getRoute("/docs/alice-org/my%20doc/permissions")).toEqual({
     kind: "document",

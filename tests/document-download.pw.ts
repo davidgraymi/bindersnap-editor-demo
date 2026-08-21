@@ -2,8 +2,8 @@
  * Browser-based integration test for document download functionality.
  *
  * Tests the complete create → approve → publish → download flow, exercising
- * the "Download Current Version" button and the per-version "Download vN"
- * buttons in the version history section.
+ * the Download button in the document preview toolbar and the per-version
+ * "Download vN" buttons on the History tab.
  *
  * Flow:
  * 1. Alice creates a new document (v1 uploaded as part of creation)
@@ -26,10 +26,13 @@ import {
 } from "../services/api/gitea-client/pullRequests";
 import {
   createBobClient,
+  expectOpenChangeCount,
+  expectPublishedVersion,
   expectedPrefilledDocumentName,
   installMemorySessionStorage,
   makeClient,
   navigateToDocument,
+  openDocumentTab,
   openNewDocumentModal,
   pollUntil,
   resolveAndStoreToken,
@@ -95,9 +98,7 @@ test.describe("Document download", () => {
     await expect(
       page.getByRole("heading", { name: /No approved version yet/i }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: /1 Pending Approval/i }),
-    ).toBeVisible();
+    await expectOpenChangeCount(page, 1);
 
     // Capture the repo owner and name from the URL for subsequent API calls
     const url = page.url();
@@ -155,6 +156,9 @@ test.describe("Document download", () => {
     await signInAsAlice(page);
     await navigateToDocument(page, cardSearchText);
 
+    // Reviewing lives on its own tab now
+    await openDocumentTab(page, "Changes");
+
     // The Publish button must appear now that the PR is approved
     await expect(
       page.getByRole("button", {
@@ -175,9 +179,7 @@ test.describe("Document download", () => {
     await navigateToDocument(page, cardSearchText);
 
     // The page should now report Version 1 as the current published version
-    await expect(page.getByRole("heading", { name: "Version 1" })).toBeVisible({
-      timeout: 30_000,
-    });
+    await expectPublishedVersion(page, 1);
   });
 
   test("download current version after v1 publish", async ({ page }) => {
@@ -187,14 +189,12 @@ test.describe("Document download", () => {
     await navigateToDocument(page, cardSearchText);
 
     // Wait for the v1 published state to render before attempting download
-    await expect(page.getByRole("heading", { name: "Version 1" })).toBeVisible({
-      timeout: 30_000,
-    });
+    await expectPublishedVersion(page, 1);
 
-    // Intercept the download triggered by clicking "Download Current Version"
+    // Intercept the download triggered by the preview toolbar's Download button
     const [download] = await Promise.all([
       page.waitForEvent("download"),
-      page.getByRole("button", { name: "Download Current Version" }).click(),
+      page.locator(".doc-preview-download").click(),
     ]);
 
     // The suggested filename must be {repo-name}.txt
@@ -208,9 +208,7 @@ test.describe("Document download", () => {
     await navigateToDocument(page, cardSearchText);
 
     // Confirm we are on the v1 published state before uploading v2
-    await expect(page.getByRole("heading", { name: "Version 1" })).toBeVisible({
-      timeout: 30_000,
-    });
+    await expectPublishedVersion(page, 1);
 
     // Open the Submit New Version modal (button label changed in new UI)
     await page.getByRole("button", { name: "Submit New Version" }).click();
@@ -233,14 +231,10 @@ test.describe("Document download", () => {
       .click();
 
     // Wait for the PR to appear on the document detail page
-    await expect(
-      page.getByRole("heading", { name: /1 Pending Approval/i }),
-    ).toBeVisible({ timeout: 60_000 });
+    await expectOpenChangeCount(page, 1, 60_000);
 
     // The current published version remains v1 until the PR is merged
-    await expect(
-      page.getByRole("heading", { name: "Version 1" }),
-    ).toBeVisible();
+    await expectPublishedVersion(page, 1);
   });
 
   test("bob approves v2 and alice publishes", async ({ page }) => {
@@ -283,6 +277,7 @@ test.describe("Document download", () => {
     await navigateToDocument(page, cardSearchText);
 
     // Publish v2
+    await openDocumentTab(page, "Changes");
     await expect(
       page.getByRole("button", {
         name: "Publish as Official Version",
@@ -300,14 +295,13 @@ test.describe("Document download", () => {
     await navigateToDocument(page, cardSearchText);
 
     // Version 2 should now be the current published version
-    await expect(
-      page.getByRole("heading", { name: "Version 2" }),
-    ).toBeVisible();
+    await expectPublishedVersion(page, 2);
 
-    // Version history must list both published versions
+    // The History tab must list both published versions
+    await openDocumentTab(page, "History");
     await expect(
       page.locator(".vault-version-badge", { hasText: "v2" }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 30_000 });
     await expect(
       page.locator(".vault-version-badge", { hasText: "v1" }),
     ).toBeVisible();
@@ -320,14 +314,12 @@ test.describe("Document download", () => {
     await navigateToDocument(page, cardSearchText);
 
     // Wait for the v2 published state to render
-    await expect(page.getByRole("heading", { name: "Version 2" })).toBeVisible({
-      timeout: 30_000,
-    });
+    await expectPublishedVersion(page, 2);
 
-    // Intercept the download triggered by "Download Current Version"
+    // Intercept the download triggered by the preview toolbar's Download button
     const [download] = await Promise.all([
       page.waitForEvent("download"),
-      page.getByRole("button", { name: "Download Current Version" }).click(),
+      page.locator(".doc-preview-download").click(),
     ]);
 
     // The filename must still be {repo-name}.txt for v2
@@ -340,7 +332,8 @@ test.describe("Document download", () => {
     await signInAsAlice(page);
     await navigateToDocument(page, cardSearchText);
 
-    // Wait for the version history section to render the v1 badge
+    // Wait for the History tab to render the v1 badge
+    await openDocumentTab(page, "History");
     await expect(
       page.locator(".vault-version-badge", { hasText: "v1" }),
     ).toBeVisible({ timeout: 30_000 });

@@ -23,10 +23,13 @@
 import { expect, test } from "@playwright/test";
 
 import {
+  expectOpenChangeCount,
+  expectPublishedVersion,
   expectedPrefilledDocumentName,
   GITEA_BOB_USER,
   installMemorySessionStorage,
   navigateToDocument,
+  openDocumentTab,
   openNewDocumentModal,
   openCollaboratorsTab,
   resolveAndStoreToken,
@@ -85,9 +88,7 @@ test.describe("Merge conflict resolution on publish", () => {
     await expect(
       page.getByRole("heading", { name: /No approved version yet/i }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: /1 Pending Approval/i }),
-    ).toBeVisible();
+    await expectOpenChangeCount(page, 1);
 
     // Capture repo info from the URL
     const url = page.url();
@@ -124,7 +125,8 @@ test.describe("Merge conflict resolution on publish", () => {
     await signInAsBob(page);
     await navigateToDocument(page, cardSearchText);
 
-    // Bob approves v1 — new UI has a two-step confirm flow
+    // Bob approves v1 on the Changes tab — two-step confirm flow
+    await openDocumentTab(page, "Changes");
     await expect(page.getByRole("button", { name: "Approve" })).toBeVisible({
       timeout: 30_000,
     });
@@ -145,6 +147,7 @@ test.describe("Merge conflict resolution on publish", () => {
     // Switch back to Alice to publish v1
     await signInAsAlice(page);
     await navigateToDocument(page, cardSearchText);
+    await openDocumentTab(page, "Changes");
 
     await expect(
       page.getByRole("button", {
@@ -161,9 +164,7 @@ test.describe("Merge conflict resolution on publish", () => {
     await page.locator(".app-topnav-link", { hasText: "Documents" }).click();
     await navigateToDocument(page, cardSearchText);
 
-    await expect(page.getByRole("heading", { name: "Version 1" })).toBeVisible({
-      timeout: 30_000,
-    });
+    await expectPublishedVersion(page, 1);
   });
 
   test("upload v2 and v3, publish v2, then publish conflicting v3", async ({
@@ -191,9 +192,7 @@ test.describe("Merge conflict resolution on publish", () => {
       .getByRole("button", { name: "Upload" })
       .click();
 
-    await expect(
-      page.getByRole("heading", { name: /1 Pending Approval/i }),
-    ).toBeVisible({ timeout: 60_000 });
+    await expectOpenChangeCount(page, 1, 60_000);
 
     // --- Upload v3 (branch-2) while v2 PR is still open ---
     await page.getByRole("button", { name: "Submit New Version" }).click();
@@ -212,9 +211,7 @@ test.describe("Merge conflict resolution on publish", () => {
       .getByRole("button", { name: "Upload" })
       .click();
 
-    await expect(
-      page.getByRole("heading", { name: /2 Pending Approvals/i }),
-    ).toBeVisible({ timeout: 60_000 });
+    await expectOpenChangeCount(page, 2, 60_000);
 
     // --- Bob approves v2 via UI ---
     // Both PRs have the same "Upload v2:" title because version numbering is
@@ -225,6 +222,7 @@ test.describe("Merge conflict resolution on publish", () => {
     // can be published cleanly before the newer PR creates a conflict.
     await signInAsBob(page);
     await navigateToDocument(page, cardSearchText);
+    await openDocumentTab(page, "Changes");
 
     await expect(page.locator(".vault-pr-item")).toHaveCount(2, {
       timeout: 30_000,
@@ -246,6 +244,7 @@ test.describe("Merge conflict resolution on publish", () => {
     // Only v2 is approved, so there is exactly one Publish button.
     await signInAsAlice(page);
     await navigateToDocument(page, cardSearchText);
+    await openDocumentTab(page, "Changes");
 
     await expect(
       page.getByRole("button", {
@@ -260,13 +259,8 @@ test.describe("Merge conflict resolution on publish", () => {
       .click();
 
     // Wait for v2 to be published — PR count drops to 1
-    await expect(
-      page.getByRole("heading", { name: /1 Pending Approval/i }),
-    ).toBeVisible({ timeout: 120_000 });
-
-    await expect(
-      page.getByRole("heading", { name: "Version 2" }),
-    ).toBeVisible();
+    await expectOpenChangeCount(page, 1, 120_000);
+    await expectPublishedVersion(page, 2);
 
     // --- Bob approves v3 via UI ---
     // v3's branch was created from old main, but main now has v2's changes,
@@ -274,6 +268,7 @@ test.describe("Merge conflict resolution on publish", () => {
     // After publishing the first PR there is exactly 1 PR remaining.
     await signInAsBob(page);
     await navigateToDocument(page, cardSearchText);
+    await openDocumentTab(page, "Changes");
 
     await expect(page.locator(".vault-pr-item")).toHaveCount(1, {
       timeout: 30_000,
@@ -294,6 +289,7 @@ test.describe("Merge conflict resolution on publish", () => {
     // --- Alice publishes v3 (conflict resolution path) ---
     await signInAsAlice(page);
     await navigateToDocument(page, cardSearchText);
+    await openDocumentTab(page, "Changes");
 
     await expect(
       page.getByRole("button", {
@@ -314,14 +310,13 @@ test.describe("Merge conflict resolution on publish", () => {
     ).toBeVisible({ timeout: 120_000 });
 
     // Should now show Version 3 as current
-    await expect(
-      page.getByRole("heading", { name: "Version 3" }),
-    ).toBeVisible();
+    await expectPublishedVersion(page, 3);
 
-    // Version history should show all three versions
+    // The History tab should show all three versions
+    await openDocumentTab(page, "History");
     await expect(
       page.locator(".vault-version-badge", { hasText: "v3" }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 30_000 });
     await expect(
       page.locator(".vault-version-badge", { hasText: "v2" }),
     ).toBeVisible();
