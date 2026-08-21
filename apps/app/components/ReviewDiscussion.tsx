@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
+import { Check, GitMerge, MessageSquare, Undo2, X } from "lucide-react";
 
 import {
   createDocumentDiscussion,
@@ -7,12 +9,31 @@ import {
   resolveDocumentDiscussion,
   type DiscussionSummary,
   type DiscussionThread,
+  type VersionReview,
 } from "../api";
+
+/** How the change ended, as one last entry in the log. */
+export interface ClosingEvent {
+  kind: "published" | "declined" | "withdrawn";
+  actor: string | null;
+  at: string | null;
+  publishedVersion: number | null;
+}
 
 interface ReviewDiscussionProps {
   owner: string;
   repo: string;
   pullNumber: number;
+  /** The submitter's own words, pinned to the top as the opening post. */
+  opening: {
+    author: string;
+    at: string;
+    body: string;
+  };
+  /** Every review on this change: approvals, rejections, plain comments. */
+  reviews: VersionReview[];
+  /** Set once the change is closed, so the log ends where the change did. */
+  closing: ClosingEvent | null;
   /** Whether the current user may post and resolve. Read-only viewers get the record without the controls. */
   canParticipate: boolean;
   /** Publication is gated on unresolved threads for this document. */
@@ -38,10 +59,14 @@ function displayName(author: { login: string; fullName: string }): string {
   return author.fullName?.trim() || author.login;
 }
 
+function capitalize(value: string): string {
+  return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
+}
+
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
-  if (parts.length === 1) return (parts[0]?.[0] ?? "?").toUpperCase();
+  if (parts.length === 1) return (parts[0] ?? "").slice(0, 2).toUpperCase();
   return `${parts[0]?.[0] ?? ""}${parts[parts.length - 1]?.[0] ?? ""}`.toUpperCase();
 }
 
@@ -73,10 +98,145 @@ function Avatar({
   );
 }
 
+/** The submitter's own words, and the reason the change exists. */
+function OpeningPost({
+  author,
+  at,
+  body,
+}: {
+  author: string;
+  at: string;
+  body: string;
+}) {
+  return (
+    <article className="discussion-opening">
+      <span
+        className="discussion-avatar discussion-avatar-fallback"
+        aria-hidden="true"
+      >
+        {initials(author)}
+      </span>
+      <div className="discussion-opening-main">
+        <div className="discussion-comment-meta">
+          <span className="discussion-comment-author">
+            {capitalize(author) || "Someone"}
+          </span>
+          <span className="discussion-comment-time">
+            submitted this change{at ? ` · ${formatTimestamp(at)}` : ""}
+          </span>
+        </div>
+        <div className="discussion-comment-body">
+          {body || <em>No description was given.</em>}
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function reviewSentence(review: VersionReview): string {
+  switch (review.state) {
+    case "approved":
+      return "approved this change";
+    case "changes_requested":
+      return "requested changes";
+    default:
+      return "commented";
+  }
+}
+
+/**
+ * A decision, in the log, at the moment it happened.
+ *
+ * An approval is not metadata on a badge somewhere — it is an event with an
+ * author and a timestamp, and it belongs in the same column as everything
+ * else that happened to this change.
+ */
+function ReviewEvent({ review }: { review: VersionReview }) {
+  const name = displayName(review.author);
+  const tone =
+    review.state === "approved"
+      ? "approved"
+      : review.state === "changes_requested"
+        ? "changes"
+        : "comment";
+  const Icon =
+    review.state === "approved"
+      ? Check
+      : review.state === "changes_requested"
+        ? X
+        : MessageSquare;
+
+  return (
+    <article className={`discussion-event discussion-event--${tone}`}>
+      <span className="discussion-event-icon" aria-hidden="true">
+        <Icon size={13} strokeWidth={2} />
+      </span>
+      <div className="discussion-event-main">
+        <p className="discussion-event-line">
+          <span className="discussion-comment-author">{name}</span>{" "}
+          {reviewSentence(review)}
+          {review.dismissed ? (
+            <span className="discussion-event-note"> — later dismissed</span>
+          ) : review.stale ? (
+            <span className="discussion-event-note">
+              {" "}
+              — superseded by a later upload
+            </span>
+          ) : null}
+          <span className="discussion-comment-time">
+            {review.submittedAt
+              ? ` · ${formatTimestamp(review.submittedAt)}`
+              : ""}
+          </span>
+        </p>
+        {review.body.trim() ? (
+          <div className="discussion-comment-body">{review.body}</div>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
+/** The last line of the log: what became of the change. */
+function ClosingEventRow({ event }: { event: ClosingEvent }) {
+  const actor = event.actor ? capitalize(event.actor) : null;
+  const when = event.at ? formatTimestamp(event.at) : null;
+  const Icon = event.kind === "published" ? GitMerge : Undo2;
+
+  const line =
+    event.kind === "published"
+      ? `${actor ?? "Someone"} published this${
+          event.publishedVersion === null
+            ? ""
+            : ` as v${event.publishedVersion}`
+        }`
+      : event.kind === "declined"
+        ? "This change was closed without being published"
+        : "This change was withdrawn";
+
+  return (
+    <article
+      className={`discussion-event discussion-event--${event.kind === "published" ? "approved" : "closed"}`}
+    >
+      <span className="discussion-event-icon" aria-hidden="true">
+        <Icon size={13} strokeWidth={2} />
+      </span>
+      <div className="discussion-event-main">
+        <p className="discussion-event-line">
+          {line}
+          <span className="discussion-comment-time">
+            {when ? ` · ${when}` : ""}
+          </span>
+        </p>
+      </div>
+    </article>
+  );
+}
+
 /**
  * One review thread, rendered the way GitHub and GitLab render theirs: the
  * root comment, its replies in order, a resolution banner, and a reply box
- * that only appears once you focus it.
+ * that is already open — replying should cost a sentence, not a click first.
  */
 function Thread({
   thread,
@@ -91,7 +251,6 @@ function Thread({
   onToggleResolved: (threadId: string, resolved: boolean) => Promise<void>;
   busy: boolean;
 }) {
-  const [replyOpen, setReplyOpen] = useState(false);
   const [replyBody, setReplyBody] = useState("");
   const [collapsed, setCollapsed] = useState(thread.resolved);
 
@@ -107,12 +266,11 @@ function Thread({
   async function submitReply() {
     const body = replyBody.trim();
     if (!body) return;
-    // Keep the draft and the open reply box when the post fails, so an error
-    // never costs the user the text they wrote.
+    // Keep the draft when the post fails, so an error never costs the user
+    // the text they wrote.
     const posted = await onReply(thread.id, body);
     if (!posted) return;
     setReplyBody("");
-    setReplyOpen(false);
   }
 
   return (
@@ -196,47 +354,25 @@ function Thread({
           </ol>
 
           {canAct ? (
-            replyOpen ? (
-              <div className="discussion-reply-form">
-                <textarea
-                  className="vault-pr-comment-input"
-                  rows={3}
-                  autoFocus
-                  placeholder="Reply to this thread…"
-                  value={replyBody}
-                  onChange={(event) => setReplyBody(event.target.value)}
-                />
-                <div className="discussion-reply-actions">
-                  <button
-                    type="button"
-                    className="bs-btn bs-btn-primary"
-                    disabled={busy || !replyBody.trim()}
-                    onClick={() => void submitReply()}
-                  >
-                    {busy ? "Posting…" : "Reply"}
-                  </button>
-                  <button
-                    type="button"
-                    className="bs-btn bs-btn-secondary"
-                    disabled={busy}
-                    onClick={() => {
-                      setReplyOpen(false);
-                      setReplyBody("");
-                    }}
-                  >
-                    Cancel
-                  </button>
-                </div>
+            <div className="discussion-reply-form">
+              <textarea
+                className="vault-pr-comment-input"
+                rows={2}
+                placeholder="Reply to this thread…"
+                value={replyBody}
+                onChange={(event) => setReplyBody(event.target.value)}
+              />
+              <div className="discussion-reply-actions">
+                <button
+                  type="button"
+                  className="bs-btn bs-btn-secondary"
+                  disabled={busy || !replyBody.trim()}
+                  onClick={() => void submitReply()}
+                >
+                  {busy ? "Posting…" : "Reply"}
+                </button>
               </div>
-            ) : (
-              <button
-                type="button"
-                className="discussion-reply-trigger"
-                onClick={() => setReplyOpen(true)}
-              >
-                Reply…
-              </button>
-            )
+            </div>
           ) : null}
         </>
       )}
@@ -244,10 +380,19 @@ function Thread({
   );
 }
 
+/** Sort key for the log: everything is ordered by when it happened. */
+function timeOf(value: string): number {
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
 export function ReviewDiscussion({
   owner,
   repo,
   pullNumber,
+  opening,
+  reviews,
+  closing,
   canParticipate,
   blockOnUnresolvedThreads,
   onSummaryChange,
@@ -335,92 +480,97 @@ export function ReviewDiscussion({
   const threads = summary?.threads ?? [];
   const unresolved = summary?.unresolvedCount ?? 0;
 
+  // One column, in the order things happened — the same shape as the history
+  // this product exists to produce.
+  const entries: { at: number; node: ReactNode }[] = [
+    ...threads.map((thread) => ({
+      at: timeOf(thread.createdAt),
+      node: (
+        <Thread
+          key={`thread-${thread.id}`}
+          thread={thread}
+          canParticipate={canParticipate}
+          busy={busy}
+          onReply={(threadId, body) =>
+            run(() =>
+              replyToDocumentDiscussion(
+                owner,
+                repo,
+                pullNumber,
+                threadId,
+                body,
+              ),
+            )
+          }
+          onToggleResolved={async (threadId, resolved) => {
+            await run(() =>
+              resolveDocumentDiscussion(
+                owner,
+                repo,
+                pullNumber,
+                threadId,
+                resolved,
+              ),
+            );
+          }}
+        />
+      ),
+    })),
+    ...reviews.map((review) => ({
+      at: timeOf(review.submittedAt),
+      node: <ReviewEvent key={`review-${review.id}`} review={review} />,
+    })),
+  ].sort((left, right) => left.at - right.at);
+
   return (
     <section className="discussion-panel" aria-label="Review discussion">
-      <header className="discussion-panel-header">
-        <h4 className="discussion-panel-title">Discussion</h4>
-        {summary ? (
-          <span className="discussion-panel-count">
-            {unresolved === 0
-              ? `${summary.totalCount} thread${summary.totalCount === 1 ? "" : "s"}, all resolved`
-              : `${unresolved} unresolved of ${summary.totalCount}`}
-          </span>
-        ) : null}
-      </header>
-
       {blockOnUnresolvedThreads && unresolved > 0 ? (
         <p className="discussion-gate-notice" role="status">
           This version cannot be published until every thread is resolved.
         </p>
       ) : null}
 
-      {loading ? (
-        <p className="vault-pr-notice">Loading discussion…</p>
-      ) : (
-        <>
-          {threads.length === 0 ? (
-            <p className="vault-pr-notice">
-              No discussion yet. Start a thread to raise a concern about this
-              version.
-            </p>
-          ) : (
-            <div className="discussion-threads">
-              {threads.map((thread) => (
-                <Thread
-                  key={thread.id}
-                  thread={thread}
-                  canParticipate={canParticipate}
-                  busy={busy}
-                  onReply={(threadId, body) =>
-                    run(() =>
-                      replyToDocumentDiscussion(
-                        owner,
-                        repo,
-                        pullNumber,
-                        threadId,
-                        body,
-                      ),
-                    )
-                  }
-                  onToggleResolved={async (threadId, resolved) => {
-                    await run(() =>
-                      resolveDocumentDiscussion(
-                        owner,
-                        repo,
-                        pullNumber,
-                        threadId,
-                        resolved,
-                      ),
-                    );
-                  }}
-                />
-              ))}
-            </div>
-          )}
+      <div className="discussion-timeline">
+        <OpeningPost
+          author={opening.author}
+          at={opening.at}
+          body={opening.body}
+        />
 
-          {canParticipate ? (
-            <div className="discussion-new-thread">
-              <textarea
-                className="vault-pr-comment-input"
-                rows={3}
-                placeholder="Start a new thread…"
-                value={newThreadBody}
-                onChange={(event) => setNewThreadBody(event.target.value)}
-              />
-              <div className="discussion-reply-actions">
-                <button
-                  type="button"
-                  className="bs-btn bs-btn-primary"
-                  disabled={busy || !newThreadBody.trim()}
-                  onClick={() => void startThread()}
-                >
-                  {busy ? "Posting…" : "Start thread"}
-                </button>
-              </div>
+        {loading ? (
+          <p className="vault-pr-notice">Loading the discussion…</p>
+        ) : (
+          entries.map((entry, index) => (
+            <div key={index} className="discussion-timeline-item">
+              {entry.node}
             </div>
-          ) : null}
-        </>
-      )}
+          ))
+        )}
+
+        {closing ? <ClosingEventRow event={closing} /> : null}
+      </div>
+
+      {canParticipate ? (
+        <div className="discussion-new-thread">
+          <textarea
+            className="vault-pr-comment-input"
+            rows={3}
+            placeholder="Raise a concern about this version…"
+            value={newThreadBody}
+            onChange={(event) => setNewThreadBody(event.target.value)}
+          />
+          <div className="discussion-reply-actions">
+            <button
+              type="button"
+              className="bs-btn bs-btn-primary"
+              disabled={busy || !newThreadBody.trim()}
+              onClick={() => void startThread()}
+            >
+              {busy ? "Posting…" : "Start thread"}
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {error ? <p className="vault-pr-error">{error}</p> : null}
     </section>

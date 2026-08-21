@@ -5,6 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { DocumentDetailPayloadOpenPullRequestsItemApprovalState } from './documentDetailPayloadOpenPullRequestsItemApprovalState.ts';
+import type { DocumentDetailPayloadOpenPullRequestsItemReviewsItem } from './documentDetailPayloadOpenPullRequestsItemReviewsItem.ts';
 import type { DocumentDetailPayloadOpenPullRequestsItemUser } from './documentDetailPayloadOpenPullRequestsItemUser.ts';
 
 export type DocumentDetailPayloadOpenPullRequestsItem = {
@@ -25,4 +26,5 @@ export type DocumentDetailPayloadOpenPullRequestsItem = {
   approvalState: DocumentDetailPayloadOpenPullRequestsItemApprovalState;
   /** @nullable */
   user?: DocumentDetailPayloadOpenPullRequestsItemUser;
+  reviews?: DocumentDetailPayloadOpenPullRequestsItemReviewsItem[];
 };

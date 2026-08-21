@@ -5,6 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { ListDocuments200DocumentsItemPendingPRsItemApprovalState } from './listDocuments200DocumentsItemPendingPRsItemApprovalState.ts';
+import type { ListDocuments200DocumentsItemPendingPRsItemReviewsItem } from './listDocuments200DocumentsItemPendingPRsItemReviewsItem.ts';
 import type { ListDocuments200DocumentsItemPendingPRsItemUser } from './listDocuments200DocumentsItemPendingPRsItemUser.ts';
 
 export type ListDocuments200DocumentsItemPendingPRsItem = {
@@ -25,4 +26,5 @@ export type ListDocuments200DocumentsItemPendingPRsItem = {
   approvalState: ListDocuments200DocumentsItemPendingPRsItemApprovalState;
   /** @nullable */
   user?: ListDocuments200DocumentsItemPendingPRsItemUser;
+  reviews?: ListDocuments200DocumentsItemPendingPRsItemReviewsItem[];
 };

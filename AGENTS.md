@@ -80,6 +80,9 @@ Routes:
 - `/login`, `/signup` — credential forms
 - `/documents` — document list
 - `/docs/:owner/:repo` — document detail and review
+- `/docs/:owner/:repo/changes` — open and closed change requests
+- `/docs/:owner/:repo/changes/:number` — one change: its discussion and decision
+- `/docs/:owner/:repo/changes/:number/file` — the file that change proposes
 - `/docs/:owner/:repo/collaborators` — collaborator management
 - `/inbox`, `/activity` — notifications and audit log
 
@@ -103,6 +106,7 @@ directly.
 - `GET /api/app/documents` — list workspace repos with PR state
 - `POST /api/app/documents` — create repo + upload initial file
 - `GET /api/app/documents/:owner/:repo` — document detail
+- `GET /api/app/documents/:owner/:repo/changes/closed` — closed changes with how each ended
 - `POST /api/app/documents/:owner/:repo/versions` — upload new version
 - `POST /api/app/documents/:owner/:repo/pull-requests/:n/reviews` — submit review
 - `GET/POST /api/app/documents/:owner/:repo/pull-requests/:n/discussions` — review threads

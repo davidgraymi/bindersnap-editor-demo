@@ -13,6 +13,7 @@ import type { DocTag } from "./gitea-client/repos";
 import type { PullRequestWithReviews } from "./gitea-client/pullRequests";
 import type { components } from "./gitea-client/spec/gitea";
 import type {
+  ClosedChange,
   DocumentVersionRecord,
   VersionReview,
   VersionSubmission,
@@ -126,4 +127,69 @@ export function buildVersionRecords(
           prNumber === null ? 0 : (discussionCounts.get(prNumber) ?? 0),
       };
     });
+}
+
+/**
+ * How a closed change ended, in the terms a reviewer would use.
+ *
+ * Gitea only records "closed", which is the one word that tells a reader
+ * nothing: an approved version that shipped and a draft its own author gave up
+ * on look identical in the API. A change that was merged became a version; a
+ * change that was closed after somebody asked for work that never arrived was
+ * declined; anything else was withdrawn.
+ */
+export function buildClosedChanges(
+  entries: PullRequestWithReviews[],
+  tags: DocTag[],
+): ClosedChange[] {
+  const versionByMergeSha = new Map<string, number>();
+  for (const tag of tags) {
+    versionByMergeSha.set(tag.sha, tag.version);
+  }
+
+  return entries
+    .map(({ pullRequest, reviews }) => {
+      const mergeSha = (pullRequest as { merge_commit_sha?: string })
+        .merge_commit_sha;
+      const published = pullRequest.approvalState === "published";
+
+      // The last person to ask for work is the one who blocked it; a stale or
+      // dismissed review no longer speaks for the change's fate.
+      const blockingReview = [...reviews]
+        .filter(
+          (review) =>
+            normalizeReviewState(review.state) === "changes_requested" &&
+            review.dismissed !== true,
+        )
+        .sort((left, right) =>
+          (left.submitted_at ?? "").localeCompare(right.submitted_at ?? ""),
+        )
+        .pop();
+
+      const outcome: ClosedChange["outcome"] = published
+        ? "published"
+        : blockingReview
+          ? "declined"
+          : "withdrawn";
+
+      return {
+        number: pullRequest.number ?? 0,
+        title: pullRequest.title ?? "",
+        body: pullRequest.body ?? "",
+        reviews: toVersionReviews(reviews),
+        branchName: pullRequest.head?.ref ?? "",
+        submittedBy: pullRequest.user?.login ?? "",
+        submittedAt: pullRequest.created_at ?? "",
+        closedAt: pullRequest.merged_at ?? pullRequest.closed_at ?? null,
+        outcome,
+        decidedBy: published
+          ? (pullRequest.merged_by?.login ?? null)
+          : (blockingReview?.user?.login ?? null),
+        publishedVersion:
+          published && mergeSha
+            ? (versionByMergeSha.get(mergeSha) ?? null)
+            : null,
+      };
+    })
+    .sort((left, right) => right.number - left.number);
 }

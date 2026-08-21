@@ -91,6 +91,22 @@ export const ApprovalStateSchema = z.enum([
 ]);
 export type ApprovalState = z.infer<typeof ApprovalStateSchema>;
 
+/**
+ * The approval record for one published version: who signed off, what they
+ * said, and when. This is the audit trail the product exists to produce, so
+ * every review is reported — including stale and dismissed ones.
+ */
+export const VersionReviewSchema = z.object({
+  id: z.number(),
+  author: DiscussionAuthorSchema,
+  state: z.enum(["approved", "changes_requested", "commented", "other"]),
+  body: z.string(),
+  submittedAt: z.string(),
+  stale: z.boolean(),
+  dismissed: z.boolean(),
+});
+export type VersionReview = z.infer<typeof VersionReviewSchema>;
+
 export const PullRequestWithApprovalStateSchema = z.object({
   id: z.number(),
   number: z.number(),
@@ -108,6 +124,11 @@ export const PullRequestWithApprovalStateSchema = z.object({
   body: z.string().optional(),
   approvalState: ApprovalStateSchema,
   user: z.object({ login: z.string() }).nullable().optional(),
+  /**
+   * The reviews on this change, oldest first. Only the document detail
+   * populates it — a workspace list has no room for a review trail.
+   */
+  reviews: z.array(VersionReviewSchema).optional(),
 });
 export type PullRequestWithApprovalState = z.infer<
   typeof PullRequestWithApprovalStateSchema
@@ -225,22 +246,6 @@ export const AddCollaboratorBodySchema = z.object({
 });
 export type AddCollaboratorBody = z.infer<typeof AddCollaboratorBodySchema>;
 
-/**
- * The approval record for one published version: who signed off, what they
- * said, and when. This is the audit trail the product exists to produce, so
- * every review is reported — including stale and dismissed ones.
- */
-export const VersionReviewSchema = z.object({
-  id: z.number(),
-  author: DiscussionAuthorSchema,
-  state: z.enum(["approved", "changes_requested", "commented", "other"]),
-  body: z.string(),
-  submittedAt: z.string(),
-  stale: z.boolean(),
-  dismissed: z.boolean(),
-});
-export type VersionReview = z.infer<typeof VersionReviewSchema>;
-
 export const VersionSubmissionSchema = z.object({
   number: z.number(),
   title: z.string(),
@@ -271,3 +276,41 @@ export const DocumentHistoryPayloadSchema = z.object({
 export type DocumentHistoryPayload = z.infer<
   typeof DocumentHistoryPayloadSchema
 >;
+
+/**
+ * How a change stopped being open.
+ *
+ * "Closed" is not an outcome anyone can act on — an approval and an abandoned
+ * draft both end up closed, and a reviewer looking back at the record needs to
+ * know which one this was.
+ */
+export const ChangeOutcomeSchema = z.enum([
+  "published",
+  "declined",
+  "withdrawn",
+]);
+export type ChangeOutcome = z.infer<typeof ChangeOutcomeSchema>;
+
+export const ClosedChangeSchema = z.object({
+  number: z.number(),
+  title: z.string(),
+  body: z.string(),
+  /** The branch the submitted file lived on. Empty once Gitea prunes it. */
+  branchName: z.string(),
+  submittedBy: z.string(),
+  submittedAt: z.string(),
+  closedAt: z.string().nullable(),
+  outcome: ChangeOutcomeSchema,
+  /** Who published it, or who asked for changes it never came back from. */
+  decidedBy: z.string().nullable(),
+  /** The version this change became, when it was published. */
+  publishedVersion: z.number().nullable(),
+  /** Every review on the change, oldest first. */
+  reviews: z.array(VersionReviewSchema),
+});
+export type ClosedChange = z.infer<typeof ClosedChangeSchema>;
+
+export const ClosedChangesPayloadSchema = z.object({
+  changes: z.array(ClosedChangeSchema),
+});
+export type ClosedChangesPayload = z.infer<typeof ClosedChangesPayloadSchema>;

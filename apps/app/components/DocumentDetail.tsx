@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ChevronLeft, Clock, GitPullRequest, Users } from "lucide-react";
+import { Clock, GitPullRequest, Users } from "lucide-react";
 
 import type {
   PullRequestWithApprovalState,
@@ -8,17 +8,21 @@ import type {
   ReviewSettings,
   UploadResult,
 } from "../api";
-import { downloadDocument, getDocumentDetail } from "../api";
-import type { DocumentTab } from "../routes";
+import { downloadDocument, getClosedChanges, getDocumentDetail } from "../api";
+import type { DocumentChangeView, DocumentTab } from "../routes";
 import { describeFileKind } from "../documentFile";
+import type { ChangeRecord } from "../documentDisplay";
 import {
   capitalizeFirst,
+  closedChangeToRecord,
   formatDate,
   formatDocumentName,
   getApprovalStateLabel,
   parseSubmissionSummary,
+  toChangeRecord,
 } from "../documentDisplay";
 import { DocumentChangeDetail } from "./DocumentChangeDetail";
+import type { ChangeFilter } from "./DocumentChanges";
 import { DocumentChanges } from "./DocumentChanges";
 import { DocumentCollaborators } from "./DocumentCollaborators";
 import { DocumentHistory } from "./DocumentHistory";
@@ -33,9 +37,10 @@ interface DocumentDetailProps {
   activeView: DocumentTab;
   /** Which change has its own page open, or null for the change list. */
   activeChangeNumber: number | null;
+  /** Which half of that change's page: the discussion or the file. */
+  activeChangeView: DocumentChangeView;
   onTabChange: (tab: DocumentTab) => void;
-  onOpenChange: (pullNumber: number | null) => void;
-  onBack: () => void;
+  onOpenChange: (pullNumber: number | null, view?: DocumentChangeView) => void;
 }
 
 interface CanonicalFileInfo {
@@ -75,9 +80,9 @@ export function DocumentDetail({
   uploaderSlug,
   activeView,
   activeChangeNumber,
+  activeChangeView,
   onTabChange,
   onOpenChange,
-  onBack,
 }: DocumentDetailProps) {
   const [tags, setTags] = useState<DocTag[]>([]);
   const [openPRs, setOpenPRs] = useState<PullRequestWithApprovalState[]>([]);
@@ -98,6 +103,16 @@ export function DocumentDetail({
     ref: string | null;
     error: string | null;
   }>({ ref: null, error: null });
+  const [changeFilter, setChangeFilter] = useState<ChangeFilter>("open");
+  // Null until something asks for the closed list — it costs a review lookup
+  // per closed change, and opening a document should not pay that.
+  const [closedChanges, setClosedChanges] = useState<ChangeRecord[] | null>(
+    null,
+  );
+  const [closedState, setClosedState] = useState<{
+    loading: boolean;
+    error: string | null;
+  }>({ loading: false, error: null });
 
   const loadDocumentData = useCallback(async () => {
     setIsLoading(true);
@@ -111,6 +126,11 @@ export function DocumentDetail({
       setBranchProtection(detail.branchProtection);
       setReviewSettings(detail.reviewSettings ?? null);
       setCanonicalFileInfo(detail.canonicalFile);
+      // Whatever just happened may have closed a change. Drop the cached
+      // closed list rather than showing a record that is one publish stale;
+      // it is refetched only if something asks for it again.
+      setClosedChanges(null);
+      setClosedState({ loading: false, error: null });
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Unable to load document details.";
@@ -123,8 +143,26 @@ export function DocumentDetail({
     }
   }, [owner, repo]);
 
+  const loadClosedChanges = useCallback(async () => {
+    setClosedState({ loading: true, error: null });
+    try {
+      const payload = await getClosedChanges(owner, repo);
+      setClosedChanges(payload.changes.map(closedChangeToRecord));
+      setClosedState({ loading: false, error: null });
+    } catch (err) {
+      setClosedState({
+        loading: false,
+        error:
+          err instanceof Error
+            ? err.message
+            : "Unable to load the closed changes.",
+      });
+    }
+  }, [owner, repo]);
+
   useEffect(() => {
     void loadDocumentData();
+    setChangeFilter("open");
   }, [loadDocumentData]);
 
   const isAnonymous = uploaderSlug === null;
@@ -132,10 +170,36 @@ export function DocumentDetail({
   const documentName = formatDocumentName(repo);
   const latestTag = tags.length > 0 ? tags[0] : null;
   const nextVersion = (latestTag?.version ?? 0) + 1;
+
+  const openChanges = openPRs.map(toChangeRecord);
   const activeChange =
     activeChangeNumber === null
       ? null
-      : (openPRs.find((pr) => pr.number === activeChangeNumber) ?? null);
+      : (openChanges.find((change) => change.number === activeChangeNumber) ??
+        closedChanges?.find((change) => change.number === activeChangeNumber) ??
+        null);
+
+  // A link to a closed change is the normal way back into the record, so the
+  // closed list is fetched on demand rather than only when the filter is used.
+  const needsClosedChanges =
+    activeView === "changes" &&
+    !isLoading &&
+    (changeFilter === "closed" ||
+      (activeChangeNumber !== null && activeChange === null));
+
+  useEffect(() => {
+    if (!needsClosedChanges) return;
+    if (closedChanges !== null || closedState.loading || closedState.error) {
+      return;
+    }
+    void loadClosedChanges();
+  }, [
+    needsClosedChanges,
+    closedChanges,
+    closedState.loading,
+    closedState.error,
+    loadClosedChanges,
+  ]);
 
   /**
    * Save a version to disk. `loaded` lets a caller that already holds the
@@ -180,7 +244,7 @@ export function DocumentDetail({
   if (isLoading) {
     return (
       <div className="vault-detail app-page-shell">
-        <div className="bs-card vault-empty-state">
+        <div className="doc-panel vault-empty-state">
           <div className="bs-eyebrow">Loading</div>
           <h2>Loading document details…</h2>
           <p>Fetching version history and pending approvals.</p>
@@ -192,7 +256,7 @@ export function DocumentDetail({
   if (error) {
     return (
       <div className="vault-detail app-page-shell">
-        <div className="bs-card vault-error-state">
+        <div className="doc-panel vault-error-state">
           <div className="bs-eyebrow">Error</div>
           <h2>Unable to load document</h2>
           <p>{error}</p>
@@ -228,16 +292,6 @@ export function DocumentDetail({
       <header className="doc-header">
         <div className="doc-header-top">
           <div className="doc-header-identity">
-            {!isAnonymous ? (
-              <button
-                className="doc-header-back"
-                type="button"
-                onClick={onBack}
-              >
-                <ChevronLeft size={14} strokeWidth={1.5} aria-hidden="true" />
-                All documents
-              </button>
-            ) : null}
             <p className="doc-header-path">
               {owner} / {repo}
             </p>
@@ -330,7 +384,8 @@ export function DocumentDetail({
             repo={repo}
             currentUser={currentUser}
             isAnonymous={isAnonymous}
-            pullRequest={activeChange}
+            change={activeChange}
+            view={activeChangeView}
             branchProtection={branchProtection}
             blockOnUnresolvedThreads={
               reviewSettings?.blockOnUnresolvedThreads ?? false
@@ -341,22 +396,39 @@ export function DocumentDetail({
             downloading={downloadState.ref === activeChange.branchName}
             onDownload={(gitRef, loaded) => void handleDownload(gitRef, loaded)}
             onChanged={loadDocumentData}
+            onViewChange={(view) => onOpenChange(activeChange.number, view)}
             onBackToList={() => onOpenChange(null)}
           />
+        </div>
+      ) : activeView === "changes" &&
+        activeChangeNumber !== null &&
+        (closedState.loading ||
+          (closedChanges === null && closedState.error === null)) ? (
+        <div className="document-detail-tab-panel">
+          {/* The change is not open, so it is somewhere in the closed list —
+              which is only fetched when something actually needs it. */}
+          <p className="vault-pr-notice">
+            Loading change #{activeChangeNumber}…
+          </p>
         </div>
       ) : activeView === "changes" ? (
         <div className="document-detail-tab-panel">
           {activeChangeNumber !== null ? (
             <p className="vault-pr-notice">
-              Change #{activeChangeNumber} is not open on this document. It may
-              have been published or withdrawn.
+              Change #{activeChangeNumber} is not on this document.
             </p>
           ) : null}
           <DocumentChanges
             isAnonymous={isAnonymous}
-            openPullRequests={openPRs}
+            filter={changeFilter}
+            openChanges={openChanges}
+            closedChanges={closedChanges}
+            closedLoading={closedState.loading}
+            closedError={closedState.error}
             nextVersion={nextVersion}
+            onFilterChange={setChangeFilter}
             onOpenChange={onOpenChange}
+            onRetryClosed={() => void loadClosedChanges()}
             onSubmitVersion={() => setShowUploadModal(true)}
           />
         </div>
@@ -396,34 +468,58 @@ export function DocumentDetail({
               </div>
             ) : null}
 
-            <DocumentPreview
-              owner={owner}
-              repo={repo}
-              gitRef={viewingRef}
-              fileName={canonicalFileInfo?.downloadFileName ?? null}
-              downloading={downloadState.ref === viewingRef}
-              onDownload={(loaded) => void handleDownload(viewingRef, loaded)}
-            />
+            {/* Nothing has been approved, so there is no official version to
+                read. Asking for one anyway just to render "not found" in an
+                empty frame is the app failing at a question it already knows
+                the answer to. */}
+            {latestTag === null && isViewingLatest ? (
+              <div className="doc-nothing-published">
+                <h2 className="doc-nothing-published-title">
+                  No official version yet
+                </h2>
+                <p className="doc-nothing-published-note">
+                  {openChanges.length > 0
+                    ? "A version is waiting on a decision. Once it is approved and published it appears here as the official record."
+                    : "Submit a document for review. Once it is approved it appears here as the official record."}
+                </p>
+                {openChanges.length > 0 ? (
+                  <button
+                    className="bs-btn bs-btn-secondary"
+                    type="button"
+                    onClick={() => onTabChange("changes")}
+                  >
+                    Review {openChanges.length} change
+                    {openChanges.length === 1 ? "" : "s"}
+                  </button>
+                ) : null}
+              </div>
+            ) : (
+              <DocumentPreview
+                owner={owner}
+                repo={repo}
+                gitRef={viewingRef}
+                fileName={canonicalFileInfo?.downloadFileName ?? null}
+                downloading={downloadState.ref === viewingRef}
+                onDownload={(loaded) => void handleDownload(viewingRef, loaded)}
+              />
+            )}
           </div>
 
           <aside className="doc-rail" aria-label="Document summary">
-            <section className="bs-card doc-rail-card">
+            <section className="doc-rail-card">
               <h2 className="doc-rail-title">
                 {latestTag
                   ? `Official version — v${latestTag.version}`
                   : "No approved version yet"}
               </h2>
+              {/* When there is no version, the page itself already says so in
+                  full. The rail does not need to say it twice. */}
               {latestTag ? (
                 <p className="doc-rail-note">
                   Approved on {formatDate(latestTag.created)}. Approved versions
                   are locked — a change means a new version and a new review.
                 </p>
-              ) : (
-                <p className="doc-rail-note">
-                  Submit a document for review. Once it's approved, it becomes
-                  the official record.
-                </p>
-              )}
+              ) : null}
               <dl className="doc-rail-facts">
                 <div>
                   <dt>Owner</dt>
@@ -440,7 +536,7 @@ export function DocumentDetail({
               </dl>
             </section>
 
-            <section className="bs-card doc-rail-card">
+            <section className="doc-rail-card">
               <h2 className="doc-rail-title">
                 <GitPullRequest
                   size={14}
@@ -490,7 +586,7 @@ export function DocumentDetail({
               )}
             </section>
 
-            <section className="bs-card doc-rail-card">
+            <section className="doc-rail-card">
               <h2 className="doc-rail-title">
                 <Clock size={14} strokeWidth={1.5} aria-hidden="true" />
                 Recent versions
@@ -531,7 +627,7 @@ export function DocumentDetail({
             </section>
 
             {!isAnonymous ? (
-              <section className="bs-card doc-rail-card">
+              <section className="doc-rail-card">
                 <h2 className="doc-rail-title">
                   <Users size={14} strokeWidth={1.5} aria-hidden="true" />
                   Access
