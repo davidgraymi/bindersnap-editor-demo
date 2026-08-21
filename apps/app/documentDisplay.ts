@@ -5,7 +5,12 @@
  * decided in one place — and can be tested without rendering anything.
  */
 
-import type { VersionReview } from "../../packages/api-schema/schemas/documents";
+import type {
+  ChangeReviewer,
+  ChangeUser,
+  ReviewerStatus,
+  VersionReview,
+} from "../../packages/api-schema/schemas/documents";
 
 export type DocumentStatus =
   "published" | "in_review" | "changes_requested" | "approved" | "draft";
@@ -226,6 +231,14 @@ export interface ChangeRecord {
   decidedBy: string | null;
   /** The version a published change became. */
   publishedVersion: number | null;
+  /** The one person answerable for the change, when someone is. */
+  assignee: ChangeUser | null;
+  /** Who has to sign this off, and where each of them stands. */
+  reviewers: ChangeReviewer[];
+  /** Approvals that still count. */
+  approvalCount: number;
+  /** How many this document demands before anything can publish. */
+  requiredApprovals: number;
 }
 
 export type ChangeOutcome = "published" | "declined" | "withdrawn";
@@ -276,6 +289,10 @@ export function toChangeRecord(pullRequest: {
   created_at?: string;
   approvalState: string;
   reviews?: VersionReview[];
+  reviewers?: ChangeReviewer[];
+  assignee?: ChangeUser | null;
+  approvalCount?: number;
+  requiredApprovals?: number;
   user?: { login: string } | null;
 }): ChangeRecord {
   const submittedBy = pullRequest.user?.login ?? "";
@@ -293,6 +310,10 @@ export function toChangeRecord(pullRequest: {
     closedAt: null,
     decidedBy: null,
     publishedVersion: null,
+    assignee: pullRequest.assignee ?? null,
+    reviewers: pullRequest.reviewers ?? [],
+    approvalCount: pullRequest.approvalCount ?? 0,
+    requiredApprovals: pullRequest.requiredApprovals ?? 0,
   };
 }
 
@@ -307,6 +328,10 @@ export function closedChangeToRecord(change: {
   decidedBy: string | null;
   publishedVersion: number | null;
   reviews?: VersionReview[];
+  reviewers?: ChangeReviewer[];
+  assignee?: ChangeUser | null;
+  approvalCount?: number;
+  requiredApprovals?: number;
 }): ChangeRecord {
   return {
     number: change.number,
@@ -322,7 +347,84 @@ export function closedChangeToRecord(change: {
     closedAt: change.closedAt,
     decidedBy: change.decidedBy,
     publishedVersion: change.publishedVersion,
+    assignee: change.assignee ?? null,
+    reviewers: change.reviewers ?? [],
+    approvalCount: change.approvalCount ?? 0,
+    requiredApprovals: change.requiredApprovals ?? 0,
   };
+}
+
+/**
+ * Where a reviewer stands, as the page shows it.
+ *
+ * The server's four states plus one it cannot see: an unresolved thread this
+ * person started. Publication is gated on those threads, so the person holding
+ * one open is blocking the change every bit as much as one who asked for
+ * changes — and the page should say so rather than leaving them looking done.
+ */
+export type ReviewerDisplayStatus = ReviewerStatus | "thread_open";
+
+/**
+ * One reviewer, one icon.
+ *
+ * Read worst news first: someone who asked for changes is blocking, and so is
+ * someone with a thread still open, whatever they said in their review. Below
+ * that, an approval outranks a bare comment, and "awaiting" is what is left.
+ */
+export function resolveReviewerDisplayStatus(
+  reviewer: { login: string; status: ReviewerStatus },
+  openThreadAuthors: ReadonlySet<string> = new Set(),
+): ReviewerDisplayStatus {
+  if (reviewer.status === "changes_requested") return "changes_requested";
+  if (openThreadAuthors.has(reviewer.login)) return "thread_open";
+  return reviewer.status;
+}
+
+const REVIEWER_STATUS_LABELS: Record<ReviewerDisplayStatus, string> = {
+  approved: "Approved",
+  changes_requested: "Asked for changes",
+  thread_open: "Has an open thread",
+  commented: "Commented",
+  awaiting: "Awaiting review",
+};
+
+export function getReviewerStatusLabel(status: ReviewerDisplayStatus): string {
+  return REVIEWER_STATUS_LABELS[status];
+}
+
+/** The name to put next to the icon. A real name beats a username. */
+export function getReviewerDisplayName(reviewer: {
+  login: string;
+  fullName: string;
+}): string {
+  return reviewer.fullName.trim() || capitalizeFirst(reviewer.login);
+}
+
+/**
+ * How close a change is to being publishable, in the one form that answers it:
+ * approvals collected against approvals required.
+ *
+ * "Awaiting review" says a decision is outstanding without saying how much is
+ * outstanding — one more sign-off and three more are the same badge. Returns
+ * null when the document demands no approvals, because "0 of 0" is noise.
+ */
+export function describeApprovalProgress(change: {
+  approvalCount: number;
+  requiredApprovals: number;
+}): string | null {
+  if (change.requiredApprovals <= 0) return null;
+  return `${change.approvalCount} of ${change.requiredApprovals} approvals`;
+}
+
+/** True once a change has collected every approval it needs. */
+export function hasEnoughApprovals(change: {
+  approvalCount: number;
+  requiredApprovals: number;
+}): boolean {
+  return (
+    change.requiredApprovals > 0 &&
+    change.approvalCount >= change.requiredApprovals
+  );
 }
 
 const CHANGE_OUTCOME_LABELS: Record<ChangeOutcome, string> = {

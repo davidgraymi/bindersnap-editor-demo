@@ -4,7 +4,9 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
+import type { GetClosedChanges200ChangesItemAssignee } from './getClosedChanges200ChangesItemAssignee.ts';
 import type { GetClosedChanges200ChangesItemOutcome } from './getClosedChanges200ChangesItemOutcome.ts';
+import type { GetClosedChanges200ChangesItemReviewersItem } from './getClosedChanges200ChangesItemReviewersItem.ts';
 import type { GetClosedChanges200ChangesItemReviewsItem } from './getClosedChanges200ChangesItemReviewsItem.ts';
 
 export type GetClosedChanges200ChangesItem = {
@@ -22,4 +24,9 @@ export type GetClosedChanges200ChangesItem = {
   /** @nullable */
   publishedVersion: number | null;
   reviews: GetClosedChanges200ChangesItemReviewsItem[];
+  reviewers: GetClosedChanges200ChangesItemReviewersItem[];
+  /** @nullable */
+  assignee: GetClosedChanges200ChangesItemAssignee;
+  approvalCount: number;
+  requiredApprovals: number;
 };

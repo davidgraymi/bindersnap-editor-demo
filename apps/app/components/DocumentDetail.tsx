@@ -5,6 +5,7 @@ import type {
   PullRequestWithApprovalState,
   DocTag,
   RepoBranchProtection,
+  RepoCollaboratorPermissionSummary,
   ReviewSettings,
   UploadResult,
 } from "../api";
@@ -93,6 +94,8 @@ export function DocumentDetail({
   const [reviewSettings, setReviewSettings] = useState<ReviewSettings | null>(
     null,
   );
+  const [currentUserPermission, setCurrentUserPermission] =
+    useState<RepoCollaboratorPermissionSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -125,6 +128,7 @@ export function DocumentDetail({
       setOpenPRs(detail.openPullRequests);
       setBranchProtection(detail.branchProtection);
       setReviewSettings(detail.reviewSettings ?? null);
+      setCurrentUserPermission(detail.currentUserPermission);
       setCanonicalFileInfo(detail.canonicalFile);
       // Whatever just happened may have closed a change. Drop the cached
       // closed list rather than showing a record that is one publish stale;
@@ -137,6 +141,7 @@ export function DocumentDetail({
       setError(message);
       setTags([]);
       setOpenPRs([]);
+      setCurrentUserPermission(null);
       setCanonicalFileInfo(null);
     } finally {
       setIsLoading(false);
@@ -170,6 +175,16 @@ export function DocumentDetail({
   const documentName = formatDocumentName(repo);
   const latestTag = tags.length > 0 ? tags[0] : null;
   const nextVersion = (latestTag?.version ?? 0) + 1;
+
+  // Assigning a change is a write to the pull request, so it takes the same
+  // access Gitea would demand for one. The owner always has it; Gitea's own
+  // check is still the one that decides, this only keeps the buttons honest.
+  const permissionAccess = currentUserPermission?.access ?? null;
+  const canManageAssignments =
+    !isAnonymous &&
+    (currentUser === owner ||
+      permissionAccess === "write" ||
+      permissionAccess === "admin");
 
   const openChanges = openPRs.map(toChangeRecord);
   const activeChange =
@@ -390,6 +405,7 @@ export function DocumentDetail({
             blockOnUnresolvedThreads={
               reviewSettings?.blockOnUnresolvedThreads ?? false
             }
+            canManageAssignments={canManageAssignments}
             nextVersion={nextVersion}
             documentName={documentName}
             fileName={canonicalFileInfo?.downloadFileName ?? null}

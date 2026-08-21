@@ -5,6 +5,8 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { DocumentDetailPayloadOpenPullRequestsItemApprovalState } from './documentDetailPayloadOpenPullRequestsItemApprovalState.ts';
+import type { DocumentDetailPayloadOpenPullRequestsItemAssignee } from './documentDetailPayloadOpenPullRequestsItemAssignee.ts';
+import type { DocumentDetailPayloadOpenPullRequestsItemReviewersItem } from './documentDetailPayloadOpenPullRequestsItemReviewersItem.ts';
 import type { DocumentDetailPayloadOpenPullRequestsItemReviewsItem } from './documentDetailPayloadOpenPullRequestsItemReviewsItem.ts';
 import type { DocumentDetailPayloadOpenPullRequestsItemUser } from './documentDetailPayloadOpenPullRequestsItemUser.ts';
 
@@ -21,7 +23,9 @@ export type DocumentDetailPayloadOpenPullRequestsItem = {
   requiredApprovals: number;
   isApproved: boolean;
   isRejected: boolean;
-  reviewers: string[];
+  reviewers: DocumentDetailPayloadOpenPullRequestsItemReviewersItem[];
+  /** @nullable */
+  assignee: DocumentDetailPayloadOpenPullRequestsItemAssignee;
   body?: string;
   approvalState: DocumentDetailPayloadOpenPullRequestsItemApprovalState;
   /** @nullable */

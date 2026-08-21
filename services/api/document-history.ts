@@ -9,6 +9,12 @@
  * Everything here is pure. The Gitea calls happen in the request handler.
  */
 
+import {
+  buildChangeReviewers,
+  countApprovals,
+  readAssignee,
+  readRequestedReviewers,
+} from "./change-assignments";
 import type { DocTag } from "./gitea-client/repos";
 import type { PullRequestWithReviews } from "./gitea-client/pullRequests";
 import type { components } from "./gitea-client/spec/gitea";
@@ -141,6 +147,7 @@ export function buildVersionRecords(
 export function buildClosedChanges(
   entries: PullRequestWithReviews[],
   tags: DocTag[],
+  requiredApprovals = 0,
 ): ClosedChange[] {
   const versionByMergeSha = new Map<string, number>();
   for (const tag of tags) {
@@ -172,13 +179,23 @@ export function buildClosedChanges(
           ? "declined"
           : "withdrawn";
 
+      const submittedBy = pullRequest.user?.login ?? "";
+
       return {
         number: pullRequest.number ?? 0,
         title: pullRequest.title ?? "",
         body: pullRequest.body ?? "",
         reviews: toVersionReviews(reviews),
+        reviewers: buildChangeReviewers({
+          requested: readRequestedReviewers(pullRequest),
+          reviews,
+          submittedBy,
+        }),
+        assignee: readAssignee(pullRequest),
+        approvalCount: countApprovals(reviews),
+        requiredApprovals,
         branchName: pullRequest.head?.ref ?? "",
-        submittedBy: pullRequest.user?.login ?? "",
+        submittedBy,
         submittedAt: pullRequest.created_at ?? "",
         closedAt: pullRequest.merged_at ?? pullRequest.closed_at ?? null,
         outcome,
