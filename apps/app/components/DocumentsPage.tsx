@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { FileText, GitPullRequest, Search, Tag, Users } from "lucide-react";
 import { getWorkspaceDocuments, type WorkspaceDocumentSummary } from "../api";
+import {
+  getDocumentStatusLabel,
+  resolveWorkspaceDocumentStatus,
+  type DocumentStatus,
+} from "../documentDisplay";
 import { parseDocumentSearchQuery } from "../documentSearch";
 import { BindersnapLogoMark } from "./BindersnapLogoMark";
 
@@ -56,41 +61,12 @@ function formatDocumentName(repoName: string): string {
     .join(" ");
 }
 
-function getDocStatus(
-  doc: WorkspaceDocumentSummary,
-): "in_review" | "approved" | "changes_requested" | "draft" {
-  const first = doc.pendingPRs[0];
-  if (first) {
-    const s = first.approvalState;
-    if (s === "in_review" || s === "changes_requested" || s === "approved") {
-      return s;
-    }
-  }
-  if (doc.latestTag) return "approved";
-  return "draft";
-}
-
-function getStatusLabel(
-  status: "in_review" | "approved" | "changes_requested" | "draft",
-): string {
-  switch (status) {
-    case "in_review":
-      return "In Review";
-    case "approved":
-      return "Approved";
-    case "changes_requested":
-      return "Changes Requested";
-    case "draft":
-      return "Draft";
-  }
-}
-
-function getStatusClass(
-  status: "in_review" | "approved" | "changes_requested" | "draft",
-): string {
+function getStatusClass(status: DocumentStatus): string {
   switch (status) {
     case "in_review":
       return "docs-status-badge docs-status-badge--review";
+    case "published":
+      return "docs-status-badge docs-status-badge--published";
     case "approved":
       return "docs-status-badge docs-status-badge--approved";
     case "changes_requested":
@@ -109,13 +85,17 @@ function sortDocs(
       case "name":
         return a.repo.name.localeCompare(b.repo.name);
       case "status": {
-        const order = {
+        const order: Record<DocumentStatus, number> = {
           approved: 0,
-          in_review: 1,
-          changes_requested: 2,
-          draft: 3,
+          published: 1,
+          in_review: 2,
+          changes_requested: 3,
+          draft: 4,
         };
-        return order[getDocStatus(a)] - order[getDocStatus(b)];
+        return (
+          order[resolveWorkspaceDocumentStatus(a)] -
+          order[resolveWorkspaceDocumentStatus(b)]
+        );
       }
       case "updated":
       default:
@@ -335,7 +315,7 @@ export function DocumentsPage({
         ) : (
           <div className={`docs-list${loading ? " docs-list--loading" : ""}`}>
             {filtered.map((doc) => {
-              const status = getDocStatus(doc);
+              const status = resolveWorkspaceDocumentStatus(doc);
               const name = formatDocumentName(doc.repo.name);
               const updated = formatRelativeTime(doc.repo.updated_at);
               const openPRs = doc.pendingPRs.length;
@@ -355,7 +335,7 @@ export function DocumentsPage({
                     <div className="docs-list-item-top">
                       <span className="docs-list-item-name">{name}</span>
                       <span className={getStatusClass(status)}>
-                        {getStatusLabel(status)}
+                        {getDocumentStatusLabel(status)}
                       </span>
                     </div>
                     {doc.repo.description && (
