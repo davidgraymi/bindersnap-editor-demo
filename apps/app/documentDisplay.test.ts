@@ -7,6 +7,7 @@ import {
   getReviewStateLabel,
   parseSubmissionSummary,
   resolveDocumentStatus,
+  resolveWorkspaceDocumentStatus,
 } from "./documentDisplay";
 
 test("formatDocumentName turns a repo slug into a title", () => {
@@ -55,8 +56,45 @@ test("resolveDocumentStatus falls back to the published state when nothing is op
 
 test("status labels read like a person wrote them", () => {
   expect(getDocumentStatusLabel("approved")).toBe("Ready to publish");
-  expect(getDocumentStatusLabel("draft")).toBe("No version yet");
+  expect(getDocumentStatusLabel("published")).toBe("Published");
+  expect(getDocumentStatusLabel("draft")).toBe("Draft");
   expect(getReviewStateLabel("changes_requested")).toBe("Requested changes");
+});
+
+test("resolveWorkspaceDocumentStatus scans every open change, not just the first", () => {
+  // The bug this replaced: both list pages read `pendingPRs[0]` and stopped,
+  // so a second change asking for work was invisible on the row.
+  expect(
+    resolveWorkspaceDocumentStatus({
+      latestTag: { version: 3 },
+      pendingPRs: [
+        { approvalState: "in_review" },
+        { approvalState: "changes_requested" },
+      ],
+    }),
+  ).toBe("changes_requested");
+});
+
+test("resolveWorkspaceDocumentStatus separates published from ready-to-publish", () => {
+  // Both used to render "Approved" on the list, which made a document with
+  // nothing outstanding look identical to one waiting to be published.
+  expect(
+    resolveWorkspaceDocumentStatus({
+      latestTag: { version: 3 },
+      pendingPRs: [],
+    }),
+  ).toBe("published");
+
+  expect(
+    resolveWorkspaceDocumentStatus({
+      latestTag: { version: 3 },
+      pendingPRs: [{ approvalState: "approved" }],
+    }),
+  ).toBe("approved");
+
+  expect(
+    resolveWorkspaceDocumentStatus({ latestTag: null, pendingPRs: [] }),
+  ).toBe("draft");
 });
 
 test("parseSubmissionSummary rewrites the generated upload body", () => {

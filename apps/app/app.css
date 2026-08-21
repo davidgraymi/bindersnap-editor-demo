@@ -4103,6 +4103,10 @@ input {
   color: #f59e0b;
 }
 
+/* Published is the version on record; approved is a change cleared to become
+   one. Both are good news, so both are green — the label carries the
+   difference. */
+.dash-doc-badge--published,
 .dash-doc-badge--approved {
   background: var(--brand-green-dim);
   color: var(--brand-green);
@@ -5276,6 +5280,7 @@ input {
   color: #fbbf24;
 }
 
+.docs-status-badge--published,
 .docs-status-badge--approved {
   background: rgba(22, 163, 74, 0.1);
   color: var(--brand-green);
