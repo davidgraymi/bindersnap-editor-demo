@@ -428,16 +428,55 @@ export async function openDocumentTab(
   await control.click();
 }
 
+/**
+ * Open one change's own page.
+ *
+ * The Changes tab is an index of what is waiting on a decision; Approve,
+ * Request Changes and Publish live on each change's own page, so getting to
+ * them means opening a row. Gitea returns pull requests newest first, so
+ * `"last"` is the oldest open change.
+ */
+export async function openDocumentChange(
+  page: Page,
+  which: "first" | "last" = "first",
+): Promise<void> {
+  await openDocumentTab(page, "Changes");
+  const rows = page.locator(".change-row-btn");
+  await expect(rows.first()).toBeVisible({ timeout: 30_000 });
+  await (which === "last" ? rows.last() : rows.first()).click();
+  await expect(page.locator(".change-detail")).toBeVisible({ timeout: 15_000 });
+}
+
+/** Open the first change if there is one. Returns false when the list is empty. */
+async function openFirstChangeIfAny(page: Page): Promise<boolean> {
+  const row = page.locator(".change-row-btn").first();
+  const hasRow = await row.isVisible({ timeout: 3_000 }).catch(() => false);
+  if (!hasRow) return false;
+  await row.click();
+  return await page
+    .locator(".change-detail")
+    .isVisible({ timeout: 10_000 })
+    .catch(() => false);
+}
+
+/** Assert how many changes the Changes tab lists. */
+export async function expectChangeRowCount(
+  page: Page,
+  count: number,
+  timeout = 30_000,
+): Promise<void> {
+  await expect(page.locator(".change-row")).toHaveCount(count, { timeout });
+}
+
 /** Assert the header reports version `version` as the official record. */
 export async function expectPublishedVersion(
   page: Page,
   version: number,
   timeout = 30_000,
 ): Promise<void> {
-  await expect(page.locator(".doc-header-facts")).toContainText(
-    `v${version} approved`,
-    { timeout },
-  );
+  await expect(page.locator(".doc-version-pill")).toHaveText(`v${version}`, {
+    timeout,
+  });
 }
 
 /** Assert how many changes are waiting on a decision, per the Changes tab. */
@@ -476,6 +515,8 @@ export async function waitForNoPendingReviews(
   while (Date.now() < deadline) {
     // Reviewing happens on the Changes tab, so make sure we are on it.
     await openDocumentTab(page, "Changes").catch(() => undefined);
+    // …and the publish button lives on the change's own page, not the index.
+    await openFirstChangeIfAny(page);
 
     // New UI: publish button is "Publish as Official Version"
     const publishButton = page.getByRole("button", {
@@ -525,7 +566,7 @@ export async function waitForNoPendingReviews(
     if (isVisible) return;
 
     const mergeErrorLocator = page
-      .locator(".vault-pr-item")
+      .locator(".change-detail")
       .locator('[role="alert"]');
     const hasMergeError = await mergeErrorLocator
       .isVisible({ timeout: 500 })

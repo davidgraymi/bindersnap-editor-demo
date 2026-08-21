@@ -23,12 +23,14 @@
 import { expect, test } from "@playwright/test";
 
 import {
+  expectChangeRowCount,
   expectOpenChangeCount,
   expectPublishedVersion,
   expectedPrefilledDocumentName,
   GITEA_BOB_USER,
   installMemorySessionStorage,
   navigateToDocument,
+  openDocumentChange,
   openDocumentTab,
   openNewDocumentModal,
   openCollaboratorsTab,
@@ -126,7 +128,7 @@ test.describe("Merge conflict resolution on publish", () => {
     await navigateToDocument(page, cardSearchText);
 
     // Bob approves v1 on the Changes tab — two-step confirm flow
-    await openDocumentTab(page, "Changes");
+    await openDocumentChange(page);
     await expect(page.getByRole("button", { name: "Approve" })).toBeVisible({
       timeout: 30_000,
     });
@@ -147,7 +149,7 @@ test.describe("Merge conflict resolution on publish", () => {
     // Switch back to Alice to publish v1
     await signInAsAlice(page);
     await navigateToDocument(page, cardSearchText);
-    await openDocumentTab(page, "Changes");
+    await openDocumentChange(page);
 
     await expect(
       page.getByRole("button", {
@@ -217,18 +219,16 @@ test.describe("Merge conflict resolution on publish", () => {
     // Both PRs have the same "Upload v2:" title because version numbering is
     // based on published tags only — since neither is published yet, both get
     // "Upload v2:". Use position-based selection instead: Gitea returns PRs
-    // newest-first (descending by PR number), so .last() is the older PR
+    // newest-first (descending by PR number), so the last row is the older PR
     // (lower PR number, created first). We approve the older PR first so it
     // can be published cleanly before the newer PR creates a conflict.
     await signInAsBob(page);
     await navigateToDocument(page, cardSearchText);
     await openDocumentTab(page, "Changes");
+    await expectChangeRowCount(page, 2);
+    await openDocumentChange(page, "last");
 
-    await expect(page.locator(".vault-pr-item")).toHaveCount(2, {
-      timeout: 30_000,
-    });
-    const firstPr = page.locator(".vault-pr-item").last();
-    await firstPr.getByRole("button", { name: "Approve" }).click();
+    await page.getByRole("button", { name: "Approve" }).click();
     // Confirm the approval in the two-step confirm dialog
     await expect(
       page.getByRole("button", { name: "Confirm Approval" }),
@@ -236,15 +236,18 @@ test.describe("Merge conflict resolution on publish", () => {
       timeout: 5_000,
     });
     await page.getByRole("button", { name: "Confirm Approval" }).click();
-    await expect(firstPr.locator(".vault-status-approved")).toBeVisible({
+    await expect(
+      page.locator(".change-detail .vault-status-approved"),
+    ).toBeVisible({
       timeout: 30_000,
     });
 
     // --- Alice publishes v2 ---
-    // Only v2 is approved, so there is exactly one Publish button.
+    // Both changes are still open and only v2 is approved, so open the same
+    // older change Bob just approved — the newer one has no Publish button.
     await signInAsAlice(page);
     await navigateToDocument(page, cardSearchText);
-    await openDocumentTab(page, "Changes");
+    await openDocumentChange(page, "last");
 
     await expect(
       page.getByRole("button", {
@@ -269,12 +272,10 @@ test.describe("Merge conflict resolution on publish", () => {
     await signInAsBob(page);
     await navigateToDocument(page, cardSearchText);
     await openDocumentTab(page, "Changes");
+    await expectChangeRowCount(page, 1);
+    await openDocumentChange(page);
 
-    await expect(page.locator(".vault-pr-item")).toHaveCount(1, {
-      timeout: 30_000,
-    });
-    const secondPr = page.locator(".vault-pr-item");
-    await secondPr.getByRole("button", { name: "Approve" }).click();
+    await page.getByRole("button", { name: "Approve" }).click();
     // Confirm the approval in the two-step confirm dialog
     await expect(
       page.getByRole("button", { name: "Confirm Approval" }),
@@ -282,14 +283,16 @@ test.describe("Merge conflict resolution on publish", () => {
       timeout: 5_000,
     });
     await page.getByRole("button", { name: "Confirm Approval" }).click();
-    await expect(secondPr.locator(".vault-status-approved")).toBeVisible({
+    await expect(
+      page.locator(".change-detail .vault-status-approved"),
+    ).toBeVisible({
       timeout: 30_000,
     });
 
     // --- Alice publishes v3 (conflict resolution path) ---
     await signInAsAlice(page);
     await navigateToDocument(page, cardSearchText);
-    await openDocumentTab(page, "Changes");
+    await openDocumentChange(page);
 
     await expect(
       page.getByRole("button", {
