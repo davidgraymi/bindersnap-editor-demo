@@ -10,6 +10,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import {
   buildUniqueDocumentMetadata,
+  expectOpenChangeCount,
   expectedPrefilledDocumentName,
   openNewDocumentModal,
   signInAsBob,
@@ -48,8 +49,6 @@ test.describe("UI document creation flow", () => {
     await expect(
       page.getByRole("heading", { name: /No approved version yet/i }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: /1 Pending Approval/i }),
-    ).toBeVisible();
+    await expectOpenChangeCount(page, 1);
   });
 });

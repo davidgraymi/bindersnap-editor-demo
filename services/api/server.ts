@@ -34,6 +34,7 @@ import {
   getReviewSettings,
   updateReviewSettings,
 } from "./gitea-client/reviewSettings";
+import { buildVersionRecords } from "./document-history";
 import {
   addRepoCollaborator,
   bootstrapEmptyMainBranch,
@@ -69,9 +70,11 @@ import {
 import {
   createPullRequest,
   listPullRequests,
+  listPullRequestsWithReviews,
   mergeOrResolveConflicts,
   submitReview,
   type PullRequestWithApprovalState,
+  type PullRequestWithReviews,
 } from "./gitea-client/pullRequests";
 
 const authAttempts = new Map<string, { count: number; resetAt: number }>();
@@ -2254,6 +2257,93 @@ async function handleDocumentDetail(
   }
 }
 
+/**
+ * The approval trail: every published version with the review that let it
+ * through. Kept off the detail payload because it costs a review lookup per
+ * closed pull request, and the document view itself does not need it.
+ */
+async function handleDocumentHistory(
+  req: Request,
+  baseHeaders: Headers,
+  owner: string,
+  repo: string,
+): Promise<Response> {
+  const access = await resolveDocumentAccess(req, baseHeaders, owner, repo);
+  if (access instanceof Response) {
+    return access;
+  }
+
+  const { client } = access;
+
+  try {
+    const [tags, closedPullRequests] = await Promise.all([
+      listDocTags(client, owner, repo),
+      listPullRequestsWithReviews({
+        client,
+        owner,
+        repo,
+        state: "closed",
+      }),
+    ]);
+
+    const merged: PullRequestWithReviews[] = closedPullRequests.filter(
+      (entry) => entry.pullRequest.approvalState === "published",
+    );
+
+    // Comment counts are decoration, not the record — a failure here must not
+    // cost the user their history.
+    const discussionCounts = new Map<number, number>();
+    await Promise.all(
+      merged.map(async (entry) => {
+        const pullNumber = entry.pullRequest.number;
+        if (!pullNumber) return;
+        const summary = await listDiscussions({
+          client,
+          owner,
+          repo,
+          pullNumber,
+        }).catch(() => null);
+        if (summary) {
+          discussionCounts.set(pullNumber, summary.totalCount);
+        }
+      }),
+    );
+
+    let canonicalFile = await resolveCanonicalFileInfo(
+      client,
+      owner,
+      repo,
+    ).catch(() => null);
+    if (!canonicalFile) {
+      const fallbackRef = await resolveLatestUploadRef(client, owner, repo);
+      if (fallbackRef) {
+        canonicalFile =
+          (await resolveCanonicalFileInfo(
+            client,
+            owner,
+            repo,
+            fallbackRef,
+          ).catch(() => null)) ?? null;
+      }
+    }
+
+    return json(
+      200,
+      {
+        versions: buildVersionRecords(tags, merged, discussionCounts),
+        canonicalFile,
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to load the version history.",
+    );
+  }
+}
+
 async function handleDocumentVersions(
   req: Request,
   baseHeaders: Headers,
@@ -4080,6 +4170,9 @@ export function createApiServer() {
         const versionsMatch = pathname.match(
           /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/versions$/,
         );
+        const historyMatch = pathname.match(
+          /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/history$/,
+        );
         const permissionsMatch = pathname.match(
           /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/permissions$/,
         );
@@ -4161,6 +4254,13 @@ export function createApiServer() {
             baseHeaders,
             decodePathParam(downloadMatch[1] ?? ""),
             decodePathParam(downloadMatch[2] ?? ""),
+          );
+        } else if (historyMatch && method === "GET") {
+          response = await handleDocumentHistory(
+            req,
+            baseHeaders,
+            decodePathParam(historyMatch[1] ?? ""),
+            decodePathParam(historyMatch[2] ?? ""),
           );
         } else if (versionsMatch && method === "POST") {
           response = await handleDocumentVersions(

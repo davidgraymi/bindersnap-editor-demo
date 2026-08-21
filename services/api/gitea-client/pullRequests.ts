@@ -55,6 +55,12 @@ export interface ListPullRequestsParams {
   page?: number;
 }
 
+/** A pull request together with the reviews that were submitted on it. */
+export interface PullRequestWithReviews {
+  pullRequest: PullRequestWithApprovalState;
+  reviews: PullReview[];
+}
+
 function toApprovalStateFromReview(review: PullReview): ApprovalState | null {
   const state = review.state?.toUpperCase();
 
@@ -561,9 +567,17 @@ export async function mergeOrResolveConflicts(
   }
 }
 
-export async function listPullRequests(
+/**
+ * List pull requests and keep each one's reviews alongside it.
+ *
+ * `listPullRequests` throws the reviews away once the approval state is
+ * derived. The version history needs the reviews themselves — who approved,
+ * what they wrote, when — so this variant hands both back and avoids a second
+ * pass over the same API calls.
+ */
+export async function listPullRequestsWithReviews(
   params: ListPullRequestsParams,
-): Promise<PullRequestWithApprovalState[]> {
+): Promise<PullRequestWithReviews[]> {
   const { client, owner, repo, state, page } = params;
 
   const pullRequests = await unwrap(
@@ -575,14 +589,19 @@ export async function listPullRequests(
     }),
   );
 
-  const mapped = await Promise.all(
+  return Promise.all(
     pullRequests.map(async (pullRequest) => {
       const reviews = pullRequest.number
         ? await listPullReviews(client, owner, repo, pullRequest.number)
         : [];
-      return withApprovalState(pullRequest, reviews);
+      return { pullRequest: withApprovalState(pullRequest, reviews), reviews };
     }),
   );
+}
 
-  return mapped;
+export async function listPullRequests(
+  params: ListPullRequestsParams,
+): Promise<PullRequestWithApprovalState[]> {
+  const withReviews = await listPullRequestsWithReviews(params);
+  return withReviews.map((entry) => entry.pullRequest);
 }

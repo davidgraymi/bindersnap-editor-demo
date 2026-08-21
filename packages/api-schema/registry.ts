@@ -13,6 +13,7 @@ import {
   CreateDiscussionBodySchema,
   DiscussionSummarySchema,
   DocumentDetailPayloadSchema,
+  DocumentHistoryPayloadSchema,
   ResolveDiscussionBodySchema,
   DocumentPermissionsPayloadSchema,
   InitialDocumentUploadResultSchema,
@@ -45,6 +46,7 @@ registry.register("LoginBody", LoginBodySchema);
 registry.register("SignupBody", SignupBodySchema);
 registry.register("WorkspaceDocumentSummary", WorkspaceDocumentSummarySchema);
 registry.register("DocumentDetailPayload", DocumentDetailPayloadSchema);
+registry.register("DocumentHistoryPayload", DocumentHistoryPayloadSchema);
 registry.register(
   "InitialDocumentUploadResult",
   InitialDocumentUploadResultSchema,
@@ -200,6 +202,22 @@ registry.registerPath({
     200: {
       description: "Document detail",
       content: { "application/json": { schema: DocumentDetailPayloadSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/documents/{owner}/{repo}/history",
+  operationId: "getDocumentHistory",
+  tags: ["documents"],
+  request: {
+    params: z.object({ owner: z.string(), repo: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Published versions with the reviews that approved them",
+      content: { "application/json": { schema: DocumentHistoryPayloadSchema } },
     },
   },
 });

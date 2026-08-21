@@ -25,10 +25,13 @@ import {
 } from "../services/api/gitea-client/pullRequests";
 import {
   createBobClient,
+  expectOpenChangeCount,
+  expectPublishedVersion,
   expectedPrefilledDocumentName,
   installMemorySessionStorage,
   makeClient,
   navigateToDocument,
+  openDocumentTab,
   openNewDocumentModal,
   pollUntil,
   resolveAndStoreToken,
@@ -95,9 +98,7 @@ test.describe("UI document version upload flow", () => {
     await expect(
       page.getByRole("heading", { name: /No approved version yet/i }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: /1 Pending Approval/i }),
-    ).toBeVisible();
+    await expectOpenChangeCount(page, 1);
 
     // Capture repo info from the URL (e.g. /docs/alice/my-document)
     const url = page.url();
@@ -155,6 +156,9 @@ test.describe("UI document version upload flow", () => {
     await signInAsAlice(page);
     await navigateToDocument(page, cardSearchText);
 
+    // Reviewing lives on its own tab now
+    await openDocumentTab(page, "Changes");
+
     // The Publish button should be visible (PR is approved and alice can merge)
     await expect(
       page.getByRole("button", {
@@ -175,9 +179,7 @@ test.describe("UI document version upload flow", () => {
     await navigateToDocument(page, cardSearchText);
 
     // Should now show Version 1
-    await expect(page.getByRole("heading", { name: "Version 1" })).toBeVisible({
-      timeout: 30_000,
-    });
+    await expectPublishedVersion(page, 1);
   });
 
   test("alice uploads v2 via the UI", async ({ page }) => {
@@ -187,9 +189,7 @@ test.describe("UI document version upload flow", () => {
     await navigateToDocument(page, cardSearchText);
 
     // Should show Version 1 as current
-    await expect(page.getByRole("heading", { name: "Version 1" })).toBeVisible({
-      timeout: 30_000,
-    });
+    await expectPublishedVersion(page, 1);
 
     // Click Submit New Version (button label changed in new UI)
     await page.getByRole("button", { name: "Submit New Version" }).click();
@@ -215,14 +215,10 @@ test.describe("UI document version upload flow", () => {
 
     // Wait for the upload to complete — the modal shows PR creation success
     // then auto-closes. Wait for the PR to appear in the document detail.
-    await expect(
-      page.getByRole("heading", { name: /1 Pending Approval/i }),
-    ).toBeVisible({ timeout: 60_000 });
+    await expectOpenChangeCount(page, 1, 60_000);
 
     // Current version should still be v1
-    await expect(
-      page.getByRole("heading", { name: "Version 1" }),
-    ).toBeVisible();
+    await expectPublishedVersion(page, 1);
   });
 
   test("bob approves v2 and alice publishes", async ({ page }) => {
@@ -265,6 +261,7 @@ test.describe("UI document version upload flow", () => {
     await navigateToDocument(page, cardSearchText);
 
     // Publish
+    await openDocumentTab(page, "Changes");
     await expect(
       page.getByRole("button", {
         name: "Publish as Official Version",
@@ -282,14 +279,13 @@ test.describe("UI document version upload flow", () => {
     await navigateToDocument(page, cardSearchText);
 
     // Should now show Version 2 as current
-    await expect(page.getByRole("heading", { name: "Version 2" })).toBeVisible({
-      timeout: 30_000,
-    });
+    await expectPublishedVersion(page, 2);
 
-    // Version history should show both versions
+    // The History tab should show both versions
+    await openDocumentTab(page, "History");
     await expect(
       page.locator(".vault-version-badge", { hasText: "v2" }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 30_000 });
     await expect(
       page.locator(".vault-version-badge", { hasText: "v1" }),
     ).toBeVisible();
