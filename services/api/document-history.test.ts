@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
 
-import { buildVersionRecords, toVersionReviews } from "./document-history";
+import {
+  buildClosedChanges,
+  buildVersionRecords,
+  toVersionReviews,
+} from "./document-history";
 import type { PullRequestWithReviews } from "./gitea-client/pullRequests";
 import type { DocTag } from "./gitea-client/repos";
 
@@ -119,4 +123,93 @@ test("hides pending and review-request entries — they say nothing for the reco
 
   expect(reviews.map((review) => review.id)).toEqual([3]);
   expect(reviews[0]?.state).toBe("commented");
+});
+
+function closedPR(
+  number: number,
+  overrides: Record<string, unknown> = {},
+  reviews: PullRequestWithReviews["reviews"] = [],
+): PullRequestWithReviews {
+  return {
+    pullRequest: {
+      number,
+      title: `Upload #${number}`,
+      body: "Automated upload from Bindersnap file vault.",
+      state: "closed",
+      approvalState: "working",
+      branchName: `upload/v${number}`,
+      head: { ref: `upload/v${number}` },
+      created_at: "2026-01-01T00:00:00Z",
+      closed_at: "2026-01-05T00:00:00Z",
+      user: { login: "bob" },
+      ...overrides,
+    } as unknown as PullRequestWithReviews["pullRequest"],
+    reviews,
+  };
+}
+
+test("a merged change reports the version it became and who published it", () => {
+  const [change] = buildClosedChanges(
+    [mergedPR(7, "sha-one")],
+    [tag(3, "sha-one", "2026-01-02T00:00:00Z")],
+  );
+
+  expect(change?.outcome).toBe("published");
+  expect(change?.publishedVersion).toBe(3);
+  expect(change?.decidedBy).toBe("carol");
+  expect(change?.closedAt).toBe("2026-01-02T00:00:00Z");
+});
+
+test("a change closed after changes were requested was declined, by name", () => {
+  const [change] = buildClosedChanges(
+    [
+      closedPR(9, {}, [
+        {
+          state: "REQUEST_CHANGES",
+          submitted_at: "2026-01-03T00:00:00Z",
+          user: { login: "dana" },
+        },
+      ] as unknown as PullRequestWithReviews["reviews"]),
+    ],
+    [],
+  );
+
+  expect(change?.outcome).toBe("declined");
+  expect(change?.decidedBy).toBe("dana");
+});
+
+test("a dismissed request for changes no longer decides the outcome", () => {
+  const [change] = buildClosedChanges(
+    [
+      closedPR(9, {}, [
+        {
+          state: "REQUEST_CHANGES",
+          submitted_at: "2026-01-03T00:00:00Z",
+          dismissed: true,
+          user: { login: "dana" },
+        },
+      ] as unknown as PullRequestWithReviews["reviews"]),
+    ],
+    [],
+  );
+
+  expect(change?.outcome).toBe("withdrawn");
+  expect(change?.decidedBy).toBeNull();
+});
+
+test("a change closed with no decision on it was withdrawn", () => {
+  const [change] = buildClosedChanges([closedPR(4)], []);
+
+  expect(change?.outcome).toBe("withdrawn");
+  expect(change?.publishedVersion).toBeNull();
+  expect(change?.branchName).toBe("upload/v4");
+});
+
+test("closed changes come back newest first", () => {
+  const changes = buildClosedChanges(
+    [closedPR(2), closedPR(11), closedPR(7)],
+    [],
+  );
+
+  expect(changes.map((change) => change.number)).toEqual([11, 7, 2]);
 });

@@ -12,6 +12,7 @@ import type {
   CreateDocumentDiscussion201,
   CreateDocumentDiscussionBody,
   DownloadDocumentParams,
+  GetClosedChanges200,
   GetDocumentDetail200,
   GetDocumentHistory200,
   GetDocumentPermissions200,
@@ -175,6 +176,40 @@ export const getDocumentHistory = async (owner: string,
     repo: string, options?: Parameters<typeof customFetch>[1]): Promise<getDocumentHistoryResponse> => {
 
   return customFetch<getDocumentHistoryResponse>(getGetDocumentHistoryUrl(owner,repo),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type getClosedChangesResponse200 = {
+  data: GetClosedChanges200
+  status: 200
+}
+
+export type getClosedChangesResponseSuccess = (getClosedChangesResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getClosedChangesResponse = (getClosedChangesResponseSuccess)
+
+export const getGetClosedChangesUrl = (owner: string,
+    repo: string,) => {
+
+
+
+
+  return `/api/app/documents/${owner}/${repo}/changes/closed`
+}
+
+export const getClosedChanges = async (owner: string,
+    repo: string, options?: Parameters<typeof customFetch>[1]): Promise<getClosedChangesResponse> => {
+
+  return customFetch<getClosedChangesResponse>(getGetClosedChangesUrl(owner,repo),
   {
     ...options,
     method: 'GET'

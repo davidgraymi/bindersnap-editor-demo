@@ -37,6 +37,17 @@ type PreviewState =
 const MAX_INLINE_TEXT_BYTES = 500_000;
 
 /**
+ * Gitea's word for "no file at that ref" is `not found`, which on a page about
+ * documents reads like the document is gone. It is not; there is simply
+ * nothing published at this ref yet.
+ */
+function describePreviewFailure(message: string): string {
+  return /not found|404/i.test(message)
+    ? "No file has been published at this version yet."
+    : message;
+}
+
+/**
  * Renders the document itself.
  *
  * The whole point of the page is to answer "what does the approved version
@@ -130,6 +141,52 @@ export function DocumentPreview({
   const truncated =
     state.status === "text" && state.size > MAX_INLINE_TEXT_BYTES;
 
+  // Nothing to preview and nothing to download is not a preview — an empty
+  // frame with a shrug in the middle of it just takes up the page. Say the one
+  // true thing in one line and get out of the way.
+  if (state.status === "unsupported" && !fileName) {
+    return (
+      <p className="doc-preview-absent">
+        Nothing has been published yet. Once a version is approved it appears
+        here as the official record.
+      </p>
+    );
+  }
+
+  // A file we cannot render is still a file: the row names it, says why it is
+  // not on screen, and hands it over. No empty 320px box for a .docx — and no
+  // bare "not found" floating in one either.
+  if (state.status === "unsupported" || state.status === "error") {
+    const failed = state.status === "error";
+    return (
+      <div
+        className={`doc-preview-fallback${failed ? " doc-preview-fallback--error" : ""}`}
+        role={failed ? "status" : undefined}
+      >
+        <FileText size={16} strokeWidth={1.5} aria-hidden="true" />
+        <span className="doc-preview-fallback-main">
+          <span className="doc-preview-fallback-name">
+            {fileName ?? "This version"}
+          </span>
+          <span className="doc-preview-fallback-note">
+            {failed
+              ? describePreviewFailure(state.message)
+              : `${describeFileKind(fileName)} — this file type doesn’t preview in the browser.`}
+          </span>
+        </span>
+        <button
+          className="bs-btn bs-btn-secondary doc-preview-download"
+          type="button"
+          disabled={downloading || !fileName}
+          onClick={() => onDownload(loadedBlob)}
+        >
+          <Download size={14} strokeWidth={1.5} aria-hidden="true" />
+          {downloading ? "Downloading…" : "Download"}
+        </button>
+      </div>
+    );
+  }
+
   return (
     <section className="doc-preview" aria-label="Document preview">
       <header className="doc-preview-toolbar">
@@ -155,22 +212,6 @@ export function DocumentPreview({
       <div className="doc-preview-body">
         {state.status === "loading" || state.status === "idle" ? (
           <p className="doc-preview-note">Loading the document…</p>
-        ) : state.status === "error" ? (
-          <p className="doc-preview-note doc-preview-note--error" role="alert">
-            {state.message}
-          </p>
-        ) : state.status === "unsupported" ? (
-          <div className="doc-preview-placeholder">
-            <FileText size={28} strokeWidth={1.25} aria-hidden="true" />
-            <h3>
-              {fileName ? describeFileKind(fileName) : "Nothing published yet"}
-            </h3>
-            <p>
-              {fileName
-                ? "This file type doesn't preview in the browser. Download it to read the approved version."
-                : "Once a version is approved it appears here as the official record."}
-            </p>
-          </div>
         ) : state.status === "object" && state.kind === "pdf" ? (
           <iframe
             className="doc-preview-frame"

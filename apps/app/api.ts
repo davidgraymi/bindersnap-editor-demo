@@ -12,6 +12,7 @@ import * as AdminClient from "../../packages/api-client/admin/admin";
 // Import generated types
 import type { SessionAuthState } from "../../packages/api-schema/schemas/auth";
 import type {
+  ClosedChangesPayload,
   CollaboratorListPayload,
   DiscussionSummary,
   DocumentDetailPayload,
@@ -37,6 +38,9 @@ export type {
   SessionUser,
 } from "../../packages/api-schema/schemas/auth";
 export type {
+  ChangeOutcome,
+  ClosedChange,
+  ClosedChangesPayload,
   CollaboratorListPayload,
   DiscussionSummary,
   DiscussionThread,
@@ -228,6 +232,25 @@ export async function getDocumentHistory(
     return response.data;
   } catch (error) {
     handlePaymentRequired(`/api/app/documents/${owner}/${repo}/history`, error);
+  }
+}
+
+/**
+ * Changes that are no longer open. Fetched only when the reader asks for them
+ * — the document page itself has no use for a closed change.
+ */
+export async function getClosedChanges(
+  owner: string,
+  repo: string,
+): Promise<ClosedChangesPayload> {
+  try {
+    const response = await DocumentsClient.getClosedChanges(owner, repo);
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/documents/${owner}/${repo}/changes/closed`,
+      error,
+    );
   }
 }
 

@@ -19,6 +19,11 @@ export type AppRoute =
        * reviewing #3 should not mean scrolling past #4 through #10.
        */
       changeNumber?: number;
+      /**
+       * Which half of that change's page: the conversation, or the file it
+       * proposes. Only meaningful alongside `changeNumber`.
+       */
+      changeView?: DocumentChangeView;
     };
 
 /**
@@ -28,6 +33,13 @@ export type AppRoute =
  */
 export type DocumentTab =
   "overview" | "changes" | "history" | "collaborators" | "permissions";
+
+/**
+ * The two halves of a change's page. The decision is made in the discussion,
+ * so that is what a bare change URL opens; the file it proposes gets its own
+ * screen instead of pushing the conversation below the fold.
+ */
+export type DocumentChangeView = "discussion" | "preview";
 
 const DOCUMENT_TAB_PATHS: Record<Exclude<DocumentTab, "overview">, string> = {
   changes: "changes",
@@ -87,7 +99,7 @@ export function getRoute(pathname: string): AppRoute {
   }
 
   const changeMatch = normalizedPath.match(
-    /^\/docs\/([^/]+)\/([^/]+)\/changes\/(\d+)$/,
+    /^\/docs\/([^/]+)\/([^/]+)\/changes\/(\d+)(?:\/(preview))?$/,
   );
   if (changeMatch) {
     return {
@@ -96,6 +108,7 @@ export function getRoute(pathname: string): AppRoute {
       repo: changeMatch[2]!,
       tab: "changes",
       changeNumber: Number(changeMatch[3]),
+      changeView: changeMatch[4] === "preview" ? "preview" : "discussion",
     };
   }
 
@@ -143,7 +156,8 @@ export function routeToPath(route: AppRoute): string {
       const base = `/docs/${route.owner}/${route.repo}`;
       if (route.tab === "overview") return base;
       if (route.tab === "changes" && route.changeNumber !== undefined) {
-        return `${base}/changes/${route.changeNumber}`;
+        const change = `${base}/changes/${route.changeNumber}`;
+        return route.changeView === "preview" ? `${change}/preview` : change;
       }
       return `${base}/${DOCUMENT_TAB_PATHS[route.tab]}`;
     }

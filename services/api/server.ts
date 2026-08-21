@@ -34,7 +34,11 @@ import {
   getReviewSettings,
   updateReviewSettings,
 } from "./gitea-client/reviewSettings";
-import { buildVersionRecords } from "./document-history";
+import {
+  buildClosedChanges,
+  buildVersionRecords,
+  toVersionReviews,
+} from "./document-history";
 import {
   addRepoCollaborator,
   bootstrapEmptyMainBranch,
@@ -2194,10 +2198,10 @@ async function handleDocumentDetail(
       },
     );
 
-    const [tags, openPullRequests, branchProtection, reviewSettings] =
+    const [tags, openWithReviews, branchProtection, reviewSettings] =
       await Promise.all([
         listDocTags(client, owner, repo),
-        listPullRequests({
+        listPullRequestsWithReviews({
           client,
           owner,
           repo,
@@ -2206,6 +2210,14 @@ async function handleDocumentDetail(
         getRepoBranchProtection(client, owner, repo, "main").catch(() => null),
         getReviewSettings({ client, owner, repo }).catch(() => null),
       ]);
+
+    // The reviews come back with the pull requests anyway, and a change's page
+    // reads as a log of what happened — an approval is part of that log, so it
+    // travels with the change rather than costing a second round trip.
+    const openPullRequests = openWithReviews.map((entry) => ({
+      ...entry.pullRequest,
+      reviews: toVersionReviews(entry.reviews),
+    }));
 
     const latestTag = tags[0] ?? null;
     const uploadPullRequests = openPullRequests
@@ -2345,6 +2357,51 @@ async function handleDocumentHistory(
       err,
       baseHeaders,
       "Unable to load the version history.",
+    );
+  }
+}
+
+/**
+ * Changes that are no longer open, and how each one ended.
+ *
+ * Loaded on its own rather than with the document detail: it costs a review
+ * lookup per closed change, and that bill grows with every version a document
+ * ever had. Nobody should pay it just to open the document.
+ */
+async function handleClosedChanges(
+  req: Request,
+  baseHeaders: Headers,
+  owner: string,
+  repo: string,
+): Promise<Response> {
+  const access = await resolveDocumentAccess(req, baseHeaders, owner, repo);
+  if (access instanceof Response) {
+    return access;
+  }
+
+  const { client } = access;
+
+  try {
+    const [tags, closedPullRequests] = await Promise.all([
+      listDocTags(client, owner, repo),
+      listPullRequestsWithReviews({
+        client,
+        owner,
+        repo,
+        state: "closed",
+      }),
+    ]);
+
+    return json(
+      200,
+      { changes: buildClosedChanges(closedPullRequests, tags) },
+      baseHeaders,
+    );
+  } catch (err) {
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to load the closed changes.",
     );
   }
 }
@@ -4178,6 +4235,9 @@ export function createApiServer() {
         const historyMatch = pathname.match(
           /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/history$/,
         );
+        const closedChangesMatch = pathname.match(
+          /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/changes\/closed$/,
+        );
         const permissionsMatch = pathname.match(
           /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/permissions$/,
         );
@@ -4266,6 +4326,13 @@ export function createApiServer() {
             baseHeaders,
             decodePathParam(historyMatch[1] ?? ""),
             decodePathParam(historyMatch[2] ?? ""),
+          );
+        } else if (closedChangesMatch && method === "GET") {
+          response = await handleClosedChanges(
+            req,
+            baseHeaders,
+            decodePathParam(closedChangesMatch[1] ?? ""),
+            decodePathParam(closedChangesMatch[2] ?? ""),
           );
         } else if (versionsMatch && method === "POST") {
           response = await handleDocumentVersions(

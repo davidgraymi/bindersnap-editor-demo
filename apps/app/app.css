@@ -611,6 +611,17 @@ input {
   color: var(--bs-text-muted);
 }
 
+/* A closed change ended somehow, and the badge is where it says so. */
+.vault-status-declined {
+  background: var(--bs-coral-dim);
+  color: var(--brand-coral-dark);
+}
+
+.vault-status-withdrawn {
+  background: var(--bs-surface-2);
+  color: var(--bs-text-muted);
+}
+
 .vault-timestamp {
   margin: 0;
   font-size: var(--brand-text-xs);
@@ -647,6 +658,18 @@ input {
 }
 
 /* ── Document Workspace ─────────────────────────────────────── */
+
+/* The app's surface, as opposed to the marketing site's.
+   `.bs-card` is a landing-page card: 16px corners, a hover lift, a shadow and
+   a coral bar that wipes in. Stack four of those on a working page and the
+   document disappears behind the packaging. Everything under /docs uses this
+   instead — a ruled panel that holds still. */
+.doc-panel {
+  background: var(--bs-surface-1);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  padding: var(--brand-space-5);
+}
 
 .vault-detail {
   display: grid;
@@ -754,7 +777,7 @@ input {
   align-items: center;
   padding: var(--brand-space-1) var(--brand-space-3);
   border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-full);
+  border-radius: var(--brand-radius-sm);
   background: var(--bs-surface-2);
   color: var(--bs-text-secondary);
   font-family: var(--brand-font-mono);
@@ -804,7 +827,7 @@ input {
 
 .doc-tab-count {
   padding: 1px var(--brand-space-2);
-  border-radius: var(--brand-radius-full);
+  border-radius: var(--brand-radius-sm);
   background: var(--bs-surface-2);
   color: var(--bs-text-muted);
   font-family: var(--brand-font-mono);
@@ -844,7 +867,7 @@ input {
   padding: var(--brand-space-3) var(--brand-space-4);
   background: var(--bs-coral-dim);
   border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-lg);
+  border-radius: var(--brand-radius-sm);
   color: var(--bs-text-secondary);
   font-size: var(--brand-text-sm);
 }
@@ -854,7 +877,7 @@ input {
   grid-template-rows: auto minmax(0, 1fr);
   background: var(--bs-surface-1);
   border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-xl);
+  border-radius: var(--brand-radius-md);
   overflow: hidden;
 }
 
@@ -911,31 +934,77 @@ input {
   color: var(--bs-text-muted);
 }
 
-.doc-preview-note--error {
-  color: var(--brand-coral-dark);
-}
-
-.doc-preview-placeholder {
+/* No preview is not a broken preview.
+   A .docx cannot render in a browser and never will; an empty 320px frame
+   with an icon floating in it is the app apologising at full size. These two
+   say the one true thing at the size of the thing they are saying. */
+.doc-nothing-published {
   display: grid;
-  justify-items: center;
-  align-content: center;
-  gap: var(--brand-space-2);
-  padding: var(--brand-space-10) var(--brand-space-6);
-  text-align: center;
-  color: var(--bs-text-muted);
+  gap: var(--brand-space-3);
+  justify-items: start;
+  padding: var(--brand-space-8) var(--brand-space-6);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-1);
 }
 
-.doc-preview-placeholder h3 {
+.doc-nothing-published-title {
   margin: 0;
   font-family: var(--brand-font-serif);
   font-size: var(--brand-text-h3);
-  color: var(--bs-text-primary);
 }
 
-.doc-preview-placeholder p {
+.doc-nothing-published-note {
   margin: 0;
-  max-width: 44ch;
+  max-width: 60ch;
   font-size: var(--brand-text-sm);
+  color: var(--bs-text-muted);
+}
+
+.doc-preview-absent {
+  margin: 0;
+  padding: var(--brand-space-4) 0;
+  max-width: 60ch;
+  font-size: var(--brand-text-sm);
+  color: var(--bs-text-muted);
+}
+
+.doc-preview-fallback {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-3);
+  padding: var(--brand-space-4);
+  background: var(--bs-surface-1);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  color: var(--bs-text-faint);
+}
+
+.doc-preview-fallback-main {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.doc-preview-fallback-name {
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-sm);
+  color: var(--bs-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.doc-preview-fallback-note {
+  font-size: var(--brand-text-xs);
+  color: var(--bs-text-muted);
+}
+
+.doc-preview-fallback--error {
+  border-color: var(--brand-coral-mid);
+}
+
+.doc-preview-fallback--error .doc-preview-fallback-note {
+  color: var(--brand-coral-dark);
 }
 
 /* The sheet — the document reads like paper, not like a form field. */
@@ -943,8 +1012,7 @@ input {
   padding: var(--brand-space-8);
   background: var(--bs-surface-1);
   border: 1px solid var(--bs-rule-warm);
-  border-radius: var(--brand-radius-lg);
-  box-shadow: var(--bs-shadow-sm);
+  border-radius: var(--brand-radius-sm);
   color: var(--bs-text-secondary);
 }
 
@@ -1068,7 +1136,7 @@ input {
   width: 100%;
   min-height: clamp(400px, 58dvh, 860px);
   border: 1px solid var(--bs-rule-warm);
-  border-radius: var(--brand-radius-lg);
+  border-radius: var(--brand-radius-sm);
   background: var(--bs-surface-1);
 }
 
@@ -1078,7 +1146,7 @@ input {
   padding: var(--brand-space-4);
   background: var(--bs-surface-1);
   border: 1px solid var(--bs-rule-warm);
-  border-radius: var(--brand-radius-lg);
+  border-radius: var(--brand-radius-sm);
 }
 
 .doc-preview-image {
@@ -1086,19 +1154,27 @@ input {
   height: auto;
 }
 
-/* Summary rail — stays in view while a long document scrolls past it. */
+/* Summary rail — stays in view while a long document scrolls past it.
+   One column with rules between its sections, not a stack of cards: four
+   bordered boxes in a 300px gutter is four times the frame and none of the
+   information. */
 .doc-rail {
   display: grid;
-  gap: var(--brand-space-4);
   align-content: start;
   position: sticky;
   top: var(--brand-space-4);
+  padding: var(--brand-space-1) var(--brand-space-5);
+  border-left: 1px solid var(--bs-rule);
 }
 
 .doc-rail-card {
   display: grid;
   gap: var(--brand-space-3);
-  padding: var(--brand-space-5);
+  padding: var(--brand-space-5) 0;
+}
+
+.doc-rail-card + .doc-rail-card {
+  border-top: 1px solid var(--bs-rule-warm);
 }
 
 .doc-rail-title {
@@ -1196,29 +1272,61 @@ input {
   gap: var(--brand-space-2);
 }
 
-/* Changes tab — an index of open changes. One row each; the review itself
-   lives on its own page, so reaching #3 never means scrolling past #10. */
-.change-list {
+/* Changes tab — every change this document has seen, open ones first.
+   One row each; the review itself lives on its own page, so reaching #3 never
+   means scrolling past #10. */
+.change-index {
   display: grid;
-  gap: var(--brand-space-4);
+  gap: var(--brand-space-3);
 }
 
-.change-list-header {
-  display: grid;
-  gap: var(--brand-space-1);
+.change-index-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--brand-space-3);
+  flex-wrap: wrap;
 }
 
-.change-list-title {
-  margin: 0;
-  font-family: var(--brand-font-serif);
-  font-size: var(--brand-text-h3);
+/* Open and closed are one control, the way a filter should be — not two
+   headings that happen to be near each other. */
+.change-filter {
+  display: inline-flex;
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-sm);
+  overflow: hidden;
 }
 
-.change-list-note {
-  margin: 0;
-  max-width: 70ch;
-  font-size: var(--brand-text-sm);
+.change-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  padding: var(--brand-space-2) var(--brand-space-4);
+  border: none;
+  background: var(--bs-surface-1);
   color: var(--bs-text-muted);
+  cursor: pointer;
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-sm);
+  font-weight: var(--brand-weight-medium);
+  transition:
+    background var(--brand-transition-base),
+    color var(--brand-transition-base);
+}
+
+.change-filter-btn + .change-filter-btn {
+  border-left: 1px solid var(--bs-rule);
+}
+
+.change-filter-btn:hover,
+.change-filter-btn:focus-visible {
+  color: var(--bs-text-primary);
+  outline: none;
+}
+
+.change-filter-btn--active {
+  background: var(--bs-surface-2);
+  color: var(--bs-text-primary);
 }
 
 .change-list-rows {
@@ -1227,7 +1335,7 @@ input {
   padding: 0;
   list-style: none;
   border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-lg);
+  border-radius: var(--brand-radius-md);
   background: var(--bs-surface-1);
   overflow: hidden;
 }
@@ -1239,7 +1347,7 @@ input {
 .change-row-btn {
   width: 100%;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--brand-space-3);
   padding: var(--brand-space-4);
   border: none;
@@ -1257,7 +1365,22 @@ input {
 
 .change-row-icon {
   flex: none;
+  margin-top: 2px;
   color: var(--bs-text-faint);
+}
+
+/* The icon is the first thing read, so it carries the verdict. Coral stays
+   rare on purpose: it marks the one outcome that went wrong. */
+.change-row-icon--open {
+  color: var(--bs-text-secondary);
+}
+
+.change-row-icon--published {
+  color: var(--brand-green);
+}
+
+.change-row-icon--declined {
+  color: var(--brand-coral-dark);
 }
 
 .change-row-main {
@@ -1280,6 +1403,36 @@ input {
   overflow-wrap: anywhere;
 }
 
+/* Why a closed change is closed. "Closed" on its own answers nothing. */
+.change-row-outcome {
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-xs);
+  color: var(--bs-text-faint);
+  overflow-wrap: anywhere;
+}
+
+.change-empty {
+  display: grid;
+  gap: var(--brand-space-3);
+  justify-items: start;
+  padding: var(--brand-space-8) var(--brand-space-6);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-1);
+}
+
+.change-empty-title {
+  margin: 0;
+  font-family: var(--brand-font-serif);
+  font-size: var(--brand-text-h3);
+}
+
+.change-empty-note {
+  margin: 0;
+  max-width: 60ch;
+  font-size: var(--brand-text-sm);
+  color: var(--bs-text-muted);
+}
 /* One change, on its own page. */
 .change-detail {
   display: grid;
@@ -1345,8 +1498,8 @@ input {
   color: var(--bs-text-muted);
 }
 
-.change-detail-material,
-.change-detail-decision {
+.change-detail-decision,
+.change-file-view {
   display: grid;
   gap: var(--brand-space-2);
 }
@@ -1357,7 +1510,7 @@ input {
   font-size: var(--brand-text-label);
   letter-spacing: var(--brand-tracking-wide);
   text-transform: uppercase;
-  color: var(--brand-coral);
+  color: var(--bs-text-muted);
 }
 
 .change-detail-section-note {
@@ -1367,19 +1520,92 @@ input {
   color: var(--bs-text-muted);
 }
 
-/* The file under review scrolls inside its own frame. Approving is the point
-   of this page, so the buttons must never be a thousand pixels down. */
-.change-detail-material .doc-preview-body {
-  max-height: 60vh;
-  overflow: auto;
-}
-
 .change-detail-section-note code {
   padding: 1px var(--brand-space-1);
   border-radius: var(--brand-radius-xs);
   background: var(--bs-surface-2);
   font-family: var(--brand-font-mono);
   font-size: var(--brand-text-xs);
+}
+
+/* Discussion and file are two screens of one change, so they are linked the
+   way the document's own tabs are — not stacked one above the other. */
+.change-views {
+  display: flex;
+  gap: var(--brand-space-4);
+  margin-top: var(--brand-space-2);
+  margin-bottom: -1px;
+}
+
+.change-view-tab {
+  padding: var(--brand-space-2) 0;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--bs-text-muted);
+  cursor: pointer;
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-sm);
+  font-weight: var(--brand-weight-medium);
+  transition:
+    color var(--brand-transition-base),
+    border-color var(--brand-transition-base);
+}
+
+.change-view-tab:hover,
+.change-view-tab:focus-visible {
+  color: var(--bs-text-primary);
+  outline: none;
+}
+
+.change-view-tab--active {
+  color: var(--bs-text-primary);
+  border-bottom-color: var(--brand-coral);
+}
+
+/* How a closed change ended, stated once at the top of its record. */
+.change-outcome-banner {
+  margin: 0;
+  padding: var(--brand-space-3) var(--brand-space-4);
+  background: var(--bs-surface-2);
+  border: 1px solid var(--bs-rule);
+  border-left: 3px solid var(--bs-rule);
+  border-radius: var(--brand-radius-sm);
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-sm);
+}
+
+/* The file, on the page where the file is not the point: named, reachable,
+   and one line tall. */
+.change-file-strip {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-3);
+  padding: var(--brand-space-3) var(--brand-space-4);
+  background: var(--bs-surface-1);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-sm);
+  color: var(--bs-text-faint);
+}
+
+.change-file-strip-name {
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-xs);
+  color: var(--bs-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.change-file-strip-spacer {
+  flex: 1;
+}
+
+.change-file-strip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  flex: none;
+  padding: var(--brand-space-2) var(--brand-space-3);
+  font-size: var(--brand-text-sm);
 }
 
 .doc-empty {
@@ -1413,7 +1639,7 @@ input {
 .doc-history-entry {
   background: var(--bs-surface-1);
   border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-lg);
+  border-radius: var(--brand-radius-md);
   overflow: hidden;
 }
 
@@ -1715,9 +1941,14 @@ input {
   gap: var(--brand-space-5);
 }
 
-.collaborators-hero p {
+/* The line under a tab's heading, where a tab needs one. */
+.doc-section-intro {
+  margin: 0;
   max-width: 72ch;
+  font-size: var(--brand-text-sm);
+  color: var(--bs-text-muted);
 }
+
 .collaborators-panel p {
   margin: 0;
   color: var(--bs-text-muted);
@@ -1738,7 +1969,15 @@ input {
   display: flex;
   justify-content: space-between;
   gap: var(--brand-space-4);
-  align-items: flex-start;
+  align-items: baseline;
+}
+
+.collaborators-panel-header h2,
+.collaborators-panel > h2 {
+  margin: 0;
+  font-family: var(--brand-font-serif);
+  font-size: var(--brand-text-h3);
+  line-height: var(--brand-leading-snug);
 }
 
 .collaborators-panel-meta {
@@ -2083,7 +2322,7 @@ input {
   padding: var(--brand-space-4) var(--brand-space-5);
   background: var(--bs-surface-2);
   border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-lg);
+  border-radius: var(--brand-radius-sm);
   color: var(--bs-text-secondary);
   font-size: var(--brand-text-sm);
 }
@@ -2103,7 +2342,7 @@ input {
 .perms-card {
   background: var(--bs-surface-1);
   border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-xl);
+  border-radius: var(--brand-radius-md);
   overflow: hidden;
 }
 
@@ -5483,27 +5722,107 @@ input {
    --------------------------------------------------------------------------- */
 
 .discussion-panel {
-  margin-top: var(--brand-space-4);
-  padding-top: var(--brand-space-4);
-  border-top: 1px solid var(--bs-rule);
+  display: grid;
+  gap: var(--brand-space-4);
+}
+
+/* One column, in the order things happened: the submission, every thread,
+   every decision. The rule down the left is the thread of the change itself —
+   this is a log, and a log reads as one line. */
+.discussion-timeline {
   display: grid;
   gap: var(--brand-space-3);
+  position: relative;
+  padding-left: 32px;
 }
 
-.discussion-panel-header {
+.discussion-timeline::before {
+  content: "";
+  position: absolute;
+  top: var(--brand-space-2);
+  bottom: var(--brand-space-2);
+  left: 11px;
+  width: 1px;
+  background: var(--bs-rule);
+}
+
+.discussion-timeline-item {
+  position: relative;
+}
+
+/* The opening post: what the submitter asked for, in their words. */
+.discussion-opening {
+  position: relative;
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
   gap: var(--brand-space-3);
-  flex-wrap: wrap;
+  padding: var(--brand-space-4);
+  background: var(--bs-surface-1);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-sm);
 }
 
-.discussion-panel-title {
+.discussion-opening-main {
+  display: grid;
+  gap: var(--brand-space-2);
+  min-width: 0;
+}
+
+/* A decision — an approval, a rejection, a close — reads as one line in the
+   log, not as a card. */
+.discussion-event {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--brand-space-3);
+  padding: var(--brand-space-1) 0;
+}
+
+.discussion-event-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-left: -32px;
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-surface-2);
+  border: 1px solid var(--bs-rule);
+  color: var(--bs-text-muted);
+}
+
+.discussion-event--approved .discussion-event-icon {
+  background: var(--brand-green-dim);
+  border-color: transparent;
+  color: var(--brand-green);
+}
+
+.discussion-event--changes .discussion-event-icon {
+  background: var(--bs-coral-dim);
+  border-color: transparent;
+  color: var(--brand-coral-dark);
+}
+
+.discussion-event-main {
+  display: grid;
+  gap: var(--brand-space-2);
+  min-width: 0;
+  flex: 1;
+}
+
+.discussion-event-line {
   margin: 0;
-  font-family: var(--brand-font-sans);
   font-size: var(--brand-text-sm);
-  font-weight: 500;
-  color: var(--bs-text-primary);
+  color: var(--bs-text-secondary);
+}
+
+.discussion-event-note {
+  color: var(--bs-text-faint);
+}
+
+.discussion-event .discussion-comment-body {
+  padding: var(--brand-space-3) var(--brand-space-4);
+  background: var(--bs-surface-1);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-sm);
 }
 
 .discussion-panel-count {
@@ -5514,23 +5833,18 @@ input {
 
 .discussion-gate-notice {
   margin: 0;
-  padding: var(--brand-space-2) var(--brand-space-3);
+  padding: var(--brand-space-3) var(--brand-space-4);
   background: var(--bs-coral-dim);
   border-radius: var(--brand-radius-sm);
   color: var(--brand-coral-dark);
-  font-size: var(--brand-text-xs);
-}
-
-.discussion-threads {
-  display: grid;
-  gap: var(--brand-space-3);
+  font-size: var(--brand-text-sm);
 }
 
 .discussion-thread {
   border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-md);
-  background: var(--bs-page-bg);
-  padding: var(--brand-space-3);
+  border-radius: var(--brand-radius-sm);
+  background: var(--bs-surface-1);
+  padding: var(--brand-space-4);
   display: grid;
   gap: var(--brand-space-3);
 }
@@ -5650,25 +5964,21 @@ input {
   overflow-wrap: anywhere;
 }
 
-.discussion-reply-trigger {
-  justify-self: start;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--bs-text-muted);
-  font-family: var(--brand-font-sans);
-  font-size: var(--brand-text-sm);
-  cursor: pointer;
-}
-
-.discussion-reply-trigger:hover {
-  color: var(--brand-coral);
-}
-
+/* The reply box is open before you decide to reply. A link that reveals a
+   textarea makes answering a colleague cost a click first. */
 .discussion-reply-form,
 .discussion-new-thread {
   display: grid;
-  gap: var(--brand-space-3);
+  gap: var(--brand-space-2);
+}
+
+.discussion-reply-form {
+  padding-top: var(--brand-space-1);
+}
+
+.discussion-new-thread {
+  padding-top: var(--brand-space-2);
+  border-top: 1px solid var(--bs-rule);
 }
 
 .discussion-reply-actions {

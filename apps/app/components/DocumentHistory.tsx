@@ -5,11 +5,9 @@ import type { DocumentVersionRecord, VersionReview } from "../api";
 import { getDocumentHistory } from "../api";
 import {
   capitalizeFirst,
+  describeSubmission,
   formatShortDate,
   formatTimestamp,
-  getInitials,
-  getReviewStateBadgeClass,
-  getReviewStateLabel,
   parseSubmissionSummary,
 } from "../documentDisplay";
 import { ReviewDiscussion } from "./ReviewDiscussion";
@@ -23,42 +21,6 @@ interface DocumentHistoryProps {
   downloadingRef: string | null;
   onDownloadVersion: (tagName: string, version: number) => void;
   onViewVersion: (tagName: string, version: number) => void;
-}
-
-function ReviewRow({ review }: { review: VersionReview }) {
-  const name = review.author.fullName?.trim() || review.author.login;
-
-  return (
-    <li className="doc-review">
-      <span className="doc-review-avatar" aria-hidden="true">
-        {getInitials(name)}
-      </span>
-      <div className="doc-review-main">
-        <div className="doc-review-meta">
-          <span className="doc-review-author">{name}</span>
-          <span className={getReviewStateBadgeClass(review.state)}>
-            {getReviewStateLabel(review.state)}
-          </span>
-          {review.submittedAt ? (
-            <time className="doc-review-time" dateTime={review.submittedAt}>
-              {formatTimestamp(review.submittedAt)}
-            </time>
-          ) : null}
-          {review.stale ? (
-            <span className="doc-review-flag">
-              superseded by a later upload
-            </span>
-          ) : null}
-          {review.dismissed ? (
-            <span className="doc-review-flag">dismissed</span>
-          ) : null}
-        </div>
-        {review.body.trim() ? (
-          <p className="doc-review-body">{review.body}</p>
-        ) : null}
-      </div>
-    </li>
-  );
 }
 
 function summarizeApprovals(reviews: VersionReview[]): string {
@@ -132,7 +94,7 @@ export function DocumentHistory({
 
   if (isLoading) {
     return (
-      <section className="bs-card doc-empty">
+      <section className="doc-panel doc-empty">
         <h2>Loading version history…</h2>
         <p>Fetching every published version and the reviews behind it.</p>
       </section>
@@ -141,7 +103,7 @@ export function DocumentHistory({
 
   if (error) {
     return (
-      <section className="bs-card doc-empty">
+      <section className="doc-panel doc-empty">
         <h2>Unable to load the history</h2>
         <p>{error}</p>
         <button
@@ -157,7 +119,7 @@ export function DocumentHistory({
 
   if (versions.length === 0) {
     return (
-      <section className="bs-card doc-empty">
+      <section className="doc-panel doc-empty">
         <h2>No published versions yet</h2>
         <p>
           The first approved version starts the record. Everything after it —
@@ -269,30 +231,34 @@ export function DocumentHistory({
                   </div>
                 </dl>
 
-                <div className="doc-history-reviews">
-                  <h4 className="doc-history-section-title">Reviews</h4>
-                  {entry.reviews.length > 0 ? (
-                    <ul className="doc-review-list">
-                      {entry.reviews.map((review) => (
-                        <ReviewRow key={review.id} review={review} />
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="vault-pr-notice">
-                      No review was recorded for this version.
-                    </p>
-                  )}
-                </div>
-
+                {/* One log, not two: the reviews and the discussion are the
+                    same sequence of events, so the version shows the same
+                    timeline the change's own page shows. */}
                 {entry.submission ? (
                   <ReviewDiscussion
                     owner={owner}
                     repo={repo}
                     pullNumber={entry.submission.number}
+                    opening={{
+                      author: entry.submission.submittedBy,
+                      at: entry.submission.submittedAt,
+                      body: describeSubmission(entry.submission.body),
+                    }}
+                    reviews={entry.reviews}
+                    closing={{
+                      kind: "published",
+                      actor: entry.submission.mergedBy,
+                      at: entry.submission.mergedAt ?? entry.createdAt,
+                      publishedVersion: entry.version,
+                    }}
                     canParticipate={false}
                     blockOnUnresolvedThreads={false}
                   />
-                ) : null}
+                ) : (
+                  <p className="vault-pr-notice">
+                    No submission record was kept for this version.
+                  </p>
+                )}
               </div>
             ) : null}
           </li>

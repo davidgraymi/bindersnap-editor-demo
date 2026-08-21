@@ -9,6 +9,7 @@ import {
   SignupBodySchema,
 } from "./schemas/auth";
 import {
+  ClosedChangesPayloadSchema,
   CollaboratorListPayloadSchema,
   CreateDiscussionBodySchema,
   DiscussionSummarySchema,
@@ -218,6 +219,22 @@ registry.registerPath({
     200: {
       description: "Published versions with the reviews that approved them",
       content: { "application/json": { schema: DocumentHistoryPayloadSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/documents/{owner}/{repo}/changes/closed",
+  operationId: "getClosedChanges",
+  tags: ["documents"],
+  request: {
+    params: z.object({ owner: z.string(), repo: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Changes that are no longer open, with how each one ended",
+      content: { "application/json": { schema: ClosedChangesPayloadSchema } },
     },
   },
 });

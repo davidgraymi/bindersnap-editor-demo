@@ -1,18 +1,17 @@
 import { useState } from "react";
-import { ChevronLeft } from "lucide-react";
+import { Download, FileText } from "lucide-react";
 
-import type {
-  PullRequestWithApprovalState,
-  RepoBranchProtection,
-} from "../api";
+import type { RepoBranchProtection } from "../api";
 import { publishDocument, submitDocumentReview } from "../api";
+import type { ChangeRecord } from "../documentDisplay";
 import {
   capitalizeFirst,
+  describeChangeOutcome,
   formatDate,
-  getApprovalStateBadgeClass,
-  getApprovalStateLabel,
-  parseSubmissionSummary,
+  getChangeStateBadgeClass,
+  getChangeStateLabel,
 } from "../documentDisplay";
+import type { DocumentChangeView } from "../routes";
 import { DocumentPreview } from "./DocumentPreview";
 import { ReviewDiscussion } from "./ReviewDiscussion";
 
@@ -21,7 +20,9 @@ interface DocumentChangeDetailProps {
   repo: string;
   currentUser: string;
   isAnonymous: boolean;
-  pullRequest: PullRequestWithApprovalState;
+  change: ChangeRecord;
+  /** Which half of the page is showing: the conversation or the file. */
+  view: DocumentChangeView;
   branchProtection: RepoBranchProtection | null;
   blockOnUnresolvedThreads: boolean;
   nextVersion: number;
@@ -32,6 +33,7 @@ interface DocumentChangeDetailProps {
   downloading: boolean;
   onDownload: (gitRef: string, loaded?: Blob | null) => void;
   onChanged: () => void | Promise<void>;
+  onViewChange: (view: DocumentChangeView) => void;
   onBackToList: () => void;
 }
 
@@ -57,7 +59,7 @@ function readActionError(err: unknown, fallback: string): string {
 
 function canUserReview(
   currentUser: string,
-  prAuthor: string | undefined,
+  prAuthor: string,
   protection: RepoBranchProtection | null,
 ): { allowed: boolean; reason: string | null } {
   if (currentUser === prAuthor) {
@@ -97,16 +99,18 @@ function canUserMerge(
 /**
  * One change, on its own page.
  *
- * You cannot sign off on something you have not read, so the proposed file is
- * the body of the page — previewed inline and downloadable — with the decision
- * and the discussion beneath it.
+ * The decision gets made in the conversation, so the conversation is the page:
+ * the discussion, the reviews, and the two buttons that end it. The file being
+ * proposed is one click away on its own screen rather than a wall of preview
+ * the reader has to scroll past to reach the argument about it.
  */
 export function DocumentChangeDetail({
   owner,
   repo,
   currentUser,
   isAnonymous,
-  pullRequest,
+  change,
+  view,
   branchProtection,
   blockOnUnresolvedThreads,
   nextVersion,
@@ -115,6 +119,7 @@ export function DocumentChangeDetail({
   downloading,
   onDownload,
   onChanged,
+  onViewChange,
   onBackToList,
 }: DocumentChangeDetailProps) {
   const [actionState, setActionState] = useState<PRActionState>(
@@ -122,7 +127,7 @@ export function DocumentChangeDetail({
   );
   const [unresolvedCount, setUnresolvedCount] = useState(0);
 
-  const prNum = pullRequest.number ?? 0;
+  const prNum = change.number;
   const isSubmitting = actionState.status === "submitting";
 
   function updateActionState(update: Partial<PRActionState>) {
@@ -180,6 +185,9 @@ export function DocumentChangeDetail({
       await publishDocument(owner, repo, prNum, nextVersion);
       updateActionState({ status: "idle" });
       await onChanged();
+      // Publishing ends the review, so the page it happened on is finished
+      // too. The index confirms it: nothing is waiting on a decision.
+      onBackToList();
     } catch (err) {
       updateActionState({
         status: "error",
@@ -190,227 +198,288 @@ export function DocumentChangeDetail({
 
   const reviewPerms = canUserReview(
     currentUser,
-    pullRequest.user?.login,
+    change.submittedBy,
     branchProtection,
   );
   const mergePerms = canUserMerge(currentUser, branchProtection);
-  const mergeReady = pullRequest.approvalState === "approved";
+  const mergeReady = change.open && change.approvalState === "approved";
   // The server enforces this too; the disabled button just avoids a pointless
   // round trip that ends in a 409.
   const threadsBlockPublish = blockOnUnresolvedThreads && unresolvedCount > 0;
-  const ownSubmission = currentUser === pullRequest.user?.login;
-  const summary = parseSubmissionSummary(pullRequest.body);
-  const submitter = pullRequest.user?.login
-    ? capitalizeFirst(pullRequest.user.login)
-    : "Someone";
-  const submittedDate = pullRequest.created_at
-    ? formatDate(pullRequest.created_at)
+  const ownSubmission = currentUser === change.submittedBy;
+  const submitter = capitalizeFirst(change.submittedBy || "someone");
+  const submittedDate = change.submittedAt
+    ? formatDate(change.submittedAt)
     : null;
-  const reviewRef = pullRequest.branchName?.trim() || null;
+  const reviewRef = change.branchName;
+  const outcome = describeChangeOutcome(change);
+  const canDecide = change.open && !isAnonymous;
 
   return (
     <article className="change-detail">
       <header className="change-detail-header">
-        <button
-          className="change-detail-back"
-          type="button"
-          onClick={onBackToList}
-        >
-          <ChevronLeft size={14} strokeWidth={1.5} aria-hidden="true" />
-          All changes
-        </button>
         <div className="change-detail-heading">
           <h2 className="change-detail-title">
-            {summary ?? `Submitted by ${submitter}`}
+            {change.summary}
             <span className="change-detail-number">#{prNum}</span>
           </h2>
-          <span
-            className={getApprovalStateBadgeClass(pullRequest.approvalState)}
-          >
-            {getApprovalStateLabel(pullRequest.approvalState)}
+          <span className={getChangeStateBadgeClass(change)}>
+            {getChangeStateLabel(change)}
           </span>
         </div>
         <p className="change-detail-meta">
           Submitted by {submitter}
-          {submittedDate ? ` on ${submittedDate}` : ""} · Becomes v{nextVersion}{" "}
-          when published
+          {submittedDate ? ` on ${submittedDate}` : ""}
+          {change.open ? ` · becomes v${nextVersion} when published` : ""}
         </p>
+
+        <nav className="change-views" aria-label="Change views">
+          <button
+            className={`change-view-tab${view === "discussion" ? " change-view-tab--active" : ""}`}
+            type="button"
+            aria-current={view === "discussion" ? "page" : undefined}
+            onClick={() => onViewChange("discussion")}
+          >
+            Discussion
+          </button>
+          <button
+            className={`change-view-tab${view === "preview" ? " change-view-tab--active" : ""}`}
+            type="button"
+            aria-current={view === "preview" ? "page" : undefined}
+            onClick={() => onViewChange("preview")}
+          >
+            Preview
+          </button>
+        </nav>
       </header>
 
-      <section className="change-detail-material">
-        <h3 className="change-detail-section-title">
-          The version under review
-        </h3>
-        {reviewRef ? (
-          <>
-            <p className="change-detail-section-note">
-              The file exactly as submitted, read from <code>{reviewRef}</code>.
-              Read it here or download it before you decide.
-            </p>
-            <DocumentPreview
-              owner={owner}
-              repo={repo}
-              gitRef={reviewRef}
-              fileName={fileName}
-              downloading={downloading}
-              onDownload={(loaded) => onDownload(reviewRef, loaded)}
-            />
-          </>
-        ) : (
-          <p className="vault-pr-notice">
-            This change has no branch on record, so the submitted file cannot be
-            shown here.
-          </p>
-        )}
-      </section>
-
-      {ownSubmission ? (
-        <p className="vault-pr-own-notice">
-          ℹ You submitted this version — waiting on other reviewers to approve.
+      {outcome ? (
+        <p className="change-outcome-banner" role="status">
+          {outcome}
         </p>
-      ) : reviewPerms.allowed ? (
-        <section className="change-detail-decision">
-          <h3 className="change-detail-section-title">Your decision</h3>
-          <div className="vault-pr-actions">
-            {actionState.showApproveConfirm ? (
-              <div className="vault-pr-confirm">
-                <p className="vault-pr-confirm-heading">
-                  Approve version {nextVersion} of {documentName}?
-                </p>
-                <p className="vault-pr-confirm-sub">
-                  This approval will be recorded with your name and timestamp.
-                </p>
-                <div className="vault-pr-confirm-actions">
+      ) : null}
+
+      {view === "preview" ? (
+        <section className="change-file-view">
+          {reviewRef ? (
+            <>
+              <p className="change-detail-section-note">
+                The file exactly as submitted, read from{" "}
+                <code>{reviewRef}</code>.
+              </p>
+              <DocumentPreview
+                owner={owner}
+                repo={repo}
+                gitRef={reviewRef}
+                fileName={fileName}
+                downloading={downloading}
+                onDownload={(loaded) => onDownload(reviewRef, loaded)}
+              />
+            </>
+          ) : (
+            <p className="vault-pr-notice">
+              This change has no branch on record, so the submitted file cannot
+              be shown.
+            </p>
+          )}
+        </section>
+      ) : (
+        <>
+          {reviewRef ? (
+            <div className="change-file-strip">
+              <FileText size={15} strokeWidth={1.5} aria-hidden="true" />
+              <span className="change-file-strip-name">
+                {fileName ?? "The submitted file"}
+              </span>
+              <span className="change-file-strip-spacer" />
+              <button
+                className="bs-btn bs-btn-secondary change-file-strip-btn"
+                type="button"
+                onClick={() => onViewChange("preview")}
+              >
+                Preview
+              </button>
+              <button
+                className="bs-btn bs-btn-secondary change-file-strip-btn"
+                type="button"
+                disabled={downloading || !fileName}
+                onClick={() => onDownload(reviewRef, null)}
+              >
+                <Download size={14} strokeWidth={1.5} aria-hidden="true" />
+                {downloading ? "Downloading…" : "Download"}
+              </button>
+            </div>
+          ) : null}
+
+          <ReviewDiscussion
+            owner={owner}
+            repo={repo}
+            pullNumber={prNum}
+            opening={{
+              author: change.submittedBy,
+              at: change.submittedAt,
+              body: change.description,
+            }}
+            reviews={change.reviews}
+            closing={
+              change.outcome
+                ? {
+                    kind: change.outcome,
+                    actor: change.decidedBy,
+                    at: change.closedAt,
+                    publishedVersion: change.publishedVersion,
+                  }
+                : null
+            }
+            canParticipate={!isAnonymous}
+            blockOnUnresolvedThreads={blockOnUnresolvedThreads}
+            onSummaryChange={(next) =>
+              setUnresolvedCount((prev) =>
+                prev === next.unresolvedCount ? prev : next.unresolvedCount,
+              )
+            }
+          />
+
+          {change.open && ownSubmission ? (
+            <p className="vault-pr-own-notice">
+              ℹ You submitted this version — waiting on other reviewers to
+              approve.
+            </p>
+          ) : canDecide && reviewPerms.allowed ? (
+            <section className="change-detail-decision">
+              <h3 className="change-detail-section-title">Your decision</h3>
+              <div className="vault-pr-actions">
+                {actionState.showApproveConfirm ? (
+                  <div className="vault-pr-confirm">
+                    <p className="vault-pr-confirm-heading">
+                      Approve version {nextVersion} of {documentName}?
+                    </p>
+                    <p className="vault-pr-confirm-sub">
+                      This approval will be recorded with your name and
+                      timestamp.
+                    </p>
+                    <div className="vault-pr-confirm-actions">
+                      <button
+                        className="bs-btn bs-btn-primary"
+                        type="button"
+                        disabled={isSubmitting}
+                        onClick={() => {
+                          updateActionState({ showApproveConfirm: false });
+                          void handleApprove();
+                        }}
+                      >
+                        {isSubmitting ? "Submitting…" : "Confirm Approval"}
+                      </button>
+                      <button
+                        className="bs-btn bs-btn-secondary"
+                        type="button"
+                        disabled={isSubmitting}
+                        onClick={() =>
+                          updateActionState({ showApproveConfirm: false })
+                        }
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
                   <button
                     className="bs-btn bs-btn-primary"
                     type="button"
                     disabled={isSubmitting}
-                    onClick={() => {
-                      updateActionState({ showApproveConfirm: false });
-                      void handleApprove();
-                    }}
-                  >
-                    {isSubmitting ? "Submitting…" : "Confirm Approval"}
-                  </button>
-                  <button
-                    className="bs-btn bs-btn-secondary"
-                    type="button"
-                    disabled={isSubmitting}
                     onClick={() =>
-                      updateActionState({ showApproveConfirm: false })
+                      updateActionState({ showApproveConfirm: true })
                     }
                   >
-                    Cancel
+                    Approve
                   </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                className="bs-btn bs-btn-primary"
-                type="button"
-                disabled={isSubmitting}
-                onClick={() => updateActionState({ showApproveConfirm: true })}
-              >
-                Approve
-              </button>
-            )}
+                )}
 
-            {actionState.showChangesForm ? (
-              <div className="vault-pr-comment-form">
-                <textarea
-                  className="vault-pr-comment-input"
-                  placeholder="Describe what needs to change…"
-                  value={actionState.changesComment}
-                  rows={3}
-                  disabled={isSubmitting}
-                  onChange={(e) =>
-                    updateActionState({
-                      changesComment: e.target.value,
-                      error: null,
-                    })
-                  }
-                />
-                <div className="vault-pr-comment-actions">
-                  <button
-                    className="bs-btn bs-btn-secondary"
-                    type="button"
-                    disabled={isSubmitting}
-                    onClick={() => void handleRequestChanges()}
-                  >
-                    {isSubmitting ? "Submitting…" : "Send Feedback"}
-                  </button>
+                {actionState.showChangesForm ? (
+                  <div className="vault-pr-comment-form">
+                    <textarea
+                      className="vault-pr-comment-input"
+                      placeholder="Describe what needs to change…"
+                      value={actionState.changesComment}
+                      rows={3}
+                      disabled={isSubmitting}
+                      onChange={(e) =>
+                        updateActionState({
+                          changesComment: e.target.value,
+                          error: null,
+                        })
+                      }
+                    />
+                    <div className="vault-pr-comment-actions">
+                      <button
+                        className="bs-btn bs-btn-secondary"
+                        type="button"
+                        disabled={isSubmitting}
+                        onClick={() => void handleRequestChanges()}
+                      >
+                        {isSubmitting ? "Submitting…" : "Send Feedback"}
+                      </button>
+                      <button
+                        className="bs-btn bs-btn-secondary"
+                        type="button"
+                        disabled={isSubmitting}
+                        onClick={() =>
+                          updateActionState({
+                            showChangesForm: false,
+                            changesComment: "",
+                            error: null,
+                          })
+                        }
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
                   <button
                     className="bs-btn bs-btn-secondary"
                     type="button"
                     disabled={isSubmitting}
                     onClick={() =>
-                      updateActionState({
-                        showChangesForm: false,
-                        changesComment: "",
-                        error: null,
-                      })
+                      updateActionState({ showChangesForm: true, error: null })
                     }
                   >
-                    Cancel
+                    Request Changes
                   </button>
-                </div>
+                )}
               </div>
-            ) : (
+            </section>
+          ) : canDecide && reviewPerms.reason ? (
+            <p className="vault-pr-notice">{reviewPerms.reason}</p>
+          ) : null}
+
+          {mergePerms.allowed && mergeReady ? (
+            <div className="vault-pr-actions">
               <button
-                className="bs-btn bs-btn-secondary"
+                className="bs-btn bs-btn-primary vault-pr-publish-btn"
                 type="button"
-                disabled={isSubmitting}
-                onClick={() =>
-                  updateActionState({ showChangesForm: true, error: null })
+                disabled={isSubmitting || threadsBlockPublish}
+                title={
+                  threadsBlockPublish
+                    ? "Resolve every discussion thread before publishing."
+                    : undefined
                 }
+                onClick={() => void handlePublish()}
               >
-                Request Changes
+                {isSubmitting ? "Publishing…" : "Publish as Official Version"}
               </button>
-            )}
-          </div>
-        </section>
-      ) : reviewPerms.reason ? (
-        <p className="vault-pr-notice">{reviewPerms.reason}</p>
-      ) : null}
+            </div>
+          ) : mergeReady && !mergePerms.allowed ? (
+            <p className="vault-pr-notice">{mergePerms.reason}</p>
+          ) : null}
 
-      <ReviewDiscussion
-        owner={owner}
-        repo={repo}
-        pullNumber={prNum}
-        canParticipate={!isAnonymous}
-        blockOnUnresolvedThreads={blockOnUnresolvedThreads}
-        onSummaryChange={(next) =>
-          setUnresolvedCount((prev) =>
-            prev === next.unresolvedCount ? prev : next.unresolvedCount,
-          )
-        }
-      />
-
-      {mergePerms.allowed && mergeReady ? (
-        <div className="vault-pr-actions">
-          <button
-            className="bs-btn bs-btn-primary vault-pr-publish-btn"
-            type="button"
-            disabled={isSubmitting || threadsBlockPublish}
-            title={
-              threadsBlockPublish
-                ? "Resolve every discussion thread before publishing."
-                : undefined
-            }
-            onClick={() => void handlePublish()}
-          >
-            {isSubmitting ? "Publishing…" : "Publish as Official Version"}
-          </button>
-        </div>
-      ) : mergeReady && !mergePerms.allowed ? (
-        <p className="vault-pr-notice">{mergePerms.reason}</p>
-      ) : null}
-
-      {actionState.error ? (
-        <p className="vault-pr-error" role="alert">
-          {actionState.error}
-        </p>
-      ) : null}
+          {actionState.error ? (
+            <p className="vault-pr-error" role="alert">
+              {actionState.error}
+            </p>
+          ) : null}
+        </>
+      )}
     </article>
   );
 }

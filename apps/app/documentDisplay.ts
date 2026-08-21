@@ -5,6 +5,8 @@
  * decided in one place — and can be tested without rendering anything.
  */
 
+import type { VersionReview } from "../../packages/api-schema/schemas/documents";
+
 export type DocumentStatus =
   "published" | "in_review" | "changes_requested" | "approved" | "draft";
 
@@ -192,4 +194,195 @@ export function getInitials(name: string): string {
   if (parts.length === 0) return "?";
   if (parts.length === 1) return (parts[0] ?? "").slice(0, 2).toUpperCase();
   return `${parts[0]?.[0] ?? ""}${parts[parts.length - 1]?.[0] ?? ""}`.toUpperCase();
+}
+
+/**
+ * One change, whatever list it came from.
+ *
+ * An open change arrives as a Gitea pull request and a closed one as the
+ * server's already-decided record of how it ended. The Changes tab and a
+ * change's own page should not have to care which — they show the same row,
+ * the same header, the same discussion — so both are narrowed to this.
+ */
+export interface ChangeRecord {
+  number: number;
+  /** What the row and the page call it, already humanised. */
+  summary: string;
+  /** What the submitter wrote, as they wrote it. */
+  description: string;
+  /** Every review on the change, oldest first. */
+  reviews: VersionReview[];
+  /** The branch the submitted file lives on, or null once it is gone. */
+  branchName: string | null;
+  submittedBy: string;
+  submittedAt: string;
+  open: boolean;
+  /** Where an open change stands. Meaningless once it is closed. */
+  approvalState: string;
+  /** How a closed change ended. Null while it is still open. */
+  outcome: ChangeOutcome | null;
+  closedAt: string | null;
+  /** Who published it, or who asked for changes it never came back from. */
+  decidedBy: string | null;
+  /** The version a published change became. */
+  publishedVersion: number | null;
+}
+
+export type ChangeOutcome = "published" | "declined" | "withdrawn";
+
+/**
+ * What to call a change in a list.
+ *
+ * The row already says who submitted it and when, so a title that also says
+ * "Submitted by Alice" is the same sentence twice. A generated upload is named
+ * after the file it carries; anything a person wrote is used as written.
+ */
+export function parseChangeTitle(
+  body: string | null | undefined,
+  submittedBy: string,
+): string {
+  const fallback = `Submitted by ${capitalizeFirst(submittedBy || "someone")}`;
+  if (!body) return fallback;
+
+  if (!body.includes("Automated upload from Bindersnap")) {
+    const trimmed = body.trim();
+    return trimmed.length > 0 ? trimmed : fallback;
+  }
+
+  const file = body.match(/Source file:\s*(\S+)/)?.[1] ?? null;
+  return file ? `New version of ${file}` : fallback;
+}
+
+/**
+ * What the submitter said, for the opening post of the discussion.
+ *
+ * A body a person typed is theirs and is shown as typed. The generated upload
+ * body is machinery — "Automated upload from Bindersnap file vault. File hash
+ * (SHA-256): 76ff…" — and nobody opens a review to read it, so it is reduced
+ * to the one fact it carries: which file was submitted.
+ */
+export function describeSubmission(body: string | null | undefined): string {
+  if (!body) return "";
+  if (!body.includes("Automated upload from Bindersnap")) return body.trim();
+
+  const file = body.match(/Source file:\s*(\S+)/)?.[1] ?? null;
+  return file ? `Submitted ${file} for review.` : "";
+}
+
+export function toChangeRecord(pullRequest: {
+  number?: number;
+  body?: string;
+  branchName?: string;
+  created_at?: string;
+  approvalState: string;
+  reviews?: VersionReview[];
+  user?: { login: string } | null;
+}): ChangeRecord {
+  const submittedBy = pullRequest.user?.login ?? "";
+  return {
+    number: pullRequest.number ?? 0,
+    summary: parseChangeTitle(pullRequest.body, submittedBy),
+    description: describeSubmission(pullRequest.body),
+    reviews: pullRequest.reviews ?? [],
+    branchName: pullRequest.branchName?.trim() || null,
+    submittedBy,
+    submittedAt: pullRequest.created_at ?? "",
+    open: true,
+    approvalState: pullRequest.approvalState,
+    outcome: null,
+    closedAt: null,
+    decidedBy: null,
+    publishedVersion: null,
+  };
+}
+
+export function closedChangeToRecord(change: {
+  number: number;
+  body: string;
+  branchName: string;
+  submittedBy: string;
+  submittedAt: string;
+  closedAt: string | null;
+  outcome: ChangeOutcome;
+  decidedBy: string | null;
+  publishedVersion: number | null;
+  reviews?: VersionReview[];
+}): ChangeRecord {
+  return {
+    number: change.number,
+    summary: parseChangeTitle(change.body, change.submittedBy),
+    description: describeSubmission(change.body),
+    reviews: change.reviews ?? [],
+    branchName: change.branchName.trim() || null,
+    submittedBy: change.submittedBy,
+    submittedAt: change.submittedAt,
+    open: false,
+    approvalState: change.outcome === "published" ? "published" : "working",
+    outcome: change.outcome,
+    closedAt: change.closedAt,
+    decidedBy: change.decidedBy,
+    publishedVersion: change.publishedVersion,
+  };
+}
+
+const CHANGE_OUTCOME_LABELS: Record<ChangeOutcome, string> = {
+  published: "Published",
+  declined: "Declined",
+  withdrawn: "Withdrawn",
+};
+
+const CHANGE_OUTCOME_BADGE_CLASSES: Record<ChangeOutcome, string> = {
+  published: "vault-status-published",
+  declined: "vault-status-declined",
+  withdrawn: "vault-status-withdrawn",
+};
+
+/** The badge on a change: where it stands, or how it ended. */
+export function getChangeStateLabel(change: ChangeRecord): string {
+  return change.outcome
+    ? CHANGE_OUTCOME_LABELS[change.outcome]
+    : getApprovalStateLabel(change.approvalState);
+}
+
+export function getChangeStateBadgeClass(change: ChangeRecord): string {
+  return change.outcome
+    ? `vault-status-badge ${CHANGE_OUTCOME_BADGE_CLASSES[change.outcome]}`
+    : getApprovalStateBadgeClass(change.approvalState);
+}
+
+/**
+ * The line under a change's title: who asked for what, and what came of it.
+ *
+ * A closed change's reason is the whole point of showing it — "closed" on its
+ * own is the answer to a question nobody asked.
+ */
+export function describeChangeOutcome(change: ChangeRecord): string | null {
+  if (!change.outcome) return null;
+
+  const when = change.closedAt ? formatShortDate(change.closedAt) : null;
+  const who = change.decidedBy ? capitalizeFirst(change.decidedBy) : null;
+
+  switch (change.outcome) {
+    case "published": {
+      const version =
+        change.publishedVersion === null
+          ? "Published"
+          : `Published as v${change.publishedVersion}`;
+      return [version, who ? `by ${who}` : null, when ? `on ${when}` : null]
+        .filter(Boolean)
+        .join(" ");
+    }
+    case "declined":
+      return [
+        "Declined",
+        who ? `after ${who} requested changes` : "after changes were requested",
+        when ? `· closed ${when}` : null,
+      ]
+        .filter(Boolean)
+        .join(" ");
+    default:
+      return ["Withdrawn without a decision", when ? `· closed ${when}` : null]
+        .filter(Boolean)
+        .join(" ");
+  }
 }
