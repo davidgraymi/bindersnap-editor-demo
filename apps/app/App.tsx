@@ -27,6 +27,7 @@ import { usePaymentRequiredHandler } from "./paymentRequired";
 import {
   asShellRoute,
   getRoute,
+  isLegacyInboxPath,
   isProtectedAppRoute,
   routeToPath,
   type AppRoute,
@@ -356,6 +357,14 @@ export function App() {
       setIsCheckingSession(false);
     }
   }, []);
+
+  // `/inbox` is gone — Home shows what used to be there. Rewrite the address
+  // bar so an old link lands somewhere that still exists and stays bookmarkable.
+  useEffect(() => {
+    if (isLegacyInboxPath(window.location.pathname)) {
+      navigateTo({ kind: "workspace" }, true);
+    }
+  }, [route]);
 
   useEffect(() => {
     const handlePopState = () => {

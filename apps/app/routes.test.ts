@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import {
   asShellRoute,
   getRoute,
+  isLegacyInboxPath,
   isProtectedAppRoute,
   routeToPath,
 } from "./routes";
@@ -154,7 +155,6 @@ test("routeToPath keeps home and workspace on the root URL", () => {
   expect(routeToPath({ kind: "workspace" })).toBe("/");
   expect(routeToPath({ kind: "login" })).toBe("/login");
   expect(routeToPath({ kind: "signup" })).toBe("/signup");
-  expect(routeToPath({ kind: "inbox" })).toBe("/inbox");
   expect(routeToPath({ kind: "adminSubscriptions" })).toBe(
     "/admin/subscriptions",
   );
@@ -171,7 +171,13 @@ test("document routes are not protected — anonymous users can view public docs
   ).toBe(false);
   expect(isProtectedAppRoute({ kind: "documents" })).toBe(true);
   expect(isProtectedAppRoute({ kind: "workspace" })).toBe(true);
-  expect(isProtectedAppRoute({ kind: "inbox" })).toBe(true);
+});
+
+test("the retired /inbox path resolves to Home", () => {
+  expect(getRoute("/inbox")).toEqual({ kind: "workspace" });
+  expect(getRoute("/inbox/")).toEqual({ kind: "workspace" });
+  expect(isLegacyInboxPath("/inbox")).toBe(true);
+  expect(isLegacyInboxPath("/")).toBe(false);
 });
 
 test("asShellRoute converts home to workspace for the authenticated shell", () => {

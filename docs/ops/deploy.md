@@ -23,7 +23,7 @@ Pushes to `main` build `apps/app/index.html` directly into `dist/`, then the wor
 The published app is the single SPA:
 
 - `/` shows the landing experience for signed-out users
-- `/`, `/docs/*`, `/inbox`, and `/activity` all hydrate from the same bundle
+- `/`, `/docs/*`, and `/activity` all hydrate from the same bundle
 - deep links rely on the `404.html` fallback, not S3 or CloudFront rewrites
 
 Repository settings must point GitHub Pages at `GitHub Actions`, and the custom domain must be `bindersnap.com`.

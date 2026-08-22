@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Bell,
   FileText,
-  GitPullRequest,
   LogOut,
   Moon,
   Plus,
@@ -18,43 +17,12 @@ import { CreateDocumentModal } from "./CreateDocumentModal";
 import { DocumentDetail } from "./DocumentDetail";
 import { DocumentsPage } from "./DocumentsPage";
 import { HomePage } from "./HomePage";
-import { InboxPage } from "./InboxPage";
 
 interface AppShellProps {
   user: SessionUser | null;
   route: AppRoute;
   onNavigate: (route: AppRoute, replace?: boolean) => void;
   onSignOut: () => void | Promise<void>;
-}
-
-function formatDocumentName(repoName: string): string {
-  return repoName
-    .split("-")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
-
-function getTopnavTitle(route: AppRoute): ReactNode {
-  switch (route.kind) {
-    case "workspace":
-      return "Home";
-    case "documents":
-      return "Documents";
-    case "inbox":
-      return "Inbox";
-    case "activity":
-      return "Activity";
-    case "adminSubscriptions":
-      return "Pro Access";
-    case "document":
-      return (
-        <>
-          {route.owner} / <strong>{formatDocumentName(route.repo)}</strong>
-        </>
-      );
-    default:
-      return "Bindersnap";
-  }
 }
 
 function toggleTheme() {
@@ -101,9 +69,7 @@ export function AppShell({
 }: AppShellProps) {
   const isWorkspace = route.kind === "workspace";
   const isDocuments = route.kind === "documents" || route.kind === "document";
-  const isInbox = route.kind === "inbox";
   const isAdminSubscriptions = route.kind === "adminSubscriptions";
-  const topnavTitle = getTopnavTitle(route);
 
   const displayName = user?.fullName ?? user?.username ?? "";
   const username = user?.username ?? displayName;
@@ -131,28 +97,41 @@ export function AppShell({
     <div className="app-shell">
       {/* ── TOP NAV ── */}
       <header className="app-topnav">
-        {/* Logo mark (always navigates to Dashboard) + page title */}
-        <div className="app-topnav-logo">
+        {/* Brand — always the way back to Home */}
+        <button
+          type="button"
+          className="app-topnav-brand"
+          onClick={() => onNavigate({ kind: "workspace" })}
+          aria-label="Bindersnap home"
+        >
+          <span className="app-topnav-logo-mark" aria-hidden="true">
+            <BindersnapLogoMark width={14} height={14} aria-hidden="true" />
+          </span>
+          <span className="app-topnav-wordmark">Bindersnap</span>
+        </button>
+
+        {/* Two places to be. Changes are not one of them — they live on Home. */}
+        <nav className="app-topnav-nav" aria-label="Workspace">
           <button
             type="button"
-            className="app-topnav-logo-mark"
+            className={`app-topnav-link${isWorkspace ? " app-topnav-link--active" : ""}`}
             onClick={() => onNavigate({ kind: "workspace" })}
-            aria-label="Go to Dashboard"
+            aria-current={isWorkspace ? "page" : undefined}
           >
-            <BindersnapLogoMark
-              width={14}
-              height={14}
-              style={{ color: "white" }}
-              aria-hidden="true"
-            />
+            Home
           </button>
-          <span>{topnavTitle}</span>
-        </div>
+          <button
+            type="button"
+            className={`app-topnav-link${isDocuments ? " app-topnav-link--active" : ""}`}
+            onClick={() => onNavigate({ kind: "documents" })}
+            aria-current={isDocuments ? "page" : undefined}
+          >
+            Documents
+          </button>
+        </nav>
 
-        {/* Spacer — pushes all right-side items to the far right */}
         <div className="app-topnav-spacer" />
 
-        {/* Right side — order: search, create doc, change requests, documents, notifications, profile */}
         <div className="app-topnav-right">
           {/* Search */}
           <div className="app-nav-search" role="search">
@@ -165,8 +144,8 @@ export function AppShell({
             <input
               className="app-nav-search-input"
               type="text"
-              placeholder="Type / to search"
-              aria-label="Type / to search"
+              placeholder="Search documents"
+              aria-label="Search documents"
             />
             <span className="app-nav-search-kbd" aria-hidden="true">
               /
@@ -181,30 +160,8 @@ export function AppShell({
             onClick={openCreateDocumentModal}
           >
             <Plus size={12} strokeWidth={2} aria-hidden="true" />
-            New Document
+            New document
           </button>
-
-          {/* Change Requests */}
-          <button
-            type="button"
-            className={`app-topnav-link${isInbox ? " app-topnav-link--active" : ""}`}
-            onClick={() => onNavigate({ kind: "inbox" })}
-          >
-            <GitPullRequest size={14} strokeWidth={1.5} aria-hidden="true" />
-            Changes
-          </button>
-
-          {/* Documents */}
-          <button
-            type="button"
-            className={`app-topnav-link${isDocuments ? " app-topnav-link--active" : ""}`}
-            onClick={() => onNavigate({ kind: "documents" })}
-          >
-            <FileText size={14} strokeWidth={1.5} aria-hidden="true" />
-            Documents
-          </button>
-
-          <div className="app-topnav-divider" aria-hidden="true" />
 
           {/* Notifications */}
           <button
@@ -385,18 +342,6 @@ export function AppShell({
                   })
                 }
               />
-            ) : route.kind === "inbox" ? (
-              <InboxPage
-                currentUsername={currentUsername}
-                onSelectDocument={(owner, repo) =>
-                  onNavigate({
-                    kind: "document",
-                    owner,
-                    repo,
-                    tab: "overview",
-                  })
-                }
-              />
             ) : route.kind === "activity" ? (
               <ActivityLogPage />
             ) : route.kind === "adminSubscriptions" ? (
@@ -406,14 +351,18 @@ export function AppShell({
             ) : (
               <HomePage
                 currentUsername={currentUsername}
-                onSelectDocument={(owner, repo) =>
+                currentUserFullName={user?.fullName ?? ""}
+                onOpenChange={(owner, repo, changeNumber) =>
                   onNavigate({
                     kind: "document",
                     owner,
                     repo,
-                    tab: "overview",
+                    tab: "changes",
+                    changeNumber,
+                    changeView: "discussion",
                   })
                 }
+                onBrowseDocuments={() => onNavigate({ kind: "documents" })}
                 onNewDocument={openCreateDocumentModal}
               />
             )}
