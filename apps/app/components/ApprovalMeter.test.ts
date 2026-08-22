@@ -6,6 +6,8 @@ import { createRoot } from "react-dom/client";
 import { JSDOM } from "jsdom";
 
 import { ApprovalMeter } from "./ApprovalMeter";
+import type { ChangeReviewer } from "../api";
+import type { ChangeRecord } from "../documentDisplay";
 
 /**
  * The approval counter, rendered.
@@ -82,9 +84,53 @@ function render(element: ReactElement) {
   };
 }
 
+function reviewer(
+  login: string,
+  status: ChangeReviewer["status"],
+): ChangeReviewer {
+  return {
+    login,
+    fullName: "",
+    avatarUrl: "",
+    status,
+    reviewedAt: "",
+    stale: false,
+    requested: true,
+  };
+}
+
+function change(overrides: Partial<ChangeRecord> = {}): ChangeRecord {
+  return {
+    number: 1,
+    summary: "Submitted by Alice",
+    description: "",
+    branchName: "bs/1",
+    submittedBy: "alice",
+    submittedAt: "2026-08-21T07:38:00Z",
+    open: true,
+    reviews: [],
+    approvalState: "awaiting",
+    outcome: null,
+    closedAt: null,
+    decidedBy: null,
+    publishedVersion: null,
+    assignee: null,
+    reviewers: [],
+    approvalCount: 0,
+    requiredApprovals: 0,
+    ...overrides,
+  };
+}
+
 test("the meter counts sign-offs and fills one pip each", () => {
   const { container, unmount } = render(
-    createElement(ApprovalMeter, { approvalCount: 1, requiredApprovals: 3 }),
+    createElement(ApprovalMeter, {
+      change: change({
+        approvalCount: 1,
+        requiredApprovals: 3,
+        reviewers: [reviewer("bob", "approved")],
+      }),
+    }),
   );
 
   expect(container.textContent).toContain("1 of 3 approvals");
@@ -92,24 +138,31 @@ test("the meter counts sign-offs and fills one pip each", () => {
   expect(
     container.querySelectorAll(".approval-meter-pip--filled"),
   ).toHaveLength(1);
-  expect(container.querySelector(".approval-meter--met")).toBeNull();
+  expect(container.querySelector(".approval-meter--ready")).toBeNull();
   unmount();
 });
 
 test("the meter turns over once every approval is in", () => {
   const { container, unmount } = render(
-    createElement(ApprovalMeter, { approvalCount: 2, requiredApprovals: 2 }),
+    createElement(ApprovalMeter, {
+      change: change({
+        approvalCount: 2,
+        requiredApprovals: 2,
+        reviewers: [reviewer("bob", "approved"), reviewer("carol", "approved")],
+      }),
+    }),
   );
 
-  expect(container.querySelector(".approval-meter--met")).not.toBeNull();
+  expect(container.querySelector(".approval-meter--ready")).not.toBeNull();
   expect(container.textContent).toContain("2 of 2 approvals");
+  expect(container.textContent).toContain("Ready to publish");
   unmount();
 });
 
 test("a document that requires no approvals gets no meter at all", () => {
   // "0 of 0 approvals" would be a number that answers nothing.
   const { container, unmount } = render(
-    createElement(ApprovalMeter, { approvalCount: 0, requiredApprovals: 0 }),
+    createElement(ApprovalMeter, { change: change({ requiredApprovals: 0 }) }),
   );
 
   expect(container.querySelector(".approval-meter")).toBeNull();
@@ -118,10 +171,82 @@ test("a document that requires no approvals gets no meter at all", () => {
 
 test("a policy demanding more approvals than fit drops the pips, not the count", () => {
   const { container, unmount } = render(
-    createElement(ApprovalMeter, { approvalCount: 2, requiredApprovals: 9 }),
+    createElement(ApprovalMeter, {
+      change: change({ approvalCount: 2, requiredApprovals: 9 }),
+    }),
   );
 
   expect(container.textContent).toContain("2 of 9 approvals");
   expect(container.querySelectorAll(".approval-meter-pip")).toHaveLength(0);
+  unmount();
+});
+
+test("a reviewer asking for changes outranks a full approval count", () => {
+  // The bug this replaced: Gitea keeps an approval after the same reviewer
+  // asks for changes, so the page showed a red CHANGES REQUESTED badge beside
+  // a green "1 of 1 approvals". One pill, worst news first.
+  const { container, unmount } = render(
+    createElement(ApprovalMeter, {
+      change: change({
+        approvalCount: 1,
+        requiredApprovals: 1,
+        approvalState: "changes_requested",
+        reviewers: [reviewer("bob", "changes_requested")],
+      }),
+    }),
+  );
+
+  expect(container.querySelector(".approval-meter--blocked")).not.toBeNull();
+  expect(container.textContent).toContain("Bob asked for changes");
+  expect(container.textContent).not.toContain("Ready to publish");
+  unmount();
+});
+
+test("an open thread blocks just as loudly as a request for changes", () => {
+  const { container, unmount } = render(
+    createElement(ApprovalMeter, {
+      change: change({
+        approvalCount: 1,
+        requiredApprovals: 1,
+        reviewers: [reviewer("bob", "approved")],
+      }),
+      openThreadAuthors: new Set(["bob"]),
+    }),
+  );
+
+  expect(container.querySelector(".approval-meter--blocked")).not.toBeNull();
+  expect(container.textContent).toContain("Bob left a thread open");
+  unmount();
+});
+
+test("a change short of approvals names who it waits on", () => {
+  const { container, unmount } = render(
+    createElement(ApprovalMeter, {
+      change: change({
+        approvalCount: 1,
+        requiredApprovals: 2,
+        reviewers: [reviewer("bob", "approved"), reviewer("carol", "awaiting")],
+      }),
+    }),
+  );
+
+  expect(container.textContent).toContain("1 of 2 approvals");
+  expect(container.textContent).toContain("Waiting on Carol");
+  unmount();
+});
+
+test("a closed change is its outcome, not a count", () => {
+  const { container, unmount } = render(
+    createElement(ApprovalMeter, {
+      change: change({
+        open: false,
+        outcome: "published",
+        approvalCount: 2,
+        requiredApprovals: 2,
+      }),
+    }),
+  );
+
+  expect(container.querySelector(".approval-meter")).toBeNull();
   unmount();
 });

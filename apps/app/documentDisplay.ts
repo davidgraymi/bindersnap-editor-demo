@@ -427,6 +427,96 @@ export function hasEnoughApprovals(change: {
   );
 }
 
+/**
+ * Whether the change is moving, stuck, or done — the one thing that decides
+ * how the standing pill is coloured.
+ */
+export type ChangeStandingTone = "blocked" | "ready" | "progress";
+
+export interface ChangeStanding {
+  tone: ChangeStandingTone;
+  /** "1 of 2 approvals", or null when the document demands none. */
+  progress: string | null;
+  /** Why it stands there, in the fewest words that name a person. */
+  reason: string;
+}
+
+/** "Bob", "Bob and Carol", "Bob, Carol and 2 others". */
+function joinNames(reviewers: { login: string; fullName: string }[]): string {
+  const names = reviewers.map(getReviewerDisplayName);
+  if (names.length === 1) return names[0]!;
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names[0]}, ${names[1]} and ${names.length - 2} other${
+    names.length - 2 === 1 ? "" : "s"
+  }`;
+}
+
+/**
+ * Where an open change stands, as one sentence.
+ *
+ * The count and the state badge were two components each answering "can this
+ * publish?" separately, and they contradicted each other the moment a reviewer
+ * approved and *then* asked for changes: Gitea keeps both, so the page showed a
+ * red CHANGES REQUESTED beside a green 1 of 1 approvals. A reader cannot act on
+ * that. One pill owns the question now, and it reports the worst news first —
+ * a blocker outranks a full count, because a full count cannot publish past it.
+ *
+ * Returns null for a closed change (its outcome is the whole story) and for a
+ * document that demands no approvals and has no blocker, where there is simply
+ * nothing to report.
+ */
+export function describeChangeStanding(
+  change: ChangeRecord,
+  openThreadAuthors: ReadonlySet<string> = new Set(),
+): ChangeStanding | null {
+  if (!change.open) return null;
+
+  const progress = describeApprovalProgress(change);
+  const standingOf = (reviewer: ChangeReviewer) =>
+    resolveReviewerDisplayStatus(reviewer, openThreadAuthors);
+
+  const refusing = change.reviewers.filter(
+    (reviewer) => standingOf(reviewer) === "changes_requested",
+  );
+  if (refusing.length > 0) {
+    return {
+      tone: "blocked",
+      progress,
+      reason: `${joinNames(refusing)} asked for changes`,
+    };
+  }
+
+  const talking = change.reviewers.filter(
+    (reviewer) => standingOf(reviewer) === "thread_open",
+  );
+  if (talking.length > 0) {
+    return {
+      tone: "blocked",
+      progress,
+      reason: `${joinNames(talking)} left a thread open`,
+    };
+  }
+
+  if (hasEnoughApprovals(change)) {
+    return { tone: "ready", progress, reason: "Ready to publish" };
+  }
+
+  if (progress === null) return null;
+
+  const missing = change.requiredApprovals - change.approvalCount;
+  const waiting = change.reviewers.filter(
+    (reviewer) => standingOf(reviewer) === "awaiting",
+  );
+  return {
+    tone: "progress",
+    progress,
+    reason:
+      waiting.length > 0
+        ? `Waiting on ${joinNames(waiting)}`
+        : `${missing} more approval${missing === 1 ? "" : "s"} needed`,
+  };
+}
+
 const CHANGE_OUTCOME_LABELS: Record<ChangeOutcome, string> = {
   published: "Published",
   declined: "Declined",

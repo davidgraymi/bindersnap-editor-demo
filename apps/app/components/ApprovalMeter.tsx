@@ -1,70 +1,77 @@
-import { CircleCheck, CircleDashed } from "lucide-react";
+import { CircleAlert, CircleCheck, CircleDashed } from "lucide-react";
 
-import {
-  describeApprovalProgress,
-  hasEnoughApprovals,
-} from "../documentDisplay";
+import type { ChangeRecord, ChangeStandingTone } from "../documentDisplay";
+import { describeChangeStanding } from "../documentDisplay";
 
 /** Beyond this many, a row of pips is a smear rather than a count. */
 const MAX_PIPS = 6;
 
+const TONE_ICONS: Record<ChangeStandingTone, typeof CircleCheck> = {
+  blocked: CircleAlert,
+  ready: CircleCheck,
+  progress: CircleDashed,
+};
+
 interface ApprovalMeterProps {
-  approvalCount: number;
-  requiredApprovals: number;
+  change: ChangeRecord;
+  /**
+   * Logins holding an unresolved thread. Only the change's own page has paid
+   * for the discussion, so everywhere else this is empty and the pill simply
+   * reports one fewer kind of blocker.
+   */
+  openThreadAuthors?: ReadonlySet<string>;
   /** Larger type and pips, for a change's own page rather than a list row. */
   size?: "row" | "detail";
 }
 
 /**
- * How many sign-offs a change has, against how many it needs.
+ * Where a change stands: how many sign-offs it has, against how many it needs,
+ * and who is holding it up.
  *
  * "Awaiting review" is a status that answers nothing: one approval short and
  * three approvals short look identical, so nobody can tell whether the change
- * is nearly through or barely started. A count says it in four words, and the
- * pips say it without reading at all.
+ * is nearly through or barely started. A count says it in four words, the pips
+ * say it without reading at all, and the reason names the person to go talk to.
+ *
+ * This is deliberately the *only* thing on the page that reports publishability
+ * — see `describeChangeStanding` for why a separate state badge alongside it
+ * was worse than nothing.
  */
 export function ApprovalMeter({
-  approvalCount,
-  requiredApprovals,
+  change,
+  openThreadAuthors,
   size = "row",
 }: ApprovalMeterProps) {
-  const progress = describeApprovalProgress({
-    approvalCount,
-    requiredApprovals,
-  });
-  if (!progress) return null;
+  const standing = describeChangeStanding(change, openThreadAuthors);
+  if (!standing) return null;
 
-  const met = hasEnoughApprovals({ approvalCount, requiredApprovals });
-  const Icon = met ? CircleCheck : CircleDashed;
-  const showPips = requiredApprovals <= MAX_PIPS;
+  const Icon = TONE_ICONS[standing.tone];
+  const showPips =
+    change.requiredApprovals > 0 && change.requiredApprovals <= MAX_PIPS;
 
   return (
     <span
-      className={`approval-meter approval-meter--${size}${
-        met ? " approval-meter--met" : ""
-      }`}
-      title={
-        met
-          ? "Every approval this document requires is in."
-          : `${requiredApprovals - approvalCount} more approval${
-              requiredApprovals - approvalCount === 1 ? "" : "s"
-            } needed before this can be published.`
-      }
+      className={`approval-meter approval-meter--${size} approval-meter--${standing.tone}`}
     >
       <Icon size={14} strokeWidth={1.75} aria-hidden="true" />
-      <span className="approval-meter-count">{progress}</span>
+      {standing.progress ? (
+        <span className="approval-meter-count">{standing.progress}</span>
+      ) : null}
       {showPips ? (
         <span className="approval-meter-pips" aria-hidden="true">
-          {Array.from({ length: requiredApprovals }, (_, index) => (
+          {Array.from({ length: change.requiredApprovals }, (_, index) => (
             <span
               key={index}
               className={`approval-meter-pip${
-                index < approvalCount ? " approval-meter-pip--filled" : ""
+                index < change.approvalCount
+                  ? " approval-meter-pip--filled"
+                  : ""
               }`}
             />
           ))}
         </span>
       ) : null}
+      <span className="approval-meter-reason">{standing.reason}</span>
     </span>
   );
 }

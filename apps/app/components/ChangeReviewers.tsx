@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ChevronDown,
   CircleCheck,
   CircleDashed,
   CircleX,
@@ -8,7 +9,11 @@ import {
   X,
 } from "lucide-react";
 
-import { searchWorkspaceUsers, updateChangeAssignments } from "../api";
+import {
+  listDocumentCollaborators,
+  searchWorkspaceUsers,
+  updateChangeAssignments,
+} from "../api";
 import type { ChangeReviewer, ChangeUser } from "../api";
 import type { ReviewerDisplayStatus } from "../documentDisplay";
 import {
@@ -18,10 +23,11 @@ import {
   getReviewerStatusLabel,
   resolveReviewerDisplayStatus,
 } from "../documentDisplay";
-import { ApprovalMeter } from "./ApprovalMeter";
 
 const SEARCH_DEBOUNCE_MS = 250;
 const SEARCH_PAGE_SIZE = 6;
+/** Enough names to pick from without the popover becoming a page of its own. */
+const SUGGESTION_LIMIT = 8;
 
 interface ChangeReviewersProps {
   owner: string;
@@ -31,8 +37,6 @@ interface ChangeReviewersProps {
   submittedBy: string;
   assignee: ChangeUser | null;
   reviewers: ChangeReviewer[];
-  approvalCount: number;
-  requiredApprovals: number;
   /**
    * Logins with at least one unresolved thread of their own on this change.
    * The server cannot see this without paying for the discussion on every
@@ -50,6 +54,9 @@ interface UserOption {
   fullName: string;
   avatarUrl: string;
 }
+
+/** Which of the two roles a popover is currently filling. */
+type PickerKind = "assignee" | "reviewer";
 
 const STATUS_ICONS: Record<ReviewerDisplayStatus, typeof CircleCheck> = {
   approved: CircleCheck,
@@ -171,25 +178,63 @@ export function ChangeReviewers({
   submittedBy,
   assignee,
   reviewers,
-  approvalCount,
-  requiredApprovals,
   openThreadAuthors,
   canManage,
   onChanged,
 }: ChangeReviewersProps) {
-  const [picker, setPicker] = useState<"assignee" | "reviewer" | null>(null);
+  const [picker, setPicker] = useState<PickerKind | null>(null);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [results, setResults] = useState<UserOption[]>([]);
   const [searching, setSearching] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** The people already on this document, offered before anyone types. */
+  const [collaborators, setCollaborators] = useState<UserOption[]>([]);
   const searchRequestId = useRef(0);
+  const sectionRef = useRef<HTMLElement | null>(null);
 
   const reviewerLogins = useMemo(
     () => new Set(reviewers.map((reviewer) => reviewer.login)),
     [reviewers],
   );
+
+  // The people who can review this are overwhelmingly the people already on
+  // the document, so the popover opens with them listed. Making someone type
+  // two letters to reach a colleague they picked yesterday is the clunk.
+  useEffect(() => {
+    let cancelled = false;
+    if (!canManage) return;
+
+    void (async () => {
+      try {
+        const payload = await listDocumentCollaborators(
+          owner,
+          repo,
+          1,
+          SUGGESTION_LIMIT,
+        );
+        if (cancelled) return;
+        setCollaborators(
+          payload.collaborators
+            .map((entry) => ({
+              login: entry.user.login ?? "",
+              fullName: entry.user.full_name ?? "",
+              avatarUrl: entry.user.avatar_url ?? "",
+            }))
+            .filter((user) => user.login),
+        );
+      } catch {
+        // A missing suggestion list is not worth an error banner: the search
+        // box below it still reaches everyone in the workspace.
+        if (!cancelled) setCollaborators([]);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [owner, repo, canManage]);
 
   useEffect(() => {
     const handle = window.setTimeout(() => {
@@ -235,6 +280,33 @@ export function ChangeReviewers({
     })();
   }, [debouncedQuery, picker]);
 
+  // A popover that only closes via the button that opened it is a trap; every
+  // other menu on the page closes on Escape and on a click elsewhere.
+  useEffect(() => {
+    if (picker === null) return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") closePicker();
+    }
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (
+        target instanceof Node &&
+        sectionRef.current &&
+        !sectionRef.current.contains(target)
+      ) {
+        closePicker();
+      }
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [picker]);
+
   function closePicker() {
     setPicker(null);
     setQuery("");
@@ -259,14 +331,106 @@ export function ChangeReviewers({
     }
   }
 
-  const visibleResults = results.filter((user) =>
-    picker === "reviewer"
+  /** Nobody reviews their own change, and nobody is listed twice. */
+  function eligible(user: UserOption, kind: PickerKind): boolean {
+    return kind === "reviewer"
       ? user.login !== submittedBy && !reviewerLogins.has(user.login)
-      : user.login !== assignee?.login,
+      : user.login !== assignee?.login;
+  }
+
+  // Before two letters are typed the popover shows the document's own people;
+  // after that it shows the whole workspace. Either way it shows *something*,
+  // which is the difference between a menu and a dead text box.
+  const searching2Plus = debouncedQuery.length >= 2;
+  const options = (searching2Plus ? results : collaborators).filter((user) =>
+    picker === null ? false : eligible(user, picker),
   );
 
+  function choose(user: UserOption) {
+    void save(
+      picker === "assignee"
+        ? { assignee: user.login }
+        : {
+            reviewers: [
+              ...reviewers.map((reviewer) => reviewer.login),
+              user.login,
+            ],
+          },
+    );
+  }
+
+  function renderPicker(kind: PickerKind) {
+    if (picker !== kind) return null;
+
+    return (
+      <div className="change-assignments-picker" role="group">
+        <label className="sr-only" htmlFor="change-assignment-search">
+          {kind === "assignee"
+            ? "Search for an assignee"
+            : "Search for a reviewer"}
+        </label>
+        <input
+          id="change-assignment-search"
+          className="collaborator-search-input"
+          type="search"
+          autoComplete="off"
+          autoFocus
+          placeholder={
+            kind === "assignee" ? "Search people…" : "Search people…"
+          }
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+
+        {searching ? (
+          <p className="change-assignments-hint">Searching…</p>
+        ) : options.length > 0 ? (
+          <>
+            {!searching2Plus ? (
+              <p className="change-assignments-hint">On this document</p>
+            ) : null}
+            <ul className="change-assignments-results">
+              {options.map((user) => (
+                <li key={user.login}>
+                  <button
+                    className="change-assignments-result"
+                    type="button"
+                    disabled={busy}
+                    onClick={() => choose(user)}
+                  >
+                    <PersonAvatar person={user} />
+                    <span className="reviewer-identity">
+                      <span className="reviewer-name">
+                        {user.fullName.trim() || capitalizeFirst(user.login)}
+                      </span>
+                      <span className="reviewer-status-label">
+                        @{user.login}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <p className="change-assignments-hint">
+            {searching2Plus
+              ? kind === "reviewer"
+                ? "Everyone matching that is already on this change."
+                : "Nobody matched that search."
+              : "Type a name to search the workspace."}
+          </p>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <section className="change-assignments" aria-label="Reviewers">
+    <section
+      className="change-assignments"
+      aria-label="Reviewers"
+      ref={sectionRef}
+    >
       <div className="change-assignments-block">
         <h3 className="change-detail-section-title">Assignee</h3>
         {assignee ? (
@@ -301,28 +465,29 @@ export function ChangeReviewers({
         )}
 
         {canManage ? (
-          <button
-            className="bs-btn bs-btn-secondary change-assignments-btn"
-            type="button"
-            disabled={busy}
-            onClick={() =>
-              picker === "assignee" ? closePicker() : setPicker("assignee")
-            }
-          >
-            {assignee ? "Reassign" : "Assign someone"}
-          </button>
+          <div className="change-assignments-anchor">
+            <button
+              className="bs-btn bs-btn-secondary change-assignments-btn"
+              type="button"
+              disabled={busy}
+              aria-expanded={picker === "assignee"}
+              aria-haspopup="true"
+              onClick={() =>
+                picker === "assignee" ? closePicker() : setPicker("assignee")
+              }
+            >
+              {assignee ? "Reassign" : "Assign someone"}
+              <ChevronDown size={14} strokeWidth={1.75} aria-hidden="true" />
+            </button>
+            {renderPicker("assignee")}
+          </div>
         ) : null}
       </div>
 
       <div className="change-assignments-block">
-        <div className="change-assignments-heading">
-          <h3 className="change-detail-section-title">Reviewers</h3>
-          <ApprovalMeter
-            approvalCount={approvalCount}
-            requiredApprovals={requiredApprovals}
-            size="detail"
-          />
-        </div>
+        {/* No approval meter here: the change's header already carries it,
+            and two of them 500px apart is the same fact twice. */}
+        <h3 className="change-detail-section-title">Reviewers</h3>
 
         {reviewers.length === 0 ? (
           <p className="change-assignments-empty">
@@ -354,89 +519,24 @@ export function ChangeReviewers({
         )}
 
         {canManage ? (
-          <button
-            className="bs-btn bs-btn-secondary change-assignments-btn"
-            type="button"
-            disabled={busy}
-            onClick={() =>
-              picker === "reviewer" ? closePicker() : setPicker("reviewer")
-            }
-          >
-            Add a reviewer
-          </button>
+          <div className="change-assignments-anchor">
+            <button
+              className="bs-btn bs-btn-secondary change-assignments-btn"
+              type="button"
+              disabled={busy}
+              aria-expanded={picker === "reviewer"}
+              aria-haspopup="true"
+              onClick={() =>
+                picker === "reviewer" ? closePicker() : setPicker("reviewer")
+              }
+            >
+              Add a reviewer
+              <ChevronDown size={14} strokeWidth={1.75} aria-hidden="true" />
+            </button>
+            {renderPicker("reviewer")}
+          </div>
         ) : null}
       </div>
-
-      {picker !== null ? (
-        <div className="change-assignments-picker">
-          <label className="sr-only" htmlFor="change-assignment-search">
-            {picker === "assignee"
-              ? "Search for an assignee"
-              : "Search for a reviewer"}
-          </label>
-          <input
-            id="change-assignment-search"
-            className="collaborator-search-input"
-            type="search"
-            autoComplete="off"
-            placeholder={
-              picker === "assignee"
-                ? "Who should own this change?"
-                : "Who should sign this off?"
-            }
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-
-          {debouncedQuery.length < 2 ? (
-            <p className="change-assignments-hint">
-              Type at least two letters of a name.
-            </p>
-          ) : searching ? (
-            <p className="change-assignments-hint">Searching…</p>
-          ) : visibleResults.length === 0 ? (
-            <p className="change-assignments-hint">
-              {picker === "reviewer"
-                ? "Everyone matching that is already on this change."
-                : "Nobody matched that search."}
-            </p>
-          ) : (
-            <ul className="change-assignments-results">
-              {visibleResults.map((user) => (
-                <li key={user.login}>
-                  <button
-                    className="change-assignments-result"
-                    type="button"
-                    disabled={busy}
-                    onClick={() =>
-                      void save(
-                        picker === "assignee"
-                          ? { assignee: user.login }
-                          : {
-                              reviewers: [
-                                ...reviewers.map((reviewer) => reviewer.login),
-                                user.login,
-                              ],
-                            },
-                      )
-                    }
-                  >
-                    <PersonAvatar person={user} />
-                    <span className="reviewer-identity">
-                      <span className="reviewer-name">
-                        {user.fullName.trim() || capitalizeFirst(user.login)}
-                      </span>
-                      <span className="reviewer-status-label">
-                        @{user.login}
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      ) : null}
 
       {error ? (
         <p className="vault-pr-error" role="alert">

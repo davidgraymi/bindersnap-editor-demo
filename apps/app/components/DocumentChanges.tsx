@@ -3,12 +3,11 @@ import { CircleSlash, GitMerge, GitPullRequest, Undo2 } from "lucide-react";
 import type { ChangeRecord } from "../documentDisplay";
 import {
   capitalizeFirst,
-  describeApprovalProgress,
   describeChangeOutcome,
+  describeChangeStanding,
   formatShortDate,
   getChangeStateBadgeClass,
   getChangeStateLabel,
-  getReviewerDisplayName,
 } from "../documentDisplay";
 import { ApprovalMeter } from "./ApprovalMeter";
 
@@ -79,15 +78,10 @@ function ChangeRow({
     ? formatShortDate(change.submittedAt)
     : null;
   const outcome = describeChangeOutcome(change);
-  // "Awaiting review" is the one label the approval count replaces outright.
-  // A request for changes and a closed change's outcome both still need words.
-  const showStateBadge =
-    !change.open ||
-    change.approvalState === "changes_requested" ||
-    describeApprovalProgress(change) === null;
-  const waitingOn = change.reviewers.filter(
-    (reviewer) => reviewer.status === "awaiting",
-  );
+  // The standing pill says where an open change stands and who it waits on, so
+  // the badge is left with the one thing it does not cover: how a closed change
+  // ended. The row's old "Waiting on …" line is inside the pill now.
+  const showStateBadge = describeChangeStanding(change) === null;
 
   return (
     <li className="change-row" key={change.number}>
@@ -107,26 +101,15 @@ function ChangeRow({
           {outcome ? (
             <span className="change-row-outcome">{outcome}</span>
           ) : null}
-          {change.open && waitingOn.length > 0 ? (
-            <span className="change-row-waiting">
-              Waiting on{" "}
-              {waitingOn.map(getReviewerDisplayName).slice(0, 3).join(", ")}
-              {waitingOn.length > 3 ? ` +${waitingOn.length - 3} more` : ""}
-            </span>
-          ) : null}
         </span>
         <span className="change-row-side">
           {showStateBadge ? (
             <span className={getChangeStateBadgeClass(change)}>
               {getChangeStateLabel(change)}
             </span>
-          ) : null}
-          {change.open ? (
-            <ApprovalMeter
-              approvalCount={change.approvalCount}
-              requiredApprovals={change.requiredApprovals}
-            />
-          ) : null}
+          ) : (
+            <ApprovalMeter change={change} />
+          )}
         </span>
       </button>
     </li>

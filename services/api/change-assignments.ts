@@ -64,7 +64,9 @@ function reviewTime(review: PullReview): string {
  * again. Only their latest answer describes where the change stands — the
  * earlier ones stay in the discussion log, which is where history belongs.
  */
-function latestReviewByUser(reviews: PullReview[]): Map<string, PullReview> {
+export function latestReviewByUser(
+  reviews: PullReview[],
+): Map<string, PullReview> {
   const latest = new Map<string, PullReview>();
 
   for (const review of reviews) {

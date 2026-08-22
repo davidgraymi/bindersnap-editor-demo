@@ -1,6 +1,7 @@
 import type { components } from "./spec/gitea";
 
 import { toGiteaApiError, unwrap, type GiteaClient } from "./client";
+import { latestReviewByUser } from "../change-assignments";
 
 type PullRequest = components["schemas"]["PullRequest"];
 type PullReview = components["schemas"]["PullReview"];
@@ -114,7 +115,15 @@ function resolveApprovalState(
     return "published";
   }
 
-  const reviewStates = reviews.map(toApprovalStateFromReview);
+  // Only each reviewer's *latest* answer counts. Folding every review ever
+  // submitted pinned a change to "changes requested" forever: a reviewer who
+  // asked for work, saw it done, and approved still left the old review in the
+  // list, so the page showed a red badge beside a full approval count and the
+  // publish button never came back. Gitea merges on the latest review per
+  // person, and this now agrees with it.
+  const reviewStates = [...latestReviewByUser(reviews).values()].map(
+    toApprovalStateFromReview,
+  );
   if (reviewStates.includes("changes_requested")) {
     return "changes_requested";
   }

@@ -978,3 +978,95 @@ test("removePullReviewers still reports a real failure", async () => {
     }),
   ).rejects.toThrow("Reviewer not found");
 });
+
+test("a reviewer who asks for changes and then approves no longer blocks the change", async () => {
+  // The bug: every review ever submitted was folded together, so one historical
+  // REQUEST_CHANGES pinned the pull request to changes_requested for good. The
+  // page then showed a red badge beside a full approval count, and the publish
+  // button — gated on approvalState — never came back. Gitea merges on each
+  // reviewer's latest review, and so does this now.
+  const handlers = buildDefaultHandlers(
+    [
+      {
+        number: 31,
+        title: "Reviewer changed their mind",
+        head: { ref: "feature/second-thoughts", label: "" },
+        state: "open",
+      },
+    ],
+    {},
+  );
+
+  handlers.GET["/repos/{owner}/{repo}/pulls/{index}/reviews"] = () => [
+    {
+      id: 1,
+      state: "REQUEST_CHANGES",
+      body: "Section 4.2 needs the updated GDPR guidance.",
+      user: { login: "bob" },
+      submitted_at: "2026-08-21T07:38:00Z",
+    },
+    {
+      id: 2,
+      state: "APPROVED",
+      body: "APPROVED",
+      user: { login: "bob" },
+      submitted_at: "2026-08-21T18:23:00Z",
+    },
+  ];
+
+  const { client } = createMockClient(handlers);
+  const { getPullRequestForBranch } = await import("./pullRequests");
+
+  const pullRequest = await getPullRequestForBranch({
+    client,
+    owner: "alice",
+    repo: "quarterly-report",
+    branch: "feature/second-thoughts",
+  });
+
+  expect(pullRequest?.approvalState).toBe("approved");
+});
+
+test("an approval withdrawn by a later request for changes still blocks", async () => {
+  // The mirror of the case above: latest-review-wins has to cut both ways.
+  const handlers = buildDefaultHandlers(
+    [
+      {
+        number: 32,
+        title: "Approval withdrawn",
+        head: { ref: "feature/withdrawn", label: "" },
+        state: "open",
+      },
+    ],
+    {},
+  );
+
+  handlers.GET["/repos/{owner}/{repo}/pulls/{index}/reviews"] = () => [
+    {
+      id: 1,
+      state: "APPROVED",
+      body: "Looks good.",
+      user: { login: "bob" },
+      submitted_at: "2026-08-21T07:38:00Z",
+    },
+    {
+      id: 2,
+      state: "REQUEST_CHANGES",
+      body: "Spotted a problem on a second read.",
+      user: { login: "bob" },
+      submitted_at: "2026-08-21T18:23:00Z",
+    },
+  ];
+
+  const { client } = createMockClient(handlers);
+  const { getPullRequestForBranch } = await import("./pullRequests");
+
+  const pullRequest = await getPullRequestForBranch({
+    client,
+    owner: "alice",
+    repo: "quarterly-report",
+    branch: "feature/withdrawn",
+  });
+
+  expect(pullRequest?.approvalState).toBe("changes_requested");
+});

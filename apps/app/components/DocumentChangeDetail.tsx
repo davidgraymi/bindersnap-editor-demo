@@ -6,7 +6,7 @@ import { publishDocument, submitDocumentReview } from "../api";
 import type { ChangeRecord } from "../documentDisplay";
 import {
   capitalizeFirst,
-  describeApprovalProgress,
+  describeChangeStanding,
   describeChangeOutcome,
   formatDate,
   getChangeStateBadgeClass,
@@ -226,12 +226,11 @@ export function DocumentChangeDetail({
   const reviewRef = change.branchName;
   const outcome = describeChangeOutcome(change);
   const canDecide = change.open && !isAnonymous;
-  // The approval count replaces "awaiting approval" and nothing else: a
-  // request for changes, or the way a closed change ended, still needs saying.
-  const showStateBadge =
-    !change.open ||
-    change.approvalState === "changes_requested" ||
-    describeApprovalProgress(change) === null;
+  // The standing pill owns publishability for an open change, blockers
+  // included, so a badge beside it could only repeat it or contradict it. What
+  // it does not cover is how a closed change ended, which is the badge's job.
+  const standing = describeChangeStanding(change, openThreadAuthors);
+  const showStateBadge = standing === null;
 
   return (
     <article className="change-detail">
@@ -241,23 +240,21 @@ export function DocumentChangeDetail({
             {change.summary}
             <span className="change-detail-number">#{prNum}</span>
           </h2>
-          {/* An open change is described by how far through approval it is,
-              not by the word "awaiting" — but a reviewer asking for work
-              still outranks the count, and a closed change is only its
-              outcome. */}
+          {/* An open change is described by how far through approval it is
+              and who is holding it up; a closed change is only its outcome.
+              Never both — they contradicted each other. */}
           <span className="change-detail-state">
             {showStateBadge ? (
               <span className={getChangeStateBadgeClass(change)}>
                 {getChangeStateLabel(change)}
               </span>
-            ) : null}
-            {change.open ? (
+            ) : (
               <ApprovalMeter
-                approvalCount={change.approvalCount}
-                requiredApprovals={change.requiredApprovals}
+                change={change}
+                openThreadAuthors={openThreadAuthors}
                 size="detail"
               />
-            ) : null}
+            )}
           </span>
         </div>
         <p className="change-detail-meta">
@@ -351,8 +348,6 @@ export function DocumentChangeDetail({
             submittedBy={change.submittedBy}
             assignee={change.assignee}
             reviewers={change.reviewers}
-            approvalCount={change.approvalCount}
-            requiredApprovals={change.requiredApprovals}
             openThreadAuthors={openThreadAuthors}
             canManage={canManageAssignments && change.open}
             onChanged={onChanged}
