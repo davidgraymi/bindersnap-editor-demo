@@ -3442,7 +3442,9 @@ input {
 }
 
 .app-nav-search {
-  flex: 0 1 260px;
+  /* Fixed, not shrinkable: the field has to stay wide enough to hold a
+     document name. The media queries below narrow it deliberately. */
+  flex: 0 0 260px;
   height: 36px;
   min-width: 0;
   position: relative;
