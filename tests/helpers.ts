@@ -474,9 +474,11 @@ export async function expectPublishedVersion(
   version: number,
   timeout = 30_000,
 ): Promise<void> {
-  await expect(page.locator(".doc-version-pill")).toHaveText(`v${version}`, {
-    timeout,
-  });
+  // The pill states the version and that it is the record: "v3 · Current".
+  await expect(page.locator(".doc-version-pill")).toHaveText(
+    `v${version} · Current`,
+    { timeout },
+  );
 }
 
 /** Assert how many changes are waiting on a decision, per the Changes tab. */

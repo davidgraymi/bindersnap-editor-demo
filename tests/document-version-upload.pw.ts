@@ -97,7 +97,7 @@ test.describe("UI document version upload flow", () => {
     });
 
     await expect(
-      page.getByRole("heading", { name: /No approved version yet/i }),
+      page.getByRole("heading", { name: /No official version yet/i }),
     ).toBeVisible();
     await expectOpenChangeCount(page, 1);
 

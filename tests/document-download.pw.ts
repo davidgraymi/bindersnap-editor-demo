@@ -97,7 +97,7 @@ test.describe("Document download", () => {
 
     // Verify the document is in the unpublished state with 1 pending approval
     await expect(
-      page.getByRole("heading", { name: /No approved version yet/i }),
+      page.getByRole("heading", { name: /No official version yet/i }),
     ).toBeVisible();
     await expectOpenChangeCount(page, 1);
 

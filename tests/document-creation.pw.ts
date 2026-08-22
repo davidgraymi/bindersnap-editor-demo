@@ -47,7 +47,7 @@ test.describe("UI document creation flow", () => {
       timeout: 30_000,
     });
     await expect(
-      page.getByRole("heading", { name: /No approved version yet/i }),
+      page.getByRole("heading", { name: /No official version yet/i }),
     ).toBeVisible();
     await expectOpenChangeCount(page, 1);
   });
