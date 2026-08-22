@@ -1,0 +1,165 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&family=Geist:wght@300..700&family=Geist+Mono:wght@400..600&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Geist', system-ui, -apple-system, sans-serif; background: #fafaf7; color: #1c1917; -webkit-font-smoothing: antialiased; }
+    a { color: #c94d1a; text-decoration: none; } a:hover { color: #e85d26; }
+    .nav { display: flex; align-items: center; gap: 24px; height: 64px; padding: 0 32px; border-bottom: 1px solid rgba(28,25,23,0.1); background: rgba(250,250,247,0.88); }
+    .navlink { font-size: 14px; font-weight: 500; color: #78716c; padding: 6px 10px; border-radius: 8px; }
+    .navlink--on { color: #1c1917; background: #f5f0e8; }
+    .search { display: flex; align-items: center; gap: 8px; width: 260px; height: 36px; padding: 0 12px; background: #ffffff; border: 1.5px solid rgba(28,25,23,0.1); border-radius: 12px; color: #a8a29e; font-size: 13px; }
+    .btn-coral { display: inline-flex; align-items: center; gap: 6px; background: #e85d26; color: #ffffff; border: none; border-radius: 8px; padding: 9px 16px; font-family: 'Geist', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .btn-ghost { display: inline-flex; align-items: center; gap: 6px; background: #ffffff; color: #1c1917; border: 1.5px solid rgba(28,25,23,0.1); border-radius: 8px; padding: 8px 14px; font-family: 'Geist', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .avatar { width: 32px; height: 32px; border-radius: 9999px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; flex-shrink: 0; }
+    .card { background: #ffffff; border: 1px solid rgba(28,25,23,0.1); border-radius: 16px; }
+    .seclabel { font-family: 'Geist Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: #78716c; }
+    .pill { display: inline-flex; align-items: center; gap: 5px; font-family: 'Geist Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.04em; border-radius: 9999px; padding: 3px 10px; white-space: nowrap; }
+    .pill--review { background: rgba(232,93,38,0.1); color: #c94d1a; }
+    .pill--approved { background: rgba(22,163,74,0.1); color: #16a34a; }
+    .pill--waiting { background: #f5f0e8; color: #78716c; }
+    .rowitem { display: flex; align-items: center; gap: 14px; padding: 16px 20px; border-top: 1px solid rgba(28,25,23,0.06); }
+    .cricon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .meta { font-size: 12.5px; color: #78716c; }
+    .docref { font-size: 12.5px; font-weight: 500; color: #44403c; }
+  </style>
+</helmet>
+
+<div style="width: 1280px; min-height: 820px; background: #fafaf7; display: flex; flex-direction: column;">
+
+  <!-- Top nav -->
+  <header class="nav">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <div style="width: 28px; height: 28px; border-radius: 8px; background: #e85d26; display: flex; align-items: center; justify-content: center;">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 2h8v12l-4-3-4 3V2z" stroke="#ffffff" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      </div>
+      <span style="font-family: 'Lora', Georgia, serif; font-weight: 600; font-size: 16px;">Bindersnap</span>
+    </div>
+    <nav style="display: flex; align-items: center; gap: 4px;">
+      <span class="navlink navlink--on">Home</span>
+      <span class="navlink">Documents</span>
+    </nav>
+    <div style="flex: 1;"></div>
+    <div class="search">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="#a8a29e" stroke-width="1.5"/><path d="M10.5 10.5L14 14" stroke="#a8a29e" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <span>Search documents</span>
+      <span style="margin-left: auto; font-family: 'Geist Mono', monospace; font-size: 11px; border: 1px solid rgba(28,25,23,0.1); border-radius: 4px; padding: 1px 5px;">/</span>
+    </div>
+    <button class="btn-coral" type="button">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"/></svg>
+      New document
+    </button>
+    <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M10 2a5 5 0 0 0-5 5v3l-1.5 3h13L15 10V7a5 5 0 0 0-5-5z" stroke="#78716c" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 16a2 2 0 0 0 4 0" stroke="#78716c" stroke-width="1.5"/></svg>
+    <div class="avatar" style="background: rgba(29,78,216,0.1); color: #1d4ed8;">DG</div>
+  </header>
+
+  <!-- Body: every row on this page is a CHANGE REQUEST you are part of -->
+  <main style="width: 880px; margin: 0 auto; padding: 40px 0 64px 0;">
+
+    <h1 style="font-family: 'Lora', Georgia, serif; font-size: 28px; font-weight: 600; letter-spacing: -0.015em; margin: 0 0 4px 0;">Good morning, David.</h1>
+    <p style="margin: 0 0 32px 0; font-size: 14px; color: #78716c;">2 change requests are waiting on you.</p>
+
+    <!-- Waiting on you -->
+    <section class="card" style="margin-bottom: 24px; overflow: hidden;">
+      <div style="display: flex; align-items: center; gap: 10px; padding: 16px 20px;">
+        <span class="seclabel" style="color: #c94d1a;">Waiting on you</span>
+        <span style="font-family: 'Geist Mono', monospace; font-size: 11px; background: rgba(232,93,38,0.1); color: #c94d1a; border-radius: 9999px; padding: 1px 8px;">2</span>
+      </div>
+
+      <div class="rowitem">
+        <div class="cricon" style="background: rgba(232,93,38,0.1); color: #c94d1a;">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8h8M10 8l-3-3M10 8l-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M13 3v10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </div>
+        <div style="flex: 1; min-width: 0;">
+          <div style="font-size: 14.5px; font-weight: 500;">Updated liability clause</div>
+          <div class="meta"><span class="docref">Vendor Agreement</span> · Maya submitted 2h ago · 2 of 3 approvals</div>
+        </div>
+        <span class="pill pill--review">Needs your review</span>
+        <button class="btn-ghost" type="button">Review</button>
+      </div>
+
+      <div class="rowitem">
+        <div class="cricon" style="background: rgba(22,163,74,0.1); color: #16a34a;">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3.5 3.5L13 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div style="flex: 1; min-width: 0;">
+          <div style="font-size: 14.5px; font-weight: 500;">Retention window extended to 7 years</div>
+          <div class="meta"><span class="docref">Data Retention Policy</span> · all approvals in · becomes v2 when you publish</div>
+        </div>
+        <span class="pill pill--approved">Ready to publish</span>
+        <button class="btn-ghost" type="button">Publish</button>
+      </div>
+    </section>
+
+    <!-- Your submissions -->
+    <section class="card" style="margin-bottom: 24px; overflow: hidden;">
+      <div style="display: flex; align-items: center; gap: 10px; padding: 16px 20px;">
+        <span class="seclabel">Your submissions</span>
+      </div>
+      <div class="rowitem">
+        <div class="cricon" style="background: #f5f0e8; color: #78716c;">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.4"/><path d="M8 4.5V8l2.5 1.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        </div>
+        <div style="flex: 1; min-width: 0;">
+          <div style="font-size: 14.5px; font-weight: 500;">Q3 policy refresh</div>
+          <div class="meta"><span class="docref">Q3 Compliance Policy</span> · waiting on Priya and Tom · submitted yesterday</div>
+        </div>
+        <span class="pill pill--waiting">1 of 3 approvals</span>
+      </div>
+    </section>
+
+    <!-- Recently decided: closed change requests, not documents -->
+    <section class="card" style="overflow: hidden;">
+      <div style="display: flex; align-items: center; gap: 10px; padding: 16px 20px;">
+        <span class="seclabel">Recently decided</span>
+        <span style="flex: 1;"></span>
+        <a href="#" style="font-size: 13px; font-weight: 500;">Browse documents →</a>
+      </div>
+      <div class="rowitem">
+        <div class="cricon" style="background: rgba(22,163,74,0.1); color: #16a34a;">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3.5 3.5L13 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div style="flex: 1; min-width: 0;">
+          <div style="font-size: 14.5px; font-weight: 500;">New onboarding checklist</div>
+          <div class="meta"><span class="docref">Employee Handbook</span> · you and 2 others approved</div>
+        </div>
+        <span class="pill pill--approved">Published as v6 · Aug 19</span>
+      </div>
+      <div class="rowitem">
+        <div class="cricon" style="background: rgba(22,163,74,0.1); color: #16a34a;">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3.5 3.5L13 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div style="flex: 1; min-width: 0;">
+          <div style="font-size: 14.5px; font-weight: 500;">Rewrote escalation contacts</div>
+          <div class="meta"><span class="docref">Incident Response Plan</span> · you approved</div>
+        </div>
+        <span class="pill pill--approved">Published as v2 · Aug 14</span>
+      </div>
+      <div class="rowitem">
+        <div class="cricon" style="background: #f5f0e8; color: #78716c;">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </div>
+        <div style="flex: 1; min-width: 0;">
+          <div style="font-size: 14.5px; font-weight: 500;">Shorter NDA for one-day contractors</div>
+          <div class="meta"><span class="docref">Mutual NDA</span> · withdrawn by Tom</div>
+        </div>
+        <span class="pill pill--waiting">Closed · Aug 12</span>
+      </div>
+    </section>
+
+  </main>
+</div>
+</x-dc>
+<script data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
