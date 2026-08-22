@@ -93,19 +93,47 @@ bun test services/api scripts infra/backups
 
 ## Seeded data
 
-After Gitea is healthy, the `seed` container runs `tests/seed.ts` automatically and creates:
+After Gitea is healthy, the `seed` container runs `tests/seed.ts`, which applies
+the scenario described in **[`tests/seed-data/dev.yaml`](seed-data/dev.yaml)**.
 
-- Two users: `alice` (admin) and `bob` (collaborator)
-- Two private demo document repositories: `alice/quarterly-report` and `alice/vendor-contracts`
-- Canonical document files stored on the seeded review branches at the repo root as `document.json`
-- Empty, protected `main` branches on the seeded document repositories
-- An open PR on `alice/quarterly-report` with a "Changes Requested" review
-- An open PR on `alice/vendor-contracts` awaiting review
-- A public OAuth2 app registered for PKCE login at the app's redirect URI
+**That YAML file is the seed data.** Want another account, another document, or a
+document parked in a particular review state? Edit the YAML. `seed.ts` is only the
+engine that turns the description into Gitea calls — you should not need to read it.
+
+Every seeded account signs in with the password `dev`:
+
+| User    | Password | Who they are                                         |
+| ------- | -------- | ---------------------------------------------------- |
+| `alice` | `dev`    | Compliance manager — owns most documents, site admin |
+| `bob`   | `dev`    | Legal counsel — the reviewer who blocks and approves |
+| `carol` | `dev`    | Operations lead — owns documents of her own          |
+| `dan`   | `dev`    | External auditor — read-only access                  |
+
+The documents cover every status the workspace list can show:
+
+| Document                          | Owner | Status                   |
+| --------------------------------- | ----- | ------------------------ |
+| `alice/quarterly-report`          | alice | Changes requested        |
+| `alice/vendor-contracts`          | alice | In review                |
+| `alice/incident-response-plan`    | alice | Ready to publish         |
+| `alice/data-processing-agreement` | alice | Published                |
+| `alice/employee-handbook`         | alice | Draft                    |
+| `carol/vendor-security-review`    | carol | Published + open change  |
+| `bob/hipaa-training-policy`       | bob   | Published (two versions) |
+
+Plus review threads (open and resolved), read-only collaborators, protected `main`
+branches, `doc/vNNNN` version tags, and a public OAuth2 app registered for PKCE
+login at the app's redirect URI.
 
 Integration tests call `seedDevStack()` from `seed.ts` themselves to ensure these
 fixtures are present before asserting against them. Seeding is idempotent — re-running
-it against an already-seeded Gitea is safe.
+it against an already-seeded Gitea is safe, including after a password change.
+
+Validate the scenario without starting anything:
+
+```bash
+bun run test:seed
+```
 
 ## Re-seeding from scratch
 
@@ -122,17 +150,16 @@ tests/
   playwright.config.ts      — Playwright configuration
   global-setup.ts           — starts the Docker Compose stack before tests
   global-teardown.ts        — tears down the stack after tests
-  seed.ts                   — shared TypeScript seeding workflow (do not edit lightly)
+  seed-data/dev.yaml        — THE SEED DATA: users, documents, changes, reviews
+  seed-scenario.ts          — the seed format: types, validation, document rendering
+  seed-scenario.test.ts     — unit tests for the format and for dev.yaml itself
+  seed.ts                   — the engine that applies a scenario to Gitea
   helpers.ts                — shared constants, createMemoryStorage, makeClient,
                               pollUntil, resolveAndStoreToken — imported by all *.pw.ts
   smoke.pw.ts               — stack health checks + app shell route smoke tests
   pkce-oauth.pw.ts          — PKCE OAuth2 app registration and SPA route tests
   gitea-services.pw.ts      — gitea-client integration tests (auth, documents,
                               pull requests, repos, uploads)
-  documents/
-    draft.json              — ProseMirror JSON fixture: working draft
-    in-review.json          — ProseMirror JSON fixture: open PR, awaiting review
-    changes-requested.json  — ProseMirror JSON fixture: PR with changes requested
 ```
 
 ### Why there is no api-auth.pw.ts

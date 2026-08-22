@@ -32,10 +32,11 @@
     "start": "bun run serve:app",
     "summarize": "bun scripts/summarize-lighthouse.ts",
     "test": "bun run test:all",
-    "test:all": "bun run test:app && bun run test:ops",
+    "test:all": "bun run test:app && bun run test:ops && bun run test:seed",
     "test:app": "bun test apps/app packages/editor packages/utils",
     "test:ops": "bun test services/api scripts infra/backups",
     "test:integration": "bunx playwright test --config=playwright.config.ts",
+    "test:seed": "bun test tests/seed-scenario.test.ts",
     "test:unit": "bun test",
     "up": "docker compose up --build",
     "tf:apply": "bash infra/apply-all.sh",
@@ -87,6 +88,7 @@
     "openapi-typescript": "^7.13.0",
     "orval": "^8.23.0",
     "prettier": "^3.9.6",
-    "standard-version": "^9.5.0"
+    "standard-version": "^9.5.0",
+    "yaml": "^2.9.0"
   }
 }

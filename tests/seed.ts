@@ -1,21 +1,34 @@
-import { readFile } from "node:fs/promises";
+/**
+ * Applies the declarative seed scenario to a running Gitea.
+ *
+ * There is no seed data in this file. What gets created lives in
+ * `tests/seed-data/dev.yaml`; this module is the engine that turns that
+ * description into Gitea repos, branches, pull requests, reviews, review
+ * threads, merges, and version tags — in that order, idempotently, so
+ * re-running it against a warm stack changes nothing.
+ *
+ * Adding a document or a reviewer is a YAML edit. Only a change to *how*
+ * Bindersnap models something in Gitea should ever bring you here.
+ */
+
 import { pathToFileURL } from "node:url";
 
-const DEFAULT_GITEA_URL = "http://localhost:3000";
-const DEFAULT_ADMIN_USER = "alice";
-const DEFAULT_ADMIN_PASS = "bindersnap-dev";
-const DEFAULT_BOB_USER = "bob";
-const DEFAULT_BOB_PASS = "bindersnap-dev";
-const DEFAULT_REPO_NAME = "quarterly-report";
-const FEATURE_BRANCH = "feature/q2-amendments";
-const CANONICAL_DOCUMENT_PATH = "document.json";
-const PR_TITLE = "Q2 amendments — GDPR section update";
-const REVIEW_BODY =
-  "Section 4.2 needs to reference the updated GDPR guidance from the January memo.";
+import {
+  loadSeedScenario,
+  renderSeedDocument,
+  type SeedChange,
+  type SeedDocumentRepo,
+  type SeedScenario,
+  type SeedThread,
+} from "./seed-scenario";
 
-const SECOND_REPO_NAME = "vendor-contracts";
-const SECOND_FEATURE_BRANCH = "feature/acme-renewal";
-const SECOND_PR_TITLE = "Acme Corp contract renewal — 2025 terms";
+const DEFAULT_GITEA_URL = "http://localhost:3000";
+const CANONICAL_DOCUMENT_PATH = "document.json";
+const SCENARIO_URL = new URL("seed-data/dev.yaml", import.meta.url);
+
+/** Kept for callers that still ask for the two historically-seeded PRs. */
+const PRIMARY_CHANGE = "alice/quarterly-report#feature/q2-amendments";
+const SECONDARY_CHANGE = "alice/vendor-contracts#feature/acme-renewal";
 
 type BasicAuth = {
   username: string;
@@ -25,25 +38,28 @@ type BasicAuth = {
 type SeedOptions = {
   baseUrl?: string;
   adminUser?: string;
+  /**
+   * Password for every seeded account, not just the admin. The accounts share
+   * one password by design — see `password` in the scenario file.
+   */
   adminPass?: string;
-  bobUser?: string;
-  bobPass?: string;
-  repoName?: string;
   createToken?: boolean;
   tokenNamePrefix?: string;
+  /** Override the scenario file. Defaults to `tests/seed-data/dev.yaml`. */
+  scenario?: SeedScenario;
   log?: (message: string) => void;
 };
 
 type SeedResult = {
   token?: string;
   tokenName?: string;
+  /** Pull request numbers keyed by `owner/repo#branch`. */
+  pullRequests: Record<string, number>;
+  /** The `alice/quarterly-report` review PR. */
   prNumber: number;
+  /** The `alice/vendor-contracts` review PR. */
   secondPrNumber: number;
   oauthClientId?: string;
-};
-
-type GiteaUser = {
-  login: string;
 };
 
 type GiteaContentFile = {
@@ -54,6 +70,8 @@ type GiteaContentFile = {
 type GiteaPull = {
   number: number;
   title: string;
+  state?: string;
+  merged?: boolean;
   head?: { ref?: string };
 };
 
@@ -61,12 +79,18 @@ type GiteaReview = {
   state?: string;
   body?: string;
   user?: { login?: string };
+  stale?: boolean;
+  dismissed?: boolean;
+};
+
+type GiteaComment = {
+  id: number;
+  body?: string;
+  user?: { login?: string };
 };
 
 type GiteaToken = {
   sha1?: string;
-  token_last_eight?: string;
-  name?: string;
 };
 
 type GiteaOAuthApp = {
@@ -95,14 +119,6 @@ function encodeAuth(auth: BasicAuth): string {
   return Buffer.from(`${auth.username}:${auth.password}`).toString("base64");
 }
 
-function fixtureUrl(name: string): URL {
-  return new URL(`documents/${name}`, import.meta.url);
-}
-
-async function fixtureText(name: string): Promise<string> {
-  return readFile(fixtureUrl(name), "utf8");
-}
-
 function toBase64Utf8(value: string): string {
   return Buffer.from(value, "utf8").toString("base64");
 }
@@ -112,6 +128,10 @@ function fromBase64Utf8(value?: string): string {
     return "";
   }
   return Buffer.from(value.replace(/\n/g, ""), "base64").toString("utf8");
+}
+
+function repoPath(owner: string, repo: string): string {
+  return `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
 }
 
 async function giteaRequest(
@@ -187,6 +207,7 @@ async function maybeBootstrapInstall(
   baseUrl: string,
   adminUser: string,
   adminPass: string,
+  adminEmail: string,
   log: (message: string) => void,
 ): Promise<void> {
   const adminLookup = await giteaRequest(
@@ -215,7 +236,7 @@ async function maybeBootstrapInstall(
     admin_name: adminUser,
     admin_passwd: adminPass,
     admin_confirm_passwd: adminPass,
-    admin_email: "alice@example.com",
+    admin_email: adminEmail,
   });
 
   await giteaRequest(baseUrl, "/", {
@@ -226,6 +247,13 @@ async function maybeBootstrapInstall(
   });
 }
 
+/**
+ * Create the account, or bring an existing one back in line with the scenario.
+ *
+ * The password reset matters: changing `password:` in the YAML has to work
+ * against a stack whose Gitea volume already holds the old accounts, otherwise
+ * every password change would mean `bun run down -v` first.
+ */
 async function ensureUser(
   baseUrl: string,
   adminAuth: BasicAuth,
@@ -235,56 +263,84 @@ async function ensureUser(
   fullName: string,
   log: (message: string) => void,
 ): Promise<void> {
-  const payload = {
-    login_name: username,
-    username,
-    email,
-    password,
-    full_name: fullName,
-    must_change_password: false,
-    send_notify: false,
-  };
-
-  const response = await giteaRequest(baseUrl, "/api/v1/admin/users", {
+  const created = await giteaRequest(baseUrl, "/api/v1/admin/users", {
     method: "POST",
     auth: adminAuth,
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      login_name: username,
+      username,
+      email,
+      password,
+      full_name: fullName,
+      must_change_password: false,
+      send_notify: false,
+    }),
     expectedStatuses: [201, 422],
   });
 
-  log(
-    response.status === 201
-      ? `Created user: ${username}`
-      : `User already exists: ${username}`,
+  if (created.status === 201) {
+    log(`Created user: ${username}`);
+    return;
+  }
+
+  await giteaRequest(
+    baseUrl,
+    `/api/v1/admin/users/${encodeURIComponent(username)}`,
+    {
+      method: "PATCH",
+      auth: adminAuth,
+      body: JSON.stringify({
+        login_name: username,
+        email,
+        password,
+        full_name: fullName,
+        must_change_password: false,
+      }),
+      expectedStatuses: [200, 403, 422],
+    },
   );
+  log(`User already exists, refreshed: ${username}`);
 }
 
 async function ensureRepo(
   baseUrl: string,
   adminAuth: BasicAuth,
-  repoName: string,
+  owner: string,
+  repo: string,
+  description: string,
   log: (message: string) => void,
 ): Promise<void> {
-  const response = await giteaRequest(baseUrl, "/api/v1/user/repos", {
-    method: "POST",
-    auth: adminAuth,
-    body: JSON.stringify({
-      name: repoName,
-      description: "Quarterly compliance report",
-      private: true,
-      auto_init: true,
-      default_branch: "main",
-    }),
-    expectedStatuses: [201, 409, 422],
-  });
+  const response = await giteaRequest(
+    baseUrl,
+    `/api/v1/admin/users/${encodeURIComponent(owner)}/repos`,
+    {
+      method: "POST",
+      auth: adminAuth,
+      body: JSON.stringify({
+        name: repo,
+        description,
+        private: true,
+        auto_init: true,
+        default_branch: "main",
+      }),
+      expectedStatuses: [201, 409, 422],
+    },
+  );
 
   log(
     response.status === 201
-      ? `Created repo: ${repoName}`
-      : `Repo already exists: ${repoName}`,
+      ? `Created repo: ${owner}/${repo}`
+      : `Repo already exists: ${owner}/${repo}`,
   );
 }
 
+/**
+ * Strip `main` back to an empty history.
+ *
+ * A Bindersnap document only reaches `main` by being published, so a freshly
+ * created repository must not carry Gitea's auto-init README or a stray
+ * document file — otherwise every new document would look already-published.
+ */
 async function bootstrapEmptyMainBranch(
   baseUrl: string,
   adminAuth: BasicAuth,
@@ -292,45 +348,32 @@ async function bootstrapEmptyMainBranch(
   repo: string,
   log: (message: string) => void,
 ): Promise<void> {
-  let removedAnyFile = false;
+  const currentFile = await giteaRequest(
+    baseUrl,
+    `${repoPath(owner, repo)}/contents/README.md?ref=main`,
+    {
+      auth: adminAuth,
+      expectedStatuses: [200, 404],
+    },
+  );
 
-  for (const path of ["README.md", CANONICAL_DOCUMENT_PATH]) {
-    const currentFile = await giteaRequest(
-      baseUrl,
-      `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${path}?ref=main`,
-      {
-        auth: adminAuth,
-        expectedStatuses: [200, 404],
-      },
-    );
-
-    if (currentFile.status === 404) {
-      continue;
-    }
-
-    const filePayload = (await currentFile.json()) as GiteaContentFile;
-    await giteaRequest(
-      baseUrl,
-      `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${path}`,
-      {
-        method: "DELETE",
-        auth: adminAuth,
-        body: JSON.stringify({
-          branch: "main",
-          message: `seed: remove ${path} from main`,
-          sha: filePayload.sha,
-        }),
-        expectedStatuses: [200],
-      },
-    );
-    removedAnyFile = true;
+  if (currentFile.status === 404) {
+    log(`Main branch already bootstrapped: ${owner}/${repo}`);
+    return;
   }
 
-  log(
-    removedAnyFile
-      ? `Bootstrapped empty main branch: ${repo}`
-      : `Main branch already bootstrapped: ${repo}`,
-  );
+  const filePayload = (await currentFile.json()) as GiteaContentFile;
+  await giteaRequest(baseUrl, `${repoPath(owner, repo)}/contents/README.md`, {
+    method: "DELETE",
+    auth: adminAuth,
+    body: JSON.stringify({
+      branch: "main",
+      message: "seed: remove README.md from main",
+      sha: filePayload.sha,
+    }),
+    expectedStatuses: [200],
+  });
+  log(`Bootstrapped empty main branch: ${owner}/${repo}`);
 }
 
 async function ensureMainBranchProtection(
@@ -342,111 +385,86 @@ async function ensureMainBranchProtection(
 ): Promise<void> {
   const protections = await giteaJson<GiteaBranchProtection[]>(
     baseUrl,
-    `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branch_protections`,
+    `${repoPath(owner, repo)}/branch_protections`,
     { auth: adminAuth },
   );
 
-  const existing = protections.find(
-    (protection) => protection.rule_name === "main",
-  );
-  if (existing) {
-    log(`Main branch protection already exists: ${repo}`);
+  if (protections.some((protection) => protection.rule_name === "main")) {
+    log(`Main branch protection already exists: ${owner}/${repo}`);
     return;
   }
 
-  await giteaRequest(
-    baseUrl,
-    `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branch_protections`,
-    {
-      method: "POST",
-      auth: adminAuth,
-      body: JSON.stringify({
-        rule_name: "main",
-        required_approvals: 1,
-        enable_approvals_whitelist: false,
-        enable_merge_whitelist: false,
-        block_on_rejected_reviews: true,
-        block_on_outdated_branch: true,
-        dismiss_stale_approvals: true,
-        enable_force_push: false,
-        enable_push: false,
-      }),
-      expectedStatuses: [201],
-    },
-  );
+  await giteaRequest(baseUrl, `${repoPath(owner, repo)}/branch_protections`, {
+    method: "POST",
+    auth: adminAuth,
+    body: JSON.stringify({
+      rule_name: "main",
+      required_approvals: 1,
+      enable_approvals_whitelist: false,
+      enable_merge_whitelist: false,
+      block_on_rejected_reviews: true,
+      block_on_outdated_branch: true,
+      dismiss_stale_approvals: true,
+      enable_force_push: false,
+      enable_push: false,
+    }),
+    expectedStatuses: [201],
+  });
 
-  log(`Ensured main branch protection: ${repo}`);
+  log(`Ensured main branch protection: ${owner}/${repo}`);
 }
 
 async function ensureFile(
   baseUrl: string,
-  adminAuth: BasicAuth,
+  auth: BasicAuth,
   owner: string,
   repo: string,
   path: string,
   content: string,
   commitMessage: string,
-  branch?: string,
+  branch: string,
   log?: (message: string) => void,
 ): Promise<void> {
-  const refParam = branch ? `?ref=${encodeURIComponent(branch)}` : "";
-  const getPath = `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${path}${refParam}`;
+  const getPath = `${repoPath(owner, repo)}/contents/${path}?ref=${encodeURIComponent(branch)}`;
   const currentFile = await giteaRequest(baseUrl, getPath, {
-    auth: adminAuth,
+    auth,
     expectedStatuses: [200, 404],
   });
 
   const contentBase64 = toBase64Utf8(content);
   if (currentFile.status === 404) {
-    const createPayload: Record<string, string> = {
-      message: commitMessage,
-      content: contentBase64,
-    };
-    if (branch) {
-      createPayload.branch = branch;
-    }
-
-    await giteaRequest(
-      baseUrl,
-      `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${path}`,
-      {
-        method: "POST",
-        auth: adminAuth,
-        body: JSON.stringify(createPayload),
-        expectedStatuses: [201],
-      },
-    );
-    log?.(`Committed: ${path}`);
+    await giteaRequest(baseUrl, `${repoPath(owner, repo)}/contents/${path}`, {
+      method: "POST",
+      auth,
+      body: JSON.stringify({
+        message: commitMessage,
+        content: contentBase64,
+        branch,
+      }),
+      expectedStatuses: [201],
+    });
+    log?.(`Committed: ${owner}/${repo}@${branch} ${path}`);
     return;
   }
 
   const filePayload = (await currentFile.json()) as GiteaContentFile;
-  const currentText = fromBase64Utf8(filePayload.content);
-  if (currentText === content) {
-    log?.(`Already up to date: ${path}`);
+  if (fromBase64Utf8(filePayload.content) === content) {
+    log?.(`Already up to date: ${owner}/${repo}@${branch} ${path}`);
     return;
   }
 
-  const updatePayload: Record<string, string> = {
-    message: commitMessage,
-    content: contentBase64,
-    sha: filePayload.sha,
-  };
-  if (branch) {
-    updatePayload.branch = branch;
-  }
-
-  await giteaRequest(
-    baseUrl,
-    `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${path}`,
-    {
-      method: "PUT",
-      auth: adminAuth,
-      body: JSON.stringify(updatePayload),
-      expectedStatuses: [200],
-    },
-  );
-  log?.(`Updated: ${path}`);
+  await giteaRequest(baseUrl, `${repoPath(owner, repo)}/contents/${path}`, {
+    method: "PUT",
+    auth,
+    body: JSON.stringify({
+      message: commitMessage,
+      content: contentBase64,
+      sha: filePayload.sha,
+      branch,
+    }),
+    expectedStatuses: [200],
+  });
+  log?.(`Updated: ${owner}/${repo}@${branch} ${path}`);
 }
 
 async function ensureCollaborator(
@@ -455,24 +473,25 @@ async function ensureCollaborator(
   owner: string,
   repo: string,
   collaborator: string,
+  permission: string,
   log: (message: string) => void,
 ): Promise<void> {
   await giteaRequest(
     baseUrl,
-    `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/collaborators/${encodeURIComponent(collaborator)}`,
+    `${repoPath(owner, repo)}/collaborators/${encodeURIComponent(collaborator)}`,
     {
       method: "PUT",
       auth: adminAuth,
-      body: JSON.stringify({ permission: "write" }),
+      body: JSON.stringify({ permission }),
       expectedStatuses: [204],
     },
   );
-  log(`Ensured collaborator: ${collaborator}`);
+  log(`Ensured collaborator: ${collaborator} (${permission}) on ${repo}`);
 }
 
 async function ensureBranch(
   baseUrl: string,
-  adminAuth: BasicAuth,
+  auth: BasicAuth,
   owner: string,
   repo: string,
   branchName: string,
@@ -481,9 +500,9 @@ async function ensureBranch(
 ): Promise<void> {
   const getResponse = await giteaRequest(
     baseUrl,
-    `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branches/${encodeURIComponent(branchName)}`,
+    `${repoPath(owner, repo)}/branches/${encodeURIComponent(branchName)}`,
     {
-      auth: adminAuth,
+      auth,
       expectedStatuses: [200, 404],
     },
   );
@@ -495,10 +514,10 @@ async function ensureBranch(
 
   const createResponse = await giteaRequest(
     baseUrl,
-    `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branches`,
+    `${repoPath(owner, repo)}/branches`,
     {
       method: "POST",
-      auth: adminAuth,
+      auth,
       body: JSON.stringify({
         new_branch_name: branchName,
         old_ref_name: sourceRef,
@@ -514,30 +533,46 @@ async function ensureBranch(
   );
 }
 
+async function findPullRequest(
+  baseUrl: string,
+  auth: BasicAuth,
+  owner: string,
+  repo: string,
+  branchName: string,
+): Promise<GiteaPull | undefined> {
+  const pulls = await giteaJson<GiteaPull[]>(
+    baseUrl,
+    `${repoPath(owner, repo)}/pulls?state=all&limit=100`,
+    { auth },
+  );
+  return pulls.find((pull) => pull.head?.ref === branchName);
+}
+
 async function ensurePullRequest(
   baseUrl: string,
-  adminAuth: BasicAuth,
+  auth: BasicAuth,
   owner: string,
   repo: string,
   branchName: string,
   title: string,
+  body: string,
   log: (message: string) => void,
-): Promise<number> {
-  const pulls = await giteaJson<GiteaPull[]>(
+): Promise<GiteaPull> {
+  const existing = await findPullRequest(
     baseUrl,
-    `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls?state=open&head=${encodeURIComponent(branchName)}`,
-    { auth: adminAuth },
+    auth,
+    owner,
+    repo,
+    branchName,
   );
-
-  const existing = pulls.find((pull) => pull.head?.ref === branchName);
   if (existing) {
     if (existing.title !== title) {
       await giteaRequest(
         baseUrl,
-        `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${existing.number}`,
+        `${repoPath(owner, repo)}/issues/${existing.number}`,
         {
           method: "PATCH",
-          auth: adminAuth,
+          auth,
           body: JSON.stringify({ title }),
           expectedStatuses: [200],
         },
@@ -546,73 +581,291 @@ async function ensurePullRequest(
     } else {
       log(`Pull request already exists: #${existing.number}`);
     }
-    return existing.number;
+    return { ...existing, title };
   }
 
   const created = await giteaJson<GiteaPull>(
     baseUrl,
-    `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls`,
+    `${repoPath(owner, repo)}/pulls`,
     {
       method: "POST",
-      auth: adminAuth,
-      body: JSON.stringify({
-        base: "main",
-        head: branchName,
-        title,
-        body: "",
-      }),
+      auth,
+      body: JSON.stringify({ base: "main", head: branchName, title, body }),
       expectedStatuses: [201],
     },
   );
 
-  log(`Created pull request: #${created.number}`);
-  return created.number;
+  log(`Created pull request: #${created.number} ${title}`);
+  return created;
 }
 
-async function ensureRequestedChangesReview(
+const REVIEW_EVENTS: Record<string, string> = {
+  approved: "APPROVED",
+  changes_requested: "REQUEST_CHANGES",
+  commented: "COMMENT",
+};
+
+const REVIEW_STATES: Record<string, string[]> = {
+  approved: ["APPROVED"],
+  changes_requested: ["REQUEST_CHANGES", "CHANGES_REQUESTED"],
+  commented: ["COMMENT", "COMMENTED"],
+};
+
+/**
+ * Bring the pull request's reviews in line with the scenario.
+ *
+ * Retries, because Gitea dismisses approvals asynchronously when it catches up
+ * with the push that created the branch — a push that lands moments before the
+ * pull request exists. Without the retry a seeded approval silently arrives
+ * dismissed, and the document shows up in the wrong state.
+ */
+async function ensureReviews(
   baseUrl: string,
   adminAuth: BasicAuth,
-  bobAuth: BasicAuth,
+  authFor: (username: string) => BasicAuth,
   owner: string,
   repo: string,
   pullNumber: number,
-  bobUser: string,
+  wanted: SeedChange["reviews"],
   log: (message: string) => void,
 ): Promise<void> {
-  const reviews = await giteaJson<GiteaReview[]>(
-    baseUrl,
-    `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${pullNumber}/reviews`,
-    { auth: adminAuth },
-  );
-
-  const alreadyExists = reviews.some(
-    (review) =>
-      review.user?.login === bobUser &&
-      review.body === REVIEW_BODY &&
-      (review.state === "REQUEST_CHANGES" ||
-        review.state === "CHANGES_REQUESTED"),
-  );
-
-  if (alreadyExists) {
-    log(`Requested-changes review already exists for #${pullNumber}`);
+  if (wanted.length === 0) {
     return;
   }
 
-  await giteaRequest(
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const reviews = await giteaJson<GiteaReview[]>(
+      baseUrl,
+      `${repoPath(owner, repo)}/pulls/${pullNumber}/reviews`,
+      { auth: adminAuth },
+    );
+
+    const missing = wanted.filter(
+      (review) =>
+        !reviews.some(
+          (existing) =>
+            existing.user?.login === review.by &&
+            existing.body === review.body &&
+            (REVIEW_STATES[review.state] ?? []).includes(
+              existing.state ?? "",
+            ) &&
+            existing.dismissed !== true &&
+            existing.stale !== true,
+        ),
+    );
+
+    if (missing.length === 0) {
+      if (attempt === 0) {
+        log(`Reviews already in place on #${pullNumber}`);
+      }
+      return;
+    }
+
+    for (const review of missing) {
+      await giteaRequest(
+        baseUrl,
+        `${repoPath(owner, repo)}/pulls/${pullNumber}/reviews`,
+        {
+          method: "POST",
+          auth: authFor(review.by),
+          body: JSON.stringify({
+            body: review.body,
+            event: REVIEW_EVENTS[review.state],
+          }),
+          expectedStatuses: [200, 201],
+        },
+      );
+      log(`Submitted ${review.state} review by ${review.by} on #${pullNumber}`);
+    }
+
+    // Give Gitea's async review-dismissal pass a chance to undo what we just
+    // wrote, so the next loop can see it and put it back.
+    await sleep(1500);
+  }
+
+  throw new Error(
+    `Reviews on #${pullNumber} in ${owner}/${repo} kept being dismissed after 5 attempts.`,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Review threads
+//
+// Gitea has no thread primitive, so Bindersnap models a thread as pull-request
+// issue comments carrying a trailing marker. Resolution is append-only: a
+// resolve is a new comment, never an edit. The seed writes exactly the same
+// shape the app does — see services/api/gitea-client/discussions.ts.
+// ---------------------------------------------------------------------------
+
+function threadMarker(
+  kind: "thread" | "reply" | "resolve",
+  threadId: string,
+  extra?: Record<string, string>,
+): string {
+  const attrs = [`kind=${kind}`, `thread=${threadId}`];
+  for (const [key, value] of Object.entries(extra ?? {})) {
+    attrs.push(`${key}=${value}`);
+  }
+  return `<!-- bindersnap:v1 ${attrs.join(" ")} -->`;
+}
+
+function threadComment(
+  body: string,
+  kind: "thread" | "reply" | "resolve",
+  threadId: string,
+  extra?: Record<string, string>,
+): string {
+  const marker = threadMarker(kind, threadId, extra);
+  return body ? `${body}\n\n${marker}` : marker;
+}
+
+async function ensureThread(
+  baseUrl: string,
+  adminAuth: BasicAuth,
+  authFor: (username: string) => BasicAuth,
+  owner: string,
+  repo: string,
+  pullNumber: number,
+  thread: SeedThread,
+  log: (message: string) => void,
+): Promise<void> {
+  const comments = await giteaJson<GiteaComment[]>(
     baseUrl,
-    `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${pullNumber}/reviews`,
+    `${repoPath(owner, repo)}/issues/${pullNumber}/comments`,
+    { auth: adminAuth },
+  );
+
+  const has = (marker: string): boolean =>
+    comments.some((comment) => (comment.body ?? "").includes(marker));
+
+  const post = async (author: string, body: string): Promise<void> => {
+    await giteaRequest(
+      baseUrl,
+      `${repoPath(owner, repo)}/issues/${pullNumber}/comments`,
+      {
+        method: "POST",
+        auth: authFor(author),
+        body: JSON.stringify({ body }),
+        expectedStatuses: [201],
+      },
+    );
+  };
+
+  if (!has(threadMarker("thread", thread.id))) {
+    await post(thread.by, threadComment(thread.body, "thread", thread.id));
+    log(`Opened review thread "${thread.id}" on #${pullNumber}`);
+  }
+
+  // Replies share one marker, so count them rather than matching on text.
+  const replyMarker = threadMarker("reply", thread.id);
+  const existingReplies = comments.filter((comment) =>
+    (comment.body ?? "").includes(replyMarker),
+  ).length;
+
+  for (const reply of thread.replies.slice(existingReplies)) {
+    await post(reply.by, threadComment(reply.body, "reply", thread.id));
+    log(`Replied in thread "${thread.id}" on #${pullNumber}`);
+  }
+
+  if (
+    thread.resolved &&
+    !has(threadMarker("resolve", thread.id, { state: "resolved" }))
+  ) {
+    await post(
+      thread.resolvedBy ?? thread.by,
+      threadComment("", "resolve", thread.id, { state: "resolved" }),
+    );
+    log(`Resolved thread "${thread.id}" on #${pullNumber}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Publishing
+// ---------------------------------------------------------------------------
+
+/**
+ * Merge the change and tag the result — the same two steps the publish button
+ * performs, so a seeded published version is indistinguishable from a real one.
+ *
+ * `version` comes from the change's position in the scenario rather than from
+ * counting existing tags, so a second seed run re-derives the same tag name and
+ * does nothing instead of inventing a version nobody published.
+ */
+async function publishChange(
+  baseUrl: string,
+  auth: BasicAuth,
+  owner: string,
+  repo: string,
+  pull: GiteaPull,
+  title: string,
+  version: number,
+  refreshReviews: () => Promise<void>,
+  log: (message: string) => void,
+): Promise<void> {
+  if (!pull.merged && pull.state !== "closed") {
+    // Gitea computes mergeability asynchronously and answers 405 until it has.
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const response = await giteaRequest(
+        baseUrl,
+        `${repoPath(owner, repo)}/pulls/${pull.number}/merge`,
+        {
+          method: "POST",
+          auth,
+          body: JSON.stringify({
+            Do: "merge",
+            MergeTitleField: title,
+            MergeMessageField: "",
+          }),
+          expectedStatuses: [200, 405],
+        },
+      );
+
+      if (response.status === 200) {
+        log(`Merged pull request #${pull.number}`);
+        break;
+      }
+
+      const reason = await response.text();
+      if (attempt === 9) {
+        throw new Error(
+          `Could not merge #${pull.number} in ${owner}/${repo} after 10 attempts: ${reason}`,
+        );
+      }
+      if (reason.includes("approvals")) {
+        await refreshReviews();
+      }
+      await sleep(1000);
+    }
+  } else {
+    log(`Pull request already merged: #${pull.number}`);
+  }
+
+  const tagName = `doc/v${version.toString().padStart(4, "0")}`;
+  const response = await giteaRequest(
+    baseUrl,
+    `${repoPath(owner, repo)}/tags`,
     {
       method: "POST",
-      auth: bobAuth,
+      auth,
       body: JSON.stringify({
-        body: REVIEW_BODY,
-        event: "REQUEST_CHANGES",
+        tag_name: tagName,
+        target: "main",
+        message: `Published version ${tagName}`,
       }),
-      expectedStatuses: [200, 201],
+      expectedStatuses: [201, 409, 422],
     },
   );
-  log(`Submitted requested-changes review for #${pullNumber}`);
+
+  log(
+    response.status === 201
+      ? `Tagged published version: ${owner}/${repo} ${tagName}`
+      : `Published version already tagged: ${owner}/${repo}`,
+  );
 }
+
+// ---------------------------------------------------------------------------
+// Tokens and OAuth
+// ---------------------------------------------------------------------------
 
 async function createAccessToken(
   baseUrl: string,
@@ -627,10 +880,7 @@ async function createAccessToken(
     {
       method: "POST",
       auth: adminAuth,
-      body: JSON.stringify({
-        name: tokenName,
-        scopes: ["all"],
-      }),
+      body: JSON.stringify({ name: tokenName, scopes: ["all"] }),
       expectedStatuses: [201],
     },
   );
@@ -643,19 +893,6 @@ async function createAccessToken(
 
   log(`Created token: ${tokenName}`);
   return { token: token.sha1, tokenName };
-}
-
-function buildFeatureDocument(inReview: string): string {
-  return inReview
-    .replace("Vendor Contract — Acme Corp", "Q2 Compliance Report")
-    .replace(
-      "This contract has been submitted for review. Awaiting sign-off from the compliance team.",
-      "Section 4.2 now reflects the updated GDPR guidance from the January memo.",
-    )
-    .replace(
-      "Acme Corp will provide data processing services in accordance with our data handling addendum dated 2024-01-15.",
-      "Personal data may be retained for no longer than 24 months unless a longer period is required by law.",
-    );
 }
 
 export async function isTokenValid(
@@ -711,164 +948,200 @@ async function ensureOAuthApp(
   return created.client_id;
 }
 
+// ---------------------------------------------------------------------------
+// The scenario walk
+// ---------------------------------------------------------------------------
+
+async function applyChange(
+  baseUrl: string,
+  adminAuth: BasicAuth,
+  authFor: (username: string) => BasicAuth,
+  document: SeedDocumentRepo,
+  change: SeedChange,
+  version: number,
+  log: (message: string) => void,
+): Promise<number> {
+  const { owner, repo } = document;
+  const authorAuth = authFor(change.author ?? owner);
+
+  await ensureBranch(
+    baseUrl,
+    authorAuth,
+    owner,
+    repo,
+    change.branch,
+    "main",
+    log,
+  );
+  await ensureFile(
+    baseUrl,
+    authorAuth,
+    owner,
+    repo,
+    CANONICAL_DOCUMENT_PATH,
+    renderSeedDocument(change.document),
+    `seed: ${change.title}`,
+    change.branch,
+    log,
+  );
+
+  const pull = await ensurePullRequest(
+    baseUrl,
+    authorAuth,
+    owner,
+    repo,
+    change.branch,
+    change.title,
+    change.summary,
+    log,
+  );
+
+  const refreshReviews = (): Promise<void> =>
+    ensureReviews(
+      baseUrl,
+      adminAuth,
+      authFor,
+      owner,
+      repo,
+      pull.number,
+      change.reviews,
+      log,
+    );
+
+  await refreshReviews();
+
+  for (const thread of change.threads) {
+    await ensureThread(
+      baseUrl,
+      adminAuth,
+      authFor,
+      owner,
+      repo,
+      pull.number,
+      thread,
+      log,
+    );
+  }
+
+  if (change.publish) {
+    await publishChange(
+      baseUrl,
+      adminAuth,
+      owner,
+      repo,
+      pull,
+      change.title,
+      version,
+      refreshReviews,
+      log,
+    );
+  }
+
+  return pull.number;
+}
+
+async function applyDocument(
+  baseUrl: string,
+  adminAuth: BasicAuth,
+  authFor: (username: string) => BasicAuth,
+  document: SeedDocumentRepo,
+  log: (message: string) => void,
+): Promise<Record<string, number>> {
+  const { owner, repo } = document;
+
+  await ensureRepo(baseUrl, adminAuth, owner, repo, document.description, log);
+  await bootstrapEmptyMainBranch(baseUrl, adminAuth, owner, repo, log);
+  await ensureMainBranchProtection(baseUrl, adminAuth, owner, repo, log);
+
+  for (const collaborator of document.collaborators) {
+    await ensureCollaborator(
+      baseUrl,
+      adminAuth,
+      owner,
+      repo,
+      collaborator.user,
+      collaborator.permission,
+      log,
+    );
+  }
+
+  const pullRequests: Record<string, number> = {};
+  let publishedVersions = 0;
+  for (const change of document.changes) {
+    if (change.publish) {
+      publishedVersions += 1;
+    }
+    const number = await applyChange(
+      baseUrl,
+      adminAuth,
+      authFor,
+      document,
+      change,
+      publishedVersions,
+      log,
+    );
+    pullRequests[`${owner}/${repo}#${change.branch}`] = number;
+  }
+  return pullRequests;
+}
+
 export async function seedDevStack(
   options: SeedOptions = {},
 ): Promise<SeedResult> {
+  const scenario = options.scenario ?? loadSeedScenario(SCENARIO_URL);
   const baseUrl = options.baseUrl ?? process.env.GITEA_URL ?? DEFAULT_GITEA_URL;
-  const adminUser =
-    options.adminUser ?? process.env.GITEA_ADMIN_USER ?? DEFAULT_ADMIN_USER;
-  const adminPass =
-    options.adminPass ?? process.env.GITEA_ADMIN_PASS ?? DEFAULT_ADMIN_PASS;
-  const bobUser =
-    options.bobUser ?? process.env.GITEA_BOB_USER ?? DEFAULT_BOB_USER;
-  const bobPass =
-    options.bobPass ?? process.env.GITEA_BOB_PASS ?? DEFAULT_BOB_PASS;
-  const repoName = options.repoName ?? DEFAULT_REPO_NAME;
+  const password =
+    options.adminPass ?? process.env.GITEA_ADMIN_PASS ?? scenario.password;
   const createToken = options.createToken ?? true;
   const tokenNamePrefix = options.tokenNamePrefix ?? "bindersnap-dev";
   const log = options.log ?? ((message: string) => console.log(message));
 
-  const adminAuth: BasicAuth = { username: adminUser, password: adminPass };
-  const bobAuth: BasicAuth = { username: bobUser, password: bobPass };
+  const adminUser =
+    options.adminUser ??
+    process.env.GITEA_ADMIN_USER ??
+    scenario.users[0]?.username;
+  if (!adminUser) {
+    throw new Error("The seed scenario declares no users.");
+  }
+
+  const adminAuth: BasicAuth = { username: adminUser, password };
+  const authFor = (username: string): BasicAuth => ({ username, password });
 
   log("Waiting for Gitea...");
   await waitForUrl(baseUrl, "/", 30, 2000);
-  await maybeBootstrapInstall(baseUrl, adminUser, adminPass, log);
+  await maybeBootstrapInstall(
+    baseUrl,
+    adminUser,
+    password,
+    scenario.users.find((user) => user.username === adminUser)?.email ??
+      `${adminUser}@example.com`,
+    log,
+  );
   await waitForUrl(baseUrl, "/api/v1/settings/api", 30, 2000);
   log("Gitea is ready.");
 
-  await ensureUser(
-    baseUrl,
-    adminAuth,
-    bobUser,
-    bobPass,
-    "bob@example.com",
-    "Bob Reviewer",
-    log,
-  );
-  await ensureRepo(baseUrl, adminAuth, repoName, log);
-
-  const draft = await fixtureText("draft.json");
-  const inReview = await fixtureText("in-review.json");
-  const featureDocument = buildFeatureDocument(inReview);
-
-  await bootstrapEmptyMainBranch(baseUrl, adminAuth, adminUser, repoName, log);
-  await ensureMainBranchProtection(
-    baseUrl,
-    adminAuth,
-    adminUser,
-    repoName,
-    log,
-  );
-
-  await ensureCollaborator(
-    baseUrl,
-    adminAuth,
-    adminUser,
-    repoName,
-    bobUser,
-    log,
-  );
-  await ensureBranch(
-    baseUrl,
-    adminAuth,
-    adminUser,
-    repoName,
-    FEATURE_BRANCH,
-    "main",
-    log,
-  );
-  await ensureFile(
-    baseUrl,
-    adminAuth,
-    adminUser,
-    repoName,
-    CANONICAL_DOCUMENT_PATH,
-    featureDocument,
-    `seed: add ${CANONICAL_DOCUMENT_PATH} for q2 amendments`,
-    FEATURE_BRANCH,
-    log,
-  );
-
-  const prNumber = await ensurePullRequest(
-    baseUrl,
-    adminAuth,
-    adminUser,
-    repoName,
-    FEATURE_BRANCH,
-    PR_TITLE,
-    log,
-  );
-  await ensureRequestedChangesReview(
-    baseUrl,
-    adminAuth,
-    bobAuth,
-    adminUser,
-    repoName,
-    prNumber,
-    bobUser,
-    log,
-  );
-
-  // Second repo: vendor-contracts (alice owns, bob collaborates, open PR)
-  await ensureRepo(baseUrl, adminAuth, SECOND_REPO_NAME, log);
-  await bootstrapEmptyMainBranch(
-    baseUrl,
-    adminAuth,
-    adminUser,
-    SECOND_REPO_NAME,
-    log,
-  );
-  await ensureMainBranchProtection(
-    baseUrl,
-    adminAuth,
-    adminUser,
-    SECOND_REPO_NAME,
-    log,
-  );
-  await ensureCollaborator(
-    baseUrl,
-    adminAuth,
-    adminUser,
-    SECOND_REPO_NAME,
-    bobUser,
-    log,
-  );
-  await ensureBranch(
-    baseUrl,
-    adminAuth,
-    adminUser,
-    SECOND_REPO_NAME,
-    SECOND_FEATURE_BRANCH,
-    "main",
-    log,
-  );
-  const secondFeatureDoc = draft
-    .replace("Q2 Compliance Report", "Vendor Contract — Acme Corp")
-    .replace(
-      "This document is currently a working draft. No review has been submitted.",
-      "This contract has been submitted for renewal under the 2025 terms. Awaiting sign-off from the legal team.",
+  for (const user of scenario.users) {
+    if (user.username === adminUser) {
+      continue;
+    }
+    await ensureUser(
+      baseUrl,
+      adminAuth,
+      user.username,
+      password,
+      user.email,
+      user.fullName,
+      log,
     );
-  await ensureFile(
-    baseUrl,
-    adminAuth,
-    adminUser,
-    SECOND_REPO_NAME,
-    CANONICAL_DOCUMENT_PATH,
-    secondFeatureDoc,
-    `seed: add ${CANONICAL_DOCUMENT_PATH} for acme renewal`,
-    SECOND_FEATURE_BRANCH,
-    log,
-  );
-  const secondPrNumber = await ensurePullRequest(
-    baseUrl,
-    adminAuth,
-    adminUser,
-    SECOND_REPO_NAME,
-    SECOND_FEATURE_BRANCH,
-    SECOND_PR_TITLE,
-    log,
-  );
+  }
+
+  const pullRequests: Record<string, number> = {};
+  for (const document of scenario.documents) {
+    Object.assign(
+      pullRequests,
+      await applyDocument(baseUrl, adminAuth, authFor, document, log),
+    );
+  }
 
   const redirectUri = `http://localhost:${process.env.APP_PORT ?? "5173"}/auth/callback`;
   const oauthClientId = await ensureOAuthApp(
@@ -879,8 +1152,15 @@ export async function seedDevStack(
     log,
   );
 
+  const result: SeedResult = {
+    pullRequests,
+    prNumber: pullRequests[PRIMARY_CHANGE] ?? 0,
+    secondPrNumber: pullRequests[SECONDARY_CHANGE] ?? 0,
+    oauthClientId,
+  };
+
   if (!createToken) {
-    return { prNumber, secondPrNumber, oauthClientId };
+    return result;
   }
 
   const tokenInfo = await createAccessToken(
@@ -889,28 +1169,31 @@ export async function seedDevStack(
     tokenNamePrefix,
     log,
   );
-  return {
-    prNumber,
-    secondPrNumber,
-    oauthClientId,
-    token: tokenInfo.token,
-    tokenName: tokenInfo.tokenName,
-  };
+  return { ...result, token: tokenInfo.token, tokenName: tokenInfo.tokenName };
 }
 
 async function runCli(): Promise<void> {
-  const result = await seedDevStack();
+  const scenario = loadSeedScenario(SCENARIO_URL);
+  const result = await seedDevStack({ scenario });
+  const password = process.env.GITEA_ADMIN_PASS ?? scenario.password;
+
   console.log("");
   console.log("==================================================");
+  console.log("Sign in at http://localhost:5173 as any of:");
+  for (const user of scenario.users) {
+    const role = user.role ? ` — ${user.role}` : "";
+    console.log(`  ${user.username} / ${password}${role}`);
+  }
+  console.log("");
+  console.log(`Seeded ${scenario.documents.length} documents.`);
   if (result.oauthClientId) {
     console.log(`OAUTH_CLIENT_ID=${result.oauthClientId}`);
     console.log("Add to .env:");
     console.log(`  BUN_PUBLIC_GITEA_OAUTH_CLIENT_ID=${result.oauthClientId}`);
   }
   if (result.token) {
-    const tokenSuffix = result.token.slice(-8);
     console.log(`TOKEN_NAME=${result.tokenName}`);
-    console.log(`ALICE_TOKEN_SUFFIX=...${tokenSuffix}`);
+    console.log(`ALICE_TOKEN_SUFFIX=...${result.token.slice(-8)}`);
     console.log(
       "Token created. Set VITE_GITEA_TOKEN manually in your shell if needed.",
     );

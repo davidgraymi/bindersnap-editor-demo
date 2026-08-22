@@ -24,12 +24,11 @@ export const GITEA_URL = process.env.VITE_GITEA_URL ?? "http://localhost:3000";
 
 export const GITEA_ADMIN_USER = process.env.GITEA_ADMIN_USER ?? "alice";
 
-export const GITEA_ADMIN_PASS =
-  process.env.GITEA_ADMIN_PASS ?? "bindersnap-dev";
+export const GITEA_ADMIN_PASS = process.env.GITEA_ADMIN_PASS ?? "dev";
 
 export const GITEA_BOB_USER = process.env.GITEA_BOB_USER ?? "bob";
 
-export const GITEA_BOB_PASS = process.env.GITEA_BOB_PASS ?? "bindersnap-dev";
+export const GITEA_BOB_PASS = process.env.GITEA_BOB_PASS ?? GITEA_ADMIN_PASS;
 
 /** Raw token string from the environment — may be empty. */
 export const ENV_TOKEN = process.env.VITE_GITEA_TOKEN ?? "";
@@ -50,7 +49,8 @@ export const API_BASE_URL =
 
 export const OWNER = "alice";
 export const REPO = "quarterly-report";
-export const SEEDED_BRANCH = "feature/q2-amendments";
+export const SEEDED_BRANCH =
+  "upload/quarterly-report/20260210/091500Z-alice-4b1c9de2";
 export const SEEDED_DOC_PATH = "document.json";
 
 // ---------------------------------------------------------------------------

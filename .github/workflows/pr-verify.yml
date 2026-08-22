@@ -67,6 +67,8 @@ jobs:
             command: bun test apps/app packages/editor packages/utils
           - target: ops
             command: bun test services/api scripts infra/backups
+          - target: seed-data
+            command: bun run test:seed
 
     steps:
       - name: Checkout
