@@ -141,8 +141,10 @@ test.describe("Merge conflict resolution on publish", () => {
     });
     await page.getByRole("button", { name: "Confirm Approval" }).click();
 
-    // Wait for the approval status badge to reflect approval
-    await expect(page.locator(".vault-status-approved")).toBeVisible({
+    // Wait for the standing pill to reflect approval. An open change no longer
+    // carries a state badge: the pill says where it stands, so that the count
+    // and the blocking reason cannot contradict each other.
+    await expect(page.locator(".approval-meter--ready")).toBeVisible({
       timeout: 30_000,
     });
 
@@ -237,7 +239,7 @@ test.describe("Merge conflict resolution on publish", () => {
     });
     await page.getByRole("button", { name: "Confirm Approval" }).click();
     await expect(
-      page.locator(".change-detail .vault-status-approved"),
+      page.locator(".change-detail .approval-meter--ready"),
     ).toBeVisible({
       timeout: 30_000,
     });
@@ -284,7 +286,7 @@ test.describe("Merge conflict resolution on publish", () => {
     });
     await page.getByRole("button", { name: "Confirm Approval" }).click();
     await expect(
-      page.locator(".change-detail .vault-status-approved"),
+      page.locator(".change-detail .approval-meter--ready"),
     ).toBeVisible({
       timeout: 30_000,
     });
