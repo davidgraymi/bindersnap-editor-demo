@@ -598,7 +598,7 @@ export async function waitForNoPendingReviews(
  * and wait for the collaborator search input to become visible.
  */
 export async function openCollaboratorsTab(page: Page): Promise<void> {
-  await page.getByRole("tab", { name: "Team" }).click();
+  await page.getByRole("tab", { name: "Access & approvals" }).click();
   await expect(page.locator("#collaborator-search")).toBeVisible({
     timeout: 5_000,
   });

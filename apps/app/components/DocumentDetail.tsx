@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { Clock, GitPullRequest, Users } from "lucide-react";
 
 import type {
   PullRequestWithApprovalState,
@@ -9,25 +8,31 @@ import type {
   ReviewSettings,
   UploadResult,
 } from "../api";
-import { downloadDocument, getClosedChanges, getDocumentDetail } from "../api";
+import {
+  downloadDocument,
+  getClosedChanges,
+  getDocumentDetail,
+  listDocumentCollaborators,
+} from "../api";
 import type { DocumentChangeView, DocumentTab } from "../routes";
 import { describeFileKind } from "../documentFile";
 import type { ChangeRecord } from "../documentDisplay";
 import {
-  capitalizeFirst,
   closedChangeToRecord,
-  formatDate,
   formatDocumentName,
-  getApprovalStateLabel,
-  parseSubmissionSummary,
   toChangeRecord,
 } from "../documentDisplay";
+import {
+  buildDocumentHeaderFacts,
+  buildPendingDecisionRows,
+  buildTeamAvatars,
+  buildVersionRailRows,
+} from "../documentWorkspace";
+import { DocumentAccess } from "./DocumentAccess";
 import { DocumentChangeDetail } from "./DocumentChangeDetail";
 import type { ChangeFilter } from "./DocumentChanges";
 import { DocumentChanges } from "./DocumentChanges";
-import { DocumentCollaborators } from "./DocumentCollaborators";
 import { DocumentHistory } from "./DocumentHistory";
-import { DocumentPermissions } from "./DocumentPermissions";
 import { DocumentPreview } from "./DocumentPreview";
 import { UploadModal } from "./UploadModal";
 
@@ -70,10 +75,10 @@ function triggerBrowserDownload(blob: Blob, fileName: string): void {
 /**
  * The document workspace.
  *
- * One document, five views: what it says now, what is waiting on a decision,
- * how it got here, who can see it, and how it gets approved. The header names
- * the document and the version on record, and holds still at the same width on
- * every tab — it is a page, not a stack of boxes that resize under you.
+ * One document, four views: what it says now, what is waiting on a decision,
+ * how it got here, and who can approve it. The header names the document and
+ * the version on record, and holds still at the same width on every tab — it
+ * is a page, not a stack of boxes that resize under you.
  */
 export function DocumentDetail({
   owner,
@@ -116,6 +121,11 @@ export function DocumentDetail({
     loading: boolean;
     error: string | null;
   }>({ loading: false, error: null });
+  // Faces for the rail. Purely presentational, so a refusal costs nothing but
+  // an empty row — the Access & approvals tab is where this is really asked.
+  const [collaborators, setCollaborators] = useState<
+    RepoCollaboratorPermissionSummary[]
+  >([]);
 
   const loadDocumentData = useCallback(async () => {
     setIsLoading(true);
@@ -170,10 +180,27 @@ export function DocumentDetail({
     setChangeFilter("open");
   }, [loadDocumentData]);
 
+  useEffect(() => {
+    if (uploaderSlug === null) return;
+
+    let cancelled = false;
+    listDocumentCollaborators(owner, repo, 1, 12)
+      .then((payload) => {
+        if (!cancelled) setCollaborators(payload.collaborators);
+      })
+      .catch(() => {
+        if (!cancelled) setCollaborators([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [owner, repo, uploaderSlug]);
+
   const isAnonymous = uploaderSlug === null;
   const currentUser = uploaderSlug ?? "";
   const documentName = formatDocumentName(repo);
-  const latestTag = tags.length > 0 ? tags[0] : null;
+  const latestTag = tags[0] ?? null;
   const nextVersion = (latestTag?.version ?? 0) + 1;
 
   // Assigning a change is a write to the pull request, so it takes the same
@@ -258,9 +285,8 @@ export function DocumentDetail({
 
   if (isLoading) {
     return (
-      <div className="vault-detail app-page-shell">
+      <div className="docw-page">
         <div className="doc-panel vault-empty-state">
-          <div className="bs-eyebrow">Loading</div>
           <h2>Loading document details…</h2>
           <p>Fetching version history and pending approvals.</p>
         </div>
@@ -270,9 +296,8 @@ export function DocumentDetail({
 
   if (error) {
     return (
-      <div className="vault-detail app-page-shell">
+      <div className="docw-page">
         <div className="doc-panel vault-error-state">
-          <div className="bs-eyebrow">Error</div>
           <h2>Unable to load document</h2>
           <p>{error}</p>
           <button
@@ -290,60 +315,64 @@ export function DocumentDetail({
   const viewingRef = viewedVersion?.tagName ?? "main";
   const isViewingLatest = viewedVersion === null;
 
+  // History carries no count on purpose: a version count is not a number of
+  // things to deal with, and a bubble beside it reads like one.
   const tabs: { id: DocumentTab; label: string; count?: number }[] = [
     { id: "overview", label: "Document" },
     { id: "changes", label: "Changes", count: openPRs.length },
-    { id: "history", label: "History", count: tags.length },
+    { id: "history", label: "History" },
     ...(isAnonymous
       ? []
-      : ([
-          { id: "collaborators", label: "Team" },
-          { id: "permissions", label: "Settings" },
-        ] as const)),
+      : ([{ id: "access", label: "Access & approvals" }] as const)),
   ];
 
+  const headerFacts = buildDocumentHeaderFacts({
+    latestTag,
+    fileName: canonicalFileInfo?.downloadFileName ?? null,
+  });
+  const pendingRows = buildPendingDecisionRows(openPRs);
+  const versionRows = buildVersionRailRows(tags);
+  const teamAvatars = buildTeamAvatars(collaborators, owner);
+
   return (
-    <div className="vault-detail app-page-shell">
+    <div className="docw-page">
       <header className="doc-header">
         <div className="doc-header-top">
           <div className="doc-header-identity">
-            <p className="doc-header-path">
-              {owner} / {repo}
-            </p>
+            {/* No owner/repo path. Nobody thinks of their contract as
+                "alice / vendor-agreement" — it is the Vendor Agreement. */}
             <h1 className="doc-header-title">{documentName}</h1>
             <div className="doc-header-facts">
               {/* The official version, not a status. A document can have v3
                   published and v4 in review at the same time, so a single
                   status word here was always going to be a lie. */}
-              <span className="doc-version-pill">
-                {latestTag ? `v${latestTag.version}` : "No version yet"}
+              <span
+                className={`doc-version-pill doc-version-pill--${headerFacts.tone}`}
+              >
+                {headerFacts.versionLabel}
               </span>
-              {latestTag ? (
-                <span className="doc-header-fact">
-                  Approved {formatDate(latestTag.created)}
-                </span>
-              ) : (
-                <span className="doc-header-fact">Nothing published yet</span>
-              )}
-              {canonicalFileInfo ? (
-                <span className="doc-header-fact doc-header-file">
-                  {canonicalFileInfo.downloadFileName} ·{" "}
-                  {describeFileKind(canonicalFileInfo.downloadFileName)}
+              <span className="doc-header-fact">
+                {headerFacts.approvedLine}
+              </span>
+              {headerFacts.fileName ? (
+                <span
+                  className="doc-header-fact doc-header-file"
+                  title={describeFileKind(headerFacts.fileName)}
+                >
+                  {headerFacts.fileName}
                 </span>
               ) : null}
             </div>
           </div>
 
           {!isAnonymous ? (
-            <div className="doc-header-actions">
-              <button
-                className="bs-btn bs-btn-primary"
-                type="button"
-                onClick={() => setShowUploadModal(true)}
-              >
-                Submit New Version
-              </button>
-            </div>
+            <button
+              className="doc-header-submit"
+              type="button"
+              onClick={() => setShowUploadModal(true)}
+            >
+              Submit new version
+            </button>
           ) : null}
         </div>
 
@@ -376,17 +405,9 @@ export function DocumentDetail({
         </p>
       ) : null}
 
-      {activeView === "collaborators" && !isAnonymous ? (
+      {activeView === "access" && !isAnonymous ? (
         <div className="document-detail-tab-panel">
-          <DocumentCollaborators
-            owner={owner}
-            repo={repo}
-            currentUsername={currentUser}
-          />
-        </div>
-      ) : activeView === "permissions" && !isAnonymous ? (
-        <div className="document-detail-tab-panel">
-          <DocumentPermissions
+          <DocumentAccess
             owner={owner}
             repo={repo}
             currentUsername={currentUser}
@@ -522,150 +543,105 @@ export function DocumentDetail({
           </div>
 
           <aside className="doc-rail" aria-label="Document summary">
-            <section className="doc-rail-card">
-              <h2 className="doc-rail-title">
-                {latestTag
-                  ? `Official version — v${latestTag.version}`
-                  : "No approved version yet"}
-              </h2>
-              {/* When there is no version, the page itself already says so in
-                  full. The rail does not need to say it twice. */}
-              {latestTag ? (
-                <p className="doc-rail-note">
-                  Approved on {formatDate(latestTag.created)}. Approved versions
-                  are locked — a change means a new version and a new review.
-                </p>
-              ) : null}
-              <dl className="doc-rail-facts">
-                <div>
-                  <dt>Owner</dt>
-                  <dd>{capitalizeFirst(owner)}</dd>
-                </div>
-                <div>
-                  <dt>Versions</dt>
-                  <dd>{tags.length}</dd>
-                </div>
-                <div>
-                  <dt>Open changes</dt>
-                  <dd>{openPRs.length}</dd>
-                </div>
-              </dl>
-            </section>
-
-            <section className="doc-rail-card">
-              <h2 className="doc-rail-title">
-                <GitPullRequest
-                  size={14}
-                  strokeWidth={1.5}
-                  aria-hidden="true"
-                />
+            {/* The one coral thing on the page: what somebody still has to
+                decide. Everything below it is reference. */}
+            <section className="doc-rail-section">
+              <h2 className="doc-rail-title doc-rail-title--urgent">
                 Waiting on a decision
               </h2>
-              {openPRs.length === 0 ? (
-                <p className="doc-rail-note">
-                  Nothing is pending. The approved version above is the current
-                  record.
-                </p>
+              {pendingRows.length === 0 ? (
+                <div className="doc-rail-card doc-rail-card--quiet">
+                  <p className="doc-rail-note">
+                    Nothing is pending. The version above is the record.
+                  </p>
+                </div>
               ) : (
-                <>
-                  <ul className="doc-rail-list">
-                    {openPRs.slice(0, 3).map((pr) => (
-                      <li key={pr.number}>
-                        <button
-                          className="doc-rail-link"
-                          type="button"
-                          onClick={() => onOpenChange(pr.number ?? null)}
-                        >
-                          <span className="doc-rail-link-title">
-                            {parseSubmissionSummary(pr.body) ??
-                              `Submitted by ${capitalizeFirst(pr.user?.login ?? "someone")}`}
-                          </span>
-                          <span className="doc-rail-link-sub">
-                            {getApprovalStateLabel(pr.approvalState)}
-                            {pr.created_at
-                              ? ` · ${formatDate(pr.created_at)}`
-                              : ""}
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                  <button
-                    className="bs-btn bs-btn-secondary"
-                    type="button"
-                    onClick={() => onTabChange("changes")}
-                  >
-                    Review {openPRs.length} change
-                    {openPRs.length === 1 ? "" : "s"}
-                  </button>
-                </>
+                pendingRows.map((row) => (
+                  <div className="doc-rail-card" key={row.key}>
+                    <p className="doc-rail-card-title">{row.title}</p>
+                    <p className="doc-rail-card-meta">{row.meta}</p>
+                    <button
+                      className="doc-rail-card-link"
+                      type="button"
+                      onClick={() => onOpenChange(row.number)}
+                    >
+                      Review →
+                    </button>
+                  </div>
+                ))
               )}
             </section>
 
-            <section className="doc-rail-card">
-              <h2 className="doc-rail-title">
-                <Clock size={14} strokeWidth={1.5} aria-hidden="true" />
-                Recent versions
-              </h2>
-              {tags.length === 0 ? (
-                <p className="doc-rail-note">No published versions yet.</p>
+            <section className="doc-rail-section">
+              <h2 className="doc-rail-title">Versions</h2>
+              {versionRows.length === 0 ? (
+                <div className="doc-rail-card doc-rail-card--quiet">
+                  <p className="doc-rail-note">Nothing published yet.</p>
+                </div>
               ) : (
-                <>
-                  <ul className="doc-rail-list">
-                    {tags.slice(0, 4).map((tag) => (
-                      <li key={tag.name}>
-                        <button
-                          className="doc-rail-link"
-                          type="button"
-                          onClick={() => onTabChange("history")}
-                        >
-                          <span className="doc-rail-link-title">
-                            <span className="vault-version-badge">
-                              v{tag.version}
-                            </span>
-                          </span>
-                          <span className="doc-rail-link-sub">
-                            {formatDate(tag.created)}
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                  <button
-                    className="bs-btn bs-btn-secondary"
-                    type="button"
-                    onClick={() => onTabChange("history")}
-                  >
-                    View full history
-                  </button>
-                </>
+                <div className="doc-rail-card doc-rail-card--rows">
+                  {versionRows.map((row) => (
+                    <button
+                      className="doc-rail-row"
+                      type="button"
+                      key={row.key}
+                      onClick={() => {
+                        setViewedVersion(
+                          row.current
+                            ? null
+                            : { tagName: row.tagName, version: row.version },
+                        );
+                        onTabChange("overview");
+                      }}
+                    >
+                      <span
+                        className={`doc-rail-version${row.current ? " doc-rail-version--current" : ""}`}
+                      >
+                        {row.label}
+                      </span>
+                      <span className="doc-rail-row-date">{row.date}</span>
+                      {row.current ? (
+                        <span className="doc-rail-row-note">Current</span>
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
               )}
+              {tags.length > versionRows.length ? (
+                <button
+                  className="doc-rail-more"
+                  type="button"
+                  onClick={() => onTabChange("history")}
+                >
+                  Full history →
+                </button>
+              ) : null}
             </section>
 
             {!isAnonymous ? (
-              <section className="doc-rail-card">
-                <h2 className="doc-rail-title">
-                  <Users size={14} strokeWidth={1.5} aria-hidden="true" />
-                  Access
-                </h2>
-                <p className="doc-rail-note">
-                  Manage who can read this document and who has to sign off
-                  before it publishes.
-                </p>
-                <div className="doc-rail-actions">
+              <section className="doc-rail-section">
+                <h2 className="doc-rail-title">Team</h2>
+                <div className="doc-team">
+                  {teamAvatars.slice(0, 5).map((person) => (
+                    <span
+                      className="doc-team-avatar"
+                      key={person.key}
+                      title={person.name}
+                    >
+                      {person.initials}
+                    </span>
+                  ))}
+                  {teamAvatars.length > 5 ? (
+                    <span className="doc-team-avatar doc-team-avatar--more">
+                      +{teamAvatars.length - 5}
+                    </span>
+                  ) : null}
                   <button
-                    className="bs-btn bs-btn-secondary"
+                    className="doc-team-manage"
                     type="button"
-                    onClick={() => onTabChange("collaborators")}
+                    onClick={() => onTabChange("access")}
                   >
-                    Team
-                  </button>
-                  <button
-                    className="bs-btn bs-btn-secondary"
-                    type="button"
-                    onClick={() => onTabChange("permissions")}
-                  >
-                    Settings
+                    Manage
                   </button>
                 </div>
               </section>

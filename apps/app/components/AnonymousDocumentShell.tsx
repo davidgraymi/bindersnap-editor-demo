@@ -58,13 +58,9 @@ export function AnonymousDocumentShell({
               owner={route.owner}
               repo={route.repo}
               uploaderSlug={null}
-              // Signed-out readers get the record, not the controls: team and
-              // settings fall back to the document itself.
-              activeView={
-                route.tab === "permissions" || route.tab === "collaborators"
-                  ? "overview"
-                  : route.tab
-              }
+              // Signed-out readers get the record, not the controls:
+              // access and approvals falls back to the document itself.
+              activeView={route.tab === "access" ? "overview" : route.tab}
               activeChangeNumber={route.changeNumber ?? null}
               activeChangeView={route.changeView ?? "discussion"}
               onTabChange={(tab) =>

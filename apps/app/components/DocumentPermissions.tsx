@@ -282,7 +282,6 @@ export function DocumentPermissions({
     return (
       <div className="perms-page">
         <div className="perms-notice perms-notice--error">
-          <div className="bs-eyebrow">Error</div>
           <p>{loadError}</p>
         </div>
       </div>
@@ -451,7 +450,6 @@ export function DocumentPermissions({
 
           {isInternal ? (
             <div className="perms-notice">
-              <div className="bs-eyebrow">Internal (Gitea)</div>
               <p>
                 This document uses <strong>Internal</strong> visibility —
                 accessible to all logged-in Gitea users but not listed on your

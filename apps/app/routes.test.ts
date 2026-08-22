@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import {
   asShellRoute,
   getRoute,
+  isLegacyDocumentTabPath,
   isLegacyInboxPath,
   isProtectedAppRoute,
   routeToPath,
@@ -29,19 +30,38 @@ test("getRoute preserves document detail routes", () => {
     tab: "overview",
   });
 
+  expect(getRoute("/docs/alice/quarterly-report/access")).toEqual({
+    kind: "document",
+    owner: "alice",
+    repo: "quarterly-report",
+    tab: "access",
+  });
+});
+
+// Team and Settings became one tab. Links that were already sent still land
+// on the page that answers them.
+test("getRoute resolves the retired Team and Settings tabs to Access", () => {
   expect(getRoute("/docs/alice/quarterly-report/collaborators")).toEqual({
     kind: "document",
     owner: "alice",
     repo: "quarterly-report",
-    tab: "collaborators",
+    tab: "access",
   });
 
   expect(getRoute("/docs/alice/quarterly-report/permissions")).toEqual({
     kind: "document",
     owner: "alice",
     repo: "quarterly-report",
-    tab: "permissions",
+    tab: "access",
   });
+
+  expect(
+    isLegacyDocumentTabPath("/docs/alice/quarterly-report/permissions"),
+  ).toBe(true);
+  expect(isLegacyDocumentTabPath("/docs/alice/quarterly-report/access")).toBe(
+    false,
+  );
+  expect(isLegacyDocumentTabPath("/docs/alice/quarterly-report")).toBe(false);
 });
 
 test("getRoute maps the changes and history tabs", () => {
@@ -122,13 +142,7 @@ test("getRoute falls back to home for an unknown document tab", () => {
 });
 
 test("routeToPath round-trips every document tab", () => {
-  const tabs = [
-    "overview",
-    "changes",
-    "history",
-    "collaborators",
-    "permissions",
-  ] as const;
+  const tabs = ["overview", "changes", "history", "access"] as const;
 
   for (const tab of tabs) {
     const route = {
@@ -141,12 +155,12 @@ test("routeToPath round-trips every document tab", () => {
   }
 });
 
-test("getRoute maps permissions path with URL-encoded owner/repo", () => {
-  expect(getRoute("/docs/alice-org/my%20doc/permissions")).toEqual({
+test("getRoute maps the access path with URL-encoded owner/repo", () => {
+  expect(getRoute("/docs/alice-org/my%20doc/access")).toEqual({
     kind: "document",
     owner: "alice-org",
     repo: "my%20doc",
-    tab: "permissions",
+    tab: "access",
   });
 });
 

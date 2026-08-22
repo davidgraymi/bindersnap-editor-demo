@@ -129,8 +129,10 @@ async function createDocument(page: Page, fileName: string): Promise<void> {
 }
 
 async function openCollaboratorsTab(page: Page): Promise<void> {
-  // Tab is now labeled "Team" (was "Collaborators") in the new UI
-  const collaboratorsTab = page.getByRole("tab", { name: "Team" });
+  // Team and Settings merged into one tab in the redesign.
+  const collaboratorsTab = page.getByRole("tab", {
+    name: "Access & approvals",
+  });
   await expect(collaboratorsTab).toBeVisible({ timeout: 10_000 });
   await collaboratorsTab.click();
   await expect(page.getByRole("heading", { name: "Grant access" })).toBeVisible(
@@ -171,10 +173,9 @@ async function reopenDocumentFromWorkspace(page: Page): Promise<void> {
     timeout: 10_000,
   });
   await page.locator(".docs-list-item").first().click();
-  // Tab is now labeled "Team" (was "Collaborators") in the new UI
-  await expect(page.getByRole("tab", { name: "Team" })).toBeVisible({
-    timeout: 10_000,
-  });
+  await expect(
+    page.getByRole("tab", { name: "Access & approvals" }),
+  ).toBeVisible({ timeout: 10_000 });
   await openCollaboratorsTab(page);
 }
 

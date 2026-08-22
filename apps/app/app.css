@@ -677,120 +677,131 @@ input {
   align-content: start;
 }
 
-/* Header — the one part of the page that never changes as you move
-   between tabs, so you always know which document you are looking at.
-   It sits on the page rather than inside a card: a floating box that
-   resizes under you is the thing this page was accused of. */
-.doc-header {
+/* ── Document workspace ─────────────────────────────────────────────
+   The page is 1080px of content on paper, not a stack of cards. The header
+   never changes as you move between tabs, so you always know which document
+   you are looking at. */
+.docw-page {
+  width: 100%;
+  /* 1080px of content, plus the gutter that keeps it off the edge. */
+  max-width: calc(1080px + var(--brand-space-8) * 2);
+  margin: 0 auto;
+  padding: var(--brand-space-8) var(--brand-space-8) var(--brand-space-16);
+  box-sizing: border-box;
   display: grid;
   gap: var(--brand-space-5);
+  align-content: start;
+}
+
+.doc-header {
+  display: grid;
+  gap: var(--brand-space-6);
   padding: 0;
   background: none;
   border: none;
   border-bottom: 1px solid var(--bs-rule);
   border-radius: 0;
+  margin-bottom: var(--brand-space-2);
 }
 
 .doc-header-top {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--brand-space-6);
+  gap: var(--brand-space-5);
   flex-wrap: wrap;
 }
 
 .doc-header-identity {
   display: grid;
-  gap: var(--brand-space-2);
+  gap: 6px;
   min-width: 0;
-}
-
-.doc-header-back {
-  justify-self: start;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--brand-space-1);
-  margin-bottom: var(--brand-space-1);
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--bs-text-muted);
-  cursor: pointer;
-  font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-label);
-  letter-spacing: var(--brand-tracking-wide);
-  text-transform: uppercase;
-  transition: color var(--brand-transition-base);
-}
-
-.doc-header-back:hover,
-.doc-header-back:focus-visible {
-  color: var(--bs-text-primary);
-}
-
-.doc-header-path {
-  margin: 0;
-  font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-label);
-  letter-spacing: var(--brand-tracking-wide);
-  color: var(--bs-text-faint);
-  overflow-wrap: anywhere;
+  flex: 1;
 }
 
 .doc-header-title {
-  margin: 0;
   font-family: var(--brand-font-serif);
-  font-size: var(--brand-text-h2);
-  line-height: var(--brand-leading-tight);
-  overflow-wrap: anywhere;
+  font-size: 26px;
+  font-weight: var(--brand-weight-semibold);
+  letter-spacing: var(--brand-tracking-snug);
+  color: var(--bs-text-primary);
+  margin: 0;
 }
 
 .doc-header-facts {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: var(--brand-space-2) var(--brand-space-3);
-  margin-top: var(--brand-space-1);
+  flex-wrap: wrap;
+  gap: var(--brand-space-3);
 }
 
 .doc-header-fact {
-  font-size: var(--brand-text-sm);
+  font-size: 12.5px;
   color: var(--bs-text-muted);
 }
 
 .doc-header-file {
   font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-xs);
+  font-size: 11.5px;
 }
 
-.doc-header-actions {
-  display: flex;
-  gap: var(--brand-space-3);
-  align-items: center;
-}
-
-/* Official version — a fact, not a status. "Published" and "In review" are
-   both true at once whenever a new version is under review, so the header
-   states the version on record and leaves the verdicts to the Changes tab. */
+/* The version on record. Green means it is the record; nothing published
+   yet is a quiet grey statement of fact, not a warning. */
 .doc-version-pill {
   display: inline-flex;
   align-items: center;
-  padding: var(--brand-space-1) var(--brand-space-3);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-sm);
-  background: var(--bs-surface-2);
-  color: var(--bs-text-secondary);
+  gap: 5px;
   font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-xs);
+  font-size: var(--brand-text-label);
   font-weight: var(--brand-weight-medium);
-  letter-spacing: var(--brand-tracking-wide);
+  letter-spacing: 0.04em;
+  border-radius: var(--brand-radius-full);
+  padding: 3px 10px;
+  white-space: nowrap;
 }
 
-/* Tabs — GitHub's repo bar, in Bindersnap's voice. */
+.doc-version-pill--current {
+  background: var(--bs-green-dim);
+  color: var(--brand-green);
+}
+
+.doc-version-pill--none {
+  background: var(--bs-surface-2);
+  color: var(--bs-text-muted);
+}
+
+/* The one coral element on the page: the next action. */
+.doc-header-submit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  background: var(--brand-coral);
+  color: #ffffff;
+  border: none;
+  border-radius: var(--brand-radius-md);
+  padding: 9px var(--brand-space-4);
+  font-family: var(--brand-font-sans);
+  font-size: 13px;
+  font-weight: var(--brand-weight-semibold);
+  cursor: pointer;
+  transition: background var(--brand-transition-base);
+}
+
+.doc-header-submit:hover {
+  background: var(--brand-coral-dark);
+}
+
+.doc-header-submit:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 2px;
+}
+
+/* Tabs — four of them, sitting on the header's own rule. */
 .doc-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--brand-space-1);
+  gap: var(--brand-space-6);
   margin: 0 0 -1px;
   padding: 0;
 }
@@ -799,8 +810,8 @@ input {
   appearance: none;
   display: inline-flex;
   align-items: center;
-  gap: var(--brand-space-2);
-  padding: var(--brand-space-3) var(--brand-space-3);
+  gap: 6px;
+  padding: 10px 2px;
   border: none;
   border-bottom: 2px solid transparent;
   background: none;
@@ -825,18 +836,16 @@ input {
   border-bottom-color: var(--brand-coral);
 }
 
+/* A count, not an alarm: the bubble stays quiet even on the active tab.
+   History has none at all — a number of versions is not a number of things
+   to deal with. */
 .doc-tab-count {
-  padding: 1px var(--brand-space-2);
-  border-radius: var(--brand-radius-sm);
+  padding: 1px 7px;
+  border-radius: var(--brand-radius-full);
   background: var(--bs-surface-2);
   color: var(--bs-text-muted);
   font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-xs);
-}
-
-.doc-tab--active .doc-tab-count {
-  background: var(--bs-coral-dim);
-  color: var(--brand-coral-dark);
+  font-size: 10.5px;
 }
 
 .document-detail-tab-panel {
@@ -844,11 +853,11 @@ input {
   gap: var(--brand-space-5);
 }
 
-/* Document tab — the file, with a summary rail beside it. */
+/* Document tab — the file, with a slim rail beside it. */
 .doc-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
-  gap: var(--brand-space-5);
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 28px;
   align-items: start;
 }
 
@@ -872,22 +881,27 @@ input {
   font-size: var(--brand-text-sm);
 }
 
+/* The document itself: one white sheet, big radius, room to read. The
+   toolbar is the only chrome on it — a preview you cannot download is a
+   picture of a document. */
 .doc-preview {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   background: var(--bs-surface-1);
   border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-md);
+  border-radius: var(--brand-radius-xl);
   overflow: hidden;
+  min-height: 540px;
 }
 
+/* Slim chrome on a white sheet: the file it is, and the way to keep it. */
 .doc-preview-toolbar {
   display: flex;
   align-items: center;
   gap: var(--brand-space-3);
-  padding: var(--brand-space-3) var(--brand-space-4);
-  background: var(--bs-surface-2);
-  border-bottom: 1px solid var(--bs-rule);
+  padding: var(--brand-space-3) var(--brand-space-5);
+  background: none;
+  border-bottom: 1px solid var(--bs-rule-warm);
 }
 
 .doc-preview-filename {
@@ -922,9 +936,10 @@ input {
    no scrollbox inside a scrollbox. */
 .doc-preview-body {
   display: grid;
+  align-content: start;
   gap: var(--brand-space-3);
-  padding: var(--brand-space-5);
-  background: var(--bs-page-bg);
+  padding: var(--brand-space-12) 56px;
+  background: var(--bs-surface-1);
   min-height: 320px;
 }
 
@@ -1008,11 +1023,12 @@ input {
 }
 
 /* The sheet — the document reads like paper, not like a form field. */
+/* The sheet is already inside the card, so it carries no frame of its own —
+   it just holds the measure the document is read at. */
 .doc-preview-sheet {
-  padding: var(--brand-space-8);
-  background: var(--bs-surface-1);
-  border: 1px solid var(--bs-rule-warm);
-  border-radius: var(--brand-radius-sm);
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
   color: var(--bs-text-secondary);
 }
 
@@ -1154,122 +1170,213 @@ input {
   height: auto;
 }
 
-/* Summary rail — stays in view while a long document scrolls past it.
-   One column with rules between its sections, not a stack of cards: four
-   bordered boxes in a 300px gutter is four times the frame and none of the
-   information. */
+/* Summary rail — three sections, stated in the order they matter: what
+   somebody still has to decide, what is already on the record, and who is
+   here. Section titles are mono labels on the paper; only the cards under
+   them are white. */
 .doc-rail {
   display: grid;
   align-content: start;
+  gap: var(--brand-space-6);
   position: sticky;
   top: var(--brand-space-4);
-  padding: var(--brand-space-1) var(--brand-space-5);
-  border-left: 1px solid var(--bs-rule);
 }
 
-.doc-rail-card {
+.doc-rail-section {
   display: grid;
-  gap: var(--brand-space-3);
-  padding: var(--brand-space-5) 0;
-}
-
-.doc-rail-card + .doc-rail-card {
-  border-top: 1px solid var(--bs-rule-warm);
+  gap: 10px;
+  align-content: start;
 }
 
 .doc-rail-title {
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-2);
-  margin: 0;
   font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-label);
+  font-size: 11px;
   font-weight: var(--brand-weight-medium);
-  letter-spacing: var(--brand-tracking-wide);
+  letter-spacing: var(--brand-tracking-wider);
   text-transform: uppercase;
   color: var(--bs-text-muted);
+  margin: 0;
+}
+
+/* The rail's one coral element, and the page's second: what is unfinished. */
+.doc-rail-title--urgent {
+  color: var(--brand-coral-dark);
+}
+
+.doc-rail-card {
+  background: var(--bs-surface-1);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-xl);
+  padding: 14px var(--brand-space-4);
+}
+
+.doc-rail-card--quiet {
+  background: none;
+  border-style: dashed;
+}
+
+.doc-rail-card--rows {
+  padding: 6px var(--brand-space-4);
+}
+
+.doc-rail-card-title {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: var(--brand-weight-medium);
+  color: var(--bs-text-primary);
+}
+
+.doc-rail-card-meta {
+  margin: 3px 0 var(--brand-space-2);
+  font-size: 12.5px;
+  color: var(--bs-text-muted);
+}
+
+.doc-rail-card-link,
+.doc-rail-more,
+.doc-team-manage {
+  appearance: none;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--brand-coral-dark);
+  cursor: pointer;
+  font-family: var(--brand-font-sans);
+  text-align: left;
+}
+
+.doc-rail-card-link {
+  font-size: 13px;
+  font-weight: var(--brand-weight-semibold);
+}
+
+.doc-rail-more,
+.doc-team-manage {
+  font-size: 12.5px;
+  font-weight: var(--brand-weight-medium);
+}
+
+.doc-rail-card-link:hover,
+.doc-rail-more:hover,
+.doc-team-manage:hover {
+  color: var(--brand-coral);
 }
 
 .doc-rail-note {
   margin: 0;
-  font-size: var(--brand-text-sm);
-  line-height: var(--brand-leading-normal);
+  font-size: 12.5px;
   color: var(--bs-text-muted);
 }
 
-.doc-rail-facts {
-  display: grid;
-  gap: var(--brand-space-2);
-  margin: 0;
-}
-
-.doc-rail-facts > div {
+/* Versions: hairline-separated rows inside one card, not one card each. */
+.doc-rail-row {
+  appearance: none;
   display: flex;
-  justify-content: space-between;
-  gap: var(--brand-space-3);
-  padding-top: var(--brand-space-2);
-  border-top: 1px solid var(--bs-rule-warm);
-}
-
-.doc-rail-facts dt {
-  font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-xs);
-  text-transform: uppercase;
-  letter-spacing: var(--brand-tracking-wide);
-  color: var(--bs-text-faint);
-}
-
-.doc-rail-facts dd {
-  margin: 0;
-  font-size: var(--brand-text-sm);
-  color: var(--bs-text-secondary);
-}
-
-.doc-rail-list {
-  display: grid;
-  gap: var(--brand-space-1);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.doc-rail-link {
-  display: grid;
-  gap: 2px;
+  align-items: center;
+  gap: 10px;
   width: 100%;
-  padding: var(--brand-space-2) var(--brand-space-3);
-  border: 1px solid transparent;
-  border-radius: var(--brand-radius-md);
+  padding: 9px 0;
+  border: none;
+  border-top: 1px solid var(--bs-rule-warm);
   background: none;
-  cursor: pointer;
-  text-align: left;
-  transition: background var(--brand-transition-base);
-}
-
-.doc-rail-link:hover,
-.doc-rail-link:focus-visible {
-  background: var(--bs-surface-2);
-  outline: none;
-}
-
-.doc-rail-link-title {
-  font-size: var(--brand-text-sm);
   color: var(--bs-text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-family: var(--brand-font-sans);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
 }
 
-.doc-rail-link-sub {
+.doc-rail-row:first-child {
+  border-top: none;
+}
+
+.doc-rail-row:hover .doc-rail-row-date {
+  color: var(--bs-text-primary);
+}
+
+.doc-rail-row:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: -2px;
+}
+
+.doc-rail-version {
+  display: inline-flex;
+  align-items: center;
   font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-xs);
-  color: var(--bs-text-faint);
+  font-size: var(--brand-text-label);
+  font-weight: var(--brand-weight-medium);
+  letter-spacing: 0.04em;
+  border-radius: var(--brand-radius-full);
+  padding: 3px 10px;
+  background: var(--bs-surface-2);
+  color: var(--bs-text-muted);
 }
 
-.doc-rail-actions {
+.doc-rail-version--current {
+  background: var(--bs-green-dim);
+  color: var(--brand-green);
+}
+
+.doc-rail-row-date {
+  flex: 1;
+}
+
+.doc-rail-row-note {
+  font-size: 12.5px;
+  color: var(--bs-text-muted);
+}
+
+/* Team: faces, then the way to the page that lists them properly. */
+.doc-team {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   gap: var(--brand-space-2);
+  flex-wrap: wrap;
+}
+
+.doc-team-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--brand-radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--bs-surface-2);
+  color: var(--bs-text-secondary);
+  font-size: 11px;
+  font-weight: var(--brand-weight-semibold);
+}
+
+.doc-team-avatar--more {
+  background: none;
+  border: 1px dashed var(--bs-rule);
+  color: var(--bs-text-muted);
+}
+
+.doc-team-manage {
+  margin-left: var(--brand-space-1);
+}
+
+/* Access & approvals — who is on the document, then what has to happen
+   before anything lands. One page, because it is one question. */
+.doc-access {
+  display: grid;
+  gap: var(--brand-space-10);
+}
+
+.doc-access-section {
+  display: grid;
+  gap: var(--brand-space-4);
+}
+
+.doc-access-heading {
+  font-family: var(--brand-font-serif);
+  font-size: 18px;
+  font-weight: var(--brand-weight-semibold);
+  letter-spacing: var(--brand-tracking-snug);
+  color: var(--bs-text-primary);
+  margin: 0;
 }
 
 /* Changes tab — every change this document has seen, open ones first.
@@ -2224,6 +2331,10 @@ input {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .docw-page {
+    padding: var(--brand-space-5) var(--brand-space-5) var(--brand-space-12);
+  }
+
   .doc-rail {
     position: static;
   }
@@ -2235,12 +2346,9 @@ input {
     flex-wrap: nowrap;
   }
 
-  .doc-header-actions {
+  .doc-header-submit {
     width: 100%;
-  }
-
-  .doc-header-actions .bs-btn {
-    width: 100%;
+    justify-content: center;
   }
 
   .doc-history-row {
@@ -2256,11 +2364,7 @@ input {
   }
 
   .doc-preview-body {
-    padding: var(--brand-space-3);
-  }
-
-  .doc-preview-sheet {
-    padding: var(--brand-space-5);
+    padding: var(--brand-space-5) var(--brand-space-4);
   }
 }
 
