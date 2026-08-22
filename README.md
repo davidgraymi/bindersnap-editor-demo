@@ -56,9 +56,7 @@ This is the complete environment variable reference used by repo code, scripts, 
 | `BUN_PUBLIC_GITEA_URL`                  | `http://localhost:3000`                   | `services/api/server.ts`, compose                                        | Optional Gitea URL fallback source for API service config.                                                   |
 | `VITE_GITEA_URL`                        | `http://localhost:3000`                   | `services/api/server.ts`, smoke tests, integration tests                 | Gitea URL for test clients and optional API fallback source.                                                 |
 | `GITEA_ADMIN_USER`                      | `alice`                                   | seed/tests, bootstrap script                                             | Break-glass admin username for local seeding and one-time service-account bootstrap.                         |
-| `GITEA_ADMIN_PASS`                      | `bindersnap-dev`                          | seed/tests, bootstrap script                                             | Break-glass admin password for local seeding and one-time service-account bootstrap.                         |
-| `GITEA_BOB_USER`                        | `bob`                                     | `tests/seed.ts`                                                          | Seed collaborator username override.                                                                         |
-| `GITEA_BOB_PASS`                        | `bindersnap-dev`                          | `tests/seed.ts`                                                          | Seed collaborator password override.                                                                         |
+| `GITEA_ADMIN_PASS`                      | `dev`                                     | seed/tests, bootstrap script                                             | Password for every seeded local account, and for the one-time service-account bootstrap.                     |
 | `GITEA_URL`                             | `http://localhost:3000`                   | `tests/seed.ts`                                                          | Seed script base URL for Gitea API.                                                                          |
 | `USER_UID`                              | `1000`                                    | `docker-compose.yml` (`gitea`)                                           | Linux UID used by the Gitea container for file ownership.                                                    |
 | `USER_GID`                              | `1000`                                    | `docker-compose.yml` (`gitea`)                                           | Linux GID used by the Gitea container for file ownership.                                                    |
@@ -109,6 +107,16 @@ Use the dockerized stack when you want seeded Gitea + API + app together:
 ```bash
 bun run up
 ```
+
+Sign in at <http://localhost:5173> as `alice`, `bob`, `carol`, or `dan` — every
+seeded account uses the password `dev`. The stack comes up with documents in
+every review state: draft, in review, changes requested, ready to publish, and
+published.
+
+What gets seeded is described declaratively in
+[`tests/seed-data/dev.yaml`](tests/seed-data/dev.yaml). Edit that file to add an
+account, a document, or a review scenario; `bun run test:seed` validates it
+without starting anything.
 
 See [`tests/README.md`](tests/README.md) for full workflow details.
 

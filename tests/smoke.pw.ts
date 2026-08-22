@@ -100,7 +100,7 @@ test.describe("Gitea dev stack health", () => {
     request,
   }) => {
     const res = await request.get(
-      `${GITEA_URL}/api/v1/repos/alice/quarterly-report/contents/document.json?ref=feature/q2-amendments`,
+      `${GITEA_URL}/api/v1/repos/alice/quarterly-report/contents/document.json?ref=${encodeURIComponent(SEEDED_BRANCH)}`,
       { headers: authHeaders },
     );
     expect(res.status()).toBe(200);
@@ -128,7 +128,7 @@ test.describe("Gitea dev stack health", () => {
     expect(mainRule?.block_on_rejected_reviews).toBe(true);
   });
 
-  test("seeded PR from feature/q2-amendments has bob's changes_requested review", async ({
+  test("seeded PR from the review branch has bob's changes_requested review", async ({
     request,
   }) => {
     const pullsRes = await request.get(
@@ -144,7 +144,7 @@ test.describe("Gitea dev stack health", () => {
       base?: { ref?: string };
     }>;
 
-    const pr = pulls.find((p) => p.head?.ref === "feature/q2-amendments");
+    const pr = pulls.find((p) => p.head?.ref === SEEDED_BRANCH);
     expect(pr).toBeTruthy();
     expect(pr!.title).toBe("Q2 amendments — GDPR section update");
     expect(pr!.base?.ref).toBe("main");
