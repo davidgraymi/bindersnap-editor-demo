@@ -1,0 +1,243 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&family=Geist:wght@300..700&family=Geist+Mono:wght@400..600&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Geist', system-ui, -apple-system, sans-serif; background: #fafaf7; color: #1c1917; -webkit-font-smoothing: antialiased; }
+    a { color: #c94d1a; text-decoration: none; } a:hover { color: #e85d26; }
+    .nav { display: flex; align-items: center; gap: 24px; height: 64px; padding: 0 32px; border-bottom: 1px solid rgba(28,25,23,0.1); background: rgba(250,250,247,0.88); }
+    .btn-green { display: inline-flex; align-items: center; gap: 6px; background: #16a34a; color: #ffffff; border: none; border-radius: 9999px; padding: 10px 20px; font-family: 'Geist', sans-serif; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+    .btn-ghost { display: inline-flex; align-items: center; gap: 6px; background: #ffffff; color: #1c1917; border: 1.5px solid rgba(28,25,23,0.1); border-radius: 8px; padding: 9px 16px; font-family: 'Geist', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .avatar { border-radius: 9999px; display: flex; align-items: center; justify-content: center; font-weight: 600; flex-shrink: 0; }
+    .pill { display: inline-flex; align-items: center; gap: 5px; font-family: 'Geist Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.04em; border-radius: 9999px; padding: 3px 10px; white-space: nowrap; }
+    .pill--approved { background: rgba(22,163,74,0.1); color: #16a34a; }
+    .tab { font-size: 14px; font-weight: 500; color: #78716c; padding: 10px 2px; border-bottom: 2px solid transparent; display: inline-flex; align-items: center; gap: 6px; }
+    .tab--on { color: #1c1917; border-bottom-color: #e85d26; }
+    .tabcount { font-family: 'Geist Mono', monospace; font-size: 10.5px; background: #f5f0e8; color: #78716c; border-radius: 9999px; padding: 1px 7px; }
+    .meta { font-size: 12.5px; color: #78716c; }
+    .rstate { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: #78716c; }
+    /* Timeline: a spine on the page, not a box. Dots are fully opaque. */
+    .timeline { position: relative; padding-left: 40px; display: flex; flex-direction: column; gap: 18px; }
+    .timeline::before { content: ""; position: absolute; left: 13px; top: 8px; bottom: 8px; width: 1.5px; background: #ebeae7; }
+    .tdot { position: absolute; left: -40px; top: 0; width: 28px; height: 28px; border-radius: 9999px; background: #fafaf7; border: 1.5px solid #e4e3e0; display: flex; align-items: center; justify-content: center; z-index: 1; }
+    .tdot--green { background: #e3f1e6; border-color: #b6e0c3; }
+    .tentry { position: relative; }
+    .tevent { display: flex; align-items: center; gap: 8px; min-height: 28px; padding-top: 5px; }
+    .tcard { background: #ffffff; border: 1px solid rgba(28,25,23,0.1); border-radius: 12px; padding: 16px 18px; }
+    .chead { display: flex; align-items: center; gap: 8px; }
+    .csub { border-top: 1px solid rgba(28,25,23,0.06); margin-top: 12px; padding-top: 12px; }
+  </style>
+</helmet>
+
+<div style="width: 1280px; min-height: 1280px; background: #fafaf7; display: flex; flex-direction: column; position: relative;">
+
+  <!-- Top nav -->
+  <header class="nav">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <div style="width: 28px; height: 28px; border-radius: 8px; background: #e85d26; display: flex; align-items: center; justify-content: center;">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 2h8v12l-4-3-4 3V2z" stroke="#ffffff" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      </div>
+      <span style="font-family: 'Lora', Georgia, serif; font-weight: 600; font-size: 16px;">Bindersnap</span>
+    </div>
+    <span style="color: #a8a29e;">/</span>
+    <span style="font-size: 14px; font-weight: 500;">Vendor Agreement</span>
+    <div style="flex: 1;"></div>
+    <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M10 2a5 5 0 0 0-5 5v3l-1.5 3h13L15 10V7a5 5 0 0 0-5-5z" stroke="#78716c" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 16a2 2 0 0 0 4 0" stroke="#78716c" stroke-width="1.5"/></svg>
+    <div class="avatar" style="width: 32px; height: 32px; font-size: 12px; background: rgba(29,78,216,0.1); color: #1d4ed8;">DG</div>
+  </header>
+
+  <!-- Body -->
+  <main style="width: 1080px; margin: 0 auto; padding: 32px 0 96px 0;">
+
+    <!-- Document header stays put: the review lives INSIDE the Changes tab -->
+    <div style="display: flex; align-items: flex-start; gap: 20px; margin-bottom: 8px;">
+      <div style="flex: 1;">
+        <h1 style="font-family: 'Lora', Georgia, serif; font-size: 26px; font-weight: 600; letter-spacing: -0.015em; margin: 0 0 6px 0;">Vendor Agreement</h1>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span class="pill pill--approved">v3 · Current</span>
+          <span class="meta">Approved Jan 12, 2026</span>
+        </div>
+      </div>
+    </div>
+    <nav style="display: flex; gap: 24px; border-bottom: 1px solid rgba(28,25,23,0.1); margin-bottom: 24px;">
+      <span class="tab">Document</span>
+      <span class="tab tab--on">Changes <span class="tabcount">2</span></span>
+      <span class="tab">History</span>
+      <span class="tab">Access &amp; approvals</span>
+    </nav>
+
+    <div style="width: 820px;">
+      <a href="#" style="font-size: 13px; font-weight: 500; color: #78716c;">← All changes</a>
+
+      <!-- Change header -->
+      <div style="margin: 14px 0 6px 0; display: flex; align-items: flex-start; gap: 16px;">
+        <div style="flex: 1;">
+          <h2 style="font-family: 'Lora', Georgia, serif; font-size: 22px; font-weight: 600; letter-spacing: -0.015em; margin: 0 0 6px 0;">Updated liability clause</h2>
+          <p class="meta" style="margin: 0 0 10px 0; font-size: 13.5px;">Maya opened this on Aug 20 · becomes <strong style="color: #1c1917;">v4</strong> when published</p>
+          <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #44403c; max-width: 620px;">Legal asked us to cap liability at 12 months of fees instead of the flat amount. Section 8.2 is rewritten and the indemnification cross-reference in 9.1 now points at the new cap. Nothing else changed.</p>
+        </div>
+        <!-- Approval meter -->
+        <div style="text-align: right; flex-shrink: 0;">
+          <div style="display: flex; gap: 4px; justify-content: flex-end; margin-bottom: 5px;">
+            <div style="width: 26px; height: 6px; border-radius: 9999px; background: #16a34a;"></div>
+            <div style="width: 26px; height: 6px; border-radius: 9999px; background: #16a34a;"></div>
+            <div style="width: 26px; height: 6px; border-radius: 9999px; background: #ede8df;"></div>
+          </div>
+          <span class="meta" style="font-family: 'Geist Mono', monospace; font-size: 11px;">2 of 3 approvals</span>
+        </div>
+      </div>
+
+      <!-- Proposed version: fixed chrome, same place on every change request -->
+      <div style="display: flex; align-items: center; gap: 14px; background: #ffffff; border: 1px solid rgba(28,25,23,0.1); border-radius: 12px; padding: 14px 18px; margin: 18px 0 20px 0;">
+        <div style="width: 36px; height: 36px; border-radius: 8px; background: #f5f0e8; color: #78716c; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 1.5h5.5L13 5v9.5H4V1.5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M9.5 1.5V5H13" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+        </div>
+        <div style="flex: 1; min-width: 0;">
+          <div style="font-size: 14px; font-weight: 600;">Proposed version</div>
+          <div class="meta" style="font-family: 'Geist Mono', monospace; font-size: 11.5px;">vendor-agreement.docx · update 2 of 2 · Aug 21</div>
+        </div>
+        <a href="#" style="font-size: 12.5px; font-weight: 500; color: #78716c;">All updates</a>
+        <button class="btn-ghost" type="button">Open</button>
+      </div>
+
+      <!-- Reviewers -->
+      <div style="display: flex; align-items: center; gap: 18px; margin-bottom: 26px;">
+        <span class="meta" style="font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;">Reviewers</span>
+        <div class="rstate">
+          <div class="avatar" style="width: 26px; height: 26px; font-size: 10.5px; background: rgba(22,163,74,0.1); color: #16a34a;">PS</div>
+          Priya
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3.5 3.5L13 5" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="rstate">
+          <div class="avatar" style="width: 26px; height: 26px; font-size: 10.5px; background: rgba(124,58,237,0.1); color: #7c3aed;">TW</div>
+          Tom
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3.5 3.5L13 5" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="rstate">
+          <div class="avatar" style="width: 26px; height: 26px; font-size: 10.5px; background: rgba(29,78,216,0.1); color: #1d4ed8;">DG</div>
+          You
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="#a8a29e" stroke-width="1.5"/><path d="M8 4.5V8l2.5 1.5" stroke="#a8a29e" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </div>
+        <button class="btn-ghost" type="button" style="padding: 5px 12px; font-size: 12.5px; border-radius: 9999px;">
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          Add reviewer
+        </button>
+      </div>
+
+      <!-- Timeline: comments are cards on the spine; events sit on the paper -->
+      <div class="timeline">
+
+        <div class="tentry">
+          <div class="tdot">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M2 8h8M10 8l-3-3M10 8l-3 3" stroke="#78716c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M13 3v10" stroke="#78716c" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="tevent"><span class="meta"><strong style="color: #44403c;">Maya</strong> opened this change request · Aug 20, 9:14 AM</span></div>
+        </div>
+
+        <!-- Unresolved thread, expanded: chat glyph on the spine, avatars in the card -->
+        <div class="tentry">
+          <div class="tdot">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M14 10a1.5 1.5 0 0 1-1.5 1.5H6l-4 3V3.5A1.5 1.5 0 0 1 3.5 2h9A1.5 1.5 0 0 1 14 3.5V10z" stroke="#78716c" stroke-width="1.4" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="tcard">
+            <div class="chead">
+              <div class="avatar" style="width: 24px; height: 24px; font-size: 10px; background: rgba(124,58,237,0.1); color: #7c3aed;">TW</div>
+              <strong style="font-size: 13.5px;">Tom</strong>
+              <span class="meta">Aug 20</span>
+              <span style="flex: 1;"></span>
+              <span class="meta" style="display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px;"><span style="width: 6px; height: 6px; border-radius: 9999px; background: #e85d26;"></span>Unresolved</span>
+              <a href="#" style="font-size: 12px; color: #a8a29e; font-weight: 400;">Collapse</a>
+            </div>
+            <p style="margin: 8px 0 0 0; font-size: 14px; line-height: 1.55; color: #44403c;">Does the 12-month cap include indemnification claims, or only direct damages?</p>
+            <div class="csub">
+              <div class="chead">
+                <div class="avatar" style="width: 24px; height: 24px; font-size: 10px; background: rgba(180,83,9,0.08); color: #b45309;">MK</div>
+                <strong style="font-size: 13.5px;">Maya</strong>
+                <span class="meta">Aug 21</span>
+              </div>
+              <p style="margin: 8px 0 0 0; font-size: 14px; line-height: 1.55; color: #44403c;">Only direct damages — indemnification stays uncapped per 9.1. I added the cross-reference in the latest update.</p>
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 14px; margin-top: 12px;">
+              <a href="#" style="font-size: 12.5px; font-weight: 500; color: #78716c;">Resolve</a>
+              <a href="#" style="font-size: 12.5px; font-weight: 500; color: #78716c;">Reply</a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Proposal update event -->
+        <div class="tentry">
+          <div class="tdot">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M13.5 8A5.5 5.5 0 1 1 8 2.5c2 0 3.8 1.1 4.8 2.7" stroke="#78716c" stroke-width="1.5" stroke-linecap="round"/><path d="M13 2v3.5H9.5" stroke="#78716c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="tevent"><span class="meta"><strong style="color: #44403c;">Maya</strong> updated the proposed version <span style="font-family: 'Geist Mono', monospace; font-size: 11px;">(update 2)</span> · Aug 21 · earlier approvals were reset · <a href="#" style="font-size: 12.5px;">compare</a></span></div>
+        </div>
+
+        <!-- Approvals: the loud green moments -->
+        <div class="tentry">
+          <div class="tdot tdot--green">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3.5 3.5L13 5" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="tevent"><span class="meta" style="color: #44403c;"><strong>Priya</strong> <strong style="color: #16a34a;">approved</strong> · Aug 21 · "Matches what legal sent over."</span></div>
+        </div>
+
+        <div class="tentry">
+          <div class="tdot tdot--green">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3.5 3.5L13 5" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="tevent"><span class="meta" style="color: #44403c;"><strong>Tom</strong> <strong style="color: #16a34a;">approved</strong> · Aug 22</span></div>
+        </div>
+
+        <!-- Resolved thread: still a comment card, collapsed, quiet marker, toggle at the top -->
+        <div class="tentry">
+          <div class="tdot">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M14 10a1.5 1.5 0 0 1-1.5 1.5H6l-4 3V3.5A1.5 1.5 0 0 1 3.5 2h9A1.5 1.5 0 0 1 14 3.5V10z" stroke="#78716c" stroke-width="1.4" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="tcard" style="padding: 13px 18px;">
+            <div class="chead">
+              <div class="avatar" style="width: 24px; height: 24px; font-size: 10px; background: rgba(22,163,74,0.1); color: #16a34a;">PS</div>
+              <strong style="font-size: 13.5px;">Priya</strong>
+              <span class="meta">Aug 20</span>
+              <span style="flex: 1;"></span>
+              <span class="meta" style="display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: #a8a29e;">
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M4 8.5l2.5 2.5L12 5.5" stroke="#a8a29e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Resolved
+              </span>
+              <a href="#" style="font-size: 12px; color: #a8a29e; font-weight: 400;">Show 2 replies</a>
+            </div>
+            <p style="margin: 6px 0 0 0; font-size: 13.5px; line-height: 1.5; color: #78716c;">Should the renewal date move to Jan 1 to match the new cap?</p>
+          </div>
+        </div>
+
+        <!-- Reply box -->
+        <div class="tentry">
+          <div class="tdot">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M11.5 2.5l2 2L6 12l-2.7.7L4 10l7.5-7.5z" stroke="#78716c" stroke-width="1.4" stroke-linejoin="round"/></svg>
+          </div>
+          <div style="border: 1.5px solid rgba(28,25,23,0.1); border-radius: 12px; padding: 12px 16px; font-size: 14px; color: #a8a29e; background: #ffffff;">Add a comment…</div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- Floating decision pill: always reachable, no scrolling to decide -->
+  <div style="position: absolute; right: 48px; bottom: 40px; display: flex; align-items: center; gap: 10px; background: #ffffff; border: 1px solid rgba(28,25,23,0.1); border-radius: 9999px; padding: 10px 12px; box-shadow: 0 20px 60px rgba(28,25,23,0.15), 0 4px 12px rgba(28,25,23,0.08);">
+    <button class="btn-ghost" type="button" style="border-radius: 9999px;">Request changes</button>
+    <button class="btn-green" type="button">Approve</button>
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

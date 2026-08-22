@@ -1,0 +1,17 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "title": "Home — your change requests", "x": 0, "y": 0, "w": 1280, "h": 820 },
+    { "file": "Documents.dc.html", "title": "Documents", "x": 1400, "y": 0, "w": 1280, "h": 840 },
+    { "file": "DocumentDetail.dc.html", "title": "Document workspace", "x": 0, "y": 1040, "w": 1280, "h": 880 },
+    { "file": "ChangeReview.dc.html", "title": "Change review", "x": 1400, "y": 1040, "w": 1280, "h": 1280 },
+    { "file": "ThreadStates.dc.html", "title": "Thread states", "x": 2800, "y": 1040, "w": 1240, "h": 900 }
+  ],
+  "annotations": [
+    { "id": "what-changed", "x": -560, "y": 0, "w": 480, "text": "Direction locked: task-first home (Option A).\n\n- Every row on Home is a CHANGE REQUEST you are part of — including \"Recently decided,\" which lists closed change requests, never documents.\n- Documents live on their own page with saved views: I contribute to / I own / everything I can see, plus person filters (\"Owned by Jack\").\n- One coral element per screen; no owner/repo paths; no vanity stats." },
+    { "id": "home-note", "x": 0, "y": -150, "w": 380, "text": "Home: three buckets, all change requests — waiting on you, your submissions, recently decided. Clicking any row opens that change request's review page. Replaces the Inbox page." },
+    { "id": "documents-note", "x": 1400, "y": -150, "w": 380, "text": "Documents: saved views as chips (I contribute to / I own / everything I can see) plus removable person filters. Rows link to the document workspace. Search stays plain-language; the query syntax becomes an advanced affordance." },
+    { "id": "detail-note", "x": 0, "y": 1960, "w": 400, "text": "Document workspace: 4 tabs — Document, Changes, History (no count bubble), Access & approvals (renamed from Sharing since it also holds approver rules and required-approval count)." },
+    { "id": "review-note", "x": 1400, "y": 2360, "w": 460, "text": "Change review lives INSIDE the Changes tab — document header and tabs stay visible, \"← All changes\" returns to the list.\n\n- The conversation is a timeline spine on the page: comments are cards on the line, events sit on the paper — no growing box.\n- Green checks mean approvals, and only approvals. Resolved threads stay comment cards, collapsed by default, with a faint gray check and a blended \"Show N replies\".\n- Unresolved threads carry only a small dot + \"Unresolved\" — quiet until they matter.\n- Resolution is logged INSIDE the thread (\"Priya marked this as resolved\"); a new comment reopens it. See the Thread states board for all four states.\n- \"Proposed version\" is fixed chrome in the same place on every change request.\n- Approve is green (success semantic); no assignee; decision floats bottom-right." }
+  ],
+  "launch": { "view": "canvas" }
+}

@@ -1,0 +1,150 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&family=Geist:wght@300..700&family=Geist+Mono:wght@400..600&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Geist', system-ui, -apple-system, sans-serif; background: #fafaf7; color: #1c1917; -webkit-font-smoothing: antialiased; }
+    a { color: #c94d1a; text-decoration: none; } a:hover { color: #e85d26; }
+    .statelabel { font-family: 'Geist Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: #78716c; margin: 0 0 10px 0; }
+    .tcard { background: #ffffff; border: 1px solid rgba(28,25,23,0.1); border-radius: 12px; padding: 16px 18px; }
+    .avatar { border-radius: 9999px; display: flex; align-items: center; justify-content: center; font-weight: 600; flex-shrink: 0; }
+    .meta { font-size: 12.5px; color: #78716c; }
+    .chead { display: flex; align-items: center; gap: 8px; }
+    .csub { border-top: 1px solid rgba(28,25,23,0.06); margin-top: 12px; padding-top: 12px; }
+    .mark-open { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: #78716c; }
+    .mark-resolved { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: #a8a29e; }
+    .toggle { font-size: 12px; color: #a8a29e; font-weight: 400; }
+    .actions { display: flex; justify-content: flex-end; gap: 14px; margin-top: 12px; }
+    .threadevent { display: flex; align-items: center; gap: 8px; margin: 12px 0 0 0; padding: 10px 0 0 0; border-top: 1px solid rgba(28,25,23,0.06); font-size: 12px; color: #a8a29e; }
+  </style>
+</helmet>
+
+<div style="width: 1240px; min-height: 900px; background: #fafaf7; padding: 40px 48px; box-sizing: border-box;">
+
+  <h1 style="font-family: 'Lora', Georgia, serif; font-size: 22px; font-weight: 600; letter-spacing: -0.015em; margin: 0 0 4px 0;">Thread states</h1>
+  <p class="meta" style="margin: 0 0 28px 0; max-width: 720px;">One comment primitive. A reply makes it a thread. Anyone can resolve; resolution is logged inside the thread. A new comment on a resolved thread reopens it — and unresolved threads block publishing when that setting is on. The show/collapse toggle always lives at the top, so it never moves.</p>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px 40px;">
+
+    <!-- 1. Expanded · unresolved -->
+    <div>
+      <p class="statelabel">Unresolved · expanded</p>
+      <div class="tcard">
+        <div class="chead">
+          <div class="avatar" style="width: 24px; height: 24px; font-size: 10px; background: rgba(124,58,237,0.1); color: #7c3aed;">TW</div>
+          <strong style="font-size: 13.5px;">Tom</strong>
+          <span class="meta">Aug 20</span>
+          <span style="flex: 1;"></span>
+          <span class="mark-open"><span style="width: 6px; height: 6px; border-radius: 9999px; background: #e85d26;"></span>Unresolved</span>
+          <a href="#" class="toggle">Collapse</a>
+        </div>
+        <p style="margin: 8px 0 0 0; font-size: 14px; line-height: 1.55; color: #44403c;">Does the 12-month cap include indemnification claims, or only direct damages?</p>
+        <div class="csub">
+          <div class="chead">
+            <div class="avatar" style="width: 24px; height: 24px; font-size: 10px; background: rgba(180,83,9,0.08); color: #b45309;">MK</div>
+            <strong style="font-size: 13.5px;">Maya</strong>
+            <span class="meta">Aug 21</span>
+          </div>
+          <p style="margin: 8px 0 0 0; font-size: 14px; line-height: 1.55; color: #44403c;">Only direct damages — indemnification stays uncapped per 9.1.</p>
+        </div>
+        <div class="actions">
+          <a href="#" style="font-size: 12.5px; font-weight: 500; color: #78716c;">Resolve</a>
+          <a href="#" style="font-size: 12.5px; font-weight: 500; color: #78716c;">Reply</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Collapsed · unresolved -->
+    <div>
+      <p class="statelabel">Unresolved · collapsed</p>
+      <div class="tcard" style="padding: 13px 18px;">
+        <div class="chead">
+          <div class="avatar" style="width: 24px; height: 24px; font-size: 10px; background: rgba(124,58,237,0.1); color: #7c3aed;">TW</div>
+          <strong style="font-size: 13.5px;">Tom</strong>
+          <span class="meta">Aug 20</span>
+          <span style="flex: 1;"></span>
+          <span class="mark-open"><span style="width: 6px; height: 6px; border-radius: 9999px; background: #e85d26;"></span>Unresolved</span>
+          <a href="#" class="toggle" style="color: #78716c; font-weight: 500; font-size: 12.5px;">Show 1 reply</a>
+        </div>
+        <p style="margin: 6px 0 0 0; font-size: 13.5px; line-height: 1.5; color: #44403c;">Does the 12-month cap include indemnification claims, or only direct damages?</p>
+      </div>
+    </div>
+
+    <!-- 3. Expanded · resolved -->
+    <div>
+      <p class="statelabel">Resolved · expanded</p>
+      <div class="tcard">
+        <div class="chead">
+          <div class="avatar" style="width: 24px; height: 24px; font-size: 10px; background: rgba(22,163,74,0.1); color: #16a34a;">PS</div>
+          <strong style="font-size: 13.5px;">Priya</strong>
+          <span class="meta">Aug 20</span>
+          <span style="flex: 1;"></span>
+          <span class="mark-resolved">
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M4 8.5l2.5 2.5L12 5.5" stroke="#a8a29e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Resolved
+          </span>
+          <a href="#" class="toggle">Collapse</a>
+        </div>
+        <p style="margin: 8px 0 0 0; font-size: 14px; line-height: 1.55; color: #44403c;">Should the renewal date move to Jan 1 to match the new cap?</p>
+        <div class="csub">
+          <div class="chead">
+            <div class="avatar" style="width: 24px; height: 24px; font-size: 10px; background: rgba(180,83,9,0.08); color: #b45309;">MK</div>
+            <strong style="font-size: 13.5px;">Maya</strong>
+            <span class="meta">Aug 20</span>
+          </div>
+          <p style="margin: 8px 0 0 0; font-size: 14px; line-height: 1.55; color: #44403c;">No — renewal stays on the anniversary date. The cap change doesn't touch section 4.</p>
+        </div>
+        <div class="csub">
+          <div class="chead">
+            <div class="avatar" style="width: 24px; height: 24px; font-size: 10px; background: rgba(22,163,74,0.1); color: #16a34a;">PS</div>
+            <strong style="font-size: 13.5px;">Priya</strong>
+            <span class="meta">Aug 21</span>
+          </div>
+          <p style="margin: 8px 0 0 0; font-size: 14px; line-height: 1.55; color: #44403c;">Got it, thanks.</p>
+        </div>
+        <!-- Resolution is part of the thread's own history -->
+        <div class="threadevent">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M4 8.5l2.5 2.5L12 5.5" stroke="#a8a29e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Priya marked this as resolved · Aug 21 · a new comment reopens it
+        </div>
+        <div class="actions">
+          <a href="#" style="font-size: 12.5px; font-weight: 500; color: #a8a29e;">Reply</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Collapsed · resolved -->
+    <div>
+      <p class="statelabel">Resolved · collapsed</p>
+      <div class="tcard" style="padding: 13px 18px;">
+        <div class="chead">
+          <div class="avatar" style="width: 24px; height: 24px; font-size: 10px; background: rgba(22,163,74,0.1); color: #16a34a;">PS</div>
+          <strong style="font-size: 13.5px;">Priya</strong>
+          <span class="meta">Aug 20</span>
+          <span style="flex: 1;"></span>
+          <span class="mark-resolved">
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M4 8.5l2.5 2.5L12 5.5" stroke="#a8a29e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Resolved
+          </span>
+          <a href="#" class="toggle">Show 2 replies</a>
+        </div>
+        <p style="margin: 6px 0 0 0; font-size: 13.5px; line-height: 1.5; color: #78716c;">Should the renewal date move to Jan 1 to match the new cap?</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
