@@ -27,6 +27,7 @@ import { usePaymentRequiredHandler } from "./paymentRequired";
 import {
   asShellRoute,
   getRoute,
+  isLegacyDocumentTabPath,
   isLegacyInboxPath,
   isProtectedAppRoute,
   routeToPath,
@@ -363,6 +364,12 @@ export function App() {
   useEffect(() => {
     if (isLegacyInboxPath(window.location.pathname)) {
       navigateTo({ kind: "workspace" }, true);
+      return;
+    }
+
+    // Same for the document's old Team and Settings tabs, now one page.
+    if (isLegacyDocumentTabPath(window.location.pathname)) {
+      navigateTo(route, true);
     }
   }, [route]);
 

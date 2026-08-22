@@ -30,8 +30,7 @@ export type AppRoute =
  * bare `/docs/:owner/:repo` path; every other tab is a suffix so any view can
  * be linked to, bookmarked, and reloaded.
  */
-export type DocumentTab =
-  "overview" | "changes" | "history" | "collaborators" | "permissions";
+export type DocumentTab = "overview" | "changes" | "history" | "access";
 
 /**
  * The two halves of a change's page. The decision is made in the discussion,
@@ -43,8 +42,20 @@ export type DocumentChangeView = "discussion" | "preview";
 const DOCUMENT_TAB_PATHS: Record<Exclude<DocumentTab, "overview">, string> = {
   changes: "changes",
   history: "history",
-  collaborators: "collaborators",
-  permissions: "permissions",
+  access: "access",
+};
+
+/**
+ * The two tabs that became one.
+ *
+ * "Team" listed who could see the document and "Settings" held how many of
+ * them had to sign off — two halves of the same question, so the redesign
+ * merged them into Access & approvals. Links that were sent, bookmarked, or
+ * pasted into a ticket still land on the page that answers them.
+ */
+const LEGACY_DOCUMENT_TAB_PATHS: Record<string, DocumentTab> = {
+  collaborators: "access",
+  permissions: "access",
 };
 
 function normalizePathname(pathname: string): string {
@@ -57,6 +68,20 @@ function normalizePathname(pathname: string): string {
 
 export function isHomePath(pathname: string): boolean {
   return normalizePathname(pathname) === "/";
+}
+
+/**
+ * A link to one of the two document tabs the redesign merged.
+ *
+ * `getRoute` already resolves these to Access & approvals; this is what lets
+ * the app rewrite the address bar so nobody keeps a bookmark to a tab that no
+ * longer exists.
+ */
+export function isLegacyDocumentTabPath(pathname: string): boolean {
+  const match = normalizePathname(pathname).match(
+    /^\/docs\/[^/]+\/[^/]+\/([^/]+)$/,
+  );
+  return match !== null && match[1]! in LEGACY_DOCUMENT_TAB_PATHS;
 }
 
 /** A link to the retired `/inbox` page. Its contents now live on Home. */
@@ -124,9 +149,11 @@ export function getRoute(pathname: string): AppRoute {
   );
   if (docTabMatch) {
     const segment = docTabMatch[3]!;
-    const tab = (
-      Object.keys(DOCUMENT_TAB_PATHS) as Exclude<DocumentTab, "overview">[]
-    ).find((candidate) => DOCUMENT_TAB_PATHS[candidate] === segment);
+    const tab =
+      (
+        Object.keys(DOCUMENT_TAB_PATHS) as Exclude<DocumentTab, "overview">[]
+      ).find((candidate) => DOCUMENT_TAB_PATHS[candidate] === segment) ??
+      LEGACY_DOCUMENT_TAB_PATHS[segment];
 
     if (tab) {
       return {

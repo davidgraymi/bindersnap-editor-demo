@@ -107,8 +107,8 @@ async function createDocument(page: Page, fileName: string): Promise<void> {
     expectedDocumentName(fileName),
   );
 
-  // New UI shows .vault-detail when the document detail page has loaded
-  const vaultDetail = page.locator(".vault-detail");
+  // The document workspace shows .docw-page once it has loaded
+  const documentPage = page.locator(".docw-page");
   const createError = page
     .locator(".upload-validation-error, .upload-error-message")
     .first();
@@ -116,7 +116,7 @@ async function createDocument(page: Page, fileName: string): Promise<void> {
   await page.getByRole("button", { name: "Create Document" }).click();
 
   await Promise.race([
-    vaultDetail.waitFor({ state: "visible", timeout: 20_000 }),
+    documentPage.waitFor({ state: "visible", timeout: 20_000 }),
     createError
       .waitFor({ state: "visible", timeout: 20_000 })
       .then(async () => {
@@ -129,8 +129,10 @@ async function createDocument(page: Page, fileName: string): Promise<void> {
 }
 
 async function openCollaboratorsTab(page: Page): Promise<void> {
-  // Tab is now labeled "Team" (was "Collaborators") in the new UI
-  const collaboratorsTab = page.getByRole("tab", { name: "Team" });
+  // Team and Settings merged into one tab in the redesign.
+  const collaboratorsTab = page.getByRole("tab", {
+    name: "Access & approvals",
+  });
   await expect(collaboratorsTab).toBeVisible({ timeout: 10_000 });
   await collaboratorsTab.click();
   await expect(page.getByRole("heading", { name: "Grant access" })).toBeVisible(
@@ -171,10 +173,9 @@ async function reopenDocumentFromWorkspace(page: Page): Promise<void> {
     timeout: 10_000,
   });
   await page.locator(".docs-list-item").first().click();
-  // Tab is now labeled "Team" (was "Collaborators") in the new UI
-  await expect(page.getByRole("tab", { name: "Team" })).toBeVisible({
-    timeout: 10_000,
-  });
+  await expect(
+    page.getByRole("tab", { name: "Access & approvals" }),
+  ).toBeVisible({ timeout: 10_000 });
   await openCollaboratorsTab(page);
 }
 

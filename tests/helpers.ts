@@ -384,7 +384,7 @@ export async function signOutCurrentUser(page: Page): Promise<void> {
  * Navigate from any app page to a document detail page.
  *
  * Navigates to the Documents list page first, then clicks the row whose
- * text matches `docName`. Waits for `.vault-detail` to confirm arrival.
+ * text matches `docName`. Waits for `.docw-page` to confirm arrival.
  *
  * Stability fix: waits for DOM content to be loaded before clicking so the
  * list is fully rendered. We intentionally avoid networkidle because the live
@@ -406,7 +406,7 @@ export async function navigateToDocument(
   await expect(card).toBeVisible({ timeout: 10_000 });
   await card.click({ force: true });
   // Confirm we reached the document detail page
-  await expect(page.locator(".vault-detail")).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator(".docw-page")).toBeVisible({ timeout: 10_000 });
 }
 
 /** The tabs across the top of the document workspace. */
@@ -474,9 +474,11 @@ export async function expectPublishedVersion(
   version: number,
   timeout = 30_000,
 ): Promise<void> {
-  await expect(page.locator(".doc-version-pill")).toHaveText(`v${version}`, {
-    timeout,
-  });
+  // The pill states the version and that it is the record: "v3 · Current".
+  await expect(page.locator(".doc-version-pill")).toHaveText(
+    `v${version} · Current`,
+    { timeout },
+  );
 }
 
 /** Assert how many changes are waiting on a decision, per the Changes tab. */
@@ -598,7 +600,7 @@ export async function waitForNoPendingReviews(
  * and wait for the collaborator search input to become visible.
  */
 export async function openCollaboratorsTab(page: Page): Promise<void> {
-  await page.getByRole("tab", { name: "Team" }).click();
+  await page.getByRole("tab", { name: "Access & approvals" }).click();
   await expect(page.locator("#collaborator-search")).toBeVisible({
     timeout: 5_000,
   });

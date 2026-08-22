@@ -92,12 +92,12 @@ test.describe("UI document version upload flow", () => {
     await page.getByRole("button", { name: "Create Document" }).click();
 
     // Wait for navigation to document detail
-    await expect(page.locator(".vault-detail")).toBeVisible({
+    await expect(page.locator(".docw-page")).toBeVisible({
       timeout: 30_000,
     });
 
     await expect(
-      page.getByRole("heading", { name: /No approved version yet/i }),
+      page.getByRole("heading", { name: /No official version yet/i }),
     ).toBeVisible();
     await expectOpenChangeCount(page, 1);
 

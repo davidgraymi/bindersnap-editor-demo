@@ -226,7 +226,7 @@ test.describe("app shell routes", () => {
     await page.goto(`/docs/${OWNER}/${REPO}`);
 
     await expect(page).toHaveURL(new RegExp(`/docs/${OWNER}/${REPO}$`));
-    await expect(page.locator(".vault-detail")).toBeVisible();
+    await expect(page.locator(".docw-page")).toBeVisible();
     await expect(
       page.locator(".app-topnav-link", { hasText: "Documents" }),
     ).toBeVisible();
