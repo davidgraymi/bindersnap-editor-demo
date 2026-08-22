@@ -12,6 +12,8 @@ import * as AdminClient from "../../packages/api-client/admin/admin";
 // Import generated types
 import type { SessionAuthState } from "../../packages/api-schema/schemas/auth";
 import type {
+  ChangeAssignments,
+  ClosedChangesPayload,
   CollaboratorListPayload,
   DiscussionSummary,
   DocumentDetailPayload,
@@ -37,6 +39,12 @@ export type {
   SessionUser,
 } from "../../packages/api-schema/schemas/auth";
 export type {
+  ChangeAssignments,
+  ChangeOutcome,
+  ChangeReviewer,
+  ChangeUser,
+  ClosedChange,
+  ClosedChangesPayload,
   CollaboratorListPayload,
   DiscussionSummary,
   DiscussionThread,
@@ -47,6 +55,7 @@ export type {
   WorkspaceDocumentSummary,
   InitialDocumentUploadResult,
   PullRequestWithApprovalState,
+  ReviewerStatus,
   ReviewSettings,
   UploadResult,
   VersionReview,
@@ -228,6 +237,25 @@ export async function getDocumentHistory(
     return response.data;
   } catch (error) {
     handlePaymentRequired(`/api/app/documents/${owner}/${repo}/history`, error);
+  }
+}
+
+/**
+ * Changes that are no longer open. Fetched only when the reader asks for them
+ * — the document page itself has no use for a closed change.
+ */
+export async function getClosedChanges(
+  owner: string,
+  repo: string,
+): Promise<ClosedChangesPayload> {
+  try {
+    const response = await DocumentsClient.getClosedChanges(owner, repo);
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/documents/${owner}/${repo}/changes/closed`,
+      error,
+    );
   }
 }
 
@@ -424,6 +452,34 @@ export async function submitDocumentReview(
   } catch (error) {
     handlePaymentRequired(
       `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/reviews`,
+      error,
+    );
+  }
+}
+
+/**
+ * Put a change on someone's desk.
+ *
+ * `reviewers` is the whole list, not a delta — leave it out to change only the
+ * assignee, and pass `assignee: null` to clear the assignment.
+ */
+export async function updateChangeAssignments(
+  owner: string,
+  repo: string,
+  pullNumber: number,
+  updates: { assignee?: string | null; reviewers?: string[] },
+): Promise<ChangeAssignments> {
+  try {
+    const response = await DocumentsClient.updateChangeAssignments(
+      owner,
+      repo,
+      String(pullNumber),
+      updates,
+    );
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/assignments`,
       error,
     );
   }

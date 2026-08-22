@@ -66,6 +66,7 @@ export function AnonymousDocumentShell({
                   : route.tab
               }
               activeChangeNumber={route.changeNumber ?? null}
+              activeChangeView={route.changeView ?? "discussion"}
               onTabChange={(tab) =>
                 onNavigate({
                   kind: "document",
@@ -74,16 +75,20 @@ export function AnonymousDocumentShell({
                   tab,
                 })
               }
-              onOpenChange={(pullNumber) =>
+              onOpenChange={(pullNumber, changeView) =>
                 onNavigate({
                   kind: "document",
                   owner: route.owner,
                   repo: route.repo,
                   tab: "changes",
-                  ...(pullNumber === null ? {} : { changeNumber: pullNumber }),
+                  ...(pullNumber === null
+                    ? {}
+                    : {
+                        changeNumber: pullNumber,
+                        changeView: changeView ?? "discussion",
+                      }),
                 })
               }
-              onBack={() => onNavigate({ kind: "home" })}
             />
           </main>
         </div>

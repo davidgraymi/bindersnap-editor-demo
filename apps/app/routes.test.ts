@@ -66,6 +66,7 @@ test("getRoute gives every change its own page", () => {
     repo: "quarterly-report",
     tab: "changes",
     changeNumber: 7,
+    changeView: "discussion",
   });
 
   expect(
@@ -77,6 +78,34 @@ test("getRoute gives every change its own page", () => {
       changeNumber: 7,
     }),
   ).toBe("/docs/alice/quarterly-report/changes/7");
+});
+
+test("the file under review is its own screen within a change", () => {
+  expect(getRoute("/docs/alice/quarterly-report/changes/7/preview")).toEqual({
+    kind: "document",
+    owner: "alice",
+    repo: "quarterly-report",
+    tab: "changes",
+    changeNumber: 7,
+    changeView: "preview",
+  });
+
+  expect(
+    routeToPath({
+      kind: "document",
+      owner: "alice",
+      repo: "quarterly-report",
+      tab: "changes",
+      changeNumber: 7,
+      changeView: "preview",
+    }),
+  ).toBe("/docs/alice/quarterly-report/changes/7/preview");
+});
+
+test("an unknown segment under a change is not a change page", () => {
+  expect(getRoute("/docs/alice/quarterly-report/changes/7/nonsense")).toEqual({
+    kind: "home",
+  });
 });
 
 test("a non-numeric change segment is not a change page", () => {

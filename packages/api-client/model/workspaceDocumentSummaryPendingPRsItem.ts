@@ -5,6 +5,9 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { WorkspaceDocumentSummaryPendingPRsItemApprovalState } from './workspaceDocumentSummaryPendingPRsItemApprovalState.ts';
+import type { WorkspaceDocumentSummaryPendingPRsItemAssignee } from './workspaceDocumentSummaryPendingPRsItemAssignee.ts';
+import type { WorkspaceDocumentSummaryPendingPRsItemReviewersItem } from './workspaceDocumentSummaryPendingPRsItemReviewersItem.ts';
+import type { WorkspaceDocumentSummaryPendingPRsItemReviewsItem } from './workspaceDocumentSummaryPendingPRsItemReviewsItem.ts';
 import type { WorkspaceDocumentSummaryPendingPRsItemUser } from './workspaceDocumentSummaryPendingPRsItemUser.ts';
 
 export type WorkspaceDocumentSummaryPendingPRsItem = {
@@ -20,9 +23,12 @@ export type WorkspaceDocumentSummaryPendingPRsItem = {
   requiredApprovals: number;
   isApproved: boolean;
   isRejected: boolean;
-  reviewers: string[];
+  reviewers: WorkspaceDocumentSummaryPendingPRsItemReviewersItem[];
+  /** @nullable */
+  assignee: WorkspaceDocumentSummaryPendingPRsItemAssignee;
   body?: string;
   approvalState: WorkspaceDocumentSummaryPendingPRsItemApprovalState;
   /** @nullable */
   user?: WorkspaceDocumentSummaryPendingPRsItemUser;
+  reviews?: WorkspaceDocumentSummaryPendingPRsItemReviewsItem[];
 };

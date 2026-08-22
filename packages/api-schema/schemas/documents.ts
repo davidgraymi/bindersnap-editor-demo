@@ -91,6 +91,57 @@ export const ApprovalStateSchema = z.enum([
 ]);
 export type ApprovalState = z.infer<typeof ApprovalStateSchema>;
 
+/**
+ * The approval record for one published version: who signed off, what they
+ * said, and when. This is the audit trail the product exists to produce, so
+ * every review is reported — including stale and dismissed ones.
+ */
+export const VersionReviewSchema = z.object({
+  id: z.number(),
+  author: DiscussionAuthorSchema,
+  state: z.enum(["approved", "changes_requested", "commented", "other"]),
+  body: z.string(),
+  submittedAt: z.string(),
+  stale: z.boolean(),
+  dismissed: z.boolean(),
+});
+export type VersionReview = z.infer<typeof VersionReviewSchema>;
+
+/**
+ * A person attached to a change — the assignee, or someone asked to review.
+ *
+ * Same three fields the discussion already shows an author by, so a name
+ * renders identically wherever it appears.
+ */
+export const ChangeUserSchema = DiscussionAuthorSchema;
+export type ChangeUser = z.infer<typeof ChangeUserSchema>;
+
+/**
+ * Where one reviewer stands.
+ *
+ * "Awaiting" is the state that matters: it is the only one that names a person
+ * the change is actually waiting on, and the whole reason a reviewer list beats
+ * a single "in review" badge.
+ */
+export const ReviewerStatusSchema = z.enum([
+  "approved",
+  "changes_requested",
+  "commented",
+  "awaiting",
+]);
+export type ReviewerStatus = z.infer<typeof ReviewerStatusSchema>;
+
+export const ChangeReviewerSchema = ChangeUserSchema.extend({
+  status: ReviewerStatusSchema,
+  /** When they last reviewed. Empty while their review is still awaited. */
+  reviewedAt: z.string(),
+  /** Their review no longer counts — a later upload superseded it. */
+  stale: z.boolean(),
+  /** They were explicitly asked, rather than turning up on their own. */
+  requested: z.boolean(),
+});
+export type ChangeReviewer = z.infer<typeof ChangeReviewerSchema>;
+
 export const PullRequestWithApprovalStateSchema = z.object({
   id: z.number(),
   number: z.number(),
@@ -100,14 +151,23 @@ export const PullRequestWithApprovalStateSchema = z.object({
   created_at: z.string().optional(),
   updated_at: z.string().optional(),
   branchName: z.string(),
+  /** Approvals that still count, against the number the document demands. */
   approvalCount: z.number(),
   requiredApprovals: z.number(),
   isApproved: z.boolean(),
   isRejected: z.boolean(),
-  reviewers: z.array(z.string()),
+  /** Who is on the hook to review, and where each of them stands. */
+  reviewers: z.array(ChangeReviewerSchema),
+  /** The one person answerable for the change, when someone is. */
+  assignee: ChangeUserSchema.nullable(),
   body: z.string().optional(),
   approvalState: ApprovalStateSchema,
   user: z.object({ login: z.string() }).nullable().optional(),
+  /**
+   * The reviews on this change, oldest first. Only the document detail
+   * populates it — a workspace list has no room for a review trail.
+   */
+  reviews: z.array(VersionReviewSchema).optional(),
 });
 export type PullRequestWithApprovalState = z.infer<
   typeof PullRequestWithApprovalStateSchema
@@ -225,22 +285,6 @@ export const AddCollaboratorBodySchema = z.object({
 });
 export type AddCollaboratorBody = z.infer<typeof AddCollaboratorBodySchema>;
 
-/**
- * The approval record for one published version: who signed off, what they
- * said, and when. This is the audit trail the product exists to produce, so
- * every review is reported — including stale and dismissed ones.
- */
-export const VersionReviewSchema = z.object({
-  id: z.number(),
-  author: DiscussionAuthorSchema,
-  state: z.enum(["approved", "changes_requested", "commented", "other"]),
-  body: z.string(),
-  submittedAt: z.string(),
-  stale: z.boolean(),
-  dismissed: z.boolean(),
-});
-export type VersionReview = z.infer<typeof VersionReviewSchema>;
-
 export const VersionSubmissionSchema = z.object({
   number: z.number(),
   title: z.string(),
@@ -271,3 +315,74 @@ export const DocumentHistoryPayloadSchema = z.object({
 export type DocumentHistoryPayload = z.infer<
   typeof DocumentHistoryPayloadSchema
 >;
+
+/**
+ * How a change stopped being open.
+ *
+ * "Closed" is not an outcome anyone can act on — an approval and an abandoned
+ * draft both end up closed, and a reviewer looking back at the record needs to
+ * know which one this was.
+ */
+export const ChangeOutcomeSchema = z.enum([
+  "published",
+  "declined",
+  "withdrawn",
+]);
+export type ChangeOutcome = z.infer<typeof ChangeOutcomeSchema>;
+
+export const ClosedChangeSchema = z.object({
+  number: z.number(),
+  title: z.string(),
+  body: z.string(),
+  /** The branch the submitted file lived on. Empty once Gitea prunes it. */
+  branchName: z.string(),
+  submittedBy: z.string(),
+  submittedAt: z.string(),
+  closedAt: z.string().nullable(),
+  outcome: ChangeOutcomeSchema,
+  /** Who published it, or who asked for changes it never came back from. */
+  decidedBy: z.string().nullable(),
+  /** The version this change became, when it was published. */
+  publishedVersion: z.number().nullable(),
+  /** Every review on the change, oldest first. */
+  reviews: z.array(VersionReviewSchema),
+  /** Who was asked to review it, and how each of them answered. */
+  reviewers: z.array(ChangeReviewerSchema),
+  assignee: ChangeUserSchema.nullable(),
+  approvalCount: z.number(),
+  requiredApprovals: z.number(),
+});
+export type ClosedChange = z.infer<typeof ClosedChangeSchema>;
+
+export const ClosedChangesPayloadSchema = z.object({
+  changes: z.array(ClosedChangeSchema),
+});
+export type ClosedChangesPayload = z.infer<typeof ClosedChangesPayloadSchema>;
+
+/**
+ * Who a change is on, and who has to sign it off.
+ *
+ * Both are optional by design: a change nobody has assigned still gets
+ * reviewed, and the required-approval count still gates publishing. Naming
+ * people only makes it obvious whose desk it is sitting on.
+ */
+export const UpdateChangeAssignmentsBodySchema = z.object({
+  /** The person answerable for the change. `null` clears the assignment. */
+  assignee: z.string().nullable().optional(),
+  /**
+   * The whole reviewer list, not a delta — anyone left out has their review
+   * request withdrawn. Omit the field to leave reviewers alone.
+   */
+  reviewers: z.array(z.string()).optional(),
+});
+export type UpdateChangeAssignmentsBody = z.infer<
+  typeof UpdateChangeAssignmentsBodySchema
+>;
+
+export const ChangeAssignmentsSchema = z.object({
+  assignee: ChangeUserSchema.nullable(),
+  reviewers: z.array(ChangeReviewerSchema),
+  approvalCount: z.number(),
+  requiredApprovals: z.number(),
+});
+export type ChangeAssignments = z.infer<typeof ChangeAssignmentsSchema>;

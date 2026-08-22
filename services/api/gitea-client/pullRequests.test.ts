@@ -851,3 +851,222 @@ test("mergeOrResolveConflicts throws if 409 persists after conflict resolution",
     expect((error as GiteaApiError).message).toContain("persisted");
   }
 });
+
+test("getPullRequestWithReviews returns one change and its reviews", async () => {
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/pulls/{index}": () => ({
+        number: 7,
+        state: "open",
+        head: { ref: "upload/v2", label: "upload/v2" },
+        requested_reviewers: [{ login: "dana" }],
+      }),
+      "/repos/{owner}/{repo}/pulls/{index}/reviews": () => [
+        { id: 1, state: "APPROVED", user: { login: "dana" } },
+      ],
+    },
+  });
+
+  const { getPullRequestWithReviews } = await import("./pullRequests");
+  const result = await getPullRequestWithReviews({
+    client,
+    owner: "acme",
+    repo: "policy",
+    pullNumber: 7,
+  });
+
+  expect(result.pullRequest.approvalState).toBe("approved");
+  expect(result.pullRequest.branchName).toBe("upload/v2");
+  expect(result.reviews).toHaveLength(1);
+});
+
+test("setPullRequestAssignees replaces the assignee list", async () => {
+  const bodies: unknown[] = [];
+  const { client } = createMockClient({
+    PATCH: {
+      "/repos/{owner}/{repo}/pulls/{index}": (...args: unknown[]) => {
+        bodies.push((args[0] as { body?: unknown } | undefined)?.body);
+        return {};
+      },
+    },
+  });
+
+  const { setPullRequestAssignees } = await import("./pullRequests");
+
+  await setPullRequestAssignees({
+    client,
+    owner: "acme",
+    repo: "policy",
+    pullNumber: 7,
+    assignees: ["dana"],
+  });
+  // An empty list is how an assignment gets cleared, so it must still be sent.
+  await setPullRequestAssignees({
+    client,
+    owner: "acme",
+    repo: "policy",
+    pullNumber: 7,
+    assignees: [],
+  });
+
+  expect(bodies).toEqual([{ assignees: ["dana"] }, { assignees: [] }]);
+});
+
+test("review requests are only sent when somebody is on the list", async () => {
+  const { client, mockPost, mockDelete } = createMockClient({
+    POST: {
+      "/repos/{owner}/{repo}/pulls/{index}/requested_reviewers": () => [],
+    },
+    DELETE: {
+      "/repos/{owner}/{repo}/pulls/{index}/requested_reviewers": () => ({}),
+    },
+  });
+
+  const { removePullReviewers, requestPullReviewers } =
+    await import("./pullRequests");
+  const ref = { client, owner: "acme", repo: "policy", pullNumber: 7 };
+
+  await requestPullReviewers({ ...ref, reviewers: [] });
+  await removePullReviewers({ ...ref, reviewers: [] });
+  expect(mockPost).not.toHaveBeenCalled();
+  expect(mockDelete).not.toHaveBeenCalled();
+
+  await requestPullReviewers({ ...ref, reviewers: ["dana"] });
+  await removePullReviewers({ ...ref, reviewers: ["kim"] });
+  expect(mockPost).toHaveBeenCalledTimes(1);
+  expect(mockDelete).toHaveBeenCalledTimes(1);
+});
+
+test("removePullReviewers accepts Gitea's empty 204", async () => {
+  // Gitea answers this one with no body at all. Unwrapping it as if a body
+  // were guaranteed reads success as failure and loses the removal.
+  const { client } = createMockClient({});
+  client.DELETE = mock(async () => ({
+    data: undefined,
+    error: undefined,
+    response: new Response(null, { status: 204 }),
+  })) as unknown as GiteaClient["DELETE"];
+
+  const { removePullReviewers } = await import("./pullRequests");
+
+  await removePullReviewers({
+    client,
+    owner: "acme",
+    repo: "policy",
+    pullNumber: 7,
+    reviewers: ["kim"],
+  });
+});
+
+test("removePullReviewers still reports a real failure", async () => {
+  const { client } = createMockClient({});
+  client.DELETE = mock(async () => ({
+    data: undefined,
+    error: { message: "Reviewer not found" },
+    response: new Response(null, { status: 404 }),
+  })) as unknown as GiteaClient["DELETE"];
+
+  const { removePullReviewers } = await import("./pullRequests");
+
+  await expect(
+    removePullReviewers({
+      client,
+      owner: "acme",
+      repo: "policy",
+      pullNumber: 7,
+      reviewers: ["kim"],
+    }),
+  ).rejects.toThrow("Reviewer not found");
+});
+
+test("a reviewer who asks for changes and then approves no longer blocks the change", async () => {
+  // The bug: every review ever submitted was folded together, so one historical
+  // REQUEST_CHANGES pinned the pull request to changes_requested for good. The
+  // page then showed a red badge beside a full approval count, and the publish
+  // button — gated on approvalState — never came back. Gitea merges on each
+  // reviewer's latest review, and so does this now.
+  const handlers = buildDefaultHandlers(
+    [
+      {
+        number: 31,
+        title: "Reviewer changed their mind",
+        head: { ref: "feature/second-thoughts", label: "" },
+        state: "open",
+      },
+    ],
+    {},
+  );
+
+  handlers.GET["/repos/{owner}/{repo}/pulls/{index}/reviews"] = () => [
+    {
+      id: 1,
+      state: "REQUEST_CHANGES",
+      body: "Section 4.2 needs the updated GDPR guidance.",
+      user: { login: "bob" },
+      submitted_at: "2026-08-21T07:38:00Z",
+    },
+    {
+      id: 2,
+      state: "APPROVED",
+      body: "APPROVED",
+      user: { login: "bob" },
+      submitted_at: "2026-08-21T18:23:00Z",
+    },
+  ];
+
+  const { client } = createMockClient(handlers);
+  const { getPullRequestForBranch } = await import("./pullRequests");
+
+  const pullRequest = await getPullRequestForBranch({
+    client,
+    owner: "alice",
+    repo: "quarterly-report",
+    branch: "feature/second-thoughts",
+  });
+
+  expect(pullRequest?.approvalState).toBe("approved");
+});
+
+test("an approval withdrawn by a later request for changes still blocks", async () => {
+  // The mirror of the case above: latest-review-wins has to cut both ways.
+  const handlers = buildDefaultHandlers(
+    [
+      {
+        number: 32,
+        title: "Approval withdrawn",
+        head: { ref: "feature/withdrawn", label: "" },
+        state: "open",
+      },
+    ],
+    {},
+  );
+
+  handlers.GET["/repos/{owner}/{repo}/pulls/{index}/reviews"] = () => [
+    {
+      id: 1,
+      state: "APPROVED",
+      body: "Looks good.",
+      user: { login: "bob" },
+      submitted_at: "2026-08-21T07:38:00Z",
+    },
+    {
+      id: 2,
+      state: "REQUEST_CHANGES",
+      body: "Spotted a problem on a second read.",
+      user: { login: "bob" },
+      submitted_at: "2026-08-21T18:23:00Z",
+    },
+  ];
+
+  const { client } = createMockClient(handlers);
+  const { getPullRequestForBranch } = await import("./pullRequests");
+
+  const pullRequest = await getPullRequestForBranch({
+    client,
+    owner: "alice",
+    repo: "quarterly-report",
+    branch: "feature/withdrawn",
+  });
+
+  expect(pullRequest?.approvalState).toBe("changes_requested");
+});

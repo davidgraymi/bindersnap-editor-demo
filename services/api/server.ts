@@ -34,7 +34,11 @@ import {
   getReviewSettings,
   updateReviewSettings,
 } from "./gitea-client/reviewSettings";
-import { buildVersionRecords } from "./document-history";
+import {
+  buildClosedChanges,
+  buildVersionRecords,
+  toVersionReviews,
+} from "./document-history";
 import {
   addRepoCollaborator,
   bootstrapEmptyMainBranch,
@@ -69,13 +73,24 @@ import {
 } from "./gitea-client/uploads";
 import {
   createPullRequest,
+  getPullRequestWithReviews,
   listPullRequests,
   listPullRequestsWithReviews,
   mergeOrResolveConflicts,
+  removePullReviewers,
+  requestPullReviewers,
+  setPullRequestAssignees,
   submitReview,
   type PullRequestWithApprovalState,
   type PullRequestWithReviews,
 } from "./gitea-client/pullRequests";
+import {
+  buildChangeReviewers,
+  countApprovals,
+  planReviewerChanges,
+  readAssignee,
+  readRequestedReviewers,
+} from "./change-assignments";
 
 const authAttempts = new Map<string, { count: number; resetAt: number }>();
 const checkoutAttempts = new Map<string, { count: number; resetAt: number }>();
@@ -1951,20 +1966,41 @@ async function handleDocuments(
     const documents = await Promise.all(
       repos.map(async (repo) => {
         try {
-          const [latestTag, pullRequests] = await Promise.all([
-            getLatestDocTag(client, repo.owner.login, repo.name),
-            listPullRequests({
-              client,
-              owner: repo.owner.login,
-              repo: repo.name,
-              state: "open",
-            }),
-          ]);
+          const [latestTag, openWithReviews, branchProtection] =
+            await Promise.all([
+              getLatestDocTag(client, repo.owner.login, repo.name),
+              listPullRequestsWithReviews({
+                client,
+                owner: repo.owner.login,
+                repo: repo.name,
+                state: "open",
+              }),
+              getRepoBranchProtection(
+                client,
+                repo.owner.login,
+                repo.name,
+                "main",
+                // A row is worth showing without its approval policy; it is
+                // not worth failing the whole list for.
+              ).catch(() => null),
+            ]);
 
-          const pendingPRs = pullRequests
-            .filter((pullRequest) =>
-              (pullRequest.head?.ref ?? "").startsWith("upload/"),
+          const requiredApprovals = branchProtection?.requiredApprovals ?? 0;
+          const pendingPRs = openWithReviews
+            .filter((entry) =>
+              (entry.pullRequest.head?.ref ?? "").startsWith("upload/"),
             )
+            .map((entry) => ({
+              ...entry.pullRequest,
+              reviewers: buildChangeReviewers({
+                requested: readRequestedReviewers(entry.pullRequest),
+                reviews: entry.reviews,
+                submittedBy: entry.pullRequest.user?.login ?? "",
+              }),
+              assignee: readAssignee(entry.pullRequest),
+              approvalCount: countApprovals(entry.reviews),
+              requiredApprovals,
+            }))
             .sort((left, right) => (right.number ?? 0) - (left.number ?? 0));
 
           return {
@@ -2194,10 +2230,10 @@ async function handleDocumentDetail(
       },
     );
 
-    const [tags, openPullRequests, branchProtection, reviewSettings] =
+    const [tags, openWithReviews, branchProtection, reviewSettings] =
       await Promise.all([
         listDocTags(client, owner, repo),
-        listPullRequests({
+        listPullRequestsWithReviews({
           client,
           owner,
           repo,
@@ -2206,6 +2242,25 @@ async function handleDocumentDetail(
         getRepoBranchProtection(client, owner, repo, "main").catch(() => null),
         getReviewSettings({ client, owner, repo }).catch(() => null),
       ]);
+
+    // The reviews come back with the pull requests anyway, and a change's page
+    // reads as a log of what happened — an approval is part of that log, so it
+    // travels with the change rather than costing a second round trip. The
+    // reviewer list is the same reviews read a different way: not what happened,
+    // but who the change is still waiting on.
+    const requiredApprovals = branchProtection?.requiredApprovals ?? 0;
+    const openPullRequests = openWithReviews.map((entry) => ({
+      ...entry.pullRequest,
+      reviews: toVersionReviews(entry.reviews),
+      reviewers: buildChangeReviewers({
+        requested: readRequestedReviewers(entry.pullRequest),
+        reviews: entry.reviews,
+        submittedBy: entry.pullRequest.user?.login ?? "",
+      }),
+      assignee: readAssignee(entry.pullRequest),
+      approvalCount: countApprovals(entry.reviews),
+      requiredApprovals,
+    }));
 
     const latestTag = tags[0] ?? null;
     const uploadPullRequests = openPullRequests
@@ -2345,6 +2400,58 @@ async function handleDocumentHistory(
       err,
       baseHeaders,
       "Unable to load the version history.",
+    );
+  }
+}
+
+/**
+ * Changes that are no longer open, and how each one ended.
+ *
+ * Loaded on its own rather than with the document detail: it costs a review
+ * lookup per closed change, and that bill grows with every version a document
+ * ever had. Nobody should pay it just to open the document.
+ */
+async function handleClosedChanges(
+  req: Request,
+  baseHeaders: Headers,
+  owner: string,
+  repo: string,
+): Promise<Response> {
+  const access = await resolveDocumentAccess(req, baseHeaders, owner, repo);
+  if (access instanceof Response) {
+    return access;
+  }
+
+  const { client } = access;
+
+  try {
+    const [tags, closedPullRequests, branchProtection] = await Promise.all([
+      listDocTags(client, owner, repo),
+      listPullRequestsWithReviews({
+        client,
+        owner,
+        repo,
+        state: "closed",
+      }),
+      getRepoBranchProtection(client, owner, repo, "main").catch(() => null),
+    ]);
+
+    return json(
+      200,
+      {
+        changes: buildClosedChanges(
+          closedPullRequests,
+          tags,
+          branchProtection?.requiredApprovals ?? 0,
+        ),
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to load the closed changes.",
     );
   }
 }
@@ -2546,6 +2653,159 @@ async function handleDocumentReview(
     return json(200, { review }, baseHeaders);
   } catch (err) {
     return responseFromError(err, baseHeaders, "Unable to submit review.");
+  }
+}
+
+/** Distinct, trimmed usernames, in the order they were given. */
+function readUsernameList(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+
+  const logins: string[] = [];
+  for (const entry of value) {
+    const login = typeof entry === "string" ? entry.trim() : "";
+    if (login && !logins.includes(login)) {
+      logins.push(login);
+    }
+  }
+
+  return logins;
+}
+
+/**
+ * Put a change on someone's desk.
+ *
+ * Both halves are Gitea primitives — the assignee is the pull request's
+ * assignee, the reviewers are its review requests — so nothing new is stored
+ * and Gitea keeps enforcing who is allowed to set them. Reviewers arrive as
+ * the whole list rather than a delta: the caller says who should be on the
+ * change, and the difference against what Gitea already holds is worked out
+ * here, so two people editing at once cannot double-add anybody.
+ */
+async function handleUpdateChangeAssignments(
+  req: Request,
+  baseHeaders: Headers,
+  owner: string,
+  repo: string,
+  prNumber: number,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) {
+    return auth;
+  }
+
+  const { client } = auth;
+  const payload = (await readJsonBody(req)) ?? null;
+
+  const assigneeGiven = payload !== null && "assignee" in payload;
+  const rawAssignee = payload?.assignee;
+  if (
+    assigneeGiven &&
+    rawAssignee !== null &&
+    typeof rawAssignee !== "string"
+  ) {
+    return json(
+      400,
+      { error: "assignee must be a username or null." },
+      baseHeaders,
+    );
+  }
+  const assignee = typeof rawAssignee === "string" ? rawAssignee.trim() : null;
+
+  const reviewersGiven = payload !== null && "reviewers" in payload;
+  const reviewers = reviewersGiven
+    ? readUsernameList(payload?.reviewers)
+    : null;
+  if (reviewersGiven && reviewers === null) {
+    return json(
+      400,
+      { error: "reviewers must be an array of usernames." },
+      baseHeaders,
+    );
+  }
+
+  if (!assigneeGiven && !reviewersGiven) {
+    return json(
+      400,
+      { error: "Provide an assignee, a reviewer list, or both." },
+      baseHeaders,
+    );
+  }
+
+  try {
+    const before = await getPullRequestWithReviews({
+      client,
+      owner,
+      repo,
+      pullNumber: prNumber,
+    });
+    const submittedBy = before.pullRequest.user?.login ?? "";
+
+    if (assigneeGiven) {
+      await setPullRequestAssignees({
+        client,
+        owner,
+        repo,
+        pullNumber: prNumber,
+        assignees: assignee ? [assignee] : [],
+      });
+    }
+
+    if (reviewers) {
+      const { add, remove } = planReviewerChanges({
+        current: readRequestedReviewers(before.pullRequest)
+          .map((user) => user.login?.trim() ?? "")
+          .filter(Boolean),
+        wanted: reviewers,
+        submittedBy,
+      });
+
+      await requestPullReviewers({
+        client,
+        owner,
+        repo,
+        pullNumber: prNumber,
+        reviewers: add,
+      });
+
+      await removePullReviewers({
+        client,
+        owner,
+        repo,
+        pullNumber: prNumber,
+        reviewers: remove,
+      });
+    }
+
+    const [after, branchProtection] = await Promise.all([
+      getPullRequestWithReviews({
+        client,
+        owner,
+        repo,
+        pullNumber: prNumber,
+      }),
+      getRepoBranchProtection(client, owner, repo, "main").catch(() => null),
+    ]);
+
+    return json(
+      200,
+      {
+        assignee: readAssignee(after.pullRequest),
+        reviewers: buildChangeReviewers({
+          requested: readRequestedReviewers(after.pullRequest),
+          reviews: after.reviews,
+          submittedBy: after.pullRequest.user?.login ?? submittedBy,
+        }),
+        approvalCount: countApprovals(after.reviews),
+        requiredApprovals: branchProtection?.requiredApprovals ?? 0,
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to update who this change is assigned to.",
+    );
   }
 }
 
@@ -4157,6 +4417,9 @@ export function createApiServer() {
         const reviewMatch = pathname.match(
           /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/reviews$/,
         );
+        const assignmentsMatch = pathname.match(
+          /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/assignments$/,
+        );
         const publishMatch = pathname.match(
           /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/publish$/,
         );
@@ -4177,6 +4440,9 @@ export function createApiServer() {
         );
         const historyMatch = pathname.match(
           /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/history$/,
+        );
+        const closedChangesMatch = pathname.match(
+          /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/changes\/closed$/,
         );
         const permissionsMatch = pathname.match(
           /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/permissions$/,
@@ -4210,6 +4476,14 @@ export function createApiServer() {
             decodePathParam(reviewMatch[1] ?? ""),
             decodePathParam(reviewMatch[2] ?? ""),
             Number.parseInt(reviewMatch[3] ?? "", 10),
+          );
+        } else if (assignmentsMatch && method === "PUT") {
+          response = await handleUpdateChangeAssignments(
+            req,
+            baseHeaders,
+            decodePathParam(assignmentsMatch[1] ?? ""),
+            decodePathParam(assignmentsMatch[2] ?? ""),
+            Number.parseInt(assignmentsMatch[3] ?? "", 10),
           );
         } else if (publishMatch && method === "POST") {
           response = await handleDocumentPublish(
@@ -4266,6 +4540,13 @@ export function createApiServer() {
             baseHeaders,
             decodePathParam(historyMatch[1] ?? ""),
             decodePathParam(historyMatch[2] ?? ""),
+          );
+        } else if (closedChangesMatch && method === "GET") {
+          response = await handleClosedChanges(
+            req,
+            baseHeaders,
+            decodePathParam(closedChangesMatch[1] ?? ""),
+            decodePathParam(closedChangesMatch[2] ?? ""),
           );
         } else if (versionsMatch && method === "POST") {
           response = await handleDocumentVersions(

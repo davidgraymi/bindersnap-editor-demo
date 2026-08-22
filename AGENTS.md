@@ -80,6 +80,9 @@ Routes:
 - `/login`, `/signup` — credential forms
 - `/documents` — document list
 - `/docs/:owner/:repo` — document detail and review
+- `/docs/:owner/:repo/changes` — open and closed change requests
+- `/docs/:owner/:repo/changes/:number` — one change: its discussion and decision
+- `/docs/:owner/:repo/changes/:number/file` — the file that change proposes
 - `/docs/:owner/:repo/collaborators` — collaborator management
 - `/inbox`, `/activity` — notifications and audit log
 
@@ -103,8 +106,10 @@ directly.
 - `GET /api/app/documents` — list workspace repos with PR state
 - `POST /api/app/documents` — create repo + upload initial file
 - `GET /api/app/documents/:owner/:repo` — document detail
+- `GET /api/app/documents/:owner/:repo/changes/closed` — closed changes with how each ended
 - `POST /api/app/documents/:owner/:repo/versions` — upload new version
 - `POST /api/app/documents/:owner/:repo/pull-requests/:n/reviews` — submit review
+- `PUT /api/app/documents/:owner/:repo/pull-requests/:n/assignments` — set the assignee and reviewers
 - `GET/POST /api/app/documents/:owner/:repo/pull-requests/:n/discussions` — review threads
 - `POST /api/app/documents/:owner/:repo/pull-requests/:n/discussions/:threadId/comments` — reply
 - `POST /api/app/documents/:owner/:repo/pull-requests/:n/discussions/:threadId/resolve` — resolve/unresolve
@@ -215,6 +220,13 @@ carrying a trailing `<!-- bindersnap:v1 ... -->` marker. Resolution is an
 **append-only event log** — resolving posts a new comment rather than editing
 the root — because an audit product must never lose the history of who
 reopened a concern. See `services/api/gitea-client/discussions.ts`.
+
+**Change assignments** follow the rule too. A change's assignee is the pull
+request's Gitea assignee and its reviewers are Gitea review requests, so who a
+change is waiting on is part of the same record as the reviews themselves. The
+reviewer states the UI shows are derived from those two facts plus the reviews
+(`services/api/change-assignments.ts`) — nothing about an assignment is stored
+outside Gitea.
 
 **Per-document review policy** lives in `.bindersnap/config.json` on a
 dedicated `bindersnap-config` branch (`reviewSettings.ts`), so policy changes

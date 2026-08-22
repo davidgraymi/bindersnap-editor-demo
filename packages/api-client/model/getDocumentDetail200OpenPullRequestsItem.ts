@@ -5,6 +5,9 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { GetDocumentDetail200OpenPullRequestsItemApprovalState } from './getDocumentDetail200OpenPullRequestsItemApprovalState.ts';
+import type { GetDocumentDetail200OpenPullRequestsItemAssignee } from './getDocumentDetail200OpenPullRequestsItemAssignee.ts';
+import type { GetDocumentDetail200OpenPullRequestsItemReviewersItem } from './getDocumentDetail200OpenPullRequestsItemReviewersItem.ts';
+import type { GetDocumentDetail200OpenPullRequestsItemReviewsItem } from './getDocumentDetail200OpenPullRequestsItemReviewsItem.ts';
 import type { GetDocumentDetail200OpenPullRequestsItemUser } from './getDocumentDetail200OpenPullRequestsItemUser.ts';
 
 export type GetDocumentDetail200OpenPullRequestsItem = {
@@ -20,9 +23,12 @@ export type GetDocumentDetail200OpenPullRequestsItem = {
   requiredApprovals: number;
   isApproved: boolean;
   isRejected: boolean;
-  reviewers: string[];
+  reviewers: GetDocumentDetail200OpenPullRequestsItemReviewersItem[];
+  /** @nullable */
+  assignee: GetDocumentDetail200OpenPullRequestsItemAssignee;
   body?: string;
   approvalState: GetDocumentDetail200OpenPullRequestsItemApprovalState;
   /** @nullable */
   user?: GetDocumentDetail200OpenPullRequestsItemUser;
+  reviews?: GetDocumentDetail200OpenPullRequestsItemReviewsItem[];
 };

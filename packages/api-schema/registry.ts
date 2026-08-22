@@ -9,6 +9,8 @@ import {
   SignupBodySchema,
 } from "./schemas/auth";
 import {
+  ChangeAssignmentsSchema,
+  ClosedChangesPayloadSchema,
   CollaboratorListPayloadSchema,
   CreateDiscussionBodySchema,
   DiscussionSummarySchema,
@@ -20,6 +22,7 @@ import {
   PublishDocumentBodySchema,
   PublishDocumentResultSchema,
   SubmitReviewBodySchema,
+  UpdateChangeAssignmentsBodySchema,
   UpdatePermissionsBodySchema,
   UploadResultSchema,
   AddCollaboratorBodySchema,
@@ -223,6 +226,22 @@ registry.registerPath({
 });
 
 registry.registerPath({
+  method: "get",
+  path: "/api/app/documents/{owner}/{repo}/changes/closed",
+  operationId: "getClosedChanges",
+  tags: ["documents"],
+  request: {
+    params: z.object({ owner: z.string(), repo: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Changes that are no longer open, with how each one ended",
+      content: { "application/json": { schema: ClosedChangesPayloadSchema } },
+    },
+  },
+});
+
+registry.registerPath({
   method: "post",
   path: "/api/app/documents/{owner}/{repo}/versions",
   operationId: "uploadDocumentVersion",
@@ -405,6 +424,32 @@ registry.registerPath({
   },
   responses: {
     204: { description: "Review submitted" },
+  },
+});
+
+registry.registerPath({
+  method: "put",
+  path: "/api/app/documents/{owner}/{repo}/pull-requests/{pullNumber}/assignments",
+  operationId: "updateChangeAssignments",
+  tags: ["documents"],
+  request: {
+    params: z.object({
+      owner: z.string(),
+      repo: z.string(),
+      pullNumber: z.string(),
+    }),
+    body: {
+      required: true,
+      content: {
+        "application/json": { schema: UpdateChangeAssignmentsBodySchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Assignee and reviewers updated",
+      content: { "application/json": { schema: ChangeAssignmentsSchema } },
+    },
   },
 });
 

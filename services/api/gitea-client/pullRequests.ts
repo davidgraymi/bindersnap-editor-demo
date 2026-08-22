@@ -1,6 +1,7 @@
 import type { components } from "./spec/gitea";
 
 import { toGiteaApiError, unwrap, type GiteaClient } from "./client";
+import { latestReviewByUser } from "../change-assignments";
 
 type PullRequest = components["schemas"]["PullRequest"];
 type PullReview = components["schemas"]["PullReview"];
@@ -10,6 +11,8 @@ export type ApprovalState =
 
 export interface PullRequestWithApprovalState extends PullRequest {
   approvalState: ApprovalState;
+  /** The branch the submitted version lives on. Always set by this module. */
+  branchName: string;
 }
 
 export interface CreatePullRequestParams {
@@ -55,6 +58,22 @@ export interface ListPullRequestsParams {
   page?: number;
 }
 
+export interface PullRequestRef {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+  pullNumber: number;
+}
+
+export interface SetPullRequestAssigneesParams extends PullRequestRef {
+  /** The whole list. An empty array clears the assignment. */
+  assignees: string[];
+}
+
+export interface PullReviewRequestParams extends PullRequestRef {
+  reviewers: string[];
+}
+
 /** A pull request together with the reviews that were submitted on it. */
 export interface PullRequestWithReviews {
   pullRequest: PullRequestWithApprovalState;
@@ -96,7 +115,15 @@ function resolveApprovalState(
     return "published";
   }
 
-  const reviewStates = reviews.map(toApprovalStateFromReview);
+  // Only each reviewer's *latest* answer counts. Folding every review ever
+  // submitted pinned a change to "changes requested" forever: a reviewer who
+  // asked for work, saw it done, and approved still left the old review in the
+  // list, so the page showed a red badge beside a full approval count and the
+  // publish button never came back. Gitea merges on the latest review per
+  // person, and this now agrees with it.
+  const reviewStates = [...latestReviewByUser(reviews).values()].map(
+    toApprovalStateFromReview,
+  );
   if (reviewStates.includes("changes_requested")) {
     return "changes_requested";
   }
@@ -608,4 +635,80 @@ export async function listPullRequests(
 ): Promise<PullRequestWithApprovalState[]> {
   const withReviews = await listPullRequestsWithReviews(params);
   return withReviews.map((entry) => entry.pullRequest);
+}
+
+/** One change and its reviews, for the pages that show a single change. */
+export async function getPullRequestWithReviews(
+  params: PullRequestRef,
+): Promise<PullRequestWithReviews> {
+  const { client, owner, repo, pullNumber } = params;
+
+  const pullRequest = await unwrap(
+    client.GET("/repos/{owner}/{repo}/pulls/{index}", {
+      params: { path: { owner, repo, index: pullNumber } },
+    }),
+  );
+
+  const reviews = await listPullReviews(client, owner, repo, pullNumber);
+  return { pullRequest: withApprovalState(pullRequest, reviews), reviews };
+}
+
+/**
+ * Set who is answerable for a change.
+ *
+ * Gitea models this as issue assignees, and the list it is given replaces the
+ * one it holds — so an empty array is how an assignment gets cleared.
+ */
+export async function setPullRequestAssignees(
+  params: SetPullRequestAssigneesParams,
+): Promise<void> {
+  const { client, owner, repo, pullNumber, assignees } = params;
+
+  await unwrap(
+    client.PATCH("/repos/{owner}/{repo}/pulls/{index}", {
+      params: { path: { owner, repo, index: pullNumber } },
+      body: { assignees },
+    }),
+  );
+}
+
+/** Ask these people to review. Already-requested reviewers are left alone. */
+export async function requestPullReviewers(
+  params: PullReviewRequestParams,
+): Promise<void> {
+  const { client, owner, repo, pullNumber, reviewers } = params;
+  if (reviewers.length === 0) return;
+
+  await unwrap(
+    client.POST("/repos/{owner}/{repo}/pulls/{index}/requested_reviewers", {
+      params: { path: { owner, repo, index: pullNumber } },
+      body: { reviewers },
+    }),
+  );
+}
+
+/**
+ * Withdraw a review request.
+ *
+ * Gitea keeps the reviews these people already submitted — withdrawing the
+ * request only stops the change waiting on them, it never edits the record.
+ */
+export async function removePullReviewers(
+  params: PullReviewRequestParams,
+): Promise<void> {
+  const { client, owner, repo, pullNumber, reviewers } = params;
+  if (reviewers.length === 0) return;
+
+  // Gitea answers 204 with no body here, which `unwrap` reads as a failure.
+  const { error, response } = await client.DELETE(
+    "/repos/{owner}/{repo}/pulls/{index}/requested_reviewers",
+    {
+      params: { path: { owner, repo, index: pullNumber } },
+      body: { reviewers },
+    },
+  );
+
+  if (error !== undefined || !response.ok) {
+    throw toGiteaApiError(response.status, error);
+  }
 }

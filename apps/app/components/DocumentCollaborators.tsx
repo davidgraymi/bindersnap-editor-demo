@@ -805,23 +805,17 @@ export function DocumentCollaborators({
 
   return (
     <div className="vault-detail collaborators-page">
-      <section className="vault-section collaborators-hero">
-        <div className="bs-eyebrow">Collaborators</div>
-        <h1>Document access</h1>
-        <p>
-          Manage who can see and edit{" "}
-          <code>
-            {owner}/{repo}
-          </code>
-          . Every entry is pulled from Gitea, including permission data.
-        </p>
-      </section>
+      {/* No hero: the document header three lines above already names the
+          document. A second title for the same page is just packaging. */}
+      <p className="doc-section-intro">
+        Manage who can see and edit this document. Every entry is pulled from
+        Gitea, including permission data.
+      </p>
 
       {canManageCollaborators ? (
-        <section className="bs-card collaborators-panel collaborators-panel-search">
+        <section className="doc-panel collaborators-panel collaborators-panel-search">
           <div className="collaborators-panel-header">
             <div>
-              <div className="bs-eyebrow">Add People</div>
               <h2>Grant access</h2>
             </div>
             <div className="collaborators-panel-meta">
@@ -962,8 +956,7 @@ export function DocumentCollaborators({
           ) : null}
         </section>
       ) : (
-        <section className="bs-card collaborators-panel collaborators-readonly">
-          <div className="bs-eyebrow">Access</div>
+        <section className="doc-panel collaborators-panel collaborators-readonly">
           <h2>Only owners and admins can add collaborators</h2>
           <p>
             {permissionLoadPending
@@ -976,8 +969,7 @@ export function DocumentCollaborators({
       )}
 
       {collaboratorError ? (
-        <section className="bs-card collaborators-panel collaborators-panel-error">
-          <div className="bs-eyebrow">Error</div>
+        <section className="doc-panel collaborators-panel collaborators-panel-error">
           <h2>Unable to load collaborators</h2>
           <p>{collaboratorError}</p>
           <button
@@ -1020,10 +1012,9 @@ export function DocumentCollaborators({
         </section>
       ) : null}
 
-      <section className="bs-card collaborators-panel">
+      <section className="doc-panel collaborators-panel">
         <div className="collaborators-panel-header">
           <div>
-            <div className="bs-eyebrow">Repository Members</div>
             <h2>Collaborators</h2>
           </div>
           <div className="collaborators-panel-meta">

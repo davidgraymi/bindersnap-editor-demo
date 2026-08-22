@@ -1,13 +1,23 @@
 import { expect, test } from "bun:test";
 
 import {
+  closedChangeToRecord,
+  describeApprovalProgress,
+  describeChangeOutcome,
   formatDocumentName,
+  getChangeStateBadgeClass,
+  getChangeStateLabel,
   getDocumentStatusLabel,
   getInitials,
+  getReviewerDisplayName,
+  getReviewerStatusLabel,
   getReviewStateLabel,
+  hasEnoughApprovals,
   parseSubmissionSummary,
   resolveDocumentStatus,
+  resolveReviewerDisplayStatus,
   resolveWorkspaceDocumentStatus,
+  toChangeRecord,
 } from "./documentDisplay";
 
 test("formatDocumentName turns a repo slug into a title", () => {
@@ -113,8 +123,173 @@ test("parseSubmissionSummary keeps a body a person wrote", () => {
   expect(parseSubmissionSummary(null)).toBeNull();
 });
 
+test("a generated upload is named after the file, not its submitter", () => {
+  const change = toChangeRecord({
+    number: 4,
+    body: "Automated upload from Bindersnap file vault. Source file: CHANGELOG.md Document: changelog Uploaded by: bob",
+    branchName: "upload/v2",
+    created_at: "2026-02-01T00:00:00Z",
+    approvalState: "in_review",
+    user: { login: "bob" },
+  });
+
+  // The row already says "submitted by Bob on 1 Feb"; a title that repeats it
+  // is the same sentence twice.
+  expect(change.summary).toBe("New version of CHANGELOG.md");
+});
+
 test("getInitials handles one and two part names", () => {
   expect(getInitials("Dana Reyes")).toBe("DR");
   expect(getInitials("bob")).toBe("BO");
   expect(getInitials("  ")).toBe("?");
+});
+
+test("an open change keeps its approval state as its badge", () => {
+  const change = toChangeRecord({
+    number: 4,
+    body: "Adds the 2026 retention clause.",
+    branchName: "upload/v2",
+    created_at: "2026-02-01T00:00:00Z",
+    approvalState: "in_review",
+    user: { login: "bob" },
+  });
+
+  expect(change.open).toBe(true);
+  expect(change.summary).toBe("Adds the 2026 retention clause.");
+  expect(getChangeStateLabel(change)).toBe("Awaiting Approval");
+  expect(describeChangeOutcome(change)).toBeNull();
+});
+
+test("a published change says which version it became", () => {
+  const change = closedChangeToRecord({
+    number: 4,
+    body: "",
+    branchName: "upload/v2",
+    submittedBy: "bob",
+    submittedAt: "2026-02-01T00:00:00Z",
+    closedAt: "2026-02-03T00:00:00Z",
+    outcome: "published",
+    decidedBy: "dana",
+    publishedVersion: 2,
+  });
+
+  expect(getChangeStateLabel(change)).toBe("Published");
+  expect(getChangeStateBadgeClass(change)).toBe(
+    "vault-status-badge vault-status-published",
+  );
+  expect(describeChangeOutcome(change)).toBe(
+    "Published as v2 by Dana on Feb 3, 2026",
+  );
+});
+
+test("a declined change names who asked for the changes it never made", () => {
+  const change = closedChangeToRecord({
+    number: 5,
+    body: "",
+    branchName: "",
+    submittedBy: "bob",
+    submittedAt: "2026-02-01T00:00:00Z",
+    closedAt: "2026-02-04T00:00:00Z",
+    outcome: "declined",
+    decidedBy: "dana",
+    publishedVersion: null,
+  });
+
+  expect(getChangeStateLabel(change)).toBe("Declined");
+  expect(change.branchName).toBeNull();
+  expect(describeChangeOutcome(change)).toBe(
+    "Declined after Dana requested changes · closed Feb 4, 2026",
+  );
+});
+
+test("a withdrawn change says so rather than saying nothing", () => {
+  const change = closedChangeToRecord({
+    number: 6,
+    body: "",
+    branchName: "upload/v3",
+    submittedBy: "bob",
+    submittedAt: "2026-02-01T00:00:00Z",
+    closedAt: "2026-02-05T00:00:00Z",
+    outcome: "withdrawn",
+    decidedBy: null,
+    publishedVersion: null,
+  });
+
+  expect(getChangeStateLabel(change)).toBe("Withdrawn");
+  expect(getChangeStateBadgeClass(change)).toBe(
+    "vault-status-badge vault-status-withdrawn",
+  );
+  expect(describeChangeOutcome(change)).toBe(
+    "Withdrawn without a decision · closed Feb 5, 2026",
+  );
+});
+
+test("a change with no assignments still becomes a record", () => {
+  const change = toChangeRecord({
+    number: 7,
+    body: "Adds the 2026 retention clause.",
+    branchName: "upload/v2",
+    created_at: "2026-02-01T00:00:00Z",
+    approvalState: "in_review",
+    user: { login: "bob" },
+  });
+
+  expect(change.assignee).toBeNull();
+  expect(change.reviewers).toEqual([]);
+  expect(change.approvalCount).toBe(0);
+  expect(change.requiredApprovals).toBe(0);
+});
+
+test("approval progress counts sign-offs instead of saying 'awaiting'", () => {
+  expect(
+    describeApprovalProgress({ approvalCount: 1, requiredApprovals: 2 }),
+  ).toBe("1 of 2 approvals");
+  expect(hasEnoughApprovals({ approvalCount: 1, requiredApprovals: 2 })).toBe(
+    false,
+  );
+  expect(hasEnoughApprovals({ approvalCount: 2, requiredApprovals: 2 })).toBe(
+    true,
+  );
+});
+
+test("a document that demands no approvals gets no counter", () => {
+  // "0 of 0 approvals" is a number that answers nothing; the badge is better.
+  expect(
+    describeApprovalProgress({ approvalCount: 0, requiredApprovals: 0 }),
+  ).toBeNull();
+  expect(hasEnoughApprovals({ approvalCount: 0, requiredApprovals: 0 })).toBe(
+    false,
+  );
+});
+
+test("an unresolved thread outranks the reviewer's own approval", () => {
+  const reviewer = { login: "dana", status: "approved" as const };
+
+  expect(resolveReviewerDisplayStatus(reviewer, new Set(["dana"]))).toBe(
+    "thread_open",
+  );
+  expect(resolveReviewerDisplayStatus(reviewer, new Set())).toBe("approved");
+});
+
+test("asking for changes outranks everything, open thread included", () => {
+  expect(
+    resolveReviewerDisplayStatus(
+      { login: "kim", status: "changes_requested" },
+      new Set(["kim"]),
+    ),
+  ).toBe("changes_requested");
+});
+
+test("every reviewer state has words to go with its icon", () => {
+  expect(getReviewerStatusLabel("awaiting")).toBe("Awaiting review");
+  expect(getReviewerStatusLabel("thread_open")).toBe("Has an open thread");
+  expect(getReviewerStatusLabel("changes_requested")).toBe("Asked for changes");
+  expect(getReviewerStatusLabel("approved")).toBe("Approved");
+});
+
+test("a reviewer is named as a person, falling back to their username", () => {
+  expect(
+    getReviewerDisplayName({ login: "dana", fullName: "Dana Reyes" }),
+  ).toBe("Dana Reyes");
+  expect(getReviewerDisplayName({ login: "bob", fullName: "  " })).toBe("Bob");
 });
