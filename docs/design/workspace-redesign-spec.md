@@ -31,16 +31,19 @@ structure (change requests, approvals, versions) stays.
 ## Screen decisions
 
 ### Home (`Main.dc.html`) — replaces HomePage AND InboxPage
+
 Task-first. **Every row is a change request the user is part of** (author,
 reviewer, or on a document they own) — never a document link. Three sections:
+
 1. **Waiting on you** (coral section label + count): needs-your-review and
    ready-to-publish items, each with a Review/Publish ghost button.
 2. **Your submissions**: user's open change requests with approval progress.
-3. **Recently decided**: *closed* change requests with outcome
+3. **Recently decided**: _closed_ change requests with outcome
    ("Published as v6 · Aug 19", "Closed · withdrawn by Tom").
-Only path to the library is the "Browse documents →" link.
+   Only path to the library is the "Browse documents →" link.
 
 ### Documents (`Documents.dc.html`)
+
 Library page with saved views as chips: **I contribute to** (default) /
 **I own** / **Everything I can see**, plus removable person-filter chips
 ("Owned by Jack ×") and a dashed "+ Filter by person" affordance. Rows:
@@ -49,6 +52,7 @@ Plain-language search; the `owner:@me` query syntax stays as a power feature,
 not the placeholder.
 
 ### Document workspace (`DocumentDetail.dc.html`)
+
 Header: title (Lora 26), `v3 · Current` pill, approved date, filename. No
 owner/repo path. Coral "Submit new version" button. **Four tabs**: Document,
 Changes (count bubble), History (NO count bubble), **Access & approvals**
@@ -57,9 +61,11 @@ rules and required-approval count too). Document tab: preview + slim rail
 (Waiting on a decision / Versions / Team avatars).
 
 ### Change review (`ChangeReview.dc.html`)
+
 Opens **inside the Changes tab** — document header and tabs stay visible;
 "← All changes" returns to the list. No assignee concept anywhere (submitter +
 reviewers only; the Gitea assignee field goes unused).
+
 - Description paragraph under the title, written by the author.
 - **Proposed version** card is fixed chrome, same place on every change:
   file icon, "Proposed version", `filename · update N of M · date` (mono),
@@ -80,9 +86,11 @@ reviewers only; the Gitea assignee field goes unused).
   **green** Approve), always reachable without scrolling.
 
 ### Threads (`ThreadStates.dc.html` — all four states)
+
 One comment primitive. A reply turns a comment into a thread. Anyone can
 resolve; **a new comment on a resolved thread reopens it**; unresolved
 threads block publishing when `blockOnUnresolvedThreads` is on.
+
 - Unresolved marker: 6px coral dot + "Unresolved" muted text (no pill).
 - Resolved marker: small gray check + "Resolved" in faint #a8a29e.
 - Show/Collapse toggle lives in the card header (top-right), toggling in

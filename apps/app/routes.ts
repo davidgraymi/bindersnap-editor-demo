@@ -5,7 +5,6 @@ export type AppRoute =
   | { kind: "callback" }
   | { kind: "workspace" }
   | { kind: "documents" }
-  | { kind: "inbox" }
   | { kind: "activity" }
   | { kind: "adminSubscriptions" }
   | { kind: "billing" }
@@ -60,6 +59,11 @@ export function isHomePath(pathname: string): boolean {
   return normalizePathname(pathname) === "/";
 }
 
+/** A link to the retired `/inbox` page. Its contents now live on Home. */
+export function isLegacyInboxPath(pathname: string): boolean {
+  return normalizePathname(pathname) === "/inbox";
+}
+
 export function getRoute(pathname: string): AppRoute {
   const normalizedPath = normalizePathname(pathname);
 
@@ -79,8 +83,11 @@ export function getRoute(pathname: string): AppRoute {
     return { kind: "documents" };
   }
 
-  if (normalizedPath === "/inbox") {
-    return { kind: "inbox" };
+  // The redesign folded the inbox into Home — every change request that was
+  // waiting there is now the first thing Home shows. Old links still resolve;
+  // `App` rewrites the address bar so nobody bookmarks a page that is gone.
+  if (isLegacyInboxPath(normalizedPath)) {
+    return { kind: "workspace" };
   }
 
   if (normalizedPath === "/activity") {
@@ -163,8 +170,6 @@ export function routeToPath(route: AppRoute): string {
     }
     case "documents":
       return "/documents";
-    case "inbox":
-      return "/inbox";
     case "activity":
       return "/activity";
     case "adminSubscriptions":
@@ -182,7 +187,6 @@ export function isProtectedAppRoute(route: AppRoute): boolean {
   return (
     route.kind === "workspace" ||
     route.kind === "documents" ||
-    route.kind === "inbox" ||
     route.kind === "activity" ||
     route.kind === "adminSubscriptions"
   );

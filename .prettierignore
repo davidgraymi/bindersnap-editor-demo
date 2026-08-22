@@ -4,5 +4,10 @@ services/api/gitea-client/spec/gitea.d.ts
 services/api/gitea-client/spec/openapi3.json
 services/api/gitea-client/spec/swagger2.json
 CHANGELOG.md
+
+# Approved design mockups: verbatim copies of the canvas artboards. Their
+# markup and pixel values are the visual source of truth for the workspace
+# redesign, so nothing is allowed to reflow them.
+docs/design/mockups/
 packages/api-schema/openapi.json
 packages/api-client/

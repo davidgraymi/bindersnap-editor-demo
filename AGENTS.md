@@ -84,7 +84,8 @@ Routes:
 - `/docs/:owner/:repo/changes/:number` — one change: its discussion and decision
 - `/docs/:owner/:repo/changes/:number/file` — the file that change proposes
 - `/docs/:owner/:repo/collaborators` — collaborator management
-- `/inbox`, `/activity` — notifications and audit log
+- `/activity` — audit log (`/inbox` was folded into `/`, which now lists the
+  change requests the reader is part of)
 
 ### The shared editor
 
