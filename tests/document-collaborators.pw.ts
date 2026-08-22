@@ -164,9 +164,9 @@ async function reopenDocumentFromWorkspace(page: Page): Promise<void> {
     timeout: 10_000,
   });
 
-  // Switch to "My Documents" (owner:@me) so we only see documents this user owns.
-  // The default "My Contributions" scope may include documents from other tests.
-  await page.locator(".docs-scope-tab", { hasText: "My Documents" }).click();
+  // Switch to the "I own" saved view so we only see documents this user owns.
+  // The default "I contribute to" scope may include documents from other tests.
+  await page.locator(".docs-chip", { hasText: "I own" }).click();
   await expect(page.locator(".docs-list-item")).toHaveCount(1, {
     timeout: 10_000,
   });

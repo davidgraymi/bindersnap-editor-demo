@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Bell,
   FileText,
@@ -9,6 +9,7 @@ import {
   Shield,
 } from "lucide-react";
 import type { SessionUser } from "../api";
+import { buildDocumentsUrl, parseDocumentsViewState } from "../documentsView";
 import type { AppRoute } from "../routes";
 import { ActivityLogPage } from "./ActivityLogPage";
 import { AdminSubscriptionManagementPage } from "./AdminSubscriptionManagementPage";
@@ -31,6 +32,22 @@ function toggleTheme() {
   const next = isDark ? "light" : "dark";
   html.setAttribute("data-theme", next);
   localStorage.setItem("bs-theme", next);
+}
+
+/**
+ * Search lands on the library, because that is where a document is found.
+ *
+ * The nav owns the search box on every page, so it moves the address bar
+ * directly rather than going through the route table — a route is a page, and
+ * this is a page plus a question.
+ */
+function navigateToSearch(freeText: string): void {
+  window.history.pushState(
+    {},
+    "",
+    buildDocumentsUrl({ view: "contributing", people: [], freeText }),
+  );
+  window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
 /** Derive uppercase initials from a username or full name. */
@@ -78,6 +95,12 @@ export function AppShell({
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [showCreateDocumentModal, setShowCreateDocumentModal] = useState(false);
+  // A search that was linked to or reloaded is still the search that is on
+  // screen, so the box says so.
+  const [search, setSearch] = useState(
+    () => parseDocumentsViewState(window.location.search, "").freeText,
+  );
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const openCreateDocumentModal = useCallback(() => {
     setShowCreateDocumentModal(true);
@@ -92,6 +115,31 @@ export function AppShell({
       );
     };
   }, [openCreateDocumentModal]);
+
+  // "/" puts the cursor in search from anywhere — unless the reader is already
+  // typing somewhere, where a slash is just a slash.
+  useEffect(() => {
+    const focusSearch = (event: KeyboardEvent) => {
+      if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+      event.preventDefault();
+      searchInputRef.current?.focus();
+    };
+
+    document.addEventListener("keydown", focusSearch);
+    return () => document.removeEventListener("keydown", focusSearch);
+  }, []);
 
   return (
     <div className="app-shell">
@@ -133,8 +181,16 @@ export function AppShell({
         <div className="app-topnav-spacer" />
 
         <div className="app-topnav-right">
-          {/* Search */}
-          <div className="app-nav-search" role="search">
+          {/* Search — the only search there is, on every page */}
+          <form
+            className="app-nav-search"
+            role="search"
+            onSubmit={(event) => {
+              event.preventDefault();
+              searchInputRef.current?.blur();
+              navigateToSearch(search.trim());
+            }}
+          >
             <Search
               className="app-nav-search-icon"
               aria-hidden="true"
@@ -142,15 +198,26 @@ export function AppShell({
               strokeWidth={1.5}
             />
             <input
+              ref={searchInputRef}
               className="app-nav-search-input"
               type="text"
               placeholder="Search documents"
               aria-label="Search documents"
+              value={search}
+              autoComplete="off"
+              spellCheck={false}
+              onChange={(event) => setSearch(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  setSearch("");
+                  searchInputRef.current?.blur();
+                }
+              }}
             />
             <span className="app-nav-search-kbd" aria-hidden="true">
               /
             </span>
-          </div>
+          </form>
 
           {/* Create document */}
           <button
