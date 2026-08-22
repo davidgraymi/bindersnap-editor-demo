@@ -107,8 +107,8 @@ async function createDocument(page: Page, fileName: string): Promise<void> {
     expectedDocumentName(fileName),
   );
 
-  // New UI shows .vault-detail when the document detail page has loaded
-  const vaultDetail = page.locator(".vault-detail");
+  // The document workspace shows .docw-page once it has loaded
+  const documentPage = page.locator(".docw-page");
   const createError = page
     .locator(".upload-validation-error, .upload-error-message")
     .first();
@@ -116,7 +116,7 @@ async function createDocument(page: Page, fileName: string): Promise<void> {
   await page.getByRole("button", { name: "Create Document" }).click();
 
   await Promise.race([
-    vaultDetail.waitFor({ state: "visible", timeout: 20_000 }),
+    documentPage.waitFor({ state: "visible", timeout: 20_000 }),
     createError
       .waitFor({ state: "visible", timeout: 20_000 })
       .then(async () => {

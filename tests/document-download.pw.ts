@@ -91,7 +91,7 @@ test.describe("Document download", () => {
     await page.getByRole("button", { name: "Create Document" }).click();
 
     // Wait for navigation to document detail
-    await expect(page.locator(".vault-detail")).toBeVisible({
+    await expect(page.locator(".docw-page")).toBeVisible({
       timeout: 30_000,
     });
 
