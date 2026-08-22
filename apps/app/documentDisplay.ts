@@ -463,7 +463,13 @@ function joinNames(reviewers: { login: string; fullName: string }[]): string {
  *
  * Returns null for a closed change (its outcome is the whole story) and for a
  * document that demands no approvals and has no blocker, where there is simply
- * nothing to report.
+ * nothing to report. The caller falls back to the state badge in that case.
+ *
+ * That second case is more common than it looks: `requiredApprovals` comes from
+ * the repo's branch protection, and Gitea only serves that to an admin. A write
+ * collaborator — which is to say most reviewers — receives 0 and therefore sees
+ * the badge rather than the count. They are the people the count is *for*, so
+ * this is worth fixing at the source rather than papering over here.
  */
 export function describeChangeStanding(
   change: ChangeRecord,

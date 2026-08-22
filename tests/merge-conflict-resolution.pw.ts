@@ -141,10 +141,11 @@ test.describe("Merge conflict resolution on publish", () => {
     });
     await page.getByRole("button", { name: "Confirm Approval" }).click();
 
-    // Wait for the standing pill to reflect approval. An open change no longer
-    // carries a state badge: the pill says where it stands, so that the count
-    // and the blocking reason cannot contradict each other.
-    await expect(page.locator(".approval-meter--ready")).toBeVisible({
+    // Bob is a write collaborator, not an admin, so Gitea refuses him the
+    // branch protection read and the change arrives with requiredApprovals 0.
+    // With no count to show, the standing pill cannot render and the state
+    // badge is what he gets. See the note in documentDisplay.
+    await expect(page.locator(".vault-status-approved")).toBeVisible({
       timeout: 30_000,
     });
 
@@ -239,7 +240,7 @@ test.describe("Merge conflict resolution on publish", () => {
     });
     await page.getByRole("button", { name: "Confirm Approval" }).click();
     await expect(
-      page.locator(".change-detail .approval-meter--ready"),
+      page.locator(".change-detail .vault-status-approved"),
     ).toBeVisible({
       timeout: 30_000,
     });
@@ -286,7 +287,7 @@ test.describe("Merge conflict resolution on publish", () => {
     });
     await page.getByRole("button", { name: "Confirm Approval" }).click();
     await expect(
-      page.locator(".change-detail .approval-meter--ready"),
+      page.locator(".change-detail .vault-status-approved"),
     ).toBeVisible({
       timeout: 30_000,
     });
