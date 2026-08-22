@@ -12,6 +12,7 @@ import * as AdminClient from "../../packages/api-client/admin/admin";
 // Import generated types
 import type { SessionAuthState } from "../../packages/api-schema/schemas/auth";
 import type {
+  ChangeAssignments,
   ClosedChangesPayload,
   CollaboratorListPayload,
   DiscussionSummary,
@@ -38,7 +39,10 @@ export type {
   SessionUser,
 } from "../../packages/api-schema/schemas/auth";
 export type {
+  ChangeAssignments,
   ChangeOutcome,
+  ChangeReviewer,
+  ChangeUser,
   ClosedChange,
   ClosedChangesPayload,
   CollaboratorListPayload,
@@ -51,6 +55,7 @@ export type {
   WorkspaceDocumentSummary,
   InitialDocumentUploadResult,
   PullRequestWithApprovalState,
+  ReviewerStatus,
   ReviewSettings,
   UploadResult,
   VersionReview,
@@ -447,6 +452,34 @@ export async function submitDocumentReview(
   } catch (error) {
     handlePaymentRequired(
       `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/reviews`,
+      error,
+    );
+  }
+}
+
+/**
+ * Put a change on someone's desk.
+ *
+ * `reviewers` is the whole list, not a delta — leave it out to change only the
+ * assignee, and pass `assignee: null` to clear the assignment.
+ */
+export async function updateChangeAssignments(
+  owner: string,
+  repo: string,
+  pullNumber: number,
+  updates: { assignee?: string | null; reviewers?: string[] },
+): Promise<ChangeAssignments> {
+  try {
+    const response = await DocumentsClient.updateChangeAssignments(
+      owner,
+      repo,
+      String(pullNumber),
+      updates,
+    );
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/assignments`,
       error,
     );
   }

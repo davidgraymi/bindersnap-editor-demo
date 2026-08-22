@@ -4,10 +4,12 @@ import type { ChangeRecord } from "../documentDisplay";
 import {
   capitalizeFirst,
   describeChangeOutcome,
+  describeChangeStanding,
   formatShortDate,
   getChangeStateBadgeClass,
   getChangeStateLabel,
 } from "../documentDisplay";
+import { ApprovalMeter } from "./ApprovalMeter";
 
 export type ChangeFilter = "open" | "closed";
 
@@ -76,6 +78,10 @@ function ChangeRow({
     ? formatShortDate(change.submittedAt)
     : null;
   const outcome = describeChangeOutcome(change);
+  // The standing pill says where an open change stands and who it waits on, so
+  // the badge is left with the one thing it does not cover: how a closed change
+  // ended. The row's old "Waiting on …" line is inside the pill now.
+  const showStateBadge = describeChangeStanding(change) === null;
 
   return (
     <li className="change-row" key={change.number}>
@@ -96,8 +102,14 @@ function ChangeRow({
             <span className="change-row-outcome">{outcome}</span>
           ) : null}
         </span>
-        <span className={getChangeStateBadgeClass(change)}>
-          {getChangeStateLabel(change)}
+        <span className="change-row-side">
+          {showStateBadge ? (
+            <span className={getChangeStateBadgeClass(change)}>
+              {getChangeStateLabel(change)}
+            </span>
+          ) : (
+            <ApprovalMeter change={change} />
+          )}
         </span>
       </button>
     </li>

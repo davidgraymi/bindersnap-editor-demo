@@ -5,6 +5,8 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { GetDocumentDetail200UploadPullRequestsItemApprovalState } from './getDocumentDetail200UploadPullRequestsItemApprovalState.ts';
+import type { GetDocumentDetail200UploadPullRequestsItemAssignee } from './getDocumentDetail200UploadPullRequestsItemAssignee.ts';
+import type { GetDocumentDetail200UploadPullRequestsItemReviewersItem } from './getDocumentDetail200UploadPullRequestsItemReviewersItem.ts';
 import type { GetDocumentDetail200UploadPullRequestsItemReviewsItem } from './getDocumentDetail200UploadPullRequestsItemReviewsItem.ts';
 import type { GetDocumentDetail200UploadPullRequestsItemUser } from './getDocumentDetail200UploadPullRequestsItemUser.ts';
 
@@ -21,7 +23,9 @@ export type GetDocumentDetail200UploadPullRequestsItem = {
   requiredApprovals: number;
   isApproved: boolean;
   isRejected: boolean;
-  reviewers: string[];
+  reviewers: GetDocumentDetail200UploadPullRequestsItemReviewersItem[];
+  /** @nullable */
+  assignee: GetDocumentDetail200UploadPullRequestsItemAssignee;
   body?: string;
   approvalState: GetDocumentDetail200UploadPullRequestsItemApprovalState;
   /** @nullable */

@@ -6,12 +6,15 @@ import { publishDocument, submitDocumentReview } from "../api";
 import type { ChangeRecord } from "../documentDisplay";
 import {
   capitalizeFirst,
+  describeChangeStanding,
   describeChangeOutcome,
   formatDate,
   getChangeStateBadgeClass,
   getChangeStateLabel,
 } from "../documentDisplay";
+import { ApprovalMeter } from "./ApprovalMeter";
 import type { DocumentChangeView } from "../routes";
+import { ChangeReviewers } from "./ChangeReviewers";
 import { DocumentPreview } from "./DocumentPreview";
 import { ReviewDiscussion } from "./ReviewDiscussion";
 
@@ -25,6 +28,8 @@ interface DocumentChangeDetailProps {
   view: DocumentChangeView;
   branchProtection: RepoBranchProtection | null;
   blockOnUnresolvedThreads: boolean;
+  /** Whether this reader may set the assignee and the reviewer list. */
+  canManageAssignments: boolean;
   nextVersion: number;
   documentName: string;
   /** Canonical file name, so the proposed version can be previewed and saved. */
@@ -113,6 +118,7 @@ export function DocumentChangeDetail({
   view,
   branchProtection,
   blockOnUnresolvedThreads,
+  canManageAssignments,
   nextVersion,
   documentName,
   fileName,
@@ -126,6 +132,12 @@ export function DocumentChangeDetail({
     DEFAULT_PR_ACTION_STATE,
   );
   const [unresolvedCount, setUnresolvedCount] = useState(0);
+  // Who is still holding a thread open. The reviewer list needs it to tell a
+  // reviewer who is done from one who raised a concern and never closed it,
+  // and the discussion has already paid for the data.
+  const [openThreadAuthors, setOpenThreadAuthors] = useState<
+    ReadonlySet<string>
+  >(() => new Set<string>());
 
   const prNum = change.number;
   const isSubmitting = actionState.status === "submitting";
@@ -214,6 +226,11 @@ export function DocumentChangeDetail({
   const reviewRef = change.branchName;
   const outcome = describeChangeOutcome(change);
   const canDecide = change.open && !isAnonymous;
+  // The standing pill owns publishability for an open change, blockers
+  // included, so a badge beside it could only repeat it or contradict it. What
+  // it does not cover is how a closed change ended, which is the badge's job.
+  const standing = describeChangeStanding(change, openThreadAuthors);
+  const showStateBadge = standing === null;
 
   return (
     <article className="change-detail">
@@ -223,8 +240,21 @@ export function DocumentChangeDetail({
             {change.summary}
             <span className="change-detail-number">#{prNum}</span>
           </h2>
-          <span className={getChangeStateBadgeClass(change)}>
-            {getChangeStateLabel(change)}
+          {/* An open change is described by how far through approval it is
+              and who is holding it up; a closed change is only its outcome.
+              Never both — they contradicted each other. */}
+          <span className="change-detail-state">
+            {showStateBadge ? (
+              <span className={getChangeStateBadgeClass(change)}>
+                {getChangeStateLabel(change)}
+              </span>
+            ) : (
+              <ApprovalMeter
+                change={change}
+                openThreadAuthors={openThreadAuthors}
+                size="detail"
+              />
+            )}
           </span>
         </div>
         <p className="change-detail-meta">
@@ -311,6 +341,18 @@ export function DocumentChangeDetail({
             </div>
           ) : null}
 
+          <ChangeReviewers
+            owner={owner}
+            repo={repo}
+            pullNumber={prNum}
+            submittedBy={change.submittedBy}
+            assignee={change.assignee}
+            reviewers={change.reviewers}
+            openThreadAuthors={openThreadAuthors}
+            canManage={canManageAssignments && change.open}
+            onChanged={onChanged}
+          />
+
           <ReviewDiscussion
             owner={owner}
             repo={repo}
@@ -333,11 +375,29 @@ export function DocumentChangeDetail({
             }
             canParticipate={!isAnonymous}
             blockOnUnresolvedThreads={blockOnUnresolvedThreads}
-            onSummaryChange={(next) =>
+            onSummaryChange={(next) => {
               setUnresolvedCount((prev) =>
                 prev === next.unresolvedCount ? prev : next.unresolvedCount,
-              )
-            }
+              );
+              setOpenThreadAuthors((prev) => {
+                const authors = new Set(
+                  next.threads
+                    .filter((thread) => !thread.resolved)
+                    .map((thread) => thread.comments[0]?.author.login ?? "")
+                    .filter(Boolean),
+                );
+                // Identity churn here would re-render the reviewer list on
+                // every poll, so a set that says the same thing stays the
+                // same set.
+                if (
+                  authors.size === prev.size &&
+                  [...authors].every((login) => prev.has(login))
+                ) {
+                  return prev;
+                }
+                return authors;
+              });
+            }}
           />
 
           {change.open && ownSubmission ? (

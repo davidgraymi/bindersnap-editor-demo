@@ -9,6 +9,7 @@ import {
   SignupBodySchema,
 } from "./schemas/auth";
 import {
+  ChangeAssignmentsSchema,
   ClosedChangesPayloadSchema,
   CollaboratorListPayloadSchema,
   CreateDiscussionBodySchema,
@@ -21,6 +22,7 @@ import {
   PublishDocumentBodySchema,
   PublishDocumentResultSchema,
   SubmitReviewBodySchema,
+  UpdateChangeAssignmentsBodySchema,
   UpdatePermissionsBodySchema,
   UploadResultSchema,
   AddCollaboratorBodySchema,
@@ -422,6 +424,32 @@ registry.registerPath({
   },
   responses: {
     204: { description: "Review submitted" },
+  },
+});
+
+registry.registerPath({
+  method: "put",
+  path: "/api/app/documents/{owner}/{repo}/pull-requests/{pullNumber}/assignments",
+  operationId: "updateChangeAssignments",
+  tags: ["documents"],
+  request: {
+    params: z.object({
+      owner: z.string(),
+      repo: z.string(),
+      pullNumber: z.string(),
+    }),
+    body: {
+      required: true,
+      content: {
+        "application/json": { schema: UpdateChangeAssignmentsBodySchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Assignee and reviewers updated",
+      content: { "application/json": { schema: ChangeAssignmentsSchema } },
+    },
   },
 });
 

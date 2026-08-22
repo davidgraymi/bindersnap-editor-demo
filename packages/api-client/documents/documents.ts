@@ -28,6 +28,8 @@ import type {
   ResolveDocumentDiscussion200,
   ResolveDocumentDiscussionBody,
   SubmitDocumentReviewBody,
+  UpdateChangeAssignments200,
+  UpdateChangeAssignmentsBody,
   UpdateDocumentPermissions200,
   UpdateDocumentPermissionsBody,
   UploadDocumentVersion200,
@@ -523,6 +525,43 @@ export const submitDocumentReview = async (owner: string,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(submitDocumentReviewBody)
+  }
+);}
+
+
+export type updateChangeAssignmentsResponse200 = {
+  data: UpdateChangeAssignments200
+  status: 200
+}
+
+export type updateChangeAssignmentsResponseSuccess = (updateChangeAssignmentsResponse200) & {
+  headers: Headers;
+};
+;
+
+export type updateChangeAssignmentsResponse = (updateChangeAssignmentsResponseSuccess)
+
+export const getUpdateChangeAssignmentsUrl = (owner: string,
+    repo: string,
+    pullNumber: string,) => {
+
+
+
+
+  return `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/assignments`
+}
+
+export const updateChangeAssignments = async (owner: string,
+    repo: string,
+    pullNumber: string,
+    updateChangeAssignmentsBody: UpdateChangeAssignmentsBody, options?: Parameters<typeof customFetch>[1]): Promise<updateChangeAssignmentsResponse> => {
+
+  return customFetch<updateChangeAssignmentsResponse>(getUpdateChangeAssignmentsUrl(owner,repo,pullNumber),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateChangeAssignmentsBody)
   }
 );}
 

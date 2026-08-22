@@ -2,15 +2,20 @@ import { expect, test } from "bun:test";
 
 import {
   closedChangeToRecord,
+  describeApprovalProgress,
   describeChangeOutcome,
   formatDocumentName,
   getChangeStateBadgeClass,
   getChangeStateLabel,
   getDocumentStatusLabel,
   getInitials,
+  getReviewerDisplayName,
+  getReviewerStatusLabel,
   getReviewStateLabel,
+  hasEnoughApprovals,
   parseSubmissionSummary,
   resolveDocumentStatus,
+  resolveReviewerDisplayStatus,
   resolveWorkspaceDocumentStatus,
   toChangeRecord,
 } from "./documentDisplay";
@@ -217,4 +222,74 @@ test("a withdrawn change says so rather than saying nothing", () => {
   expect(describeChangeOutcome(change)).toBe(
     "Withdrawn without a decision · closed Feb 5, 2026",
   );
+});
+
+test("a change with no assignments still becomes a record", () => {
+  const change = toChangeRecord({
+    number: 7,
+    body: "Adds the 2026 retention clause.",
+    branchName: "upload/v2",
+    created_at: "2026-02-01T00:00:00Z",
+    approvalState: "in_review",
+    user: { login: "bob" },
+  });
+
+  expect(change.assignee).toBeNull();
+  expect(change.reviewers).toEqual([]);
+  expect(change.approvalCount).toBe(0);
+  expect(change.requiredApprovals).toBe(0);
+});
+
+test("approval progress counts sign-offs instead of saying 'awaiting'", () => {
+  expect(
+    describeApprovalProgress({ approvalCount: 1, requiredApprovals: 2 }),
+  ).toBe("1 of 2 approvals");
+  expect(hasEnoughApprovals({ approvalCount: 1, requiredApprovals: 2 })).toBe(
+    false,
+  );
+  expect(hasEnoughApprovals({ approvalCount: 2, requiredApprovals: 2 })).toBe(
+    true,
+  );
+});
+
+test("a document that demands no approvals gets no counter", () => {
+  // "0 of 0 approvals" is a number that answers nothing; the badge is better.
+  expect(
+    describeApprovalProgress({ approvalCount: 0, requiredApprovals: 0 }),
+  ).toBeNull();
+  expect(hasEnoughApprovals({ approvalCount: 0, requiredApprovals: 0 })).toBe(
+    false,
+  );
+});
+
+test("an unresolved thread outranks the reviewer's own approval", () => {
+  const reviewer = { login: "dana", status: "approved" as const };
+
+  expect(resolveReviewerDisplayStatus(reviewer, new Set(["dana"]))).toBe(
+    "thread_open",
+  );
+  expect(resolveReviewerDisplayStatus(reviewer, new Set())).toBe("approved");
+});
+
+test("asking for changes outranks everything, open thread included", () => {
+  expect(
+    resolveReviewerDisplayStatus(
+      { login: "kim", status: "changes_requested" },
+      new Set(["kim"]),
+    ),
+  ).toBe("changes_requested");
+});
+
+test("every reviewer state has words to go with its icon", () => {
+  expect(getReviewerStatusLabel("awaiting")).toBe("Awaiting review");
+  expect(getReviewerStatusLabel("thread_open")).toBe("Has an open thread");
+  expect(getReviewerStatusLabel("changes_requested")).toBe("Asked for changes");
+  expect(getReviewerStatusLabel("approved")).toBe("Approved");
+});
+
+test("a reviewer is named as a person, falling back to their username", () => {
+  expect(
+    getReviewerDisplayName({ login: "dana", fullName: "Dana Reyes" }),
+  ).toBe("Dana Reyes");
+  expect(getReviewerDisplayName({ login: "bob", fullName: "  " })).toBe("Bob");
 });

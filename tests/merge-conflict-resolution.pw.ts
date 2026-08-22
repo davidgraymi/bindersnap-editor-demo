@@ -141,7 +141,10 @@ test.describe("Merge conflict resolution on publish", () => {
     });
     await page.getByRole("button", { name: "Confirm Approval" }).click();
 
-    // Wait for the approval status badge to reflect approval
+    // Bob is a write collaborator, not an admin, so Gitea refuses him the
+    // branch protection read and the change arrives with requiredApprovals 0.
+    // With no count to show, the standing pill cannot render and the state
+    // badge is what he gets. See the note in documentDisplay.
     await expect(page.locator(".vault-status-approved")).toBeVisible({
       timeout: 30_000,
     });
