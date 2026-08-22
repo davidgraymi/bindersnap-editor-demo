@@ -1,386 +1,327 @@
-import { useEffect, useRef, useState } from "react";
-import { FileText, GitPullRequest, Search, Tag, Users } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { FileText, Plus, X } from "lucide-react";
+
 import { getWorkspaceDocuments, type WorkspaceDocumentSummary } from "../api";
+import { capitalizeFirst } from "../documentDisplay";
 import {
-  getDocumentStatusLabel,
-  resolveWorkspaceDocumentStatus,
-  type DocumentStatus,
-} from "../documentDisplay";
-import { parseDocumentSearchQuery } from "../documentSearch";
-import { BindersnapLogoMark } from "./BindersnapLogoMark";
+  applyPersonFilter,
+  buildDocumentRows,
+  buildDocumentsUrl,
+  collectOwners,
+  describeDocumentCount,
+  getSavedViewLabel,
+  parseDocumentsViewState,
+  SAVED_VIEWS,
+  toSearchParams,
+  type DocumentRow,
+  type DocumentsViewState,
+  type SavedView,
+} from "../documentsView";
 
 interface DocumentsPageProps {
   currentUsername: string;
   onSelectDocument: (owner: string, repo: string) => void;
 }
 
-type SortOption = "updated" | "name" | "status";
-
-const DEFAULT_QUERY = "contributed-by:@me";
-const MY_DOCS_QUERY = "owner:@me";
-
-function readQueryFromUrl(): string {
-  return new URLSearchParams(window.location.search).get("q") ?? "";
-}
-
-function queryToSearchBarValue(q: string): string {
-  return q === "" ? DEFAULT_QUERY : q;
-}
-
-function formatRelativeTime(timestamp: string): string {
-  if (!timestamp) return "Unknown";
-  try {
-    const date = new Date(timestamp);
-    if (Number.isNaN(date.getTime())) return "Unknown";
-    const now = Date.now();
-    const diff = now - date.getTime();
-    const seconds = Math.floor(diff / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-    const weeks = Math.floor(days / 7);
-    const months = Math.floor(days / 30);
-
-    if (months > 0)
-      return `Updated ${months} month${months > 1 ? "s" : ""} ago`;
-    if (weeks > 0) return `Updated ${weeks} week${weeks > 1 ? "s" : ""} ago`;
-    if (days > 0) return `Updated ${days} day${days > 1 ? "s" : ""} ago`;
-    if (hours > 0) return `Updated ${hours} hour${hours > 1 ? "s" : ""} ago`;
-    if (minutes > 0)
-      return `Updated ${minutes} minute${minutes > 1 ? "s" : ""} ago`;
-    return "Updated just now";
-  } catch {
-    return "Unknown";
-  }
-}
-
-function formatDocumentName(repoName: string): string {
-  return repoName
-    .split("-")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
-
-function getStatusClass(status: DocumentStatus): string {
-  switch (status) {
-    case "in_review":
-      return "docs-status-badge docs-status-badge--review";
-    case "published":
-      return "docs-status-badge docs-status-badge--published";
-    case "approved":
-      return "docs-status-badge docs-status-badge--approved";
-    case "changes_requested":
-      return "docs-status-badge docs-status-badge--changes";
-    case "draft":
-      return "docs-status-badge docs-status-badge--draft";
-  }
-}
-
-function sortDocs(
-  docs: WorkspaceDocumentSummary[],
-  sort: SortOption,
-): WorkspaceDocumentSummary[] {
-  return [...docs].sort((a, b) => {
-    switch (sort) {
-      case "name":
-        return a.repo.name.localeCompare(b.repo.name);
-      case "status": {
-        const order: Record<DocumentStatus, number> = {
-          approved: 0,
-          published: 1,
-          in_review: 2,
-          changes_requested: 3,
-          draft: 4,
-        };
-        return (
-          order[resolveWorkspaceDocumentStatus(a)] -
-          order[resolveWorkspaceDocumentStatus(b)]
-        );
-      }
-      case "updated":
-      default:
-        return (
-          new Date(b.repo.updated_at).getTime() -
-          new Date(a.repo.updated_at).getTime()
-        );
-    }
-  });
-}
-
-function navigateToQuery(q: string, replace = false): void {
-  const normalised = q.trim();
-  const url =
-    normalised === "" || normalised === DEFAULT_QUERY
-      ? "/documents"
-      : `/documents?q=${encodeURIComponent(normalised)}`;
-  const method = replace ? "replaceState" : "pushState";
-  window.history[method]({}, "", url);
+/** Move the page, and let the app's popstate listener redraw it. */
+function navigateTo(state: DocumentsViewState): void {
+  window.history.pushState({}, "", buildDocumentsUrl(state));
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
-function isScopeTab(
-  activeQ: string,
-  tab: "contributions" | "my-docs",
-): boolean {
-  if (tab === "contributions") {
-    return activeQ === "" || activeQ === DEFAULT_QUERY;
-  }
-  return activeQ === MY_DOCS_QUERY;
-}
-
+/**
+ * The library: every document the reader can reach, under one scope at a time.
+ *
+ * Home answers "what is waiting on me?"; this page answers the other question —
+ * "where is that document?" — so it is a list with a scope, a few people, and
+ * nothing else. The scope lives in the URL, which is what makes a saved view
+ * saveable.
+ */
 export function DocumentsPage({
   currentUsername,
   onSelectDocument,
 }: DocumentsPageProps) {
-  const [documents, setDocuments] = useState<WorkspaceDocumentSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  // The active query (from URL) drives data fetching.
-  const [activeQ, setActiveQ] = useState<string>(readQueryFromUrl);
-  // The search bar input (may differ from activeQ while the user types).
-  const [inputValue, setInputValue] = useState<string>(() =>
-    queryToSearchBarValue(readQueryFromUrl()),
+  const [state, setState] = useState<DocumentsViewState>(() =>
+    parseDocumentsViewState(window.location.search, currentUsername),
   );
+  const [documents, setDocuments] = useState<WorkspaceDocumentSummary[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [personPickerOpen, setPersonPickerOpen] = useState(false);
 
-  const [sort, setSort] = useState<SortOption>("updated");
-
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  // Sync state when the user navigates with browser back/forward.
+  // Back and forward are the way out of a saved view, so the page follows the
+  // address bar rather than its own memory of what was clicked.
   useEffect(() => {
     const handler = () => {
-      const q = readQueryFromUrl();
-      setActiveQ(q);
-      setInputValue(queryToSearchBarValue(q));
+      setState(
+        parseDocumentsViewState(window.location.search, currentUsername),
+      );
     };
     window.addEventListener("popstate", handler);
     return () => window.removeEventListener("popstate", handler);
-  }, []);
+  }, [currentUsername]);
 
-  // Fetch documents whenever activeQ changes.
+  // Only the scope and the words travel to the server; a person filter is
+  // applied to what comes back.
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    setIsLoading(true);
     setError(null);
 
-    const params =
-      activeQ && activeQ !== DEFAULT_QUERY
-        ? parseDocumentSearchQuery(activeQ, currentUsername)
-        : undefined;
-
-    getWorkspaceDocuments(params)
-      .then((docs) => {
-        if (!cancelled) {
-          setDocuments(docs);
-          setLoading(false);
-        }
+    getWorkspaceDocuments(
+      toSearchParams(
+        { view: state.view, people: [], freeText: state.freeText },
+        currentUsername,
+      ),
+    )
+      .then((fetched) => {
+        if (cancelled) return;
+        setDocuments(fetched);
+        setIsLoading(false);
       })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setError(
-            err instanceof Error ? err.message : "Unable to load documents.",
-          );
-          setLoading(false);
-        }
+      .catch((loadError: unknown) => {
+        if (cancelled) return;
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Unable to load documents.",
+        );
+        setDocuments([]);
+        setIsLoading(false);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [activeQ]);
+  }, [state.view, state.freeText, currentUsername]);
 
-  function handleSearchSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const q = inputValue.trim();
-    navigateToQuery(q === DEFAULT_QUERY ? "" : q);
+  const visible = useMemo(
+    () => applyPersonFilter(documents, state.people),
+    [documents, state.people],
+  );
+  const rows = useMemo(
+    () => buildDocumentRows(visible, currentUsername),
+    [visible, currentUsername],
+  );
+  const owners = useMemo(
+    () =>
+      collectOwners(documents).filter((owner) => !state.people.includes(owner)),
+    [documents, state.people],
+  );
+
+  function selectView(view: SavedView) {
+    setPersonPickerOpen(false);
+    navigateTo({ ...state, view });
   }
 
-  function handleTabClick(tab: "contributions" | "my-docs") {
-    const q = tab === "my-docs" ? MY_DOCS_QUERY : "";
-    navigateToQuery(q);
+  function addPerson(login: string) {
+    setPersonPickerOpen(false);
+    navigateTo({ ...state, people: [...state.people, login] });
   }
 
-  const filtered = sortDocs(documents, sort);
-
-  const totalDocuments = documents.length;
-  const totalResults = filtered.length;
-
-  const isContributionsTab = isScopeTab(activeQ, "contributions");
-  const isMyDocsTab = isScopeTab(activeQ, "my-docs");
+  function removePerson(login: string) {
+    navigateTo({
+      ...state,
+      people: state.people.filter((person) => person !== login),
+    });
+  }
 
   return (
-    <div className="docs-page app-page-shell">
-      {/* Hero search bar */}
-      <form
-        className="docs-hero-search"
-        onSubmit={handleSearchSubmit}
-        role="search"
-      >
-        <input
-          ref={inputRef}
-          type="text"
-          className="docs-hero-search-input"
-          placeholder={`Try owner:@${currentUsername || "me"} or contributed-by:@someone`}
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          aria-label="Search documents"
-          autoComplete="off"
-          spellCheck={false}
-        />
-        {inputValue !== "" && (
+    <div className="docs-page">
+      <h1 className="docs-title">Documents</h1>
+
+      <div className="docs-views">
+        {SAVED_VIEWS.map((view) => (
           <button
+            key={view}
             type="button"
-            className="docs-hero-search-clear"
-            aria-label="Clear search"
-            onClick={() => {
-              setInputValue("");
-              inputRef.current?.focus();
-            }}
+            className={`docs-chip${view === state.view ? " docs-chip--on" : ""}`}
+            aria-pressed={view === state.view}
+            onClick={() => selectView(view)}
           >
-            ×
+            {getSavedViewLabel(view)}
           </button>
-        )}
-        <button
-          type="submit"
-          className="docs-hero-search-submit"
-          aria-label="Search"
-        >
-          <Search size={16} strokeWidth={1.5} aria-hidden="true" />
-        </button>
-      </form>
+        ))}
 
-      <div className="docs-panel">
-        {/* Header: scope tabs + sort */}
-        <div className="docs-panel-header">
-          <div className="docs-scope-tabs">
+        <span className="docs-views-divider" aria-hidden="true" />
+
+        {state.people.map((person) => (
+          <span key={person} className="docs-chip docs-chip--person">
+            Owned by <strong>{capitalizeFirst(person)}</strong>
             <button
               type="button"
-              className={`docs-scope-tab${isContributionsTab ? " docs-scope-tab--active" : ""}`}
-              onClick={() => handleTabClick("contributions")}
+              className="docs-chip-remove"
+              aria-label={`Remove the filter on ${capitalizeFirst(person)}`}
+              onClick={() => removePerson(person)}
             >
-              My Contributions
+              <X size={10} strokeWidth={1.5} aria-hidden="true" />
             </button>
-            <button
-              type="button"
-              className={`docs-scope-tab${isMyDocsTab ? " docs-scope-tab--active" : ""}`}
-              onClick={() => handleTabClick("my-docs")}
-            >
-              My Documents
-            </button>
-          </div>
-          <div className="docs-sort-control">
-            <select
-              className="docs-toolbar-select"
-              value={sort}
-              onChange={(e) => setSort(e.target.value as SortOption)}
-              aria-label="Sort documents"
-            >
-              <option value="updated">Last updated</option>
-              <option value="name">Name</option>
-              <option value="status">Status</option>
-            </select>
-          </div>
-        </div>
+          </span>
+        ))}
 
-        {loading && documents.length === 0 ? (
-          <div className="docs-list">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="docs-list-item docs-list-item--skeleton">
-                <div className="docs-skeleton docs-skeleton--icon" />
-                <div className="docs-skeleton-body">
-                  <div className="docs-skeleton docs-skeleton--title" />
-                  <div className="docs-skeleton docs-skeleton--desc" />
-                  <div className="docs-skeleton docs-skeleton--meta" />
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : error ? (
-          <div className="docs-error-card">
-            <p className="docs-error-text">{error}</p>
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="docs-empty">
-            <div className="docs-empty-icon">
-              <FileText size={32} strokeWidth={1} aria-hidden="true" />
-            </div>
-            <p className="docs-empty-title">No documents found.</p>
-            <p className="docs-empty-sub">
-              {isContributionsTab
-                ? "You haven't contributed to any documents yet."
-                : "No documents matched your search."}
-            </p>
-          </div>
-        ) : (
-          <div className={`docs-list${loading ? " docs-list--loading" : ""}`}>
-            {filtered.map((doc) => {
-              const status = resolveWorkspaceDocumentStatus(doc);
-              const name = formatDocumentName(doc.repo.name);
-              const updated = formatRelativeTime(doc.repo.updated_at);
-              const openPRs = doc.pendingPRs.length;
-              const owner = doc.repo.owner.login;
+        <PersonPicker
+          owners={owners}
+          open={personPickerOpen}
+          onToggle={() => setPersonPickerOpen((open) => !open)}
+          onPick={addPerson}
+        />
 
-              return (
-                <button
-                  key={`${owner}/${doc.repo.name}`}
-                  type="button"
-                  className="docs-list-item"
-                  onClick={() => onSelectDocument(owner, doc.repo.name)}
-                >
-                  <div className="docs-list-item-icon" aria-hidden="true">
-                    <BindersnapLogoMark width={18} height={18} />
-                  </div>
-                  <div className="docs-list-item-body">
-                    <div className="docs-list-item-top">
-                      <span className="docs-list-item-name">{name}</span>
-                      <span className={getStatusClass(status)}>
-                        {getDocumentStatusLabel(status)}
-                      </span>
-                    </div>
-                    {doc.repo.description && (
-                      <p className="docs-list-item-description">
-                        {doc.repo.description}
-                      </p>
-                    )}
-                    <div className="docs-list-item-meta">
-                      <span className="docs-list-item-owner">
-                        <Users size={12} strokeWidth={1.5} aria-hidden="true" />
-                        {owner}
-                      </span>
-                      {openPRs > 0 && (
-                        <span className="docs-list-item-prs">
-                          <GitPullRequest
-                            size={12}
-                            strokeWidth={1.5}
-                            aria-hidden="true"
-                          />
-                          {openPRs} open{" "}
-                          {openPRs === 1 ? "request" : "requests"}
-                        </span>
-                      )}
-                      {doc.latestTag && (
-                        <span className="docs-list-item-tag">
-                          <Tag size={12} strokeWidth={1.5} aria-hidden="true" />
-                          {doc.latestTag.name}
-                        </span>
-                      )}
-                      <span className="docs-list-item-updated">{updated}</span>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )}
+        <span className="docs-views-spacer" />
+        <span className="docs-sorted-by">Sorted by last updated</span>
       </div>
 
-      {!loading && !error && filtered.length > 0 && (
-        <p className="docs-result-count">
-          Showing {totalResults} of {totalDocuments} document
-          {totalDocuments !== 1 ? "s" : ""}
+      <section className="docs-list">
+        {isLoading ? (
+          <DocumentSkeletonRows count={3} />
+        ) : error ? (
+          <div className="docs-notice">
+            <p>{error}</p>
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="docs-notice">
+            <p>{describeEmpty(state)}</p>
+          </div>
+        ) : (
+          rows.map((row) => (
+            <DocumentRowItem
+              key={row.key}
+              row={row}
+              onOpen={() => onSelectDocument(row.owner, row.repo)}
+            />
+          ))
+        )}
+      </section>
+
+      {!isLoading && !error && rows.length > 0 ? (
+        <p className="docs-count">
+          {describeDocumentCount(state.view, rows.length, documents.length)}
         </p>
-      )}
+      ) : null}
     </div>
+  );
+}
+
+/** Why the list is empty, in terms of what the reader last clicked. */
+function describeEmpty(state: DocumentsViewState): string {
+  if (state.freeText) {
+    return `Nothing matched "${state.freeText}".`;
+  }
+  if (state.people.length > 0) {
+    return "Nobody you filtered by owns a document in this view.";
+  }
+  return state.view === "owned"
+    ? "You do not own any documents yet."
+    : "No documents here yet.";
+}
+
+function PersonPicker({
+  owners,
+  open,
+  onToggle,
+  onPick,
+}: {
+  owners: string[];
+  open: boolean;
+  onToggle: () => void;
+  onPick: (login: string) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: MouseEvent) => {
+      if (!ref.current?.contains(event.target as Node)) onToggle();
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open, onToggle]);
+
+  return (
+    <div className="docs-person-picker" ref={ref}>
+      <button
+        type="button"
+        className="docs-chip docs-chip--add"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        onClick={onToggle}
+      >
+        <Plus size={11} strokeWidth={1.5} aria-hidden="true" />
+        Filter by person
+      </button>
+
+      {open ? (
+        <div className="docs-person-menu" role="menu">
+          {owners.length === 0 ? (
+            <p className="docs-person-menu-empty">
+              Nobody else owns a document in this view.
+            </p>
+          ) : (
+            owners.map((owner) => (
+              <button
+                key={owner}
+                type="button"
+                className="docs-person-menu-item"
+                role="menuitem"
+                onClick={() => onPick(owner)}
+              >
+                {capitalizeFirst(owner)}
+              </button>
+            ))
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function DocumentRowItem({
+  row,
+  onOpen,
+}: {
+  row: DocumentRow;
+  onOpen: () => void;
+}) {
+  return (
+    <button type="button" className="docs-list-item" onClick={onOpen}>
+      <span
+        className={`docs-list-item-icon${row.urgent ? " docs-list-item-icon--urgent" : ""}`}
+        aria-hidden="true"
+      >
+        <FileText size={16} strokeWidth={1.4} />
+      </span>
+
+      <span className="docs-list-item-body">
+        <span className="docs-list-item-name">{row.name}</span>
+        <span className="docs-list-item-meta">{row.meta}</span>
+      </span>
+
+      <span className={`docs-pill docs-pill--${toneOf(row)}`}>
+        {row.statusLabel}
+      </span>
+    </button>
+  );
+}
+
+/** Coral for work owed, green for settled, quiet grey for everything else. */
+function toneOf(row: DocumentRow): "review" | "approved" | "waiting" {
+  if (row.status === "needs_your_review" || row.status === "ready_to_publish") {
+    return "review";
+  }
+  return row.status === "current" ? "approved" : "waiting";
+}
+
+function DocumentSkeletonRows({ count }: { count: number }) {
+  return (
+    <>
+      {Array.from({ length: count }, (_, index) => (
+        <div className="docs-list-item docs-list-item--skeleton" key={index}>
+          <span className="docs-list-item-icon" />
+          <span className="docs-skeleton-lines">
+            <span className="docs-skeleton-line docs-skeleton-line--wide" />
+            <span className="docs-skeleton-line docs-skeleton-line--short" />
+          </span>
+        </div>
+      ))}
+    </>
   );
 }
