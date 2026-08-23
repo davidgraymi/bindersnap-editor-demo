@@ -8,7 +8,8 @@
         "run",
         "up"
       ],
-      "port": 5173
+      "port": 5173,
+      "autoPort": false
     },
     {
       "name": "app-dev",
