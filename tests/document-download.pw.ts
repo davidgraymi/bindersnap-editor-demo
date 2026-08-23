@@ -163,7 +163,7 @@ test.describe("Document download", () => {
     // The Publish button must appear now that the PR is approved
     await expect(
       page.getByRole("button", {
-        name: "Publish as Official Version",
+        name: "Publish",
         exact: true,
       }),
     ).toBeVisible({
@@ -171,9 +171,7 @@ test.describe("Document download", () => {
     });
 
     // Publish v1
-    await page
-      .getByRole("button", { name: "Publish as Official Version", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Publish", exact: true }).click();
 
     await waitForNoPendingReviews(page, cardSearchText);
     await page.locator(".app-topnav-link", { hasText: "Documents" }).click();
@@ -281,15 +279,13 @@ test.describe("Document download", () => {
     await openDocumentChange(page);
     await expect(
       page.getByRole("button", {
-        name: "Publish as Official Version",
+        name: "Publish",
         exact: true,
       }),
     ).toBeVisible({
       timeout: 30_000,
     });
-    await page
-      .getByRole("button", { name: "Publish as Official Version", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Publish", exact: true }).click();
 
     await waitForNoPendingReviews(page, cardSearchText);
     await page.locator(".app-topnav-link", { hasText: "Documents" }).click();

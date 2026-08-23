@@ -163,7 +163,7 @@ test.describe("UI document version upload flow", () => {
     // The Publish button should be visible (PR is approved and alice can merge)
     await expect(
       page.getByRole("button", {
-        name: "Publish as Official Version",
+        name: "Publish",
         exact: true,
       }),
     ).toBeVisible({
@@ -171,9 +171,7 @@ test.describe("UI document version upload flow", () => {
     });
 
     // Click Publish
-    await page
-      .getByRole("button", { name: "Publish as Official Version", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Publish", exact: true }).click();
 
     await waitForNoPendingReviews(page, cardSearchText);
     await page.locator(".app-topnav-link", { hasText: "Documents" }).click();
@@ -265,15 +263,13 @@ test.describe("UI document version upload flow", () => {
     await openDocumentChange(page);
     await expect(
       page.getByRole("button", {
-        name: "Publish as Official Version",
+        name: "Publish",
         exact: true,
       }),
     ).toBeVisible({
       timeout: 30_000,
     });
-    await page
-      .getByRole("button", { name: "Publish as Official Version", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Publish", exact: true }).click();
 
     await waitForNoPendingReviews(page, cardSearchText);
     await page.locator(".app-topnav-link", { hasText: "Documents" }).click();

@@ -589,7 +589,7 @@ export function DocumentChangeDetail({
               }
               onClick={() => void handlePublish()}
             >
-              {isSubmitting ? "Publishing…" : "Publish as Official Version"}
+              {isSubmitting ? "Publishing…" : "Publish"}
             </button>
           ) : (
             <>

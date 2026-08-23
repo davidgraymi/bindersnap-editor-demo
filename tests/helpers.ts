@@ -520,9 +520,8 @@ export async function waitForNoPendingReviews(
     // …and the publish button lives on the change's own page, not the index.
     await openFirstChangeIfAny(page);
 
-    // New UI: publish button is "Publish as Official Version"
     const publishButton = page.getByRole("button", {
-      name: "Publish as Official Version",
+      name: "Publish",
       exact: true,
     });
     const canPublish = await publishButton
