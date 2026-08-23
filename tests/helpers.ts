@@ -20,7 +20,9 @@ import { seedDevStack } from "./seed";
 // Environment constants
 // ---------------------------------------------------------------------------
 
-export const GITEA_URL = process.env.VITE_GITEA_URL ?? "http://localhost:3000";
+export const GITEA_URL =
+  process.env.VITE_GITEA_URL ??
+  `http://localhost:${process.env.GITEA_PORT ?? "3000"}`;
 
 export const GITEA_ADMIN_USER = process.env.GITEA_ADMIN_USER ?? "alice";
 

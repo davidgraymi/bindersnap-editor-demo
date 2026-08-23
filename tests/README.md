@@ -6,9 +6,10 @@ Everything needed to run the **full Bindersnap target architecture locally** for
 
 | Service        | URL                                        | Purpose                                              |
 | -------------- | ------------------------------------------ | ---------------------------------------------------- |
-| Gitea          | `http://localhost:3000`                    | Git backend, auth source, document storage           |
-| Hocuspocus     | `ws://localhost:1234`                      | Real-time collaboration WebSocket server             |
+| Gitea          | `http://localhost:${GITEA_PORT:-3000}`     | Git backend, auth source, document storage           |
+| Hocuspocus     | `ws://localhost:${HOCUSPOCUS_PORT:-1234}`  | Real-time collaboration WebSocket server             |
 | Caddy          | `http://localhost:${API_PROXY_PORT:-8788}` | Local reverse proxy for production-style API ingress |
+| API            | `http://localhost:${API_PORT:-8787}`       | The BFF (`services/api/`)                            |
 | Bindersnap app | `http://localhost:${APP_PORT:-5173}`       | The unified SPA (`apps/app/`) with hot reload        |
 
 ## Running integration tests
@@ -38,11 +39,44 @@ SKIP_STACK=1 bun run test:integration
 If you want proxy-path webhook coverage in that mode, make sure the existing
 stack includes the local Caddy service on `http://localhost:${API_PROXY_PORT:-8788}`.
 
-### Overriding the app port
+### Overriding ports
+
+Every published port is an environment variable, so nothing in the stack is
+pinned to a fixed number:
+
+| Variable          | Default | What it moves                       |
+| ----------------- | ------- | ----------------------------------- |
+| `APP_PORT`        | `5173`  | The SPA                             |
+| `API_PORT`        | `8787`  | The BFF                             |
+| `API_PROXY_PORT`  | `8788`  | The Caddy proxy in front of the BFF |
+| `GITEA_PORT`      | `3000`  | Gitea                               |
+| `HOCUSPOCUS_PORT` | `1234`  | The collaboration websocket server  |
 
 ```bash
 APP_PORT=4000 bun run test:integration
 ```
+
+### Running two stacks side by side (one per worktree)
+
+Ports are only half the problem — container names, the network name and the
+volume prefix all have to differ too. `STACK_NAME` moves all of them at once:
+it is the Compose project name, so it prefixes every container, the network
+`${STACK_NAME}-dev`, and every volume.
+
+Give each worktree a `.env` with its own name and its own port block:
+
+```bash
+STACK_NAME=bindersnap-wt2
+APP_PORT=5273
+API_PORT=8887
+API_PROXY_PORT=8888
+GITEA_PORT=3100
+HOCUSPOCUS_PORT=1334
+```
+
+Then `bun run up`, `bun run down` and `bun run test:integration` all operate on
+that worktree's stack alone. Gitea's data lives in the worktree's own
+`./data/gitea`, so the two instances never share state.
 
 ## Stripe billing flow
 
