@@ -16,6 +16,7 @@ import type {
   GetDocumentDetail200,
   GetDocumentHistory200,
   GetDocumentPermissions200,
+  ListChangeUpdates200,
   ListDocumentCollaborators200,
   ListDocumentCollaboratorsParams,
   ListDocumentDiscussions200,
@@ -713,6 +714,42 @@ export const resolveDocumentDiscussion = async (owner: string,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(resolveDocumentDiscussionBody)
+  }
+);}
+
+
+export type listChangeUpdatesResponse200 = {
+  data: ListChangeUpdates200
+  status: 200
+}
+
+export type listChangeUpdatesResponseSuccess = (listChangeUpdatesResponse200) & {
+  headers: Headers;
+};
+;
+
+export type listChangeUpdatesResponse = (listChangeUpdatesResponseSuccess)
+
+export const getListChangeUpdatesUrl = (owner: string,
+    repo: string,
+    pullNumber: string,) => {
+
+
+
+
+  return `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/updates`
+}
+
+export const listChangeUpdates = async (owner: string,
+    repo: string,
+    pullNumber: string, options?: Parameters<typeof customFetch>[1]): Promise<listChangeUpdatesResponse> => {
+
+  return customFetch<listChangeUpdatesResponse>(getListChangeUpdatesUrl(owner,repo,pullNumber),
+  {
+    ...options,
+    method: 'GET'
+
+
   }
 );}
 

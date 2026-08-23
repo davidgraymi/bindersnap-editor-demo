@@ -5,12 +5,12 @@ import type { DocumentVersionRecord, VersionReview } from "../api";
 import { getDocumentHistory } from "../api";
 import {
   capitalizeFirst,
-  describeSubmission,
   formatShortDate,
   formatTimestamp,
   parseSubmissionSummary,
+  publishedVersionToRecord,
 } from "../documentDisplay";
-import { ReviewDiscussion } from "./ReviewDiscussion";
+import { ReviewTimeline } from "./ReviewTimeline";
 
 interface DocumentHistoryProps {
   owner: string;
@@ -235,24 +235,20 @@ export function DocumentHistory({
                     same sequence of events, so the version shows the same
                     timeline the change's own page shows. */}
                 {entry.submission ? (
-                  <ReviewDiscussion
+                  <ReviewTimeline
                     owner={owner}
                     repo={repo}
-                    pullNumber={entry.submission.number}
-                    opening={{
-                      author: entry.submission.submittedBy,
-                      at: entry.submission.submittedAt,
-                      body: describeSubmission(entry.submission.body),
-                    }}
-                    reviews={entry.reviews}
-                    closing={{
-                      kind: "published",
-                      actor: entry.submission.mergedBy,
-                      at: entry.submission.mergedAt ?? entry.createdAt,
-                      publishedVersion: entry.version,
-                    }}
+                    change={publishedVersionToRecord({
+                      version: entry.version,
+                      createdAt: entry.createdAt,
+                      submission: entry.submission,
+                      reviews: entry.reviews,
+                    })}
+                    updates={[]}
+                    resetsApprovals={false}
                     canParticipate={false}
                     blockOnUnresolvedThreads={false}
+                    onOpenUpdate={null}
                   />
                 ) : (
                   <p className="vault-pr-notice">

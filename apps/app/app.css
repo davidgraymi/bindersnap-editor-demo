@@ -1525,8 +1525,7 @@ input {
   overflow-wrap: anywhere;
 }
 
-.change-row-side,
-.change-detail-state {
+.change-row-side {
   display: flex;
   flex: none;
   flex-wrap: wrap;
@@ -1550,10 +1549,6 @@ input {
   font-size: var(--brand-text-xs);
   font-weight: var(--brand-weight-medium);
   white-space: nowrap;
-}
-
-.approval-meter--detail {
-  font-size: var(--brand-text-sm);
 }
 
 /* Green is the product's only "this is settled" colour, and a change with
@@ -1608,231 +1603,8 @@ input {
   background: var(--bs-rule);
 }
 
-.approval-meter--detail .approval-meter-pip {
-  width: 8px;
-  height: 8px;
-}
-
 .approval-meter-pip--filled {
   background: currentColor;
-}
-
-/* Who a change is sitting with: the assignee, and every reviewer it needs. */
-.change-assignments {
-  display: grid;
-  gap: var(--brand-space-4);
-  padding: var(--brand-space-4);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-md);
-  background: var(--bs-surface-1);
-}
-
-@media (min-width: 720px) {
-  .change-assignments {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
-  }
-
-  .change-assignments > .vault-pr-error {
-    grid-column: 1 / -1;
-  }
-}
-
-.change-assignments-block {
-  display: grid;
-  align-content: start;
-  gap: var(--brand-space-2);
-}
-
-.change-assignments-heading {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--brand-space-2);
-}
-
-.change-assignments-empty {
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-2);
-  margin: 0;
-  font-size: var(--brand-text-sm);
-  color: var(--bs-text-muted);
-}
-
-.change-assignments-btn {
-  justify-self: start;
-}
-
-.reviewer-list {
-  display: grid;
-  gap: var(--brand-space-1);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.reviewer-row,
-.assignee-row,
-.change-assignments-result {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  gap: var(--brand-space-2);
-  padding: var(--brand-space-2);
-  border-radius: var(--brand-radius-sm);
-}
-
-/* The icon is the whole point of the list: one glance says who is holding
-   this up. Coral marks the one state that means work is owed. */
-.reviewer-status-icon {
-  display: inline-flex;
-  flex: none;
-  color: var(--bs-text-faint);
-}
-
-.reviewer-row--approved .reviewer-status-icon {
-  color: var(--brand-green);
-}
-
-.reviewer-row--changes_requested .reviewer-status-icon {
-  color: var(--brand-coral-dark);
-}
-
-.reviewer-row--thread_open .reviewer-status-icon,
-.reviewer-row--commented .reviewer-status-icon {
-  color: var(--bs-text-secondary);
-}
-
-.reviewer-avatar {
-  flex: none;
-  width: 24px;
-  height: 24px;
-  border-radius: var(--brand-radius-full);
-  object-fit: cover;
-}
-
-.reviewer-avatar--fallback {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bs-surface-3);
-  color: var(--bs-text-secondary);
-  font-family: var(--brand-font-mono);
-  font-size: 10px;
-  letter-spacing: var(--brand-tracking-wide);
-}
-
-.reviewer-identity {
-  display: grid;
-  gap: 1px;
-  flex: 1 1 auto;
-  min-width: 0;
-  text-align: left;
-}
-
-.reviewer-name {
-  font-size: var(--brand-text-sm);
-  font-weight: var(--brand-weight-medium);
-  color: var(--bs-text-primary);
-  overflow-wrap: anywhere;
-}
-
-.reviewer-status-label {
-  font-size: var(--brand-text-xs);
-  color: var(--bs-text-muted);
-  overflow-wrap: anywhere;
-}
-
-.reviewer-remove {
-  display: inline-flex;
-  flex: none;
-  padding: var(--brand-space-1);
-  border: none;
-  border-radius: var(--brand-radius-sm);
-  background: none;
-  color: var(--bs-text-faint);
-  cursor: pointer;
-  transition:
-    color var(--brand-transition-base),
-    background var(--brand-transition-base);
-}
-
-.reviewer-remove:hover:not(:disabled),
-.reviewer-remove:focus-visible {
-  background: var(--bs-surface-2);
-  color: var(--brand-coral-dark);
-  outline: none;
-}
-
-.reviewer-remove:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-/* The picker used to be one panel at the foot of the whole card, so pressing
-   "Assign someone" at the top opened a search box below "Add a reviewer" —
-   nothing tied the box to the button. Each button now owns its own popover,
-   anchored directly beneath it. */
-.change-assignments-anchor {
-  position: relative;
-  justify-self: start;
-}
-
-.change-assignments-picker {
-  position: absolute;
-  z-index: 20;
-  top: calc(100% + var(--brand-space-1));
-  left: 0;
-  display: grid;
-  gap: var(--brand-space-2);
-  width: max(260px, 100%);
-  max-height: 320px;
-  overflow-y: auto;
-  padding: var(--brand-space-3);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-md);
-  background: var(--bs-surface-1);
-  box-shadow: var(--brand-shadow-lg, 0 12px 28px rgba(0, 0, 0, 0.14));
-}
-
-/* Near the right edge of a narrow card the popover would otherwise clip. */
-@media (max-width: 719px) {
-  .change-assignments-picker {
-    width: min(320px, calc(100vw - var(--brand-space-6)));
-  }
-}
-
-.change-assignments-hint {
-  margin: 0;
-  font-size: var(--brand-text-sm);
-  color: var(--bs-text-muted);
-}
-
-.change-assignments-results {
-  display: grid;
-  gap: var(--brand-space-1);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.change-assignments-result {
-  border: none;
-  background: none;
-  cursor: pointer;
-  transition: background var(--brand-transition-base);
-}
-
-.change-assignments-result:hover:not(:disabled),
-.change-assignments-result:focus-visible {
-  background: var(--bs-surface-2);
-  outline: none;
-}
-
-.change-assignments-result:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
 }
 
 /* Named for a screen reader, invisible to everyone else. */
@@ -1870,179 +1642,854 @@ input {
   font-size: var(--brand-text-sm);
   color: var(--bs-text-muted);
 }
-/* One change, on its own page. */
+/* ── Change review ───────────────────────────────────────────────
+   One change, reviewed inside the Changes tab. The document header and its
+   tabs stay above this, so the reader never leaves the document to decide
+   something about it — "← All changes" is the only way back out.
+   ---------------------------------------------------------------- */
+
 .change-detail {
   display: grid;
   gap: var(--brand-space-5);
+  max-width: 820px;
 }
 
-.change-detail-header {
-  display: grid;
-  gap: var(--brand-space-2);
-  padding-bottom: var(--brand-space-4);
-  border-bottom: 1px solid var(--bs-rule);
-}
-
-.change-detail-back {
+.rev-back {
   justify-self: start;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--brand-space-1);
   padding: 0;
   border: none;
   background: none;
   color: var(--bs-text-muted);
+  font-size: var(--brand-text-sm);
+  font-weight: var(--brand-weight-medium);
   cursor: pointer;
-  font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-label);
-  letter-spacing: var(--brand-tracking-wide);
-  text-transform: uppercase;
-  transition: color var(--brand-transition-base);
 }
 
-.change-detail-back:hover,
-.change-detail-back:focus-visible {
+.rev-back:hover,
+.rev-back:focus-visible {
   color: var(--bs-text-primary);
 }
 
-.change-detail-heading {
+.rev-header {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--brand-space-3);
+  align-items: flex-start;
+  gap: var(--brand-space-4);
 }
 
-.change-detail-title {
+.rev-header-main {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.rev-title {
   margin: 0;
   font-family: var(--brand-font-serif);
-  font-size: var(--brand-text-h3);
-  line-height: var(--brand-leading-tight);
-  overflow-wrap: anywhere;
+  font-size: 22px;
+  font-weight: var(--brand-weight-semibold);
+  letter-spacing: var(--brand-tracking-snug);
+  color: var(--bs-text-primary);
 }
 
-.change-detail-number {
-  margin-left: var(--brand-space-2);
-  font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-body);
-  font-weight: var(--brand-weight-regular);
-  color: var(--bs-text-faint);
-}
-
-.change-detail-meta {
+/* One sentence: who asked for this, and what the document becomes. */
+.rev-meta {
   margin: 0;
-  font-size: var(--brand-text-sm);
+  font-size: 13.5px;
   color: var(--bs-text-muted);
 }
 
-.change-detail-decision,
-.change-file-view {
+.rev-meta strong {
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-semibold);
+}
+
+/* The author's own words. The single most useful thing on the page, and the
+   old design had nowhere to put it. */
+.rev-description {
+  margin: var(--brand-space-1) 0 0;
+  max-width: 620px;
+  font-size: var(--brand-text-sm);
+  line-height: 1.6;
+  color: var(--bs-text-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* How far through approval, without being read. */
+.rev-approvals {
+  flex: none;
+  display: grid;
+  gap: 5px;
+  justify-items: end;
+  text-align: right;
+}
+
+.rev-approval-bars {
+  display: flex;
+  gap: var(--brand-space-1);
+}
+
+.rev-approval-bar {
+  width: 26px;
+  height: 6px;
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-surface-3);
+}
+
+/* Green is the only "settled" colour this product has, and a collected
+   approval is exactly that. */
+.rev-approval-bar--filled {
+  background: var(--brand-green);
+}
+
+.rev-approval-count {
+  font-family: var(--brand-font-mono);
+  font-size: 11px;
+  color: var(--bs-text-muted);
+}
+
+/* How a closed change ended, stated once, at the top of its record. */
+.rev-outcome {
+  margin: 0;
+  padding: var(--brand-space-3) var(--brand-space-4);
+  background: var(--bs-surface-2);
+  border-radius: var(--brand-radius-md);
+  font-size: var(--brand-text-sm);
+  color: var(--bs-text-secondary);
+}
+
+/* A quiet line for the things that are neither an event nor an action:
+   "you submitted this", "you cannot publish this". */
+.rev-note {
+  margin: 0;
+  font-size: 13px;
+  color: var(--bs-text-muted);
+}
+
+/* ── Proposed version ──────────────────────────────────────────────
+   Fixed chrome in the same place on every change: the thing being approved,
+   which update of it, and one button to go and read it. A reviewer should
+   never have to hunt for the file they are being asked to sign off.
+   ------------------------------------------------------------------ */
+
+.rev-proposed {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-4);
+  padding: 14px 18px;
+  background: var(--bs-surface-1);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+}
+
+.rev-proposed-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-2);
+  color: var(--bs-text-muted);
+}
+
+.rev-proposed-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.rev-proposed-title {
+  margin: 0;
+  font-size: var(--brand-text-sm);
+  font-weight: var(--brand-weight-semibold);
+  color: var(--bs-text-primary);
+}
+
+.rev-proposed-meta {
+  margin: 2px 0 0;
+  font-family: var(--brand-font-mono);
+  font-size: 11.5px;
+  color: var(--bs-text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* ── Reviewers ─────────────────────────────────────────────────────
+   One row, no assignee. Two names for "who is this on" asked a reader to
+   hold a distinction the product never enforced.
+   ------------------------------------------------------------------ */
+
+.rev-reviewers {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--brand-space-2) var(--brand-space-5);
+}
+
+.rev-reviewers-label {
+  margin: 0;
+  font-family: var(--brand-font-mono);
+  font-size: 11px;
+  font-weight: var(--brand-weight-medium);
+  letter-spacing: var(--brand-tracking-wider);
+  text-transform: uppercase;
+  color: var(--bs-text-muted);
+}
+
+.rev-reviewers-empty {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--bs-text-muted);
+}
+
+.rev-reviewer-list {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--brand-space-2) var(--brand-space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rev-reviewer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--bs-text-muted);
+}
+
+.rev-reviewer-name {
+  color: var(--bs-text-secondary);
+}
+
+.rev-reviewer-mark {
+  display: inline-flex;
+  color: var(--bs-text-faint);
+}
+
+/* Approval is the only finished thing on this row, so it is the only loud
+   one. A reviewer who has not answered is not a problem, just not done. */
+.rev-reviewer-mark--approved {
+  color: var(--brand-green);
+}
+
+/* Withdrawing a review request is real, and rare. It stays out of the way
+   until somebody goes looking for it. */
+.rev-reviewer-remove {
+  display: inline-flex;
+  padding: 2px;
+  border: none;
+  border-radius: var(--brand-radius-full);
+  background: none;
+  color: var(--bs-text-faint);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity var(--brand-transition-fast);
+}
+
+.rev-reviewer:hover .rev-reviewer-remove,
+.rev-reviewer-remove:focus-visible {
+  opacity: 1;
+}
+
+.rev-reviewer-remove:hover:not(:disabled) {
+  color: var(--brand-coral-dark);
+}
+
+.rev-reviewers-anchor {
+  position: relative;
+}
+
+.rev-picker {
+  position: absolute;
+  z-index: var(--brand-z-overlay);
+  top: calc(100% + var(--brand-space-2));
+  left: 0;
+  width: min(320px, 80vw);
+  display: grid;
+  gap: var(--brand-space-2);
+  padding: var(--brand-space-3);
+  background: var(--bs-surface-1);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+  box-shadow: var(--bs-shadow-lg);
+}
+
+.rev-picker-input {
+  width: 100%;
+  padding: var(--brand-space-2) var(--brand-space-3);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-page-bg);
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-sm);
+}
+
+.rev-picker-input:focus {
+  outline: none;
+  border-color: var(--brand-coral);
+  box-shadow: 0 0 0 3px var(--bs-coral-dim);
+}
+
+.rev-picker-hint {
+  margin: 0;
+  font-size: var(--brand-text-xs);
+  color: var(--bs-text-muted);
+}
+
+.rev-picker-results {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.rev-picker-result {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-3);
+  width: 100%;
+  padding: var(--brand-space-2);
+  border: none;
+  border-radius: var(--brand-radius-md);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rev-picker-result:hover:not(:disabled),
+.rev-picker-result:focus-visible {
+  background: var(--bs-surface-2);
+}
+
+.rev-picker-result:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.rev-picker-identity {
+  display: grid;
+  min-width: 0;
+}
+
+.rev-picker-name {
+  font-size: var(--brand-text-sm);
+  font-weight: var(--brand-weight-medium);
+  color: var(--bs-text-primary);
+}
+
+.rev-picker-login {
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-xs);
+  color: var(--bs-text-muted);
+}
+
+/* ── Faces ─────────────────────────────────────────────────────────
+   Most people never upload a photo, so most faces here are initials. Five
+   tints, keyed off the login, so the same person is the same colour on every
+   screen — a reviewer list you recognise beats one you have to read.
+   ------------------------------------------------------------------ */
+
+.rev-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  border-radius: var(--brand-radius-full);
+  object-fit: cover;
+  font-weight: var(--brand-weight-semibold);
+  background: var(--bs-surface-2);
+  color: var(--bs-text-muted);
+}
+
+.rev-avatar--sm {
+  width: 24px;
+  height: 24px;
+  font-size: 10px;
+}
+
+.rev-avatar--md {
+  width: 26px;
+  height: 26px;
+  font-size: 10.5px;
+}
+
+.rev-avatar--tone1 {
+  background: rgba(29, 78, 216, 0.1);
+  color: #1d4ed8;
+}
+
+.rev-avatar--tone2 {
+  background: rgba(124, 58, 237, 0.1);
+  color: #7c3aed;
+}
+
+.rev-avatar--tone3 {
+  background: var(--brand-green-dim);
+  color: var(--brand-green);
+}
+
+.rev-avatar--tone4 {
+  background: rgba(180, 83, 9, 0.1);
+  color: #b45309;
+}
+
+.rev-avatar--tone5 {
+  background: rgba(15, 118, 110, 0.1);
+  color: #0f766e;
+}
+
+/* ── The timeline ──────────────────────────────────────────────────
+   A spine on the page, not a box. The change's history *is* the page, so a
+   border around it would only say it was one panel among several. Comments
+   are white cards — somebody wrote them and they can be answered. Events sit
+   on the paper, because there is nothing to do with them but read them.
+   ------------------------------------------------------------------ */
+
+.rev-timeline-wrap {
+  display: grid;
+  gap: var(--brand-space-4);
+}
+
+.rev-gate {
+  margin: 0;
+  padding: var(--brand-space-3) var(--brand-space-4);
+  background: var(--bs-coral-dim);
+  border-radius: var(--brand-radius-md);
+  color: var(--brand-coral-dark);
+  font-size: var(--brand-text-sm);
+}
+
+.rev-timeline {
+  position: relative;
+  display: grid;
+  gap: 18px;
+  padding-left: 40px;
+}
+
+.rev-timeline::before {
+  content: "";
+  position: absolute;
+  left: 13px;
+  top: var(--brand-space-2);
+  bottom: var(--brand-space-2);
+  width: 1.5px;
+  background: var(--bs-rule-warm);
+}
+
+.rev-entry {
+  position: relative;
+}
+
+/* Opaque, always: the spine showing through a dot turns every marker into a
+   smudge with a line through it. */
+.rev-dot {
+  position: absolute;
+  left: -40px;
+  top: 0;
+  z-index: var(--brand-z-raised);
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-page-bg);
+  border: 1.5px solid var(--bs-rule);
+  color: var(--bs-text-muted);
+}
+
+.rev-dot--green {
+  background: #e3f1e6;
+  border-color: #b6e0c3;
+  color: var(--brand-green);
+}
+
+[data-theme="dark"] .rev-dot--green {
+  background: var(--brand-green-dim);
+  border-color: rgba(22, 163, 74, 0.4);
+}
+
+.rev-event {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-height: 28px;
+  margin: 0;
+  padding-top: 5px;
+  font-size: 12.5px;
+  color: var(--bs-text-muted);
+}
+
+.rev-event-actor {
+  font-weight: var(--brand-weight-semibold);
+  color: var(--bs-text-secondary);
+}
+
+/* The loud moments. An approval is the point of this product, so it is the
+   one word on the timeline that gets a colour. */
+.rev-event-verb--good {
+  font-weight: var(--brand-weight-semibold);
+  color: var(--brand-green);
+}
+
+.rev-event-tag {
+  font-family: var(--brand-font-mono);
+  font-size: 11px;
+}
+
+.rev-event-when,
+.rev-event-note {
+  color: var(--bs-text-muted);
+}
+
+/* ── One comment. A reply is what makes it a thread. ───────────────── */
+
+.rev-thread {
+  padding: var(--brand-space-4) 18px;
+  background: var(--bs-surface-1);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+}
+
+.rev-thread--collapsed {
+  padding: 13px 18px;
+}
+
+.rev-thread-head {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+}
+
+.rev-thread-author {
+  font-size: 13.5px;
+  font-weight: var(--brand-weight-semibold);
+  color: var(--bs-text-primary);
+}
+
+.rev-thread-date {
+  font-size: 12.5px;
+  color: var(--bs-text-muted);
+}
+
+.rev-thread-spacer {
+  flex: 1;
+}
+
+.rev-thread-external {
+  font-family: var(--brand-font-mono);
+  font-size: 11px;
+  padding: 2px var(--brand-space-2);
+  border: 1px dashed var(--bs-rule);
+  border-radius: var(--brand-radius-sm);
+  color: var(--bs-text-muted);
+}
+
+/* A dot, not a pill: an unresolved thread is a fact about the conversation,
+   not a badge competing with the page's one coral action. */
+.rev-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.rev-mark--open {
+  color: var(--bs-text-muted);
+}
+
+.rev-mark-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--brand-radius-full);
+  background: var(--brand-coral);
+}
+
+.rev-mark--resolved {
+  color: var(--bs-text-faint);
+}
+
+/* Top right, so it holds still. Under the text it walked further away the
+   longer the thread got — which is exactly when somebody wants it. */
+.rev-thread-toggle {
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 12px;
+  font-weight: var(--brand-weight-regular);
+  color: var(--bs-text-faint);
+  cursor: pointer;
+}
+
+/* An unresolved thread may still need somebody to act, so its toggle asks
+   for slightly more attention than a resolved one's. */
+.rev-thread-toggle--live {
+  font-size: 12.5px;
+  font-weight: var(--brand-weight-medium);
+  color: var(--bs-text-muted);
+}
+
+.rev-thread-toggle:hover,
+.rev-thread-toggle:focus-visible {
+  color: var(--bs-text-primary);
+}
+
+.rev-thread-body {
+  margin: var(--brand-space-2) 0 0;
+  font-size: var(--brand-text-sm);
+  line-height: 1.55;
+  color: var(--bs-text-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.rev-thread--collapsed .rev-thread-body {
+  margin-top: 6px;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+/* Replies are full width and hairline-separated, not indented. Nesting buys
+   nothing when a thread is three people discussing one paragraph. */
+.rev-thread-reply {
+  margin-top: var(--brand-space-3);
+  padding-top: var(--brand-space-3);
+  border-top: 1px solid var(--bs-rule-warm);
+}
+
+/* The resolution belongs to the thread's own history, not to a banner
+   floating above it — and it says out loud that it can be undone. */
+.rev-thread-event {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  margin: var(--brand-space-3) 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--bs-rule-warm);
+  font-size: 12px;
+  color: var(--bs-text-faint);
+}
+
+.rev-thread-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 14px;
+  margin-top: var(--brand-space-3);
+}
+
+/* ── Composers ─────────────────────────────────────────────────────── */
+
+.rev-composer {
   display: grid;
   gap: var(--brand-space-2);
 }
 
-.change-detail-section-title {
-  margin: 0;
-  font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-label);
-  letter-spacing: var(--brand-tracking-wide);
-  text-transform: uppercase;
-  color: var(--bs-text-muted);
+.rev-composer--reply {
+  margin-top: var(--brand-space-3);
 }
 
-.change-detail-section-note {
-  margin: 0 0 var(--brand-space-2);
-  max-width: 70ch;
-  font-size: var(--brand-text-sm);
-  color: var(--bs-text-muted);
-}
-
-.change-detail-section-note code {
-  padding: 1px var(--brand-space-1);
-  border-radius: var(--brand-radius-xs);
-  background: var(--bs-surface-2);
-  font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-xs);
-}
-
-/* Discussion and file are two screens of one change, so they are linked the
-   way the document's own tabs are — not stacked one above the other. */
-.change-views {
-  display: flex;
-  gap: var(--brand-space-4);
-  margin-top: var(--brand-space-2);
-  margin-bottom: -1px;
-}
-
-.change-view-tab {
-  padding: var(--brand-space-2) 0;
-  border: none;
-  border-bottom: 2px solid transparent;
-  background: none;
-  color: var(--bs-text-muted);
-  cursor: pointer;
+.rev-composer-input {
+  width: 100%;
+  padding: var(--brand-space-3) var(--brand-space-4);
+  border: 1.5px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+  background: var(--bs-surface-1);
+  color: var(--bs-text-primary);
   font-family: var(--brand-font-sans);
   font-size: var(--brand-text-sm);
-  font-weight: var(--brand-weight-medium);
-  transition:
-    color var(--brand-transition-base),
-    border-color var(--brand-transition-base);
+  line-height: 1.55;
+  resize: vertical;
 }
 
-.change-view-tab:hover,
-.change-view-tab:focus-visible {
-  color: var(--bs-text-primary);
+.rev-composer-input:focus {
   outline: none;
+  border-color: var(--brand-coral);
+  box-shadow: 0 0 0 3px var(--bs-coral-dim);
 }
 
-.change-view-tab--active {
-  color: var(--bs-text-primary);
-  border-bottom-color: var(--brand-coral);
-}
-
-/* How a closed change ended, stated once at the top of its record. */
-.change-outcome-banner {
-  margin: 0;
-  padding: var(--brand-space-3) var(--brand-space-4);
-  background: var(--bs-surface-2);
-  border: 1px solid var(--bs-rule);
-  border-left: 3px solid var(--bs-rule);
-  border-radius: var(--brand-radius-sm);
-  color: var(--bs-text-secondary);
-  font-size: var(--brand-text-sm);
-}
-
-/* The file, on the page where the file is not the point: named, reachable,
-   and one line tall. */
-.change-file-strip {
+.rev-composer-actions {
   display: flex;
   align-items: center;
   gap: var(--brand-space-3);
+}
+
+/* The comment box before anyone commits to writing one: the shape of the
+   field, none of its weight. */
+.rev-composer-stub {
+  width: 100%;
   padding: var(--brand-space-3) var(--brand-space-4);
+  border: 1.5px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
   background: var(--bs-surface-1);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-sm);
   color: var(--bs-text-faint);
+  font-size: var(--brand-text-sm);
+  text-align: left;
+  cursor: text;
 }
 
-.change-file-strip-name {
-  font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-xs);
-  color: var(--bs-text-secondary);
-  overflow-wrap: anywhere;
+.rev-composer-stub:hover,
+.rev-composer-stub:focus-visible {
+  border-color: var(--bs-text-faint);
 }
 
-.change-file-strip-spacer {
-  flex: 1;
-}
+/* ── Buttons and links on this page ────────────────────────────────── */
 
-.change-file-strip-btn {
+.rev-btn {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
+  border-radius: var(--brand-radius-md);
+  padding: 9px var(--brand-space-4);
+  font-family: var(--brand-font-sans);
+  font-size: 13px;
+  font-weight: var(--brand-weight-semibold);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.rev-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.rev-btn--ghost {
+  background: var(--bs-surface-1);
+  color: var(--bs-text-primary);
+  border: 1.5px solid var(--bs-rule);
+}
+
+.rev-btn--ghost:hover:not(:disabled),
+.rev-btn--ghost:focus-visible {
+  border-color: var(--bs-text-faint);
+}
+
+.rev-btn--pill {
+  padding: 5px var(--brand-space-3);
+  font-size: 12.5px;
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-surface-1);
+  color: var(--bs-text-primary);
+  border: 1.5px solid var(--bs-rule);
+}
+
+.rev-btn--pill:hover:not(:disabled),
+.rev-btn--pill:focus-visible {
+  border-color: var(--bs-text-faint);
+}
+
+/* Green, and only here. Approving and publishing are the only two things on
+   this page that settle anything. */
+.rev-btn--green {
+  background: var(--brand-green);
+  color: #ffffff;
+  border: 1.5px solid transparent;
+  border-radius: var(--brand-radius-full);
+  padding: 10px var(--brand-space-5);
+  font-size: 13.5px;
+}
+
+.rev-btn--green:hover:not(:disabled),
+.rev-btn--green:focus-visible {
+  background: #128040;
+}
+
+.rev-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 12.5px;
+  font-weight: var(--brand-weight-medium);
+  color: var(--bs-text-muted);
+  cursor: pointer;
+}
+
+.rev-link:hover:not(:disabled),
+.rev-link:focus-visible {
+  color: var(--bs-text-primary);
+}
+
+.rev-link:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* ── The decision ──────────────────────────────────────────────────
+   Floating, bottom right. A reviewer who has read enough should never have
+   to scroll back through the argument to record what they decided.
+   ------------------------------------------------------------------ */
+
+.rev-decision {
+  position: fixed;
+  right: var(--brand-space-12);
+  bottom: var(--brand-space-10);
+  z-index: var(--brand-z-overlay);
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-3);
+  padding: 10px var(--brand-space-3);
+  background: var(--bs-surface-1);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-full);
+  box-shadow: var(--bs-shadow-lg);
+}
+
+/* Approving and asking for changes both need a sentence first, so the pill
+   grows a panel rather than opening a dialog over the change being decided. */
+.rev-decision:has(.rev-decision-confirm) {
+  border-radius: var(--brand-radius-xl);
+  padding: var(--brand-space-4);
+}
+
+.rev-decision-confirm {
+  display: grid;
+  gap: var(--brand-space-3);
+  width: min(360px, 70vw);
+}
+
+.rev-decision-confirm-line {
+  margin: 0;
+  font-size: 13px;
+  color: var(--bs-text-secondary);
+}
+
+.rev-decision-row {
+  display: flex;
+  justify-content: flex-end;
   gap: var(--brand-space-2);
-  flex: none;
-  padding: var(--brand-space-2) var(--brand-space-3);
+}
+
+/* ── The file, on its own screen ───────────────────────────────────── */
+
+.rev-file-view {
+  display: grid;
+  gap: var(--brand-space-4);
+  justify-items: start;
+}
+
+.rev-file-note {
+  margin: 0;
   font-size: var(--brand-text-sm);
+  color: var(--bs-text-muted);
+}
+
+@media (max-width: 900px) {
+  /* Fixed chrome that overlaps the conversation is worse than chrome that
+     scrolls with it, so on a narrow screen the decision returns to the page. */
+  .rev-decision {
+    position: static;
+    justify-content: flex-end;
+  }
 }
 
 .doc-empty {
@@ -5373,276 +5820,4 @@ input {
     flex-direction: column;
     align-items: flex-start;
   }
-}
-
-/* ---------------------------------------------------------------------------
-   Review discussion
-   Threaded conversation on a pending version, modelled on the GitHub/GitLab
-   review pattern: every comment belongs to a thread, and threads are resolved
-   rather than deleted.
-   --------------------------------------------------------------------------- */
-
-.discussion-panel {
-  display: grid;
-  gap: var(--brand-space-4);
-}
-
-/* One column, in the order things happened: the submission, every thread,
-   every decision. The rule down the left is the thread of the change itself —
-   this is a log, and a log reads as one line. */
-.discussion-timeline {
-  display: grid;
-  gap: var(--brand-space-3);
-  position: relative;
-  padding-left: 32px;
-}
-
-.discussion-timeline::before {
-  content: "";
-  position: absolute;
-  top: var(--brand-space-2);
-  bottom: var(--brand-space-2);
-  left: 11px;
-  width: 1px;
-  background: var(--bs-rule);
-}
-
-.discussion-timeline-item {
-  position: relative;
-}
-
-/* The opening post: what the submitter asked for, in their words. */
-.discussion-opening {
-  position: relative;
-  display: flex;
-  gap: var(--brand-space-3);
-  padding: var(--brand-space-4);
-  background: var(--bs-surface-1);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-sm);
-}
-
-.discussion-opening-main {
-  display: grid;
-  gap: var(--brand-space-2);
-  min-width: 0;
-}
-
-/* A decision — an approval, a rejection, a close — reads as one line in the
-   log, not as a card. */
-.discussion-event {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--brand-space-3);
-  padding: var(--brand-space-1) 0;
-}
-
-.discussion-event-icon {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 22px;
-  height: 22px;
-  margin-left: -32px;
-  border-radius: var(--brand-radius-full);
-  background: var(--bs-surface-2);
-  border: 1px solid var(--bs-rule);
-  color: var(--bs-text-muted);
-}
-
-.discussion-event--approved .discussion-event-icon {
-  background: var(--brand-green-dim);
-  border-color: transparent;
-  color: var(--brand-green);
-}
-
-.discussion-event--changes .discussion-event-icon {
-  background: var(--bs-coral-dim);
-  border-color: transparent;
-  color: var(--brand-coral-dark);
-}
-
-.discussion-event-main {
-  display: grid;
-  gap: var(--brand-space-2);
-  min-width: 0;
-  flex: 1;
-}
-
-.discussion-event-line {
-  margin: 0;
-  font-size: var(--brand-text-sm);
-  color: var(--bs-text-secondary);
-}
-
-.discussion-event-note {
-  color: var(--bs-text-faint);
-}
-
-.discussion-event .discussion-comment-body {
-  padding: var(--brand-space-3) var(--brand-space-4);
-  background: var(--bs-surface-1);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-sm);
-}
-
-.discussion-panel-count {
-  font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-xs);
-  color: var(--bs-text-muted);
-}
-
-.discussion-gate-notice {
-  margin: 0;
-  padding: var(--brand-space-3) var(--brand-space-4);
-  background: var(--bs-coral-dim);
-  border-radius: var(--brand-radius-sm);
-  color: var(--brand-coral-dark);
-  font-size: var(--brand-text-sm);
-}
-
-.discussion-thread {
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-sm);
-  background: var(--bs-surface-1);
-  padding: var(--brand-space-4);
-  display: grid;
-  gap: var(--brand-space-3);
-}
-
-.discussion-thread-resolved {
-  opacity: 0.75;
-}
-
-.discussion-thread-header {
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-2);
-  flex-wrap: wrap;
-}
-
-.discussion-thread-status {
-  padding: 2px var(--brand-space-2);
-  border-radius: var(--brand-radius-sm);
-  background: rgba(217, 119, 6, 0.12);
-  color: #b45309;
-  font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.discussion-thread-status-resolved {
-  background: var(--brand-green-dim);
-  color: var(--brand-green);
-}
-
-.discussion-thread-resolved-by,
-.discussion-thread-external {
-  font-size: var(--brand-text-xs);
-  color: var(--bs-text-muted);
-}
-
-.discussion-thread-external {
-  font-family: var(--brand-font-mono);
-  padding: 2px var(--brand-space-2);
-  border: 1px dashed var(--bs-rule);
-  border-radius: var(--brand-radius-sm);
-}
-
-.discussion-thread-header-actions {
-  margin-left: auto;
-  display: flex;
-  gap: var(--brand-space-2);
-}
-
-.discussion-btn-sm {
-  padding: 4px var(--brand-space-3);
-  font-size: var(--brand-text-xs);
-}
-
-.discussion-comments {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: var(--brand-space-3);
-}
-
-.discussion-comment {
-  display: flex;
-  gap: var(--brand-space-3);
-  align-items: flex-start;
-}
-
-.discussion-avatar {
-  width: 28px;
-  height: 28px;
-  flex: none;
-  border-radius: var(--brand-radius-full);
-  object-fit: cover;
-}
-
-.discussion-avatar-fallback {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bs-surface-2);
-  color: var(--bs-text-muted);
-  font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-xs);
-}
-
-.discussion-comment-main {
-  min-width: 0;
-  flex: 1;
-}
-
-.discussion-comment-meta {
-  display: flex;
-  align-items: baseline;
-  gap: var(--brand-space-2);
-  flex-wrap: wrap;
-}
-
-.discussion-comment-author {
-  font-size: var(--brand-text-sm);
-  font-weight: 500;
-  color: var(--bs-text-primary);
-}
-
-.discussion-comment-time {
-  font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-xs);
-  color: var(--bs-text-muted);
-}
-
-.discussion-comment-body {
-  margin-top: 2px;
-  font-size: var(--brand-text-sm);
-  color: var(--bs-text-primary);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-/* The reply box is open before you decide to reply. A link that reveals a
-   textarea makes answering a colleague cost a click first. */
-.discussion-reply-form,
-.discussion-new-thread {
-  display: grid;
-  gap: var(--brand-space-2);
-}
-
-.discussion-reply-form {
-  padding-top: var(--brand-space-1);
-}
-
-.discussion-new-thread {
-  padding-top: var(--brand-space-2);
-  border-top: 1px solid var(--bs-rule);
-}
-
-.discussion-reply-actions {
-  display: flex;
-  gap: var(--brand-space-3);
 }

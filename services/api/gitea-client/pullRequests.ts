@@ -653,6 +653,63 @@ export async function getPullRequestWithReviews(
   return { pullRequest: withApprovalState(pullRequest, reviews), reviews };
 }
 
+export interface ListBranchUpdatesParams {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+  /** The change's own branch. */
+  branch: string;
+  /** The branch it would be published onto — everything here is old news. */
+  base: string;
+  limit: number;
+}
+
+/**
+ * The commits a change's branch has that the base branch does not.
+ *
+ * These *are* the change's updates: a submitter answers a reviewer by
+ * uploading a corrected file, and that upload is a commit here. Nothing about
+ * an update is stored outside Gitea.
+ *
+ * Deliberately not filtered by file path. Gitea's `path` filter on this
+ * endpoint returns only the newest matching commit rather than the file's
+ * history, which would report every change as having exactly one update. `not`
+ * is the filter that actually answers the question, and it is also the more
+ * honest one: every commit on a change's branch is part of what that change
+ * proposes, whichever file it touched.
+ */
+export async function listBranchUpdates(
+  params: ListBranchUpdatesParams,
+): Promise<{ sha: string; author: string; timestamp: string }[]> {
+  const { client, owner, repo, branch, base, limit } = params;
+
+  const commits = await unwrap(
+    client.GET("/repos/{owner}/{repo}/commits", {
+      params: {
+        path: { owner, repo },
+        query: {
+          sha: branch,
+          not: base,
+          limit,
+          stat: false,
+          verification: false,
+          files: false,
+        },
+      },
+    }),
+  );
+
+  return commits.map((commit) => ({
+    sha: commit.sha ?? "",
+    author:
+      commit.author?.full_name ||
+      commit.author?.login ||
+      commit.commit?.author?.name ||
+      "Someone",
+    timestamp: commit.commit?.author?.date ?? commit.created ?? "",
+  }));
+}
+
 /**
  * Set who is answerable for a change.
  *

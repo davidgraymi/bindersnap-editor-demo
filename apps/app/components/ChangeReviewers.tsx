@@ -1,28 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  ChevronDown,
-  CircleCheck,
-  CircleDashed,
-  CircleX,
-  MessageSquare,
-  UserRound,
-  X,
-} from "lucide-react";
+import { Check, Clock, MessageSquare, Plus, X } from "lucide-react";
 
 import {
   listDocumentCollaborators,
   searchWorkspaceUsers,
   updateChangeAssignments,
 } from "../api";
-import type { ChangeReviewer, ChangeUser } from "../api";
+import type { ChangeReviewer } from "../api";
 import type { ReviewerDisplayStatus } from "../documentDisplay";
 import {
   capitalizeFirst,
-  formatShortDate,
   getReviewerDisplayName,
   getReviewerStatusLabel,
   resolveReviewerDisplayStatus,
 } from "../documentDisplay";
+import { PersonAvatar } from "./PersonAvatar";
 
 const SEARCH_DEBOUNCE_MS = 250;
 const SEARCH_PAGE_SIZE = 6;
@@ -35,17 +27,18 @@ interface ChangeReviewersProps {
   pullNumber: number;
   /** Who submitted the change. They can never be one of its reviewers. */
   submittedBy: string;
-  assignee: ChangeUser | null;
   reviewers: ChangeReviewer[];
+  /** The reader, so their own row reads "You" rather than their name. */
+  currentUser: string;
   /**
    * Logins with at least one unresolved thread of their own on this change.
    * The server cannot see this without paying for the discussion on every
    * change in the list, so the page that already loaded it says so.
    */
   openThreadAuthors: ReadonlySet<string>;
-  /** Whether this reader may change who the work sits with. */
+  /** Whether this reader may change who has to sign the change off. */
   canManage: boolean;
-  /** Refetch the change: assignments are server state, not local state. */
+  /** Refetch the change: reviewers are server state, not local state. */
   onChanged: () => void | Promise<void>;
 }
 
@@ -55,134 +48,46 @@ interface UserOption {
   avatarUrl: string;
 }
 
-/** Which of the two roles a popover is currently filling. */
-type PickerKind = "assignee" | "reviewer";
-
-const STATUS_ICONS: Record<ReviewerDisplayStatus, typeof CircleCheck> = {
-  approved: CircleCheck,
-  changes_requested: CircleX,
+/**
+ * The mark beside a name.
+ *
+ * A green check is the only loud one, because approval is the only thing on
+ * this row that is finished. Everything else is quiet and grey — a reviewer
+ * who has not answered yet is not a problem, they are just not done.
+ */
+const STATUS_ICONS: Record<ReviewerDisplayStatus, typeof Check> = {
+  approved: Check,
+  changes_requested: X,
   thread_open: MessageSquare,
   commented: MessageSquare,
-  awaiting: CircleDashed,
+  awaiting: Clock,
 };
 
 function readError(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback;
 }
 
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return (parts[0] ?? "").slice(0, 2).toUpperCase();
-  return `${parts[0]?.[0] ?? ""}${parts[parts.length - 1]?.[0] ?? ""}`.toUpperCase();
-}
-
-function PersonAvatar({ person }: { person: UserOption }) {
-  const name = person.fullName.trim() || person.login;
-
-  if (person.avatarUrl) {
-    return (
-      <img
-        className="reviewer-avatar"
-        src={person.avatarUrl}
-        alt=""
-        aria-hidden="true"
-      />
-    );
-  }
-
-  return (
-    <span
-      className="reviewer-avatar reviewer-avatar--fallback"
-      aria-hidden="true"
-    >
-      {initials(name)}
-    </span>
-  );
-}
-
 /**
- * One reviewer, with the icon that says where they stand.
+ * Who has to sign this change off, on one row.
  *
- * The icon is the point: a reader scanning the list should be able to see who
- * is still holding the change up without reading a single word.
- */
-function ReviewerRow({
-  reviewer,
-  status,
-  canManage,
-  busy,
-  onRemove,
-}: {
-  reviewer: ChangeReviewer;
-  status: ReviewerDisplayStatus;
-  canManage: boolean;
-  busy: boolean;
-  onRemove: () => void;
-}) {
-  const Icon = STATUS_ICONS[status];
-  const name = getReviewerDisplayName(reviewer);
-  const label = getReviewerStatusLabel(status);
-  const reviewed = reviewer.reviewedAt
-    ? formatShortDate(reviewer.reviewedAt)
-    : null;
-
-  return (
-    <li className={`reviewer-row reviewer-row--${status}`}>
-      <span className="reviewer-status-icon" title={label}>
-        <Icon size={16} strokeWidth={1.75} aria-hidden="true" />
-      </span>
-      <PersonAvatar person={reviewer} />
-      <span className="reviewer-identity">
-        <span className="reviewer-name">{name}</span>
-        <span className="reviewer-status-label">
-          {label}
-          {reviewer.stale && status === "approved"
-            ? " — superseded by a later upload"
-            : reviewed && status !== "awaiting"
-              ? ` · ${reviewed}`
-              : ""}
-          {!reviewer.requested && status !== "awaiting"
-            ? " · reviewed uninvited"
-            : ""}
-        </span>
-      </span>
-      {canManage ? (
-        <button
-          className="reviewer-remove"
-          type="button"
-          disabled={busy}
-          title={`Withdraw the review request for ${name}`}
-          onClick={onRemove}
-        >
-          <X size={14} strokeWidth={1.75} aria-hidden="true" />
-          <span className="sr-only">Remove {name} as a reviewer</span>
-        </button>
-      ) : null}
-    </li>
-  );
-}
-
-/**
- * Who this change is sitting with.
- *
- * A change with no name on it is a change nobody owns, and "awaiting review"
- * has never told anyone whose review. The assignee is the one person
- * answerable for getting it decided; the reviewers are the people whose
- * sign-off it needs. Both are Gitea primitives, so both are part of the record.
+ * There is no assignee here, and there is not meant to be. Two names — "the
+ * person answerable" and "the people whose sign-off it needs" — asked a reader
+ * to hold a distinction the product never actually enforced. The reviewers are
+ * the answer to "who is this waiting on", and their marks say which of them it
+ * is still waiting on.
  */
 export function ChangeReviewers({
   owner,
   repo,
   pullNumber,
   submittedBy,
-  assignee,
   reviewers,
+  currentUser,
   openThreadAuthors,
   canManage,
   onChanged,
 }: ChangeReviewersProps) {
-  const [picker, setPicker] = useState<PickerKind | null>(null);
+  const [picking, setPicking] = useState(false);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [results, setResults] = useState<UserOption[]>([]);
@@ -192,7 +97,7 @@ export function ChangeReviewers({
   /** The people already on this document, offered before anyone types. */
   const [collaborators, setCollaborators] = useState<UserOption[]>([]);
   const searchRequestId = useRef(0);
-  const sectionRef = useRef<HTMLElement | null>(null);
+  const sectionRef = useRef<HTMLDivElement | null>(null);
 
   const reviewerLogins = useMemo(
     () => new Set(reviewers.map((reviewer) => reviewer.login)),
@@ -246,7 +151,7 @@ export function ChangeReviewers({
   useEffect(() => {
     const requestId = ++searchRequestId.current;
 
-    if (picker === null || debouncedQuery.length < 2) {
+    if (!picking || debouncedQuery.length < 2) {
       setResults([]);
       setSearching(false);
       return;
@@ -278,12 +183,12 @@ export function ChangeReviewers({
         if (requestId === searchRequestId.current) setSearching(false);
       }
     })();
-  }, [debouncedQuery, picker]);
+  }, [debouncedQuery, picking]);
 
   // A popover that only closes via the button that opened it is a trap; every
   // other menu on the page closes on Escape and on a click elsewhere.
   useEffect(() => {
-    if (picker === null) return;
+    if (!picking) return;
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") closePicker();
@@ -305,244 +210,188 @@ export function ChangeReviewers({
       document.removeEventListener("keydown", onKeyDown);
       document.removeEventListener("pointerdown", onPointerDown);
     };
-  }, [picker]);
+  }, [picking]);
 
   function closePicker() {
-    setPicker(null);
+    setPicking(false);
     setQuery("");
     setDebouncedQuery("");
     setResults([]);
   }
 
-  async function save(updates: {
-    assignee?: string | null;
-    reviewers?: string[];
-  }) {
+  async function save(next: string[]) {
     setBusy(true);
     setError(null);
     try {
-      await updateChangeAssignments(owner, repo, pullNumber, updates);
+      await updateChangeAssignments(owner, repo, pullNumber, {
+        reviewers: next,
+      });
       closePicker();
       await onChanged();
     } catch (err) {
-      setError(readError(err, "Unable to update this change's assignments."));
+      setError(readError(err, "Unable to update this change's reviewers."));
     } finally {
       setBusy(false);
     }
   }
 
   /** Nobody reviews their own change, and nobody is listed twice. */
-  function eligible(user: UserOption, kind: PickerKind): boolean {
-    return kind === "reviewer"
-      ? user.login !== submittedBy && !reviewerLogins.has(user.login)
-      : user.login !== assignee?.login;
-  }
+  const eligible = (user: UserOption) =>
+    user.login !== submittedBy && !reviewerLogins.has(user.login);
 
   // Before two letters are typed the popover shows the document's own people;
   // after that it shows the whole workspace. Either way it shows *something*,
   // which is the difference between a menu and a dead text box.
-  const searching2Plus = debouncedQuery.length >= 2;
-  const options = (searching2Plus ? results : collaborators).filter((user) =>
-    picker === null ? false : eligible(user, picker),
+  const searchingWorkspace = debouncedQuery.length >= 2;
+  const options = (searchingWorkspace ? results : collaborators).filter(
+    eligible,
   );
 
-  function choose(user: UserOption) {
-    void save(
-      picker === "assignee"
-        ? { assignee: user.login }
-        : {
-            reviewers: [
-              ...reviewers.map((reviewer) => reviewer.login),
-              user.login,
-            ],
-          },
-    );
-  }
+  return (
+    <div className="rev-reviewers" ref={sectionRef}>
+      <h3 className="rev-reviewers-label">Reviewers</h3>
 
-  function renderPicker(kind: PickerKind) {
-    if (picker !== kind) return null;
+      {reviewers.length === 0 ? (
+        <p className="rev-reviewers-empty">
+          Nobody has been asked to review this yet.
+        </p>
+      ) : (
+        <ul className="rev-reviewer-list">
+          {reviewers.map((reviewer) => {
+            const status = resolveReviewerDisplayStatus(
+              reviewer,
+              openThreadAuthors,
+            );
+            const Icon = STATUS_ICONS[status];
+            const name =
+              reviewer.login === currentUser
+                ? "You"
+                : getReviewerDisplayName(reviewer);
 
-    return (
-      <div className="change-assignments-picker" role="group">
-        <label className="sr-only" htmlFor="change-assignment-search">
-          {kind === "assignee"
-            ? "Search for an assignee"
-            : "Search for a reviewer"}
-        </label>
-        <input
-          id="change-assignment-search"
-          className="collaborator-search-input"
-          type="search"
-          autoComplete="off"
-          autoFocus
-          placeholder={
-            kind === "assignee" ? "Search people…" : "Search people…"
-          }
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-
-        {searching ? (
-          <p className="change-assignments-hint">Searching…</p>
-        ) : options.length > 0 ? (
-          <>
-            {!searching2Plus ? (
-              <p className="change-assignments-hint">On this document</p>
-            ) : null}
-            <ul className="change-assignments-results">
-              {options.map((user) => (
-                <li key={user.login}>
+            return (
+              <li className="rev-reviewer" key={reviewer.login}>
+                <PersonAvatar person={reviewer} size="md" />
+                <span className="rev-reviewer-name">{name}</span>
+                <span
+                  className={`rev-reviewer-mark rev-reviewer-mark--${status}`}
+                  title={getReviewerStatusLabel(status)}
+                >
+                  <Icon size={13} strokeWidth={2} aria-hidden="true" />
+                  <span className="sr-only">
+                    {getReviewerStatusLabel(status)}
+                  </span>
+                </span>
+                {canManage ? (
                   <button
-                    className="change-assignments-result"
+                    className="rev-reviewer-remove"
                     type="button"
                     disabled={busy}
-                    onClick={() => choose(user)}
+                    title={`Withdraw the review request for ${getReviewerDisplayName(reviewer)}`}
+                    onClick={() =>
+                      void save(
+                        reviewers
+                          .filter(
+                            (candidate) => candidate.login !== reviewer.login,
+                          )
+                          .map((candidate) => candidate.login),
+                      )
+                    }
                   >
-                    <PersonAvatar person={user} />
-                    <span className="reviewer-identity">
-                      <span className="reviewer-name">
-                        {user.fullName.trim() || capitalizeFirst(user.login)}
-                      </span>
-                      <span className="reviewer-status-label">
-                        @{user.login}
-                      </span>
+                    <X size={12} strokeWidth={2} aria-hidden="true" />
+                    <span className="sr-only">
+                      Remove {getReviewerDisplayName(reviewer)} as a reviewer
                     </span>
                   </button>
-                </li>
-              ))}
-            </ul>
-          </>
-        ) : (
-          <p className="change-assignments-hint">
-            {searching2Plus
-              ? kind === "reviewer"
-                ? "Everyone matching that is already on this change."
-                : "Nobody matched that search."
-              : "Type a name to search the workspace."}
-          </p>
-        )}
-      </div>
-    );
-  }
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
-  return (
-    <section
-      className="change-assignments"
-      aria-label="Reviewers"
-      ref={sectionRef}
-    >
-      <div className="change-assignments-block">
-        <h3 className="change-detail-section-title">Assignee</h3>
-        {assignee ? (
-          <div className="assignee-row">
-            <PersonAvatar person={assignee} />
-            <span className="reviewer-identity">
-              <span className="reviewer-name">
-                {assignee.fullName.trim() || capitalizeFirst(assignee.login)}
-              </span>
-              <span className="reviewer-status-label">
-                Answerable for getting this decided
-              </span>
-            </span>
-            {canManage ? (
-              <button
-                className="reviewer-remove"
-                type="button"
-                disabled={busy}
-                title="Clear the assignee"
-                onClick={() => void save({ assignee: null })}
-              >
-                <X size={14} strokeWidth={1.75} aria-hidden="true" />
-                <span className="sr-only">Clear the assignee</span>
-              </button>
-            ) : null}
-          </div>
-        ) : (
-          <p className="change-assignments-empty">
-            <UserRound size={14} strokeWidth={1.5} aria-hidden="true" />
-            Nobody is assigned.
-          </p>
-        )}
+      {canManage ? (
+        <div className="rev-reviewers-anchor">
+          <button
+            className="rev-btn rev-btn--pill"
+            type="button"
+            disabled={busy}
+            aria-expanded={picking}
+            aria-haspopup="true"
+            onClick={() => (picking ? closePicker() : setPicking(true))}
+          >
+            <Plus size={11} strokeWidth={2} aria-hidden="true" />
+            Add reviewer
+          </button>
 
-        {canManage ? (
-          <div className="change-assignments-anchor">
-            <button
-              className="bs-btn bs-btn-secondary change-assignments-btn"
-              type="button"
-              disabled={busy}
-              aria-expanded={picker === "assignee"}
-              aria-haspopup="true"
-              onClick={() =>
-                picker === "assignee" ? closePicker() : setPicker("assignee")
-              }
-            >
-              {assignee ? "Reassign" : "Assign someone"}
-              <ChevronDown size={14} strokeWidth={1.75} aria-hidden="true" />
-            </button>
-            {renderPicker("assignee")}
-          </div>
-        ) : null}
-      </div>
-
-      <div className="change-assignments-block">
-        {/* No approval meter here: the change's header already carries it,
-            and two of them 500px apart is the same fact twice. */}
-        <h3 className="change-detail-section-title">Reviewers</h3>
-
-        {reviewers.length === 0 ? (
-          <p className="change-assignments-empty">
-            <CircleDashed size={14} strokeWidth={1.5} aria-hidden="true" />
-            Nobody has been asked to review this yet.
-          </p>
-        ) : (
-          <ul className="reviewer-list">
-            {reviewers.map((reviewer) => (
-              <ReviewerRow
-                key={reviewer.login}
-                reviewer={reviewer}
-                status={resolveReviewerDisplayStatus(
-                  reviewer,
-                  openThreadAuthors,
-                )}
-                canManage={canManage}
-                busy={busy}
-                onRemove={() =>
-                  void save({
-                    reviewers: reviewers
-                      .filter((candidate) => candidate.login !== reviewer.login)
-                      .map((candidate) => candidate.login),
-                  })
-                }
+          {picking ? (
+            <div className="rev-picker" role="group">
+              <label className="sr-only" htmlFor="rev-reviewer-search">
+                Search for a reviewer
+              </label>
+              <input
+                id="rev-reviewer-search"
+                className="rev-picker-input"
+                type="search"
+                autoComplete="off"
+                autoFocus
+                placeholder="Search people…"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
               />
-            ))}
-          </ul>
-        )}
 
-        {canManage ? (
-          <div className="change-assignments-anchor">
-            <button
-              className="bs-btn bs-btn-secondary change-assignments-btn"
-              type="button"
-              disabled={busy}
-              aria-expanded={picker === "reviewer"}
-              aria-haspopup="true"
-              onClick={() =>
-                picker === "reviewer" ? closePicker() : setPicker("reviewer")
-              }
-            >
-              Add a reviewer
-              <ChevronDown size={14} strokeWidth={1.75} aria-hidden="true" />
-            </button>
-            {renderPicker("reviewer")}
-          </div>
-        ) : null}
-      </div>
+              {searching ? (
+                <p className="rev-picker-hint">Searching…</p>
+              ) : options.length > 0 ? (
+                <>
+                  {!searchingWorkspace ? (
+                    <p className="rev-picker-hint">On this document</p>
+                  ) : null}
+                  <ul className="rev-picker-results">
+                    {options.map((user) => (
+                      <li key={user.login}>
+                        <button
+                          className="rev-picker-result"
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            void save([
+                              ...reviewers.map((reviewer) => reviewer.login),
+                              user.login,
+                            ])
+                          }
+                        >
+                          <PersonAvatar person={user} />
+                          <span className="rev-picker-identity">
+                            <span className="rev-picker-name">
+                              {user.fullName.trim() ||
+                                capitalizeFirst(user.login)}
+                            </span>
+                            <span className="rev-picker-login">
+                              @{user.login}
+                            </span>
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : (
+                <p className="rev-picker-hint">
+                  {searchingWorkspace
+                    ? "Everyone matching that is already on this change."
+                    : "Type a name to search the workspace."}
+                </p>
+              )}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {error ? (
         <p className="vault-pr-error" role="alert">
           {error}
         </p>
       ) : null}
-    </section>
+    </div>
   );
 }

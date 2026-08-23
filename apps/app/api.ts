@@ -13,6 +13,7 @@ import * as AdminClient from "../../packages/api-client/admin/admin";
 import type { SessionAuthState } from "../../packages/api-schema/schemas/auth";
 import type {
   ChangeAssignments,
+  ChangeUpdatesPayload,
   ClosedChangesPayload,
   CollaboratorListPayload,
   DiscussionSummary,
@@ -42,6 +43,8 @@ export type {
   ChangeAssignments,
   ChangeOutcome,
   ChangeReviewer,
+  ChangeUpdate,
+  ChangeUpdatesPayload,
   ChangeUser,
   ClosedChange,
   ClosedChangesPayload,
@@ -480,6 +483,32 @@ export async function updateChangeAssignments(
   } catch (error) {
     handlePaymentRequired(
       `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/assignments`,
+      error,
+    );
+  }
+}
+
+/**
+ * Every version this change has proposed.
+ *
+ * Separate from the change itself because the Changes tab has no use for it:
+ * a list of changes does not need the history inside each one.
+ */
+export async function listChangeUpdates(
+  owner: string,
+  repo: string,
+  pullNumber: number,
+): Promise<ChangeUpdatesPayload> {
+  try {
+    const response = await DocumentsClient.listChangeUpdates(
+      owner,
+      repo,
+      String(pullNumber),
+    );
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/updates`,
       error,
     );
   }

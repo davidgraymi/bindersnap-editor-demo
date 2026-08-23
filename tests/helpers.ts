@@ -432,7 +432,7 @@ export async function openDocumentTab(
  * Open one change's own page.
  *
  * The Changes tab is an index of what is waiting on a decision; Approve,
- * Request Changes and Publish live on each change's own page, so getting to
+ * Request changes and Publish live on each change's own page, so getting to
  * them means opening a row. Gitea returns pull requests newest first, so
  * `"last"` is the oldest open change.
  */
@@ -520,9 +520,8 @@ export async function waitForNoPendingReviews(
     // …and the publish button lives on the change's own page, not the index.
     await openFirstChangeIfAny(page);
 
-    // New UI: publish button is "Publish as Official Version"
     const publishButton = page.getByRole("button", {
-      name: "Publish as Official Version",
+      name: "Publish",
       exact: true,
     });
     const canPublish = await publishButton

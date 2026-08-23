@@ -65,10 +65,13 @@ function createMockClient(initial: RawComment[]) {
 
   const POST = mock(async (path: string, init?: any) => {
     if (path === COMMENTS_PATH) {
+      // A posted comment lands after everything already in the store — a
+      // reply that sorted before the root would read as reopening the thread
+      // it was answering.
       const created = comment(
         nextId++,
         init?.body?.body ?? "",
-        `2026-01-01T00:00:${String(store.length).padStart(2, "0")}Z`,
+        `2026-01-02T00:00:${String(store.length).padStart(2, "0")}Z`,
         "carol",
       );
       store.push(created);
@@ -235,6 +238,70 @@ test("buildThreads replays events so the last one wins", () => {
   expect(threads[0]?.resolved).toBe(false);
   // Reopening keeps the full history rather than erasing the resolution.
   expect(threads[0]?.events).toHaveLength(2);
+});
+
+test("a reply after a resolve event reopens the thread", () => {
+  const threads = buildThreads([
+    comment(1, `Root\n\n${marker("thread", "t1")}`, "2026-01-01T00:01:00Z"),
+    comment(
+      2,
+      marker("resolve", "t1", "state=resolved"),
+      "2026-01-01T00:02:00Z",
+      "bob",
+    ),
+    comment(
+      3,
+      `Actually, one more thing.\n\n${marker("reply", "t1")}`,
+      "2026-01-01T00:03:00Z",
+      "carol",
+    ),
+  ]);
+
+  expect(threads[0]?.resolved).toBe(false);
+  expect(threads[0]?.resolvedBy).toBeNull();
+  expect(threads[0]?.resolvedAt).toBeNull();
+  // The resolution still happened, and the record still says so.
+  expect(threads[0]?.events).toHaveLength(1);
+  expect(threads[0]?.comments).toHaveLength(2);
+});
+
+test("resolving again after a reopening comment settles the thread", () => {
+  const threads = buildThreads([
+    comment(1, `Root\n\n${marker("thread", "t1")}`, "2026-01-01T00:01:00Z"),
+    comment(
+      2,
+      marker("resolve", "t1", "state=resolved"),
+      "2026-01-01T00:02:00Z",
+    ),
+    comment(
+      3,
+      `One more thing.\n\n${marker("reply", "t1")}`,
+      "2026-01-01T00:03:00Z",
+    ),
+    comment(
+      4,
+      marker("resolve", "t1", "state=resolved"),
+      "2026-01-01T00:04:00Z",
+      "bob",
+    ),
+  ]);
+
+  expect(threads[0]?.resolved).toBe(true);
+  expect(threads[0]?.resolvedBy?.login).toBe("bob");
+});
+
+test("a comment on an unrelated thread does not reopen a resolved one", () => {
+  const threads = buildThreads([
+    comment(1, `Root\n\n${marker("thread", "t1")}`, "2026-01-01T00:01:00Z"),
+    comment(
+      2,
+      marker("resolve", "t1", "state=resolved"),
+      "2026-01-01T00:02:00Z",
+    ),
+    comment(3, `Other\n\n${marker("thread", "t2")}`, "2026-01-01T00:03:00Z"),
+  ]);
+
+  expect(threads.find((thread) => thread.id === "t1")?.resolved).toBe(true);
 });
 
 test("buildThreads breaks timestamp ties with comment id", () => {

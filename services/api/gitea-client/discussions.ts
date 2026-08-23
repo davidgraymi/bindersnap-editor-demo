@@ -23,9 +23,12 @@ type Comment = components["schemas"]["Comment"];
  *
  * Resolution is an **append-only event log**, not a mutation: resolving a
  * thread posts a new `kind=resolve` comment rather than editing the root.
- * Current state is the last resolve event in chronological order. This is
- * deliberate — an audit product must never lose the history of who reopened a
- * concern and when, and Gitea comment edits would do exactly that.
+ * Current state is derived by replaying that log in chronological order: a
+ * resolve event settles the thread and any comment after it reopens the
+ * thread, because a new question about a settled concern is exactly what
+ * "unresolved" means. This is deliberate — an audit product must never lose
+ * the history of who reopened a concern and when, and Gitea comment edits
+ * would do exactly that.
  *
  * Comments without a marker (written directly in the Gitea UI, produced by a
  * review submission, or predating this feature) are surfaced as single-comment
@@ -300,6 +303,12 @@ export function buildThreads(comments: Comment[]): DiscussionThread[] {
       updatedAt: comment.updated_at ?? createdAt,
       htmlUrl: comment.html_url ?? "",
     });
+    // Saying something new about a settled concern unsettles it. Somebody had
+    // to reopen the thread by hand before, which meant the common case — one
+    // more question after "resolved" — sat under a green check nobody read.
+    thread.resolved = false;
+    thread.resolvedBy = null;
+    thread.resolvedAt = null;
     thread.updatedAt = createdAt || thread.updatedAt;
   }
 

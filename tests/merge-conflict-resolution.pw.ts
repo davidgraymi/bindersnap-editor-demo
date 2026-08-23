@@ -156,15 +156,13 @@ test.describe("Merge conflict resolution on publish", () => {
 
     await expect(
       page.getByRole("button", {
-        name: "Publish as Official Version",
+        name: "Publish",
         exact: true,
       }),
     ).toBeVisible({
       timeout: 30_000,
     });
-    await page
-      .getByRole("button", { name: "Publish as Official Version", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Publish", exact: true }).click();
     await waitForNoPendingReviews(page, cardSearchText);
     await page.locator(".app-topnav-link", { hasText: "Documents" }).click();
     await navigateToDocument(page, cardSearchText);
@@ -254,15 +252,13 @@ test.describe("Merge conflict resolution on publish", () => {
 
     await expect(
       page.getByRole("button", {
-        name: "Publish as Official Version",
+        name: "Publish",
         exact: true,
       }),
     ).toBeVisible({
       timeout: 30_000,
     });
-    await page
-      .getByRole("button", { name: "Publish as Official Version", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Publish", exact: true }).click();
 
     // Wait for v2 to be published — PR count drops to 1
     await expectOpenChangeCount(page, 1, 120_000);
@@ -299,7 +295,7 @@ test.describe("Merge conflict resolution on publish", () => {
 
     await expect(
       page.getByRole("button", {
-        name: "Publish as Official Version",
+        name: "Publish",
         exact: true,
       }),
     ).toBeVisible({
@@ -307,9 +303,7 @@ test.describe("Merge conflict resolution on publish", () => {
     });
 
     // Conflict resolution + retry may take longer than a normal merge
-    await page
-      .getByRole("button", { name: "Publish as Official Version", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Publish", exact: true }).click();
 
     await expect(
       page.getByRole("heading", { name: "No pending approvals" }),

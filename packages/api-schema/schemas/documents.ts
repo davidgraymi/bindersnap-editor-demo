@@ -360,6 +360,37 @@ export const ClosedChangesPayloadSchema = z.object({
 export type ClosedChangesPayload = z.infer<typeof ClosedChangesPayloadSchema>;
 
 /**
+ * One update to what a change proposes.
+ *
+ * A change is not a single file — a submitter answers a reviewer by uploading
+ * a corrected version, and that upload is a commit on the change's own branch.
+ * Those commits *are* the updates, so nothing new is stored: this reads the
+ * branch's history and numbers it. Update 1 is the original submission.
+ */
+export const ChangeUpdateSchema = z.object({
+  /** 1-based position in the branch's history, oldest first. */
+  index: z.number(),
+  /** The commit the update landed as — the ref its file can be read at. */
+  sha: z.string(),
+  /** Who uploaded it, as Gitea recorded the commit author. */
+  author: z.string(),
+  at: z.string(),
+});
+export type ChangeUpdate = z.infer<typeof ChangeUpdateSchema>;
+
+export const ChangeUpdatesPayloadSchema = z.object({
+  /** Oldest first, so an index reads as the update number a person sees. */
+  updates: z.array(ChangeUpdateSchema),
+  /**
+   * Whether an update wipes the approvals collected before it. This is Gitea's
+   * `dismiss_stale_approvals` branch protection flag, so the timeline says
+   * what actually happened rather than guessing.
+   */
+  resetsApprovals: z.boolean(),
+});
+export type ChangeUpdatesPayload = z.infer<typeof ChangeUpdatesPayloadSchema>;
+
+/**
  * Who a change is on, and who has to sign it off.
  *
  * Both are optional by design: a change nobody has assigned still gets
