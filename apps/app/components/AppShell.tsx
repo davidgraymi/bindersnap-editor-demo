@@ -1,13 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  Bell,
-  FileText,
-  LogOut,
-  Moon,
-  Plus,
-  Search,
-  Shield,
-} from "lucide-react";
+import { Bell, FileText, LogOut, Moon, Search, Shield } from "lucide-react";
 import type { SessionUser } from "../api";
 import { buildDocumentsUrl, parseDocumentsViewState } from "../documentsView";
 import type { AppRoute } from "../routes";
@@ -18,6 +10,7 @@ import { CreateDocumentModal } from "./CreateDocumentModal";
 import { DocumentDetail } from "./DocumentDetail";
 import { DocumentsPage } from "./DocumentsPage";
 import { HomePage } from "./HomePage";
+import { NewDocumentButton } from "./NewDocumentButton";
 
 interface AppShellProps {
   user: SessionUser | null;
@@ -219,16 +212,8 @@ export function AppShell({
             </span>
           </form>
 
-          {/* Create document */}
-          <button
-            className="app-topnav-new-btn"
-            type="button"
-            id="topnav-new-doc-btn"
-            onClick={openCreateDocumentModal}
-          >
-            <Plus size={12} strokeWidth={2} aria-hidden="true" />
-            New document
-          </button>
+          {/* Create document — a convenience, not the page's headline action */}
+          <NewDocumentButton onClick={openCreateDocumentModal} />
 
           {/* Notifications */}
           <button

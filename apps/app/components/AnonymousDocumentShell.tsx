@@ -43,7 +43,7 @@ export function AnonymousDocumentShell({
           </button>
           <button
             type="button"
-            className="bs-btn bs-btn-primary app-topnav-new-btn"
+            className="bs-btn bs-btn-primary"
             onClick={() => onNavigate({ kind: "signup" })}
           >
             Sign up
