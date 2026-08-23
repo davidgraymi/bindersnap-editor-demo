@@ -14,6 +14,12 @@ export type AppRoute =
       repo: string;
       tab: DocumentTab;
       /**
+       * Which published version the Document tab is showing, or undefined for
+       * the one on record. Only ever set on the `overview` tab — an earlier
+       * version is a thing you can link to, not a mode the page remembers.
+       */
+      version?: number;
+      /**
        * One change, on its own page. Only ever set on the `changes` tab —
        * reviewing #3 should not mean scrolling past #4 through #10.
        */
@@ -144,6 +150,19 @@ export function getRoute(pathname: string): AppRoute {
     };
   }
 
+  const versionMatch = normalizedPath.match(
+    /^\/docs\/([^/]+)\/([^/]+)\/version\/(\d+)$/,
+  );
+  if (versionMatch) {
+    return {
+      kind: "document",
+      owner: versionMatch[1]!,
+      repo: versionMatch[2]!,
+      tab: "overview",
+      version: Number(versionMatch[3]),
+    };
+  }
+
   const docTabMatch = normalizedPath.match(
     /^\/docs\/([^/]+)\/([^/]+)\/([^/]+)$/,
   );
@@ -188,7 +207,11 @@ export function routeToPath(route: AppRoute): string {
       return "/auth/callback";
     case "document": {
       const base = `/docs/${route.owner}/${route.repo}`;
-      if (route.tab === "overview") return base;
+      if (route.tab === "overview") {
+        return route.version === undefined
+          ? base
+          : `${base}/version/${route.version}`;
+      }
       if (route.tab === "changes" && route.changeNumber !== undefined) {
         const change = `${base}/changes/${route.changeNumber}`;
         return route.changeView === "preview" ? `${change}/preview` : change;

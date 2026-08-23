@@ -9,6 +9,7 @@ import {
   buildDocumentHeaderFacts,
   buildPendingDecisionRows,
   buildTeamAvatars,
+  buildVersionMenuOptions,
   buildVersionRailRows,
 } from "./documentWorkspace";
 
@@ -102,6 +103,60 @@ test("the newest version is the current one and the rest are history", () => {
   expect(rows.map((row) => row.label)).toEqual(["v3", "v2", "v1"]);
   expect(rows.map((row) => row.current)).toEqual([true, false, false]);
   expect(rows[0]?.date).toBe("Jan 12, 2026");
+});
+
+test("reading an earlier version says so in the header, in coral", () => {
+  expect(
+    buildDocumentHeaderFacts({
+      latestTag: tag(3, "2026-01-12T00:00:00Z"),
+      fileName: "vendor-agreement.docx",
+      viewedTag: tag(1, "2025-09-22T00:00:00Z"),
+    }),
+  ).toEqual({
+    versionLabel: "v1 · Earlier version",
+    tone: "past",
+    approvedLine: "Approved Sep 22, 2025 · v3 is current",
+    fileName: "vendor-agreement.docx",
+  });
+});
+
+test("opening the version on record by number is not an earlier version", () => {
+  const facts = buildDocumentHeaderFacts({
+    latestTag: tag(3, "2026-01-12T00:00:00Z"),
+    fileName: null,
+    viewedTag: tag(3, "2026-01-12T00:00:00Z"),
+  });
+
+  expect(facts.tone).toBe("current");
+  expect(facts.versionLabel).toBe("v3 · Current");
+});
+
+test("the version dropdown lists every version and ticks the record by default", () => {
+  const options = buildVersionMenuOptions(
+    [
+      tag(3, "2026-01-12T00:00:00Z"),
+      tag(2, "2025-11-03T00:00:00Z"),
+      tag(1, "2025-09-22T00:00:00Z"),
+    ],
+    null,
+  );
+
+  expect(options.map((option) => option.label)).toEqual(["v3", "v2", "v1"]);
+  expect(options.map((option) => option.current)).toEqual([true, false, false]);
+  expect(options.map((option) => option.selected)).toEqual([
+    true,
+    false,
+    false,
+  ]);
+});
+
+test("the version dropdown ticks the earlier version being read", () => {
+  const options = buildVersionMenuOptions(
+    [tag(3, "2026-01-12T00:00:00Z"), tag(2, "2025-11-03T00:00:00Z")],
+    2,
+  );
+
+  expect(options.map((option) => option.selected)).toEqual([false, true]);
 });
 
 test("the version rail stops at four rows", () => {
