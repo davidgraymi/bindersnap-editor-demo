@@ -300,6 +300,38 @@ test("a knot does not unfold into a second copy of the review record", async () 
   unmount();
 });
 
+test("a knot does not say who approved it", async () => {
+  // Everything on this page is published, which is to say approved. Repeating
+  // that on every knot distinguishes nothing.
+  payload = {
+    versions: [
+      version({
+        reviews: [
+          {
+            id: 1,
+            author: { login: "kit", fullName: "", avatarUrl: "" },
+            state: "approved",
+            body: "",
+            submittedAt: "2026-08-20T10:00:00Z",
+            stale: false,
+            dismissed: false,
+          },
+        ],
+      }),
+    ],
+    canonicalFile: null,
+  };
+
+  const { container, unmount } = await render(
+    createElement(DocumentHistory, historyProps()),
+  );
+
+  expect(container.textContent).not.toContain("Approved");
+  expect(container.textContent).not.toContain("Kit");
+
+  unmount();
+});
+
 test("a knot never shows a commit hash", async () => {
   // The reader is a compliance manager. A SHA answers no question they have.
   payload = { versions: [version()], canonicalFile: null };

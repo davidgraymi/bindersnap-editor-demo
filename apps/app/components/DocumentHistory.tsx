@@ -228,8 +228,6 @@ export function DocumentHistory({
                 <time dateTime={entry.createdAt} title={entry.publishedAt}>
                   {entry.publishedOn}
                 </time>
-                {" · "}
-                {entry.approvals}
                 {entry.comments ? ` · ${entry.comments}` : ""}
               </p>
             </div>

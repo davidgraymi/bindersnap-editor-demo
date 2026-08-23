@@ -1,14 +1,14 @@
 import { expect, test } from "bun:test";
 
 import type { DocumentVersionRecord, VersionReview } from "./api";
-import { buildHistoryEntries, summarizeApprovals } from "./documentHistory";
+import { buildHistoryEntries } from "./documentHistory";
 
 /**
  * What a knot on the history spline says.
  *
  * The spline is the audit trail, so the wording is the product: which change
- * review produced this version, who wrote it, who published it, and what the
- * reviews came to. Decided here, tested here.
+ * review produced this version, who wrote it, who published it, when. Decided
+ * here, tested here.
  */
 
 function review(
@@ -44,7 +44,7 @@ function version(
       mergedAt: "2026-08-21T09:00:00Z",
       mergedBy: "dana",
     },
-    reviews: [review("dana")],
+    reviews: [review("kit")],
     discussionCount: 3,
     ...overrides,
   };
@@ -129,6 +129,16 @@ test("nothing on a knot is a commit hash", () => {
   expect(JSON.stringify(entry)).not.toContain("abcdef");
 });
 
+test("a knot does not summarise who approved", () => {
+  // Every version on this page was approved — that is what published means.
+  // Naming the approver again on every knot says nothing that distinguishes
+  // one from another; the change review is where that belongs.
+  const [entry] = buildHistoryEntries([version()], "alice", "contract");
+
+  expect(JSON.stringify(entry)).not.toContain("kit");
+  expect(JSON.stringify(entry)).not.toContain("Approved");
+});
+
 test("one comment is not pluralised, and none is not mentioned", () => {
   const [one] = buildHistoryEntries(
     [version({ discussionCount: 1 })],
@@ -143,35 +153,6 @@ test("one comment is not pluralised, and none is not mentioned", () => {
 
   expect(one?.comments).toBe("1 comment");
   expect(none?.comments).toBeNull();
-});
-
-test("approvals name a person rather than counting one", () => {
-  expect(summarizeApprovals([])).toBe("No recorded approval");
-  expect(summarizeApprovals([review("dana")])).toBe("Approved by Dana");
-  expect(summarizeApprovals([review("dana"), review("sam")])).toBe(
-    "Approved by Dana and 1 other",
-  );
-  expect(
-    summarizeApprovals([review("dana"), review("sam"), review("kit")]),
-  ).toBe("Approved by Dana and 2 others");
-});
-
-test("a full name beats a login, and the same person is only counted once", () => {
-  expect(summarizeApprovals([review("dana", "approved", "dana reyes")])).toBe(
-    "Approved by Dana reyes",
-  );
-  expect(summarizeApprovals([review("dana"), review("dana")])).toBe(
-    "Approved by Dana",
-  );
-});
-
-test("a comment is not a sign-off", () => {
-  expect(
-    summarizeApprovals([
-      review("sam", "commented"),
-      review("kit", "changes_requested"),
-    ]),
-  ).toBe("No recorded approval");
 });
 
 test("every version in the payload becomes a knot, in the order given", () => {

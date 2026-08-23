@@ -1,4 +1,4 @@
-import type { DocumentVersionRecord, VersionReview } from "./api";
+import type { DocumentVersionRecord } from "./api";
 import {
   capitalizeFirst,
   formatShortDate,
@@ -12,9 +12,9 @@ import { routeToPath } from "./routes";
  *
  * History is a spline of published versions, and every one of them came from a
  * change somebody reviewed. What a knot on that spline reads — the change's
- * own title, who wrote it, who published it, what the reviews came to — is a
- * set of decisions, so they are made in one place and tested without a
- * browser. The component only draws the rail.
+ * own title, who wrote it, who published it, when — is a set of decisions, so
+ * they are made in one place and tested without a browser. The component only
+ * draws the rail.
  */
 
 /** One person named on the spline. */
@@ -57,29 +57,8 @@ export interface HistoryEntry {
   publishedOn: string;
   /** The full stamp, for the title attribute. */
   publishedAt: string;
-  /** "Approved by Dana", or that nobody signed off. */
-  approvals: string;
   /** "3 comments", or null when the change drew none. */
   comments: string | null;
-}
-
-/**
- * Who signed off, in the fewest words that name someone.
- *
- * "2 approvals" is a number; "Approved by Dana and 1 other" is a person you
- * can go ask. Only approvals count here — a comment is not a sign-off.
- */
-export function summarizeApprovals(reviews: VersionReview[]): string {
-  const approvers = reviews
-    .filter((review) => review.state === "approved")
-    .map((review) => review.author.fullName?.trim() || review.author.login);
-
-  const unique = [...new Set(approvers)];
-  if (unique.length === 0) return "No recorded approval";
-  if (unique.length === 1) return `Approved by ${capitalizeFirst(unique[0]!)}`;
-  return `Approved by ${capitalizeFirst(unique[0]!)} and ${unique.length - 1} other${
-    unique.length === 2 ? "" : "s"
-  }`;
 }
 
 export function buildHistoryEntries(
@@ -115,7 +94,6 @@ export function buildHistoryEntries(
       createdAt: entry.createdAt,
       publishedOn: formatShortDate(entry.createdAt) || "Unknown",
       publishedAt: formatTimestamp(entry.createdAt) || "Unknown",
-      approvals: summarizeApprovals(entry.reviews),
       comments:
         entry.discussionCount > 0
           ? `${entry.discussionCount} comment${
