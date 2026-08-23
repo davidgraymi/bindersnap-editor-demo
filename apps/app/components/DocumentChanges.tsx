@@ -10,6 +10,7 @@ import {
   getChangeStateLabel,
 } from "../documentDisplay";
 import { ApprovalMeter } from "./ApprovalMeter";
+import { SkeletonGroup, SkeletonLine, SkeletonShape } from "./Skeleton";
 
 export type ChangeFilter = "open" | "closed";
 
@@ -176,9 +177,21 @@ export function DocumentChanges({
           </button>
         </div>
       ) : filter === "closed" && closedLoading ? (
-        <div className="change-empty">
-          <p className="change-empty-note">Loading closed changes…</p>
-        </div>
+        <SkeletonGroup
+          label="Loading closed changes"
+          className="change-list-rows"
+        >
+          {Array.from({ length: 3 }, (_, index) => (
+            <div className="bs-skeleton-row" key={index}>
+              <SkeletonShape variant="icon" />
+              <span className="bs-skeleton-lines">
+                <SkeletonLine width="wide" />
+                <SkeletonLine width="medium" />
+              </span>
+              <SkeletonShape variant="badge" />
+            </div>
+          ))}
+        </SkeletonGroup>
       ) : rows.length === 0 ? (
         <div className="change-empty">
           {filter === "open" ? (

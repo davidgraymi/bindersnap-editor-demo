@@ -10,6 +10,7 @@ import {
   parseSubmissionSummary,
   publishedVersionToRecord,
 } from "../documentDisplay";
+import { SkeletonGroup, SkeletonLine, SkeletonShape } from "./Skeleton";
 import { ReviewTimeline } from "./ReviewTimeline";
 
 interface DocumentHistoryProps {
@@ -94,10 +95,24 @@ export function DocumentHistory({
 
   if (isLoading) {
     return (
-      <section className="doc-panel doc-empty">
-        <h2>Loading version history…</h2>
-        <p>Fetching every published version and the reviews behind it.</p>
-      </section>
+      <SkeletonGroup label="Loading version history" className="doc-history">
+        {Array.from({ length: 3 }, (_, index) => (
+          <div className="doc-history-entry" key={index}>
+            <div className="doc-history-row">
+              <div className="doc-history-toggle">
+                <SkeletonShape variant="badge" />
+                <span className="bs-skeleton-lines">
+                  <SkeletonLine width="wide" />
+                  <SkeletonLine width="medium" />
+                </span>
+              </div>
+              <div className="doc-history-actions">
+                <SkeletonShape variant="pill" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </SkeletonGroup>
     );
   }
 

@@ -3586,7 +3586,13 @@ input {
 
 /* ── Skeleton loading ───────────────────────────────────────── */
 
-@keyframes vault-skeleton-pulse {
+/*
+ * Every waiting page wears the shape of the page that is coming. These are the
+ * only placeholder shapes in the app — a page builds its skeleton out of them
+ * rather than inventing its own greys.
+ */
+
+@keyframes bs-skeleton-pulse {
   0%,
   100% {
     opacity: 0.65;
@@ -3596,26 +3602,114 @@ input {
   }
 }
 
-.vault-skeleton-card {
+.bs-skeleton {
+  animation: bs-skeleton-pulse 2s ease-in-out infinite;
   pointer-events: none;
-  animation: vault-skeleton-pulse 2s ease-in-out infinite;
 }
 
-.vault-skeleton-line {
-  height: 1em;
-  background: var(--bs-surface-3);
+/* The sentence the shapes cannot say out loud. */
+.bs-skeleton-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.bs-skeleton-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-2);
+  flex: 1;
+  min-width: 0;
+}
+
+.bs-skeleton-line {
+  display: block;
+  height: 10px;
   border-radius: var(--brand-radius-sm);
-  margin-top: var(--brand-space-3);
+  background: var(--bs-surface-3);
 }
 
-.vault-skeleton-line--short {
-  width: 40%;
+.bs-skeleton-line--full {
+  width: 100%;
 }
-.vault-skeleton-line--medium {
-  width: 65%;
+.bs-skeleton-line--wide {
+  width: 62%;
 }
-.vault-skeleton-line--wide {
-  width: 85%;
+.bs-skeleton-line--medium {
+  width: 44%;
+}
+.bs-skeleton-line--short {
+  width: 28%;
+}
+.bs-skeleton-line--tiny {
+  width: 14%;
+}
+
+.bs-skeleton-line--heading {
+  height: 18px;
+  border-radius: var(--brand-radius-md);
+}
+
+.bs-skeleton-shape {
+  display: block;
+  flex-shrink: 0;
+  background: var(--bs-surface-3);
+}
+
+.bs-skeleton-shape--icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--brand-radius-md);
+}
+
+.bs-skeleton-shape--avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--brand-radius-full);
+}
+
+.bs-skeleton-shape--badge {
+  width: 72px;
+  height: 20px;
+  border-radius: var(--brand-radius-xs);
+}
+
+.bs-skeleton-shape--pill {
+  width: 96px;
+  height: 28px;
+  border-radius: var(--brand-radius-full);
+}
+
+.bs-skeleton-shape--sheet {
+  width: 100%;
+  height: 320px;
+  border-radius: var(--brand-radius-lg);
+}
+
+/* A row of shapes: icon, body lines, and whatever sits on the right. */
+.bs-skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-3);
+  padding: var(--brand-space-4) var(--brand-space-5);
+  border-bottom: 1px solid var(--bs-rule);
+}
+
+.bs-skeleton-row:last-child {
+  border-bottom: none;
+}
+
+/* A stack of placeholder rows or blocks, spaced like the real page. */
+.bs-skeleton-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-4);
 }
 
 /* ── Login logo lockup ─────────────────────────────────────── */
@@ -4987,9 +5081,9 @@ input {
     transition: none;
   }
 
-  .vault-skeleton-card {
+  .bs-skeleton {
     animation: none;
-    opacity: 0.75;
+    opacity: 0.8;
   }
 
   .bs-card,
@@ -5272,27 +5366,6 @@ input {
   font-size: 13.5px;
   color: var(--bs-text-muted);
   max-width: 52ch;
-}
-
-.home-skeleton-lines {
-  display: flex;
-  flex-direction: column;
-  gap: var(--brand-space-2);
-  flex: 1;
-}
-
-.home-skeleton-line {
-  height: 10px;
-  border-radius: var(--brand-radius-sm);
-  background: var(--bs-surface-2);
-}
-
-.home-skeleton-line--wide {
-  width: 44%;
-}
-
-.home-skeleton-line--short {
-  width: 28%;
 }
 
 @media (max-width: 768px) {
@@ -5711,27 +5784,6 @@ input {
 }
 
 /* ── Loading, empty, and the count under the list ── */
-
-.docs-skeleton-lines {
-  display: flex;
-  flex-direction: column;
-  gap: var(--brand-space-2);
-  flex: 1;
-}
-
-.docs-skeleton-line {
-  height: 10px;
-  border-radius: var(--brand-radius-sm);
-  background: var(--bs-surface-2);
-}
-
-.docs-skeleton-line--wide {
-  width: 44%;
-}
-
-.docs-skeleton-line--short {
-  width: 28%;
-}
 
 .docs-notice {
   padding: var(--brand-space-5);
