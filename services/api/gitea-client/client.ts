@@ -15,6 +15,28 @@ export function createGiteaClient(baseUrl: string, token: string) {
   });
 }
 
+/**
+ * The same client, authenticated as a Gitea user rather than by token.
+ *
+ * Dev and test stacks bring Gitea up with admin credentials and no service
+ * token to mint one from, so the BFF's privileged reads have always fallen
+ * back to basic auth there. This is that fallback, for the reads that go
+ * through the typed client instead of raw fetch.
+ */
+export function createGiteaBasicAuthClient(
+  baseUrl: string,
+  username: string,
+  password: string,
+) {
+  return createClient<paths>({
+    baseUrl: `${baseUrl}/api/v1`,
+    headers: {
+      Accept: "application/json",
+      Authorization: `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`,
+    },
+  });
+}
+
 export class GiteaApiError extends Error {
   constructor(
     public status: number,

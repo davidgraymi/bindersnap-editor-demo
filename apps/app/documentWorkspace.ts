@@ -84,7 +84,7 @@ export function buildPendingDecisionRows(
       formatWhen(pullRequest.created_at ?? "", now),
       describeApprovalProgress({
         approvalCount: pullRequest.approvalCount ?? 0,
-        requiredApprovals: pullRequest.requiredApprovals ?? 0,
+        requiredApprovals: pullRequest.requiredApprovals ?? null,
       }) ?? "no approvals needed",
     ];
 

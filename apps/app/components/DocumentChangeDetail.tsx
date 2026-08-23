@@ -118,14 +118,14 @@ function canUserMerge(
  * says it exactly. Who is holding it up is the reviewers row's job, right
  * below — it names people, which a meter never can.
  *
- * `requiredApprovals` comes from the repo's branch protection, and Gitea only
- * serves that to an admin — so a write collaborator, which is to say most
- * reviewers, receives 0 and there is no count to draw. They still need to know
- * their approval registered, so the state badge stands in. Rendering nothing
- * would leave the reviewer who just signed off with no sign anything happened.
+ * A document can demand no approvals at all, and the server can fail to read
+ * the policy — both leave nothing to draw. The reviewer who just signed off
+ * still needs to see that it registered, so the state badge stands in rather
+ * than rendering nothing.
  */
 function ApprovalBars({ change }: { change: ChangeRecord }) {
-  if (change.requiredApprovals <= 0) {
+  const required = change.requiredApprovals ?? 0;
+  if (required <= 0) {
     return (
       <div className="rev-approvals">
         <span className={getChangeStateBadgeClass(change)}>
@@ -135,14 +135,14 @@ function ApprovalBars({ change }: { change: ChangeRecord }) {
     );
   }
 
-  const filled = Math.min(change.approvalCount, change.requiredApprovals);
-  const showBars = change.requiredApprovals <= MAX_APPROVAL_BARS;
+  const filled = Math.min(change.approvalCount, required);
+  const showBars = required <= MAX_APPROVAL_BARS;
 
   return (
     <div className="rev-approvals">
       {showBars ? (
         <div className="rev-approval-bars" aria-hidden="true">
-          {Array.from({ length: change.requiredApprovals }, (_, index) => (
+          {Array.from({ length: required }, (_, index) => (
             <span
               key={index}
               className={`rev-approval-bar${
@@ -153,7 +153,7 @@ function ApprovalBars({ change }: { change: ChangeRecord }) {
         </div>
       ) : null}
       <span className="rev-approval-count">
-        {change.approvalCount} of {change.requiredApprovals} approvals
+        {change.approvalCount} of {required} approvals
       </span>
     </div>
   );

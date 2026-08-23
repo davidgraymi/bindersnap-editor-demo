@@ -12,5 +12,6 @@ export type UpdateChangeAssignments200 = {
   assignee: UpdateChangeAssignments200Assignee;
   reviewers: UpdateChangeAssignments200ReviewersItem[];
   approvalCount: number;
-  requiredApprovals: number;
+  /** @nullable */
+  requiredApprovals: number | null;
 };
