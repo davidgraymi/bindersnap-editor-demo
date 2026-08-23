@@ -4109,25 +4109,11 @@ input {
   flex-shrink: 1;
 }
 
-.app-topnav-new-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 9px var(--brand-space-4);
-  background: var(--brand-coral);
-  color: #fff;
-  font-size: 13px;
-  font-weight: var(--brand-weight-semibold);
-  border-radius: var(--brand-radius-md);
-  border: none;
-  cursor: pointer;
-  transition: none;
-  white-space: nowrap;
+/* The nav's create action is a convenience, not a headline: every page owns a
+   primary action of its own, so this one keeps the quiet icon-button styling
+   it shares with the bell and leaves coral to the page. */
+.app-topnav-new-btn svg {
   flex-shrink: 0;
-}
-
-.app-topnav-new-btn:hover {
-  background: var(--brand-coral-dark);
 }
 
 .app-topnav-divider {
@@ -4921,22 +4907,6 @@ input {
      you are, and Home/Documents are the only way to move. */
   .app-topnav-wordmark {
     display: none;
-  }
-
-  /* New Document: icon-only square */
-  .app-topnav-new-btn {
-    width: var(--brand-space-8);
-    height: var(--brand-space-8);
-    padding: 0;
-    justify-content: center;
-    font-size: 0;
-    gap: 0;
-  }
-
-  .app-topnav-new-btn svg {
-    width: 14px;
-    height: 14px;
-    flex-shrink: 0;
   }
 
   .app-nav-search {
