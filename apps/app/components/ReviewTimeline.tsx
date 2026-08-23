@@ -20,6 +20,7 @@ import type { TimelineEntry, TimelineEntryKind } from "../changeReview";
 import { buildReviewTimeline } from "../changeReview";
 import type { ChangeRecord } from "../documentDisplay";
 import { ReviewThread } from "./ReviewThread";
+import { SkeletonGroup, SkeletonLine, SkeletonShape } from "./Skeleton";
 
 interface ReviewTimelineProps {
   owner: string;
@@ -260,12 +261,17 @@ export function ReviewTimeline({
         })}
 
         {loading ? (
-          <div className="rev-entry">
-            <span className="rev-dot" aria-hidden="true">
-              <MessageSquare size={13} strokeWidth={1.75} />
-            </span>
-            <p className="rev-event">Loading the discussion…</p>
-          </div>
+          <SkeletonGroup label="Loading the discussion">
+            {Array.from({ length: 2 }, (_, index) => (
+              <div className="rev-entry" key={index}>
+                <SkeletonShape variant="avatar" />
+                <span className="bs-skeleton-lines">
+                  <SkeletonLine width="medium" />
+                  <SkeletonLine width="wide" />
+                </span>
+              </div>
+            ))}
+          </SkeletonGroup>
         ) : null}
 
         {canParticipate ? (

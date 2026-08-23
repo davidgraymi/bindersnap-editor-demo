@@ -555,8 +555,10 @@ export async function waitForNoPendingReviews(
     }
 
     await navigateToDocument(page, cardSearchText);
+    // The page waits behind a skeleton now, not a heading that says so.
     await page
-      .getByRole("heading", { name: "Loading document details..." })
+      .locator(".bs-skeleton")
+      .first()
       .waitFor({ state: "hidden", timeout: 30_000 })
       .catch(() => undefined);
     await openDocumentTab(page, "Changes").catch(() => undefined);

@@ -18,6 +18,7 @@ import {
   type HomeChangeRow,
   type HomeDecidedRow,
 } from "../homeChanges";
+import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
 interface HomePageProps {
   currentUsername: string;
@@ -247,17 +248,17 @@ export function HomePage({
 
 function HomeSkeletonRows({ count }: { count: number }) {
   return (
-    <>
+    <SkeletonGroup label="Loading your change requests">
       {Array.from({ length: count }, (_, index) => (
         <div className="home-row home-row--skeleton" key={index}>
           <div className="home-row-icon home-row-icon--quiet" />
-          <div className="home-skeleton-lines">
-            <span className="home-skeleton-line home-skeleton-line--wide" />
-            <span className="home-skeleton-line home-skeleton-line--short" />
-          </div>
+          <span className="bs-skeleton-lines">
+            <SkeletonLine width="medium" />
+            <SkeletonLine width="short" />
+          </span>
         </div>
       ))}
-    </>
+    </SkeletonGroup>
   );
 }
 

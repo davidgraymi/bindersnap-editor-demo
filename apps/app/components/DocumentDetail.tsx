@@ -34,6 +34,7 @@ import type { ChangeFilter } from "./DocumentChanges";
 import { DocumentChanges } from "./DocumentChanges";
 import { DocumentHistory } from "./DocumentHistory";
 import { DocumentPreview } from "./DocumentPreview";
+import { SkeletonGroup, SkeletonLine, SkeletonShape } from "./Skeleton";
 import { UploadModal } from "./UploadModal";
 
 interface DocumentDetailProps {
@@ -285,12 +286,32 @@ export function DocumentDetail({
 
   if (isLoading) {
     return (
-      <div className="docw-page">
-        <div className="doc-panel vault-empty-state">
-          <h2>Loading document details…</h2>
-          <p>Fetching version history and pending approvals.</p>
+      <SkeletonGroup label="Loading document" className="docw-page">
+        <header className="doc-header">
+          <div className="doc-header-top">
+            <div className="doc-header-identity">
+              <SkeletonLine width="medium" heading />
+              <div className="doc-header-facts">
+                <SkeletonShape variant="badge" />
+                <SkeletonLine width="short" />
+              </div>
+            </div>
+          </div>
+          <div className="doc-tabs">
+            {Array.from({ length: 4 }, (_, index) => (
+              <SkeletonShape key={index} variant="pill" />
+            ))}
+          </div>
+        </header>
+        <div className="doc-panel bs-skeleton-stack">
+          <SkeletonLine width="medium" heading />
+          <SkeletonLine width="full" />
+          <SkeletonLine width="full" />
+          <SkeletonLine width="wide" />
+          <SkeletonLine width="full" />
+          <SkeletonLine width="medium" />
         </div>
-      </div>
+      </SkeletonGroup>
     );
   }
 

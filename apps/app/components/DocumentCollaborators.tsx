@@ -10,6 +10,7 @@ import type {
   RepoCollaboratorPermissionSummary,
   RepoUserSummary,
 } from "../api";
+import { SkeletonGroup, SkeletonLine, SkeletonShape } from "./Skeleton";
 
 type WritablePermission = "read" | "write" | "admin";
 type DisplayPermission = WritablePermission | "owner" | "unknown";
@@ -1040,13 +1041,28 @@ export function DocumentCollaborators({
           </div>
 
           {isLoadingCollaborators ? (
-            <div
-              className="collaborators-empty-state"
-              role="status"
-              aria-live="polite"
+            <SkeletonGroup
+              label="Loading collaborators"
+              className="bs-skeleton-stack"
             >
-              Loading collaborators...
-            </div>
+              {Array.from({ length: 3 }, (_, index) => (
+                <div className="collaborator-row" key={index}>
+                  <div className="collaborator-row-cell">
+                    <SkeletonShape variant="avatar" />
+                    <SkeletonLine width="medium" />
+                  </div>
+                  <div className="collaborator-row-cell">
+                    <SkeletonLine width="wide" />
+                  </div>
+                  <div className="collaborator-row-cell">
+                    <SkeletonShape variant="badge" />
+                  </div>
+                  <div className="collaborator-row-cell collaborator-row-actions">
+                    <SkeletonShape variant="pill" />
+                  </div>
+                </div>
+              ))}
+            </SkeletonGroup>
           ) : collaborators.length === 0 ? (
             <div className="collaborators-empty-state">
               No collaborators are listed for this repository yet.
