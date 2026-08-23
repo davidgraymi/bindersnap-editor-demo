@@ -8,9 +8,14 @@
  * The companion globalTeardown tears everything down after the run.
  *
  * Environment variables (all optional — defaults match docker-compose.yml):
- *   APP_PORT        App container port (default: 5173)
- *   SKIP_STACK      Set to "1" to skip docker compose entirely (use an
- *                   already-running stack, e.g. from `bun run up`)
+ *   STACK_NAME       Compose project + container name prefix (default: bindersnap)
+ *   APP_PORT         App container port (default: 5173)
+ *   API_PORT         API container port (default: 8787)
+ *   API_PROXY_PORT   Caddy proxy port in front of the API (default: 8788)
+ *   GITEA_PORT       Gitea HTTP port (default: 3000)
+ *   HOCUSPOCUS_PORT  Collaboration websocket port (default: 1234)
+ *   SKIP_STACK       Set to "1" to skip docker compose entirely (use an
+ *                    already-running stack, e.g. from `bun run up`)
  */
 
 import { spawnSync } from "node:child_process";
@@ -52,9 +57,12 @@ function loadEnvFile(): void {
   }
 }
 
+const STACK_NAME = process.env.STACK_NAME ?? "bindersnap";
 const APP_PORT = process.env.APP_PORT ?? "5173";
 const API_PORT = process.env.API_PORT ?? "8787";
 const API_PROXY_PORT = process.env.API_PROXY_PORT ?? "8788";
+const GITEA_PORT = process.env.GITEA_PORT ?? "3000";
+const HOCUSPOCUS_PORT = process.env.HOCUSPOCUS_PORT ?? "1234";
 const APP_BASE_URL = `http://localhost:${APP_PORT}`;
 const API_READY_URL = `http://localhost:${API_PORT}/auth/me`;
 const API_PROXY_BASE_URL = `http://localhost:${API_PROXY_PORT}`;
@@ -216,9 +224,12 @@ export default async function globalSetup(): Promise<void> {
 
   const composeEnv = {
     ...process.env,
+    STACK_NAME,
     APP_PORT,
     API_PORT,
     API_PROXY_PORT,
+    GITEA_PORT,
+    HOCUSPOCUS_PORT,
     STRIPE_SECRET_KEY:
       process.env.STRIPE_SECRET_KEY || DEFAULT_STRIPE_SECRET_KEY,
     STRIPE_PRICE_ID: process.env.STRIPE_PRICE_ID || DEFAULT_STRIPE_PRICE_ID,

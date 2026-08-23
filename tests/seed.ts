@@ -22,7 +22,7 @@ import {
   type SeedThread,
 } from "./seed-scenario";
 
-const DEFAULT_GITEA_URL = "http://localhost:3000";
+const DEFAULT_GITEA_URL = `http://localhost:${process.env.GITEA_PORT ?? "3000"}`;
 const CANONICAL_DOCUMENT_PATH = "document.json";
 const SCENARIO_URL = new URL("seed-data/dev.yaml", import.meta.url);
 
@@ -203,6 +203,17 @@ async function waitForUrl(
   throw new Error(`Timed out waiting for ${new URL(path, baseUrl).toString()}`);
 }
 
+/** The port Gitea serves HTTP on, read off the base URL the seeder was given. */
+function resolveGiteaHttpPort(baseUrl: string): string {
+  try {
+    const port = new URL(baseUrl).port;
+    if (port) return port;
+  } catch {
+    // Fall through to the default below.
+  }
+  return "3000";
+}
+
 async function maybeBootstrapInstall(
   baseUrl: string,
   adminUser: string,
@@ -222,6 +233,9 @@ async function maybeBootstrapInstall(
   }
 
   log("Bootstrapping Gitea install and admin user...");
+  // The install form has to advertise the port Gitea actually listens on,
+  // which is whatever GITEA_URL points at — not a hardcoded 3000.
+  const giteaHttpPort = resolveGiteaHttpPort(baseUrl);
   const form = new URLSearchParams({
     db_type: "sqlite3",
     db_path: "/data/gitea.db",
@@ -230,8 +244,8 @@ async function maybeBootstrapInstall(
     run_user: "git",
     domain: "localhost",
     ssh_port: "22",
-    http_port: "3000",
-    app_url: "http://localhost:3000/",
+    http_port: giteaHttpPort,
+    app_url: `http://localhost:${giteaHttpPort}/`,
     log_root_path: "/data/gitea/log",
     admin_name: adminUser,
     admin_passwd: adminPass,
@@ -1179,7 +1193,9 @@ async function runCli(): Promise<void> {
 
   console.log("");
   console.log("==================================================");
-  console.log("Sign in at http://localhost:5173 as any of:");
+  console.log(
+    `Sign in at http://localhost:${process.env.APP_PORT ?? "5173"} as any of:`,
+  );
   for (const user of scenario.users) {
     const role = user.role ? ` — ${user.role}` : "";
     console.log(`  ${user.username} / ${password}${role}`);

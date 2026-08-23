@@ -1,5 +1,7 @@
-:8788 {
-	reverse_proxy api:8787 {
+# Local reverse proxy in front of the API, mirroring the production ingress
+# path. Ports come from the environment so several stacks can run at once.
+:{$API_PROXY_PORT:8788} {
+	reverse_proxy api:{$API_PORT:8787} {
 		header_up X-Forwarded-Proto https
 		header_up X-Forwarded-For {remote}
 	}

@@ -5,11 +5,17 @@
 # This is a developer tool. It is never deployed. The Docker Compose config
 # uses insecure defaults (fixed passwords, no TLS) that are intentional for
 # local speed. Do not use this config as a basis for any production deployment.
+#
+# Every published port and every container name is configurable so that several
+# copies of this stack — one per git worktree — can run side by side. Set
+# STACK_NAME plus the *_PORT variables in that worktree's .env.
+
+name: ${STACK_NAME:-bindersnap}
 
 services:
   gitea-init:
     image: alpine:latest
-    container_name: bindersnap-gitea-init
+    container_name: ${STACK_NAME:-bindersnap}-gitea-init
     user: "0:0"
     command: ["sh", "-c", "chown -R 1000:1000 /data"]
     volumes:
@@ -17,7 +23,7 @@ services:
 
   gitea:
     image: gitea/gitea:1.26
-    container_name: bindersnap-gitea
+    container_name: ${STACK_NAME:-bindersnap}-gitea
     restart: unless-stopped
     depends_on:
       gitea-init:
@@ -25,8 +31,8 @@ services:
     environment:
       - USER_UID=1000
       - USER_GID=1000
-      - GITEA__server__ROOT_URL=http://localhost:3000
-      - GITEA__server__HTTP_PORT=3000
+      - GITEA__server__ROOT_URL=http://localhost:${GITEA_PORT:-3000}
+      - GITEA__server__HTTP_PORT=${GITEA_PORT:-3000}
       - GITEA__database__DB_TYPE=sqlite3
       - GITEA__database__PATH=/data/gitea.db
       - GITEA__service__DISABLE_REGISTRATION=false
@@ -40,11 +46,11 @@ services:
       - GITEA__security__MIN_PASSWORD_LENGTH=3
       - GITEA__security__PASSWORD_COMPLEXITY=off
     ports:
-      - "3000:3000"
+      - "${GITEA_PORT:-3000}:${GITEA_PORT:-3000}"
     volumes:
       - ./data/gitea:/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      test: ["CMD", "curl", "-f", "http://localhost:${GITEA_PORT:-3000}/"]
       interval: 5s
       timeout: 3s
       retries: 12
@@ -52,7 +58,7 @@ services:
 
   seed:
     image: oven/bun:1
-    container_name: bindersnap-seed
+    container_name: ${STACK_NAME:-bindersnap}-seed
     depends_on:
       gitea:
         condition: service_healthy
@@ -61,23 +67,28 @@ services:
       - ./:/workspace:ro
     command: ["bun", "tests/seed.ts"]
     environment:
-      - GITEA_URL=http://gitea:3000
+      - GITEA_URL=http://gitea:${GITEA_PORT:-3000}
       - GITEA_ADMIN_USER=${GITEA_ADMIN_USER:-alice}
       - GITEA_ADMIN_PASS=${GITEA_ADMIN_PASS:-dev}
+      - APP_PORT=${APP_PORT:-5173}
 
   hocuspocus:
     build:
       context: .
       dockerfile: services/hocuspocus/Dockerfile
-    container_name: bindersnap-hocuspocus
+      args:
+        HOCUSPOCUS_PORT: ${HOCUSPOCUS_PORT:-1234}
+    container_name: ${STACK_NAME:-bindersnap}-hocuspocus
+    environment:
+      - HOCUSPOCUS_PORT=${HOCUSPOCUS_PORT:-1234}
     ports:
-      - "1234:1234"
+      - "${HOCUSPOCUS_PORT:-1234}:${HOCUSPOCUS_PORT:-1234}"
 
   api:
     build:
       context: .
       dockerfile: services/api/Dockerfile
-    container_name: bindersnap-api
+    container_name: ${STACK_NAME:-bindersnap}-api
     depends_on:
       gitea:
         condition: service_healthy
@@ -86,7 +97,7 @@ services:
     environment:
       - API_PORT=${API_PORT:-8787}
       - PORT=${API_PORT:-8787}
-      - GITEA_INTERNAL_URL=${GITEA_INTERNAL_URL:-http://gitea:3000}
+      - GITEA_INTERNAL_URL=${GITEA_INTERNAL_URL:-http://gitea:${GITEA_PORT:-3000}}
       - GITEA_ADMIN_USER=${GITEA_ADMIN_USER:-alice}
       - GITEA_ADMIN_PASS=${GITEA_ADMIN_PASS:-dev}
       - BINDERSNAP_APP_ORIGIN=http://localhost:${APP_PORT:-5173}
@@ -109,12 +120,15 @@ services:
 
   caddy:
     image: caddy:2-alpine
-    container_name: bindersnap-caddy
+    container_name: ${STACK_NAME:-bindersnap}-caddy
     depends_on:
       api:
         condition: service_started
+    environment:
+      - API_PORT=${API_PORT:-8787}
+      - API_PROXY_PORT=${API_PROXY_PORT:-8788}
     ports:
-      - "${API_PROXY_PORT:-8788}:8788"
+      - "${API_PROXY_PORT:-8788}:${API_PROXY_PORT:-8788}"
     volumes:
       - ./tests/Caddyfile.integration:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
@@ -126,7 +140,7 @@ services:
       dockerfile: Dockerfile
       args:
         APP_PORT: ${APP_PORT:-5173}
-    container_name: bindersnap-app
+    container_name: ${STACK_NAME:-bindersnap}-app
     depends_on:
       api:
         condition: service_started
@@ -142,11 +156,11 @@ services:
       - BUN_PUBLIC_API_BASE_URL=http://localhost:${API_PROXY_PORT:-8788}
       - BUN_PUBLIC_API_URL=http://localhost:${API_PROXY_PORT:-8788}
       - VITE_API_URL=http://localhost:${API_PROXY_PORT:-8788}
-      - BUN_PUBLIC_GITEA_URL=http://localhost:3000
-      - VITE_GITEA_URL=http://localhost:3000
-      - BUN_PUBLIC_HOCUSPOCUS_URL=ws://localhost:1234
-      - VITE_HOCUSPOCUS_URL=ws://localhost:1234
-      - GITEA_INTERNAL_URL=${GITEA_INTERNAL_URL:-http://gitea:3000}
+      - BUN_PUBLIC_GITEA_URL=http://localhost:${GITEA_PORT:-3000}
+      - VITE_GITEA_URL=http://localhost:${GITEA_PORT:-3000}
+      - BUN_PUBLIC_HOCUSPOCUS_URL=ws://localhost:${HOCUSPOCUS_PORT:-1234}
+      - VITE_HOCUSPOCUS_URL=ws://localhost:${HOCUSPOCUS_PORT:-1234}
+      - GITEA_INTERNAL_URL=${GITEA_INTERNAL_URL:-http://gitea:${GITEA_PORT:-3000}}
       - GITEA_ADMIN_USER=${GITEA_ADMIN_USER:-alice}
       - GITEA_ADMIN_PASS=${GITEA_ADMIN_PASS:-dev}
     ports:
@@ -164,4 +178,4 @@ volumes:
 
 networks:
   default:
-    name: bindersnap-dev
+    name: ${STACK_NAME:-bindersnap}-dev
