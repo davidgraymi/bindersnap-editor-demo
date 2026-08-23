@@ -557,7 +557,6 @@ input {
   align-items: center;
 }
 
-.vault-version-badge,
 .vault-pending-badge,
 .vault-status-badge,
 .collaborator-permission-badge {
@@ -569,11 +568,6 @@ input {
   border-radius: var(--brand-radius-sm);
   text-transform: uppercase;
   letter-spacing: var(--brand-tracking-wide);
-}
-
-.vault-version-badge {
-  background: var(--bs-coral-dim);
-  color: var(--brand-coral-dark);
 }
 
 .vault-no-version {
