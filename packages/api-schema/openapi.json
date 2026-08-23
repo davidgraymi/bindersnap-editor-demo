@@ -1737,6 +1737,44 @@
           "unresolvedCount"
         ]
       },
+      "ChangeUpdatesPayload": {
+        "type": "object",
+        "properties": {
+          "updates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "index": {
+                  "type": "number"
+                },
+                "sha": {
+                  "type": "string"
+                },
+                "author": {
+                  "type": "string"
+                },
+                "at": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "index",
+                "sha",
+                "author",
+                "at"
+              ]
+            }
+          },
+          "resetsApprovals": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "updates",
+          "resetsApprovals"
+        ]
+      },
       "SearchUsersPayload": {
         "type": "object",
         "properties": {
@@ -5839,6 +5877,87 @@
                     "threads",
                     "totalCount",
                     "unresolvedCount"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/documents/{owner}/{repo}/pull-requests/{pullNumber}/updates": {
+      "get": {
+        "operationId": "listChangeUpdates",
+        "tags": [
+          "documents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "owner",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "repo",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "pullNumber",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Every update this change has proposed, oldest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "updates": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "index": {
+                            "type": "number"
+                          },
+                          "sha": {
+                            "type": "string"
+                          },
+                          "author": {
+                            "type": "string"
+                          },
+                          "at": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "index",
+                          "sha",
+                          "author",
+                          "at"
+                        ]
+                      }
+                    },
+                    "resetsApprovals": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "updates",
+                    "resetsApprovals"
                   ]
                 }
               }

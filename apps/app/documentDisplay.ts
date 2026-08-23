@@ -202,6 +202,24 @@ export function getInitials(name: string): string {
 }
 
 /**
+ * Which of five tints a person's avatar takes.
+ *
+ * Faces in this product are usually initials — most people never upload a
+ * photo — and a wall of identical grey circles makes a reviewer list something
+ * you have to read rather than recognise. The tint is derived from the login
+ * so the same person is the same colour on every screen, every session.
+ */
+export type AvatarTone = 1 | 2 | 3 | 4 | 5;
+
+export function getAvatarTone(login: string): AvatarTone {
+  let sum = 0;
+  for (let index = 0; index < login.length; index += 1) {
+    sum = (sum + login.charCodeAt(index)) % 5;
+  }
+  return ((sum % 5) + 1) as AvatarTone;
+}
+
+/**
  * One change, whatever list it came from.
  *
  * An open change arrives as a Gitea pull request and a closed one as the
@@ -351,6 +369,49 @@ export function closedChangeToRecord(change: {
     reviewers: change.reviewers ?? [],
     approvalCount: change.approvalCount ?? 0,
     requiredApprovals: change.requiredApprovals ?? 0,
+  };
+}
+
+/**
+ * A published version, read back as the change that produced it.
+ *
+ * The History tab and a change's own page are looking at the same events —
+ * who opened it, what was said, who signed it off, when it went out — so they
+ * render the same timeline rather than two components that drift apart. What
+ * History has is the version record, so it is narrowed to the same shape.
+ */
+export function publishedVersionToRecord(version: {
+  version: number;
+  createdAt: string;
+  submission: {
+    number: number;
+    body: string;
+    submittedBy: string;
+    submittedAt: string;
+    mergedAt: string | null;
+    mergedBy: string | null;
+  };
+  reviews?: VersionReview[];
+}): ChangeRecord {
+  const { submission } = version;
+  return {
+    number: submission.number,
+    summary: parseChangeTitle(submission.body, submission.submittedBy),
+    description: describeSubmission(submission.body),
+    reviews: version.reviews ?? [],
+    branchName: null,
+    submittedBy: submission.submittedBy,
+    submittedAt: submission.submittedAt,
+    open: false,
+    approvalState: "published",
+    outcome: "published",
+    closedAt: submission.mergedAt ?? version.createdAt,
+    decidedBy: submission.mergedBy,
+    publishedVersion: version.version,
+    assignee: null,
+    reviewers: [],
+    approvalCount: 0,
+    requiredApprovals: 0,
   };
 }
 

@@ -10,6 +10,7 @@ import {
 } from "./schemas/auth";
 import {
   ChangeAssignmentsSchema,
+  ChangeUpdatesPayloadSchema,
   ClosedChangesPayloadSchema,
   CollaboratorListPayloadSchema,
   CreateDiscussionBodySchema,
@@ -61,6 +62,7 @@ registry.register(
   DocumentPermissionsPayloadSchema,
 );
 registry.register("DiscussionSummary", DiscussionSummarySchema);
+registry.register("ChangeUpdatesPayload", ChangeUpdatesPayloadSchema);
 registry.register("SearchUsersPayload", SearchUsersPayloadSchema);
 registry.register("BillingStatusPayload", BillingStatusPayloadSchema);
 registry.register(
@@ -531,6 +533,20 @@ registry.registerPath({
     200: {
       description: "Thread status updated",
       content: { "application/json": { schema: DiscussionSummarySchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/documents/{owner}/{repo}/pull-requests/{pullNumber}/updates",
+  operationId: "listChangeUpdates",
+  tags: ["documents"],
+  request: { params: discussionParams },
+  responses: {
+    200: {
+      description: "Every update this change has proposed, oldest first",
+      content: { "application/json": { schema: ChangeUpdatesPayloadSchema } },
     },
   },
 });

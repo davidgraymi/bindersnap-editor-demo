@@ -74,6 +74,7 @@ import {
 import {
   createPullRequest,
   getPullRequestWithReviews,
+  listBranchUpdates,
   listPullRequests,
   listPullRequestsWithReviews,
   mergeOrResolveConflicts,
@@ -91,6 +92,16 @@ import {
   readAssignee,
   readRequestedReviewers,
 } from "./change-assignments";
+import { buildChangeUpdates } from "./change-updates";
+
+/**
+ * How far back a change's update history is read.
+ *
+ * A change that has been corrected fifty times is a change that should have
+ * been closed and resubmitted; the cap keeps one pathological branch from
+ * costing every reader a long walk through Gitea's commit pages.
+ */
+const CHANGE_UPDATE_LIMIT = 50;
 
 const authAttempts = new Map<string, { count: number; resetAt: number }>();
 const checkoutAttempts = new Map<string, { count: number; resetAt: number }>();
@@ -2838,6 +2849,74 @@ async function handleListDiscussions(
   }
 }
 
+/**
+ * Every version this change has proposed, oldest first.
+ *
+ * The commits on the change's branch are the updates — an answer to a reviewer
+ * is a new upload, and Gitea has already recorded it. Loaded on its own rather
+ * than with the change: the Changes tab lists changes, and a list has no use
+ * for the history inside each one.
+ */
+async function handleChangeUpdates(
+  req: Request,
+  baseHeaders: Headers,
+  owner: string,
+  repo: string,
+  prNumber: number,
+): Promise<Response> {
+  const access = await resolveDocumentAccess(req, baseHeaders, owner, repo);
+  if (access instanceof Response) {
+    return access;
+  }
+
+  const { client } = access;
+
+  try {
+    const { pullRequest } = await getPullRequestWithReviews({
+      client,
+      owner,
+      repo,
+      pullNumber: prNumber,
+    });
+
+    const branch = pullRequest.branchName;
+    if (!branch) {
+      // A published or withdrawn change has had its branch deleted. The record
+      // of what it proposed is the published version now, not a branch.
+      return json(200, { updates: [], resetsApprovals: false }, baseHeaders);
+    }
+
+    const base = pullRequest.base?.ref || "main";
+
+    const [commits, branchProtection] = await Promise.all([
+      listBranchUpdates({
+        client,
+        owner,
+        repo,
+        branch,
+        base,
+        limit: CHANGE_UPDATE_LIMIT,
+      }),
+      getRepoBranchProtection(client, owner, repo, base).catch(() => null),
+    ]);
+
+    return json(
+      200,
+      {
+        updates: buildChangeUpdates(commits),
+        resetsApprovals: branchProtection?.dismissStaleApprovals ?? false,
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to load this change's updates.",
+    );
+  }
+}
+
 async function handleCreateDiscussionThread(
   req: Request,
   baseHeaders: Headers,
@@ -4426,6 +4505,9 @@ export function createApiServer() {
         const discussionsMatch = pathname.match(
           /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/discussions$/,
         );
+        const changeUpdatesMatch = pathname.match(
+          /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/updates$/,
+        );
         const discussionRepliesMatch = pathname.match(
           /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/discussions\/([^/]+)\/comments$/,
         );
@@ -4492,6 +4574,14 @@ export function createApiServer() {
             decodePathParam(publishMatch[1] ?? ""),
             decodePathParam(publishMatch[2] ?? ""),
             Number.parseInt(publishMatch[3] ?? "", 10),
+          );
+        } else if (changeUpdatesMatch && method === "GET") {
+          response = await handleChangeUpdates(
+            req,
+            baseHeaders,
+            decodePathParam(changeUpdatesMatch[1] ?? ""),
+            decodePathParam(changeUpdatesMatch[2] ?? ""),
+            Number.parseInt(changeUpdatesMatch[3] ?? "", 10),
           );
         } else if (discussionsMatch && method === "GET") {
           response = await handleListDiscussions(

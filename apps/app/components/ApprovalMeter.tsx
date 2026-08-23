@@ -20,8 +20,6 @@ interface ApprovalMeterProps {
    * reports one fewer kind of blocker.
    */
   openThreadAuthors?: ReadonlySet<string>;
-  /** Larger type and pips, for a change's own page rather than a list row. */
-  size?: "row" | "detail";
 }
 
 /**
@@ -33,14 +31,13 @@ interface ApprovalMeterProps {
  * is nearly through or barely started. A count says it in four words, the pips
  * say it without reading at all, and the reason names the person to go talk to.
  *
- * This is deliberately the *only* thing on the page that reports publishability
- * — see `describeChangeStanding` for why a separate state badge alongside it
- * was worse than nothing.
+ * Used on rows in the Changes tab. A change's own page shows the same fact as
+ * bars under its title, where it has the room to be read at a glance rather
+ * than squeezed into a pill.
  */
 export function ApprovalMeter({
   change,
   openThreadAuthors,
-  size = "row",
 }: ApprovalMeterProps) {
   const standing = describeChangeStanding(change, openThreadAuthors);
   if (!standing) return null;
@@ -51,7 +48,7 @@ export function ApprovalMeter({
 
   return (
     <span
-      className={`approval-meter approval-meter--${size} approval-meter--${standing.tone}`}
+      className={`approval-meter approval-meter--row approval-meter--${standing.tone}`}
     >
       <Icon size={14} strokeWidth={1.75} aria-hidden="true" />
       {standing.progress ? (
