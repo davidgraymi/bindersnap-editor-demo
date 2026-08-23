@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, Download, Eye } from "lucide-react";
+import { Download, Eye } from "lucide-react";
 
 import type { DocumentVersionRecord } from "../api";
 import { getDocumentHistory } from "../api";
-import { publishedVersionToRecord } from "../documentDisplay";
 import type { HistoryEntry, HistoryPerson } from "../documentHistory";
 import { buildHistoryEntries } from "../documentHistory";
 import { PersonAvatar } from "./PersonAvatar";
-import { ReviewTimeline } from "./ReviewTimeline";
 
 interface DocumentHistoryProps {
   owner: string;
@@ -45,8 +43,12 @@ function SplinePerson({
  * Every published version is a knot on one line, and every knot is a change
  * review somebody argued over — so the version is titled with that review and
  * links straight to it. The two people who matter are on the line itself: who
- * wrote the change, and who put it on the record. Expanding a knot replays
- * the reviews and the discussion that got it there.
+ * wrote the change, and who put it on the record.
+ *
+ * A knot does not unfold into the reviews and the discussion. The change
+ * review *is* the review record, and it already renders them on its own page —
+ * a second copy here is the same log in two places, drifting apart the moment
+ * one of them changes. The title is the way in.
  */
 export function DocumentHistory({
   owner,
@@ -61,7 +63,6 @@ export function DocumentHistory({
   const [versions, setVersions] = useState<DocumentVersionRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState<Set<number>>(new Set());
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -69,9 +70,6 @@ export function DocumentHistory({
     try {
       const payload = await getDocumentHistory(owner, repo);
       setVersions(payload.versions);
-      // Open the newest version so the page never lands on a wall of rows.
-      const newest = payload.versions[0]?.version;
-      setExpanded(newest === undefined ? new Set() : new Set([newest]));
     } catch (err) {
       setError(
         err instanceof Error
@@ -88,20 +86,11 @@ export function DocumentHistory({
     void load();
   }, [load]);
 
-  function toggle(version: number) {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(version)) next.delete(version);
-      else next.add(version);
-      return next;
-    });
-  }
-
   if (isLoading) {
     return (
       <section className="doc-panel doc-empty">
         <h2>Loading version history…</h2>
-        <p>Fetching every published version and the reviews behind it.</p>
+        <p>Fetching every version that has been published.</p>
       </section>
     );
   }
@@ -138,9 +127,7 @@ export function DocumentHistory({
 
   return (
     <ol className="doc-spline">
-      {entries.map((entry, index) => {
-        const record = versions[index]!;
-        const isOpen = expanded.has(entry.version);
+      {entries.map((entry) => {
         const isViewing = viewingVersion === entry.version;
 
         return (
@@ -238,81 +225,13 @@ export function DocumentHistory({
               </div>
 
               <p className="doc-spline-meta">
-                <time dateTime={record.createdAt} title={entry.publishedAt}>
+                <time dateTime={entry.createdAt} title={entry.publishedAt}>
                   {entry.publishedOn}
                 </time>
                 {" · "}
                 {entry.approvals}
                 {entry.comments ? ` · ${entry.comments}` : ""}
               </p>
-
-              <button
-                className="doc-spline-toggle"
-                type="button"
-                aria-expanded={isOpen}
-                onClick={() => toggle(entry.version)}
-              >
-                {isOpen ? (
-                  <ChevronDown size={14} strokeWidth={1.5} aria-hidden="true" />
-                ) : (
-                  <ChevronRight
-                    size={14}
-                    strokeWidth={1.5}
-                    aria-hidden="true"
-                  />
-                )}
-                {isOpen ? "Hide the review record" : "Show the review record"}
-              </button>
-
-              {isOpen ? (
-                <div className="doc-spline-detail">
-                  <dl className="doc-history-facts">
-                    <div>
-                      <dt>Published</dt>
-                      <dd>{entry.publishedAt}</dd>
-                    </div>
-                    <div>
-                      <dt>Change review</dt>
-                      <dd>
-                        {entry.changeNumber === null
-                          ? "No record kept"
-                          : `#${entry.changeNumber}`}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Commit</dt>
-                      <dd>
-                        <code>{entry.shortSha}</code>
-                      </dd>
-                    </div>
-                  </dl>
-
-                  {/* One log, not two: the reviews and the discussion are the
-                      same sequence of events, so the version shows the same
-                      timeline the change's own page shows. */}
-                  {record.submission ? (
-                    <ReviewTimeline
-                      owner={owner}
-                      repo={repo}
-                      change={publishedVersionToRecord({
-                        version: record.version,
-                        createdAt: record.createdAt,
-                        submission: record.submission,
-                        reviews: record.reviews,
-                      })}
-                      updates={[]}
-                      resetsApprovals={false}
-                      canParticipate={false}
-                      blockOnUnresolvedThreads={false}
-                      onOpenUpdate={null}
-                    />
-                  ) : (
-                    <p className="vault-pr-notice">
-                      No submission record was kept for {entry.label}.
-                    </p>
-                  )}
-                </div>
-              ) : null}
             </div>
           </li>
         );

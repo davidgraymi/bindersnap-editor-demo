@@ -51,16 +51,16 @@ export interface HistoryEntry {
   author: HistoryPerson | null;
   /** Who published it. Often, but not always, someone else. */
   publisher: HistoryPerson | null;
+  /** The raw stamp, for the `datetime` attribute. */
+  createdAt: string;
   /** "Jan 12, 2026". */
   publishedOn: string;
-  /** The full stamp, for the title attribute and the expanded facts. */
+  /** The full stamp, for the title attribute. */
   publishedAt: string;
   /** "Approved by Dana", or that nobody signed off. */
   approvals: string;
   /** "3 comments", or null when the change drew none. */
   comments: string | null;
-  /** The commit the version points at, short. */
-  shortSha: string;
 }
 
 /**
@@ -112,6 +112,7 @@ export function buildHistoryEntries(
             }),
       author: toPerson(submission?.submittedBy),
       publisher: toPerson(submission?.mergedBy),
+      createdAt: entry.createdAt,
       publishedOn: formatShortDate(entry.createdAt) || "Unknown",
       publishedAt: formatTimestamp(entry.createdAt) || "Unknown",
       approvals: summarizeApprovals(entry.reviews),
@@ -121,7 +122,6 @@ export function buildHistoryEntries(
               entry.discussionCount === 1 ? "" : "s"
             }`
           : null,
-      shortSha: entry.sha.slice(0, 10),
     };
   });
 }

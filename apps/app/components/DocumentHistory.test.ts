@@ -13,7 +13,8 @@ import type { DocumentHistoryPayload, DocumentVersionRecord } from "../api";
  * One line down the page, one knot per published version. What has to survive
  * a redesign: the title is the change review and it goes there, both people
  * are named, and the two actions are icons — the version is on the knot, so a
- * button that repeats it is the same word twice.
+ * button that repeats it is the same word twice. Nothing here unfolds into a
+ * second copy of the review record, and nothing here shows a commit hash.
  */
 
 let payload: DocumentHistoryPayload = { versions: [], canonicalFile: null };
@@ -22,12 +23,6 @@ const mockGetDocumentHistory = mock(async () => payload);
 
 mock.module("../api", () => ({
   getDocumentHistory: mockGetDocumentHistory,
-}));
-
-// The timeline fetches the change's discussion of its own accord. This test is
-// about the spline, not what a knot unfolds into.
-mock.module("./ReviewTimeline", () => ({
-  ReviewTimeline: () => createElement("div", { "data-testid": "timeline" }),
 }));
 
 const { DocumentHistory } = await import("./DocumentHistory");
@@ -283,6 +278,38 @@ test("a version with no surviving change review is plain text, not a dead link",
   expect(container.querySelector(".doc-spline-title")?.textContent).toContain(
     "Version 3",
   );
+
+  unmount();
+});
+
+test("a knot does not unfold into a second copy of the review record", async () => {
+  // The change review is the review record — it renders the approvals and the
+  // discussion threads on its own page. Repeating them here is the same log in
+  // two places. The title is the way in.
+  payload = { versions: [version()], canonicalFile: null };
+
+  const { container, unmount } = await render(
+    createElement(DocumentHistory, historyProps()),
+  );
+
+  expect(container.querySelector(".doc-spline-toggle")).toBeNull();
+  expect(container.querySelector(".doc-spline-detail")).toBeNull();
+  expect(container.querySelector(".rev-timeline")).toBeNull();
+  expect(container.textContent).not.toContain("review record");
+
+  unmount();
+});
+
+test("a knot never shows a commit hash", async () => {
+  // The reader is a compliance manager. A SHA answers no question they have.
+  payload = { versions: [version()], canonicalFile: null };
+
+  const { container, unmount } = await render(
+    createElement(DocumentHistory, historyProps()),
+  );
+
+  expect(container.querySelector("code")).toBeNull();
+  expect(container.textContent).not.toContain("abcdef");
 
   unmount();
 });

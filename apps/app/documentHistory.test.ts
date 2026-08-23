@@ -111,14 +111,22 @@ test("an automated upload is titled by the file it carried", () => {
   expect(entry?.title).toBe("New version of vendor-agreement.docx");
 });
 
-test("the knot carries the version, the date, the commit, and the comment count", () => {
+test("the knot carries the version, the date, and the comment count", () => {
   const [entry] = buildHistoryEntries([version()], "alice", "contract");
 
   expect(entry?.label).toBe("v3");
   expect(entry?.tagName).toBe("v3");
   expect(entry?.publishedOn).toBe("Aug 21, 2026");
-  expect(entry?.shortSha).toBe("abcdef0123");
+  expect(entry?.createdAt).toBe("2026-08-21T09:00:00Z");
   expect(entry?.comments).toBe("3 comments");
+});
+
+test("nothing on a knot is a commit hash", () => {
+  // A compliance manager does not know what a SHA is, and never needed one to
+  // answer "which version did we approve?".
+  const [entry] = buildHistoryEntries([version()], "alice", "contract");
+
+  expect(JSON.stringify(entry)).not.toContain("abcdef");
 });
 
 test("one comment is not pluralised, and none is not mentioned", () => {
