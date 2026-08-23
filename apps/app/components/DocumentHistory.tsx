@@ -6,6 +6,7 @@ import { getDocumentHistory } from "../api";
 import type { HistoryEntry, HistoryPerson } from "../documentHistory";
 import { buildHistoryEntries } from "../documentHistory";
 import { PersonAvatar } from "./PersonAvatar";
+import { SkeletonGroup, SkeletonLine, SkeletonShape } from "./Skeleton";
 
 interface DocumentHistoryProps {
   owner: string;
@@ -88,10 +89,26 @@ export function DocumentHistory({
 
   if (isLoading) {
     return (
-      <section className="doc-panel doc-empty">
-        <h2>Loading version history…</h2>
-        <p>Fetching every version that has been published.</p>
-      </section>
+      <SkeletonGroup label="Loading version history" className="doc-spline">
+        {Array.from({ length: 3 }, (_, index) => (
+          <div className="doc-spline-entry" key={index}>
+            <span className="doc-spline-knot" />
+            <div className="doc-spline-body">
+              <div className="doc-spline-head">
+                <SkeletonLine width="wide" />
+                <div className="doc-spline-actions">
+                  <SkeletonShape variant="icon" />
+                </div>
+              </div>
+              <div className="doc-spline-people">
+                <SkeletonShape variant="avatar" />
+                <SkeletonLine width="short" />
+              </div>
+              <SkeletonLine width="medium" />
+            </div>
+          </div>
+        ))}
+      </SkeletonGroup>
     );
   }
 

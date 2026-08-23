@@ -7,6 +7,7 @@ import {
   BACKGROUND_POLL_WINDOW_MS,
   runBackgroundPoll,
 } from "./checkoutPolling";
+import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
 interface BillingPageProps {
   subscriptionStatus: "active" | "none" | "loading";
@@ -307,9 +308,13 @@ export function BillingPage({
               </div>
             </div>
           ) : null}
-          <p style={{ color: "var(--bs-text-muted)" }}>
-            {plan?.formatted ?? "Loading…"}
-          </p>
+          {plan ? (
+            <p style={{ color: "var(--bs-text-muted)" }}>{plan.formatted}</p>
+          ) : (
+            <SkeletonGroup label="Loading the price">
+              <SkeletonLine width="medium" />
+            </SkeletonGroup>
+          )}
           <button
             className="bs-btn bs-btn-primary"
             type="button"

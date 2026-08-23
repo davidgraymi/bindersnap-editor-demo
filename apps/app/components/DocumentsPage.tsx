@@ -17,6 +17,7 @@ import {
   type DocumentsViewState,
   type SavedView,
 } from "../documentsView";
+import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
 interface DocumentsPageProps {
   currentUsername: string;
@@ -312,16 +313,16 @@ function toneOf(row: DocumentRow): "review" | "approved" | "waiting" {
 
 function DocumentSkeletonRows({ count }: { count: number }) {
   return (
-    <>
+    <SkeletonGroup label="Loading documents">
       {Array.from({ length: count }, (_, index) => (
         <div className="docs-list-item docs-list-item--skeleton" key={index}>
           <span className="docs-list-item-icon" />
-          <span className="docs-skeleton-lines">
-            <span className="docs-skeleton-line docs-skeleton-line--wide" />
-            <span className="docs-skeleton-line docs-skeleton-line--short" />
+          <span className="bs-skeleton-lines">
+            <SkeletonLine width="medium" />
+            <SkeletonLine width="short" />
           </span>
         </div>
       ))}
-    </>
+    </SkeletonGroup>
   );
 }

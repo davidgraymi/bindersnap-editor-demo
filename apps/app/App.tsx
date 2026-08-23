@@ -13,6 +13,7 @@ import { AppShell } from "./components/AppShell";
 import { BillingPage } from "./components/BillingPage";
 import { BindersnapLogoMark } from "./components/BindersnapLogoMark";
 import { LandingPage } from "./components/LandingPage";
+import { WorkspaceSkeleton } from "./components/WorkspaceSkeleton";
 import {
   type SessionUser,
   createCheckoutSession,
@@ -506,31 +507,11 @@ export function App() {
   }, [view]);
 
   if (view === "callback") {
-    return (
-      <section className="app-gate">
-        <div className="app-gate-panel bs-card">
-          <div className="bs-eyebrow">Authentication</div>
-          <h1>Completing sign-in...</h1>
-          <p className="app-gate-copy">
-            Handing the sign-in response back to the workspace session service.
-          </p>
-        </div>
-      </section>
-    );
+    return <WorkspaceSkeleton label="Completing sign-in" />;
   }
 
   if (view === "loading") {
-    return (
-      <section className="app-gate">
-        <div className="app-gate-panel bs-card">
-          <div className="bs-eyebrow">Workspace</div>
-          <h1>Checking your session...</h1>
-          <p className="app-gate-copy">
-            Making sure your workspace is ready before we open the app.
-          </p>
-        </div>
-      </section>
-    );
+    return <WorkspaceSkeleton label="Opening your workspace" />;
   }
 
   if (view === "billing") {

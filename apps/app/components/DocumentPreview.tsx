@@ -9,6 +9,7 @@ import {
   formatFileSize,
 } from "../documentFile";
 import { markdownToHtml } from "../markdown";
+import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
 interface DocumentPreviewProps {
   owner: string;
@@ -211,7 +212,17 @@ export function DocumentPreview({
 
       <div className="doc-preview-body">
         {state.status === "loading" || state.status === "idle" ? (
-          <p className="doc-preview-note">Loading the document…</p>
+          <SkeletonGroup
+            label="Loading the document"
+            className="doc-preview-sheet bs-skeleton-stack"
+          >
+            <SkeletonLine width="medium" heading />
+            <SkeletonLine width="full" />
+            <SkeletonLine width="full" />
+            <SkeletonLine width="wide" />
+            <SkeletonLine width="full" />
+            <SkeletonLine width="medium" />
+          </SkeletonGroup>
         ) : state.status === "object" && state.kind === "pdf" ? (
           <iframe
             className="doc-preview-frame"

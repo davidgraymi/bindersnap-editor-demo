@@ -6,6 +6,7 @@ import {
 } from "../api";
 import type { DocumentPermissionsPayload } from "../api";
 import type { RepoUserSummary } from "../api";
+import { SkeletonGroup, SkeletonLine, SkeletonShape } from "./Skeleton";
 
 interface DocumentPermissionsProps {
   owner: string;
@@ -272,9 +273,24 @@ export function DocumentPermissions({
 
   if (loading) {
     return (
-      <div className="perms-page">
-        <p className="perms-state-text">Loading permissions…</p>
-      </div>
+      <SkeletonGroup label="Loading permissions" className="perms-page">
+        <div className="perms-card">
+          {Array.from({ length: 2 }, (_, group) => (
+            <div className="perms-group" key={group}>
+              <SkeletonLine width="short" />
+              {Array.from({ length: 3 }, (_, row) => (
+                <div className="perms-row perms-row--split" key={row}>
+                  <span className="bs-skeleton-lines">
+                    <SkeletonLine width="medium" />
+                    <SkeletonLine width="wide" />
+                  </span>
+                  <SkeletonShape variant="pill" />
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </SkeletonGroup>
     );
   }
 
