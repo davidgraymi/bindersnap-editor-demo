@@ -2484,11 +2484,32 @@ input {
 }
 
 @media (max-width: 900px) {
-  /* Fixed chrome that overlaps the conversation is worse than chrome that
-     scrolls with it, so on a narrow screen the decision returns to the page. */
+  /* A decision bar stretched across a narrow window reads as a page section
+     rather than the one button it is, so the pill keeps floating and just
+     tucks closer to the corner. */
   .rev-decision {
-    position: static;
-    justify-content: flex-end;
+    right: var(--brand-space-4);
+    bottom: var(--brand-space-4);
+  }
+
+  /* A pill drawn around a single floating button is a ring around a ring, so
+     on a narrow screen the buttons carry the shadow and float on their own. The
+     confirm panel still needs a surface to sit on, so it keeps its pill. */
+  .rev-decision:not(:has(.rev-decision-confirm)) {
+    padding: 0;
+    background: none;
+    border: none;
+    box-shadow: none;
+  }
+
+  .rev-decision:not(:has(.rev-decision-confirm)) .rev-btn {
+    box-shadow: var(--bs-shadow-lg);
+  }
+
+  /* It floats over the tail of the conversation, so the conversation gets
+     room to scroll clear of it. */
+  .change-detail {
+    padding-bottom: var(--brand-space-12);
   }
 }
 
