@@ -45,11 +45,11 @@ export function SkeletonLines({ count = 2 }: { count?: number }) {
   );
 }
 
-/** A solid block: an icon square, an avatar, a badge, or a whole sheet. */
+/** A solid block: an icon square, an avatar, a badge, or a button. */
 export function SkeletonShape({
   variant,
 }: {
-  variant: "icon" | "avatar" | "badge" | "pill" | "sheet";
+  variant: "icon" | "avatar" | "badge" | "pill";
 }) {
   return <span className={`bs-skeleton-shape bs-skeleton-shape--${variant}`} />;
 }

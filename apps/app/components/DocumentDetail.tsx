@@ -304,8 +304,12 @@ export function DocumentDetail({
           </div>
         </header>
         <div className="doc-panel bs-skeleton-stack">
-          <SkeletonLine width="wide" heading />
-          <SkeletonShape variant="sheet" />
+          <SkeletonLine width="medium" heading />
+          <SkeletonLine width="full" />
+          <SkeletonLine width="full" />
+          <SkeletonLine width="wide" />
+          <SkeletonLine width="full" />
+          <SkeletonLine width="medium" />
         </div>
       </SkeletonGroup>
     );

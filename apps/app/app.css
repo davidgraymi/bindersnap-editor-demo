@@ -3628,11 +3628,20 @@ input {
   min-width: 0;
 }
 
+/*
+ * The fill is one step darker than the deepest surface token. On paper, a
+ * plain surface fill is so close to the page that the shapes read as a smudge
+ * rather than as the rows they stand in for.
+ */
+.bs-skeleton-line,
+.bs-skeleton-shape {
+  background: color-mix(in srgb, var(--bs-text-muted) 22%, var(--bs-surface-3));
+}
+
 .bs-skeleton-line {
   display: block;
   height: 10px;
   border-radius: var(--brand-radius-sm);
-  background: var(--bs-surface-3);
 }
 
 .bs-skeleton-line--full {
@@ -3659,7 +3668,6 @@ input {
 .bs-skeleton-shape {
   display: block;
   flex-shrink: 0;
-  background: var(--bs-surface-3);
 }
 
 .bs-skeleton-shape--icon {
@@ -3684,12 +3692,6 @@ input {
   width: 96px;
   height: 28px;
   border-radius: var(--brand-radius-full);
-}
-
-.bs-skeleton-shape--sheet {
-  width: 100%;
-  height: 320px;
-  border-radius: var(--brand-radius-lg);
 }
 
 /* A row of shapes: icon, body lines, and whatever sits on the right. */

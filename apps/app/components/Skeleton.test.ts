@@ -89,11 +89,10 @@ function render(element: ReactElement) {
 
 test("the group announces what is coming while it waits", () => {
   const { container, unmount } = render(
-    createElement(
-      SkeletonGroup,
-      { label: "Loading documents" },
-      createElement(SkeletonLine, {}),
-    ),
+    createElement(SkeletonGroup, {
+      label: "Loading documents",
+      children: createElement(SkeletonLine, {}),
+    }),
   );
 
   const group = container.querySelector(".bs-skeleton");
@@ -106,11 +105,11 @@ test("the group announces what is coming while it waits", () => {
 
 test("the group keeps the page's own class, so it holds the page's layout", () => {
   const { container, unmount } = render(
-    createElement(
-      SkeletonGroup,
-      { label: "Loading document", className: "docw-page" },
-      createElement(SkeletonShape, { variant: "icon" }),
-    ),
+    createElement(SkeletonGroup, {
+      label: "Loading document",
+      className: "docw-page",
+      children: createElement(SkeletonShape, { variant: "icon" }),
+    }),
   );
 
   const group = container.querySelector(".bs-skeleton");
@@ -122,12 +121,13 @@ test("the group keeps the page's own class, so it holds the page's layout", () =
 
 test("a line carries its width, and a heading line is its own shape", () => {
   const { container, unmount } = render(
-    createElement(
-      SkeletonGroup,
-      { label: "Loading" },
-      createElement(SkeletonLine, { width: "short" }),
-      createElement(SkeletonLine, { heading: true }),
-    ),
+    createElement(SkeletonGroup, {
+      label: "Loading",
+      children: [
+        createElement(SkeletonLine, { key: "a", width: "short" }),
+        createElement(SkeletonLine, { key: "b", heading: true }),
+      ],
+    }),
   );
 
   const lines = container.querySelectorAll(".bs-skeleton-line");
@@ -142,11 +142,10 @@ test("a line carries its width, and a heading line is its own shape", () => {
 
 test("stacked lines vary in width, so a block never reads as ruled paper", () => {
   const { container, unmount } = render(
-    createElement(
-      SkeletonGroup,
-      { label: "Loading" },
-      createElement(SkeletonLines, { count: 3 }),
-    ),
+    createElement(SkeletonGroup, {
+      label: "Loading",
+      children: createElement(SkeletonLines, { count: 3 }),
+    }),
   );
 
   const widths = [...container.querySelectorAll(".bs-skeleton-line")].map(

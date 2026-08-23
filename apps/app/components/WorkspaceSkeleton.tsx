@@ -11,30 +11,36 @@ export function WorkspaceSkeleton({ label }: { label: string }) {
   return (
     <SkeletonGroup label={label} className="app-shell app-shell--skeleton">
       <header className="app-topnav">
-        <span className="bs-skeleton-shape bs-skeleton-shape--pill" />
+        <SkeletonShape variant="pill" />
         <span className="app-topnav-spacer" />
-        <span className="bs-skeleton-shape bs-skeleton-shape--pill" />
-        <SkeletonShape variant="avatar" />
+        <span className="app-topnav-right">
+          <SkeletonShape variant="pill" />
+          <SkeletonShape variant="avatar" />
+        </span>
       </header>
 
-      <main className="app-main">
-        <div className="home-page">
-          <SkeletonLine width="medium" heading />
-          <div className="bs-skeleton-stack">
-            <SkeletonLine width="short" />
-            {Array.from({ length: 3 }, (_, index) => (
-              <div className="bs-skeleton-row" key={index}>
-                <SkeletonShape variant="icon" />
-                <span className="bs-skeleton-lines">
-                  <SkeletonLine width="wide" />
-                  <SkeletonLine width="short" />
-                </span>
-                <SkeletonShape variant="badge" />
+      <div className="app-body-wrap">
+        <div className="app-main-area">
+          <main className="app-main app-main--workspace">
+            <div className="home-page">
+              <SkeletonLine width="medium" heading />
+              <div className="bs-skeleton-stack">
+                <SkeletonLine width="short" />
+                {Array.from({ length: 3 }, (_, index) => (
+                  <div className="bs-skeleton-row" key={index}>
+                    <SkeletonShape variant="icon" />
+                    <span className="bs-skeleton-lines">
+                      <SkeletonLine width="wide" />
+                      <SkeletonLine width="short" />
+                    </span>
+                    <SkeletonShape variant="badge" />
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </div>
+          </main>
         </div>
-      </main>
+      </div>
     </SkeletonGroup>
   );
 }
