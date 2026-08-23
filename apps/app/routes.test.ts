@@ -123,6 +123,43 @@ test("the file under review is its own screen within a change", () => {
   ).toBe("/docs/alice/quarterly-report/changes/7/preview");
 });
 
+test("every published version has a page of its own", () => {
+  expect(getRoute("/docs/alice/quarterly-report/version/2")).toEqual({
+    kind: "document",
+    owner: "alice",
+    repo: "quarterly-report",
+    tab: "overview",
+    version: 2,
+  });
+
+  expect(
+    routeToPath({
+      kind: "document",
+      owner: "alice",
+      repo: "quarterly-report",
+      tab: "overview",
+      version: 2,
+    }),
+  ).toBe("/docs/alice/quarterly-report/version/2");
+});
+
+test("the document tab without a version is the version on record", () => {
+  expect(
+    routeToPath({
+      kind: "document",
+      owner: "alice",
+      repo: "quarterly-report",
+      tab: "overview",
+    }),
+  ).toBe("/docs/alice/quarterly-report");
+});
+
+test("a non-numeric version segment is not a version page", () => {
+  expect(getRoute("/docs/alice/quarterly-report/version/latest")).toEqual({
+    kind: "home",
+  });
+});
+
 test("an unknown segment under a change is not a change page", () => {
   expect(getRoute("/docs/alice/quarterly-report/changes/7/nonsense")).toEqual({
     kind: "home",

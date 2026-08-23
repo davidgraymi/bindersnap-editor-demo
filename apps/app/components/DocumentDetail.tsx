@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { ChevronDown, Check } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type {
   PullRequestWithApprovalState,
@@ -26,8 +27,10 @@ import {
   buildDocumentHeaderFacts,
   buildPendingDecisionRows,
   buildTeamAvatars,
+  buildVersionMenuOptions,
   buildVersionRailRows,
 } from "../documentWorkspace";
+import type { VersionMenuOption } from "../documentWorkspace";
 import { DocumentAccess } from "./DocumentAccess";
 import { DocumentChangeDetail } from "./DocumentChangeDetail";
 import type { ChangeFilter } from "./DocumentChanges";
@@ -46,19 +49,20 @@ interface DocumentDetailProps {
   activeChangeNumber: number | null;
   /** Which half of that change's page: the discussion or the file. */
   activeChangeView: DocumentChangeView;
+  /**
+   * Which published version the Document tab is showing, from the URL. Null
+   * is the version on record.
+   */
+  activeVersion: number | null;
   onTabChange: (tab: DocumentTab) => void;
+  /** Open a published version, or the record when given null. */
+  onSelectVersion: (version: number | null) => void;
   onOpenChange: (pullNumber: number | null, view?: DocumentChangeView) => void;
 }
 
 interface CanonicalFileInfo {
   storedFileName: string;
   downloadFileName: string;
-}
-
-/** Which version the Document tab is showing. `null` means the latest. */
-interface ViewedVersion {
-  tagName: string;
-  version: number;
 }
 
 function triggerBrowserDownload(blob: Blob, fileName: string): void {
@@ -88,7 +92,9 @@ export function DocumentDetail({
   activeView,
   activeChangeNumber,
   activeChangeView,
+  activeVersion,
   onTabChange,
+  onSelectVersion,
   onOpenChange,
 }: DocumentDetailProps) {
   const [tags, setTags] = useState<DocTag[]>([]);
@@ -105,9 +111,7 @@ export function DocumentDetail({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [viewedVersion, setViewedVersion] = useState<ViewedVersion | null>(
-    null,
-  );
+  const [versionMenuOpen, setVersionMenuOpen] = useState(false);
   const [downloadState, setDownloadState] = useState<{
     ref: string | null;
     error: string | null;
@@ -333,8 +337,17 @@ export function DocumentDetail({
     );
   }
 
-  const viewingRef = viewedVersion?.tagName ?? "main";
-  const isViewingLatest = viewedVersion === null;
+  // The URL carries a version number; the tag list is what turns it into a
+  // git ref. An unknown number resolves to nothing, and the page says so
+  // rather than quietly showing the record under the wrong heading.
+  const viewedTag =
+    activeVersion === null
+      ? null
+      : (tags.find((tag) => tag.version === activeVersion) ?? null);
+  const isViewingLatest =
+    activeVersion === null || latestTag?.version === activeVersion;
+  const viewingRef = isViewingLatest ? "main" : (viewedTag?.name ?? "main");
+  const missingVersion = activeVersion !== null && viewedTag === null;
 
   // History carries no count on purpose: a version count is not a number of
   // things to deal with, and a bubble beside it reads like one.
@@ -350,7 +363,9 @@ export function DocumentDetail({
   const headerFacts = buildDocumentHeaderFacts({
     latestTag,
     fileName: canonicalFileInfo?.downloadFileName ?? null,
+    viewedTag,
   });
+  const versionOptions = buildVersionMenuOptions(tags, activeVersion);
   const pendingRows = buildPendingDecisionRows(openPRs);
   const versionRows = buildVersionRailRows(tags);
   const teamAvatars = buildTeamAvatars(collaborators, owner);
@@ -366,15 +381,38 @@ export function DocumentDetail({
             <div className="doc-header-facts">
               {/* The official version, not a status. A document can have v3
                   published and v4 in review at the same time, so a single
-                  status word here was always going to be a lie. */}
-              <span
-                className={`doc-version-pill doc-version-pill--${headerFacts.tone}`}
-              >
-                {headerFacts.versionLabel}
-              </span>
+                  status word here was always going to be a lie. It is also
+                  the way back to every earlier version — the pill names what
+                  you are reading, so it is where you go to read another. */}
+              <VersionMenu
+                label={headerFacts.versionLabel}
+                tone={headerFacts.tone}
+                options={versionOptions}
+                open={versionMenuOpen}
+                onToggle={() => setVersionMenuOpen((wasOpen) => !wasOpen)}
+                onClose={() => setVersionMenuOpen(false)}
+                onSelect={(version) => {
+                  setVersionMenuOpen(false);
+                  // `onSelectVersion` lands on the Document tab itself, so
+                  // asking for the tab as well would only race it.
+                  onSelectVersion(version);
+                }}
+              />
               <span className="doc-header-fact">
                 {headerFacts.approvedLine}
               </span>
+              {/* The banner this replaces sat on top of the document itself.
+                  The way out of an earlier version belongs beside the pill
+                  that says you are in one. */}
+              {!isViewingLatest ? (
+                <button
+                  className="doc-header-latest"
+                  type="button"
+                  onClick={() => onSelectVersion(null)}
+                >
+                  Back to current
+                </button>
+              ) : null}
               {headerFacts.fileName ? (
                 <span
                   className="doc-header-fact doc-header-file"
@@ -495,15 +533,12 @@ export function DocumentDetail({
           <DocumentHistory
             owner={owner}
             repo={repo}
-            viewingVersion={viewedVersion?.version ?? null}
+            viewingVersion={isViewingLatest ? null : activeVersion}
             hasCanonicalFile={canonicalFileInfo !== null}
             downloadingRef={downloadState.ref}
             onDownloadVersion={(tagName) => void handleDownload(tagName)}
             onViewVersion={(tagName, version) => {
-              setViewedVersion(
-                latestTag?.name === tagName ? null : { tagName, version },
-              );
-              onTabChange("overview");
+              onSelectVersion(latestTag?.name === tagName ? null : version);
             }}
             onOpenChange={(changeNumber) => onOpenChange(changeNumber)}
           />
@@ -511,20 +546,11 @@ export function DocumentDetail({
       ) : (
         <div className="doc-workspace">
           <div className="doc-workspace-main">
-            {!isViewingLatest ? (
-              <div className="doc-version-notice" role="status">
-                <span>
-                  Viewing <strong>v{viewedVersion?.version}</strong>, an earlier
-                  approved version.
-                </span>
-                <button
-                  className="bs-btn bs-btn-secondary doc-history-btn"
-                  type="button"
-                  onClick={() => setViewedVersion(null)}
-                >
-                  Back to latest
-                </button>
-              </div>
+            {missingVersion ? (
+              <p className="vault-pr-notice" role="status">
+                This document has no v{activeVersion}. Showing the version on
+                record instead.
+              </p>
             ) : null}
 
             {/* Nothing has been approved, so there is no official version to
@@ -604,17 +630,16 @@ export function DocumentDetail({
                 <div className="doc-rail-card doc-rail-card--rows">
                   {versionRows.map((row) => (
                     <button
-                      className="doc-rail-row"
+                      className={`doc-rail-row${row.version === activeVersion ? " doc-rail-row--viewing" : ""}`}
                       type="button"
                       key={row.key}
-                      onClick={() => {
-                        setViewedVersion(
-                          row.current
-                            ? null
-                            : { tagName: row.tagName, version: row.version },
-                        );
-                        onTabChange("overview");
-                      }}
+                      // The rail says which version is on screen, not only
+                      // which one is the record — reading v1 beside a row
+                      // marked "Current" is exactly the confusion to avoid.
+                      aria-current={row.version === activeVersion}
+                      onClick={() =>
+                        onSelectVersion(row.current ? null : row.version)
+                      }
                     >
                       <span
                         className={`doc-rail-version${row.current ? " doc-rail-version--current" : ""}`}
@@ -624,6 +649,8 @@ export function DocumentDetail({
                       <span className="doc-rail-row-date">{row.date}</span>
                       {row.current ? (
                         <span className="doc-rail-row-note">Current</span>
+                      ) : row.version === activeVersion ? (
+                        <span className="doc-rail-row-note">Viewing</span>
                       ) : null}
                     </button>
                   ))}
@@ -683,6 +710,100 @@ export function DocumentDetail({
           onClose={() => setShowUploadModal(false)}
           onSuccess={handleUploadSuccess}
         />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The version pill, which is also the way to every earlier version.
+ *
+ * A document's history is the reason the record can be trusted, so reaching
+ * an older version should not mean finding the History tab first. The pill
+ * already names what is on screen; opening it names everything else.
+ */
+function VersionMenu({
+  label,
+  tone,
+  options,
+  open,
+  onToggle,
+  onClose,
+  onSelect,
+}: {
+  label: string;
+  tone: "current" | "past" | "none";
+  options: VersionMenuOption[];
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  onSelect: (version: number | null) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const closeOnOutside = (event: MouseEvent) => {
+      if (!ref.current?.contains(event.target as Node)) onClose();
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    document.addEventListener("mousedown", closeOnOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open, onClose]);
+
+  // Nothing published: the pill is a statement of fact, not a control.
+  if (options.length === 0) {
+    return (
+      <span className={`doc-version-pill doc-version-pill--${tone}`}>
+        {label}
+      </span>
+    );
+  }
+
+  return (
+    <div className="doc-version-picker" ref={ref}>
+      <button
+        className={`doc-version-pill doc-version-pill--${tone} doc-version-pill--button`}
+        type="button"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        aria-label={`${label}. Choose a version`}
+        onClick={onToggle}
+      >
+        {label}
+        <ChevronDown size={12} strokeWidth={1.8} aria-hidden="true" />
+      </button>
+
+      {open ? (
+        <div className="doc-version-menu" role="menu">
+          {options.map((option) => (
+            <button
+              className={`doc-version-menu-item${option.selected ? " doc-version-menu-item--selected" : ""}`}
+              type="button"
+              role="menuitemradio"
+              aria-checked={option.selected}
+              key={option.key}
+              onClick={() => onSelect(option.current ? null : option.version)}
+            >
+              <span className="doc-version-menu-check" aria-hidden="true">
+                {option.selected ? <Check size={12} strokeWidth={2} /> : null}
+              </span>
+              <span className="doc-version-menu-label">{option.label}</span>
+              <span className="doc-version-menu-date">{option.date}</span>
+              {option.current ? (
+                <span className="doc-version-menu-note">Current</span>
+              ) : null}
+            </button>
+          ))}
+        </div>
       ) : null}
     </div>
   );

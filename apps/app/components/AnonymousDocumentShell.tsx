@@ -63,12 +63,27 @@ export function AnonymousDocumentShell({
               activeView={route.tab === "access" ? "overview" : route.tab}
               activeChangeNumber={route.changeNumber ?? null}
               activeChangeView={route.changeView ?? "discussion"}
+              activeVersion={route.version ?? null}
               onTabChange={(tab) =>
                 onNavigate({
                   kind: "document",
                   owner: route.owner,
                   repo: route.repo,
                   tab,
+                  // A version lives on the Document tab; walking to another
+                  // tab leaves it behind rather than carrying it along.
+                  ...(tab === "overview" && route.version !== undefined
+                    ? { version: route.version }
+                    : {}),
+                })
+              }
+              onSelectVersion={(version) =>
+                onNavigate({
+                  kind: "document",
+                  owner: route.owner,
+                  repo: route.repo,
+                  tab: "overview",
+                  ...(version === null ? {} : { version }),
                 })
               }
               onOpenChange={(pullNumber, changeView) =>

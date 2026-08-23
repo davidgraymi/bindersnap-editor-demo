@@ -25,8 +25,12 @@ import { formatWhen } from "./homeChanges";
 export interface DocumentHeaderFacts {
   /** "v3 · Current", or "No version yet" before anything is published. */
   versionLabel: string;
-  /** Green only once something is actually on the record. */
-  tone: "current" | "none";
+  /**
+   * Green once something is on the record, coral while an earlier version is
+   * open — reading v2 when v3 exists is the one thing the header must not let
+   * you miss.
+   */
+  tone: "current" | "past" | "none";
   /** "Approved Jan 12, 2026", or why there is no such date. */
   approvedLine: string;
   /** The file the document is, in mono. Null when it cannot be resolved. */
@@ -36,8 +40,13 @@ export interface DocumentHeaderFacts {
 export function buildDocumentHeaderFacts(params: {
   latestTag: Pick<DocTag, "version" | "created"> | null;
   fileName: string | null;
+  /**
+   * The earlier version being read, when one is. Null means the page is
+   * showing the record itself.
+   */
+  viewedTag?: Pick<DocTag, "version" | "created"> | null;
 }): DocumentHeaderFacts {
-  const { latestTag, fileName } = params;
+  const { latestTag, fileName, viewedTag = null } = params;
 
   if (!latestTag) {
     return {
@@ -48,12 +57,60 @@ export function buildDocumentHeaderFacts(params: {
     };
   }
 
+  if (viewedTag && viewedTag.version !== latestTag.version) {
+    return {
+      versionLabel: `v${viewedTag.version} · Earlier version`,
+      tone: "past",
+      approvedLine: `Approved ${formatShortDate(viewedTag.created)} · v${latestTag.version} is current`,
+      fileName,
+    };
+  }
+
   return {
     versionLabel: `v${latestTag.version} · Current`,
     tone: "current",
     approvedLine: `Approved ${formatShortDate(latestTag.created)}`,
     fileName,
   };
+}
+
+/** One line in the header's version dropdown. */
+export interface VersionMenuOption {
+  key: string;
+  tagName: string;
+  version: number;
+  /** "v3". */
+  label: string;
+  /** "Jan 12, 2026". */
+  date: string;
+  /** The version on record. */
+  current: boolean;
+  /** The version the page is showing right now. */
+  selected: boolean;
+}
+
+/**
+ * Every published version, newest first, as the header dropdown lists them.
+ *
+ * Unlike the rail this does not cut the list: the dropdown is how somebody
+ * reaches an old version, so hiding half of them behind another page would
+ * defeat the point. `viewedVersion` is null when the record is open.
+ */
+export function buildVersionMenuOptions(
+  tags: DocTag[],
+  viewedVersion: number | null,
+): VersionMenuOption[] {
+  return tags.map((tag, index) => ({
+    key: tag.name,
+    tagName: tag.name,
+    version: tag.version,
+    label: `v${tag.version}`,
+    date: formatShortDate(tag.created),
+    // The list arrives newest first, so the first row is the record.
+    current: index === 0,
+    selected:
+      viewedVersion === null ? index === 0 : tag.version === viewedVersion,
+  }));
 }
 
 /** One open change, as the rail states it. */
