@@ -2433,19 +2433,35 @@ async function handleDocumentHistory(
 
     // Comment counts are decoration, not the record — a failure here must not
     // cost the user their history.
+    //
+    // The publisher is not decoration: the spline names the person who put
+    // each version on the record. Gitea only fills `merged_by` in on a single
+    // pull request's own endpoint, never in the list, so it is read per change
+    // here. A read that fails leaves that one version unattributed rather than
+    // failing the whole history.
     const discussionCounts = new Map<number, number>();
+    const publishers = new Map<number, string>();
     await Promise.all(
       merged.map(async (entry) => {
         const pullNumber = entry.pullRequest.number;
         if (!pullNumber) return;
-        const summary = await listDiscussions({
-          client,
-          owner,
-          repo,
-          pullNumber,
-        }).catch(() => null);
+
+        const [summary, detail] = await Promise.all([
+          listDiscussions({ client, owner, repo, pullNumber }).catch(
+            () => null,
+          ),
+          getPullRequestWithReviews({ client, owner, repo, pullNumber }).catch(
+            () => null,
+          ),
+        ]);
+
         if (summary) {
           discussionCounts.set(pullNumber, summary.totalCount);
+        }
+
+        const publisher = detail?.pullRequest.merged_by?.login;
+        if (publisher) {
+          publishers.set(pullNumber, publisher);
         }
       }),
     );
@@ -2471,7 +2487,12 @@ async function handleDocumentHistory(
     return json(
       200,
       {
-        versions: buildVersionRecords(tags, merged, discussionCounts),
+        versions: buildVersionRecords(
+          tags,
+          merged,
+          discussionCounts,
+          publishers,
+        ),
         canonicalFile,
       },
       baseHeaders,

@@ -52,6 +52,35 @@ test("joins each version to the pull request whose merge commit it tags", () => 
   });
 });
 
+test("names the publisher read from the change's own endpoint", () => {
+  // Gitea's *list* of pull requests leaves `merged_by` empty; only the single
+  // pull request endpoint fills it in. The history reads it per change and
+  // passes it here, so a version still names who put it on the record.
+  const listed = mergedPR(7, "sha-one");
+  delete (listed.pullRequest as { merged_by?: unknown }).merged_by;
+
+  const versions = buildVersionRecords(
+    [tag(1, "sha-one", "2026-01-02T00:00:00Z")],
+    [listed],
+    new Map(),
+    new Map([[7, "carol"]]),
+  );
+
+  expect(versions[0]?.submission?.mergedBy).toBe("carol");
+});
+
+test("a publisher the change's endpoint would not give up leaves the version unattributed", () => {
+  const listed = mergedPR(7, "sha-one");
+  delete (listed.pullRequest as { merged_by?: unknown }).merged_by;
+
+  const versions = buildVersionRecords(
+    [tag(1, "sha-one", "2026-01-02T00:00:00Z")],
+    [listed],
+  );
+
+  expect(versions[0]?.submission?.mergedBy).toBeNull();
+});
+
 test("orders versions newest first", () => {
   const versions = buildVersionRecords(
     [

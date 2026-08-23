@@ -46,7 +46,14 @@ const mockSignup = mock(async () => ({
 }));
 const mockStoreToken = mock(() => {});
 
+// Spread the real module rather than replacing it: `mock.module` fixes a
+// module's export names the first time it is applied, so a partial mock here
+// makes every *other* suite that imports an untouched export of `./api` fail
+// to link — in a different file, with a confusing message.
+const actualApi = await import("./api");
+
 mock.module("./api", () => ({
+  ...actualApi,
   clearToken: mockClearToken,
   createCheckoutSession: mockCreateCheckoutSession,
   createPortalSession: mockCreatePortalSession,

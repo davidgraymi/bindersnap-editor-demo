@@ -313,13 +313,13 @@ test.describe("Merge conflict resolution on publish", () => {
     // The History tab should show all three versions
     await openDocumentTab(page, "History");
     await expect(
-      page.locator(".vault-version-badge", { hasText: "v3" }),
+      page.locator(".doc-spline-knot", { hasText: "v3" }),
     ).toBeVisible({ timeout: 30_000 });
     await expect(
-      page.locator(".vault-version-badge", { hasText: "v2" }),
+      page.locator(".doc-spline-knot", { hasText: "v2" }),
     ).toBeVisible();
     await expect(
-      page.locator(".vault-version-badge", { hasText: "v1" }),
+      page.locator(".doc-spline-knot", { hasText: "v1" }),
     ).toBeVisible();
   });
 });
