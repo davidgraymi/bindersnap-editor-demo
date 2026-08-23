@@ -20,7 +20,8 @@ export type ListDocuments200DocumentsItemPendingPRsItem = {
   updated_at?: string;
   branchName: string;
   approvalCount: number;
-  requiredApprovals: number;
+  /** @nullable */
+  requiredApprovals: number | null;
   isApproved: boolean;
   isRejected: boolean;
   reviewers: ListDocuments200DocumentsItemPendingPRsItemReviewersItem[];

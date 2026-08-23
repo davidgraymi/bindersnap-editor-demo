@@ -26,6 +26,10 @@ type GiteaUser = { login: string; full_name: string; avatar_url: string };
 const originalFetch = globalThis.fetch;
 const originalApiPort = config.apiPort;
 const originalSessionsDbPath = config.sessionsDbPath;
+const originalServiceToken = config.giteaServiceToken;
+
+/** The token the BFF holds; the only one Gitea serves branch protection to. */
+const SERVICE_TOKEN = "gitea_service_token";
 
 let giteaUsersByLogin = new Map<string, { login: string; email: string }>();
 let giteaLoginsByToken = new Map<string, string>();
@@ -34,6 +38,8 @@ let assignees: GiteaUser[] = [];
 let reviewerCalls: { method: string; reviewers: string[] }[] = [];
 let assigneeCalls: string[][] = [];
 let requiredApprovals = 2;
+/** False when Gitea refuses the rule to everyone, service account included. */
+let protectionReadable = true;
 
 function person(login: string): GiteaUser {
   return {
@@ -52,6 +58,7 @@ function json(data: unknown, status = 200): Response {
 
 beforeEach(() => {
   config.apiPort = 0;
+  config.giteaServiceToken = SERVICE_TOKEN;
   config.sessionsDbPath = `/tmp/bindersnap-assign-test-${randomUUID()}.sqlite`;
   resetStripeClientForTests();
 
@@ -71,6 +78,7 @@ beforeEach(() => {
   reviewerCalls = [];
   assigneeCalls = [];
   requiredApprovals = 2;
+  protectionReadable = true;
 
   globalThis.fetch = (async (input, init) => {
     const requestUrl =
@@ -153,6 +161,20 @@ beforeEach(() => {
       /^\/api\/v1\/repos\/([^/]+)\/([^/]+)\/branch_protections$/,
     );
     if (protectionMatch && method === "GET") {
+      // Gitea serves this to an owner or an admin collaborator and nobody
+      // else, which is the whole reason the BFF reads it as the service
+      // account. A caller's own token gets the 403 a reviewer would get.
+      const auth = headers.get("Authorization") ?? "";
+      const token = auth.startsWith("token ") ? auth.slice(6) : "";
+      if (!protectionReadable || token !== SERVICE_TOKEN) {
+        return json(
+          {
+            message:
+              "user should be an owner or a collaborator with admin write of a repository",
+          },
+          403,
+        );
+      }
       return json([
         { rule_name: "main", required_approvals: requiredApprovals },
       ]);
@@ -200,6 +222,7 @@ beforeEach(() => {
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  config.giteaServiceToken = originalServiceToken;
   config.apiPort = originalApiPort;
   config.sessionsDbPath = originalSessionsDbPath;
 });
@@ -317,7 +340,7 @@ describe("change assignment route", () => {
     const payload = (await response.json()) as {
       reviewers: { login: string; status: string; requested: boolean }[];
       approvalCount: number;
-      requiredApprovals: number;
+      requiredApprovals: number | null;
     };
 
     expect(payload.approvalCount).toBe(1);
@@ -329,6 +352,39 @@ describe("change assignment route", () => {
       ["lee", "awaiting"],
       ["dana", "approved"],
     ]);
+  });
+
+  test("a write collaborator is told what publishing needs", async () => {
+    const server = createApiServer();
+    // Bob's own Gitea token is refused the branch protection rule; the count
+    // comes back anyway, because the BFF reads it as the service account.
+    const session = await seedSession("carol");
+
+    const response = await server.fetch(
+      request({ reviewers: ["dana"] }, session),
+    );
+    const payload = (await response.json()) as {
+      requiredApprovals: number | null;
+    };
+
+    expect(response.status).toBe(200);
+    expect(payload.requiredApprovals).toBe(2);
+  });
+
+  test("reports an unreadable policy as unknown rather than none", async () => {
+    protectionReadable = false;
+    const server = createApiServer();
+    const session = await seedSession("alice");
+
+    const response = await server.fetch(
+      request({ reviewers: ["dana"] }, session),
+    );
+    const payload = (await response.json()) as {
+      requiredApprovals: number | null;
+    };
+
+    expect(response.status).toBe(200);
+    expect(payload.requiredApprovals).toBeNull();
   });
 
   test("rejects a request that changes nothing", async () => {

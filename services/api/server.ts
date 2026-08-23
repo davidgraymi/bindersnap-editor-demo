@@ -19,6 +19,7 @@ import {
   reconcileStripeCustomerByCustomerId,
 } from "./stripe/reconcile";
 import {
+  createGiteaBasicAuthClient,
   createGiteaClient,
   GiteaApiError,
   unwrap,
@@ -580,6 +581,75 @@ function createSessionGiteaClient(session: SessionRecord): GiteaClient {
 
 function createServiceGiteaClient(): GiteaClient {
   return createGiteaClient(config.giteaUrl, config.giteaServiceToken);
+}
+
+/**
+ * A client that can read what the caller is not allowed to, or null.
+ *
+ * The service token is the real answer. Dev and test stacks come up without
+ * one, so they fall back to the admin credentials the BFF already holds —
+ * the same fallback `buildGiteaPrivilegedHeaders` makes for the raw-fetch
+ * calls, kept in one shape so the two cannot drift apart.
+ */
+function createPrivilegedGiteaClient(): GiteaClient | null {
+  if (config.giteaServiceToken) {
+    return createServiceGiteaClient();
+  }
+
+  if (
+    !config.isProduction &&
+    config.giteaAdminUsername &&
+    config.giteaAdminPassword
+  ) {
+    return createGiteaBasicAuthClient(
+      config.giteaUrl,
+      config.giteaAdminUsername,
+      config.giteaAdminPassword,
+    );
+  }
+
+  return null;
+}
+
+/**
+ * How many approvals a document demands before anything can publish.
+ *
+ * Gitea serves branch protection only to an owner or a collaborator with admin
+ * write, so reading it as the caller hands every write collaborator a 403 — and
+ * the reviewers who need the count most are precisely the ones who never see
+ * it. The service account reads it instead, and only the number comes back:
+ * the whitelists on the same object name individual people and stay as
+ * admin-only as they are today.
+ *
+ * Returns 0 for a repo with no protection rule, and null when the read fails,
+ * so "this document needs no approvals" stays distinguishable from "we could
+ * not find out how many it needs".
+ */
+async function readRequiredApprovals(
+  owner: string,
+  repo: string,
+  branch = "main",
+): Promise<number | null> {
+  const client = createPrivilegedGiteaClient();
+  if (!client) return null;
+
+  try {
+    const protection = await getRepoBranchProtection(
+      client,
+      owner,
+      repo,
+      branch,
+    );
+    return protection?.requiredApprovals ?? 0;
+  } catch (err) {
+    logger.error("Failed to read required approvals", {
+      owner,
+      repo,
+      branch,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
 }
 
 interface DocumentAccessContext {
@@ -1977,7 +2047,7 @@ async function handleDocuments(
     const documents = await Promise.all(
       repos.map(async (repo) => {
         try {
-          const [latestTag, openWithReviews, branchProtection] =
+          const [latestTag, openWithReviews, requiredApprovals] =
             await Promise.all([
               getLatestDocTag(client, repo.owner.login, repo.name),
               listPullRequestsWithReviews({
@@ -1986,17 +2056,10 @@ async function handleDocuments(
                 repo: repo.name,
                 state: "open",
               }),
-              getRepoBranchProtection(
-                client,
-                repo.owner.login,
-                repo.name,
-                "main",
-                // A row is worth showing without its approval policy; it is
-                // not worth failing the whole list for.
-              ).catch(() => null),
+              // A row is worth showing without its approval policy; it is not
+              // worth failing the whole list for.
+              readRequiredApprovals(repo.owner.login, repo.name),
             ]);
-
-          const requiredApprovals = branchProtection?.requiredApprovals ?? 0;
           const pendingPRs = openWithReviews
             .filter((entry) =>
               (entry.pullRequest.head?.ref ?? "").startsWith("upload/"),
@@ -2241,25 +2304,32 @@ async function handleDocumentDetail(
       },
     );
 
-    const [tags, openWithReviews, branchProtection, reviewSettings] =
-      await Promise.all([
-        listDocTags(client, owner, repo),
-        listPullRequestsWithReviews({
-          client,
-          owner,
-          repo,
-          state: "open",
-        }),
-        getRepoBranchProtection(client, owner, repo, "main").catch(() => null),
-        getReviewSettings({ client, owner, repo }).catch(() => null),
-      ]);
+    const [
+      tags,
+      openWithReviews,
+      branchProtection,
+      requiredApprovals,
+      reviewSettings,
+    ] = await Promise.all([
+      listDocTags(client, owner, repo),
+      listPullRequestsWithReviews({
+        client,
+        owner,
+        repo,
+        state: "open",
+      }),
+      // The whole rule, whitelists and all, is admin-only and stays that way:
+      // a non-admin gets null here and the count below regardless.
+      getRepoBranchProtection(client, owner, repo, "main").catch(() => null),
+      readRequiredApprovals(owner, repo),
+      getReviewSettings({ client, owner, repo }).catch(() => null),
+    ]);
 
     // The reviews come back with the pull requests anyway, and a change's page
     // reads as a log of what happened — an approval is part of that log, so it
     // travels with the change rather than costing a second round trip. The
     // reviewer list is the same reviews read a different way: not what happened,
     // but who the change is still waiting on.
-    const requiredApprovals = branchProtection?.requiredApprovals ?? 0;
     const openPullRequests = openWithReviews.map((entry) => ({
       ...entry.pullRequest,
       reviews: toVersionReviews(entry.reviews),
@@ -2436,7 +2506,7 @@ async function handleClosedChanges(
   const { client } = access;
 
   try {
-    const [tags, closedPullRequests, branchProtection] = await Promise.all([
+    const [tags, closedPullRequests, requiredApprovals] = await Promise.all([
       listDocTags(client, owner, repo),
       listPullRequestsWithReviews({
         client,
@@ -2444,7 +2514,7 @@ async function handleClosedChanges(
         repo,
         state: "closed",
       }),
-      getRepoBranchProtection(client, owner, repo, "main").catch(() => null),
+      readRequiredApprovals(owner, repo),
     ]);
 
     return json(
@@ -2453,7 +2523,7 @@ async function handleClosedChanges(
         changes: buildClosedChanges(
           closedPullRequests,
           tags,
-          branchProtection?.requiredApprovals ?? 0,
+          requiredApprovals,
         ),
       },
       baseHeaders,
@@ -2787,14 +2857,14 @@ async function handleUpdateChangeAssignments(
       });
     }
 
-    const [after, branchProtection] = await Promise.all([
+    const [after, requiredApprovals] = await Promise.all([
       getPullRequestWithReviews({
         client,
         owner,
         repo,
         pullNumber: prNumber,
       }),
-      getRepoBranchProtection(client, owner, repo, "main").catch(() => null),
+      readRequiredApprovals(owner, repo),
     ]);
 
     return json(
@@ -2807,7 +2877,7 @@ async function handleUpdateChangeAssignments(
           submittedBy: after.pullRequest.user?.login ?? submittedBy,
         }),
         approvalCount: countApprovals(after.reviews),
-        requiredApprovals: branchProtection?.requiredApprovals ?? 0,
+        requiredApprovals,
       },
       baseHeaders,
     );

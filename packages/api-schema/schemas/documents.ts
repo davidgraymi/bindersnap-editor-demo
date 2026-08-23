@@ -153,7 +153,12 @@ export const PullRequestWithApprovalStateSchema = z.object({
   branchName: z.string(),
   /** Approvals that still count, against the number the document demands. */
   approvalCount: z.number(),
-  requiredApprovals: z.number(),
+  /**
+   * How many approvals the document demands, or null when the policy could not
+   * be read. 0 means the document genuinely demands none — the two are not the
+   * same answer and the UI renders them differently.
+   */
+  requiredApprovals: z.number().nullable(),
   isApproved: z.boolean(),
   isRejected: z.boolean(),
   /** Who is on the hook to review, and where each of them stands. */
@@ -350,7 +355,8 @@ export const ClosedChangeSchema = z.object({
   reviewers: z.array(ChangeReviewerSchema),
   assignee: ChangeUserSchema.nullable(),
   approvalCount: z.number(),
-  requiredApprovals: z.number(),
+  /** As on an open change: null means unknown, 0 means none required. */
+  requiredApprovals: z.number().nullable(),
 });
 export type ClosedChange = z.infer<typeof ClosedChangeSchema>;
 
@@ -414,6 +420,7 @@ export const ChangeAssignmentsSchema = z.object({
   assignee: ChangeUserSchema.nullable(),
   reviewers: z.array(ChangeReviewerSchema),
   approvalCount: z.number(),
-  requiredApprovals: z.number(),
+  /** As on an open change: null means unknown, 0 means none required. */
+  requiredApprovals: z.number().nullable(),
 });
 export type ChangeAssignments = z.infer<typeof ChangeAssignmentsSchema>;

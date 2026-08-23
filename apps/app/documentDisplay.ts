@@ -255,8 +255,13 @@ export interface ChangeRecord {
   reviewers: ChangeReviewer[];
   /** Approvals that still count. */
   approvalCount: number;
-  /** How many this document demands before anything can publish. */
-  requiredApprovals: number;
+  /**
+   * How many approvals this document demands before anything can publish, or
+   * null when the server could not read the policy. A document that demands
+   * none reports 0 — the two are different answers and only one of them means
+   * "nothing left to collect".
+   */
+  requiredApprovals: number | null;
 }
 
 export type ChangeOutcome = "published" | "declined" | "withdrawn";
@@ -310,7 +315,7 @@ export function toChangeRecord(pullRequest: {
   reviewers?: ChangeReviewer[];
   assignee?: ChangeUser | null;
   approvalCount?: number;
-  requiredApprovals?: number;
+  requiredApprovals?: number | null;
   user?: { login: string } | null;
 }): ChangeRecord {
   const submittedBy = pullRequest.user?.login ?? "";
@@ -331,7 +336,7 @@ export function toChangeRecord(pullRequest: {
     assignee: pullRequest.assignee ?? null,
     reviewers: pullRequest.reviewers ?? [],
     approvalCount: pullRequest.approvalCount ?? 0,
-    requiredApprovals: pullRequest.requiredApprovals ?? 0,
+    requiredApprovals: pullRequest.requiredApprovals ?? null,
   };
 }
 
@@ -349,7 +354,7 @@ export function closedChangeToRecord(change: {
   reviewers?: ChangeReviewer[];
   assignee?: ChangeUser | null;
   approvalCount?: number;
-  requiredApprovals?: number;
+  requiredApprovals?: number | null;
 }): ChangeRecord {
   return {
     number: change.number,
@@ -368,7 +373,7 @@ export function closedChangeToRecord(change: {
     assignee: change.assignee ?? null,
     reviewers: change.reviewers ?? [],
     approvalCount: change.approvalCount ?? 0,
-    requiredApprovals: change.requiredApprovals ?? 0,
+    requiredApprovals: change.requiredApprovals ?? null,
   };
 }
 
@@ -411,7 +416,7 @@ export function publishedVersionToRecord(version: {
     assignee: null,
     reviewers: [],
     approvalCount: 0,
-    requiredApprovals: 0,
+    requiredApprovals: null,
   };
 }
 
@@ -467,25 +472,25 @@ export function getReviewerDisplayName(reviewer: {
  *
  * "Awaiting review" says a decision is outstanding without saying how much is
  * outstanding — one more sign-off and three more are the same badge. Returns
- * null when the document demands no approvals, because "0 of 0" is noise.
+ * null when the document demands no approvals, because "0 of 0" is noise, and
+ * when the requirement is unknown, because a denominator is the whole point.
  */
 export function describeApprovalProgress(change: {
   approvalCount: number;
-  requiredApprovals: number;
+  requiredApprovals: number | null;
 }): string | null {
-  if (change.requiredApprovals <= 0) return null;
-  return `${change.approvalCount} of ${change.requiredApprovals} approvals`;
+  const required = change.requiredApprovals;
+  if (required === null || required <= 0) return null;
+  return `${change.approvalCount} of ${required} approvals`;
 }
 
 /** True once a change has collected every approval it needs. */
 export function hasEnoughApprovals(change: {
   approvalCount: number;
-  requiredApprovals: number;
+  requiredApprovals: number | null;
 }): boolean {
-  return (
-    change.requiredApprovals > 0 &&
-    change.approvalCount >= change.requiredApprovals
-  );
+  const required = change.requiredApprovals;
+  return required !== null && required > 0 && change.approvalCount >= required;
 }
 
 /**
@@ -523,14 +528,9 @@ function joinNames(reviewers: { login: string; fullName: string }[]): string {
  * a blocker outranks a full count, because a full count cannot publish past it.
  *
  * Returns null for a closed change (its outcome is the whole story) and for a
- * document that demands no approvals and has no blocker, where there is simply
- * nothing to report. The caller falls back to the state badge in that case.
- *
- * That second case is more common than it looks: `requiredApprovals` comes from
- * the repo's branch protection, and Gitea only serves that to an admin. A write
- * collaborator — which is to say most reviewers — receives 0 and therefore sees
- * the badge rather than the count. They are the people the count is *for*, so
- * this is worth fixing at the source rather than papering over here.
+ * document that demands no approvals — or whose policy could not be read — and
+ * has no blocker, where there is simply nothing to report. The caller falls
+ * back to the state badge in that case.
  */
 export function describeChangeStanding(
   change: ChangeRecord,
@@ -570,7 +570,7 @@ export function describeChangeStanding(
 
   if (progress === null) return null;
 
-  const missing = change.requiredApprovals - change.approvalCount;
+  const missing = (change.requiredApprovals ?? 0) - change.approvalCount;
   const waiting = change.reviewers.filter(
     (reviewer) => standingOf(reviewer) === "awaiting",
   );

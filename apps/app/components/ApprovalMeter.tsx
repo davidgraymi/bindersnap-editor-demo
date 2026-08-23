@@ -43,8 +43,8 @@ export function ApprovalMeter({
   if (!standing) return null;
 
   const Icon = TONE_ICONS[standing.tone];
-  const showPips =
-    change.requiredApprovals > 0 && change.requiredApprovals <= MAX_PIPS;
+  const required = change.requiredApprovals ?? 0;
+  const showPips = required > 0 && required <= MAX_PIPS;
 
   return (
     <span
@@ -56,7 +56,7 @@ export function ApprovalMeter({
       ) : null}
       {showPips ? (
         <span className="approval-meter-pips" aria-hidden="true">
-          {Array.from({ length: change.requiredApprovals }, (_, index) => (
+          {Array.from({ length: required }, (_, index) => (
             <span
               key={index}
               className={`approval-meter-pip${

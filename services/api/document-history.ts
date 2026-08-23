@@ -147,7 +147,8 @@ export function buildVersionRecords(
 export function buildClosedChanges(
   entries: PullRequestWithReviews[],
   tags: DocTag[],
-  requiredApprovals = 0,
+  /** null when the approval policy could not be read. See ClosedChange. */
+  requiredApprovals: number | null = null,
 ): ClosedChange[] {
   const versionByMergeSha = new Map<string, number>();
   for (const tag of tags) {

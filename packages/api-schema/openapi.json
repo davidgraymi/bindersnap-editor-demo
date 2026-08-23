@@ -184,7 +184,8 @@
                   "type": "number"
                 },
                 "requiredApprovals": {
-                  "type": "number"
+                  "type": "number",
+                  "nullable": true
                 },
                 "isApproved": {
                   "type": "boolean"
@@ -496,7 +497,8 @@
                   "type": "number"
                 },
                 "requiredApprovals": {
-                  "type": "number"
+                  "type": "number",
+                  "nullable": true
                 },
                 "isApproved": {
                   "type": "boolean"
@@ -704,7 +706,8 @@
                   "type": "number"
                 },
                 "requiredApprovals": {
-                  "type": "number"
+                  "type": "number",
+                  "nullable": true
                 },
                 "isApproved": {
                   "type": "boolean"
@@ -2391,7 +2394,8 @@
                                   "type": "number"
                                 },
                                 "requiredApprovals": {
-                                  "type": "number"
+                                  "type": "number",
+                                  "nullable": true
                                 },
                                 "isApproved": {
                                   "type": "boolean"
@@ -2868,7 +2872,8 @@
                             "type": "number"
                           },
                           "requiredApprovals": {
-                            "type": "number"
+                            "type": "number",
+                            "nullable": true
                           },
                           "isApproved": {
                             "type": "boolean"
@@ -3076,7 +3081,8 @@
                             "type": "number"
                           },
                           "requiredApprovals": {
-                            "type": "number"
+                            "type": "number",
+                            "nullable": true
                           },
                           "isApproved": {
                             "type": "boolean"
@@ -3803,7 +3809,8 @@
                             "type": "number"
                           },
                           "requiredApprovals": {
-                            "type": "number"
+                            "type": "number",
+                            "nullable": true
                           }
                         },
                         "required": [
@@ -4933,7 +4940,8 @@
                       "type": "number"
                     },
                     "requiredApprovals": {
-                      "type": "number"
+                      "type": "number",
+                      "nullable": true
                     }
                   },
                   "required": [

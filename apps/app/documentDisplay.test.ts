@@ -237,7 +237,9 @@ test("a change with no assignments still becomes a record", () => {
   expect(change.assignee).toBeNull();
   expect(change.reviewers).toEqual([]);
   expect(change.approvalCount).toBe(0);
-  expect(change.requiredApprovals).toBe(0);
+  // Absent, not zero: a change that arrives without a policy has an unknown
+  // requirement, which is not the same as a document demanding none.
+  expect(change.requiredApprovals).toBeNull();
 });
 
 test("approval progress counts sign-offs instead of saying 'awaiting'", () => {
@@ -260,6 +262,18 @@ test("a document that demands no approvals gets no counter", () => {
   expect(hasEnoughApprovals({ approvalCount: 0, requiredApprovals: 0 })).toBe(
     false,
   );
+});
+
+test("an unknown approval requirement is not a requirement of none", () => {
+  // A reader who cannot be told the denominator gets the badge, same as a
+  // document that demands nothing — but the two arrive as different values, so
+  // nothing downstream can mistake "unknown" for "nothing left to collect".
+  expect(
+    describeApprovalProgress({ approvalCount: 1, requiredApprovals: null }),
+  ).toBeNull();
+  expect(
+    hasEnoughApprovals({ approvalCount: 3, requiredApprovals: null }),
+  ).toBe(false);
 });
 
 test("an unresolved thread outranks the reviewer's own approval", () => {

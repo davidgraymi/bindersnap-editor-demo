@@ -1,5 +1,9 @@
 import type { WorkspaceDocumentSummary } from "./api";
-import { capitalizeFirst, formatDocumentName } from "./documentDisplay";
+import {
+  capitalizeFirst,
+  formatDocumentName,
+  hasEnoughApprovals,
+} from "./documentDisplay";
 import type { DocumentSearchParams } from "./documentSearch";
 import { parseDocumentSearchQuery } from "./documentSearch";
 import { formatDecisionDate, formatWhen } from "./homeChanges";
@@ -197,11 +201,7 @@ export interface DocumentRow {
 type OpenChange = WorkspaceDocumentSummary["pendingPRs"][number];
 
 function isReady(change: OpenChange): boolean {
-  return (
-    !change.isRejected &&
-    change.requiredApprovals > 0 &&
-    change.approvalCount >= change.requiredApprovals
-  );
+  return !change.isRejected && hasEnoughApprovals(change);
 }
 
 /** A stale approval is a review still owed: the version under it moved on. */

@@ -28,5 +28,6 @@ export type GetClosedChanges200ChangesItem = {
   /** @nullable */
   assignee: GetClosedChanges200ChangesItemAssignee;
   approvalCount: number;
-  requiredApprovals: number;
+  /** @nullable */
+  requiredApprovals: number | null;
 };

@@ -141,13 +141,13 @@ test.describe("Merge conflict resolution on publish", () => {
     });
     await page.getByRole("button", { name: "Confirm Approval" }).click();
 
-    // Bob is a write collaborator, not an admin, so Gitea refuses him the
-    // branch protection read and the change arrives with requiredApprovals 0.
-    // With no count to show, the standing pill cannot render and the state
-    // badge is what he gets. See the note in documentDisplay.
-    await expect(page.locator(".vault-status-approved")).toBeVisible({
-      timeout: 30_000,
-    });
+    // Bob is a write collaborator, not an admin, but the BFF reads the
+    // approval policy with the service account — so he gets the count, and
+    // the count is what says his approval landed.
+    await expect(page.locator(".change-detail .rev-approval-count")).toHaveText(
+      "1 of 1 approvals",
+      { timeout: 30_000 },
+    );
 
     // Switch back to Alice to publish v1
     await signInAsAlice(page);
@@ -237,11 +237,10 @@ test.describe("Merge conflict resolution on publish", () => {
       timeout: 5_000,
     });
     await page.getByRole("button", { name: "Confirm Approval" }).click();
-    await expect(
-      page.locator(".change-detail .vault-status-approved"),
-    ).toBeVisible({
-      timeout: 30_000,
-    });
+    await expect(page.locator(".change-detail .rev-approval-count")).toHaveText(
+      "1 of 1 approvals",
+      { timeout: 30_000 },
+    );
 
     // --- Alice publishes v2 ---
     // Both changes are still open and only v2 is approved, so open the same
@@ -282,11 +281,10 @@ test.describe("Merge conflict resolution on publish", () => {
       timeout: 5_000,
     });
     await page.getByRole("button", { name: "Confirm Approval" }).click();
-    await expect(
-      page.locator(".change-detail .vault-status-approved"),
-    ).toBeVisible({
-      timeout: 30_000,
-    });
+    await expect(page.locator(".change-detail .rev-approval-count")).toHaveText(
+      "1 of 1 approvals",
+      { timeout: 30_000 },
+    );
 
     // --- Alice publishes v3 (conflict resolution path) ---
     await signInAsAlice(page);
