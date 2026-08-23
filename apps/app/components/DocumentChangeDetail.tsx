@@ -14,7 +14,11 @@ import {
   resolveReviewDecision,
 } from "../changeReview";
 import type { ChangeRecord } from "../documentDisplay";
-import { describeChangeOutcome } from "../documentDisplay";
+import {
+  describeChangeOutcome,
+  getChangeStateBadgeClass,
+  getChangeStateLabel,
+} from "../documentDisplay";
 import type { DocumentChangeView } from "../routes";
 import { ChangeReviewers } from "./ChangeReviewers";
 import { DocumentPreview } from "./DocumentPreview";
@@ -113,9 +117,23 @@ function canUserMerge(
  * identically. Bars say it without being read at all, and the count under them
  * says it exactly. Who is holding it up is the reviewers row's job, right
  * below — it names people, which a meter never can.
+ *
+ * `requiredApprovals` comes from the repo's branch protection, and Gitea only
+ * serves that to an admin — so a write collaborator, which is to say most
+ * reviewers, receives 0 and there is no count to draw. They still need to know
+ * their approval registered, so the state badge stands in. Rendering nothing
+ * would leave the reviewer who just signed off with no sign anything happened.
  */
 function ApprovalBars({ change }: { change: ChangeRecord }) {
-  if (change.requiredApprovals <= 0) return null;
+  if (change.requiredApprovals <= 0) {
+    return (
+      <div className="rev-approvals">
+        <span className={getChangeStateBadgeClass(change)}>
+          {getChangeStateLabel(change)}
+        </span>
+      </div>
+    );
+  }
 
   const filled = Math.min(change.approvalCount, change.requiredApprovals);
   const showBars = change.requiredApprovals <= MAX_APPROVAL_BARS;
