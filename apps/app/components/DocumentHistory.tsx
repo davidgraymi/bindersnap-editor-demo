@@ -1,16 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, Download, Eye } from "lucide-react";
+import { Download, Eye } from "lucide-react";
 
-import type { DocumentVersionRecord, VersionReview } from "../api";
+import type { DocumentVersionRecord } from "../api";
 import { getDocumentHistory } from "../api";
-import {
-  capitalizeFirst,
-  formatShortDate,
-  formatTimestamp,
-  parseSubmissionSummary,
-  publishedVersionToRecord,
-} from "../documentDisplay";
-import { ReviewTimeline } from "./ReviewTimeline";
+import type { HistoryEntry, HistoryPerson } from "../documentHistory";
+import { buildHistoryEntries } from "../documentHistory";
+import { PersonAvatar } from "./PersonAvatar";
 
 interface DocumentHistoryProps {
   owner: string;
@@ -21,28 +16,39 @@ interface DocumentHistoryProps {
   downloadingRef: string | null;
   onDownloadVersion: (tagName: string, version: number) => void;
   onViewVersion: (tagName: string, version: number) => void;
+  /** Opens the change review a version came from, in the Changes tab. */
+  onOpenChange: (changeNumber: number) => void;
 }
 
-function summarizeApprovals(reviews: VersionReview[]): string {
-  const approvers = reviews
-    .filter((review) => review.state === "approved")
-    .map((review) => review.author.fullName?.trim() || review.author.login);
-
-  const unique = [...new Set(approvers)];
-  if (unique.length === 0) return "No recorded approval";
-  if (unique.length === 1) return `Approved by ${capitalizeFirst(unique[0]!)}`;
-  return `Approved by ${capitalizeFirst(unique[0]!)} and ${unique.length - 1} other${
-    unique.length === 2 ? "" : "s"
-  }`;
+/** One name on the spline: a face, who they are, and what they did. */
+function SplinePerson({
+  person,
+  role,
+}: {
+  person: HistoryPerson;
+  role: string;
+}) {
+  return (
+    <span className="doc-spline-person">
+      <PersonAvatar person={{ login: person.login, fullName: person.name }} />
+      <span className="doc-spline-person-name">{person.name}</span>
+      <span className="doc-spline-person-role">{role}</span>
+    </span>
+  );
 }
 
 /**
- * The audit trail, as a timeline.
+ * The audit trail, as a spline.
  *
- * Each published version expands into the record that produced it: who
- * submitted it, every review that was filed, and the discussion that went with
- * it. This is the product's whole promise — "which version did we approve, and
- * who said yes?" — so it gets a first-class page instead of a list of tags.
+ * Every published version is a knot on one line, and every knot is a change
+ * review somebody argued over — so the version is titled with that review and
+ * links straight to it. The two people who matter are on the line itself: who
+ * wrote the change, and who put it on the record.
+ *
+ * A knot does not unfold into the reviews and the discussion. The change
+ * review *is* the review record, and it already renders them on its own page —
+ * a second copy here is the same log in two places, drifting apart the moment
+ * one of them changes. The title is the way in.
  */
 export function DocumentHistory({
   owner,
@@ -52,11 +58,11 @@ export function DocumentHistory({
   downloadingRef,
   onDownloadVersion,
   onViewVersion,
+  onOpenChange,
 }: DocumentHistoryProps) {
   const [versions, setVersions] = useState<DocumentVersionRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState<Set<number>>(new Set());
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -64,9 +70,6 @@ export function DocumentHistory({
     try {
       const payload = await getDocumentHistory(owner, repo);
       setVersions(payload.versions);
-      // Open the newest version so the page never lands on a wall of rows.
-      const newest = payload.versions[0]?.version;
-      setExpanded(newest === undefined ? new Set() : new Set([newest]));
     } catch (err) {
       setError(
         err instanceof Error
@@ -83,20 +86,11 @@ export function DocumentHistory({
     void load();
   }, [load]);
 
-  function toggle(version: number) {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(version)) next.delete(version);
-      else next.add(version);
-      return next;
-    });
-  }
-
   if (isLoading) {
     return (
       <section className="doc-panel doc-empty">
         <h2>Loading version history…</h2>
-        <p>Fetching every published version and the reviews behind it.</p>
+        <p>Fetching every version that has been published.</p>
       </section>
     );
   }
@@ -129,134 +123,114 @@ export function DocumentHistory({
     );
   }
 
+  const entries: HistoryEntry[] = buildHistoryEntries(versions, owner, repo);
+
   return (
-    <ol className="doc-history">
-      {versions.map((entry) => {
-        const isOpen = expanded.has(entry.version);
+    <ol className="doc-spline">
+      {entries.map((entry) => {
         const isViewing = viewingVersion === entry.version;
-        const submitter = entry.submission?.submittedBy
-          ? capitalizeFirst(entry.submission.submittedBy)
-          : null;
-        const summary = parseSubmissionSummary(entry.submission?.body ?? null);
 
         return (
           <li
-            className={`doc-history-entry${isViewing ? " doc-history-entry--viewing" : ""}`}
-            key={entry.tagName}
+            className={`doc-spline-entry${
+              isViewing ? " doc-spline-entry--viewing" : ""
+            }`}
+            key={entry.key}
           >
-            <div className="doc-history-row">
-              <button
-                className="doc-history-toggle"
-                type="button"
-                aria-expanded={isOpen}
-                onClick={() => toggle(entry.version)}
-              >
-                {isOpen ? (
-                  <ChevronDown size={16} strokeWidth={1.5} aria-hidden="true" />
-                ) : (
-                  <ChevronRight
-                    size={16}
-                    strokeWidth={1.5}
-                    aria-hidden="true"
-                  />
-                )}
-                <span className="vault-version-badge">v{entry.version}</span>
-                <span className="doc-history-summary">
-                  <span className="doc-history-title">
-                    {summary ??
-                      (submitter
-                        ? `Submitted by ${submitter}`
-                        : `Version ${entry.version}`)}
-                  </span>
-                  <span className="doc-history-sub">
-                    {formatShortDate(entry.createdAt)} ·{" "}
-                    {summarizeApprovals(entry.reviews)}
-                    {entry.discussionCount > 0
-                      ? ` · ${entry.discussionCount} comment${
-                          entry.discussionCount === 1 ? "" : "s"
-                        }`
-                      : ""}
-                  </span>
-                </span>
-              </button>
+            <span className="doc-spline-knot" aria-hidden="true">
+              {entry.label}
+            </span>
 
-              <div className="doc-history-actions">
-                <button
-                  className="bs-btn bs-btn-secondary doc-history-btn"
-                  type="button"
-                  onClick={() => onViewVersion(entry.tagName, entry.version)}
-                >
-                  <Eye size={14} strokeWidth={1.5} aria-hidden="true" />
-                  View
-                </button>
-                {hasCanonicalFile ? (
+            <div className="doc-spline-body">
+              <div className="doc-spline-head">
+                <h3 className="doc-spline-title">
+                  {entry.changeHref && entry.changeNumber !== null ? (
+                    <a
+                      className="doc-spline-link"
+                      href={entry.changeHref}
+                      onClick={(event) => {
+                        // Let a modifier click open the review in a new tab;
+                        // a plain click is a route change, not a page load.
+                        if (
+                          event.defaultPrevented ||
+                          event.metaKey ||
+                          event.ctrlKey ||
+                          event.shiftKey ||
+                          event.altKey ||
+                          event.button !== 0
+                        ) {
+                          return;
+                        }
+                        event.preventDefault();
+                        onOpenChange(entry.changeNumber!);
+                      }}
+                    >
+                      {entry.title}
+                    </a>
+                  ) : (
+                    entry.title
+                  )}
+                  {/* The knot carries the version visually; a reader who
+                      cannot see the rail still needs to hear it. */}
+                  <span className="sr-only">{entry.label}</span>
+                </h3>
+
+                <div className="doc-spline-actions">
                   <button
-                    className="bs-btn bs-btn-secondary doc-history-btn vault-version-download"
+                    className="bs-btn bs-btn-secondary doc-spline-icon-btn"
                     type="button"
-                    disabled={downloadingRef === entry.tagName}
-                    onClick={() =>
-                      onDownloadVersion(entry.tagName, entry.version)
-                    }
+                    title={`View ${entry.label}`}
+                    aria-label={`View ${entry.label}`}
+                    onClick={() => onViewVersion(entry.tagName, entry.version)}
                   >
-                    <Download size={14} strokeWidth={1.5} aria-hidden="true" />
-                    {downloadingRef === entry.tagName
-                      ? "Downloading…"
-                      : `Download v${entry.version}`}
+                    <Eye size={15} strokeWidth={1.5} aria-hidden="true" />
                   </button>
+                  {hasCanonicalFile ? (
+                    <button
+                      className="bs-btn bs-btn-secondary doc-spline-icon-btn vault-version-download"
+                      type="button"
+                      disabled={downloadingRef === entry.tagName}
+                      title={
+                        downloadingRef === entry.tagName
+                          ? `Downloading ${entry.label}…`
+                          : `Download ${entry.label}`
+                      }
+                      aria-label={
+                        downloadingRef === entry.tagName
+                          ? `Downloading ${entry.label}…`
+                          : `Download ${entry.label}`
+                      }
+                      onClick={() =>
+                        onDownloadVersion(entry.tagName, entry.version)
+                      }
+                    >
+                      <Download
+                        size={15}
+                        strokeWidth={1.5}
+                        aria-hidden="true"
+                      />
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+
+              {/* The two people the record is about, on the line itself. */}
+              <div className="doc-spline-people">
+                {entry.author ? (
+                  <SplinePerson person={entry.author} role="wrote" />
+                ) : null}
+                {entry.publisher ? (
+                  <SplinePerson person={entry.publisher} role="published" />
                 ) : null}
               </div>
+
+              <p className="doc-spline-meta">
+                <time dateTime={entry.createdAt} title={entry.publishedAt}>
+                  {entry.publishedOn}
+                </time>
+                {entry.comments ? ` · ${entry.comments}` : ""}
+              </p>
             </div>
-
-            {isOpen ? (
-              <div className="doc-history-detail">
-                <dl className="doc-history-facts">
-                  <div>
-                    <dt>Published</dt>
-                    <dd>{formatTimestamp(entry.createdAt) || "Unknown"}</dd>
-                  </div>
-                  <div>
-                    <dt>Submitted by</dt>
-                    <dd>
-                      {submitter ?? "Unknown"}
-                      {entry.submission?.submittedAt
-                        ? ` · ${formatShortDate(entry.submission.submittedAt)}`
-                        : ""}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Commit</dt>
-                    <dd>
-                      <code>{entry.sha.slice(0, 10)}</code>
-                    </dd>
-                  </div>
-                </dl>
-
-                {/* One log, not two: the reviews and the discussion are the
-                    same sequence of events, so the version shows the same
-                    timeline the change's own page shows. */}
-                {entry.submission ? (
-                  <ReviewTimeline
-                    owner={owner}
-                    repo={repo}
-                    change={publishedVersionToRecord({
-                      version: entry.version,
-                      createdAt: entry.createdAt,
-                      submission: entry.submission,
-                      reviews: entry.reviews,
-                    })}
-                    updates={[]}
-                    resetsApprovals={false}
-                    canParticipate={false}
-                    blockOnUnresolvedThreads={false}
-                    onOpenUpdate={null}
-                  />
-                ) : (
-                  <p className="vault-pr-notice">
-                    No submission record was kept for this version.
-                  </p>
-                )}
-              </div>
-            ) : null}
           </li>
         );
       })}

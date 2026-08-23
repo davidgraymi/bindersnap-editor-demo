@@ -378,49 +378,6 @@ export function closedChangeToRecord(change: {
 }
 
 /**
- * A published version, read back as the change that produced it.
- *
- * The History tab and a change's own page are looking at the same events —
- * who opened it, what was said, who signed it off, when it went out — so they
- * render the same timeline rather than two components that drift apart. What
- * History has is the version record, so it is narrowed to the same shape.
- */
-export function publishedVersionToRecord(version: {
-  version: number;
-  createdAt: string;
-  submission: {
-    number: number;
-    body: string;
-    submittedBy: string;
-    submittedAt: string;
-    mergedAt: string | null;
-    mergedBy: string | null;
-  };
-  reviews?: VersionReview[];
-}): ChangeRecord {
-  const { submission } = version;
-  return {
-    number: submission.number,
-    summary: parseChangeTitle(submission.body, submission.submittedBy),
-    description: describeSubmission(submission.body),
-    reviews: version.reviews ?? [],
-    branchName: null,
-    submittedBy: submission.submittedBy,
-    submittedAt: submission.submittedAt,
-    open: false,
-    approvalState: "published",
-    outcome: "published",
-    closedAt: submission.mergedAt ?? version.createdAt,
-    decidedBy: submission.mergedBy,
-    publishedVersion: version.version,
-    assignee: null,
-    reviewers: [],
-    approvalCount: 0,
-    requiredApprovals: null,
-  };
-}
-
-/**
  * Where a reviewer stands, as the page shows it.
  *
  * The server's four states plus one it cannot see: an unresolved thread this

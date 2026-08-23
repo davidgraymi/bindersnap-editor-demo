@@ -79,8 +79,17 @@ export function toVersionReviews(reviews: PullReview[]): VersionReview[] {
     .sort((left, right) => left.submittedAt.localeCompare(right.submittedAt));
 }
 
+/**
+ * Who submitted a version and who published it.
+ *
+ * `publishedBy` exists because Gitea's *list* of pull requests omits
+ * `merged_by` — it is only filled in on a single pull request's own endpoint.
+ * The history spline names the publisher, so the caller reads it per change
+ * and passes it in; without it, every version would claim nobody published it.
+ */
 export function toVersionSubmission(
   pullRequest: PullRequest,
+  publishedBy: string | null = null,
 ): VersionSubmission {
   return {
     number: pullRequest.number ?? 0,
@@ -89,7 +98,7 @@ export function toVersionSubmission(
     submittedBy: pullRequest.user?.login ?? "",
     submittedAt: pullRequest.created_at ?? "",
     mergedAt: pullRequest.merged_at ?? null,
-    mergedBy: pullRequest.merged_by?.login ?? null,
+    mergedBy: pullRequest.merged_by?.login ?? publishedBy,
   };
 }
 
@@ -106,6 +115,7 @@ export function buildVersionRecords(
   tags: DocTag[],
   pullRequests: PullRequestWithReviews[],
   discussionCounts: Map<number, number> = new Map(),
+  publishers: Map<number, string> = new Map(),
 ): DocumentVersionRecord[] {
   const byMergeSha = new Map<string, PullRequestWithReviews>();
   for (const entry of pullRequests) {
@@ -127,7 +137,12 @@ export function buildVersionRecords(
         tagName: tag.name,
         sha: tag.sha,
         createdAt: tag.created,
-        submission: match ? toVersionSubmission(match.pullRequest) : null,
+        submission: match
+          ? toVersionSubmission(
+              match.pullRequest,
+              prNumber === null ? null : (publishers.get(prNumber) ?? null),
+            )
+          : null,
         reviews: match ? toVersionReviews(match.reviews) : [],
         discussionCount:
           prNumber === null ? 0 : (discussionCounts.get(prNumber) ?? 0),

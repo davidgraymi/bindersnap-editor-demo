@@ -297,10 +297,10 @@ test.describe("Document download", () => {
     // The History tab must list both published versions
     await openDocumentTab(page, "History");
     await expect(
-      page.locator(".vault-version-badge", { hasText: "v2" }),
+      page.locator(".doc-spline-knot", { hasText: "v2" }),
     ).toBeVisible({ timeout: 30_000 });
     await expect(
-      page.locator(".vault-version-badge", { hasText: "v1" }),
+      page.locator(".doc-spline-knot", { hasText: "v1" }),
     ).toBeVisible();
   });
 
@@ -329,10 +329,10 @@ test.describe("Document download", () => {
     await signInAsAlice(page);
     await navigateToDocument(page, cardSearchText);
 
-    // Wait for the History tab to render the v1 badge
+    // Wait for the History tab to render the v1 knot
     await openDocumentTab(page, "History");
     await expect(
-      page.locator(".vault-version-badge", { hasText: "v1" }),
+      page.locator(".doc-spline-knot", { hasText: "v1" }),
     ).toBeVisible({ timeout: 30_000 });
 
     // Intercept the download triggered by the "Download v1" history button

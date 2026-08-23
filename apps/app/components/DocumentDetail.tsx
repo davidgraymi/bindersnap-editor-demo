@@ -484,6 +484,7 @@ export function DocumentDetail({
               );
               onTabChange("overview");
             }}
+            onOpenChange={(changeNumber) => onOpenChange(changeNumber)}
           />
         </div>
       ) : (

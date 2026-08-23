@@ -281,10 +281,10 @@ test.describe("UI document version upload flow", () => {
     // The History tab should show both versions
     await openDocumentTab(page, "History");
     await expect(
-      page.locator(".vault-version-badge", { hasText: "v2" }),
+      page.locator(".doc-spline-knot", { hasText: "v2" }),
     ).toBeVisible({ timeout: 30_000 });
     await expect(
-      page.locator(".vault-version-badge", { hasText: "v1" }),
+      page.locator(".doc-spline-knot", { hasText: "v1" }),
     ).toBeVisible();
   });
 });

@@ -557,7 +557,6 @@ input {
   align-items: center;
 }
 
-.vault-version-badge,
 .vault-pending-badge,
 .vault-status-badge,
 .collaborator-permission-badge {
@@ -569,11 +568,6 @@ input {
   border-radius: var(--brand-radius-sm);
   text-transform: uppercase;
   letter-spacing: var(--brand-tracking-wide);
-}
-
-.vault-version-badge {
-  background: var(--bs-coral-dim);
-  color: var(--brand-coral-dark);
 }
 
 .vault-no-version {
@@ -2511,123 +2505,163 @@ input {
   color: var(--bs-text-muted);
 }
 
-/* History tab — the audit trail as a timeline. */
-.doc-history {
+/* ── History tab — the audit trail as a spline ─────────────────────
+   One line down the page with a knot for every published version. Each knot
+   is the change review that produced it, so the title is that review's title
+   and it links straight to it; the two people the record is about — who wrote
+   the change and who published it — sit on the line rather than inside a
+   panel nobody opens.
+   ------------------------------------------------------------------ */
+.doc-spline {
+  position: relative;
   display: grid;
-  gap: var(--brand-space-3);
+  gap: var(--brand-space-5);
   margin: 0;
-  padding: 0;
+  padding: var(--brand-space-2) 0 var(--brand-space-2) 56px;
   list-style: none;
 }
 
-.doc-history-entry {
-  background: var(--bs-surface-1);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-md);
-  overflow: hidden;
+/* The line is the page's structure, not an inner divider, so it reads at the
+   rule colour rather than the warm 6% one used inside a card. */
+.doc-spline::before {
+  content: "";
+  position: absolute;
+  left: 21px;
+  top: var(--brand-space-3);
+  bottom: var(--brand-space-3);
+  width: 1.5px;
+  background: var(--bs-rule);
 }
 
-.doc-history-entry--viewing {
-  border-color: var(--brand-coral);
+.doc-spline-entry {
+  position: relative;
 }
 
-.doc-history-row {
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-3);
-  padding: var(--brand-space-3) var(--brand-space-4);
-}
-
-.doc-history-toggle {
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-3);
-  flex: 1;
-  min-width: 0;
-  padding: 0;
-  border: none;
-  background: none;
-  color: inherit;
-  cursor: pointer;
-  text-align: left;
-}
-
-.doc-history-summary {
+/* Opaque, always: the line showing through a knot turns the version into a
+   smudge with a rule drawn across it. */
+.doc-spline-knot {
+  position: absolute;
+  left: -56px;
+  top: 0;
+  z-index: var(--brand-z-raised);
   display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.doc-history-title {
-  font-size: var(--brand-text-sm);
-  font-weight: var(--brand-weight-medium);
-  color: var(--bs-text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.doc-history-sub {
+  place-items: center;
+  width: 44px;
+  height: 26px;
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-surface-1);
+  border: 1.5px solid var(--bs-rule);
   font-family: var(--brand-font-mono);
   font-size: var(--brand-text-xs);
-  color: var(--bs-text-muted);
+  color: var(--bs-text-secondary);
 }
 
-.doc-history-actions {
+/* The version currently open on the Document tab. Coral is the one thing on
+   this page that says "you are here". */
+.doc-spline-entry--viewing .doc-spline-knot {
+  border-color: var(--brand-coral);
+  color: var(--brand-coral-dark);
+}
+
+.doc-spline-body {
+  display: grid;
+  gap: var(--brand-space-2);
+  min-width: 0;
+}
+
+.doc-spline-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--brand-space-3);
+}
+
+.doc-spline-title {
+  margin: 0;
+  min-width: 0;
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-body);
+  font-weight: var(--brand-weight-medium);
+  color: var(--bs-text-primary);
+}
+
+.doc-spline-link {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color var(--brand-transition-fast);
+}
+
+.doc-spline-link:hover,
+.doc-spline-link:focus-visible {
+  border-bottom-color: var(--brand-coral);
+}
+
+.doc-spline-actions {
   display: flex;
   gap: var(--brand-space-2);
   flex-shrink: 0;
 }
 
+/* Icon only. A row of buttons that each repeat the version number reads as a
+   form; the icon plus the version on the knot says the same thing quieter.
+   Scoped to the row so it outranks `.bs-btn`'s own padding, which is set for
+   a button with words in it. */
+.doc-spline-actions .doc-spline-icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+}
+
+/* A 15px icon in a grid cell narrower than its intrinsic width collapses to
+   nothing rather than overflowing. */
+.doc-spline-icon-btn svg {
+  flex: none;
+}
+
+.doc-spline-people {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--brand-space-3);
+}
+
+.doc-spline-person {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  min-width: 0;
+}
+
+.doc-spline-person-name {
+  font-size: var(--brand-text-sm);
+  font-weight: var(--brand-weight-medium);
+  color: var(--bs-text-secondary);
+}
+
+.doc-spline-person-role {
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-xs);
+  color: var(--bs-text-faint);
+}
+
+.doc-spline-meta {
+  margin: 0;
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-xs);
+  color: var(--bs-text-muted);
+}
+
+/* The "Back to latest" button on the Document tab, which reads an earlier
+   version. Not part of the spline. */
 .doc-history-btn {
   display: inline-flex;
   align-items: center;
   gap: var(--brand-space-2);
   padding: var(--brand-space-2) var(--brand-space-3);
   font-size: var(--brand-text-sm);
-}
-
-.doc-history-detail {
-  display: grid;
-  gap: var(--brand-space-4);
-  padding: var(--brand-space-4);
-  border-top: 1px solid var(--bs-rule-warm);
-  background: var(--bs-surface-2);
-}
-
-.doc-history-facts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: var(--brand-space-3);
-  margin: 0;
-}
-
-.doc-history-facts dt {
-  font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-xs);
-  text-transform: uppercase;
-  letter-spacing: var(--brand-tracking-wide);
-  color: var(--bs-text-faint);
-}
-
-.doc-history-facts dd {
-  margin: var(--brand-space-1) 0 0;
-  font-size: var(--brand-text-sm);
-  color: var(--bs-text-secondary);
-}
-
-.doc-history-facts code {
-  font-family: var(--brand-font-mono);
-}
-
-.doc-history-section-title {
-  margin: 0 0 var(--brand-space-2);
-  font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-label);
-  font-weight: var(--brand-weight-medium);
-  letter-spacing: var(--brand-tracking-wide);
-  text-transform: uppercase;
-  color: var(--bs-text-muted);
 }
 
 .doc-review-list {
@@ -2798,7 +2832,22 @@ input {
     justify-content: center;
   }
 
-  .doc-history-row {
+  /* The rail costs 56px of a 375px screen. Narrow the gutter, shrink the
+     knot, and let the head wrap rather than squeezing the title to nothing. */
+  .doc-spline {
+    padding-left: 44px;
+  }
+
+  .doc-spline::before {
+    left: 17px;
+  }
+
+  .doc-spline-knot {
+    left: -44px;
+    width: 36px;
+  }
+
+  .doc-spline-head {
     flex-wrap: wrap;
   }
 
