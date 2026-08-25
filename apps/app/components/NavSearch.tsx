@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { Search } from "lucide-react";
 
 import { searchDocuments } from "../api";
@@ -14,6 +20,13 @@ import {
   shouldLoadNextQuickFindPage,
 } from "../quickFind";
 import type { AppRoute } from "../routes";
+
+/** The panel is wider than the box: a document name is longer than a query. */
+const NAV_SEARCH_PANEL_WIDTH = 320;
+/** Breathing room between the panel and the edge of the window. */
+const NAV_SEARCH_PANEL_MARGIN = 8;
+/** And between the panel and the box it belongs to. */
+const NAV_SEARCH_PANEL_GAP = 6;
 
 interface NavSearchProps {
   /** Whose workspace this is, so a row can say "You own" instead of a name. */
@@ -56,6 +69,19 @@ export function NavSearch({
 
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  /**
+   * Where the panel hangs, in viewport coordinates.
+   *
+   * The nav clips what overflows it — that is what keeps the avatar from
+   * escaping its right edge — so a panel positioned inside it is cut off at
+   * the nav's own bottom. The profile menu solves this by being `fixed` at a
+   * hardcoded offset, which it can do because it is anchored to the right
+   * edge; the search box moves with the viewport, so its panel measures.
+   */
+  const [anchor, setAnchor] = useState<{ top: number; left: number } | null>(
+    null,
+  );
   const pageRef = useRef(1);
   /**
    * Which query each response belongs to. Responses can land out of order, and
@@ -228,13 +254,38 @@ export function NavSearch({
   }, [highlight]);
 
   const showPanel = open && isQuickFindQuery(query);
+
+  useLayoutEffect(() => {
+    if (!showPanel) {
+      setAnchor(null);
+      return;
+    }
+
+    const measure = () => {
+      const box = wrapRef.current?.getBoundingClientRect();
+      if (!box) return;
+      // Keep the whole panel on screen when the box sits close to the right
+      // edge: it is wider than the box it hangs from.
+      const width = Math.max(NAV_SEARCH_PANEL_WIDTH, box.width);
+      const maxLeft = window.innerWidth - width - NAV_SEARCH_PANEL_MARGIN;
+      setAnchor({
+        top: box.bottom + NAV_SEARCH_PANEL_GAP,
+        left: Math.max(NAV_SEARCH_PANEL_MARGIN, Math.min(box.left, maxLeft)),
+      });
+    };
+
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [showPanel]);
+
   const activeId =
     highlight >= 0 && results[highlight]
       ? `nav-search-result-${highlight}`
       : undefined;
 
   return (
-    <div className="app-nav-search-wrap">
+    <div className="app-nav-search-wrap" ref={wrapRef}>
       <form
         className="app-nav-search"
         role="search"
@@ -284,6 +335,13 @@ export function NavSearch({
             className="app-nav-search-panel"
             id="nav-search-panel"
             role="presentation"
+            style={{
+              top: anchor?.top ?? 0,
+              left: anchor?.left ?? 0,
+              // Until the first measurement lands there is nowhere to put it,
+              // and a panel in the top-left corner is worse than no panel.
+              visibility: anchor ? "visible" : "hidden",
+            }}
           >
             {results.length > 0 && (
               <ul

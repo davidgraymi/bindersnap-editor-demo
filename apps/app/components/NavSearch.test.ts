@@ -377,6 +377,32 @@ test("a last page is not asked for twice", async () => {
   await view.unmount();
 });
 
+test("the panel is placed from the box, not laid out inside the nav", async () => {
+  // The nav clips what overflows it, so the panel is `fixed` and positioned
+  // from a measurement. A box near the right edge is pulled back on screen:
+  // the panel is wider than the box it hangs from.
+  pages = [page(["vendor-agreement"], 1, false)];
+  const view = await render(createElement(NavSearch, props()));
+
+  const wrap = view.container.querySelector(
+    ".app-nav-search-wrap",
+  ) as HTMLElement;
+  wrap.getBoundingClientRect = () =>
+    ({ left: 900, bottom: 50, width: 260 }) as DOMRect;
+
+  await type(view.container, "ven");
+
+  const panel = view.container.querySelector(
+    ".app-nav-search-panel",
+  ) as HTMLElement;
+  expect(panel.style.top).toBe("56px");
+  // 1024 (JSDOM's window) - 320 (panel) - 8 (margin), not the box's own 900.
+  expect(panel.style.left).toBe("696px");
+  expect(panel.style.visibility).toBe("visible");
+
+  await view.unmount();
+});
+
 test("nothing matching says so", async () => {
   pages = [page([], 1, false)];
   const view = await render(createElement(NavSearch, props()));
