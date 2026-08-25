@@ -69,7 +69,7 @@ test("the record names the document, the workspace, and the version on record", 
 
   expect(html).toContain("<title>Quarterly Report — audit record</title>");
   expect(html).toContain("<dd>alice</dd>");
-  expect(html).toContain("<dd>v3</dd>");
+  expect(html).toContain("<dd>Version 3</dd>");
   expect(html).toContain("<dd>2</dd>");
 });
 
@@ -94,13 +94,13 @@ test("every version is a section, newest first", () => {
     version({ version: 3, tagName: "v3" }),
   ]);
 
-  const labels = [...html.matchAll(/record-version-label">(v\d+)</g)].map(
+  const labels = [...html.matchAll(/record-version-label">([^<]+)</g)].map(
     (match) => match[1],
   );
-  expect(labels).toEqual(["v3", "v2"]);
+  expect(labels).toEqual(["Version 3", "Version 2"]);
 });
 
-test("a review that no longer counts stays on the record, labelled", () => {
+test("an approval that no longer counts stays on the record, labelled", () => {
   const { html } = record([
     version({
       reviews: [
@@ -108,7 +108,6 @@ test("a review that no longer counts stays on the record, labelled", () => {
         review({
           id: 2,
           author: { login: "dana", fullName: "", avatarUrl: "" },
-          state: "changes_requested",
           dismissed: true,
           body: "",
         }),
@@ -117,17 +116,52 @@ test("a review that no longer counts stays on the record, labelled", () => {
   ]);
 
   expect(html).toContain("Kit Alvarez (kit)");
+  expect(html).toContain("Approved");
   expect(html).toContain("superseded by a later upload");
   expect(html).toContain("Dana (dana)");
-  expect(html).toContain("Requested changes");
   expect(html).toContain("dismissed");
   expect(html).toContain("No comment");
 });
 
-test("a version nobody reviewed says so rather than showing an empty table", () => {
+test("the record says approved, never signed off", () => {
+  const { html } = record([version()]);
+
+  expect(html).toContain("<td>Approved</td>");
+  expect(html).not.toContain("Signed off");
+});
+
+test("a request for changes is a step on the way, not part of the record", () => {
+  // It was answered — that is why there is a published version underneath it.
+  const { html } = record([
+    version({
+      reviews: [
+        review({
+          id: 2,
+          state: "changes_requested",
+          body: "The cap needs an IP carve-out.",
+        }),
+        review(),
+      ],
+    }),
+  ]);
+
+  expect(html).not.toContain("Requested changes");
+  expect(html).not.toContain("IP carve-out");
+  expect(html).toContain("Reads correctly against the March policy.");
+});
+
+test("a change whose only review asked for changes reads as unapproved", () => {
+  const { html } = record([
+    version({ reviews: [review({ state: "changes_requested" })] }),
+  ]);
+
+  expect(html).toContain("No approvals were recorded on this change.");
+});
+
+test("a version nobody approved says so rather than showing an empty table", () => {
   const { html } = record([version({ reviews: [] })]);
 
-  expect(html).toContain("No reviews were recorded on this change.");
+  expect(html).toContain("No approvals were recorded on this change.");
 });
 
 test("a version with no surviving change record is still on the record", () => {

@@ -3,7 +3,7 @@
  *
  * The product's claim is that the approval trail is exportable for a regulator.
  * A regulator does not have a login, so the export cannot be a link into the
- * app, and it cannot be a screenshot either — it has to state who signed off on
+ * app, and it cannot be a screenshot either — it has to state who approved
  * every version, what they said, and when, in a document that opens on its own.
  *
  * So this builds one self-contained HTML file out of the history payload the
@@ -23,13 +23,26 @@ import {
   parseChangeTitle,
 } from "./documentDisplay";
 
-/** What a verdict is called in the record. */
+/** What a verdict is called in the record. Bindersnap says "approved". */
 const REVIEW_VERDICTS: Record<VersionReview["state"], string> = {
-  approved: "Signed off",
+  approved: "Approved",
   changes_requested: "Requested changes",
   commented: "Commented",
   other: "Reviewed",
 };
+
+/**
+ * Whether a review belongs in the record of a *published* version.
+ *
+ * A request for changes is a step on the way, not an outcome: the version
+ * underneath it only exists because that request was answered and the change
+ * was then approved. Printing it invites an auditor to ask what became of it,
+ * and the answer is the version they are already holding. The approvals — and
+ * what the approvers said — are what the record is for.
+ */
+function isRecordedReview(review: VersionReview): boolean {
+  return review.state !== "changes_requested";
+}
 
 export function escapeHtml(value: string): string {
   return value
@@ -87,11 +100,11 @@ function reviewerLabel(review: VersionReview): string {
 }
 
 /**
- * The qualifiers that decide whether a sign-off still counts.
+ * The qualifiers that decide whether an approval still counts.
  *
  * A stale or dismissed approval stays in the record — dropping it would be
  * editing history — but it has to be labelled, or the file reads as though the
- * version carried more sign-off than it did.
+ * version carried more approval than it did.
  */
 function reviewQualifier(review: VersionReview): string {
   const notes: string[] = [];
@@ -100,9 +113,10 @@ function reviewQualifier(review: VersionReview): string {
   return notes.join(", ");
 }
 
-function renderReviewRows(reviews: VersionReview[]): string {
+function renderReviewRows(allReviews: VersionReview[]): string {
+  const reviews = allReviews.filter(isRecordedReview);
   if (reviews.length === 0) {
-    return `<tr><td class="record-empty" colspan="4">No reviews were recorded on this change.</td></tr>`;
+    return `<tr><td class="record-empty" colspan="4">No approvals were recorded on this change.</td></tr>`;
   }
 
   return reviews
@@ -169,7 +183,7 @@ function renderVersion(entry: DocumentVersionRecord): string {
   return [
     '<section class="record-version">',
     '<header class="record-version-head">',
-    `<span class="record-version-label">v${entry.version}</span>`,
+    `<p class="record-version-label">Version ${entry.version}</p>`,
     `<h2>${escapeHtml(title)}</h2>`,
     "</header>",
     `<dl class="record-facts">${factRows}</dl>`,
@@ -199,7 +213,10 @@ export function buildAuditRecord(input: AuditRecordInput): AuditRecord {
     // The owner, not "owner/repo" — the slug is a storage path, and the
     // document already has a name at the top of the page.
     ["Workspace", owner],
-    ["Version on record", current ? `v${current.version}` : "None published"],
+    [
+      "Version on record",
+      current ? `Version ${current.version}` : "None published",
+    ],
     ["Published versions", String(newestFirst.length)],
     ["Exported", formatTimestamp(generatedAt.toISOString()) || "Unknown"],
   ];
@@ -223,117 +240,142 @@ export function buildAuditRecord(input: AuditRecordInput): AuditRecord {
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>${escapeHtml(documentName)} — audit record</title>
 <style>
+/*
+ * A printed document that happens to open in a browser.
+ *
+ * This ends up in an audit binder or attached to a regulator's email as a PDF,
+ * so it is set like paper: black on white, hairline rules, no fills, nothing
+ * that costs toner or reads as a web page. The brand lives in the typography —
+ * the serif for headings, the sans for everything else — not in colour.
+ */
 :root {
-  --color-coral: #E85D26;
-  --color-ink: #1C1917;
-  --color-ink-mid: #44403C;
-  --color-paper: #FAFAF7;
-  --color-paper-warm: #F5F0E8;
-  --color-muted: #78716C;
-  --color-rule: #E7E5E4;
-  --font-serif: 'Lora', Georgia, serif;
-  --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-mono: 'Geist Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --ink: #000000;
+  --ink-soft: #222222;
+  --label: #444444;
+  --rule: #000000;
+  --hairline: #BBBBBB;
+  --font-serif: 'Lora', Georgia, 'Times New Roman', serif;
+  --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
 }
+@page { margin: 18mm; }
 * { box-sizing: border-box; }
 body {
   margin: 0;
-  padding: 48px 24px 96px;
-  background: var(--color-paper);
-  color: var(--color-ink);
+  padding: 32pt 24pt 48pt;
+  background: #FFFFFF;
+  color: var(--ink);
   font-family: var(--font-sans);
-  font-size: 15px;
-  line-height: 1.6;
+  font-size: 10.5pt;
+  line-height: 1.5;
+  -webkit-print-color-adjust: exact;
 }
-main { max-width: 820px; margin: 0 auto; }
+main { max-width: 46em; margin: 0 auto; }
 .record-eyebrow {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.12em;
+  margin: 0 0 6pt;
+  font-size: 8pt;
+  font-weight: 500;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: var(--color-coral);
-  margin: 0 0 8px;
+  color: var(--label);
 }
 h1 {
   font-family: var(--font-serif);
-  font-size: 34px;
-  line-height: 1.2;
-  margin: 0 0 8px;
+  font-size: 22pt;
+  line-height: 1.15;
+  font-weight: 700;
+  margin: 0 0 8pt;
 }
-.record-lede { color: var(--color-muted); margin: 0 0 32px; max-width: 60ch; }
+.record-lede {
+  margin: 0 0 20pt;
+  max-width: 62ch;
+  color: var(--ink-soft);
+}
+/* The summary is the cover block: ruled off, not boxed in. */
+.record-summary {
+  border-top: 1.25pt solid var(--rule);
+  border-bottom: 0.5pt solid var(--hairline);
+  padding: 12pt 0;
+  margin: 0 0 8pt;
+}
 .record-facts {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 8px 24px;
-  margin: 0 0 24px;
+  grid-template-columns: repeat(auto-fit, minmax(150pt, 1fr));
+  gap: 10pt 24pt;
+  margin: 0 0 16pt;
 }
 .record-fact dt {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.08em;
+  font-size: 7.5pt;
+  font-weight: 500;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--color-muted);
+  color: var(--label);
+  margin-bottom: 1pt;
 }
 .record-fact dd { margin: 0; word-break: break-word; }
-.record-summary {
-  background: var(--color-paper-warm);
-  border: 1px solid var(--color-rule);
-  border-radius: 16px;
-  padding: 24px;
-  margin: 0 0 48px;
-}
 .record-summary .record-facts { margin: 0; }
 .record-version {
-  border-top: 1px solid var(--color-rule);
-  padding: 32px 0 8px;
+  border-top: 0.5pt solid var(--hairline);
+  padding-top: 18pt;
+  margin-top: 18pt;
   break-inside: avoid;
+  page-break-inside: avoid;
 }
-.record-version-head { display: flex; align-items: baseline; gap: 12px; }
 .record-version-label {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  letter-spacing: 0.06em;
-  color: var(--color-coral);
-  border: 1px solid var(--color-rule);
-  border-radius: 9999px;
-  padding: 2px 10px;
-  background: #FFFFFF;
+  margin: 0 0 2pt;
+  font-size: 8pt;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--label);
 }
-h2 { font-family: var(--font-serif); font-size: 22px; margin: 0 0 16px; }
-table.record-reviews { width: 100%; border-collapse: collapse; margin: 0 0 8px; table-layout: fixed; }
+h2 {
+  font-family: var(--font-serif);
+  font-size: 15pt;
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 0 0 14pt;
+}
+table.record-reviews {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  margin: 0;
+}
 table.record-reviews col.record-col-who { width: 24%; }
-table.record-reviews col.record-col-verdict { width: 20%; }
+table.record-reviews col.record-col-verdict { width: 18%; }
 table.record-reviews col.record-col-when { width: 22%; }
+/* Repeat the column headings when a long trail runs onto a second page. */
+table.record-reviews thead { display: table-header-group; }
+table.record-reviews tr { break-inside: avoid; page-break-inside: avoid; }
 table.record-reviews th {
   text-align: left;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--color-muted);
+  font-size: 7.5pt;
   font-weight: 500;
-  border-bottom: 1px solid var(--color-rule);
-  padding: 6px 12px 6px 0;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--label);
+  border-bottom: 1pt solid var(--rule);
+  padding: 0 10pt 4pt 0;
 }
 table.record-reviews td {
   vertical-align: top;
-  padding: 10px 12px 10px 0;
-  border-bottom: 1px solid var(--color-rule);
-  color: var(--color-ink-mid);
+  padding: 7pt 10pt 7pt 0;
+  border-bottom: 0.5pt solid var(--hairline);
+  color: var(--ink-soft);
 }
-.record-stamp { font-family: var(--font-mono); font-size: 12px; }
-.record-note { color: var(--color-muted); font-style: italic; }
-.record-empty, .record-empty-state { color: var(--color-muted); }
+.record-stamp { white-space: normal; }
+.record-note { color: var(--label); font-style: italic; }
+.record-empty, .record-empty-state { color: var(--label); font-style: italic; }
 footer {
-  margin-top: 48px;
-  padding-top: 24px;
-  border-top: 1px solid var(--color-rule);
-  color: var(--color-muted);
-  font-size: 13px;
+  margin-top: 24pt;
+  padding-top: 8pt;
+  border-top: 0.5pt solid var(--hairline);
+  color: var(--label);
+  font-size: 8.5pt;
 }
 @media print {
-  body { background: #FFFFFF; padding: 0; font-size: 12px; }
-  .record-summary { background: none; }
+  body { padding: 0; }
+  h1, h2 { page-break-after: avoid; }
 }
 </style>
 </head>
@@ -341,7 +383,7 @@ footer {
 <main>
 <p class="record-eyebrow">Audit record</p>
 <h1>${escapeHtml(documentName)}</h1>
-<p class="record-lede">Every published version of this document, who submitted it, who signed it off, and when. A published version cannot be altered — changing the document means a new version, reviewed again.</p>
+<p class="record-lede">Every published version of this document, who submitted it, who approved it, and when. A published version cannot be altered — changing the document means a new version, reviewed again.</p>
 <div class="record-summary"><dl class="record-facts">${summaryRows}</dl></div>
 ${body}
 <footer>Exported from Bindersnap. This record is generated from the document's version history; it is not editable and re-exporting reproduces it.</footer>
