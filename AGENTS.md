@@ -92,8 +92,8 @@ Routes:
 `packages/editor/` is imported by the SPA.
 
 If you change anything in `packages/editor/` that affects visual appearance, note it
-in your PR description. The landing page demo embed is a static snapshot and must
-be manually updated by running `bun run sync-demo`.
+in your PR description. The landing page no longer embeds the editor, so there is
+nothing to re-sync — but the editor is still the authoring surface inside the app.
 
 ### The BFF (`services/api`)
 

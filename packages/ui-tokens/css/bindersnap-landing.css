@@ -276,13 +276,16 @@ body::after {
 /* Hero headline */
 .hero-h1 {
   font-family: var(--brand-font-serif);
-  font-size: clamp(48px, 6.5vw, 80px);
+  /* Sized so the three authored line breaks hold at max-width instead of
+     wrapping into a fourth line, with enough headroom that the fallback serif
+     does not wrap before Lora loads. Re-check if the headline copy grows. */
+  font-size: clamp(44px, 5.9vw, 72px);
   font-weight: var(--brand-weight-bold);
   line-height: var(--brand-leading-tight);
   letter-spacing: var(--brand-tracking-tight);
   text-align: center;
   color: var(--bs-text-primary);
-  max-width: 860px;
+  max-width: 940px;
   margin-bottom: var(--brand-space-6);
   animation: fadeUp 0.7s ease 0.15s both;
   transition: color var(--brand-transition-base);
@@ -472,81 +475,6 @@ body::after {
   border-top: none;
   border-radius: 0 0 12px 12px;
   box-shadow: var(--bs-shadow-xl);
-}
-
-/* Editor demo mount */
-.mockup-editor {
-  display: block;
-  width: 100%;
-  border: calc(var(--brand-space-1) * 0.375) solid var(--bs-rule);
-  border-top: none;
-  border-radius: 0 0 var(--brand-radius-lg) var(--brand-radius-lg);
-  box-shadow: var(--bs-shadow-xl);
-  background: var(--bs-page-bg);
-  overflow: hidden;
-  min-height: calc(var(--brand-space-16) * 6);
-  height: min(72vh, calc(var(--brand-space-16) * 10));
-}
-
-.mockup-editor .editor-demo-root,
-.mockup-editor .demo-editor,
-.mockup-editor .bs-editor {
-  height: 100%;
-}
-
-.mockup-editor .bs-editor {
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
-}
-
-.editor-fallback {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  font-family: var(--brand-font-sans);
-  font-size: var(--brand-text-sm);
-  color: var(--bs-text-muted);
-}
-
-.editor-loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--brand-space-3);
-  height: 100%;
-  font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-sm);
-  color: var(--bs-text-faint);
-  letter-spacing: var(--brand-tracking-wide);
-  text-transform: uppercase;
-}
-
-.editor-loading-text {
-  font-size: var(--brand-text-label);
-  color: var(--bs-text-muted);
-}
-
-.editor-load-btn {
-  border: none;
-  border-radius: var(--brand-radius-md);
-  padding: var(--brand-space-2) var(--brand-space-4);
-  font-family: var(--brand-font-sans);
-  font-size: var(--brand-text-sm);
-  font-weight: var(--brand-weight-medium);
-  background: var(--brand-coral);
-  color: var(--bs-page-bg);
-  cursor: pointer;
-  transition:
-    transform var(--brand-transition-fast),
-    opacity var(--brand-transition-fast);
-}
-
-.editor-load-btn:hover {
-  transform: translateY(-1px);
-  opacity: 0.9;
 }
 
 /* ─────────────────────────────────────
@@ -1520,54 +1448,17 @@ body::after {
 }
 
 /* ─────────────────────────────────────
-   AUTHORING SURFACE (editor demo)
+   COMPLIANCE
 ───────────────────────────────────── */
 
-.section-authoring {
+/* Tinted band. Keeps the page alternating tinted/plain now that the section
+   above it (the review cards) and this one would otherwise run together. */
+.section-assurance {
   background: var(--bs-surface-2);
   border-top: 1px solid var(--bs-rule);
   border-bottom: 1px solid var(--bs-rule);
-  padding: var(--brand-section-padding-y) var(--brand-page-padding-x);
   transition: var(--bs-mode-transition);
 }
-
-.authoring-inner {
-  max-width: var(--brand-max-width);
-  margin: 0 auto;
-}
-
-.authoring-header {
-  text-align: center;
-  margin-bottom: var(--brand-space-12);
-}
-
-.authoring-header h2 {
-  font-family: var(--brand-font-serif);
-  font-size: clamp(28px, 3vw, 40px);
-  font-weight: var(--brand-weight-semibold);
-  line-height: var(--brand-leading-snug);
-  color: var(--bs-text-primary);
-  margin: var(--brand-space-4) 0 var(--brand-space-4);
-  transition: color var(--brand-transition-base);
-}
-
-.authoring-header p {
-  font-size: 16px;
-  font-weight: var(--brand-weight-light);
-  line-height: var(--brand-leading-relaxed);
-  color: var(--bs-text-muted);
-  max-width: var(--brand-max-width-text);
-  margin: 0 auto;
-}
-
-.authoring-mockup {
-  max-width: 960px;
-  margin: 0 auto;
-}
-
-/* ─────────────────────────────────────
-   COMPLIANCE
-───────────────────────────────────── */
 
 .section-compliance {
   padding: var(--brand-section-padding-y) var(--brand-page-padding-x);
@@ -2113,11 +2004,6 @@ footer {
   .mockup-chrome {
     display: none;
   }
-  .mockup-editor {
-    height: 70vh;
-    border-top: var(--e-border-1) solid var(--bs-rule);
-    border-radius: var(--brand-radius-xl);
-  }
 
   .features-grid {
     grid-template-columns: 1fr;
@@ -2135,10 +2021,6 @@ footer {
   .review-card {
     padding: 28px 24px;
   }
-  .section-authoring {
-    padding: var(--brand-section-padding-y-sm) var(--brand-page-padding-x);
-  }
-
   .section-cycle,
   .section-record {
     padding: var(--brand-section-padding-y-sm) var(--brand-page-padding-x);
@@ -2178,9 +2060,6 @@ footer {
   }
   .chaos-file {
     font-size: 10px;
-  }
-  .mockup-editor {
-    border-radius: var(--brand-radius-lg);
   }
   .comp-item {
     padding: 14px 16px;

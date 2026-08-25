@@ -84,6 +84,6 @@ Settled. Do not reopen. If a task requires violating one, open a `human-needed` 
 
 4. **Two independent workflows.** File vault (external uploads) and inline editor are separate. Do not conflate them.
 
-5. **Editor UI changes need a flag.** If you change `packages/editor/` visuals, note it in your PR — the landing demo embed requires a manual `bun run sync-demo`.
+5. **Editor UI changes need a flag.** If you change `packages/editor/` visuals, note it in your PR. The landing page no longer embeds the editor, so no demo re-sync is needed.
 
 6. **`deploy/` configures the host; Terraform does not.** No serverless (no Lambda, Aurora, or API Gateway), no config bucket, no bootstrap logic in `user-data.sh`. Host config changes are commits to `deploy/`.
