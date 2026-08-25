@@ -304,15 +304,20 @@ function ReactionRow({
 
       {canAct ? (
         <div className="rev-reaction-picker" ref={pickerRef}>
+          {/* Says "React", rather than being an icon a reader has to hover
+              to discover. The people this is for do not know that a faint
+              glyph under a comment is a control, and a button nobody finds is
+              a button that does not exist. */}
           <button
             type="button"
             className="rev-reaction-add"
-            aria-label="React to this comment"
+            title="React to this comment"
             aria-expanded={pickerOpen}
             aria-haspopup="menu"
             onClick={() => setPickerOpen((open) => !open)}
           >
             <SmilePlus size={13} strokeWidth={1.5} aria-hidden="true" />
+            React
           </button>
 
           {pickerOpen ? (

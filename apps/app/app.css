@@ -2450,17 +2450,21 @@ input {
   display: inline-flex;
 }
 
+/* Shaped like the chips it sits beside, because it belongs to that row —
+   and visible at rest, because a control only the initiated know to hover
+   for is a control most readers never find. */
 .rev-reaction-add {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 22px;
-  padding: 0;
-  border: 1px solid transparent;
+  gap: 5px;
+  padding: 2px 9px 2px 7px;
+  border: 1px dashed var(--bs-rule);
   border-radius: var(--brand-radius-full);
   background: none;
-  color: var(--bs-text-faint);
+  font-family: var(--brand-font-sans);
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--bs-text-muted);
   cursor: pointer;
   transition: all var(--brand-transition-fast);
 }
@@ -2468,7 +2472,8 @@ input {
 .rev-reaction-add:hover,
 .rev-reaction-add:focus-visible,
 .rev-reaction-add[aria-expanded="true"] {
-  border-color: var(--bs-rule);
+  border-style: solid;
+  border-color: var(--bs-text-faint);
   background: var(--bs-surface-1);
   color: var(--bs-text-secondary);
 }
