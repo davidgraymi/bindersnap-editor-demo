@@ -454,6 +454,7 @@ export function DocumentChangeDetail({
         updates={updates}
         resetsApprovals={resetsApprovals}
         canParticipate={!isAnonymous}
+        currentUsername={currentUser}
         blockOnUnresolvedThreads={blockOnUnresolvedThreads}
         onOpenUpdate={
           proposed.ref === null ? null : () => onViewChange("preview")

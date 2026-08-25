@@ -1,9 +1,20 @@
-import { useState } from "react";
-import { Check } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Check, SmilePlus } from "lucide-react";
 
-import type { DiscussionThread } from "../api";
+import type {
+  CommentReaction,
+  DiscussionComment,
+  DiscussionThread,
+  ReactionKind,
+} from "../api";
 import { buildThreadFacts, formatEventDate } from "../changeReview";
 import { capitalizeFirst } from "../documentDisplay";
+import {
+  describeReaction,
+  describeReactionAction,
+  findReactionDisplay,
+  REACTION_DISPLAY,
+} from "../reactions";
 import { PersonAvatar } from "./PersonAvatar";
 
 interface ReviewThreadProps {
@@ -11,8 +22,16 @@ interface ReviewThreadProps {
   /** Read-only visitors get the record without the controls. */
   canParticipate: boolean;
   busy: boolean;
+  /** Whose reactions read as "You". Empty for a signed-out reader. */
+  currentUsername: string;
   onReply: (threadId: string, body: string) => Promise<boolean>;
   onToggleResolved: (threadId: string, resolved: boolean) => Promise<void>;
+  onReact: (
+    threadId: string,
+    commentId: number,
+    content: ReactionKind,
+    on: boolean,
+  ) => void;
 }
 
 function displayName(author: { login: string; fullName: string }): string {
@@ -37,8 +56,10 @@ export function ReviewThread({
   thread,
   canParticipate,
   busy,
+  currentUsername,
   onReply,
   onToggleResolved,
+  onReact,
 }: ReviewThreadProps) {
   // Resolved threads open collapsed. A reader who expands one has said they
   // want to read it, and nothing here overrules them afterwards.
@@ -118,6 +139,13 @@ export function ReviewThread({
 
       {hidden ? null : (
         <>
+          <ReactionRow
+            comment={root}
+            canAct={canAct}
+            currentUsername={currentUsername}
+            onReact={(content, on) => onReact(thread.id, root.id, content, on)}
+          />
+
           {replies.map((comment) => (
             <div className="rev-thread-reply" key={comment.id}>
               <div className="rev-thread-head">
@@ -130,6 +158,14 @@ export function ReviewThread({
                 </time>
               </div>
               <p className="rev-thread-body">{comment.body}</p>
+              <ReactionRow
+                comment={comment}
+                canAct={canAct}
+                currentUsername={currentUsername}
+                onReact={(content, on) =>
+                  onReact(thread.id, comment.id, content, on)
+                }
+              />
             </div>
           ))}
 
@@ -201,5 +237,159 @@ export function ReviewThread({
         </>
       )}
     </article>
+  );
+}
+
+/**
+ * The reactions on one comment, and the way to leave one.
+ *
+ * A chip is a toggle, not a tally: pressing one adds the reader's name to it
+ * and pressing it again takes it back. The counts sit under the comment they
+ * are about rather than in the thread header, because a thread of five
+ * comments has five different things somebody might be agreeing with.
+ *
+ * Reactions never enter the approval record — they are not a review, and they
+ * do not resolve anything. They exist so agreeing with a concern costs the
+ * record nothing, instead of a fourth comment reading "+1".
+ */
+function ReactionRow({
+  comment,
+  canAct,
+  currentUsername,
+  onReact,
+}: {
+  comment: DiscussionComment;
+  canAct: boolean;
+  currentUsername: string;
+  onReact: (content: ReactionKind, on: boolean) => void;
+}) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!pickerOpen) return;
+
+    const closeOnOutside = (event: MouseEvent) => {
+      if (!pickerRef.current?.contains(event.target as Node)) {
+        setPickerOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPickerOpen(false);
+    };
+
+    document.addEventListener("mousedown", closeOnOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [pickerOpen]);
+
+  // Nothing to show and nothing to press: a read-only reader gets the comment
+  // without an empty row under it.
+  if (comment.reactions.length === 0 && !canAct) return null;
+
+  return (
+    <div className="rev-reactions">
+      {comment.reactions.map((reaction) => (
+        <ReactionChip
+          key={reaction.content}
+          reaction={reaction}
+          canAct={canAct}
+          currentUsername={currentUsername}
+          onReact={onReact}
+        />
+      ))}
+
+      {canAct ? (
+        <div className="rev-reaction-picker" ref={pickerRef}>
+          {/* Icon only, but with a border at rest so it still reads as a
+              control rather than a smudge. What it does is said on hover and
+              to a screen reader. */}
+          <button
+            type="button"
+            className="rev-reaction-add"
+            title="React to this comment"
+            aria-label="React to this comment"
+            aria-expanded={pickerOpen}
+            aria-haspopup="menu"
+            onClick={() => setPickerOpen((open) => !open)}
+          >
+            <SmilePlus size={14} strokeWidth={1.5} aria-hidden="true" />
+          </button>
+
+          {pickerOpen ? (
+            <div className="rev-reaction-menu" role="menu">
+              {REACTION_DISPLAY.map((display) => {
+                const existing = comment.reactions.find(
+                  (reaction) => reaction.content === display.kind,
+                );
+                const mine = existing?.viewerReacted ?? false;
+                return (
+                  <button
+                    key={display.kind}
+                    type="button"
+                    role="menuitem"
+                    className={`rev-reaction-menu-item${
+                      mine ? " rev-reaction-menu-item--on" : ""
+                    }`}
+                    // The row is five emoji, so what each one means — and
+                    // whether pressing it adds or takes back — is carried
+                    // entirely by the hover text and the accessible name.
+                    title={describeReactionAction(display, mine)}
+                    aria-label={describeReactionAction(display, mine)}
+                    onClick={() => {
+                      setPickerOpen(false);
+                      onReact(display.kind, !mine);
+                    }}
+                  >
+                    <span className="rev-reaction-emoji" aria-hidden="true">
+                      {display.emoji}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ReactionChip({
+  reaction,
+  canAct,
+  currentUsername,
+  onReact,
+}: {
+  reaction: CommentReaction;
+  canAct: boolean;
+  currentUsername: string;
+  onReact: (content: ReactionKind, on: boolean) => void;
+}) {
+  const display = findReactionDisplay(reaction.content);
+  if (!display) return null;
+
+  const sentence = describeReaction(reaction, currentUsername);
+
+  return (
+    <button
+      type="button"
+      className={`rev-reaction${reaction.viewerReacted ? " rev-reaction--on" : ""}`}
+      // A reader who cannot act still gets the count and who left it; the
+      // button simply does not move.
+      disabled={!canAct}
+      aria-pressed={reaction.viewerReacted}
+      title={sentence}
+      aria-label={sentence}
+      onClick={() => onReact(display.kind, !reaction.viewerReacted)}
+    >
+      <span className="rev-reaction-emoji" aria-hidden="true">
+        {display.emoji}
+      </span>
+      <span className="rev-reaction-count">{reaction.count}</span>
+    </button>
   );
 }

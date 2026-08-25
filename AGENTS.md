@@ -114,6 +114,7 @@ directly.
 - `GET/POST /api/app/documents/:owner/:repo/pull-requests/:n/discussions` — review threads
 - `POST /api/app/documents/:owner/:repo/pull-requests/:n/discussions/:threadId/comments` — reply
 - `POST /api/app/documents/:owner/:repo/pull-requests/:n/discussions/:threadId/resolve` — resolve/unresolve
+- `PUT /api/app/documents/:owner/:repo/pull-requests/:n/discussions/:threadId/comments/:commentId/reactions` — leave or take back a reaction
 - `POST /api/app/documents/:owner/:repo/pull-requests/:n/publish` — merge + tag
 - `GET /api/app/documents/:owner/:repo/download` — proxy file download
 - `GET/PUT/DELETE /api/app/documents/:owner/:repo/collaborators/:user` — manage access
@@ -221,6 +222,15 @@ carrying a trailing `<!-- bindersnap:v1 ... -->` marker. Resolution is an
 **append-only event log** — resolving posts a new comment rather than editing
 the root — because an audit product must never lose the history of who
 reopened a concern. See `services/api/gitea-client/discussions.ts`.
+
+**Reactions** on review comments are Gitea comment reactions, nothing more.
+The vocabulary is five keys — `+1`, `-1`, `confused`, `eyes`, `heart` — all
+inside Gitea's default allow-list, so no Gitea config change is involved. A
+reaction is deliberately not part of the approval record: it never counts
+toward `unresolvedCount`, never gates publishing, and never stands in for a
+review. It exists so that agreeing with a concern costs the record nothing
+instead of a fourth comment reading "+1". See
+`services/api/gitea-client/reactions.ts`.
 
 **Change assignments** follow the rule too. A change's assignee is the pull
 request's Gitea assignee and its reviewers are Gitea review requests, so who a

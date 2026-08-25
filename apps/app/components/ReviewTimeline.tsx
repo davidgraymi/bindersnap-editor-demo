@@ -9,13 +9,15 @@ import {
   X,
 } from "lucide-react";
 
-import type { ChangeUpdate, DiscussionSummary } from "../api";
+import type { ChangeUpdate, DiscussionSummary, ReactionKind } from "../api";
 import {
   createDocumentDiscussion,
   listDocumentDiscussions,
   replyToDocumentDiscussion,
   resolveDocumentDiscussion,
+  setDiscussionCommentReaction,
 } from "../api";
+import { applyReactionLocally } from "../reactions";
 import type { TimelineEntry, TimelineEntryKind } from "../changeReview";
 import { buildReviewTimeline } from "../changeReview";
 import type { ChangeRecord } from "../documentDisplay";
@@ -31,6 +33,8 @@ interface ReviewTimelineProps {
   /** Whether an update wipes earlier approvals, per branch protection. */
   resetsApprovals: boolean;
   canParticipate: boolean;
+  /** Whose reactions read as "You". Empty for a signed-out reader. */
+  currentUsername: string;
   blockOnUnresolvedThreads: boolean;
   /** Lets the page re-render its publish gate when the unresolved count moves. */
   onSummaryChange?: (summary: DiscussionSummary) => void;
@@ -113,6 +117,7 @@ export function ReviewTimeline({
   updates,
   resetsApprovals,
   canParticipate,
+  currentUsername,
   blockOnUnresolvedThreads,
   onSummaryChange,
   onOpenUpdate,
@@ -185,6 +190,47 @@ export function ReviewTimeline({
     }
   }
 
+  /**
+   * Move the chip first, then tell the server.
+   *
+   * A reaction is the cheapest thing on this page and the round trip is not.
+   * Waiting on the network to draw a "+1" makes the control feel broken, so
+   * the count moves immediately and the server's answer — which is the whole
+   * discussion — overwrites it either way. A failure puts the count back and
+   * says why.
+   */
+  function react(
+    threadId: string,
+    commentId: number,
+    content: ReactionKind,
+    on: boolean,
+  ): void {
+    const before = summary;
+    if (!before) return;
+
+    apply(
+      reactLocally(before, threadId, commentId, content, on, currentUsername),
+    );
+    setError(null);
+
+    void setDiscussionCommentReaction(
+      owner,
+      repo,
+      pullNumber,
+      threadId,
+      commentId,
+      content,
+      on,
+    )
+      .then(apply)
+      .catch((err: unknown) => {
+        apply(before);
+        setError(
+          err instanceof Error ? err.message : "Unable to save the reaction.",
+        );
+      });
+  }
+
   async function startThread() {
     const body = newThreadBody.trim();
     if (!body) return;
@@ -230,6 +276,8 @@ export function ReviewTimeline({
                   thread={entry.thread}
                   canParticipate={canParticipate}
                   busy={busy}
+                  currentUsername={currentUsername}
+                  onReact={react}
                   onReply={(threadId, body) =>
                     run(() =>
                       replyToDocumentDiscussion(
@@ -336,4 +384,42 @@ export function ReviewTimeline({
 /** Publishing is the one closing event that earns the green dot. */
 function isPublished(entry: TimelineEntry, change: ChangeRecord): boolean {
   return entry.kind === "closed" && change.outcome === "published";
+}
+
+/**
+ * The same summary with one reaction moved, for the moment before the server
+ * answers. Copies down to the comment that changed and leaves the rest of the
+ * record alone.
+ */
+function reactLocally(
+  summary: DiscussionSummary,
+  threadId: string,
+  commentId: number,
+  content: ReactionKind,
+  on: boolean,
+  currentUsername: string,
+): DiscussionSummary {
+  return {
+    ...summary,
+    threads: summary.threads.map((thread) =>
+      thread.id !== threadId
+        ? thread
+        : {
+            ...thread,
+            comments: thread.comments.map((comment) =>
+              comment.id !== commentId
+                ? comment
+                : {
+                    ...comment,
+                    reactions: applyReactionLocally(
+                      comment.reactions,
+                      content,
+                      on,
+                      { login: currentUsername, fullName: "" },
+                    ),
+                  },
+            ),
+          },
+    ),
+  };
 }
