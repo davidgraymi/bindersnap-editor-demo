@@ -68,29 +68,36 @@ test("the record names the document, the workspace, and the version on record", 
   const { html } = record([version(), version({ version: 2, tagName: "v2" })]);
 
   expect(html).toContain("<title>Quarterly Report — audit record</title>");
-  expect(html).toContain("alice/quarterly-report");
+  expect(html).toContain("<dd>alice</dd>");
   expect(html).toContain("<dd>v3</dd>");
   expect(html).toContain("<dd>2</dd>");
 });
 
-test("a tag that is not just the version number is named alongside it", () => {
-  const { html } = record([version({ tagName: "release-2026-08" })]);
-
-  expect(html).toContain("v3 (release-2026-08)");
-});
-
-test("every version is a section, newest first, with its commit", () => {
+test("nothing in the record is a tag, a commit, or a repository path", () => {
+  // The reader is an auditor, not an engineer. A version number is the whole
+  // identity; how Bindersnap stores it underneath is not their question, and
+  // they have no way to look any of it up.
   const { html } = record([
-    version({ version: 2, tagName: "v2", sha: "1111111111111111" }),
-    version({ version: 3, tagName: "v3", sha: "2222222222222222" }),
+    version({ tagName: "release-2026-08", sha: "abcdef0123456789" }),
   ]);
 
-  const tags = [...html.matchAll(/record-version-tag">(v\d+)</g)].map(
+  expect(html).not.toContain("release-2026-08");
+  expect(html).not.toContain("abcdef0123456789");
+  expect(html).not.toContain("alice/quarterly-report");
+  expect(html).not.toContain("Commit");
+  expect(html).not.toContain("Tag");
+});
+
+test("every version is a section, newest first", () => {
+  const { html } = record([
+    version({ version: 2, tagName: "v2" }),
+    version({ version: 3, tagName: "v3" }),
+  ]);
+
+  const labels = [...html.matchAll(/record-version-label">(v\d+)</g)].map(
     (match) => match[1],
   );
-  expect(tags).toEqual(["v3", "v2"]);
-  expect(html).toContain("2222222222222222");
-  expect(html).toContain("1111111111111111");
+  expect(labels).toEqual(["v3", "v2"]);
 });
 
 test("a review that no longer counts stays on the record, labelled", () => {

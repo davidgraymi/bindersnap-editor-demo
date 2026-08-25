@@ -131,10 +131,12 @@ function renderVersion(entry: DocumentVersionRecord): string {
     ? parseChangeTitle(submission.body, submission.submittedBy)
     : `Version ${entry.version}`;
 
+  // A version number is the whole identity a reader needs. The tag and the
+  // commit underneath it are how Bindersnap stores that version, not what the
+  // version is — and nobody reading this record can look either one up, so
+  // printing them only invites a question the file cannot answer.
   const facts: [string, string][] = [
     ["Published", formatTimestamp(entry.createdAt) || "Unknown"],
-    ["Tag", entry.tagName],
-    ["Commit", entry.sha],
   ];
 
   if (submission) {
@@ -167,7 +169,7 @@ function renderVersion(entry: DocumentVersionRecord): string {
   return [
     '<section class="record-version">',
     '<header class="record-version-head">',
-    `<span class="record-version-tag">v${entry.version}</span>`,
+    `<span class="record-version-label">v${entry.version}</span>`,
     `<h2>${escapeHtml(title)}</h2>`,
     "</header>",
     `<dl class="record-facts">${factRows}</dl>`,
@@ -194,17 +196,10 @@ export function buildAuditRecord(input: AuditRecordInput): AuditRecord {
   const current = newestFirst[0] ?? null;
 
   const summary: [string, string][] = [
-    ["Workspace", `${owner}/${repo}`],
-    // The tag is normally just "v3" — printing "v3 (v3)" is the same word
-    // twice, so the tag only earns its parentheses when it differs.
-    [
-      "Version on record",
-      current
-        ? current.tagName === `v${current.version}`
-          ? `v${current.version}`
-          : `v${current.version} (${current.tagName})`
-        : "None published",
-    ],
+    // The owner, not "owner/repo" — the slug is a storage path, and the
+    // document already has a name at the top of the page.
+    ["Workspace", owner],
+    ["Version on record", current ? `v${current.version}` : "None published"],
     ["Published versions", String(newestFirst.length)],
     ["Exported", formatTimestamp(generatedAt.toISOString()) || "Unknown"],
   ];
@@ -294,7 +289,7 @@ h1 {
   break-inside: avoid;
 }
 .record-version-head { display: flex; align-items: baseline; gap: 12px; }
-.record-version-tag {
+.record-version-label {
   font-family: var(--font-mono);
   font-size: 12px;
   letter-spacing: 0.06em;
@@ -346,7 +341,7 @@ footer {
 <main>
 <p class="record-eyebrow">Audit record</p>
 <h1>${escapeHtml(documentName)}</h1>
-<p class="record-lede">Every published version of this document, who submitted it, who signed it off, and when. Each version is an immutable tag on the document's repository — the commit named below is the file that was approved.</p>
+<p class="record-lede">Every published version of this document, who submitted it, who signed it off, and when. A published version cannot be altered — changing the document means a new version, reviewed again.</p>
 <div class="record-summary"><dl class="record-facts">${summaryRows}</dl></div>
 ${body}
 <footer>Exported from Bindersnap. This record is generated from the document's version history; it is not editable and re-exporting reproduces it.</footer>
