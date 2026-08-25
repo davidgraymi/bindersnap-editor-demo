@@ -4267,55 +4267,57 @@ input {
 }
 
 .app-nav-search-wrap {
-  /* Fixed, not shrinkable: the field has to stay wide enough to hold a
+  /* Fixed, not shrinkable: the trigger has to stay wide enough to hold a
      document name. The media queries below narrow it deliberately. */
   flex: 0 0 260px;
   min-width: 0;
   position: relative;
 }
 
-.app-nav-search {
+/* The nav holds a button that opens the search, not the search itself. It is
+   dressed as a field because that is what it stands in for. */
+.app-nav-search-trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  width: 260px;
+  max-width: 100%;
   height: 36px;
-  min-width: 0;
-  position: relative;
-}
-
-.app-nav-search-input {
-  width: 100%;
-  height: 36px;
+  padding: 0 10px 0 12px;
   background: var(--bs-surface-1);
   border: 1.5px solid var(--bs-rule);
   border-radius: var(--brand-radius-lg);
-  padding: 0 var(--brand-space-6) 0 34px;
+  font-family: inherit;
   font-size: 13px;
-  color: var(--bs-text-primary);
-  outline: none;
-  transition: none;
-}
-
-.app-nav-search-input::placeholder {
   color: var(--bs-text-faint);
+  text-align: left;
+  cursor: pointer;
 }
 
-.app-nav-search-input:focus {
-  border-color: var(--brand-coral);
-  background: var(--bs-surface-1);
+.app-nav-search-trigger:hover {
+  border-color: var(--bs-text-faint);
+}
+
+.app-nav-search-trigger:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 1px;
+}
+
+.app-nav-search-trigger-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .app-nav-search-icon {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
+  flex-shrink: 0;
   color: var(--bs-text-faint);
-  pointer-events: none;
 }
 
 .app-nav-search-kbd {
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
+  flex-shrink: 0;
   font-family: var(--brand-font-mono);
   font-size: 11px;
   color: var(--bs-text-faint);
@@ -4323,60 +4325,113 @@ input {
   border: 1px solid var(--bs-rule);
   border-radius: var(--brand-radius-sm);
   padding: 1px 5px;
-  pointer-events: none;
 }
 
 /* ── QUICK FIND ──────────────────────────────────────────────── */
 
-/* Clicking anywhere else is a way to dismiss the panel, and only that: the
-   backdrop is invisible so the page underneath still reads as the page. */
-.app-nav-search-backdrop {
+/* The page dims and steps back; the search is the only thing in front of the
+   reader. Sat high rather than centred, because the list grows downward. */
+.quick-find-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: var(--brand-z-modal);
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: max(12vh, var(--brand-space-8)) var(--brand-space-5)
+    var(--brand-space-8);
 }
 
-.app-nav-search-panel {
-  /* Fixed, and positioned from JS: the nav clips what overflows it, so a
-     panel laid out inside it is cut off at the nav's bottom edge. The
-     component measures the box and anchors this to it. */
-  position: fixed;
-  /* Wider than the box it hangs from: a document name is longer than the
-     query that found it. */
-  width: min(320px, calc(100vw - 16px));
-  z-index: 41;
+.quick-find-dialog {
+  width: min(100%, 640px);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
   background: var(--bs-surface-1);
-  border: 1.5px solid var(--bs-rule);
-  border-radius: var(--brand-radius-lg);
-  box-shadow: var(--bs-shadow-lg);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-xl);
+  box-shadow: var(--bs-shadow-xl);
   overflow: hidden;
 }
 
-.app-nav-search-results {
-  /* About five rows. Past that the list scrolls, which is also what asks for
-     the next page. */
-  max-height: 264px;
-  overflow-y: auto;
+.quick-find-field {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-3);
+  padding: 0 var(--brand-space-5);
+  height: 60px;
+  border-bottom: 1px solid var(--bs-rule);
+  flex-shrink: 0;
+}
+
+.quick-find-field-icon {
+  color: var(--bs-text-faint);
+  flex-shrink: 0;
+}
+
+.quick-find-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 17px;
+  color: var(--bs-text-primary);
+  outline: none;
+}
+
+.quick-find-input::placeholder {
+  color: var(--bs-text-faint);
+}
+
+.quick-find-field-hint {
+  flex-shrink: 0;
+  font-family: var(--brand-font-mono);
+  font-size: 11px;
+  color: var(--bs-text-faint);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-sm);
+  padding: 2px 6px;
+}
+
+.quick-find-body {
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.quick-find-results {
   margin: 0;
   padding: var(--brand-space-2);
   list-style: none;
+  overflow-y: auto;
+  min-height: 0;
 }
 
-.app-nav-search-result {
+.quick-find-result {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 7px 10px;
+  align-items: center;
+  gap: var(--brand-space-3);
+  padding: 9px 12px;
   border-radius: var(--brand-radius-md);
   cursor: pointer;
 }
 
-.app-nav-search-result--active {
+.quick-find-result--active {
   background: var(--bs-surface-3);
 }
 
-.app-nav-search-result-name {
-  font-size: 13px;
+.quick-find-result-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.quick-find-result-name {
+  font-size: 14px;
   font-weight: var(--brand-weight-medium);
   color: var(--bs-text-primary);
   overflow: hidden;
@@ -4384,39 +4439,69 @@ input {
   white-space: nowrap;
 }
 
-.app-nav-search-result-meta {
-  font-size: 11px;
+.quick-find-result-meta {
+  font-size: 12px;
   color: var(--bs-text-faint);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.app-nav-search-note {
-  margin: 0;
-  padding: 12px;
-  font-size: 12px;
+.quick-find-result-enter {
+  flex-shrink: 0;
   color: var(--bs-text-faint);
 }
 
-.app-nav-search-all {
-  display: block;
-  width: 100%;
-  padding: 9px 12px;
-  border: none;
+.quick-find-note {
+  margin: 0;
+  padding: var(--brand-space-5);
+  font-size: 13px;
+  color: var(--bs-text-faint);
+}
+
+.quick-find-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--brand-space-3);
+  padding: 8px var(--brand-space-4) 8px 8px;
   border-top: 1px solid var(--bs-rule);
+  flex-shrink: 0;
+}
+
+.quick-find-all {
+  padding: 6px 10px;
+  border: none;
+  border-radius: var(--brand-radius-md);
   background: transparent;
   font-family: inherit;
   font-size: 12px;
   font-weight: var(--brand-weight-medium);
   color: var(--bs-text-secondary);
-  text-align: left;
   cursor: pointer;
 }
 
-.app-nav-search-all:hover {
+.quick-find-all:hover:not(:disabled) {
   background: var(--bs-surface-2);
   color: var(--bs-text-primary);
+}
+
+.quick-find-all:disabled {
+  color: var(--bs-text-faint);
+  cursor: default;
+}
+
+.quick-find-legend {
+  font-size: 11px;
+  color: var(--bs-text-faint);
+}
+
+.quick-find-legend kbd {
+  font-family: var(--brand-font-mono);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-sm);
+  padding: 1px 4px;
+  margin: 0 1px;
 }
 
 .app-topnav-link {
@@ -5284,6 +5369,10 @@ input {
   .app-nav-search-wrap {
     flex: 0 1 180px;
   }
+
+  .app-nav-search-trigger {
+    width: 100%;
+  }
 }
 
 @media (max-width: 768px) {
@@ -5305,8 +5394,31 @@ input {
     padding: 0 var(--brand-space-4);
   }
 
+  /* The overlay is the whole screen here, so the way in is worth keeping —
+     it just shrinks to the icon that opens it. */
   .app-nav-search-wrap {
+    flex: 0 0 auto;
+  }
+
+  .app-nav-search-trigger {
+    width: 36px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .app-nav-search-trigger-label,
+  .app-nav-search-kbd {
     display: none;
+  }
+
+  /* Keyboard hints are noise on a touch screen, and dropping them keeps the
+     one action down there on a single line. */
+  .quick-find-legend {
+    display: none;
+  }
+
+  .quick-find-all {
+    white-space: nowrap;
   }
 
   .app-topnav-nav {

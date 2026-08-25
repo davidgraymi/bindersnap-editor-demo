@@ -1,11 +1,6 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
-import { Search } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { CornerDownLeft, Search } from "lucide-react";
 
 import { searchDocuments } from "../api";
 import type { QuickFindResult } from "../quickFind";
@@ -21,36 +16,34 @@ import {
 } from "../quickFind";
 import type { AppRoute } from "../routes";
 
-/** The panel is wider than the box: a document name is longer than a query. */
-const NAV_SEARCH_PANEL_WIDTH = 320;
-/** Breathing room between the panel and the edge of the window. */
-const NAV_SEARCH_PANEL_MARGIN = 8;
-/** And between the panel and the box it belongs to. */
-const NAV_SEARCH_PANEL_GAP = 6;
-
 interface NavSearchProps {
   /** Whose workspace this is, so a row can say "You own" instead of a name. */
   currentUsername: string;
   /** The query the address bar arrived with, if the reader linked to one. */
   initialQuery: string;
-  /** Open a document — the whole point of the panel. */
+  /** Open a document — the whole point of the overlay. */
   onNavigate: (route: AppRoute) => void;
-  /** Fall back to the library, for a search too broad to answer in a panel. */
+  /** Fall back to the library, for a search too broad to answer in a list. */
   onSearchLibrary: (query: string) => void;
 }
 
 /**
- * The nav search box, and the panel of documents under it.
+ * Quick find: the nav's search, opened as an overlay over the whole page.
  *
- * Typing asks the server directly instead of waiting for a submit, so the
- * document a reader is looking for is usually on screen before they finish
- * naming it. Results come a page at a time and the panel asks for the next
- * one when the reader scrolls to the bottom of what it already has, which
- * keeps the first page fast no matter how many documents match.
+ * The nav holds a button, not a field. Pressing it — or `/`, or ⌘K — puts the
+ * search in front of the reader instead of off in the corner: a dimmed page,
+ * a wide field near the top, and results directly under it. Browsing a list
+ * of documents is the main thing this does, and a list you read straight
+ * ahead is easier than one squeezed under a 260px box.
  *
- * The keyboard is the fast path all the way through: `/` focuses the box,
- * arrows move down the list, Enter opens the highlighted document, and Enter
- * with nothing highlighted still does what it always did — search the library.
+ * Typing asks the server instead of waiting for a submit, so the document
+ * someone is looking for is usually on screen before they finish naming it.
+ * Results come a page at a time and the next page is fetched when the reader
+ * scrolls to the bottom of the list.
+ *
+ * The keyboard is the fast path all the way through: arrows move down the
+ * list, Enter opens the highlighted document, Enter with nothing highlighted
+ * searches the library, and Escape closes without going anywhere.
  */
 export function NavSearch({
   currentUsername,
@@ -58,8 +51,8 @@ export function NavSearch({
   onNavigate,
   onSearchLibrary,
 }: NavSearchProps) {
-  const [query, setQuery] = useState(initialQuery);
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<QuickFindResult[]>([]);
   const [highlight, setHighlight] = useState(-1);
   const [loading, setLoading] = useState(false);
@@ -67,21 +60,10 @@ export function NavSearch({
   const [hasMore, setHasMore] = useState(false);
   const [failed, setFailed] = useState(false);
 
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
-  const wrapRef = useRef<HTMLDivElement>(null);
-  /**
-   * Where the panel hangs, in viewport coordinates.
-   *
-   * The nav clips what overflows it — that is what keeps the avatar from
-   * escaping its right edge — so a panel positioned inside it is cut off at
-   * the nav's own bottom. The profile menu solves this by being `fixed` at a
-   * hardcoded offset, which it can do because it is anchored to the right
-   * edge; the search box moves with the viewport, so its panel measures.
-   */
-  const [anchor, setAnchor] = useState<{ top: number; left: number } | null>(
-    null,
-  );
+  const dialogRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef(1);
   /**
    * Which query each response belongs to. Responses can land out of order, and
@@ -89,42 +71,53 @@ export function NavSearch({
    */
   const queryRef = useRef(query);
 
-  const closePanel = useCallback(() => {
+  const closeOverlay = useCallback(() => {
     setOpen(false);
     setHighlight(-1);
+    // Closing puts the reader back where they were, which for a keyboard is
+    // the button they opened this from.
+    triggerRef.current?.focus();
   }, []);
 
-  // "/" puts the cursor in search from anywhere — unless the reader is already
+  // `/` and ⌘K both open it from anywhere — unless the reader is already
   // typing somewhere, where a slash is just a slash.
   useEffect(() => {
-    const focusSearch = (event: KeyboardEvent) => {
-      if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) {
-        return;
-      }
+    const onKeyDown = (event: KeyboardEvent) => {
+      const isCommandK =
+        (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k";
+      const isSlash =
+        event.key === "/" && !event.metaKey && !event.ctrlKey && !event.altKey;
+      if (!isCommandK && !isSlash) return;
+
       const target = event.target as HTMLElement | null;
       const tag = target?.tagName;
-      if (
+      const typing =
         tag === "INPUT" ||
         tag === "TEXTAREA" ||
         tag === "SELECT" ||
-        target?.isContentEditable
-      ) {
-        return;
-      }
+        target?.isContentEditable === true;
+      // ⌘K is a chord nothing else claims, so it works mid-sentence too.
+      if (typing && !isCommandK) return;
+
       event.preventDefault();
-      inputRef.current?.focus();
+      setOpen(true);
     };
 
-    document.addEventListener("keydown", focusSearch);
-    return () => document.removeEventListener("keydown", focusSearch);
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
+
+  // The field is the only thing anyone opens this to reach.
+  useEffect(() => {
+    if (open) inputRef.current?.focus();
+  }, [open]);
 
   // Every settled keystroke is a new first page. The debounce is what keeps a
   // typed word from being eight separate searches.
   useEffect(() => {
     queryRef.current = query;
 
-    if (!isQuickFindQuery(query)) {
+    if (!open || !isQuickFindQuery(query)) {
       setResults([]);
       setHasMore(false);
       setLoading(false);
@@ -158,7 +151,7 @@ export function NavSearch({
     }, QUICK_FIND_DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
-  }, [query, currentUsername]);
+  }, [open, query, currentUsername]);
 
   const loadNextPage = useCallback(() => {
     if (!hasMore || loading || loadingMore) return;
@@ -182,7 +175,7 @@ export function NavSearch({
       .catch(() => {
         if (queryRef.current !== asked) return;
         // A page that failed is not a search that failed: keep what is on
-        // screen and stop asking rather than emptying the panel underneath
+        // screen and stop asking rather than emptying the list underneath
         // the reader.
         setHasMore(false);
       })
@@ -194,8 +187,7 @@ export function NavSearch({
 
   const openResult = useCallback(
     (result: QuickFindResult) => {
-      closePanel();
-      inputRef.current?.blur();
+      closeOverlay();
       onNavigate({
         kind: "document",
         owner: result.owner,
@@ -203,25 +195,18 @@ export function NavSearch({
         tab: "overview",
       });
     },
-    [closePanel, onNavigate],
+    [closeOverlay, onNavigate],
   );
 
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Escape") {
-      if (open && results.length > 0) {
-        closePanel();
-        return;
-      }
-      setQuery("");
-      closePanel();
-      inputRef.current?.blur();
-      return;
-    }
+  const searchLibrary = useCallback(() => {
+    closeOverlay();
+    onSearchLibrary(query.trim());
+  }, [closeOverlay, onSearchLibrary, query]);
 
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       if (results.length === 0) return;
       event.preventDefault();
-      setOpen(true);
       setHighlight((current) =>
         moveQuickFindHighlight(
           current,
@@ -239,58 +224,225 @@ export function NavSearch({
       openResult(picked);
       return;
     }
-    closePanel();
-    inputRef.current?.blur();
-    onSearchLibrary(query.trim());
+    searchLibrary();
+  };
+
+  /**
+   * Escape closes from anywhere inside, and Tab stays inside while it is open.
+   *
+   * Everything behind the dim is out of reach for a mouse, and a modal that
+   * lets the keyboard wander back there is a modal only for people using a
+   * mouse.
+   */
+  const handleDialogKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeOverlay();
+      return;
+    }
+
+    if (event.key !== "Tab") return;
+    const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+      "input, button:not([disabled])",
+    );
+    if (!focusable || focusable.length === 0) return;
+
+    const first = focusable[0]!;
+    const last = focusable[focusable.length - 1]!;
+    const active = document.activeElement;
+
+    if (event.shiftKey && active === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      first.focus();
+    }
   };
 
   // The highlighted row has to be a row the reader can see, however they moved
   // to it — arrow keys can wrap from the last result back to the first.
   useEffect(() => {
     if (highlight < 0) return;
-    const list = listRef.current;
-    const row = list?.children[highlight] as HTMLElement | undefined;
+    const row = listRef.current?.children[highlight] as HTMLElement | undefined;
     row?.scrollIntoView({ block: "nearest" });
   }, [highlight]);
 
-  const showPanel = open && isQuickFindQuery(query);
-
-  useLayoutEffect(() => {
-    if (!showPanel) {
-      setAnchor(null);
-      return;
-    }
-
-    const measure = () => {
-      const box = wrapRef.current?.getBoundingClientRect();
-      if (!box) return;
-      // Keep the whole panel on screen when the box sits close to the right
-      // edge: it is wider than the box it hangs from.
-      const width = Math.max(NAV_SEARCH_PANEL_WIDTH, box.width);
-      const maxLeft = window.innerWidth - width - NAV_SEARCH_PANEL_MARGIN;
-      setAnchor({
-        top: box.bottom + NAV_SEARCH_PANEL_GAP,
-        left: Math.max(NAV_SEARCH_PANEL_MARGIN, Math.min(box.left, maxLeft)),
-      });
-    };
-
-    measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, [showPanel]);
-
   const activeId =
     highlight >= 0 && results[highlight]
-      ? `nav-search-result-${highlight}`
+      ? `quick-find-result-${highlight}`
       : undefined;
+  const searching = isQuickFindQuery(query);
+
+  const overlay = (
+    <div
+      className="quick-find-backdrop"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) closeOverlay();
+      }}
+    >
+      <div
+        className="quick-find-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Search documents"
+        ref={dialogRef}
+        onKeyDown={handleDialogKeyDown}
+      >
+        <form
+          className="quick-find-field"
+          role="search"
+          onSubmit={handleSubmit}
+        >
+          <Search
+            className="quick-find-field-icon"
+            aria-hidden="true"
+            size={18}
+            strokeWidth={1.5}
+          />
+          <input
+            ref={inputRef}
+            className="quick-find-input"
+            type="text"
+            placeholder="Search documents"
+            aria-label="Search documents"
+            role="combobox"
+            aria-expanded={searching}
+            aria-controls="quick-find-results"
+            aria-autocomplete="list"
+            aria-activedescendant={activeId}
+            value={query}
+            autoComplete="off"
+            spellCheck={false}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={handleKeyDown}
+          />
+          <span className="quick-find-field-hint" aria-hidden="true">
+            Esc
+          </span>
+        </form>
+
+        <div className="quick-find-body">
+          {results.length > 0 && (
+            <ul
+              ref={listRef}
+              className="quick-find-results"
+              id="quick-find-results"
+              role="listbox"
+              aria-label="Matching documents"
+              onScroll={(event) => {
+                const list = event.currentTarget;
+                if (
+                  shouldLoadNextQuickFindPage(
+                    list.scrollTop,
+                    list.clientHeight,
+                    list.scrollHeight,
+                  )
+                ) {
+                  loadNextPage();
+                }
+              }}
+            >
+              {results.map((result, index) => (
+                <li
+                  key={result.key}
+                  id={`quick-find-result-${index}`}
+                  className={`quick-find-result${
+                    index === highlight ? " quick-find-result--active" : ""
+                  }`}
+                  role="option"
+                  aria-selected={index === highlight}
+                  onMouseEnter={() => setHighlight(index)}
+                  onMouseDown={(event) => {
+                    // Mouse-down, not click: the input blurs first otherwise
+                    // and the row is gone before the click lands.
+                    event.preventDefault();
+                    openResult(result);
+                  }}
+                >
+                  <span className="quick-find-result-copy">
+                    <span className="quick-find-result-name">
+                      {result.name}
+                    </span>
+                    <span className="quick-find-result-meta">
+                      {result.meta}
+                    </span>
+                  </span>
+                  {index === highlight && (
+                    <CornerDownLeft
+                      className="quick-find-result-enter"
+                      aria-hidden="true"
+                      size={14}
+                      strokeWidth={1.5}
+                    />
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {loadingMore && (
+            <p className="quick-find-note" role="status">
+              Loading more…
+            </p>
+          )}
+
+          {!searching && (
+            <p className="quick-find-note">
+              Type to search every document you can see.
+            </p>
+          )}
+
+          {searching && loading && results.length === 0 && (
+            <p className="quick-find-note" role="status">
+              Searching…
+            </p>
+          )}
+
+          {searching && !loading && failed && (
+            <p className="quick-find-note">Search is unavailable right now.</p>
+          )}
+
+          {searching && !loading && !failed && results.length === 0 && (
+            <p className="quick-find-note">
+              {describeQuickFindEmptyState(query)}
+            </p>
+          )}
+        </div>
+
+        <div className="quick-find-footer">
+          <button
+            type="button"
+            className="quick-find-all"
+            disabled={!searching}
+            onMouseDown={(event) => {
+              event.preventDefault();
+              searchLibrary();
+            }}
+          >
+            See all matches in Documents
+          </button>
+          <span className="quick-find-legend" aria-hidden="true">
+            <kbd>↑</kbd>
+            <kbd>↓</kbd> to move · <kbd>↵</kbd> to open
+          </span>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="app-nav-search-wrap" ref={wrapRef}>
-      <form
-        className="app-nav-search"
-        role="search"
-        onSubmit={handleSubmit}
-        aria-owns="nav-search-panel"
+    <>
+      <button
+        type="button"
+        ref={triggerRef}
+        className="app-nav-search-trigger"
+        onClick={() => setOpen(true)}
+        // Named here rather than by its own text: on a phone the label and the
+        // shortcut hint are gone and only the icon is left.
+        aria-label="Search documents"
+        aria-haspopup="dialog"
+        aria-expanded={open}
       >
         <Search
           className="app-nav-search-icon"
@@ -298,139 +450,20 @@ export function NavSearch({
           size={14}
           strokeWidth={1.5}
         />
-        <input
-          ref={inputRef}
-          className="app-nav-search-input"
-          type="text"
-          placeholder="Search documents"
-          aria-label="Search documents"
-          role="combobox"
-          aria-expanded={showPanel}
-          aria-controls="nav-search-panel"
-          aria-autocomplete="list"
-          aria-activedescendant={activeId}
-          value={query}
-          autoComplete="off"
-          spellCheck={false}
-          onChange={(event) => {
-            setQuery(event.target.value);
-            setOpen(true);
-          }}
-          onFocus={() => setOpen(true)}
-          onKeyDown={handleKeyDown}
-        />
+        <span className="app-nav-search-trigger-label">
+          {query.trim() || "Search documents"}
+        </span>
         <span className="app-nav-search-kbd" aria-hidden="true">
           /
         </span>
-      </form>
+      </button>
 
-      {showPanel && (
-        <>
-          <div
-            className="app-nav-search-backdrop"
-            onMouseDown={closePanel}
-            aria-hidden="true"
-          />
-          <div
-            className="app-nav-search-panel"
-            id="nav-search-panel"
-            role="presentation"
-            style={{
-              top: anchor?.top ?? 0,
-              left: anchor?.left ?? 0,
-              // Until the first measurement lands there is nowhere to put it,
-              // and a panel in the top-left corner is worse than no panel.
-              visibility: anchor ? "visible" : "hidden",
-            }}
-          >
-            {results.length > 0 && (
-              <ul
-                ref={listRef}
-                className="app-nav-search-results"
-                role="listbox"
-                aria-label="Matching documents"
-                onScroll={(event) => {
-                  const list = event.currentTarget;
-                  if (
-                    shouldLoadNextQuickFindPage(
-                      list.scrollTop,
-                      list.clientHeight,
-                      list.scrollHeight,
-                    )
-                  ) {
-                    loadNextPage();
-                  }
-                }}
-              >
-                {results.map((result, index) => (
-                  <li
-                    key={result.key}
-                    id={`nav-search-result-${index}`}
-                    className={`app-nav-search-result${
-                      index === highlight
-                        ? " app-nav-search-result--active"
-                        : ""
-                    }`}
-                    role="option"
-                    aria-selected={index === highlight}
-                    onMouseEnter={() => setHighlight(index)}
-                    onMouseDown={(event) => {
-                      // Mouse-down, not click: the input blurs first otherwise
-                      // and the panel is gone before the click lands.
-                      event.preventDefault();
-                      openResult(result);
-                    }}
-                  >
-                    <span className="app-nav-search-result-name">
-                      {result.name}
-                    </span>
-                    <span className="app-nav-search-result-meta">
-                      {result.meta}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            {loadingMore && (
-              <p className="app-nav-search-note" role="status">
-                Loading more…
-              </p>
-            )}
-
-            {loading && results.length === 0 && (
-              <p className="app-nav-search-note" role="status">
-                Searching…
-              </p>
-            )}
-
-            {!loading && failed && (
-              <p className="app-nav-search-note">
-                Search is unavailable right now.
-              </p>
-            )}
-
-            {!loading && !failed && results.length === 0 && (
-              <p className="app-nav-search-note">
-                {describeQuickFindEmptyState(query)}
-              </p>
-            )}
-
-            <button
-              type="button"
-              className="app-nav-search-all"
-              onMouseDown={(event) => {
-                event.preventDefault();
-                closePanel();
-                inputRef.current?.blur();
-                onSearchLibrary(query.trim());
-              }}
-            >
-              See all matches in Documents
-            </button>
-          </div>
-        </>
-      )}
-    </div>
+      {/*
+        Into the body, not the nav: the nav clips what overflows it so the
+        avatar cannot escape its right edge, and an overlay is nothing but
+        overflow.
+      */}
+      {open && createPortal(overlay, document.body)}
+    </>
   );
 }

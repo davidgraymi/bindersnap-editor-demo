@@ -26,9 +26,12 @@ structure (change requests, approvals, versions) stays.
   `Needs your review`, `Ready to publish`, `Draft`.
 - Top nav (all pages): logo + wordmark, Home, Documents, spacer, search
   ("Search documents", `/` shortcut), coral "New document", bell, avatar.
-  No "Changes" nav link. Search answers while you type: a panel of matching
-  documents under the box, arrow keys and Enter to open one, more results
-  fetched as you scroll. Enter with nothing picked still lands on the library.
+  No "Changes" nav link. The nav holds a _button_, not a field: pressing it
+  (or `/`, or ⌘K) opens quick find as an overlay over the dimmed page — a wide
+  field near the top with matching documents listed under it, answered while
+  you type. Arrow keys and Enter open one, more results are fetched as you
+  scroll, Escape closes, and Enter with nothing picked lands on the library.
+  On phones the trigger collapses to its icon rather than disappearing.
 
 ## Screen decisions
 
