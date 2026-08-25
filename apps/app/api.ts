@@ -20,6 +20,7 @@ import type {
   DocumentDetailPayload,
   DocumentHistoryPayload,
   DocumentPermissionsPayload,
+  DocumentSearchResultsPayload,
   InitialDocumentUploadResult,
   ReactionKind,
   UploadResult,
@@ -57,6 +58,7 @@ export type {
   DocumentDetailPayload,
   DocumentHistoryPayload,
   DocumentPermissionsPayload,
+  DocumentSearchResultsPayload,
   DocumentVersionRecord,
   WorkspaceDocumentSummary,
   InitialDocumentUploadResult,
@@ -83,6 +85,7 @@ export type {
   DocTag,
   RepoCollaboratorPermissionSummary,
   RepoUserSummary,
+  WorkspaceRepo,
 } from "../../packages/api-schema/schemas/common";
 export type {
   ApprovalState,
@@ -200,6 +203,30 @@ export async function getWorkspaceDocuments(
     return response.data.documents ?? [];
   } catch (error) {
     handlePaymentRequired("/api/app/documents", error);
+  }
+}
+
+/**
+ * One page of quick-find matches: repo rows only, no per-document fan-out.
+ *
+ * The panel calls this on every settled keystroke and again for each page the
+ * reader scrolls into, so it stays deliberately cheap. The library listing is
+ * still the call that knows about versions and open changes.
+ */
+export async function searchDocuments(
+  query: string,
+  page = 1,
+  limit = 8,
+): Promise<DocumentSearchResultsPayload> {
+  try {
+    const response = await DocumentsClient.searchDocuments({
+      q: query,
+      page: String(page),
+      limit: String(limit),
+    });
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired("/api/app/documents/search", error);
   }
 }
 

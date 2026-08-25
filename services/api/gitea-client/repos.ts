@@ -250,12 +250,30 @@ export interface SearchWorkspaceReposParams {
   ownerUsername?: string;
   /** If set, return repos where this username is a member (owner or collaborator). */
   memberUsername?: string;
+  /** 1-based page of results. Defaults to the first page. */
+  page?: number;
+  /** How many repos one page holds. */
+  limit?: number;
 }
 
-export async function searchWorkspaceRepos(
+export interface SearchWorkspaceReposResult {
+  repos: WorkspaceRepo[];
+  page: number;
+  limit: number;
+  /**
+   * Gitea's repo search reports no total, so a full page is taken as the sign
+   * that another one may exist. The cost of guessing wrong is one empty fetch.
+   */
+  hasMore: boolean;
+}
+
+/** One page of matching repos, for a caller that pages through results. */
+export async function searchWorkspaceReposPage(
   params: SearchWorkspaceReposParams,
-): Promise<WorkspaceRepo[]> {
+): Promise<SearchWorkspaceReposResult> {
   const { client, q, ownerUsername, memberUsername } = params;
+  const page = params.page ?? 1;
+  const limit = params.limit ?? 100;
 
   const filterUsername = ownerUsername ?? memberUsername;
   const exclusive = !!ownerUsername;
@@ -274,7 +292,8 @@ export async function searchWorkspaceRepos(
     client.GET("/repos/search", {
       params: {
         query: {
-          limit: 100,
+          page,
+          limit,
           ...(q ? { q } : {}),
           ...(uid !== undefined ? { uid } : {}),
           ...(exclusive ? { exclusive: true } : {}),
@@ -283,7 +302,16 @@ export async function searchWorkspaceRepos(
     }),
   );
 
-  return result.data?.map(normalizeWorkspaceRepo) ?? [];
+  const repos = result.data?.map(normalizeWorkspaceRepo) ?? [];
+
+  return { repos, page, limit, hasMore: repos.length === limit };
+}
+
+export async function searchWorkspaceRepos(
+  params: SearchWorkspaceReposParams,
+): Promise<WorkspaceRepo[]> {
+  const { repos } = await searchWorkspaceReposPage(params);
+  return repos;
 }
 
 export async function createPrivateCurrentUserRepo(

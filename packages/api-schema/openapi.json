@@ -1877,6 +1877,68 @@
           "hasMore"
         ]
       },
+      "DocumentSearchResultsPayload": {
+        "type": "object",
+        "properties": {
+          "documents": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "number"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "full_name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "updated_at": {
+                  "type": "string"
+                },
+                "owner": {
+                  "type": "object",
+                  "properties": {
+                    "login": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "login"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "full_name",
+                "description",
+                "updated_at",
+                "owner"
+              ]
+            }
+          },
+          "page": {
+            "type": "number"
+          },
+          "limit": {
+            "type": "number"
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "documents",
+          "page",
+          "limit",
+          "hasMore"
+        ]
+      },
       "BillingStatusPayload": {
         "type": "object",
         "properties": {
@@ -2759,6 +2821,111 @@
                     "prTitle",
                     "branchName",
                     "commitSha"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/documents/search": {
+      "get": {
+        "operationId": "searchDocuments",
+        "tags": [
+          "documents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "q",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of document search results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "documents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "number"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "full_name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "updated_at": {
+                            "type": "string"
+                          },
+                          "owner": {
+                            "type": "object",
+                            "properties": {
+                              "login": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "login"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "full_name",
+                          "description",
+                          "updated_at",
+                          "owner"
+                        ]
+                      }
+                    },
+                    "page": {
+                      "type": "number"
+                    },
+                    "limit": {
+                      "type": "number"
+                    },
+                    "hasMore": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "documents",
+                    "page",
+                    "limit",
+                    "hasMore"
                   ]
                 }
               }
