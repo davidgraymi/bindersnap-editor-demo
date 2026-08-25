@@ -53,6 +53,7 @@ function thread(overrides: Partial<any> = {}) {
         createdAt: "2026-08-20T10:00:00Z",
         updatedAt: "2026-08-20T10:00:00Z",
         htmlUrl: "",
+        reactions: [],
       },
     ],
     events: [],
@@ -183,6 +184,7 @@ test("a reply makes it a thread, and the toggle counts the replies", () => {
         createdAt: "2026-08-21T09:00:00Z",
         updatedAt: "2026-08-21T09:00:00Z",
         htmlUrl: "",
+        reactions: [],
       },
     ],
   });

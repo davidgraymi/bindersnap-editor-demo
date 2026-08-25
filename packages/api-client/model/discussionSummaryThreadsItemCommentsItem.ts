@@ -5,6 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { DiscussionSummaryThreadsItemCommentsItemAuthor } from './discussionSummaryThreadsItemCommentsItemAuthor.ts';
+import type { DiscussionSummaryThreadsItemCommentsItemReactionsItem } from './discussionSummaryThreadsItemCommentsItemReactionsItem.ts';
 
 export type DiscussionSummaryThreadsItemCommentsItem = {
   id: number;
@@ -14,4 +15,5 @@ export type DiscussionSummaryThreadsItemCommentsItem = {
   createdAt: string;
   updatedAt: string;
   htmlUrl: string;
+  reactions: DiscussionSummaryThreadsItemCommentsItemReactionsItem[];
 };

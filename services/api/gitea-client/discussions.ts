@@ -1,6 +1,11 @@
 import type { components } from "./spec/gitea";
 
 import { GiteaApiError, unwrap, type GiteaClient } from "./client";
+import {
+  listCommentReactions,
+  setCommentReaction,
+  type CommentReaction,
+} from "./reactions";
 
 type Comment = components["schemas"]["Comment"];
 
@@ -63,6 +68,12 @@ export interface DiscussionComment {
   createdAt: string;
   updatedAt: string;
   htmlUrl: string;
+  /**
+   * Agreement, disagreement, and "I'm on it" — never part of the approval
+   * record. Empty unless the caller asked for reactions, which costs one
+   * Gitea request per comment.
+   */
+  reactions: CommentReaction[];
 }
 
 export interface DiscussionResolutionEvent {
@@ -102,6 +113,14 @@ export interface ListDiscussionsParams {
   owner: string;
   repo: string;
   pullNumber: number;
+  /** Who is reading, so a chip can show as already pressed. */
+  viewerLogin?: string | null;
+  /**
+   * Reactions cost one Gitea request per comment, so the callers that only
+   * need the resolved/unresolved count — publish gating, most of all — leave
+   * them off.
+   */
+  withReactions?: boolean;
 }
 
 export interface CreateDiscussionThreadParams extends ListDiscussionsParams {
@@ -116,6 +135,13 @@ export interface ReplyToDiscussionParams extends ListDiscussionsParams {
 export interface SetDiscussionResolutionParams extends ListDiscussionsParams {
   threadId: string;
   resolved: boolean;
+}
+
+export interface SetCommentReactionInThreadParams extends ListDiscussionsParams {
+  threadId: string;
+  commentId: number;
+  content: string;
+  on: boolean;
 }
 
 export function isValidThreadId(value: string): boolean {
@@ -302,6 +328,7 @@ export function buildThreads(comments: Comment[]): DiscussionThread[] {
       createdAt,
       updatedAt: comment.updated_at ?? createdAt,
       htmlUrl: comment.html_url ?? "",
+      reactions: [],
     });
     // Saying something new about a settled concern unsettles it. Somebody had
     // to reopen the thread by hand before, which meant the common case — one
@@ -370,18 +397,101 @@ async function postComment(
   );
 }
 
+/**
+ * Hang each comment's reactions off the thread it belongs to.
+ *
+ * Mutates in place: the threads were just built here and nothing else has seen
+ * them yet.
+ */
+function attachReactions(
+  threads: DiscussionThread[],
+  byComment: Map<number, CommentReaction[]>,
+): void {
+  for (const thread of threads) {
+    for (const comment of thread.comments) {
+      comment.reactions = byComment.get(comment.id) ?? [];
+    }
+  }
+}
+
 export async function listDiscussions(
   params: ListDiscussionsParams,
 ): Promise<DiscussionSummary> {
-  const { client, owner, repo, pullNumber } = params;
+  const { client, owner, repo, pullNumber, viewerLogin, withReactions } =
+    params;
   const comments = await listAllComments(client, owner, repo, pullNumber);
-  return summarizeThreads(buildThreads(comments));
+  const threads = buildThreads(comments);
+
+  if (withReactions) {
+    const commentIds = threads.flatMap((thread) =>
+      thread.comments.map((comment) => comment.id),
+    );
+    attachReactions(
+      threads,
+      await listCommentReactions({
+        client,
+        owner,
+        repo,
+        commentIds,
+        viewerLogin: viewerLogin ?? null,
+      }),
+    );
+  }
+
+  return summarizeThreads(threads);
+}
+
+/**
+ * Leave or take back a reaction on one comment in a thread.
+ *
+ * The comment id is checked against the thread it claims to be in before
+ * anything is written, so a request cannot reach a comment on another change —
+ * or another repo — by guessing an id.
+ */
+export async function setCommentReactionInThread(
+  params: SetCommentReactionInThreadParams,
+): Promise<DiscussionSummary> {
+  const {
+    client,
+    owner,
+    repo,
+    pullNumber,
+    threadId,
+    commentId,
+    content,
+    on,
+    viewerLogin,
+  } = params;
+
+  if (!isValidThreadId(threadId)) {
+    throw new GiteaApiError(0, "Invalid thread id.");
+  }
+
+  const existing = await listDiscussions({ client, owner, repo, pullNumber });
+  const thread = existing.threads.find(
+    (candidate) => candidate.id === threadId,
+  );
+  if (!thread?.comments.some((comment) => comment.id === commentId)) {
+    throw new GiteaApiError(404, "Comment not found on this change.");
+  }
+
+  await setCommentReaction({ client, owner, repo, commentId, content, on });
+
+  return listDiscussions({
+    client,
+    owner,
+    repo,
+    pullNumber,
+    viewerLogin,
+    withReactions: true,
+  });
 }
 
 export async function createDiscussionThread(
   params: CreateDiscussionThreadParams,
 ): Promise<DiscussionSummary> {
-  const { client, owner, repo, pullNumber, body } = params;
+  const { client, owner, repo, pullNumber, body, viewerLogin, withReactions } =
+    params;
 
   if (stripForgedMarkers(body).trim() === "") {
     throw new GiteaApiError(0, "A comment body is required.");
@@ -396,13 +506,29 @@ export async function createDiscussionThread(
     composeBody(body, "thread", threadId),
   );
 
-  return listDiscussions({ client, owner, repo, pullNumber });
+  return listDiscussions({
+    client,
+    owner,
+    repo,
+    pullNumber,
+    viewerLogin,
+    withReactions,
+  });
 }
 
 export async function replyToDiscussion(
   params: ReplyToDiscussionParams,
 ): Promise<DiscussionSummary> {
-  const { client, owner, repo, pullNumber, threadId, body } = params;
+  const {
+    client,
+    owner,
+    repo,
+    pullNumber,
+    threadId,
+    body,
+    viewerLogin,
+    withReactions,
+  } = params;
 
   if (!isValidThreadId(threadId)) {
     throw new GiteaApiError(0, "Invalid thread id.");
@@ -428,19 +554,45 @@ export async function replyToDiscussion(
     composeBody(body, "reply", threadId),
   );
 
-  return listDiscussions({ client, owner, repo, pullNumber });
+  return listDiscussions({
+    client,
+    owner,
+    repo,
+    pullNumber,
+    viewerLogin,
+    withReactions,
+  });
 }
 
 export async function setDiscussionResolution(
   params: SetDiscussionResolutionParams,
 ): Promise<DiscussionSummary> {
-  const { client, owner, repo, pullNumber, threadId, resolved } = params;
+  const {
+    client,
+    owner,
+    repo,
+    pullNumber,
+    threadId,
+    resolved,
+    viewerLogin,
+    withReactions,
+  } = params;
 
   if (!isValidThreadId(threadId)) {
     throw new GiteaApiError(0, "Invalid thread id.");
   }
 
-  const existing = await listDiscussions({ client, owner, repo, pullNumber });
+  // Read with whatever the caller asked for: when the thread is already in the
+  // state being asked for, this read is what comes back, and a response
+  // missing its reactions would blank the chips the reader is looking at.
+  const existing = await listDiscussions({
+    client,
+    owner,
+    repo,
+    pullNumber,
+    viewerLogin,
+    withReactions,
+  });
   const thread = existing.threads.find(
     (candidate) => candidate.id === threadId,
   );
@@ -473,5 +625,12 @@ export async function setDiscussionResolution(
     }),
   );
 
-  return listDiscussions({ client, owner, repo, pullNumber });
+  return listDiscussions({
+    client,
+    owner,
+    repo,
+    pullNumber,
+    viewerLogin,
+    withReactions,
+  });
 }

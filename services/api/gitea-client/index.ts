@@ -3,6 +3,7 @@ export * from "./auth";
 export * from "./discussions";
 export * from "./documents";
 export * from "./pullRequests";
+export * from "./reactions";
 export * from "./reviewSettings";
 export * from "./repos";
 export * from "./uploads";

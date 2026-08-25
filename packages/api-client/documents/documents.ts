@@ -28,6 +28,8 @@ import type {
   ReplyToDocumentDiscussionBody,
   ResolveDocumentDiscussion200,
   ResolveDocumentDiscussionBody,
+  SetDiscussionCommentReaction200,
+  SetDiscussionCommentReactionBody,
   SubmitDocumentReviewBody,
   UpdateChangeAssignments200,
   UpdateChangeAssignmentsBody,
@@ -714,6 +716,47 @@ export const resolveDocumentDiscussion = async (owner: string,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(resolveDocumentDiscussionBody)
+  }
+);}
+
+
+export type setDiscussionCommentReactionResponse200 = {
+  data: SetDiscussionCommentReaction200
+  status: 200
+}
+
+export type setDiscussionCommentReactionResponseSuccess = (setDiscussionCommentReactionResponse200) & {
+  headers: Headers;
+};
+;
+
+export type setDiscussionCommentReactionResponse = (setDiscussionCommentReactionResponseSuccess)
+
+export const getSetDiscussionCommentReactionUrl = (owner: string,
+    repo: string,
+    pullNumber: string,
+    threadId: string,
+    commentId: string,) => {
+
+
+
+
+  return `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/discussions/${threadId}/comments/${commentId}/reactions`
+}
+
+export const setDiscussionCommentReaction = async (owner: string,
+    repo: string,
+    pullNumber: string,
+    threadId: string,
+    commentId: string,
+    setDiscussionCommentReactionBody: SetDiscussionCommentReactionBody, options?: Parameters<typeof customFetch>[1]): Promise<setDiscussionCommentReactionResponse> => {
+
+  return customFetch<setDiscussionCommentReactionResponse>(getSetDiscussionCommentReactionUrl(owner,repo,pullNumber,threadId,commentId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(setDiscussionCommentReactionBody)
   }
 );}
 
