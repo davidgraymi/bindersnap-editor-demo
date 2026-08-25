@@ -304,20 +304,19 @@ function ReactionRow({
 
       {canAct ? (
         <div className="rev-reaction-picker" ref={pickerRef}>
-          {/* Says "React", rather than being an icon a reader has to hover
-              to discover. The people this is for do not know that a faint
-              glyph under a comment is a control, and a button nobody finds is
-              a button that does not exist. */}
+          {/* Icon only, but with a border at rest so it still reads as a
+              control rather than a smudge. What it does is said on hover and
+              to a screen reader. */}
           <button
             type="button"
             className="rev-reaction-add"
             title="React to this comment"
+            aria-label="React to this comment"
             aria-expanded={pickerOpen}
             aria-haspopup="menu"
             onClick={() => setPickerOpen((open) => !open)}
           >
-            <SmilePlus size={13} strokeWidth={1.5} aria-hidden="true" />
-            React
+            <SmilePlus size={14} strokeWidth={1.5} aria-hidden="true" />
           </button>
 
           {pickerOpen ? (
@@ -335,9 +334,9 @@ function ReactionRow({
                     className={`rev-reaction-menu-item${
                       mine ? " rev-reaction-menu-item--on" : ""
                     }`}
-                    // The menu reads as five words, not five sentences; what
-                    // pressing one would do is said to a screen reader and on
-                    // hover instead.
+                    // The row is five emoji, so what each one means — and
+                    // whether pressing it adds or takes back — is carried
+                    // entirely by the hover text and the accessible name.
                     title={describeReactionAction(display, mine)}
                     aria-label={describeReactionAction(display, mine)}
                     onClick={() => {
@@ -348,7 +347,6 @@ function ReactionRow({
                     <span className="rev-reaction-emoji" aria-hidden="true">
                       {display.emoji}
                     </span>
-                    {display.label}
                   </button>
                 );
               })}
