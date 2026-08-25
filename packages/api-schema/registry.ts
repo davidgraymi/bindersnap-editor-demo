@@ -18,6 +18,7 @@ import {
   DocumentDetailPayloadSchema,
   DocumentHistoryPayloadSchema,
   ResolveDiscussionBodySchema,
+  SetCommentReactionBodySchema,
   DocumentPermissionsPayloadSchema,
   DocumentSearchResultsPayloadSchema,
   InitialDocumentUploadResultSchema,
@@ -561,6 +562,26 @@ registry.registerPath({
   responses: {
     200: {
       description: "Thread status updated",
+      content: { "application/json": { schema: DiscussionSummarySchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "put",
+  path: "/api/app/documents/{owner}/{repo}/pull-requests/{pullNumber}/discussions/{threadId}/comments/{commentId}/reactions",
+  operationId: "setDiscussionCommentReaction",
+  tags: ["documents"],
+  request: {
+    params: threadParams.extend({ commentId: z.string() }),
+    body: {
+      required: true,
+      content: { "application/json": { schema: SetCommentReactionBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Reaction added or taken back",
       content: { "application/json": { schema: DiscussionSummarySchema } },
     },
   },

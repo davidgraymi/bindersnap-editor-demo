@@ -5,6 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { ReplyToDocumentDiscussion201ThreadsItemCommentsItemAuthor } from './replyToDocumentDiscussion201ThreadsItemCommentsItemAuthor.ts';
+import type { ReplyToDocumentDiscussion201ThreadsItemCommentsItemReactionsItem } from './replyToDocumentDiscussion201ThreadsItemCommentsItemReactionsItem.ts';
 
 export type ReplyToDocumentDiscussion201ThreadsItemCommentsItem = {
   id: number;
@@ -14,4 +15,5 @@ export type ReplyToDocumentDiscussion201ThreadsItemCommentsItem = {
   createdAt: string;
   updatedAt: string;
   htmlUrl: string;
+  reactions: ReplyToDocumentDiscussion201ThreadsItemCommentsItemReactionsItem[];
 };

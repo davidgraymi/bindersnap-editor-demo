@@ -22,6 +22,7 @@ import type {
   DocumentPermissionsPayload,
   DocumentSearchResultsPayload,
   InitialDocumentUploadResult,
+  ReactionKind,
   UploadResult,
   WorkspaceDocumentSummary,
 } from "../../packages/api-schema/schemas/documents";
@@ -43,6 +44,7 @@ export type {
 export type {
   ChangeAssignments,
   ChangeOutcome,
+  CommentReaction,
   ChangeReviewer,
   ChangeUpdate,
   ChangeUpdatesPayload,
@@ -50,6 +52,7 @@ export type {
   ClosedChange,
   ClosedChangesPayload,
   CollaboratorListPayload,
+  DiscussionComment,
   DiscussionSummary,
   DiscussionThread,
   DocumentDetailPayload,
@@ -60,6 +63,8 @@ export type {
   WorkspaceDocumentSummary,
   InitialDocumentUploadResult,
   PullRequestWithApprovalState,
+  ReactionKind,
+  ReactionUser,
   ReviewerStatus,
   ReviewSettings,
   UploadResult,
@@ -626,6 +631,40 @@ export async function resolveDocumentDiscussion(
   } catch (error) {
     handlePaymentRequired(
       `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/discussions/${threadId}/resolve`,
+      error,
+    );
+  }
+}
+
+/**
+ * Leave or take back one reaction on one review comment.
+ *
+ * Returns the whole discussion, like every other write here: the record the
+ * page draws always comes back from the server rather than being patched
+ * together on the client.
+ */
+export async function setDiscussionCommentReaction(
+  owner: string,
+  repo: string,
+  pullNumber: number,
+  threadId: string,
+  commentId: number,
+  content: ReactionKind,
+  on: boolean,
+): Promise<DiscussionSummary> {
+  try {
+    const response = await DocumentsClient.setDiscussionCommentReaction(
+      owner,
+      repo,
+      String(pullNumber),
+      threadId,
+      String(commentId),
+      { content, on },
+    );
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/discussions/${threadId}/comments/${commentId}/reactions`,
       error,
     );
   }

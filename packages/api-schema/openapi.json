@@ -1625,6 +1625,54 @@
                       },
                       "htmlUrl": {
                         "type": "string"
+                      },
+                      "reactions": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "content": {
+                              "type": "string",
+                              "enum": [
+                                "+1",
+                                "-1",
+                                "confused",
+                                "eyes",
+                                "heart"
+                              ]
+                            },
+                            "count": {
+                              "type": "number"
+                            },
+                            "viewerReacted": {
+                              "type": "boolean"
+                            },
+                            "users": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "login": {
+                                    "type": "string"
+                                  },
+                                  "fullName": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "login",
+                                  "fullName"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "content",
+                            "count",
+                            "viewerReacted",
+                            "users"
+                          ]
+                        }
                       }
                     },
                     "required": [
@@ -1634,7 +1682,8 @@
                       "body",
                       "createdAt",
                       "updatedAt",
-                      "htmlUrl"
+                      "htmlUrl",
+                      "reactions"
                     ]
                   }
                 },
@@ -5220,6 +5269,54 @@
                                 },
                                 "htmlUrl": {
                                   "type": "string"
+                                },
+                                "reactions": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "content": {
+                                        "type": "string",
+                                        "enum": [
+                                          "+1",
+                                          "-1",
+                                          "confused",
+                                          "eyes",
+                                          "heart"
+                                        ]
+                                      },
+                                      "count": {
+                                        "type": "number"
+                                      },
+                                      "viewerReacted": {
+                                        "type": "boolean"
+                                      },
+                                      "users": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "login": {
+                                              "type": "string"
+                                            },
+                                            "fullName": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "login",
+                                            "fullName"
+                                          ]
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "content",
+                                      "count",
+                                      "viewerReacted",
+                                      "users"
+                                    ]
+                                  }
                                 }
                               },
                               "required": [
@@ -5229,7 +5326,8 @@
                                 "body",
                                 "createdAt",
                                 "updatedAt",
-                                "htmlUrl"
+                                "htmlUrl",
+                                "reactions"
                               ]
                             }
                           },
@@ -5453,6 +5551,54 @@
                                 },
                                 "htmlUrl": {
                                   "type": "string"
+                                },
+                                "reactions": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "content": {
+                                        "type": "string",
+                                        "enum": [
+                                          "+1",
+                                          "-1",
+                                          "confused",
+                                          "eyes",
+                                          "heart"
+                                        ]
+                                      },
+                                      "count": {
+                                        "type": "number"
+                                      },
+                                      "viewerReacted": {
+                                        "type": "boolean"
+                                      },
+                                      "users": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "login": {
+                                              "type": "string"
+                                            },
+                                            "fullName": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "login",
+                                            "fullName"
+                                          ]
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "content",
+                                      "count",
+                                      "viewerReacted",
+                                      "users"
+                                    ]
+                                  }
                                 }
                               },
                               "required": [
@@ -5462,7 +5608,8 @@
                                 "body",
                                 "createdAt",
                                 "updatedAt",
-                                "htmlUrl"
+                                "htmlUrl",
+                                "reactions"
                               ]
                             }
                           },
@@ -5696,6 +5843,54 @@
                                 },
                                 "htmlUrl": {
                                   "type": "string"
+                                },
+                                "reactions": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "content": {
+                                        "type": "string",
+                                        "enum": [
+                                          "+1",
+                                          "-1",
+                                          "confused",
+                                          "eyes",
+                                          "heart"
+                                        ]
+                                      },
+                                      "count": {
+                                        "type": "number"
+                                      },
+                                      "viewerReacted": {
+                                        "type": "boolean"
+                                      },
+                                      "users": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "login": {
+                                              "type": "string"
+                                            },
+                                            "fullName": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "login",
+                                            "fullName"
+                                          ]
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "content",
+                                      "count",
+                                      "viewerReacted",
+                                      "users"
+                                    ]
+                                  }
                                 }
                               },
                               "required": [
@@ -5705,7 +5900,8 @@
                                 "body",
                                 "createdAt",
                                 "updatedAt",
-                                "htmlUrl"
+                                "htmlUrl",
+                                "reactions"
                               ]
                             }
                           },
@@ -5939,6 +6135,54 @@
                                 },
                                 "htmlUrl": {
                                   "type": "string"
+                                },
+                                "reactions": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "content": {
+                                        "type": "string",
+                                        "enum": [
+                                          "+1",
+                                          "-1",
+                                          "confused",
+                                          "eyes",
+                                          "heart"
+                                        ]
+                                      },
+                                      "count": {
+                                        "type": "number"
+                                      },
+                                      "viewerReacted": {
+                                        "type": "boolean"
+                                      },
+                                      "users": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "login": {
+                                              "type": "string"
+                                            },
+                                            "fullName": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "login",
+                                            "fullName"
+                                          ]
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "content",
+                                      "count",
+                                      "viewerReacted",
+                                      "users"
+                                    ]
+                                  }
                                 }
                               },
                               "required": [
@@ -5948,7 +6192,319 @@
                                 "body",
                                 "createdAt",
                                 "updatedAt",
-                                "htmlUrl"
+                                "htmlUrl",
+                                "reactions"
+                              ]
+                            }
+                          },
+                          "events": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "number"
+                                },
+                                "actor": {
+                                  "type": "object",
+                                  "properties": {
+                                    "login": {
+                                      "type": "string"
+                                    },
+                                    "fullName": {
+                                      "type": "string"
+                                    },
+                                    "avatarUrl": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "login",
+                                    "fullName",
+                                    "avatarUrl"
+                                  ]
+                                },
+                                "resolved": {
+                                  "type": "boolean"
+                                },
+                                "at": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "actor",
+                                "resolved",
+                                "at"
+                              ]
+                            }
+                          },
+                          "resolved": {
+                            "type": "boolean"
+                          },
+                          "resolvedBy": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "login": {
+                                "type": "string"
+                              },
+                              "fullName": {
+                                "type": "string"
+                              },
+                              "avatarUrl": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "login",
+                              "fullName",
+                              "avatarUrl"
+                            ]
+                          },
+                          "resolvedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "origin",
+                          "comments",
+                          "events",
+                          "resolved",
+                          "resolvedBy",
+                          "resolvedAt",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    },
+                    "totalCount": {
+                      "type": "number"
+                    },
+                    "unresolvedCount": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "threads",
+                    "totalCount",
+                    "unresolvedCount"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/documents/{owner}/{repo}/pull-requests/{pullNumber}/discussions/{threadId}/comments/{commentId}/reactions": {
+      "put": {
+        "operationId": "setDiscussionCommentReaction",
+        "tags": [
+          "documents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "owner",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "repo",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "pullNumber",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "threadId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "commentId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "content": {
+                    "type": "string",
+                    "enum": [
+                      "+1",
+                      "-1",
+                      "confused",
+                      "eyes",
+                      "heart"
+                    ]
+                  },
+                  "on": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "content",
+                  "on"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reaction added or taken back",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "threads": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "origin": {
+                            "type": "string",
+                            "enum": [
+                              "bindersnap",
+                              "external"
+                            ]
+                          },
+                          "comments": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "number"
+                                },
+                                "threadId": {
+                                  "type": "string"
+                                },
+                                "author": {
+                                  "type": "object",
+                                  "properties": {
+                                    "login": {
+                                      "type": "string"
+                                    },
+                                    "fullName": {
+                                      "type": "string"
+                                    },
+                                    "avatarUrl": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "login",
+                                    "fullName",
+                                    "avatarUrl"
+                                  ]
+                                },
+                                "body": {
+                                  "type": "string"
+                                },
+                                "createdAt": {
+                                  "type": "string"
+                                },
+                                "updatedAt": {
+                                  "type": "string"
+                                },
+                                "htmlUrl": {
+                                  "type": "string"
+                                },
+                                "reactions": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "content": {
+                                        "type": "string",
+                                        "enum": [
+                                          "+1",
+                                          "-1",
+                                          "confused",
+                                          "eyes",
+                                          "heart"
+                                        ]
+                                      },
+                                      "count": {
+                                        "type": "number"
+                                      },
+                                      "viewerReacted": {
+                                        "type": "boolean"
+                                      },
+                                      "users": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "login": {
+                                              "type": "string"
+                                            },
+                                            "fullName": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "login",
+                                            "fullName"
+                                          ]
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "content",
+                                      "count",
+                                      "viewerReacted",
+                                      "users"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "threadId",
+                                "author",
+                                "body",
+                                "createdAt",
+                                "updatedAt",
+                                "htmlUrl",
+                                "reactions"
                               ]
                             }
                           },
