@@ -1,6 +1,11 @@
 import type { components } from "./spec/gitea";
 
 import { GiteaApiError, unwrap, type GiteaClient } from "./client";
+import {
+  listCommentReactions,
+  setCommentReaction,
+  type ThreadReaction,
+} from "./reactions";
 
 type Comment = components["schemas"]["Comment"];
 
@@ -84,6 +89,11 @@ export interface DiscussionThread {
   origin: DiscussionOrigin;
   comments: DiscussionComment[];
   events: DiscussionResolutionEvent[];
+  /**
+   * Reactions on the comment that opened the thread. Empty unless the caller
+   * asked for them by naming a viewer — see `ListDiscussionsParams`.
+   */
+  reactions: ThreadReaction[];
   resolved: boolean;
   resolvedBy: DiscussionAuthor | null;
   resolvedAt: string | null;
@@ -102,6 +112,21 @@ export interface ListDiscussionsParams {
   owner: string;
   repo: string;
   pullNumber: number;
+  /**
+   * Fetch each thread's reactions.
+   *
+   * Gitea returns reactions per comment rather than alongside the comment
+   * list, so asking for them costs one extra round trip per thread. Callers
+   * that only count threads or gate publishing never render a reaction, so
+   * they leave this off and pay nothing.
+   */
+  withReactions?: boolean;
+  /**
+   * Who is reading, so their own chips come back marked. Empty for a signed
+   * out visitor on a public document: they still see what everyone left, they
+   * just have nothing of their own in it.
+   */
+  viewer?: string;
 }
 
 export interface CreateDiscussionThreadParams extends ListDiscussionsParams {
@@ -256,6 +281,7 @@ export function buildThreads(comments: Comment[]): DiscussionThread[] {
         origin,
         comments: [],
         events: [],
+        reactions: [],
         resolved: false,
         resolvedBy: null,
         resolvedAt: null,
@@ -370,12 +396,63 @@ async function postComment(
   );
 }
 
+/**
+ * The comment a thread's reactions hang on: the one that opened it.
+ *
+ * Reacting per comment would mean a picker on every reply and one request per
+ * comment to read them back. A thread is one conversation about one point, so
+ * the reaction belongs to the point — which is the root comment.
+ */
+function rootCommentId(thread: DiscussionThread): number | null {
+  return thread.comments[0]?.id ?? null;
+}
+
+/**
+ * Fill in each thread's reactions, in parallel.
+ *
+ * A thread whose reactions cannot be read keeps its empty list rather than
+ * failing the whole page: reactions are the least important thing on a review
+ * screen, and losing the conversation because a chip would not load is a bad
+ * trade.
+ */
+async function attachReactions(
+  client: GiteaClient,
+  owner: string,
+  repo: string,
+  threads: DiscussionThread[],
+  viewer: string,
+): Promise<void> {
+  await Promise.all(
+    threads.map(async (thread) => {
+      const commentId = rootCommentId(thread);
+      if (commentId === null) return;
+      try {
+        thread.reactions = await listCommentReactions({
+          client,
+          owner,
+          repo,
+          commentId,
+          viewer,
+        });
+      } catch {
+        thread.reactions = [];
+      }
+    }),
+  );
+}
+
 export async function listDiscussions(
   params: ListDiscussionsParams,
 ): Promise<DiscussionSummary> {
-  const { client, owner, repo, pullNumber } = params;
+  const { client, owner, repo, pullNumber, withReactions, viewer } = params;
   const comments = await listAllComments(client, owner, repo, pullNumber);
-  return summarizeThreads(buildThreads(comments));
+  const threads = buildThreads(comments);
+
+  if (withReactions) {
+    await attachReactions(client, owner, repo, threads, viewer ?? "");
+  }
+
+  return summarizeThreads(threads);
 }
 
 export async function createDiscussionThread(
@@ -396,7 +473,14 @@ export async function createDiscussionThread(
     composeBody(body, "thread", threadId),
   );
 
-  return listDiscussions({ client, owner, repo, pullNumber });
+  return listDiscussions({
+    client,
+    owner,
+    repo,
+    pullNumber,
+    withReactions: params.withReactions,
+    viewer: params.viewer,
+  });
 }
 
 export async function replyToDiscussion(
@@ -412,7 +496,14 @@ export async function replyToDiscussion(
     throw new GiteaApiError(0, "A comment body is required.");
   }
 
-  const existing = await listDiscussions({ client, owner, repo, pullNumber });
+  const existing = await listDiscussions({
+    client,
+    owner,
+    repo,
+    pullNumber,
+    withReactions: params.withReactions,
+    viewer: params.viewer,
+  });
   const target = existing.threads.find(
     (thread) => thread.id === threadId && thread.origin === "bindersnap",
   );
@@ -428,7 +519,14 @@ export async function replyToDiscussion(
     composeBody(body, "reply", threadId),
   );
 
-  return listDiscussions({ client, owner, repo, pullNumber });
+  return listDiscussions({
+    client,
+    owner,
+    repo,
+    pullNumber,
+    withReactions: params.withReactions,
+    viewer: params.viewer,
+  });
 }
 
 export async function setDiscussionResolution(
@@ -440,7 +538,14 @@ export async function setDiscussionResolution(
     throw new GiteaApiError(0, "Invalid thread id.");
   }
 
-  const existing = await listDiscussions({ client, owner, repo, pullNumber });
+  const existing = await listDiscussions({
+    client,
+    owner,
+    repo,
+    pullNumber,
+    withReactions: params.withReactions,
+    viewer: params.viewer,
+  });
   const thread = existing.threads.find(
     (candidate) => candidate.id === threadId,
   );
@@ -473,5 +578,77 @@ export async function setDiscussionResolution(
     }),
   );
 
-  return listDiscussions({ client, owner, repo, pullNumber });
+  return listDiscussions({
+    client,
+    owner,
+    repo,
+    pullNumber,
+    withReactions: params.withReactions,
+    viewer: params.viewer,
+  });
+}
+
+export interface SetDiscussionReactionParams extends ListDiscussionsParams {
+  threadId: string;
+  content: string;
+  /** The state the reader wants, so a double click cannot race itself. */
+  reacted: boolean;
+}
+
+/**
+ * Leave or take back one reaction on a thread.
+ *
+ * Unlike resolving, this is allowed on `external` threads as well. The origin
+ * distinction exists to decide what can gate publication, and a reaction never
+ * gates anything — a comment written in Gitea is still a comment somebody can
+ * agree with.
+ */
+export async function setDiscussionReaction(
+  params: SetDiscussionReactionParams,
+): Promise<DiscussionSummary> {
+  const { client, owner, repo, pullNumber, threadId, content, reacted } =
+    params;
+
+  if (!isValidThreadId(threadId)) {
+    throw new GiteaApiError(0, "Invalid thread id.");
+  }
+
+  const existing = await listDiscussions({
+    client,
+    owner,
+    repo,
+    pullNumber,
+    withReactions: params.withReactions,
+    viewer: params.viewer,
+  });
+
+  const thread = existing.threads.find(
+    (candidate) => candidate.id === threadId,
+  );
+  if (!thread) {
+    throw new GiteaApiError(404, "Thread not found on this version.");
+  }
+
+  const commentId = rootCommentId(thread);
+  if (commentId === null) {
+    throw new GiteaApiError(404, "Thread not found on this version.");
+  }
+
+  await setCommentReaction({
+    client,
+    owner,
+    repo,
+    commentId,
+    content,
+    reacted,
+  });
+
+  return listDiscussions({
+    client,
+    owner,
+    repo,
+    pullNumber,
+    withReactions: params.withReactions,
+    viewer: params.viewer,
+  });
 }

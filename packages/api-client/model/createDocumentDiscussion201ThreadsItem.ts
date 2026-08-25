@@ -7,6 +7,7 @@
 import type { CreateDocumentDiscussion201ThreadsItemCommentsItem } from './createDocumentDiscussion201ThreadsItemCommentsItem.ts';
 import type { CreateDocumentDiscussion201ThreadsItemEventsItem } from './createDocumentDiscussion201ThreadsItemEventsItem.ts';
 import type { CreateDocumentDiscussion201ThreadsItemOrigin } from './createDocumentDiscussion201ThreadsItemOrigin.ts';
+import type { CreateDocumentDiscussion201ThreadsItemReactionsItem } from './createDocumentDiscussion201ThreadsItemReactionsItem.ts';
 import type { CreateDocumentDiscussion201ThreadsItemResolvedBy } from './createDocumentDiscussion201ThreadsItemResolvedBy.ts';
 
 export type CreateDocumentDiscussion201ThreadsItem = {
@@ -14,6 +15,7 @@ export type CreateDocumentDiscussion201ThreadsItem = {
   origin: CreateDocumentDiscussion201ThreadsItemOrigin;
   comments: CreateDocumentDiscussion201ThreadsItemCommentsItem[];
   events: CreateDocumentDiscussion201ThreadsItemEventsItem[];
+  reactions: CreateDocumentDiscussion201ThreadsItemReactionsItem[];
   resolved: boolean;
   /** @nullable */
   resolvedBy: CreateDocumentDiscussion201ThreadsItemResolvedBy;

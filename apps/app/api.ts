@@ -58,6 +58,7 @@ export type {
   WorkspaceDocumentSummary,
   InitialDocumentUploadResult,
   PullRequestWithApprovalState,
+  ThreadReaction,
   ReviewerStatus,
   ReviewSettings,
   UploadResult,
@@ -599,6 +600,31 @@ export async function resolveDocumentDiscussion(
   } catch (error) {
     handlePaymentRequired(
       `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/discussions/${threadId}/resolve`,
+      error,
+    );
+  }
+}
+
+export async function reactToDocumentDiscussion(
+  owner: string,
+  repo: string,
+  pullNumber: number,
+  threadId: string,
+  content: string,
+  reacted: boolean,
+): Promise<DiscussionSummary> {
+  try {
+    const response = await DocumentsClient.reactToDocumentDiscussion(
+      owner,
+      repo,
+      String(pullNumber),
+      threadId,
+      { content, reacted },
+    );
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/discussions/${threadId}/reactions`,
       error,
     );
   }

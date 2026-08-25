@@ -114,6 +114,7 @@ directly.
 - `GET/POST /api/app/documents/:owner/:repo/pull-requests/:n/discussions` — review threads
 - `POST /api/app/documents/:owner/:repo/pull-requests/:n/discussions/:threadId/comments` — reply
 - `POST /api/app/documents/:owner/:repo/pull-requests/:n/discussions/:threadId/resolve` — resolve/unresolve
+- `POST /api/app/documents/:owner/:repo/pull-requests/:n/discussions/:threadId/reactions` — react/unreact
 - `POST /api/app/documents/:owner/:repo/pull-requests/:n/publish` — merge + tag
 - `GET /api/app/documents/:owner/:repo/download` — proxy file download
 - `GET/PUT/DELETE /api/app/documents/:owner/:repo/collaborators/:user` — manage access
@@ -221,6 +222,11 @@ carrying a trailing `<!-- bindersnap:v1 ... -->` marker. Resolution is an
 **append-only event log** — resolving posts a new comment rather than editing
 the root — because an audit product must never lose the history of who
 reopened a concern. See `services/api/gitea-client/discussions.ts`.
+
+**Reactions** on a thread are Gitea's own reactions on the comment that opened
+it (`services/api/gitea-client/reactions.ts`) — no marker, no new storage. They
+deliberately do not gate publication: an unresolved thread blocks a version
+because somebody raised a concern in words, and a thumbs-down is not that.
 
 **Change assignments** follow the rule too. A change's assignee is the pull
 request's Gitea assignee and its reviewers are Gitea review requests, so who a

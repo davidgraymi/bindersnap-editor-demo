@@ -18,6 +18,7 @@ import {
   DocumentDetailPayloadSchema,
   DocumentHistoryPayloadSchema,
   ResolveDiscussionBodySchema,
+  SetDiscussionReactionBodySchema,
   DocumentPermissionsPayloadSchema,
   InitialDocumentUploadResultSchema,
   PublishDocumentBodySchema,
@@ -532,6 +533,28 @@ registry.registerPath({
   responses: {
     200: {
       description: "Thread status updated",
+      content: { "application/json": { schema: DiscussionSummarySchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/documents/{owner}/{repo}/pull-requests/{pullNumber}/discussions/{threadId}/reactions",
+  operationId: "reactToDocumentDiscussion",
+  tags: ["documents"],
+  request: {
+    params: threadParams,
+    body: {
+      required: true,
+      content: {
+        "application/json": { schema: SetDiscussionReactionBodySchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Reaction updated",
       content: { "application/json": { schema: DiscussionSummarySchema } },
     },
   },

@@ -24,6 +24,8 @@ import type {
   ListDocumentsParams,
   PublishDocument200,
   PublishDocumentBody,
+  ReactToDocumentDiscussion200,
+  ReactToDocumentDiscussionBody,
   ReplyToDocumentDiscussion201,
   ReplyToDocumentDiscussionBody,
   ResolveDocumentDiscussion200,
@@ -714,6 +716,45 @@ export const resolveDocumentDiscussion = async (owner: string,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(resolveDocumentDiscussionBody)
+  }
+);}
+
+
+export type reactToDocumentDiscussionResponse200 = {
+  data: ReactToDocumentDiscussion200
+  status: 200
+}
+
+export type reactToDocumentDiscussionResponseSuccess = (reactToDocumentDiscussionResponse200) & {
+  headers: Headers;
+};
+;
+
+export type reactToDocumentDiscussionResponse = (reactToDocumentDiscussionResponseSuccess)
+
+export const getReactToDocumentDiscussionUrl = (owner: string,
+    repo: string,
+    pullNumber: string,
+    threadId: string,) => {
+
+
+
+
+  return `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/discussions/${threadId}/reactions`
+}
+
+export const reactToDocumentDiscussion = async (owner: string,
+    repo: string,
+    pullNumber: string,
+    threadId: string,
+    reactToDocumentDiscussionBody: ReactToDocumentDiscussionBody, options?: Parameters<typeof customFetch>[1]): Promise<reactToDocumentDiscussionResponse> => {
+
+  return customFetch<reactToDocumentDiscussionResponse>(getReactToDocumentDiscussionUrl(owner,repo,pullNumber,threadId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(reactToDocumentDiscussionBody)
   }
 );}
 

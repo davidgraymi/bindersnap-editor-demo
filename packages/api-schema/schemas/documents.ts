@@ -46,11 +46,27 @@ export const DiscussionResolutionEventSchema = z.object({
   at: z.string(),
 });
 
+/**
+ * One emoji on a thread, and who left it.
+ *
+ * `content` is Gitea's reaction name rather than an enum: the picker offers a
+ * fixed six, but an instance configured with a wider `ALLOWED_REACTIONS` can
+ * hold others, and the record shows what is actually there.
+ */
+export const ThreadReactionSchema = z.object({
+  content: z.string(),
+  count: z.number(),
+  users: z.array(z.string()),
+  reactedByViewer: z.boolean(),
+});
+export type ThreadReaction = z.infer<typeof ThreadReactionSchema>;
+
 export const DiscussionThreadSchema = z.object({
   id: z.string(),
   origin: z.enum(["bindersnap", "external"]),
   comments: z.array(DiscussionCommentSchema),
   events: z.array(DiscussionResolutionEventSchema),
+  reactions: z.array(ThreadReactionSchema),
   resolved: z.boolean(),
   resolvedBy: DiscussionAuthorSchema.nullable(),
   resolvedAt: z.string().nullable(),
@@ -75,6 +91,18 @@ export const ResolveDiscussionBodySchema = z.object({
   resolved: z.boolean(),
 });
 export type ResolveDiscussionBody = z.infer<typeof ResolveDiscussionBodySchema>;
+
+/**
+ * The state the reader wants, not a flip. Two quick clicks on a toggle race
+ * each other; asking for `reacted: true` twice is simply true.
+ */
+export const SetDiscussionReactionBodySchema = z.object({
+  content: z.string(),
+  reacted: z.boolean(),
+});
+export type SetDiscussionReactionBody = z.infer<
+  typeof SetDiscussionReactionBodySchema
+>;
 
 export const CanonicalFileInfoSchema = z.object({
   storedFileName: z.string(),

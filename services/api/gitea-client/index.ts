@@ -1,6 +1,7 @@
 export * from "./client";
 export * from "./auth";
 export * from "./discussions";
+export * from "./reactions";
 export * from "./documents";
 export * from "./pullRequests";
 export * from "./reviewSettings";

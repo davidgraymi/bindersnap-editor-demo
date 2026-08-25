@@ -1,9 +1,15 @@
-import { useState } from "react";
-import { Check } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, SmilePlus } from "lucide-react";
 
-import type { DiscussionThread } from "../api";
+import type { DiscussionThread, ThreadReaction } from "../api";
 import { buildThreadFacts, formatEventDate } from "../changeReview";
 import { capitalizeFirst } from "../documentDisplay";
+import {
+  REACTION_CHOICES,
+  describeReaction,
+  describeReactionAction,
+  reactionEmoji,
+} from "../threadReactions";
 import { PersonAvatar } from "./PersonAvatar";
 
 interface ReviewThreadProps {
@@ -13,10 +19,140 @@ interface ReviewThreadProps {
   busy: boolean;
   onReply: (threadId: string, body: string) => Promise<boolean>;
   onToggleResolved: (threadId: string, resolved: boolean) => Promise<void>;
+  onReact: (
+    threadId: string,
+    content: string,
+    reacted: boolean,
+  ) => Promise<void>;
 }
 
 function displayName(author: { login: string; fullName: string }): string {
   return author.fullName.trim() || capitalizeFirst(author.login);
+}
+
+/**
+ * The reactions on a thread, and the way to leave one.
+ *
+ * Reactions hang on the comment that opened the thread, not on every reply: a
+ * thread is one conversation about one point, and "I agree" belongs to the
+ * point. A chip is a button — clicking one you already left takes it back —
+ * and the chips are in a fixed order so they do not swap places under the
+ * cursor as votes come in.
+ *
+ * Nothing here gates publishing. A raised concern blocks a version because
+ * somebody wrote a sentence; a thumbs-down is a feeling, and a feeling should
+ * never be why a document cannot ship.
+ */
+function ReactionBar({
+  reactions,
+  canReact,
+  busy,
+  onReact,
+}: {
+  reactions: ThreadReaction[];
+  canReact: boolean;
+  busy: boolean;
+  onReact: (content: string, reacted: boolean) => void;
+}) {
+  const [picking, setPicking] = useState(false);
+
+  // Escape closes the picker wherever the focus went. Without this the only
+  // way out of an accidental click is to pick something.
+  useEffect(() => {
+    if (!picking) return;
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPicking(false);
+    };
+    document.addEventListener("keydown", close);
+    return () => document.removeEventListener("keydown", close);
+  }, [picking]);
+
+  const already = new Set(
+    reactions
+      .filter((reaction) => reaction.reactedByViewer)
+      .map((reaction) => reaction.content),
+  );
+
+  return (
+    <div className="rev-reactions">
+      {reactions.map((reaction) => (
+        <button
+          className={`rev-reaction${
+            reaction.reactedByViewer ? " rev-reaction--mine" : ""
+          }`}
+          key={reaction.content}
+          type="button"
+          disabled={!canReact || busy}
+          aria-pressed={reaction.reactedByViewer}
+          title={describeReaction(reaction)}
+          aria-label={`${describeReaction(reaction)}. ${describeReactionAction(
+            reaction,
+          )}`}
+          onClick={() => onReact(reaction.content, !reaction.reactedByViewer)}
+        >
+          <span className="rev-reaction-emoji" aria-hidden="true">
+            {reactionEmoji(reaction.content)}
+          </span>
+          <span className="rev-reaction-count">{reaction.count}</span>
+        </button>
+      ))}
+
+      {canReact ? (
+        <div
+          className="rev-reaction-picker"
+          onBlur={(event) => {
+            // Closing on focus leaving the whole picker keeps a keyboard user
+            // inside it while they tab across the six choices.
+            if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+              setPicking(false);
+            }
+          }}
+        >
+          <button
+            className="rev-reaction rev-reaction--add"
+            type="button"
+            disabled={busy}
+            aria-expanded={picking}
+            aria-haspopup="true"
+            title="Add a reaction"
+            aria-label="Add a reaction"
+            onClick={() => setPicking((value) => !value)}
+          >
+            <SmilePlus size={13} strokeWidth={1.6} aria-hidden="true" />
+          </button>
+
+          {picking ? (
+            <div className="rev-reaction-menu" role="menu">
+              {REACTION_CHOICES.map((choice) => {
+                const mine = already.has(choice.content);
+                return (
+                  <button
+                    className={`rev-reaction-choice${
+                      mine ? " rev-reaction-choice--mine" : ""
+                    }`}
+                    key={choice.content}
+                    type="button"
+                    role="menuitem"
+                    disabled={busy}
+                    title={choice.label}
+                    onClick={() => {
+                      setPicking(false);
+                      onReact(choice.content, !mine);
+                    }}
+                  >
+                    <span aria-hidden="true">{choice.emoji}</span>
+                    <span className="rev-reaction-choice-label">
+                      {choice.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 /**
@@ -39,6 +175,7 @@ export function ReviewThread({
   busy,
   onReply,
   onToggleResolved,
+  onReact,
 }: ReviewThreadProps) {
   // Resolved threads open collapsed. A reader who expands one has said they
   // want to read it, and nothing here overrules them afterwards.
@@ -115,6 +252,21 @@ export function ReviewThread({
       </header>
 
       <p className="rev-thread-body">{root.body}</p>
+
+      {/* Reactions belong to the root comment, which is on screen even when
+          the thread is collapsed — so a collapsed thread still shows what
+          people made of it. The picker is not offered there: a collapsed
+          thread is meant to be small. */}
+      {thread.reactions.length > 0 || (canParticipate && !hidden) ? (
+        <ReactionBar
+          reactions={thread.reactions}
+          canReact={canParticipate && !hidden}
+          busy={busy}
+          onReact={(content, reacted) =>
+            void onReact(thread.id, content, reacted)
+          }
+        />
+      ) : null}
 
       {hidden ? null : (
         <>

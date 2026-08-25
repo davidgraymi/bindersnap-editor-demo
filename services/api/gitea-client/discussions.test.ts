@@ -9,6 +9,7 @@ import {
   listDiscussions,
   parseMarker,
   replyToDiscussion,
+  setDiscussionReaction,
   setDiscussionResolution,
   stripForgedMarkers,
   stripMarkers,
@@ -16,6 +17,7 @@ import {
 } from "./discussions";
 
 const COMMENTS_PATH = "/repos/{owner}/{repo}/issues/{index}/comments";
+const REACTIONS_PATH = "/repos/{owner}/{repo}/issues/comments/{id}/reactions";
 
 type RawComment = components["schemas"]["Comment"];
 
@@ -48,10 +50,25 @@ function createMockClient(initial: RawComment[]) {
   const store = [...initial];
   let nextId = Math.max(0, ...store.map((c) => c.id ?? 0)) + 1;
 
-  const GET = mock(async (path: string) => {
+  // Reactions, keyed by the comment they hang on.
+  const reactions = new Map<number, { content: string; login: string }[]>();
+
+  const GET = mock(async (path: string, init?: any) => {
     if (path === COMMENTS_PATH) {
       return {
         data: [...store],
+        error: undefined,
+        response: new Response(null, { status: 200 }),
+      };
+    }
+    if (path === REACTIONS_PATH) {
+      const id = init?.params?.path?.id as number;
+      return {
+        data: (reactions.get(id) ?? []).map((entry) => ({
+          content: entry.content,
+          created_at: "2026-01-02T00:00:00Z",
+          user: { login: entry.login, full_name: entry.login, avatar_url: "" },
+        })),
         error: undefined,
         response: new Response(null, { status: 200 }),
       };
@@ -64,6 +81,17 @@ function createMockClient(initial: RawComment[]) {
   });
 
   const POST = mock(async (path: string, init?: any) => {
+    if (path === REACTIONS_PATH) {
+      const id = init?.params?.path?.id as number;
+      const list = reactions.get(id) ?? [];
+      list.push({ content: init?.body?.content ?? "", login: "carol" });
+      reactions.set(id, list);
+      return {
+        data: { content: init?.body?.content ?? "" },
+        error: undefined,
+        response: new Response(null, { status: 201 }),
+      };
+    }
     if (path === COMMENTS_PATH) {
       // A posted comment lands after everything already in the store — a
       // reply that sorted before the root would read as reopening the thread
@@ -88,17 +116,42 @@ function createMockClient(initial: RawComment[]) {
     };
   });
 
+  const DELETE = mock(async (path: string, init?: any) => {
+    if (path === REACTIONS_PATH) {
+      const id = init?.params?.path?.id as number;
+      const content = init?.body?.content ?? "";
+      reactions.set(
+        id,
+        (reactions.get(id) ?? []).filter(
+          (entry) => !(entry.content === content && entry.login === "carol"),
+        ),
+      );
+      return {
+        data: undefined,
+        error: undefined,
+        response: new Response(null, { status: 204 }),
+      };
+    }
+    return {
+      data: undefined,
+      error: { message: "not found" },
+      response: new Response(null, { status: 404 }),
+    };
+  });
+
   return {
     client: {
       GET,
       POST,
       PUT: mock(),
-      DELETE: mock(),
+      DELETE,
       use: mock(),
     } as unknown as GiteaClient,
     GET,
     POST,
+    DELETE,
     store,
+    reactions,
   };
 }
 
@@ -478,4 +531,177 @@ test("setDiscussionResolution refuses to resolve an external comment", async () 
       resolved: true,
     }),
   ).rejects.toThrow(/not created in Bindersnap/i);
+});
+
+// --- reactions ------------------------------------------------------------
+
+test("reactions are left alone unless somebody is going to look at them", async () => {
+  const { client, GET } = createMockClient([
+    comment(
+      1,
+      `Looks wrong\n\n${marker("thread", "t1")}`,
+      "2026-01-01T00:00:00Z",
+    ),
+  ]);
+
+  await listDiscussions({ client, ...base });
+
+  // One call for the comment list, and nothing else: the counting and
+  // publish-gate callers must not pay a round trip per thread.
+  expect(GET.mock.calls.every((call) => call[0] === COMMENTS_PATH)).toBe(true);
+});
+
+test("a thread carries the reactions on the comment that opened it", async () => {
+  const mocked = createMockClient([
+    comment(
+      1,
+      `Looks wrong\n\n${marker("thread", "t1")}`,
+      "2026-01-01T00:00:00Z",
+    ),
+    comment(2, `Agreed\n\n${marker("reply", "t1")}`, "2026-01-01T00:00:01Z"),
+  ]);
+  mocked.reactions.set(1, [
+    { content: "+1", login: "alice" },
+    { content: "+1", login: "bob" },
+  ]);
+
+  const summary = await listDiscussions({
+    client: mocked.client,
+    ...base,
+    withReactions: true,
+    viewer: "bob",
+  });
+
+  const thread = summary.threads.find((candidate) => candidate.id === "t1")!;
+  expect(thread.reactions).toEqual([
+    { content: "+1", count: 2, users: ["alice", "bob"], reactedByViewer: true },
+  ]);
+});
+
+test("a thread whose reactions cannot be read still shows its conversation", async () => {
+  const mocked = createMockClient([
+    comment(
+      1,
+      `Looks wrong\n\n${marker("thread", "t1")}`,
+      "2026-01-01T00:00:00Z",
+    ),
+  ]);
+  const realGet = mocked.client.GET;
+  (mocked.client as any).GET = mock(async (path: string, init?: any) => {
+    if (path === REACTIONS_PATH) {
+      return {
+        data: undefined,
+        error: { message: "boom" },
+        response: new Response(null, { status: 500 }),
+      };
+    }
+    return (realGet as any)(path, init);
+  });
+
+  const summary = await listDiscussions({
+    client: mocked.client,
+    ...base,
+    withReactions: true,
+    viewer: "bob",
+  });
+
+  expect(summary.threads[0]!.comments[0]!.body).toBe("Looks wrong");
+  expect(summary.threads[0]!.reactions).toEqual([]);
+});
+
+test("reacting hangs the reaction on the thread's root comment", async () => {
+  const mocked = createMockClient([
+    comment(
+      1,
+      `Looks wrong\n\n${marker("thread", "t1")}`,
+      "2026-01-01T00:00:00Z",
+    ),
+    comment(2, `Agreed\n\n${marker("reply", "t1")}`, "2026-01-01T00:00:01Z"),
+  ]);
+
+  const summary = await setDiscussionReaction({
+    client: mocked.client,
+    ...base,
+    threadId: "t1",
+    content: "+1",
+    reacted: true,
+    withReactions: true,
+    viewer: "carol",
+  });
+
+  // Not the reply — the root.
+  expect(mocked.reactions.get(1)).toEqual([{ content: "+1", login: "carol" }]);
+  expect(mocked.reactions.get(2)).toBeUndefined();
+  expect(summary.threads[0]!.reactions[0]).toEqual({
+    content: "+1",
+    count: 1,
+    users: ["carol"],
+    reactedByViewer: true,
+  });
+});
+
+test("taking a reaction back removes it", async () => {
+  const mocked = createMockClient([
+    comment(
+      1,
+      `Looks wrong\n\n${marker("thread", "t1")}`,
+      "2026-01-01T00:00:00Z",
+    ),
+  ]);
+  mocked.reactions.set(1, [{ content: "+1", login: "carol" }]);
+
+  const summary = await setDiscussionReaction({
+    client: mocked.client,
+    ...base,
+    threadId: "t1",
+    content: "+1",
+    reacted: false,
+    withReactions: true,
+    viewer: "carol",
+  });
+
+  expect(summary.threads[0]!.reactions).toEqual([]);
+});
+
+test("a comment written in Gitea can still be reacted to", async () => {
+  // External threads cannot be resolved — they have no marker to hang the
+  // event on — but a reaction never gates publishing, so it is allowed.
+  const mocked = createMockClient([
+    comment(9, "Posted straight into Gitea", "2026-01-01T00:00:00Z"),
+  ]);
+
+  const summary = await setDiscussionReaction({
+    client: mocked.client,
+    ...base,
+    threadId: "c9",
+    content: "eyes",
+    reacted: true,
+    withReactions: true,
+    viewer: "carol",
+  });
+
+  expect(mocked.reactions.get(9)).toEqual([
+    { content: "eyes", login: "carol" },
+  ]);
+  expect(summary.threads[0]!.reactions[0]!.content).toBe("eyes");
+});
+
+test("reacting to a thread that is not there is a 404", async () => {
+  const { client } = createMockClient([
+    comment(
+      1,
+      `Looks wrong\n\n${marker("thread", "t1")}`,
+      "2026-01-01T00:00:00Z",
+    ),
+  ]);
+
+  await expect(
+    setDiscussionReaction({
+      client,
+      ...base,
+      threadId: "nope",
+      content: "+1",
+      reacted: true,
+    }),
+  ).rejects.toThrow("Thread not found");
 });

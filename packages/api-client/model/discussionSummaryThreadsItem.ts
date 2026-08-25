@@ -7,6 +7,7 @@
 import type { DiscussionSummaryThreadsItemCommentsItem } from './discussionSummaryThreadsItemCommentsItem.ts';
 import type { DiscussionSummaryThreadsItemEventsItem } from './discussionSummaryThreadsItemEventsItem.ts';
 import type { DiscussionSummaryThreadsItemOrigin } from './discussionSummaryThreadsItemOrigin.ts';
+import type { DiscussionSummaryThreadsItemReactionsItem } from './discussionSummaryThreadsItemReactionsItem.ts';
 import type { DiscussionSummaryThreadsItemResolvedBy } from './discussionSummaryThreadsItemResolvedBy.ts';
 
 export type DiscussionSummaryThreadsItem = {
@@ -14,6 +15,7 @@ export type DiscussionSummaryThreadsItem = {
   origin: DiscussionSummaryThreadsItemOrigin;
   comments: DiscussionSummaryThreadsItemCommentsItem[];
   events: DiscussionSummaryThreadsItemEventsItem[];
+  reactions: DiscussionSummaryThreadsItemReactionsItem[];
   resolved: boolean;
   /** @nullable */
   resolvedBy: DiscussionSummaryThreadsItemResolvedBy;

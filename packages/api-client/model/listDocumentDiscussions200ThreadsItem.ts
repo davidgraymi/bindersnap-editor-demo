@@ -7,6 +7,7 @@
 import type { ListDocumentDiscussions200ThreadsItemCommentsItem } from './listDocumentDiscussions200ThreadsItemCommentsItem.ts';
 import type { ListDocumentDiscussions200ThreadsItemEventsItem } from './listDocumentDiscussions200ThreadsItemEventsItem.ts';
 import type { ListDocumentDiscussions200ThreadsItemOrigin } from './listDocumentDiscussions200ThreadsItemOrigin.ts';
+import type { ListDocumentDiscussions200ThreadsItemReactionsItem } from './listDocumentDiscussions200ThreadsItemReactionsItem.ts';
 import type { ListDocumentDiscussions200ThreadsItemResolvedBy } from './listDocumentDiscussions200ThreadsItemResolvedBy.ts';
 
 export type ListDocumentDiscussions200ThreadsItem = {
@@ -14,6 +15,7 @@ export type ListDocumentDiscussions200ThreadsItem = {
   origin: ListDocumentDiscussions200ThreadsItemOrigin;
   comments: ListDocumentDiscussions200ThreadsItemCommentsItem[];
   events: ListDocumentDiscussions200ThreadsItemEventsItem[];
+  reactions: ListDocumentDiscussions200ThreadsItemReactionsItem[];
   resolved: boolean;
   /** @nullable */
   resolvedBy: ListDocumentDiscussions200ThreadsItemResolvedBy;

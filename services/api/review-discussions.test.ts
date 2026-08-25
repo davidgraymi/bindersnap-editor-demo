@@ -35,6 +35,10 @@ const originalSessionsDbPath = config.sessionsDbPath;
 let giteaUsersByLogin = new Map<string, { login: string; email: string }>();
 let giteaLoginsByToken = new Map<string, string>();
 let commentsByPR = new Map<string, MockedComment[]>();
+let reactionsByComment = new Map<
+  number,
+  { content: string; login: string }[]
+>();
 let reviewConfigFile: string | null = null;
 let mergeCalls = 0;
 let nextCommentId = 1;
@@ -70,6 +74,7 @@ beforeEach(() => {
   giteaUsersByLogin = new Map();
   giteaLoginsByToken = new Map();
   commentsByPR = new Map();
+  reactionsByComment = new Map();
   reviewConfigFile = null;
   mergeCalls = 0;
   nextCommentId = 1;
@@ -133,6 +138,54 @@ beforeEach(() => {
         };
         commentsByPR.set(key, [...list, created]);
         return json(created, 201);
+      }
+    }
+
+    // Reactions hang on a comment, not on the pull request.
+    const reactionsMatch = path.match(
+      /^\/api\/v1\/repos\/([^/]+)\/([^/]+)\/issues\/comments\/(\d+)\/reactions$/,
+    );
+    if (reactionsMatch) {
+      const commentId = Number(reactionsMatch[3]);
+      const list = reactionsByComment.get(commentId) ?? [];
+      const auth = headers.get("Authorization") ?? "";
+      const token = auth.startsWith("token ") ? auth.slice(6) : "";
+      const login = giteaLoginsByToken.get(token) ?? "unknown";
+
+      if (method === "GET") {
+        return json(
+          list.map((entry) => ({
+            content: entry.content,
+            created_at: new Date(1_800_000_000_000).toISOString(),
+            user: {
+              login: entry.login,
+              full_name: entry.login,
+              avatar_url: "",
+            },
+          })),
+        );
+      }
+
+      if (method === "POST") {
+        const content = parsed?.content ?? "";
+        const already = list.some(
+          (entry) => entry.content === content && entry.login === login,
+        );
+        if (!already) {
+          reactionsByComment.set(commentId, [...list, { content, login }]);
+        }
+        return json({ content }, 201);
+      }
+
+      if (method === "DELETE") {
+        const content = parsed?.content ?? "";
+        reactionsByComment.set(
+          commentId,
+          list.filter(
+            (entry) => !(entry.content === content && entry.login === login),
+          ),
+        );
+        return new Response(null, { status: 204 });
       }
     }
 
@@ -376,6 +429,201 @@ describe("review discussion routes", () => {
       // Resolution is appended, never an edit of the original comment.
       expect(payload.threads[0].comments).toHaveLength(2);
       expect(payload.threads[0].events).toHaveLength(1);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("a reaction lands on the thread and comes back marked as the reader's", async () => {
+    const server = createApiServer();
+    const session = await seedSession(OWNER);
+
+    try {
+      const created = await server.fetch(
+        request(DISCUSSIONS, session, {
+          method: "POST",
+          body: { body: "Clause 4 needs legal sign-off." },
+        }),
+      );
+      const threadId = ((await created.json()) as any).threads[0].id;
+
+      const reacted = await server.fetch(
+        request(`${DISCUSSIONS}/${threadId}/reactions`, session, {
+          method: "POST",
+          body: { content: "+1", reacted: true },
+        }),
+      );
+      const payload = (await reacted.json()) as any;
+
+      expect(reacted.status).toBe(200);
+      expect(payload.threads[0].reactions).toEqual([
+        {
+          content: "+1",
+          count: 1,
+          users: [OWNER],
+          reactedByViewer: true,
+        },
+      ]);
+      // A reaction is not a comment and must never become one: the record of
+      // what people said is unchanged.
+      expect(payload.threads[0].comments).toHaveLength(1);
+      expect(payload.unresolvedCount).toBe(1);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("a reaction can be taken back", async () => {
+    const server = createApiServer();
+    const session = await seedSession(OWNER);
+
+    try {
+      const created = await server.fetch(
+        request(DISCUSSIONS, session, {
+          method: "POST",
+          body: { body: "A concern." },
+        }),
+      );
+      const threadId = ((await created.json()) as any).threads[0].id;
+
+      await server.fetch(
+        request(`${DISCUSSIONS}/${threadId}/reactions`, session, {
+          method: "POST",
+          body: { content: "eyes", reacted: true },
+        }),
+      );
+
+      const removed = await server.fetch(
+        request(`${DISCUSSIONS}/${threadId}/reactions`, session, {
+          method: "POST",
+          body: { content: "eyes", reacted: false },
+        }),
+      );
+
+      expect(((await removed.json()) as any).threads[0].reactions).toEqual([]);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("asking for the same reaction twice is still one reaction", async () => {
+    const server = createApiServer();
+    const session = await seedSession(OWNER);
+
+    try {
+      const created = await server.fetch(
+        request(DISCUSSIONS, session, {
+          method: "POST",
+          body: { body: "A concern." },
+        }),
+      );
+      const threadId = ((await created.json()) as any).threads[0].id;
+
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        await server.fetch(
+          request(`${DISCUSSIONS}/${threadId}/reactions`, session, {
+            method: "POST",
+            body: { content: "+1", reacted: true },
+          }),
+        );
+      }
+
+      const listed = await server.fetch(request(DISCUSSIONS, session));
+      const payload = (await listed.json()) as any;
+
+      expect(payload.threads[0].reactions[0].count).toBe(1);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("an emoji outside the picker is refused", async () => {
+    const server = createApiServer();
+    const session = await seedSession(OWNER);
+
+    try {
+      const created = await server.fetch(
+        request(DISCUSSIONS, session, {
+          method: "POST",
+          body: { body: "A concern." },
+        }),
+      );
+      const threadId = ((await created.json()) as any).threads[0].id;
+
+      const response = await server.fetch(
+        request(`${DISCUSSIONS}/${threadId}/reactions`, session, {
+          method: "POST",
+          body: { content: "rocket", reacted: true },
+        }),
+      );
+
+      expect(response.status).toBe(400);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("rejects a reaction request with no explicit boolean", async () => {
+    const server = createApiServer();
+    const session = await seedSession(OWNER);
+
+    try {
+      const created = await server.fetch(
+        request(DISCUSSIONS, session, {
+          method: "POST",
+          body: { body: "A concern." },
+        }),
+      );
+      const threadId = ((await created.json()) as any).threads[0].id;
+
+      const response = await server.fetch(
+        request(`${DISCUSSIONS}/${threadId}/reactions`, session, {
+          method: "POST",
+          body: { content: "+1" },
+        }),
+      );
+
+      expect(response.status).toBe(400);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("a reaction does not gate publishing the way a thread does", async () => {
+    // Reactions are feeling, not a raised concern. Only an unresolved thread
+    // may stand between a version and its release.
+    setPolicy(true);
+    const server = createApiServer();
+    const session = await seedSession(OWNER);
+
+    try {
+      const created = await server.fetch(
+        request(DISCUSSIONS, session, {
+          method: "POST",
+          body: { body: "Looks good to me." },
+        }),
+      );
+      const threadId = ((await created.json()) as any).threads[0].id;
+
+      await server.fetch(
+        request(`${DISCUSSIONS}/${threadId}/reactions`, session, {
+          method: "POST",
+          body: { content: "-1", reacted: true },
+        }),
+      );
+
+      const resolved = await server.fetch(
+        request(`${DISCUSSIONS}/${threadId}/resolve`, session, {
+          method: "POST",
+          body: { resolved: true },
+        }),
+      );
+      const payload = (await resolved.json()) as any;
+
+      // The thumbs-down is on the record, and the count it does not touch is
+      // the one publishing looks at.
+      expect(payload.threads[0].reactions[0].content).toBe("-1");
+      expect(payload.unresolvedCount).toBe(0);
     } finally {
       server.stop(true);
     }

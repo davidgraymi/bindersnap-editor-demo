@@ -30,6 +30,7 @@ import {
   listDiscussions,
   replyToDiscussion,
   setDiscussionResolution,
+  setDiscussionReaction,
 } from "./gitea-client/discussions";
 import {
   getReviewSettings,
@@ -2929,6 +2930,8 @@ async function handleListDiscussions(
       owner,
       repo,
       pullNumber: prNumber,
+      withReactions: true,
+      viewer: access.username ?? "",
     });
     return json(200, discussions, baseHeaders);
   } catch (err) {
@@ -3035,6 +3038,8 @@ async function handleCreateDiscussionThread(
       repo,
       pullNumber: prNumber,
       body,
+      withReactions: true,
+      viewer: auth.session.username,
     });
     return json(201, discussions, baseHeaders);
   } catch (err) {
@@ -3071,6 +3076,8 @@ async function handleReplyToDiscussion(
       pullNumber: prNumber,
       threadId,
       body,
+      withReactions: true,
+      viewer: auth.session.username,
     });
     return json(201, discussions, baseHeaders);
   } catch (err) {
@@ -3120,6 +3127,8 @@ async function handleResolveDiscussion(
       pullNumber: prNumber,
       threadId,
       resolved,
+      withReactions: true,
+      viewer: auth.session.username,
     });
     return json(200, discussions, baseHeaders);
   } catch (err) {
@@ -3128,6 +3137,64 @@ async function handleResolveDiscussion(
       baseHeaders,
       "Unable to update the thread status.",
     );
+  }
+}
+
+async function handleReactToDiscussion(
+  req: Request,
+  baseHeaders: Headers,
+  owner: string,
+  repo: string,
+  prNumber: number,
+  threadId: string,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) {
+    return auth;
+  }
+
+  const payload = (await readJsonBody(req)) ?? null;
+  const form = payload ? null : await readMultipartBody(req);
+  const content = readInputString(payload, form, "content");
+  const reactedRaw = payload
+    ? payload.reacted
+    : readInputString(null, form, "reacted");
+
+  // Require an explicit value for the same reason resolving does: a malformed
+  // request that defaulted to `false` would quietly remove somebody's
+  // reaction instead of adding one.
+  const reacted =
+    typeof reactedRaw === "boolean"
+      ? reactedRaw
+      : reactedRaw === "true"
+        ? true
+        : reactedRaw === "false"
+          ? false
+          : null;
+
+  if (!content.trim()) {
+    return json(400, { error: "A reaction is required." }, baseHeaders);
+  }
+
+  if (reacted === null) {
+    return json(400, { error: "reacted must be true or false." }, baseHeaders);
+  }
+
+  try {
+    const discussions = await setDiscussionReaction({
+      client: auth.client,
+      owner,
+      repo,
+      pullNumber: prNumber,
+      threadId,
+      content,
+      reacted,
+      withReactions: true,
+      viewer: auth.session.username,
+    });
+    return json(200, discussions, baseHeaders);
+  } catch (err) {
+    return responseFromError(err, baseHeaders, "Unable to save the reaction.");
   }
 }
 
@@ -4605,6 +4672,9 @@ export function createApiServer() {
         const discussionResolveMatch = pathname.match(
           /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/discussions\/([^/]+)\/resolve$/,
         );
+        const discussionReactionMatch = pathname.match(
+          /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/discussions\/([^/]+)\/reactions$/,
+        );
         const downloadMatch = pathname.match(
           /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/download$/,
         );
@@ -4707,6 +4777,15 @@ export function createApiServer() {
             decodePathParam(discussionResolveMatch[2] ?? ""),
             Number.parseInt(discussionResolveMatch[3] ?? "", 10),
             decodePathParam(discussionResolveMatch[4] ?? ""),
+          );
+        } else if (discussionReactionMatch && method === "POST") {
+          response = await handleReactToDiscussion(
+            req,
+            baseHeaders,
+            decodePathParam(discussionReactionMatch[1] ?? ""),
+            decodePathParam(discussionReactionMatch[2] ?? ""),
+            Number.parseInt(discussionReactionMatch[3] ?? "", 10),
+            decodePathParam(discussionReactionMatch[4] ?? ""),
           );
         } else if (downloadMatch && method === "GET") {
           response = await handleDocumentDownload(

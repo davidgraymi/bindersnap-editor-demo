@@ -1680,6 +1680,35 @@
                     ]
                   }
                 },
+                "reactions": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "content": {
+                        "type": "string"
+                      },
+                      "count": {
+                        "type": "number"
+                      },
+                      "users": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "reactedByViewer": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "content",
+                      "count",
+                      "users",
+                      "reactedByViewer"
+                    ]
+                  }
+                },
                 "resolved": {
                   "type": "boolean"
                 },
@@ -1719,6 +1748,7 @@
                 "origin",
                 "comments",
                 "events",
+                "reactions",
                 "resolved",
                 "resolvedBy",
                 "resolvedAt",
@@ -5108,6 +5138,35 @@
                               ]
                             }
                           },
+                          "reactions": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "content": {
+                                  "type": "string"
+                                },
+                                "count": {
+                                  "type": "number"
+                                },
+                                "users": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "reactedByViewer": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "content",
+                                "count",
+                                "users",
+                                "reactedByViewer"
+                              ]
+                            }
+                          },
                           "resolved": {
                             "type": "boolean"
                           },
@@ -5147,6 +5206,7 @@
                           "origin",
                           "comments",
                           "events",
+                          "reactions",
                           "resolved",
                           "resolvedBy",
                           "resolvedAt",
@@ -5341,6 +5401,35 @@
                               ]
                             }
                           },
+                          "reactions": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "content": {
+                                  "type": "string"
+                                },
+                                "count": {
+                                  "type": "number"
+                                },
+                                "users": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "reactedByViewer": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "content",
+                                "count",
+                                "users",
+                                "reactedByViewer"
+                              ]
+                            }
+                          },
                           "resolved": {
                             "type": "boolean"
                           },
@@ -5380,6 +5469,7 @@
                           "origin",
                           "comments",
                           "events",
+                          "reactions",
                           "resolved",
                           "resolvedBy",
                           "resolvedAt",
@@ -5584,6 +5674,35 @@
                               ]
                             }
                           },
+                          "reactions": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "content": {
+                                  "type": "string"
+                                },
+                                "count": {
+                                  "type": "number"
+                                },
+                                "users": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "reactedByViewer": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "content",
+                                "count",
+                                "users",
+                                "reactedByViewer"
+                              ]
+                            }
+                          },
                           "resolved": {
                             "type": "boolean"
                           },
@@ -5623,6 +5742,7 @@
                           "origin",
                           "comments",
                           "events",
+                          "reactions",
                           "resolved",
                           "resolvedBy",
                           "resolvedAt",
@@ -5827,6 +5947,35 @@
                               ]
                             }
                           },
+                          "reactions": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "content": {
+                                  "type": "string"
+                                },
+                                "count": {
+                                  "type": "number"
+                                },
+                                "users": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "reactedByViewer": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "content",
+                                "count",
+                                "users",
+                                "reactedByViewer"
+                              ]
+                            }
+                          },
                           "resolved": {
                             "type": "boolean"
                           },
@@ -5866,6 +6015,284 @@
                           "origin",
                           "comments",
                           "events",
+                          "reactions",
+                          "resolved",
+                          "resolvedBy",
+                          "resolvedAt",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    },
+                    "totalCount": {
+                      "type": "number"
+                    },
+                    "unresolvedCount": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "threads",
+                    "totalCount",
+                    "unresolvedCount"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/documents/{owner}/{repo}/pull-requests/{pullNumber}/discussions/{threadId}/reactions": {
+      "post": {
+        "operationId": "reactToDocumentDiscussion",
+        "tags": [
+          "documents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "owner",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "repo",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "pullNumber",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "threadId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "content": {
+                    "type": "string"
+                  },
+                  "reacted": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "content",
+                  "reacted"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reaction updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "threads": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "origin": {
+                            "type": "string",
+                            "enum": [
+                              "bindersnap",
+                              "external"
+                            ]
+                          },
+                          "comments": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "number"
+                                },
+                                "threadId": {
+                                  "type": "string"
+                                },
+                                "author": {
+                                  "type": "object",
+                                  "properties": {
+                                    "login": {
+                                      "type": "string"
+                                    },
+                                    "fullName": {
+                                      "type": "string"
+                                    },
+                                    "avatarUrl": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "login",
+                                    "fullName",
+                                    "avatarUrl"
+                                  ]
+                                },
+                                "body": {
+                                  "type": "string"
+                                },
+                                "createdAt": {
+                                  "type": "string"
+                                },
+                                "updatedAt": {
+                                  "type": "string"
+                                },
+                                "htmlUrl": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "threadId",
+                                "author",
+                                "body",
+                                "createdAt",
+                                "updatedAt",
+                                "htmlUrl"
+                              ]
+                            }
+                          },
+                          "events": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "number"
+                                },
+                                "actor": {
+                                  "type": "object",
+                                  "properties": {
+                                    "login": {
+                                      "type": "string"
+                                    },
+                                    "fullName": {
+                                      "type": "string"
+                                    },
+                                    "avatarUrl": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "login",
+                                    "fullName",
+                                    "avatarUrl"
+                                  ]
+                                },
+                                "resolved": {
+                                  "type": "boolean"
+                                },
+                                "at": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "actor",
+                                "resolved",
+                                "at"
+                              ]
+                            }
+                          },
+                          "reactions": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "content": {
+                                  "type": "string"
+                                },
+                                "count": {
+                                  "type": "number"
+                                },
+                                "users": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "reactedByViewer": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "content",
+                                "count",
+                                "users",
+                                "reactedByViewer"
+                              ]
+                            }
+                          },
+                          "resolved": {
+                            "type": "boolean"
+                          },
+                          "resolvedBy": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "login": {
+                                "type": "string"
+                              },
+                              "fullName": {
+                                "type": "string"
+                              },
+                              "avatarUrl": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "login",
+                              "fullName",
+                              "avatarUrl"
+                            ]
+                          },
+                          "resolvedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "origin",
+                          "comments",
+                          "events",
+                          "reactions",
                           "resolved",
                           "resolvedBy",
                           "resolvedAt",

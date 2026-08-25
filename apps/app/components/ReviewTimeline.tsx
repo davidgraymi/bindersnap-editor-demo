@@ -13,6 +13,7 @@ import type { ChangeUpdate, DiscussionSummary } from "../api";
 import {
   createDocumentDiscussion,
   listDocumentDiscussions,
+  reactToDocumentDiscussion,
   replyToDocumentDiscussion,
   resolveDocumentDiscussion,
 } from "../api";
@@ -249,6 +250,18 @@ export function ReviewTimeline({
                         pullNumber,
                         threadId,
                         resolved,
+                      ),
+                    );
+                  }}
+                  onReact={async (threadId, content, reacted) => {
+                    await run(() =>
+                      reactToDocumentDiscussion(
+                        owner,
+                        repo,
+                        pullNumber,
+                        threadId,
+                        content,
+                        reacted,
                       ),
                     );
                   }}

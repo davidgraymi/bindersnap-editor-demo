@@ -56,6 +56,7 @@ function thread(overrides: Partial<any> = {}) {
       },
     ],
     events: [],
+    reactions: [],
     resolved: false,
     resolvedBy: null,
     resolvedAt: null,
