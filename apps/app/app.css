@@ -4266,10 +4266,15 @@ input {
   flex-shrink: 0;
 }
 
-.app-nav-search {
+.app-nav-search-wrap {
   /* Fixed, not shrinkable: the field has to stay wide enough to hold a
      document name. The media queries below narrow it deliberately. */
   flex: 0 0 260px;
+  min-width: 0;
+  position: relative;
+}
+
+.app-nav-search {
   height: 36px;
   min-width: 0;
   position: relative;
@@ -4319,6 +4324,98 @@ input {
   border-radius: var(--brand-radius-sm);
   padding: 1px 5px;
   pointer-events: none;
+}
+
+/* ── QUICK FIND ──────────────────────────────────────────────── */
+
+/* Clicking anywhere else is a way to dismiss the panel, and only that: the
+   backdrop is invisible so the page underneath still reads as the page. */
+.app-nav-search-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+.app-nav-search-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  /* Wider than the box it hangs from: a document name is longer than the
+     query that found it. */
+  width: max(320px, 100%);
+  z-index: 41;
+  background: var(--bs-surface-1);
+  border: 1.5px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+  box-shadow: var(--bs-shadow-lg);
+  overflow: hidden;
+}
+
+.app-nav-search-results {
+  /* About five rows. Past that the list scrolls, which is also what asks for
+     the next page. */
+  max-height: 264px;
+  overflow-y: auto;
+  margin: 0;
+  padding: var(--brand-space-2);
+  list-style: none;
+}
+
+.app-nav-search-result {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 10px;
+  border-radius: var(--brand-radius-md);
+  cursor: pointer;
+}
+
+.app-nav-search-result--active {
+  background: var(--bs-surface-3);
+}
+
+.app-nav-search-result-name {
+  font-size: 13px;
+  font-weight: var(--brand-weight-medium);
+  color: var(--bs-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-nav-search-result-meta {
+  font-size: 11px;
+  color: var(--bs-text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-nav-search-note {
+  margin: 0;
+  padding: 12px;
+  font-size: 12px;
+  color: var(--bs-text-faint);
+}
+
+.app-nav-search-all {
+  display: block;
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  border-top: 1px solid var(--bs-rule);
+  background: transparent;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: var(--brand-weight-medium);
+  color: var(--bs-text-secondary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.app-nav-search-all:hover {
+  background: var(--bs-surface-2);
+  color: var(--bs-text-primary);
 }
 
 .app-topnav-link {
@@ -5183,7 +5280,7 @@ input {
     display: none;
   }
 
-  .app-nav-search {
+  .app-nav-search-wrap {
     flex: 0 1 180px;
   }
 }
@@ -5197,7 +5294,7 @@ input {
     padding: var(--brand-space-5);
   }
 
-  .app-nav-search {
+  .app-nav-search-wrap {
     flex: 0 1 140px;
   }
 }
@@ -5207,7 +5304,7 @@ input {
     padding: 0 var(--brand-space-4);
   }
 
-  .app-nav-search {
+  .app-nav-search-wrap {
     display: none;
   }
 

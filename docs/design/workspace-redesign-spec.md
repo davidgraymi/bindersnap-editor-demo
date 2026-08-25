@@ -26,7 +26,9 @@ structure (change requests, approvals, versions) stays.
   `Needs your review`, `Ready to publish`, `Draft`.
 - Top nav (all pages): logo + wordmark, Home, Documents, spacer, search
   ("Search documents", `/` shortcut), coral "New document", bell, avatar.
-  No "Changes" nav link.
+  No "Changes" nav link. Search answers while you type: a panel of matching
+  documents under the box, arrow keys and Enter to open one, more results
+  fetched as you scroll. Enter with nothing picked still lands on the library.
 
 ## Screen decisions
 

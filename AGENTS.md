@@ -105,6 +105,7 @@ directly.
 - `POST /auth/logout` — revoke session + Gitea token
 - `GET /auth/me` — return current session user + a Gitea token for the client
 - `GET /api/app/documents` — list workspace repos with PR state
+- `GET /api/app/documents/search` — one page of quick-find matches (repo rows only)
 - `POST /api/app/documents` — create repo + upload initial file
 - `GET /api/app/documents/:owner/:repo` — document detail
 - `GET /api/app/documents/:owner/:repo/changes/closed` — closed changes with how each ended

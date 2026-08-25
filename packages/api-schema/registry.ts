@@ -19,6 +19,7 @@ import {
   DocumentHistoryPayloadSchema,
   ResolveDiscussionBodySchema,
   DocumentPermissionsPayloadSchema,
+  DocumentSearchResultsPayloadSchema,
   InitialDocumentUploadResultSchema,
   PublishDocumentBodySchema,
   PublishDocumentResultSchema,
@@ -64,6 +65,10 @@ registry.register(
 registry.register("DiscussionSummary", DiscussionSummarySchema);
 registry.register("ChangeUpdatesPayload", ChangeUpdatesPayloadSchema);
 registry.register("SearchUsersPayload", SearchUsersPayloadSchema);
+registry.register(
+  "DocumentSearchResultsPayload",
+  DocumentSearchResultsPayloadSchema,
+);
 registry.register("BillingStatusPayload", BillingStatusPayloadSchema);
 registry.register(
   "AdminSubscriptionAccessListPayload",
@@ -154,6 +159,30 @@ registry.registerPath({
           schema: z.object({
             documents: z.array(WorkspaceDocumentSummarySchema),
           }),
+        },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/documents/search",
+  operationId: "searchDocuments",
+  tags: ["documents"],
+  request: {
+    query: z.object({
+      q: z.string(),
+      page: z.string().optional(),
+      limit: z.string().optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "One page of document search results",
+      content: {
+        "application/json": {
+          schema: DocumentSearchResultsPayloadSchema,
         },
       },
     },

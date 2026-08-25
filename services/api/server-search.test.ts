@@ -194,6 +194,18 @@ beforeEach(() => {
         );
       }
 
+      // Gitea pages its repo search; quick find is the caller that relies on it.
+      const limitParam = Number.parseInt(
+        url.searchParams.get("limit") ?? "100",
+        10,
+      );
+      const pageParam = Number.parseInt(
+        url.searchParams.get("page") ?? "1",
+        10,
+      );
+      const start = (pageParam - 1) * limitParam;
+      filtered = filtered.slice(start, start + limitParam);
+
       return new Response(
         JSON.stringify({
           ok: true,
@@ -737,5 +749,124 @@ describe("GET /api/app/documents with search query", () => {
       (call) => call.path === "/api/v1/users/bob",
     );
     expect(userLookupCalls.length).toBe(1);
+  });
+});
+
+/**
+ * Quick find's endpoint. It answers with repo rows and nothing else: no tags,
+ * no open changes, no approval policy — that is what makes it cheap enough to
+ * call on a keystroke, and the assertion below is what keeps it that way.
+ */
+describe("GET /api/app/documents/search", () => {
+  test("returns one page of matches with the paging flag set", async () => {
+    const server = await createApiServer();
+    const sessionId = await seedSession("alice");
+    const aliceUser = giteaUsersByLogin.get("alice")!;
+
+    for (const name of ["doc-alpha", "doc-beta", "doc-gamma"]) {
+      seedGiteaRepo({
+        name,
+        owner: { id: aliceUser.id, login: "alice" },
+        private: true,
+      });
+    }
+
+    const response = await server.fetch(
+      makeSessionRequest("/api/app/documents/search", sessionId, {
+        queryParams: { q: "doc", limit: "2" },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as {
+      documents: { name: string; owner: { login: string } }[];
+      page: number;
+      limit: number;
+      hasMore: boolean;
+    };
+
+    expect(payload.documents.map((doc) => doc.name)).toEqual([
+      "doc-alpha",
+      "doc-beta",
+    ]);
+    expect(payload.documents[0]!.owner.login).toBe("alice");
+    expect(payload).toMatchObject({ page: 1, limit: 2, hasMore: true });
+  });
+
+  test("a later page continues where the previous one stopped", async () => {
+    const server = await createApiServer();
+    const sessionId = await seedSession("alice");
+    const aliceUser = giteaUsersByLogin.get("alice")!;
+
+    for (const name of ["doc-alpha", "doc-beta", "doc-gamma"]) {
+      seedGiteaRepo({
+        name,
+        owner: { id: aliceUser.id, login: "alice" },
+        private: true,
+      });
+    }
+
+    const response = await server.fetch(
+      makeSessionRequest("/api/app/documents/search", sessionId, {
+        queryParams: { q: "doc", limit: "2", page: "2" },
+      }),
+    );
+
+    const payload = (await response.json()) as {
+      documents: { name: string }[];
+      page: number;
+      hasMore: boolean;
+    };
+
+    expect(payload.documents.map((doc) => doc.name)).toEqual(["doc-gamma"]);
+    expect(payload).toMatchObject({ page: 2, hasMore: false });
+  });
+
+  test("does not fan out per document the way the library listing does", async () => {
+    const server = await createApiServer();
+    const sessionId = await seedSession("alice");
+    const aliceUser = giteaUsersByLogin.get("alice")!;
+
+    seedGiteaRepo({
+      name: "doc-alpha",
+      owner: { id: aliceUser.id, login: "alice" },
+      private: true,
+    });
+
+    await server.fetch(
+      makeSessionRequest("/api/app/documents/search", sessionId, {
+        queryParams: { q: "doc" },
+      }),
+    );
+
+    expect(
+      fetchCalls.filter((call) => call.path.endsWith("/tags")),
+    ).toHaveLength(0);
+    expect(
+      fetchCalls.filter((call) => call.path.endsWith("/pulls")),
+    ).toHaveLength(0);
+  });
+
+  test("a search for nothing is a bad request, not an empty library", async () => {
+    const server = await createApiServer();
+    const sessionId = await seedSession("alice");
+
+    const response = await server.fetch(
+      makeSessionRequest("/api/app/documents/search", sessionId, {
+        queryParams: { q: "  " },
+      }),
+    );
+
+    expect(response.status).toBe(400);
+  });
+
+  test("an unauthenticated reader gets nothing", async () => {
+    const server = await createApiServer();
+
+    const response = await server.fetch(
+      new Request("http://localhost/api/app/documents/search?q=doc"),
+    );
+
+    expect(response.status).toBe(401);
   });
 });

@@ -28,6 +28,8 @@ import type {
   ReplyToDocumentDiscussionBody,
   ResolveDocumentDiscussion200,
   ResolveDocumentDiscussionBody,
+  SearchDocuments200,
+  SearchDocumentsParams,
   SubmitDocumentReviewBody,
   UpdateChangeAssignments200,
   UpdateChangeAssignmentsBody,
@@ -116,6 +118,45 @@ if(createDocumentBody.description !== undefined) {
     method: 'POST'
     ,
     body: formData
+  }
+);}
+
+
+export type searchDocumentsResponse200 = {
+  data: SearchDocuments200
+  status: 200
+}
+
+export type searchDocumentsResponseSuccess = (searchDocumentsResponse200) & {
+  headers: Headers;
+};
+;
+
+export type searchDocumentsResponse = (searchDocumentsResponseSuccess)
+
+export const getSearchDocumentsUrl = (params: SearchDocumentsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/app/documents/search?${stringifiedParams}` : `/api/app/documents/search`
+}
+
+export const searchDocuments = async (params: SearchDocumentsParams, options?: Parameters<typeof customFetch>[1]): Promise<searchDocumentsResponse> => {
+
+  return customFetch<searchDocumentsResponse>(getSearchDocumentsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
   }
 );}
 

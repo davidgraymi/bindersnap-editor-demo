@@ -424,3 +424,21 @@ export const ChangeAssignmentsSchema = z.object({
   requiredApprovals: z.number().nullable(),
 });
 export type ChangeAssignments = z.infer<typeof ChangeAssignmentsSchema>;
+
+/**
+ * One page of quick-find results.
+ *
+ * Quick find answers "which document did I mean?", not "what is happening to
+ * it": the row is a repo and nothing more, so the panel can come back while
+ * the reader is still typing. `hasMore` is the paging signal — the panel asks
+ * for the next page when the reader scrolls to the bottom of this one.
+ */
+export const DocumentSearchResultsPayloadSchema = z.object({
+  documents: z.array(WorkspaceRepoSchema),
+  page: z.number(),
+  limit: z.number(),
+  hasMore: z.boolean(),
+});
+export type DocumentSearchResultsPayload = z.infer<
+  typeof DocumentSearchResultsPayloadSchema
+>;
