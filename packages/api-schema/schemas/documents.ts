@@ -29,6 +29,38 @@ export const DiscussionAuthorSchema = z.object({
   avatarUrl: z.string(),
 });
 
+/**
+ * The reaction vocabulary, in the order the chips are drawn.
+ *
+ * A short list on purpose: a reviewer needs to agree, disagree, say something
+ * is unclear, say they are looking at it, or say thank you. Every key is in
+ * Gitea's default allowed reactions, because a reaction is stored as a Gitea
+ * comment reaction and nowhere else.
+ */
+export const REACTION_KINDS = [
+  "+1",
+  "-1",
+  "confused",
+  "eyes",
+  "heart",
+] as const;
+export type ReactionKind = (typeof REACTION_KINDS)[number];
+
+export const ReactionUserSchema = z.object({
+  login: z.string(),
+  fullName: z.string(),
+});
+export type ReactionUser = z.infer<typeof ReactionUserSchema>;
+
+export const CommentReactionSchema = z.object({
+  content: z.enum(REACTION_KINDS),
+  count: z.number(),
+  /** Whether the reader has already left this one. */
+  viewerReacted: z.boolean(),
+  users: z.array(ReactionUserSchema),
+});
+export type CommentReaction = z.infer<typeof CommentReactionSchema>;
+
 export const DiscussionCommentSchema = z.object({
   id: z.number(),
   threadId: z.string(),
@@ -37,7 +69,9 @@ export const DiscussionCommentSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   htmlUrl: z.string(),
+  reactions: z.array(CommentReactionSchema),
 });
+export type DiscussionComment = z.infer<typeof DiscussionCommentSchema>;
 
 export const DiscussionResolutionEventSchema = z.object({
   id: z.number(),
@@ -75,6 +109,15 @@ export const ResolveDiscussionBodySchema = z.object({
   resolved: z.boolean(),
 });
 export type ResolveDiscussionBody = z.infer<typeof ResolveDiscussionBodySchema>;
+
+export const SetCommentReactionBodySchema = z.object({
+  content: z.enum(REACTION_KINDS),
+  /** True leaves the reaction, false takes it back. */
+  on: z.boolean(),
+});
+export type SetCommentReactionBody = z.infer<
+  typeof SetCommentReactionBodySchema
+>;
 
 export const CanonicalFileInfoSchema = z.object({
   storedFileName: z.string(),
@@ -424,3 +467,21 @@ export const ChangeAssignmentsSchema = z.object({
   requiredApprovals: z.number().nullable(),
 });
 export type ChangeAssignments = z.infer<typeof ChangeAssignmentsSchema>;
+
+/**
+ * One page of quick-find results.
+ *
+ * Quick find answers "which document did I mean?", not "what is happening to
+ * it": the row is a repo and nothing more, so the panel can come back while
+ * the reader is still typing. `hasMore` is the paging signal — the panel asks
+ * for the next page when the reader scrolls to the bottom of this one.
+ */
+export const DocumentSearchResultsPayloadSchema = z.object({
+  documents: z.array(WorkspaceRepoSchema),
+  page: z.number(),
+  limit: z.number(),
+  hasMore: z.boolean(),
+});
+export type DocumentSearchResultsPayload = z.infer<
+  typeof DocumentSearchResultsPayloadSchema
+>;

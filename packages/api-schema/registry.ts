@@ -18,7 +18,9 @@ import {
   DocumentDetailPayloadSchema,
   DocumentHistoryPayloadSchema,
   ResolveDiscussionBodySchema,
+  SetCommentReactionBodySchema,
   DocumentPermissionsPayloadSchema,
+  DocumentSearchResultsPayloadSchema,
   InitialDocumentUploadResultSchema,
   PublishDocumentBodySchema,
   PublishDocumentResultSchema,
@@ -64,6 +66,10 @@ registry.register(
 registry.register("DiscussionSummary", DiscussionSummarySchema);
 registry.register("ChangeUpdatesPayload", ChangeUpdatesPayloadSchema);
 registry.register("SearchUsersPayload", SearchUsersPayloadSchema);
+registry.register(
+  "DocumentSearchResultsPayload",
+  DocumentSearchResultsPayloadSchema,
+);
 registry.register("BillingStatusPayload", BillingStatusPayloadSchema);
 registry.register(
   "AdminSubscriptionAccessListPayload",
@@ -154,6 +160,30 @@ registry.registerPath({
           schema: z.object({
             documents: z.array(WorkspaceDocumentSummarySchema),
           }),
+        },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/documents/search",
+  operationId: "searchDocuments",
+  tags: ["documents"],
+  request: {
+    query: z.object({
+      q: z.string(),
+      page: z.string().optional(),
+      limit: z.string().optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "One page of document search results",
+      content: {
+        "application/json": {
+          schema: DocumentSearchResultsPayloadSchema,
         },
       },
     },
@@ -532,6 +562,26 @@ registry.registerPath({
   responses: {
     200: {
       description: "Thread status updated",
+      content: { "application/json": { schema: DiscussionSummarySchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "put",
+  path: "/api/app/documents/{owner}/{repo}/pull-requests/{pullNumber}/discussions/{threadId}/comments/{commentId}/reactions",
+  operationId: "setDiscussionCommentReaction",
+  tags: ["documents"],
+  request: {
+    params: threadParams.extend({ commentId: z.string() }),
+    body: {
+      required: true,
+      content: { "application/json": { schema: SetCommentReactionBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Reaction added or taken back",
       content: { "application/json": { schema: DiscussionSummarySchema } },
     },
   },

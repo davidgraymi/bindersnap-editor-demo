@@ -92,8 +92,8 @@ Routes:
 `packages/editor/` is imported by the SPA.
 
 If you change anything in `packages/editor/` that affects visual appearance, note it
-in your PR description. The landing page demo embed is a static snapshot and must
-be manually updated by running `bun run sync-demo`.
+in your PR description. The landing page no longer embeds the editor, so there is
+nothing to re-sync — but the editor is still the authoring surface inside the app.
 
 ### The BFF (`services/api`)
 
@@ -105,6 +105,7 @@ directly.
 - `POST /auth/logout` — revoke session + Gitea token
 - `GET /auth/me` — return current session user + a Gitea token for the client
 - `GET /api/app/documents` — list workspace repos with PR state
+- `GET /api/app/documents/search` — one page of quick-find matches (repo rows only)
 - `POST /api/app/documents` — create repo + upload initial file
 - `GET /api/app/documents/:owner/:repo` — document detail
 - `GET /api/app/documents/:owner/:repo/changes/closed` — closed changes with how each ended
@@ -114,6 +115,7 @@ directly.
 - `GET/POST /api/app/documents/:owner/:repo/pull-requests/:n/discussions` — review threads
 - `POST /api/app/documents/:owner/:repo/pull-requests/:n/discussions/:threadId/comments` — reply
 - `POST /api/app/documents/:owner/:repo/pull-requests/:n/discussions/:threadId/resolve` — resolve/unresolve
+- `PUT /api/app/documents/:owner/:repo/pull-requests/:n/discussions/:threadId/comments/:commentId/reactions` — leave or take back a reaction
 - `POST /api/app/documents/:owner/:repo/pull-requests/:n/publish` — merge + tag
 - `GET /api/app/documents/:owner/:repo/download` — proxy file download
 - `GET/PUT/DELETE /api/app/documents/:owner/:repo/collaborators/:user` — manage access
@@ -221,6 +223,15 @@ carrying a trailing `<!-- bindersnap:v1 ... -->` marker. Resolution is an
 **append-only event log** — resolving posts a new comment rather than editing
 the root — because an audit product must never lose the history of who
 reopened a concern. See `services/api/gitea-client/discussions.ts`.
+
+**Reactions** on review comments are Gitea comment reactions, nothing more.
+The vocabulary is five keys — `+1`, `-1`, `confused`, `eyes`, `heart` — all
+inside Gitea's default allow-list, so no Gitea config change is involved. A
+reaction is deliberately not part of the approval record: it never counts
+toward `unresolvedCount`, never gates publishing, and never stands in for a
+review. It exists so that agreeing with a concern costs the record nothing
+instead of a fourth comment reading "+1". See
+`services/api/gitea-client/reactions.ts`.
 
 **Change assignments** follow the rule too. A change's assignee is the pull
 request's Gitea assignee and its reviewers are Gitea review requests, so who a

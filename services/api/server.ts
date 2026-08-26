@@ -29,8 +29,10 @@ import {
   createDiscussionThread,
   listDiscussions,
   replyToDiscussion,
+  setCommentReactionInThread,
   setDiscussionResolution,
 } from "./gitea-client/discussions";
+import { isSupportedReaction } from "./gitea-client/reactions";
 import {
   getReviewSettings,
   updateReviewSettings,
@@ -55,6 +57,7 @@ import {
   listRepoCollaborators,
   listWorkspaceRepos,
   searchWorkspaceRepos,
+  searchWorkspaceReposPage,
   repoExists,
   searchUsers,
   removeRepoCollaborator,
@@ -2017,6 +2020,60 @@ async function handleAuthMe(
   );
 }
 
+/**
+ * Quick find: one page of documents whose name or description matches.
+ *
+ * Deliberately not the library listing. That call fans out per repo for tags,
+ * open changes and approval policy, which is the right answer for a page and
+ * far too much for a panel that reopens on every keystroke. This returns the
+ * repo rows only, in pages, so the panel can render the first results while
+ * the reader is still typing and ask for more as they scroll.
+ */
+async function handleDocumentSearch(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) {
+    return auth;
+  }
+
+  const { client } = auth;
+  const url = new URL(req.url);
+  const query = url.searchParams.get("q")?.trim() || "";
+  const page = parsePositiveIntInput(url.searchParams.get("page"), 1);
+  const limit = Math.min(
+    parsePositiveIntInput(url.searchParams.get("limit"), 8),
+    50,
+  );
+
+  if (!query) {
+    return json(400, { error: "q is required." }, baseHeaders);
+  }
+
+  try {
+    const result = await searchWorkspaceReposPage({
+      client,
+      q: query,
+      page,
+      limit,
+    });
+
+    return json(
+      200,
+      {
+        documents: result.repos.map(normalizeWorkspaceRepoSummary),
+        page: result.page,
+        limit: result.limit,
+        hasMore: result.hasMore,
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    return responseFromError(err, baseHeaders, "Unable to search documents.");
+  }
+}
+
 async function handleDocuments(
   req: Request,
   baseHeaders: Headers,
@@ -2929,6 +2986,8 @@ async function handleListDiscussions(
       owner,
       repo,
       pullNumber: prNumber,
+      viewerLogin: access.username,
+      withReactions: true,
     });
     return json(200, discussions, baseHeaders);
   } catch (err) {
@@ -3035,6 +3094,8 @@ async function handleCreateDiscussionThread(
       repo,
       pullNumber: prNumber,
       body,
+      viewerLogin: auth.session.username,
+      withReactions: true,
     });
     return json(201, discussions, baseHeaders);
   } catch (err) {
@@ -3071,6 +3132,8 @@ async function handleReplyToDiscussion(
       pullNumber: prNumber,
       threadId,
       body,
+      viewerLogin: auth.session.username,
+      withReactions: true,
     });
     return json(201, discussions, baseHeaders);
   } catch (err) {
@@ -3120,6 +3183,8 @@ async function handleResolveDiscussion(
       pullNumber: prNumber,
       threadId,
       resolved,
+      viewerLogin: auth.session.username,
+      withReactions: true,
     });
     return json(200, discussions, baseHeaders);
   } catch (err) {
@@ -3128,6 +3193,77 @@ async function handleResolveDiscussion(
       baseHeaders,
       "Unable to update the thread status.",
     );
+  }
+}
+
+/**
+ * Leave or take back a reaction on one comment in a review thread.
+ *
+ * A reaction is not a review and not a resolution: it changes nothing about
+ * whether this version can be published. It is here so that agreeing with a
+ * concern does not cost the record another comment.
+ */
+async function handleSetCommentReaction(
+  req: Request,
+  baseHeaders: Headers,
+  owner: string,
+  repo: string,
+  prNumber: number,
+  threadId: string,
+  commentId: number,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) {
+    return auth;
+  }
+
+  if (!Number.isSafeInteger(commentId) || commentId <= 0) {
+    return json(400, { error: "Invalid comment id." }, baseHeaders);
+  }
+
+  const payload = (await readJsonBody(req)) ?? null;
+  const form = payload ? null : await readMultipartBody(req);
+  const content = readInputString(payload, form, "content");
+  const onRaw = payload ? payload.on : readInputString(null, form, "on");
+
+  if (!isSupportedReaction(content)) {
+    return json(
+      400,
+      { error: "That is not a reaction you can leave here." },
+      baseHeaders,
+    );
+  }
+
+  // Require an explicit value, the same way resolution does: defaulting a
+  // malformed request to `false` would quietly delete somebody's reaction.
+  const on =
+    typeof onRaw === "boolean"
+      ? onRaw
+      : onRaw === "true"
+        ? true
+        : onRaw === "false"
+          ? false
+          : null;
+
+  if (on === null) {
+    return json(400, { error: "on must be true or false." }, baseHeaders);
+  }
+
+  try {
+    const discussions = await setCommentReactionInThread({
+      client: auth.client,
+      owner,
+      repo,
+      pullNumber: prNumber,
+      threadId,
+      commentId,
+      content,
+      on,
+      viewerLogin: auth.session.username,
+    });
+    return json(200, discussions, baseHeaders);
+  } catch (err) {
+    return responseFromError(err, baseHeaders, "Unable to save the reaction.");
   }
 }
 
@@ -4560,6 +4696,8 @@ export function createApiServer() {
         response = await handleAuthMe(req, baseHeaders);
       } else if (pathname === "/api/app/documents" && method === "GET") {
         response = await handleDocuments(req, baseHeaders);
+      } else if (pathname === "/api/app/documents/search" && method === "GET") {
+        response = await handleDocumentSearch(req, baseHeaders);
       } else if (pathname === "/api/app/documents" && method === "POST") {
         response = await handleCreateDocument(req, baseHeaders);
       } else if (pathname === "/api/app/users/search" && method === "GET") {
@@ -4604,6 +4742,9 @@ export function createApiServer() {
         );
         const discussionResolveMatch = pathname.match(
           /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/discussions\/([^/]+)\/resolve$/,
+        );
+        const discussionReactionMatch = pathname.match(
+          /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/discussions\/([^/]+)\/comments\/(\d+)\/reactions$/,
         );
         const downloadMatch = pathname.match(
           /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/download$/,
@@ -4689,6 +4830,16 @@ export function createApiServer() {
             decodePathParam(discussionsMatch[1] ?? ""),
             decodePathParam(discussionsMatch[2] ?? ""),
             Number.parseInt(discussionsMatch[3] ?? "", 10),
+          );
+        } else if (discussionReactionMatch && method === "PUT") {
+          response = await handleSetCommentReaction(
+            req,
+            baseHeaders,
+            decodePathParam(discussionReactionMatch[1] ?? ""),
+            decodePathParam(discussionReactionMatch[2] ?? ""),
+            Number.parseInt(discussionReactionMatch[3] ?? "", 10),
+            decodePathParam(discussionReactionMatch[4] ?? ""),
+            Number.parseInt(discussionReactionMatch[5] ?? "", 10),
           );
         } else if (discussionRepliesMatch && method === "POST") {
           response = await handleReplyToDiscussion(

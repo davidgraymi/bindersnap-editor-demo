@@ -20,7 +20,9 @@ import type {
   DocumentDetailPayload,
   DocumentHistoryPayload,
   DocumentPermissionsPayload,
+  DocumentSearchResultsPayload,
   InitialDocumentUploadResult,
+  ReactionKind,
   UploadResult,
   WorkspaceDocumentSummary,
 } from "../../packages/api-schema/schemas/documents";
@@ -42,6 +44,7 @@ export type {
 export type {
   ChangeAssignments,
   ChangeOutcome,
+  CommentReaction,
   ChangeReviewer,
   ChangeUpdate,
   ChangeUpdatesPayload,
@@ -49,15 +52,19 @@ export type {
   ClosedChange,
   ClosedChangesPayload,
   CollaboratorListPayload,
+  DiscussionComment,
   DiscussionSummary,
   DiscussionThread,
   DocumentDetailPayload,
   DocumentHistoryPayload,
   DocumentPermissionsPayload,
+  DocumentSearchResultsPayload,
   DocumentVersionRecord,
   WorkspaceDocumentSummary,
   InitialDocumentUploadResult,
   PullRequestWithApprovalState,
+  ReactionKind,
+  ReactionUser,
   ReviewerStatus,
   ReviewSettings,
   UploadResult,
@@ -78,6 +85,7 @@ export type {
   DocTag,
   RepoCollaboratorPermissionSummary,
   RepoUserSummary,
+  WorkspaceRepo,
 } from "../../packages/api-schema/schemas/common";
 export type {
   ApprovalState,
@@ -195,6 +203,30 @@ export async function getWorkspaceDocuments(
     return response.data.documents ?? [];
   } catch (error) {
     handlePaymentRequired("/api/app/documents", error);
+  }
+}
+
+/**
+ * One page of quick-find matches: repo rows only, no per-document fan-out.
+ *
+ * The panel calls this on every settled keystroke and again for each page the
+ * reader scrolls into, so it stays deliberately cheap. The library listing is
+ * still the call that knows about versions and open changes.
+ */
+export async function searchDocuments(
+  query: string,
+  page = 1,
+  limit = 8,
+): Promise<DocumentSearchResultsPayload> {
+  try {
+    const response = await DocumentsClient.searchDocuments({
+      q: query,
+      page: String(page),
+      limit: String(limit),
+    });
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired("/api/app/documents/search", error);
   }
 }
 
@@ -599,6 +631,40 @@ export async function resolveDocumentDiscussion(
   } catch (error) {
     handlePaymentRequired(
       `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/discussions/${threadId}/resolve`,
+      error,
+    );
+  }
+}
+
+/**
+ * Leave or take back one reaction on one review comment.
+ *
+ * Returns the whole discussion, like every other write here: the record the
+ * page draws always comes back from the server rather than being patched
+ * together on the client.
+ */
+export async function setDiscussionCommentReaction(
+  owner: string,
+  repo: string,
+  pullNumber: number,
+  threadId: string,
+  commentId: number,
+  content: ReactionKind,
+  on: boolean,
+): Promise<DiscussionSummary> {
+  try {
+    const response = await DocumentsClient.setDiscussionCommentReaction(
+      owner,
+      repo,
+      String(pullNumber),
+      threadId,
+      String(commentId),
+      { content, on },
+    );
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/discussions/${threadId}/comments/${commentId}/reactions`,
       error,
     );
   }

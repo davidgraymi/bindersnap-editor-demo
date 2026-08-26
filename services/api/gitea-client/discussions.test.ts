@@ -9,6 +9,7 @@ import {
   listDiscussions,
   parseMarker,
   replyToDiscussion,
+  setCommentReactionInThread,
   setDiscussionResolution,
   stripForgedMarkers,
   stripMarkers,
@@ -478,4 +479,212 @@ test("setDiscussionResolution refuses to resolve an external comment", async () 
       resolved: true,
     }),
   ).rejects.toThrow(/not created in Bindersnap/i);
+});
+
+// --- reactions ------------------------------------------------------------
+
+const REACTIONS_PATH = "/repos/{owner}/{repo}/issues/comments/{id}/reactions";
+
+type RawReaction = components["schemas"]["Reaction"];
+
+/**
+ * The comment mock plus a reaction store, so a thread can be read back with
+ * the reactions hanging off the right comment.
+ */
+function createReactingClient(
+  initial: RawComment[],
+  reactions: Record<number, RawReaction[]>,
+) {
+  const store = [...initial];
+
+  const GET = mock(async (path: string, init?: any) => {
+    if (path === COMMENTS_PATH) {
+      return {
+        data: [...store],
+        error: undefined,
+        response: new Response(null, { status: 200 }),
+      };
+    }
+    if (path === REACTIONS_PATH) {
+      return {
+        data: reactions[init?.params?.path?.id as number] ?? [],
+        error: undefined,
+        response: new Response(null, { status: 200 }),
+      };
+    }
+    return {
+      data: undefined,
+      error: { message: "not found" },
+      response: new Response(null, { status: 404 }),
+    };
+  });
+
+  const POST = mock(async (path: string, init?: any) => {
+    if (path === REACTIONS_PATH) {
+      const id = init?.params?.path?.id as number;
+      (reactions[id] ??= []).push({
+        content: init?.body?.content,
+        user: { login: "carol", full_name: "Carol Reid" },
+      } as RawReaction);
+      return {
+        data: { content: init?.body?.content },
+        error: undefined,
+        response: new Response(null, { status: 201 }),
+      };
+    }
+    return {
+      data: undefined,
+      error: { message: "not found" },
+      response: new Response(null, { status: 404 }),
+    };
+  });
+
+  return {
+    client: {
+      GET,
+      POST,
+      PUT: mock(),
+      DELETE: mock(),
+      use: mock(),
+    } as unknown as GiteaClient,
+    GET,
+    POST,
+    reactions,
+  };
+}
+
+test("listDiscussions leaves reactions alone unless they are asked for", async () => {
+  const { client, GET } = createReactingClient(
+    [comment(1, `Root\n\n${marker("thread", "t1")}`, "2026-01-01T00:01:00Z")],
+    { 1: [{ content: "+1", user: { login: "bob" } } as RawReaction] },
+  );
+
+  const summary = await listDiscussions({ client, ...base });
+
+  expect(summary.threads[0]?.comments[0]?.reactions).toEqual([]);
+  // One call for the comments, and none for reactions.
+  expect(GET).toHaveBeenCalledTimes(1);
+});
+
+test("listDiscussions hangs each comment's reactions off that comment", async () => {
+  const { client } = createReactingClient(
+    [
+      comment(1, `Root\n\n${marker("thread", "t1")}`, "2026-01-01T00:01:00Z"),
+      comment(2, `Reply\n\n${marker("reply", "t1")}`, "2026-01-01T00:02:00Z"),
+    ],
+    {
+      1: [{ content: "+1", user: { login: "bob" } } as RawReaction],
+      2: [{ content: "eyes", user: { login: "alice" } } as RawReaction],
+    },
+  );
+
+  const summary = await listDiscussions({
+    client,
+    ...base,
+    viewerLogin: "bob",
+    withReactions: true,
+  });
+
+  const [root, reply] = summary.threads[0]!.comments;
+  expect(root?.reactions[0]).toMatchObject({
+    content: "+1",
+    count: 1,
+    viewerReacted: true,
+  });
+  expect(reply?.reactions[0]).toMatchObject({
+    content: "eyes",
+    viewerReacted: false,
+  });
+});
+
+test("reacting writes to Gitea and returns the discussion with the reaction on it", async () => {
+  const { client, POST } = createReactingClient(
+    [comment(1, `Root\n\n${marker("thread", "t1")}`, "2026-01-01T00:01:00Z")],
+    {},
+  );
+
+  const summary = await setCommentReactionInThread({
+    client,
+    ...base,
+    threadId: "t1",
+    commentId: 1,
+    content: "+1",
+    on: true,
+    viewerLogin: "carol",
+  });
+
+  expect(POST).toHaveBeenCalledTimes(1);
+  expect(summary.threads[0]?.comments[0]?.reactions[0]).toMatchObject({
+    content: "+1",
+    count: 1,
+    viewerReacted: true,
+  });
+});
+
+test("a reaction never changes what gates publishing", async () => {
+  const { client } = createReactingClient(
+    [comment(1, `Root\n\n${marker("thread", "t1")}`, "2026-01-01T00:01:00Z")],
+    {},
+  );
+
+  const before = await listDiscussions({ client, ...base });
+  const after = await setCommentReactionInThread({
+    client,
+    ...base,
+    threadId: "t1",
+    commentId: 1,
+    content: "+1",
+    on: true,
+    viewerLogin: "carol",
+  });
+
+  expect(after.unresolvedCount).toBe(before.unresolvedCount);
+  expect(after.totalCount).toBe(before.totalCount);
+  // Reacting posts a reaction, not a comment: the thread is not reopened and
+  // the record gains no new event.
+  expect(after.threads[0]?.comments).toHaveLength(1);
+  expect(after.threads[0]?.events).toEqual([]);
+});
+
+test("a comment id from another thread cannot be reacted to through this one", async () => {
+  const { client, POST } = createReactingClient(
+    [
+      comment(1, `Root\n\n${marker("thread", "t1")}`, "2026-01-01T00:01:00Z"),
+      comment(2, `Other\n\n${marker("thread", "t2")}`, "2026-01-01T00:02:00Z"),
+    ],
+    {},
+  );
+
+  await expect(
+    setCommentReactionInThread({
+      client,
+      ...base,
+      threadId: "t1",
+      commentId: 2,
+      content: "+1",
+      on: true,
+      viewerLogin: "carol",
+    }),
+  ).rejects.toThrow(/not found/i);
+  expect(POST).not.toHaveBeenCalled();
+});
+
+test("a reaction outside the vocabulary never reaches Gitea", async () => {
+  const { client, POST } = createReactingClient(
+    [comment(1, `Root\n\n${marker("thread", "t1")}`, "2026-01-01T00:01:00Z")],
+    {},
+  );
+
+  await expect(
+    setCommentReactionInThread({
+      client,
+      ...base,
+      threadId: "t1",
+      commentId: 1,
+      content: "rocket",
+      on: true,
+      viewerLogin: "carol",
+    }),
+  ).rejects.toThrow(/not a reaction/i);
+  expect(POST).not.toHaveBeenCalled();
 });

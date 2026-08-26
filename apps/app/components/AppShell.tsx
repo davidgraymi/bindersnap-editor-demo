@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Bell, FileText, LogOut, Moon, Search, Shield } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Bell, FileText, LogOut, Moon, Shield } from "lucide-react";
 import type { SessionUser } from "../api";
 import { buildDocumentsUrl, parseDocumentsViewState } from "../documentsView";
 import type { AppRoute } from "../routes";
@@ -10,6 +10,7 @@ import { CreateDocumentModal } from "./CreateDocumentModal";
 import { DocumentDetail } from "./DocumentDetail";
 import { DocumentsPage } from "./DocumentsPage";
 import { HomePage } from "./HomePage";
+import { NavSearch } from "./NavSearch";
 import { NewDocumentButton } from "./NewDocumentButton";
 
 interface AppShellProps {
@@ -90,10 +91,9 @@ export function AppShell({
   const [showCreateDocumentModal, setShowCreateDocumentModal] = useState(false);
   // A search that was linked to or reloaded is still the search that is on
   // screen, so the box says so.
-  const [search, setSearch] = useState(
+  const [initialSearch] = useState(
     () => parseDocumentsViewState(window.location.search, "").freeText,
   );
-  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const openCreateDocumentModal = useCallback(() => {
     setShowCreateDocumentModal(true);
@@ -108,31 +108,6 @@ export function AppShell({
       );
     };
   }, [openCreateDocumentModal]);
-
-  // "/" puts the cursor in search from anywhere — unless the reader is already
-  // typing somewhere, where a slash is just a slash.
-  useEffect(() => {
-    const focusSearch = (event: KeyboardEvent) => {
-      if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) {
-        return;
-      }
-      const target = event.target as HTMLElement | null;
-      const tag = target?.tagName;
-      if (
-        tag === "INPUT" ||
-        tag === "TEXTAREA" ||
-        tag === "SELECT" ||
-        target?.isContentEditable
-      ) {
-        return;
-      }
-      event.preventDefault();
-      searchInputRef.current?.focus();
-    };
-
-    document.addEventListener("keydown", focusSearch);
-    return () => document.removeEventListener("keydown", focusSearch);
-  }, []);
 
   return (
     <div className="app-shell">
@@ -175,42 +150,12 @@ export function AppShell({
 
         <div className="app-topnav-right">
           {/* Search — the only search there is, on every page */}
-          <form
-            className="app-nav-search"
-            role="search"
-            onSubmit={(event) => {
-              event.preventDefault();
-              searchInputRef.current?.blur();
-              navigateToSearch(search.trim());
-            }}
-          >
-            <Search
-              className="app-nav-search-icon"
-              aria-hidden="true"
-              size={14}
-              strokeWidth={1.5}
-            />
-            <input
-              ref={searchInputRef}
-              className="app-nav-search-input"
-              type="text"
-              placeholder="Search documents"
-              aria-label="Search documents"
-              value={search}
-              autoComplete="off"
-              spellCheck={false}
-              onChange={(event) => setSearch(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Escape") {
-                  setSearch("");
-                  searchInputRef.current?.blur();
-                }
-              }}
-            />
-            <span className="app-nav-search-kbd" aria-hidden="true">
-              /
-            </span>
-          </form>
+          <NavSearch
+            currentUsername={currentUsername}
+            initialQuery={initialSearch}
+            onNavigate={onNavigate}
+            onSearchLibrary={navigateToSearch}
+          />
 
           {/* Create document — a convenience, not the page's headline action */}
           <NewDocumentButton onClick={openCreateDocumentModal} />
