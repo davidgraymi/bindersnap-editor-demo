@@ -1337,116 +1337,14 @@ body::after {
   border-color: var(--brand-coral);
 }
 
-/* ─────────────────────────────────────
-   REVIEW CYCLE
-───────────────────────────────────── */
-
-.section-cycle {
+/* Tinted band. The page alternates tinted and plain sections; add this to a
+   bare <section> wrapper to put it on the tinted beat. Sections that carry
+   their own background (.section-compare, .chaos-strip) do not need it. */
+.section-band {
   background: var(--bs-surface-2);
   border-top: 1px solid var(--bs-rule);
   border-bottom: 1px solid var(--bs-rule);
-  padding: var(--brand-section-padding-y) var(--brand-page-padding-x);
   transition: var(--bs-mode-transition);
-}
-
-.cycle-inner {
-  max-width: var(--brand-max-width);
-  margin: 0 auto;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--brand-space-16);
-  align-items: center;
-}
-
-.cycle-copy h2 {
-  font-family: var(--brand-font-serif);
-  font-size: clamp(28px, 3vw, 40px);
-  font-weight: var(--brand-weight-semibold);
-  line-height: var(--brand-leading-snug);
-  color: var(--bs-text-primary);
-  margin: var(--brand-space-4) 0 var(--brand-space-4);
-  transition: color var(--brand-transition-base);
-}
-
-.cycle-copy h2 em {
-  font-style: italic;
-  color: var(--bs-text-muted);
-}
-
-.cycle-copy > p {
-  font-size: 16px;
-  font-weight: var(--brand-weight-light);
-  line-height: var(--brand-leading-relaxed);
-  color: var(--bs-text-muted);
-  max-width: var(--brand-max-width-text);
-}
-
-.cycle-queue {
-  background: var(--bs-surface-1);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-xl);
-  padding: var(--brand-space-6);
-  box-shadow: var(--bs-shadow-md);
-  transition: var(--bs-mode-transition);
-}
-
-.queue-list {
-  list-style: none;
-  margin-top: var(--brand-space-4);
-}
-
-.queue-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: var(--brand-space-1) var(--brand-space-4);
-  align-items: center;
-  padding: var(--brand-space-4) 0;
-  border-bottom: 1px solid var(--bs-rule);
-}
-
-.queue-row:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
-}
-
-.queue-name {
-  font-size: 14px;
-  font-weight: var(--brand-weight-medium);
-  color: var(--bs-text-primary);
-}
-
-.queue-meta {
-  grid-column: 1;
-  font-family: var(--brand-font-mono);
-  font-size: 11px;
-  color: var(--bs-text-faint);
-}
-
-.queue-state {
-  grid-column: 2;
-  grid-row: 1 / span 2;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--brand-space-1);
-  padding: var(--brand-space-1) var(--brand-space-3);
-  border-radius: var(--brand-radius-full);
-  background: var(--bs-surface-2);
-  font-family: var(--brand-font-mono);
-  font-size: 10px;
-  letter-spacing: var(--brand-tracking-wide);
-  text-transform: uppercase;
-  color: var(--bs-text-muted);
-  white-space: nowrap;
-}
-
-.queue-state.is-overdue {
-  background: var(--bs-coral-dim);
-  color: var(--brand-coral);
-}
-
-.queue-state.is-current {
-  background: var(--bs-green-dim);
-  color: var(--brand-green);
 }
 
 /* ─────────────────────────────────────
@@ -1824,11 +1722,6 @@ footer {
     gap: var(--brand-space-12);
   }
 
-  .cycle-inner {
-    grid-template-columns: 1fr;
-    gap: var(--brand-space-12);
-  }
-
   .compare-grid {
     grid-template-columns: 1fr;
   }
@@ -1894,14 +1787,9 @@ footer {
   .review-card {
     padding: 28px 24px;
   }
-  .section-cycle,
   .section-record {
     padding: var(--brand-section-padding-y-sm) var(--brand-page-padding-x);
   }
-  .cycle-queue {
-    padding: 28px 24px;
-  }
-
   .section-compare {
     padding: var(--brand-section-padding-y-sm) var(--brand-page-padding-x);
   }
