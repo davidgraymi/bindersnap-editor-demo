@@ -123,6 +123,28 @@ test("the file under review is its own screen within a change", () => {
   ).toBe("/docs/alice/quarterly-report/changes/7/preview");
 });
 
+test("the comparison against the last version is its own screen too", () => {
+  expect(getRoute("/docs/alice/quarterly-report/changes/7/compare")).toEqual({
+    kind: "document",
+    owner: "alice",
+    repo: "quarterly-report",
+    tab: "changes",
+    changeNumber: 7,
+    changeView: "compare",
+  });
+
+  expect(
+    routeToPath({
+      kind: "document",
+      owner: "alice",
+      repo: "quarterly-report",
+      tab: "changes",
+      changeNumber: 7,
+      changeView: "compare",
+    }),
+  ).toBe("/docs/alice/quarterly-report/changes/7/compare");
+});
+
 test("every published version has a page of its own", () => {
   expect(getRoute("/docs/alice/quarterly-report/version/2")).toEqual({
     kind: "document",

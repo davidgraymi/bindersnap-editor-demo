@@ -24,6 +24,38 @@ describe("parseSeedScenario", () => {
     expect(scenario.documents).toEqual([]);
   });
 
+  test("defaults a document's format to the editor's own JSON", () => {
+    const scenario = parseSeedScenario(`
+password: dev
+users:
+  - username: alice
+    fullName: Alice Nguyen
+    email: alice@example.com
+documents:
+  - owner: alice
+    repo: handbook
+    description: Handbook
+`);
+    expect(scenario.documents[0]?.format).toBe("prosemirror");
+  });
+
+  test("rejects a file format nothing knows how to write", () => {
+    expect(() =>
+      parseSeedScenario(`
+password: dev
+users:
+  - username: alice
+    fullName: Alice Nguyen
+    email: alice@example.com
+documents:
+  - owner: alice
+    repo: handbook
+    description: Handbook
+    format: powerpoint
+`),
+    ).toThrow(/documents\[0\].format/);
+  });
+
   test("defaults collaborator permission to write", () => {
     const scenario = parseSeedScenario(`
 password: dev
@@ -258,6 +290,44 @@ describe("tests/seed-data/dev.yaml", () => {
       "in_review",
       "published",
     ]);
+  });
+
+  test("carries one policy in each file type the app can meet", () => {
+    // Word, PDF, and Markdown, in the same house structure, so the preview
+    // and comparison screens can be judged on the file type rather than on
+    // the prose. Every one is published once and has a second version open,
+    // which is what gives the comparison two sides to show.
+    const manual = [
+      { repo: "infection-control-policy", format: "docx" },
+      { repo: "medication-administration-policy", format: "pdf" },
+      { repo: "patient-grievance-policy", format: "markdown" },
+    ] as const;
+
+    for (const { repo, format } of manual) {
+      const policy = scenario.documents.find(
+        (document) => document.repo === repo,
+      );
+      expect(policy?.format).toBe(format);
+      expect(policy?.changes.filter((change) => change.publish)).toHaveLength(
+        1,
+      );
+      expect(policy?.changes.filter((change) => !change.publish)).toHaveLength(
+        1,
+      );
+    }
+  });
+
+  test("every other document is still the editor's own JSON", () => {
+    const named = new Set([
+      "infection-control-policy",
+      "medication-administration-policy",
+      "patient-grievance-policy",
+    ]);
+
+    for (const document of scenario.documents) {
+      if (named.has(document.repo)) continue;
+      expect(document.format).toBe("prosemirror");
+    }
   });
 
   test("keeps the fixtures the integration suite pins", () => {

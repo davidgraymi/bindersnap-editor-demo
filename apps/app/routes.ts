@@ -25,8 +25,9 @@ export type AppRoute =
        */
       changeNumber?: number;
       /**
-       * Which half of that change's page: the conversation, or the file it
-       * proposes. Only meaningful alongside `changeNumber`.
+       * Which screen of that change's page: the conversation, the file it
+       * proposes, or that file against the version on record. Only meaningful
+       * alongside `changeNumber`.
        */
       changeView?: DocumentChangeView;
     };
@@ -39,11 +40,12 @@ export type AppRoute =
 export type DocumentTab = "overview" | "changes" | "history" | "access";
 
 /**
- * The two halves of a change's page. The decision is made in the discussion,
- * so that is what a bare change URL opens; the file it proposes gets its own
- * screen instead of pushing the conversation below the fold.
+ * The three screens of a change's page. The decision is made in the
+ * discussion, so that is what a bare change URL opens; the file it proposes
+ * and the comparison against the version on record each get their own screen
+ * instead of pushing the conversation below the fold.
  */
-export type DocumentChangeView = "discussion" | "preview";
+export type DocumentChangeView = "discussion" | "preview" | "compare";
 
 const DOCUMENT_TAB_PATHS: Record<Exclude<DocumentTab, "overview">, string> = {
   changes: "changes",
@@ -137,16 +139,18 @@ export function getRoute(pathname: string): AppRoute {
   }
 
   const changeMatch = normalizedPath.match(
-    /^\/docs\/([^/]+)\/([^/]+)\/changes\/(\d+)(?:\/(preview))?$/,
+    /^\/docs\/([^/]+)\/([^/]+)\/changes\/(\d+)(?:\/(preview|compare))?$/,
   );
   if (changeMatch) {
+    const segment = changeMatch[4];
     return {
       kind: "document",
       owner: changeMatch[1]!,
       repo: changeMatch[2]!,
       tab: "changes",
       changeNumber: Number(changeMatch[3]),
-      changeView: changeMatch[4] === "preview" ? "preview" : "discussion",
+      changeView:
+        segment === "preview" || segment === "compare" ? segment : "discussion",
     };
   }
 
@@ -214,7 +218,9 @@ export function routeToPath(route: AppRoute): string {
       }
       if (route.tab === "changes" && route.changeNumber !== undefined) {
         const change = `${base}/changes/${route.changeNumber}`;
-        return route.changeView === "preview" ? `${change}/preview` : change;
+        return route.changeView === "preview" || route.changeView === "compare"
+          ? `${change}/${route.changeView}`
+          : change;
       }
       return `${base}/${DOCUMENT_TAB_PATHS[route.tab]}`;
     }

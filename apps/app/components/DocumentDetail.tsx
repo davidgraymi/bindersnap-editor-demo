@@ -31,6 +31,7 @@ import {
   buildVersionRailRows,
 } from "../documentWorkspace";
 import type { VersionMenuOption } from "../documentWorkspace";
+import { resolveComparisonBase } from "../documentComparison";
 import { DocumentAccess } from "./DocumentAccess";
 import { DocumentChangeDetail } from "./DocumentChangeDetail";
 import type { ChangeFilter } from "./DocumentChanges";
@@ -489,6 +490,11 @@ export function DocumentDetail({
             nextVersion={nextVersion}
             documentName={documentName}
             fileName={canonicalFileInfo?.downloadFileName ?? null}
+            comparisonBase={resolveComparisonBase({
+              open: activeChange.open,
+              publishedVersion: activeChange.publishedVersion,
+              tags,
+            })}
             downloading={downloadState.ref === activeChange.branchName}
             onDownload={(gitRef, loaded) => void handleDownload(gitRef, loaded)}
             onChanged={loadDocumentData}

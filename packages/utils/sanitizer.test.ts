@@ -66,6 +66,19 @@ describe("sanitizeHtml", () => {
     expect(output).toContain('href="https://example.com"');
   });
 
+  // The change comparison renders a document with its own additions and
+  // deletions marked in it. Both tags are plain semantic HTML; the operation
+  // index htmldiff attaches to each one is not, and goes.
+  test("keeps the comparison's ins and del marks and drops their data attributes", () => {
+    const output = sanitizeHtml(
+      '<p>Due within <del data-operation-index="1" class="doc-compare-mark">thirty</del><ins data-operation-index="1" class="doc-compare-mark">sixty</ins> days.</p>',
+    );
+
+    expect(output).toBe(
+      '<p>Due within <del class="doc-compare-mark">thirty</del><ins class="doc-compare-mark">sixty</ins> days.</p>',
+    );
+  });
+
   test("passes valid StarterKit HTML through unchanged", () => {
     const input =
       '<p class="intro">Hello <strong>world</strong></p><h2>Heading</h2><ul><li>Item</li></ul>';
