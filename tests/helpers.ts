@@ -377,7 +377,7 @@ export async function signOutCurrentUser(page: Page): Promise<void> {
   await button.click({ force: true });
   await page.waitForURL(/\/$/, { timeout: 5_000 });
   await expect(
-    page.getByRole("heading", { name: /Your approval process/i }),
+    page.getByRole("heading", { name: /which version you approved/i }),
   ).toBeVisible({ timeout: 10_000 });
   await clearBrowserAuthState(page);
 }
