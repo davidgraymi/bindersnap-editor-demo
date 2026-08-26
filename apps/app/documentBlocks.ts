@@ -45,3 +45,46 @@ export function blocksToHtml(blocks: readonly DocumentBlock[]): string {
 export function blocksToText(blocks: readonly DocumentBlock[]): string {
   return blocks.map((block) => block.text).join("\n\n");
 }
+
+/** Marks where one block ended and the next began, before whitespace collapses. */
+const BLOCK_BREAK = "\u0000";
+
+/**
+ * The words out of a fragment of HTML, for counting what moved.
+ *
+ * The counts run on text rather than markup so that a Word file whose only
+ * change is a style — a paragraph re-tagged as a heading, say — is not
+ * reported as a hundred words rewritten.
+ *
+ * The browser's own parser does the reading. Stripping tags and decoding
+ * entities with regular expressions is the pattern that produces
+ * `<scr<script>ipt>` surviving a single pass, and `&amp;lt;` decoding twice —
+ * CodeQL flags both, and it is right to: even where the result is only ever
+ * counted, a hand-rolled HTML reader is one refactor away from being rendered
+ * by someone who assumed it was safe. `DOMParser` is inert — it runs no
+ * script and fetches nothing — and it decodes entities exactly once, because
+ * it is a parser rather than a series of substitutions.
+ */
+export function htmlToText(html: string): string {
+  const parsed = new DOMParser().parseFromString(html, "text/html");
+
+  // Block elements are where one run of words ends and the next begins. With
+  // nothing between them "…six years.Review" counts as one word.
+  //
+  // The break is marked rather than written, because a newline inside the
+  // markup is only layout — a paragraph wrapped across three source lines is
+  // still one paragraph — and it has to collapse like any other space. A
+  // control character cannot appear in the text of a document.
+  for (const block of parsed.body.querySelectorAll(
+    "p, h1, h2, h3, h4, h5, h6, li, tr, div, br",
+  )) {
+    block.after(parsed.createTextNode(BLOCK_BREAK));
+  }
+
+  return (parsed.body.textContent ?? "")
+    .replace(/\s+/g, " ")
+    .split(BLOCK_BREAK)
+    .map((block) => block.trim())
+    .filter((block) => block !== "")
+    .join("\n\n");
+}

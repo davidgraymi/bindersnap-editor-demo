@@ -38,6 +38,8 @@ const DOM_KEYS = [
   "Node",
   "MutationObserver",
   "Event",
+  // The Word comparison reads its word counts with the browser's own parser.
+  "DOMParser",
 ] as const;
 
 let originals: Record<string, unknown> = {};
@@ -56,6 +58,7 @@ beforeEach(() => {
     Node: dom.window.Node,
     MutationObserver: dom.window.MutationObserver,
     Event: dom.window.Event,
+    DOMParser: dom.window.DOMParser,
   };
 
   originals = {};

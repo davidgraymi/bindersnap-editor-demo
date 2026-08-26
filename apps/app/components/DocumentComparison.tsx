@@ -3,7 +3,7 @@ import { Columns2, Download, FileText, Layers } from "lucide-react";
 
 import { sanitizeHtml } from "../../../packages/utils/sanitizer";
 import { downloadDocument } from "../api";
-import { blocksToHtml, blocksToText } from "../documentBlocks";
+import { blocksToHtml, blocksToText, htmlToText } from "../documentBlocks";
 import type { ComparisonBase, DiffSegment } from "../documentComparison";
 import {
   diffRenderedHtml,
@@ -447,25 +447,4 @@ export function DocumentComparison({
       ) : null}
     </section>
   );
-}
-
-/**
- * The words out of a fragment of HTML, for counting what moved.
- *
- * The counts run on text rather than markup so that a Word file whose only
- * change is a style — a paragraph re-tagged as a heading, say — is not
- * reported as a hundred words rewritten.
- */
-function htmlToText(html: string): string {
-  return html
-    .replace(/<\/(p|h[1-6]|li|tr|div)>/gi, "\n\n")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/[ \t]+/g, " ")
-    .trim();
 }
