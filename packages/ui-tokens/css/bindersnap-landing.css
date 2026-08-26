@@ -1448,190 +1448,6 @@ body::after {
 }
 
 /* ─────────────────────────────────────
-   COMPLIANCE
-───────────────────────────────────── */
-
-/* Tinted band. Keeps the page alternating tinted/plain now that the section
-   above it (the review cards) and this one would otherwise run together. */
-.section-assurance {
-  background: var(--bs-surface-2);
-  border-top: 1px solid var(--bs-rule);
-  border-bottom: 1px solid var(--bs-rule);
-  transition: var(--bs-mode-transition);
-}
-
-.section-compliance {
-  padding: var(--brand-section-padding-y) var(--brand-page-padding-x);
-  max-width: var(--brand-max-width);
-  margin: 0 auto;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 96px;
-  align-items: center;
-}
-
-.comp-left .overline {
-  font-family: var(--brand-font-mono);
-  font-size: 11px;
-  font-weight: var(--brand-weight-medium);
-  color: var(--brand-green);
-  letter-spacing: var(--brand-tracking-widest);
-  text-transform: uppercase;
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-2);
-  margin-bottom: var(--brand-space-5);
-}
-
-.comp-left .overline::before {
-  content: "";
-  width: 20px;
-  height: 1px;
-  background: var(--brand-green);
-  flex-shrink: 0;
-}
-
-.comp-left h2 {
-  font-family: var(--brand-font-serif);
-  font-size: clamp(28px, 3vw, 42px);
-  font-weight: var(--brand-weight-semibold);
-  line-height: var(--brand-leading-snug);
-  color: var(--bs-text-primary);
-  margin-bottom: var(--brand-space-4);
-  transition: color var(--brand-transition-base);
-}
-
-.comp-left h2 em {
-  font-style: italic;
-  color: var(--brand-coral);
-}
-
-.comp-left > p {
-  font-size: 16px;
-  font-weight: var(--brand-weight-light);
-  line-height: var(--brand-leading-relaxed);
-  color: var(--bs-text-muted);
-  margin-bottom: var(--brand-space-10);
-}
-
-.comp-items {
-  display: flex;
-  flex-direction: column;
-  gap: var(--brand-space-4);
-}
-
-.comp-item {
-  display: flex;
-  gap: 14px;
-  align-items: flex-start;
-  padding: 16px 20px;
-  background: var(--bs-surface-1);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-lg);
-  transition:
-    border-color var(--brand-transition-base),
-    box-shadow var(--brand-transition-base),
-    background var(--brand-transition-base);
-}
-
-.comp-item:hover {
-  border-color: rgba(22, 163, 74, 0.3);
-  box-shadow: var(--bs-shadow-sm);
-}
-
-.comp-item-icon {
-  width: 36px;
-  height: 36px;
-  background: var(--bs-green-dim);
-  border-radius: var(--brand-radius-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transition: background var(--brand-transition-base);
-}
-
-.comp-item-icon svg {
-  width: 16px;
-  height: 16px;
-  color: var(--brand-green);
-}
-
-.comp-item strong {
-  display: block;
-  font-size: 14px;
-  font-weight: var(--brand-weight-semibold);
-  color: var(--bs-text-primary);
-  margin-bottom: 2px;
-  transition: color var(--brand-transition-base);
-}
-
-.comp-item span {
-  font-size: 13px;
-  font-weight: var(--brand-weight-light);
-  color: var(--bs-text-muted);
-  line-height: var(--brand-leading-normal);
-}
-
-.comp-security-link {
-  display: inline-flex;
-  align-items: center;
-  margin-top: var(--brand-space-6);
-  font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-label);
-  letter-spacing: var(--brand-tracking-wide);
-  color: var(--brand-coral);
-  text-decoration: none;
-  transition: opacity var(--brand-transition-base);
-}
-
-.comp-security-link:hover {
-  opacity: 0.75;
-}
-
-.cert-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-
-.cert-card {
-  background: var(--bs-surface-1);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-lg);
-  padding: 24px 16px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--brand-space-2);
-  transition:
-    transform var(--brand-transition-base),
-    box-shadow var(--brand-transition-base),
-    background var(--brand-transition-base),
-    border-color var(--brand-transition-base);
-}
-
-.cert-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--bs-shadow-md);
-}
-
-.cert-card img {
-  width: 80px;
-  height: 80px;
-  object-fit: contain;
-}
-
-.cert-card span {
-  font-family: var(--brand-font-mono);
-  font-size: 11px;
-  font-weight: var(--brand-weight-medium);
-  color: var(--bs-text-muted);
-  letter-spacing: var(--brand-tracking-wide);
-  text-transform: uppercase;
-}
-
-/* ─────────────────────────────────────
    FINAL CTA
 ───────────────────────────────────── */
 
@@ -1732,6 +1548,60 @@ body::after {
   gap: var(--brand-space-2);
   position: relative;
   z-index: 1;
+}
+
+/* Trust strip — the security facts, sitting with the form instead of in a
+   section of their own. Deliberately quiet: the coral CTA above it is the
+   only emphasis this section gets. */
+.trust-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--brand-space-4);
+  list-style: none;
+  margin: var(--brand-space-10) 0 0;
+  padding: var(--brand-space-6) 0 0;
+  border-top: 1px solid var(--bs-rule);
+  position: relative;
+  z-index: 1;
+}
+
+.trust-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+}
+
+.trust-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-bottom: var(--brand-space-1);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-green-dim);
+  color: var(--brand-green);
+  transition: background var(--brand-transition-base);
+}
+
+.trust-item strong {
+  font-size: 13px;
+  font-weight: var(--brand-weight-medium);
+  color: var(--bs-text-primary);
+  transition: color var(--brand-transition-base);
+}
+
+.trust-detail {
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-label);
+  font-weight: var(--brand-weight-light);
+  letter-spacing: var(--brand-tracking-wide);
+  /* muted, not faint: faint on the CTA card's dark surface lands at ~3.2:1,
+     under AA for 11px text. */
+  color: var(--bs-text-muted);
+  line-height: var(--brand-leading-normal);
 }
 
 .cta-email-row {
@@ -1902,9 +1772,6 @@ footer {
   .review-grid {
     grid-template-columns: repeat(2, 1fr);
   }
-  .section-compliance {
-    gap: var(--brand-space-16);
-  }
 }
 
 @media (max-width: 900px) {
@@ -1953,10 +1820,6 @@ footer {
   }
 
   .compare-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .section-compliance {
     grid-template-columns: 1fr;
   }
 }
@@ -2036,10 +1899,6 @@ footer {
     padding: 12px 20px;
   }
 
-  .cert-grid {
-    grid-template-columns: 1fr;
-  }
-
   .cta-inner {
     padding: var(--brand-space-16) var(--brand-space-8);
   }
@@ -2061,11 +1920,12 @@ footer {
   .chaos-file {
     font-size: 10px;
   }
-  .comp-item {
-    padding: 14px 16px;
-  }
   .cta-inner {
     padding: var(--brand-space-12) var(--brand-space-6);
+  }
+  .trust-strip {
+    grid-template-columns: 1fr;
+    gap: var(--brand-space-5);
   }
 }
 

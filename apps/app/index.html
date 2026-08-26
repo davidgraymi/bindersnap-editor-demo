@@ -824,76 +824,6 @@
           </div>
         </section>
 
-        <!-- COMPLIANCE -->
-        <section class="section-assurance">
-          <div class="section-compliance">
-            <div class="comp-left reveal">
-              <div class="overline">Built for Survey Day</div>
-              <h2>
-                Designed to <em>meet</em> the controls your surveyors ask about.
-              </h2>
-              <p>
-                Bindersnap is being built to SOC 2 / ISO 27001 readiness from
-                day one. The certifications are still in progress, and we will
-                keep saying so plainly until they are not.
-              </p>
-              <div class="comp-items">
-                <div class="comp-item">
-                  <div class="comp-item-icon">
-                    <span
-                      class="landing-lucide-icon"
-                      data-lucide-icon="lock"
-                      data-lucide-size="16"
-                      aria-hidden="true"
-                    ></span>
-                  </div>
-                  <div>
-                    <strong>Encrypted at Rest</strong>
-                    <span
-                      >Every policy file sits on AES-256 encrypted
-                      storage.</span
-                    >
-                  </div>
-                </div>
-                <div class="comp-item">
-                  <div class="comp-item-icon">
-                    <span
-                      class="landing-lucide-icon"
-                      data-lucide-icon="shield"
-                      data-lucide-size="16"
-                      aria-hidden="true"
-                    ></span>
-                  </div>
-                  <div>
-                    <strong>Encrypted in Transit</strong>
-                    <span>Nothing leaves your browser except over HTTPS.</span>
-                  </div>
-                </div>
-                <div class="comp-item">
-                  <div class="comp-item-icon">
-                    <span
-                      class="landing-lucide-icon"
-                      data-lucide-icon="users"
-                      data-lucide-size="16"
-                      aria-hidden="true"
-                    ></span>
-                  </div>
-                  <div>
-                    <strong>Role-Based Approvals</strong>
-                    <span
-                      >Name the people who can approve. Nobody else can.</span
-                    >
-                  </div>
-                </div>
-              </div>
-              <!-- TODO: add security posture documentation -->
-              <!-- <a href="/security" class="comp-security-link"
-                >Read our security posture &rarr;</a
-              > -->
-            </div>
-          </div>
-        </section>
-
         <!-- FINAL CTA -->
         <section class="section-cta" id="signup">
           <div class="cta-inner reveal">
@@ -929,6 +859,49 @@
                 before you enter a card &middot; Cancel anytime
               </p>
             </div>
+
+            <!--
+              The security facts a first-time buyer checks before handing over
+              a policy manual. They sit beside the form rather than in a
+              section of their own — nobody is persuaded by encryption, but
+              plenty of people look for it before they sign up.
+              TODO: link to a security posture page once one exists.
+            -->
+            <ul class="trust-strip">
+              <li class="trust-item">
+                <span
+                  class="landing-lucide-icon trust-icon"
+                  data-lucide-icon="lock"
+                  data-lucide-size="14"
+                  data-lucide-stroke-width="1.8"
+                  aria-hidden="true"
+                ></span>
+                <strong>Encrypted at rest</strong>
+                <span class="trust-detail">AES-256 storage</span>
+              </li>
+              <li class="trust-item">
+                <span
+                  class="landing-lucide-icon trust-icon"
+                  data-lucide-icon="shield"
+                  data-lucide-size="14"
+                  data-lucide-stroke-width="1.8"
+                  aria-hidden="true"
+                ></span>
+                <strong>Encrypted in transit</strong>
+                <span class="trust-detail">HTTPS, browser to server</span>
+              </li>
+              <li class="trust-item">
+                <span
+                  class="landing-lucide-icon trust-icon"
+                  data-lucide-icon="users"
+                  data-lucide-size="14"
+                  data-lucide-stroke-width="1.8"
+                  aria-hidden="true"
+                ></span>
+                <strong>Named approvers</strong>
+                <span class="trust-detail">Only reviewers you choose</span>
+              </li>
+            </ul>
           </div>
         </section>
       </main>
