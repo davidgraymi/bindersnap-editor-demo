@@ -401,11 +401,21 @@ body::after {
 
 .form-hint {
   font-size: 12px;
+  line-height: var(--brand-leading-normal);
   color: var(--bs-text-faint);
   display: flex;
-  align-items: center;
+  /* flex-start, not center: when the hint wraps (always on mobile) a centered
+     icon floats between the two lines. */
+  align-items: flex-start;
   gap: var(--brand-space-1);
   transition: color var(--brand-transition-base);
+}
+
+/* Match one line box so the icon sits beside the first line, not the block. */
+.form-hint > .landing-lucide-icon {
+  height: calc(12px * var(--brand-leading-normal));
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .form-hint svg {
@@ -1532,7 +1542,7 @@ body::after {
   color: var(--brand-coral);
 }
 
-.cta-inner p {
+.cta-inner > p {
   font-size: 16px;
   font-weight: var(--brand-weight-light);
   color: var(--bs-text-muted);
