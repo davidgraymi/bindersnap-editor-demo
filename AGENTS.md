@@ -150,7 +150,10 @@ the source of truth.
 ### The integration testing stack
 
 `docker-compose.yml` runs Gitea + Hocuspocus locally. `docker compose up` seeds
-demo users and documents automatically. Use this to:
+demo users and documents automatically from `tests/seed-data/dev.yaml` — which
+carries the same clinic policy as a Word file, a PDF, and a Markdown file, so
+the preview and comparison screens can be checked against every file type the
+app meets. Use this to:
 
 - Verify Gitea service implementations against a real API
 - Run integration tests (`bun run test:integration`)

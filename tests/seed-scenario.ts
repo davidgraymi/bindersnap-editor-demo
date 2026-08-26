@@ -39,6 +39,46 @@ export interface SeedDocument {
   sections: SeedSection[];
 }
 
+/**
+ * What the document is stored as.
+ *
+ * A regulated team's policy manual is not one file type. Some policies are
+ * Word files somebody has been editing since 2019, some are PDFs exported for
+ * a surveyor, and some live in Markdown on an intranet. The seed carries one
+ * of each so the review screens — the preview and the comparison especially —
+ * can be looked at against every kind of file the app actually meets.
+ *
+ * The prose in the YAML is the same either way; only the rendering differs.
+ */
+export type SeedDocumentFormat = "prosemirror" | "markdown" | "pdf" | "docx";
+
+export const SEED_DOCUMENT_FORMATS = [
+  "prosemirror",
+  "markdown",
+  "pdf",
+  "docx",
+] as const satisfies readonly SeedDocumentFormat[];
+
+/**
+ * The file every version of a document is committed to.
+ *
+ * The BFF finds a document's file by looking for `document.<ext>`
+ * (`inferStoredDocumentFileName`), so the seed has to agree with it — a
+ * mismatch produces a repo the app cannot read a single version out of.
+ */
+export function canonicalFileNameFor(format: SeedDocumentFormat): string {
+  switch (format) {
+    case "markdown":
+      return "document.md";
+    case "pdf":
+      return "document.pdf";
+    case "docx":
+      return "document.docx";
+    case "prosemirror":
+      return "document.json";
+  }
+}
+
 export interface SeedReview {
   by: string;
   state: "approved" | "changes_requested" | "commented";
@@ -82,6 +122,8 @@ export interface SeedDocumentRepo {
   owner: string;
   repo: string;
   description: string;
+  /** How every version of this document is stored. Defaults to the editor's JSON. */
+  format: SeedDocumentFormat;
   collaborators: SeedCollaborator[];
   /** Applied to `main` in order. Published ones become doc/vNNNN tags. */
   changes: SeedChange[];
@@ -288,6 +330,12 @@ function parseDocumentRepo(value: unknown, path: string): SeedDocumentRepo {
     owner: asString(raw.owner, `${path}.owner`),
     repo: asString(raw.repo, `${path}.repo`),
     description: asString(raw.description, `${path}.description`),
+    format: asEnum(
+      raw.format,
+      `${path}.format`,
+      SEED_DOCUMENT_FORMATS,
+      "prosemirror",
+    ),
     collaborators,
     changes: asArray(raw.changes, `${path}.changes`).map((change, index) =>
       parseChange(change, `${path}.changes[${index}]`),

@@ -155,6 +155,25 @@ The documents cover every status the workspace list can show:
 | `carol/vendor-security-review`    | carol | Published + open change  |
 | `bob/hipaa-training-policy`       | bob   | Published (two versions) |
 
+Three more are the same clinic policy manual in the three file types the app
+actually meets, so the preview and comparison screens can be judged on the file
+type rather than on the prose. Each is published once and has a second version
+open for review, and each second version makes the same three kinds of edit — a
+deadline shortened, a clause reworded, a paragraph added:
+
+| Document                                 | File    | What it shows                                                |
+| ---------------------------------------- | ------- | ------------------------------------------------------------ |
+| `alice/infection-control-policy`         | `.docx` | A file a browser cannot read inside — both versions offered  |
+| `alice/medication-administration-policy` | `.pdf`  | The comparison reading a PDF's text layer back with pdf.js   |
+| `alice/patient-grievance-policy`         | `.md`   | The rendered comparison: the change marked inside the policy |
+
+Set a document's `format:` in the YAML (`prosemirror`, `markdown`, `pdf`, or
+`docx`) and the prose beneath it is rendered into that file. Word files and PDFs
+are generated from the same YAML rather than committed as binary fixtures, so
+editing a policy is still a YAML edit. Their timestamps are pinned — otherwise
+identical prose would produce different bytes on every run and each re-seed
+would silently add another update to every open change.
+
 Plus review threads (open and resolved), read-only collaborators, protected `main`
 branches, `doc/vNNNN` version tags, and a public OAuth2 app registered for PKCE
 login at the app's redirect URI.
@@ -187,6 +206,8 @@ tests/
   seed-data/dev.yaml        — THE SEED DATA: users, documents, changes, reviews
   seed-scenario.ts          — the seed format: types, validation, document rendering
   seed-scenario.test.ts     — unit tests for the format and for dev.yaml itself
+  seed-documents.ts         — a document's prose to bytes: Markdown, PDF, .docx
+  seed-documents.test.ts    — unit tests for each format, and for reproducibility
   seed.ts                   — the engine that applies a scenario to Gitea
   helpers.ts                — shared constants, createMemoryStorage, makeClient,
                               pollUntil, resolveAndStoreToken — imported by all *.pw.ts

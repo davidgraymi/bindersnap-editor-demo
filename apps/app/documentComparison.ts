@@ -68,14 +68,34 @@ export function resolveComparisonBase(params: {
  * Word level, not line level: a reviewer looking at a contract cares that
  * "thirty days" became "sixty days", and a whole line lit up red tells them
  * only that the line was touched.
+ *
+ * A run of pure whitespace is never marked. Re-exporting a document moves
+ * line breaks around without changing a word of it, and a marked-up newline
+ * is a coloured sliver with nothing in it — a strike through a line break
+ * reads as a stray dash in the middle of a sentence nobody edited. Whitespace
+ * the new version has is kept as-is; whitespace only the old one had goes.
  */
 export function diffWords(before: string, after: string): DiffSegment[] {
-  return diffWordsWithSpace(before, after)
-    .map((part): DiffSegment => ({
-      kind: part.added ? "added" : part.removed ? "removed" : "same",
+  const segments: DiffSegment[] = [];
+
+  for (const part of diffWordsWithSpace(before, after)) {
+    if (part.value === "") continue;
+
+    const blank = part.value.trim() === "";
+    if (blank && part.removed) continue;
+
+    segments.push({
+      kind:
+        blank || (!part.added && !part.removed)
+          ? "same"
+          : part.added
+            ? "added"
+            : "removed",
       value: part.value,
-    }))
-    .filter((segment) => segment.value !== "");
+    });
+  }
+
+  return segments;
 }
 
 function countWords(value: string): number {

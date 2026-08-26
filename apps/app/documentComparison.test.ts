@@ -149,3 +149,27 @@ test("Markdown that did not change is rendered without any marks", () => {
   expect(html).not.toContain("<ins");
   expect(html).not.toContain("<del");
 });
+
+test("a moved line break is not a change", () => {
+  // Re-exporting a PDF or rewrapping a paragraph shifts whitespace without
+  // touching a word. Marking it puts a coloured sliver with nothing in it
+  // into the middle of a sentence nobody edited.
+  const segments = diffWords(
+    "Records and Retention\nRecords are kept for six years.",
+    "Records and Retention\n\nRecords are kept for six years.",
+  );
+
+  expect(segments.every((segment) => segment.kind === "same")).toBe(true);
+  // The new version's spacing is what survives, so the text still reads right.
+  expect(segments.map((segment) => segment.value).join("")).toBe(
+    "Records and Retention\n\nRecords are kept for six years.",
+  );
+  expect(summarizeSegments(segments).identical).toBe(true);
+});
+
+test("whitespace around a real edit is left unmarked", () => {
+  const segments = diffWords("due within thirty days", "due within sixty days");
+  const marked = segments.filter((segment) => segment.kind !== "same");
+
+  expect(marked.every((segment) => segment.value.trim() !== "")).toBe(true);
+});
