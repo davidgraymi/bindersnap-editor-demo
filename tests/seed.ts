@@ -13,9 +13,9 @@
 
 import { pathToFileURL } from "node:url";
 
+import { renderSeedDocumentFile } from "./seed-documents";
 import {
   loadSeedScenario,
-  renderSeedDocument,
   type SeedChange,
   type SeedDocumentRepo,
   type SeedScenario,
@@ -23,7 +23,6 @@ import {
 } from "./seed-scenario";
 
 const DEFAULT_GITEA_URL = `http://localhost:${process.env.GITEA_PORT ?? "3000"}`;
-const CANONICAL_DOCUMENT_PATH = "document.json";
 const SCENARIO_URL = new URL("seed-data/dev.yaml", import.meta.url);
 
 /** Kept for callers that still ask for the two historically-seeded PRs. */
@@ -117,17 +116,6 @@ function sleep(ms: number): Promise<void> {
 
 function encodeAuth(auth: BasicAuth): string {
   return Buffer.from(`${auth.username}:${auth.password}`).toString("base64");
-}
-
-function toBase64Utf8(value: string): string {
-  return Buffer.from(value, "utf8").toString("base64");
-}
-
-function fromBase64Utf8(value?: string): string {
-  if (!value) {
-    return "";
-  }
-  return Buffer.from(value.replace(/\n/g, ""), "base64").toString("utf8");
 }
 
 function repoPath(owner: string, repo: string): string {
@@ -428,13 +416,20 @@ async function ensureMainBranchProtection(
   log(`Ensured main branch protection: ${owner}/${repo}`);
 }
 
+/**
+ * Commit a file, or leave it alone when it already says the same thing.
+ *
+ * The content arrives base64-encoded rather than as text because a seeded
+ * document is not always text — the policy manual carries a Word file and a
+ * PDF as well — and base64 is what the contents API takes either way.
+ */
 async function ensureFile(
   baseUrl: string,
   auth: BasicAuth,
   owner: string,
   repo: string,
   path: string,
-  content: string,
+  contentBase64: string,
   commitMessage: string,
   branch: string,
   log?: (message: string) => void,
@@ -445,7 +440,6 @@ async function ensureFile(
     expectedStatuses: [200, 404],
   });
 
-  const contentBase64 = toBase64Utf8(content);
   if (currentFile.status === 404) {
     await giteaRequest(baseUrl, `${repoPath(owner, repo)}/contents/${path}`, {
       method: "POST",
@@ -462,7 +456,8 @@ async function ensureFile(
   }
 
   const filePayload = (await currentFile.json()) as GiteaContentFile;
-  if (fromBase64Utf8(filePayload.content) === content) {
+  // Gitea wraps its base64 at column 60; the seed's is one long line.
+  if ((filePayload.content ?? "").replace(/\s+/g, "") === contentBase64) {
     log?.(`Already up to date: ${owner}/${repo}@${branch} ${path}`);
     return;
   }
@@ -977,6 +972,7 @@ async function applyChange(
 ): Promise<number> {
   const { owner, repo } = document;
   const authorAuth = authFor(change.author ?? owner);
+  const file = await renderSeedDocumentFile(change.document, document.format);
 
   await ensureBranch(
     baseUrl,
@@ -992,8 +988,8 @@ async function applyChange(
     authorAuth,
     owner,
     repo,
-    CANONICAL_DOCUMENT_PATH,
-    renderSeedDocument(change.document),
+    file.path,
+    file.content,
     `seed: ${change.title}`,
     change.branch,
     log,
