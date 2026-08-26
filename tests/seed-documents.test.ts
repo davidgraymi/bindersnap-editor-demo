@@ -76,9 +76,9 @@ test("a seeded PDF is a real PDF carrying the policy's words", async () => {
   // The text layer is the point: the comparison screen reads the words back
   // out of it, so a PDF of flat images would seed a document that can never
   // be compared.
-  const { extractPdfPageText } = await import("../apps/app/pdfText");
-  const pages = await extractPdfPageText(new Blob([new Uint8Array(bytes)]));
-  expect(pages.join(" ")).toContain(
+  const { extractPdfBlocks } = await import("../apps/app/pdfText");
+  const blocks = await extractPdfBlocks(new Blob([new Uint8Array(bytes)]));
+  expect(blocks.map((block) => block.text)).toContain(
     "The infection preventionist audits compliance monthly.",
   );
 });

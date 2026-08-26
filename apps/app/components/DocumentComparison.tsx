@@ -3,15 +3,17 @@ import { Columns2, Download, FileText, Layers } from "lucide-react";
 
 import { sanitizeHtml } from "../../../packages/utils/sanitizer";
 import { downloadDocument } from "../api";
+import { blocksToHtml, blocksToText } from "../documentBlocks";
 import type { ComparisonBase, DiffSegment } from "../documentComparison";
 import {
-  diffRenderedMarkdown,
+  diffRenderedHtml,
   diffWords,
-  joinPdfPages,
   summarizeSegments,
 } from "../documentComparison";
 import { classifyDocumentFile, describeFileKind } from "../documentFile";
-import { extractPdfPageText } from "../pdfText";
+import { docxToHtml } from "../docxHtml";
+import { markdownToHtml } from "../markdown";
+import { extractPdfBlocks } from "../pdfText";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
 interface DocumentComparisonProps {
@@ -42,21 +44,22 @@ type ImageMode = "side-by-side" | "difference";
 
 type ComparisonState =
   | { status: "loading" }
+  /**
+   * The document, rendered, with the change marked inside it. Markdown, Word
+   * files and PDFs all end up here — every one of them has headings and
+   * paragraphs, and every one of them reads better as a document with the
+   * edit marked in place than as two columns of source.
+   */
   | {
-      status: "text";
+      status: "rendered";
+      html: string;
       segments: DiffSegment[];
-      /** Set for Markdown: both sides rendered, then diffed as markup. */
-      html: string | null;
-      truncated: boolean;
-    }
-  | {
-      status: "pdf";
-      segments: DiffSegment[];
-      beforeUrl: string;
-      afterUrl: string;
+      /** Set for a PDF: both originals, for reading side by side. */
+      originals: { beforeUrl: string; afterUrl: string } | null;
       /** A scanned PDF has no text layer, so there is nothing to compare. */
-      noTextLayer: boolean;
+      empty: boolean;
     }
+  | { status: "text"; segments: DiffSegment[]; truncated: boolean }
   | { status: "image"; beforeUrl: string; afterUrl: string }
   | { status: "unsupported" }
   | { status: "error"; message: string };
@@ -77,11 +80,11 @@ async function readText(blob: Blob): Promise<{ text: string; cut: boolean }> {
  * The proposed file against the one it replaces, marked up.
  *
  * The point of the screen is that nobody downloads two files and reads them
- * with a ruler. Text and Markdown are compared word by word and rendered as
- * one document with the changes marked in it; a PDF is compared on the words
- * pdf.js reads out of it, with both originals a click away; two images are
- * shown together, either beside each other or blended so the difference is
- * the only thing lit.
+ * with a ruler. Markdown, Word files and PDFs are all rendered as documents
+ * and compared as markup, so the answer is one readable policy with the
+ * change marked inside it. Plain text is compared word by word. Two images
+ * are shown together, either beside each other or blended so the difference
+ * is the only thing lit.
  */
 export function DocumentComparison({
   owner,
@@ -114,7 +117,28 @@ export function DocumentComparison({
         ]);
         if (cancelled) return;
 
-        if (kind === "markdown" || kind === "text") {
+        if (kind === "markdown") {
+          const [left, right] = await Promise.all([
+            readText(before),
+            readText(after),
+          ]);
+          if (cancelled) return;
+          setState({
+            status: "rendered",
+            html: sanitizeHtml(
+              diffRenderedHtml(
+                markdownToHtml(left.text),
+                markdownToHtml(right.text),
+              ),
+            ),
+            segments: diffWords(left.text, right.text),
+            originals: null,
+            empty: false,
+          });
+          return;
+        }
+
+        if (kind === "text") {
           const [left, right] = await Promise.all([
             readText(before),
             readText(after),
@@ -123,32 +147,50 @@ export function DocumentComparison({
           setState({
             status: "text",
             segments: diffWords(left.text, right.text),
-            html:
-              kind === "markdown"
-                ? sanitizeHtml(diffRenderedMarkdown(left.text, right.text))
-                : null,
             truncated: left.cut || right.cut,
           });
           return;
         }
 
-        if (kind === "pdf") {
-          const [leftPages, rightPages] = await Promise.all([
-            extractPdfPageText(before),
-            extractPdfPageText(after),
+        if (kind === "word") {
+          const [leftHtml, rightHtml] = await Promise.all([
+            docxToHtml(before),
+            docxToHtml(after),
           ]);
           if (cancelled) return;
-          const leftText = joinPdfPages(leftPages);
-          const rightText = joinPdfPages(rightPages);
+          setState({
+            status: "rendered",
+            html: sanitizeHtml(diffRenderedHtml(leftHtml, rightHtml)),
+            segments: diffWords(htmlToText(leftHtml), htmlToText(rightHtml)),
+            originals: null,
+            empty: leftHtml.trim() === "" && rightHtml.trim() === "",
+          });
+          return;
+        }
+
+        if (kind === "pdf") {
+          const [leftBlocks, rightBlocks] = await Promise.all([
+            extractPdfBlocks(before),
+            extractPdfBlocks(after),
+          ]);
+          if (cancelled) return;
           const beforeUrl = URL.createObjectURL(before);
           const afterUrl = URL.createObjectURL(after);
           objectUrls.push(beforeUrl, afterUrl);
           setState({
-            status: "pdf",
-            segments: diffWords(leftText, rightText),
-            beforeUrl,
-            afterUrl,
-            noTextLayer: leftText === "" && rightText === "",
+            status: "rendered",
+            html: sanitizeHtml(
+              diffRenderedHtml(
+                blocksToHtml(leftBlocks),
+                blocksToHtml(rightBlocks),
+              ),
+            ),
+            segments: diffWords(
+              blocksToText(leftBlocks),
+              blocksToText(rightBlocks),
+            ),
+            originals: { beforeUrl, afterUrl },
+            empty: leftBlocks.length === 0 && rightBlocks.length === 0,
           });
           return;
         }
@@ -182,7 +224,7 @@ export function DocumentComparison({
   // why instead.
   const summary = useMemo(() => {
     if (state.status === "text") return summarizeSegments(state.segments);
-    if (state.status === "pdf" && !state.noTextLayer) {
+    if (state.status === "rendered" && !state.empty) {
       return summarizeSegments(state.segments);
     }
     return null;
@@ -317,15 +359,16 @@ export function DocumentComparison({
           </SkeletonGroup>
         ) : summary?.identical ? (
           <p className="doc-compare-identical">{summary.headline}</p>
-        ) : state.status === "text" && state.html !== null ? (
+        ) : state.status === "rendered" && !state.empty ? (
           <article
             className="doc-preview-sheet doc-preview-prose doc-compare-prose"
-            // Both sides went through our own Markdown renderer, which escapes
-            // every character of the source, and the whole result through the
+            // Every side of this went through a renderer of ours that escapes
+            // its input — our Markdown renderer, the block renderer, or
+            // mammoth's own subset — and the whole result went through the
             // sanitizer before it landed here.
             dangerouslySetInnerHTML={{ __html: state.html }}
           />
-        ) : state.status === "text" || state.status === "pdf" ? (
+        ) : state.status === "text" ? (
           <article className="doc-preview-sheet">
             <pre className="doc-preview-plain doc-compare-plain">
               {state.segments.map((segment, index) =>
@@ -365,10 +408,11 @@ export function DocumentComparison({
           </div>
         ) : null}
 
-        {state.status === "pdf" && state.noTextLayer ? (
+        {state.status === "rendered" && state.empty ? (
           <p className="doc-preview-note">
-            Neither of these PDFs carries a text layer — they are scans of
-            paper. Both files are below, side by side.
+            {kind === "pdf"
+              ? "Neither of these PDFs carries a text layer — they are scans of paper. Both files are below, side by side."
+              : "Neither version has any text in it to compare."}
           </p>
         ) : null}
 
@@ -380,21 +424,21 @@ export function DocumentComparison({
         ) : null}
       </div>
 
-      {state.status === "pdf" ? (
+      {state.status === "rendered" && state.originals ? (
         <details className="doc-compare-originals">
           <summary>Read both PDFs side by side</summary>
           <div className="doc-compare-columns">
             <figure>
               <figcaption>{base.label}</figcaption>
               <iframe
-                src={state.beforeUrl}
+                src={state.originals.beforeUrl}
                 title={`${base.label} of ${fileName ?? "the document"}`}
               />
             </figure>
             <figure>
               <figcaption>{headLabel}</figcaption>
               <iframe
-                src={state.afterUrl}
+                src={state.originals.afterUrl}
                 title={`This change to ${fileName ?? "the document"}`}
               />
             </figure>
@@ -403,4 +447,25 @@ export function DocumentComparison({
       ) : null}
     </section>
   );
+}
+
+/**
+ * The words out of a fragment of HTML, for counting what moved.
+ *
+ * The counts run on text rather than markup so that a Word file whose only
+ * change is a style — a paragraph re-tagged as a heading, say — is not
+ * reported as a hundred words rewritten.
+ */
+function htmlToText(html: string): string {
+  return html
+    .replace(/<\/(p|h[1-6]|li|tr|div)>/gi, "\n\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/[ \t]+/g, " ")
+    .trim();
 }

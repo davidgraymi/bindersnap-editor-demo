@@ -15,12 +15,16 @@ import * as api from "../api";
  * instead of showing an empty frame.
  */
 
-const files: Record<string, string> = {};
+const files: Record<string, string | Uint8Array> = {};
 
 mock.module("../api", () => ({
   ...api,
-  downloadDocument: async (_owner: string, _repo: string, ref: string) =>
-    new Blob([files[ref] ?? ""]),
+  downloadDocument: async (_owner: string, _repo: string, ref: string) => {
+    const content = files[ref] ?? "";
+    return typeof content === "string"
+      ? new Blob([content])
+      : new Blob([content.buffer as ArrayBuffer]);
+  },
 }));
 
 const { DocumentComparison } = await import("./DocumentComparison");
@@ -80,11 +84,15 @@ async function render(element: ReactElement) {
   document.body.appendChild(container);
   const root = createRoot(container);
   flushSync(() => root.render(element));
-  // Both versions are fetched and read on mount.
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  flushSync(() => {});
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  flushSync(() => {});
+
+  // Both versions are fetched and read on mount, and reading a Word file
+  // means unzipping it — several ticks, not one. Poll until the skeleton is
+  // gone rather than guessing at a delay.
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    flushSync(() => {});
+    if (!container.querySelector(".bs-skeleton")) break;
+  }
 
   return {
     container,
@@ -154,11 +162,62 @@ test("plain text is compared word by word, not line by line", async () => {
   unmount();
 });
 
+test("a Word document is compared as a document, not as a download", async () => {
+  // Generated with the same writer the seed uses, so this is a real .docx
+  // rather than a fixture shaped to be easy.
+  const { renderSeedDocumentFile } =
+    await import("../../../tests/seed-documents");
+  const before = await renderSeedDocumentFile(
+    {
+      title: "Infection Control Policy",
+      sections: [
+        {
+          heading: "Training",
+          paragraphs: ["Workforce members train within thirty days of hire."],
+        },
+      ],
+    },
+    "docx",
+  );
+  const after = await renderSeedDocumentFile(
+    {
+      title: "Infection Control Policy",
+      sections: [
+        {
+          heading: "Training",
+          paragraphs: ["Workforce members train within fourteen days of hire."],
+        },
+      ],
+    },
+    "docx",
+  );
+
+  files["v3"] = new Uint8Array(Buffer.from(before.content, "base64"));
+  files["change-4"] = new Uint8Array(Buffer.from(after.content, "base64"));
+
+  const { container, unmount } = await render(
+    comparison({ fileName: "policy.docx" }),
+  );
+
+  // The Word file's own structure survives: a heading is still a heading.
+  expect(container.querySelector("h1")?.textContent).toBe(
+    "Infection Control Policy",
+  );
+  expect(
+    [...container.querySelectorAll("h2")].map((h) => h.textContent),
+  ).toContain("Training");
+  expect(container.querySelector("del")?.textContent).toBe("thirty");
+  expect(container.querySelector("ins")?.textContent).toBe("fourteen");
+
+  unmount();
+});
+
 test("a file the browser cannot read inside offers both versions instead", async () => {
   const saved: string[] = [];
   const { container, unmount } = await render(
     comparison({
-      fileName: "contract.docx",
+      // A legacy .doc is a binary format no browser library reads.
+      fileName: "contract.doc",
       onDownload: (ref: string) => saved.push(ref),
     }),
   );

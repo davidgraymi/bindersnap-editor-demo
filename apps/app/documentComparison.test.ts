@@ -1,13 +1,14 @@
 import { expect, test } from "bun:test";
 
 import type { DocTag } from "./api";
+import { blocksToHtml, blocksToText } from "./documentBlocks";
 import {
-  diffRenderedMarkdown,
+  diffRenderedHtml,
   diffWords,
-  joinPdfPages,
   resolveComparisonBase,
   summarizeSegments,
 } from "./documentComparison";
+import { markdownToHtml } from "./markdown";
 
 function tag(version: number): DocTag {
   return {
@@ -114,22 +115,47 @@ test("summarizeSegments uses the singular for a one-word change", () => {
   expect(summary.headline).toBe("1 word added");
 });
 
-test("joinPdfPages flattens layout whitespace but keeps the page breaks", () => {
-  expect(joinPdfPages(["  Section   one  ", "Section two"])).toBe(
-    "Section one\n\nSection two",
+test("a PDF's headings survive as headings, not as run-on prose", () => {
+  // The bug this replaced: every block joined with spaces, so a policy read
+  // "Medication Administration Policy Purpose This policy sets out..." as one
+  // sentence and the comparison marked it as one.
+  const html = blocksToHtml([
+    { kind: "heading", level: 1, text: "Medication Administration Policy" },
+    { kind: "heading", level: 2, text: "Purpose" },
+    { kind: "paragraph", level: 2, text: "This policy sets out how." },
+  ]);
+
+  expect(html).toBe(
+    [
+      "<h1>Medication Administration Policy</h1>",
+      "<h2>Purpose</h2>",
+      "<p>This policy sets out how.</p>",
+    ].join("\n"),
   );
 });
 
-test("a PDF re-exported with different spacing does not read as a change", () => {
-  const before = joinPdfPages(["Payment   is due  within thirty days."]);
-  const after = joinPdfPages(["Payment is    due within thirty days."]);
-  expect(summarizeSegments(diffWords(before, after)).identical).toBe(true);
+test("block text escapes whatever the document contained", () => {
+  const html = blocksToHtml([
+    { kind: "paragraph", level: 2, text: '<script>alert("x")</script>' },
+  ]);
+
+  expect(html).not.toContain("<script>");
+  expect(html).toContain("&lt;script&gt;");
+});
+
+test("blocksToText keeps the blocks apart so words do not run together", () => {
+  const text = blocksToText([
+    { kind: "heading", level: 2, text: "Scope" },
+    { kind: "paragraph", level: 2, text: "This applies to everyone." },
+  ]);
+
+  expect(text).toBe("Scope\n\nThis applies to everyone.");
 });
 
 test("the Markdown comparison is a rendered document with the changes in it", () => {
-  const html = diffRenderedMarkdown(
-    "# Vendor terms\n\nPayment is due within thirty days.",
-    "# Vendor terms\n\nPayment is due within sixty days.",
+  const html = diffRenderedHtml(
+    markdownToHtml("# Vendor terms\n\nPayment is due within thirty days."),
+    markdownToHtml("# Vendor terms\n\nPayment is due within sixty days."),
   );
 
   // Still a document — the heading survives as a heading, not as diff output.
@@ -145,7 +171,10 @@ test("the Markdown comparison is a rendered document with the changes in it", ()
 });
 
 test("Markdown that did not change is rendered without any marks", () => {
-  const html = diffRenderedMarkdown("Nothing moved.", "Nothing moved.");
+  const html = diffRenderedHtml(
+    markdownToHtml("Nothing moved."),
+    markdownToHtml("Nothing moved."),
+  );
   expect(html).not.toContain("<ins");
   expect(html).not.toContain("<del");
 });
@@ -172,4 +201,19 @@ test("whitespace around a real edit is left unmarked", () => {
   const marked = segments.filter((segment) => segment.kind !== "same");
 
   expect(marked.every((segment) => segment.value.trim() !== "")).toBe(true);
+});
+
+test("a heading that was rewritten is marked inside the heading", () => {
+  // The rendered comparison has to keep being a document: an edited heading
+  // stays an <h2> with the change inside it, not a paragraph of diff output.
+  const html = diffRenderedHtml(
+    blocksToHtml([{ kind: "heading", level: 2, text: "Records" }]),
+    blocksToHtml([
+      { kind: "heading", level: 2, text: "Records and Retention" },
+    ]),
+  );
+
+  expect(html).toContain("<h2>");
+  expect(html).toContain("<ins");
+  expect(html).toContain("Retention");
 });

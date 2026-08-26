@@ -105,12 +105,33 @@ what it says about it lives in `apps/app/documentComparison.ts`, so both are
 testable without a browser.
 
 The comparison is built on libraries, not hand-rolled: `diff` for word-level
-text, `node-htmldiff` for the rendered Markdown comparison, and `pdfjs-dist`
-for the words inside a PDF. pdf.js is imported on demand — it is a megabyte
-that most readers never open — and runs on the main thread via
-`globalThis.pdfjsWorker`, so there is no worker URL to get wrong in a
-subdirectory deploy. Two images are compared by eye: side by side, or stacked
-with `mix-blend-mode: difference`.
+text, `node-htmldiff` for diffing two rendered documents as markup,
+`pdfjs-dist` for the words inside a PDF, and `mammoth` for the contents of a
+Word file. Everything runs in the browser — there is no conversion service and
+no binary on the API host, and nothing is uploaded anywhere to be rendered.
+Both heavy libraries are imported on demand and code-split, so a reader who
+never opens a PDF or a Word document never downloads them. pdf.js runs on the
+main thread via `globalThis.pdfjsWorker`, so there is no worker URL to get
+wrong in a subdirectory deploy.
+
+Markdown, Word files and PDFs all end up on the same path: render both
+versions to HTML, diff the markup, sanitize. That is what makes the answer a
+readable policy with the change marked inside it rather than two columns of
+source. A PDF carries no headings — only glyphs at coordinates — so
+`apps/app/pdfText.ts` recovers the structure from the page itself: lines from
+baselines, paragraphs from the vertical gaps between them, headings from type
+size and face relative to whatever the body of _that_ document is set in.
+Without that step a policy's title, its first heading and its opening sentence
+run together into one line.
+
+Two images are compared by eye instead: side by side, or stacked with
+`mix-blend-mode: difference`.
+
+`.docx` renders; a legacy `.doc` does not, and neither do `.xlsx` or `.pptx`.
+Those keep the honest card that names the file type and offers both versions
+to download. Converting them would mean a conversion service on the backend —
+deliberately not built, because everything above covers the documents the ICP
+actually keeps a policy manual in.
 
 Added text is green and removed text is coral, and both carry an underline or
 a strike as well as a colour, so the comparison still reads without one.

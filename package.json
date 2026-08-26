@@ -67,6 +67,7 @@
     "dompurify": "^3.4.13",
     "drizzle-orm": "^0.45.2",
     "lucide-react": "^0.574.0",
+    "mammoth": "^1.12.1",
     "node-htmldiff": "^0.9.4",
     "openapi-fetch": "^0.17.0",
     "pdfjs-dist": "^6.2.108",

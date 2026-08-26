@@ -12,7 +12,6 @@ import { diffWordsWithSpace } from "diff";
 import htmldiff from "node-htmldiff";
 
 import type { DocTag } from "./api";
-import { markdownToHtml } from "./markdown";
 
 /** One run of text, and whether this change put it there or took it away. */
 export type DiffSegmentKind = "same" | "added" | "removed";
@@ -144,33 +143,16 @@ export function summarizeSegments(
 }
 
 /**
- * The rendered comparison for Markdown: both versions rendered, then diffed as
- * markup so the result is a readable document with the changes marked in it,
- * not two columns of source.
+ * The rendered comparison: two documents that have already been rendered to
+ * HTML, diffed as markup.
  *
- * `markdownToHtml` escapes every character of its input and htmldiff only ever
- * adds `<ins>` and `<del>` around tokens it was given — but the caller still
- * passes this through `sanitizeHtml` before it reaches the DOM.
+ * This is what makes the answer a readable policy with the change marked
+ * inside it rather than two columns of source. Every caller renders its own
+ * side first — our Markdown renderer, the PDF block renderer, or mammoth for
+ * a Word file — and every one of those escapes what it was given. htmldiff
+ * only ever adds `<ins>` and `<del>` around tokens it was handed. The caller
+ * still passes the result through `sanitizeHtml` before it reaches the DOM.
  */
-export function diffRenderedMarkdown(before: string, after: string): string {
-  return htmldiff(
-    markdownToHtml(before),
-    markdownToHtml(after),
-    "doc-compare-mark",
-  );
-}
-
-/**
- * PDF page text, joined into something diffable.
- *
- * A PDF has no lines, only positioned runs of glyphs, so the extractor hands
- * back a page at a time. Runs of whitespace are flattened because a shift in
- * layout is not a change to the words — otherwise re-exporting the same
- * document from Word would light the whole file up.
- */
-export function joinPdfPages(pages: readonly string[]): string {
-  return pages
-    .map((page) => page.replace(/[ \t ]+/g, " ").trim())
-    .join("\n\n")
-    .trim();
+export function diffRenderedHtml(before: string, after: string): string {
+  return htmldiff(before, after, "doc-compare-mark");
 }

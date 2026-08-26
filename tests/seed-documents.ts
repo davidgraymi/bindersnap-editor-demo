@@ -95,10 +95,13 @@ export function renderSeedMarkdown(document: SeedDocument): string {
  * reader both versions to open in Word.
  */
 async function renderSeedDocx(document: SeedDocument): Promise<Uint8Array> {
+  // No explicit bold on the headings: Word's own heading styles carry it,
+  // and setting it again wraps every heading in a redundant run that comes
+  // back out as `<h1><strong>…</strong></h1>` when the file is read.
   const children: Paragraph[] = [
     new Paragraph({
       heading: HeadingLevel.HEADING_1,
-      children: [new TextRun({ text: document.title, bold: true })],
+      children: [new TextRun(document.title)],
     }),
   ];
 
@@ -107,7 +110,7 @@ async function renderSeedDocx(document: SeedDocument): Promise<Uint8Array> {
       children.push(
         new Paragraph({
           heading: HeadingLevel.HEADING_2,
-          children: [new TextRun({ text: section.heading, bold: true })],
+          children: [new TextRun(section.heading)],
         }),
       );
     }
