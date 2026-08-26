@@ -8,11 +8,11 @@ import {
 } from "lucide-react";
 
 import {
-  fetchAdminSubscriptionAccess,
-  grantAdminSubscriptionAccess,
-  revokeAdminSubscriptionAccess,
+  clearAdminSubscriptionAccess,
+  listAdminSubscriptionAccess,
+  setAdminSubscriptionAccess,
   searchWorkspaceUsers,
-  type AdminSubscriptionAccessState,
+  type AdminSubscriptionAccessUser,
   type SearchUsersPayload,
 } from "../api";
 
@@ -20,8 +20,8 @@ interface AdminSubscriptionManagementPageProps {
   currentUsername: string;
 }
 
-function formatTimestamp(value: string | null): string | null {
-  if (!value) {
+function formatTimestamp(value: number | null): string | null {
+  if (value === null) {
     return null;
   }
 
@@ -33,18 +33,20 @@ function formatTimestamp(value: string | null): string | null {
   return parsed.toLocaleString();
 }
 
-function formatSourceLabel(state: AdminSubscriptionAccessState): string {
-  if (state.overrideActive === true) {
-    return "Manual override is active";
+function formatSourceLabel(user: AdminSubscriptionAccessUser): string {
+  if (user.override) {
+    return user.override.access === "grant"
+      ? "Manual override is granting access"
+      : "Manual override is revoking access";
   }
 
-  if (!state.source) {
-    return state.hasProAccess
+  if (user.accessSource === "none") {
+    return user.hasAccess
       ? "Pro access is currently enabled"
       : "Pro access is currently disabled";
   }
 
-  return state.source
+  return user.accessSource
     .replace(/[_-]+/g, " ")
     .replace(/\b\w/g, (match) => match.toUpperCase());
 }
@@ -60,7 +62,7 @@ export function AdminSubscriptionManagementPage({
   const [isMutating, setIsMutating] = useState(false);
   const [selectedUsername, setSelectedUsername] = useState<string | null>(null);
   const [accessState, setAccessState] =
-    useState<AdminSubscriptionAccessState | null>(null);
+    useState<AdminSubscriptionAccessUser | null>(null);
   const [isSearchingUsers, setIsSearchingUsers] = useState(false);
   const [suggestions, setSuggestions] = useState<SearchUsersPayload["users"]>(
     [],
@@ -103,6 +105,22 @@ export function AdminSubscriptionManagementPage({
     };
   }, [usernameQuery]);
 
+  const loadAccessUser = async (
+    username: string,
+  ): Promise<AdminSubscriptionAccessUser> => {
+    const payload = await listAdminSubscriptionAccess(username, 1, 20);
+    const normalizedUsername = username.toLowerCase();
+    const match = payload.users.find(
+      (candidate) => candidate.username.toLowerCase() === normalizedUsername,
+    );
+
+    if (!match) {
+      throw new Error(`No workspace user named ${username} was found.`);
+    }
+
+    return match;
+  };
+
   const runLookup = async (username: string) => {
     const normalizedUsername = username.trim();
     if (!normalizedUsername) {
@@ -119,7 +137,7 @@ export function AdminSubscriptionManagementPage({
     setNotice(null);
 
     try {
-      const nextState = await fetchAdminSubscriptionAccess(normalizedUsername);
+      const nextState = await loadAccessUser(normalizedUsername);
       setAccessState(nextState);
       setSelectedUsername(nextState.username);
       setUsernameQuery(nextState.username);
@@ -157,9 +175,10 @@ export function AdminSubscriptionManagementPage({
     setNotice(null);
 
     try {
-      const nextState = hasProAccess
-        ? await grantAdminSubscriptionAccess(selectedUsername)
-        : await revokeAdminSubscriptionAccess(selectedUsername);
+      const nextState = await setAdminSubscriptionAccess(
+        selectedUsername,
+        hasProAccess ? "grant" : "revoke",
+      );
       setAccessState(nextState);
       setSelectedUsername(nextState.username);
       setUsernameQuery(nextState.username);
@@ -181,7 +200,34 @@ export function AdminSubscriptionManagementPage({
     }
   };
 
-  const formattedUpdatedAt = formatTimestamp(accessState?.updatedAt ?? null);
+  const handleClearOverride = async () => {
+    if (!selectedUsername) {
+      return;
+    }
+
+    setIsMutating(true);
+    setActionError(null);
+    setNotice(null);
+
+    try {
+      await clearAdminSubscriptionAccess(selectedUsername);
+      const nextState = await loadAccessUser(selectedUsername);
+      setAccessState(nextState);
+      setNotice(`Manual override cleared for ${nextState.username}.`);
+    } catch (error) {
+      setActionError(
+        error instanceof Error && error.message.trim() !== ""
+          ? error.message
+          : "Unable to clear the manual override.",
+      );
+    } finally {
+      setIsMutating(false);
+    }
+  };
+
+  const formattedUpdatedAt = formatTimestamp(
+    accessState?.override?.updatedAt ?? null,
+  );
 
   return (
     <div className="admin-pro-page app-page-shell">
@@ -323,12 +369,12 @@ export function AdminSubscriptionManagementPage({
                 </div>
                 <span
                   className={`admin-pro-status-badge${
-                    accessState.hasProAccess
+                    accessState.hasAccess
                       ? " admin-pro-status-badge--active"
                       : " admin-pro-status-badge--inactive"
                   }`}
                 >
-                  {accessState.hasProAccess ? "Pro Enabled" : "Pro Disabled"}
+                  {accessState.hasAccess ? "Pro Enabled" : "Pro Disabled"}
                 </span>
               </div>
 
@@ -339,13 +385,7 @@ export function AdminSubscriptionManagementPage({
                 </div>
                 <div>
                   <dt>Manual override</dt>
-                  <dd>
-                    {accessState.overrideActive === null
-                      ? "Not reported"
-                      : accessState.overrideActive
-                        ? "Active"
-                        : "Not active"}
-                  </dd>
+                  <dd>{accessState.override ? "Active" : "Not active"}</dd>
                 </div>
                 <div>
                   <dt>Updated</dt>
@@ -353,7 +393,7 @@ export function AdminSubscriptionManagementPage({
                 </div>
                 <div>
                   <dt>Updated by</dt>
-                  <dd>{accessState.updatedBy ?? "Not reported"}</dd>
+                  <dd>{accessState.override?.updatedBy ?? "Not reported"}</dd>
                 </div>
               </dl>
 
@@ -361,23 +401,33 @@ export function AdminSubscriptionManagementPage({
                 <button
                   type="button"
                   className="bs-btn bs-btn-primary"
-                  disabled={isMutating || accessState.hasProAccess}
+                  disabled={isMutating || accessState.hasAccess}
                   onClick={() => void handleAccessChange(true)}
                 >
-                  {isMutating && !accessState.hasProAccess
+                  {isMutating && !accessState.hasAccess
                     ? "Granting access..."
                     : "Grant Pro access"}
                 </button>
                 <button
                   type="button"
                   className="bs-btn bs-btn-secondary"
-                  disabled={isMutating || !accessState.hasProAccess}
+                  disabled={isMutating || !accessState.hasAccess}
                   onClick={() => void handleAccessChange(false)}
                 >
-                  {isMutating && accessState.hasProAccess
+                  {isMutating && accessState.hasAccess
                     ? "Revoking access..."
                     : "Revoke Pro access"}
                 </button>
+                {accessState.override ? (
+                  <button
+                    type="button"
+                    className="bs-btn bs-btn-secondary"
+                    disabled={isMutating}
+                    onClick={() => void handleClearOverride()}
+                  >
+                    Clear manual override
+                  </button>
+                ) : null}
               </div>
             </div>
           ) : (
