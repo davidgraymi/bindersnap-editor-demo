@@ -82,7 +82,9 @@ Routes:
 - `/docs/:owner/:repo` — document detail and review
 - `/docs/:owner/:repo/changes` — open and closed change requests
 - `/docs/:owner/:repo/changes/:number` — one change: its discussion and decision
-- `/docs/:owner/:repo/changes/:number/file` — the file that change proposes
+- `/docs/:owner/:repo/changes/:number/preview` — the file that change proposes
+- `/docs/:owner/:repo/changes/:number/compare` — that file against the version
+  it replaces, rendered with the additions and deletions marked
 - `/docs/:owner/:repo/collaborators` — collaborator management
 - `/activity` — audit log (`/inbox` was folded into `/`, which now lists the
   change requests the reader is part of)
@@ -94,6 +96,24 @@ Routes:
 If you change anything in `packages/editor/` that affects visual appearance, note it
 in your PR description. The landing page no longer embeds the editor, so there is
 nothing to re-sync — but the editor is still the authoring surface inside the app.
+
+### The change comparison
+
+`apps/app/components/DocumentComparison.tsx` renders a change against the
+version it replaces for every file type the app previews. What it compares and
+what it says about it lives in `apps/app/documentComparison.ts`, so both are
+testable without a browser.
+
+The comparison is built on libraries, not hand-rolled: `diff` for word-level
+text, `node-htmldiff` for the rendered Markdown comparison, and `pdfjs-dist`
+for the words inside a PDF. pdf.js is imported on demand — it is a megabyte
+that most readers never open — and runs on the main thread via
+`globalThis.pdfjsWorker`, so there is no worker URL to get wrong in a
+subdirectory deploy. Two images are compared by eye: side by side, or stacked
+with `mix-blend-mode: difference`.
+
+Added text is green and removed text is coral, and both carry an underline or
+a strike as well as a colour, so the comparison still reads without one.
 
 ### The BFF (`services/api`)
 

@@ -1,0 +1,156 @@
+/**
+ * What changed between the version on record and the one under review.
+ *
+ * Reviewers used to answer that by downloading both files and reading them
+ * side by side on a desk. Everything the comparison screen says is decided
+ * here — which version it compares against, what counts as an addition, and
+ * the sentence that sums it up — so the answer can be checked without opening
+ * a browser.
+ */
+
+import { diffWordsWithSpace } from "diff";
+import htmldiff from "node-htmldiff";
+
+import type { DocTag } from "./api";
+import { markdownToHtml } from "./markdown";
+
+/** One run of text, and whether this change put it there or took it away. */
+export type DiffSegmentKind = "same" | "added" | "removed";
+
+export interface DiffSegment {
+  kind: DiffSegmentKind;
+  value: string;
+}
+
+/**
+ * The version this change is measured against, and what to call it on screen.
+ *
+ * A change proposes the next version, so the one it should be read against is
+ * the one it replaces — not whatever `main` happens to point at now. For a
+ * change that was already published as v4 that is v3, which is why this reads
+ * the tag list rather than the branch.
+ */
+export interface ComparisonBase {
+  /** The git ref to read the earlier file from. */
+  ref: string;
+  /** "v3", for the header above the left-hand side. */
+  label: string;
+}
+
+export function resolveComparisonBase(params: {
+  open: boolean;
+  publishedVersion: number | null;
+  tags: readonly DocTag[];
+}): ComparisonBase | null {
+  const { open, publishedVersion, tags } = params;
+  const newestFirst = [...tags].sort(
+    (left, right) => right.version - left.version,
+  );
+
+  // A published change replaced the version below the one it became. Reading
+  // it against today's record would compare it with itself.
+  if (!open && publishedVersion !== null) {
+    const previous = newestFirst.find(
+      (tag) => tag.version === publishedVersion - 1,
+    );
+    return previous
+      ? { ref: previous.name, label: `v${previous.version}` }
+      : null;
+  }
+
+  const latest = newestFirst[0];
+  return latest ? { ref: latest.name, label: `v${latest.version}` } : null;
+}
+
+/**
+ * Word-level differences between two pieces of plain text.
+ *
+ * Word level, not line level: a reviewer looking at a contract cares that
+ * "thirty days" became "sixty days", and a whole line lit up red tells them
+ * only that the line was touched.
+ */
+export function diffWords(before: string, after: string): DiffSegment[] {
+  return diffWordsWithSpace(before, after)
+    .map((part): DiffSegment => ({
+      kind: part.added ? "added" : part.removed ? "removed" : "same",
+      value: part.value,
+    }))
+    .filter((segment) => segment.value !== "");
+}
+
+function countWords(value: string): number {
+  const trimmed = value.trim();
+  return trimmed === "" ? 0 : trimmed.split(/\s+/).length;
+}
+
+/** The line above the comparison: how much moved, in words. */
+export interface ComparisonSummary {
+  additions: number;
+  deletions: number;
+  identical: boolean;
+  headline: string;
+}
+
+export function summarizeSegments(
+  segments: readonly DiffSegment[],
+): ComparisonSummary {
+  let additions = 0;
+  let deletions = 0;
+
+  for (const segment of segments) {
+    if (segment.kind === "added") additions += countWords(segment.value);
+    if (segment.kind === "removed") deletions += countWords(segment.value);
+  }
+
+  const identical = additions === 0 && deletions === 0;
+
+  return {
+    additions,
+    deletions,
+    identical,
+    headline: identical
+      ? "Nothing changed — these two versions read the same."
+      : [
+          additions > 0
+            ? `${additions} word${additions === 1 ? "" : "s"} added`
+            : null,
+          deletions > 0
+            ? `${deletions} word${deletions === 1 ? "" : "s"} removed`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+  };
+}
+
+/**
+ * The rendered comparison for Markdown: both versions rendered, then diffed as
+ * markup so the result is a readable document with the changes marked in it,
+ * not two columns of source.
+ *
+ * `markdownToHtml` escapes every character of its input and htmldiff only ever
+ * adds `<ins>` and `<del>` around tokens it was given — but the caller still
+ * passes this through `sanitizeHtml` before it reaches the DOM.
+ */
+export function diffRenderedMarkdown(before: string, after: string): string {
+  return htmldiff(
+    markdownToHtml(before),
+    markdownToHtml(after),
+    "doc-compare-mark",
+  );
+}
+
+/**
+ * PDF page text, joined into something diffable.
+ *
+ * A PDF has no lines, only positioned runs of glyphs, so the extractor hands
+ * back a page at a time. Runs of whitespace are flattened because a shift in
+ * layout is not a change to the words — otherwise re-exporting the same
+ * document from Word would light the whole file up.
+ */
+export function joinPdfPages(pages: readonly string[]): string {
+  return pages
+    .map((page) => page.replace(/[ \t ]+/g, " ").trim())
+    .join("\n\n")
+    .trim();
+}

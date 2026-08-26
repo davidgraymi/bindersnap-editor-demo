@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Download, FileText } from "lucide-react";
+import { Download, FileText, GitCompare } from "lucide-react";
 
 import type { ChangeUpdate, RepoBranchProtection } from "../api";
 import {
@@ -13,6 +13,7 @@ import {
   describeChangeOpening,
   resolveReviewDecision,
 } from "../changeReview";
+import type { ComparisonBase } from "../documentComparison";
 import type { ChangeRecord } from "../documentDisplay";
 import {
   describeChangeOutcome,
@@ -21,6 +22,7 @@ import {
 } from "../documentDisplay";
 import type { DocumentChangeView } from "../routes";
 import { ChangeReviewers } from "./ChangeReviewers";
+import { DocumentComparison } from "./DocumentComparison";
 import { DocumentPreview } from "./DocumentPreview";
 import { ReviewTimeline } from "./ReviewTimeline";
 
@@ -30,7 +32,10 @@ interface DocumentChangeDetailProps {
   currentUser: string;
   isAnonymous: boolean;
   change: ChangeRecord;
-  /** Which half of the page is showing: the conversation or the file. */
+  /**
+   * Which screen is showing: the conversation, the proposed file, or that file
+   * against the version it replaces.
+   */
   view: DocumentChangeView;
   branchProtection: RepoBranchProtection | null;
   blockOnUnresolvedThreads: boolean;
@@ -40,6 +45,11 @@ interface DocumentChangeDetailProps {
   documentName: string;
   /** Canonical file name, so the proposed version can be previewed and saved. */
   fileName: string | null;
+  /**
+   * The published version this change is read against, or null when there is
+   * none — the first version of a document replaces nothing.
+   */
+  comparisonBase: ComparisonBase | null;
   /** Set while this change's file is being fetched for download. */
   downloading: boolean;
   onDownload: (gitRef: string, loaded?: Blob | null) => void;
@@ -184,6 +194,7 @@ export function DocumentChangeDetail({
   nextVersion,
   documentName,
   fileName,
+  comparisonBase,
   downloading,
   onDownload,
   onChanged,
@@ -328,6 +339,62 @@ export function DocumentChangeDetail({
     canMerge: mergePerms.allowed,
   });
 
+  if (view === "compare") {
+    return (
+      <article className="change-detail">
+        <button className="rev-back" type="button" onClick={onBackToList}>
+          ← All changes
+        </button>
+        <h2 className="rev-title">{change.summary}</h2>
+        <section className="rev-file-view">
+          {proposed.ref === null ? (
+            <p className="vault-pr-notice">
+              This change has no branch on record, so there is nothing to
+              compare.
+            </p>
+          ) : comparisonBase === null ? (
+            <p className="vault-pr-notice">
+              Nothing has been published for this document yet, so this change
+              has no earlier version to be read against. Open it instead.
+            </p>
+          ) : (
+            <>
+              <p className="rev-file-note">
+                What this change does to {comparisonBase.label} — added,
+                removed, and rewritten.
+              </p>
+              <DocumentComparison
+                owner={owner}
+                repo={repo}
+                base={comparisonBase}
+                headRef={proposed.ref}
+                headLabel={proposed.updateLabel ?? "This change"}
+                fileName={fileName}
+                onDownload={(gitRef) => onDownload(gitRef, null)}
+              />
+            </>
+          )}
+          <div className="rev-file-actions">
+            <button
+              className="rev-btn rev-btn--ghost"
+              type="button"
+              onClick={() => onViewChange("preview")}
+            >
+              Read the proposed version
+            </button>
+            <button
+              className="rev-btn rev-btn--ghost"
+              type="button"
+              onClick={() => onViewChange("discussion")}
+            >
+              Back to the review
+            </button>
+          </div>
+        </section>
+      </article>
+    );
+  }
+
   if (view === "preview") {
     return (
       <article className="change-detail">
@@ -357,13 +424,23 @@ export function DocumentChangeDetail({
               be shown.
             </p>
           )}
-          <button
-            className="rev-btn rev-btn--ghost"
-            type="button"
-            onClick={() => onViewChange("discussion")}
-          >
-            Back to the review
-          </button>
+          <div className="rev-file-actions">
+            <button
+              className="rev-btn rev-btn--ghost"
+              type="button"
+              disabled={!proposed.ref || comparisonBase === null}
+              onClick={() => onViewChange("compare")}
+            >
+              Compare with {comparisonBase?.label ?? "the last version"}
+            </button>
+            <button
+              className="rev-btn rev-btn--ghost"
+              type="button"
+              onClick={() => onViewChange("discussion")}
+            >
+              Back to the review
+            </button>
+          </div>
         </section>
       </article>
     );
@@ -432,6 +509,22 @@ export function DocumentChangeDetail({
           onClick={() => onViewChange("preview")}
         >
           Open
+        </button>
+        {/* The question a reviewer actually opens a change with is "what is
+            different?", not "what does it say?". One click, no downloads. */}
+        <button
+          className="rev-btn rev-btn--ghost"
+          type="button"
+          disabled={!proposed.ref || comparisonBase === null}
+          title={
+            comparisonBase === null
+              ? "This document has no published version yet, so there is nothing to compare against."
+              : undefined
+          }
+          onClick={() => onViewChange("compare")}
+        >
+          <GitCompare size={13} strokeWidth={1.75} aria-hidden="true" />
+          Compare
         </button>
       </div>
 
