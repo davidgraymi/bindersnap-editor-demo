@@ -7,10 +7,10 @@ test.describe("GitHub Pages static artifact", () => {
     await page.goto("/");
 
     await expect(
-      page.getByRole("heading", { name: /Your approval process/i }),
+      page.getByRole("heading", { name: /which version you approved/i }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Load Editor" }),
+      page.getByRole("button", { name: /Create Your Account/i }).first(),
     ).toBeVisible();
   });
 
