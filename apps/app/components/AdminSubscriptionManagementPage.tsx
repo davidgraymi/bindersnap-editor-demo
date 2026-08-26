@@ -33,7 +33,22 @@ function formatTimestamp(value: number | null): string | null {
   return parsed.toLocaleString();
 }
 
-function formatSourceLabel(user: AdminSubscriptionAccessUser): string {
+/**
+ * The server resolves `config_bypass` before it looks at manual overrides, so
+ * a user on the paywall bypass list keeps Pro access no matter what an admin
+ * sets here. Saying so beats letting the admin revoke into the void.
+ */
+export function isOverrideOutranked(
+  user: AdminSubscriptionAccessUser,
+): boolean {
+  return user.override !== null && user.accessSource === "config_bypass";
+}
+
+export function formatSourceLabel(user: AdminSubscriptionAccessUser): string {
+  if (isOverrideOutranked(user)) {
+    return "Config Bypass";
+  }
+
   if (user.override) {
     return user.override.access === "grant"
       ? "Manual override is granting access"
@@ -183,9 +198,11 @@ export function AdminSubscriptionManagementPage({
       setSelectedUsername(nextState.username);
       setUsernameQuery(nextState.username);
       setNotice(
-        hasProAccess
-          ? `Bindersnap Pro access granted for ${nextState.username}.`
-          : `Bindersnap Pro access revoked for ${nextState.username}.`,
+        isOverrideOutranked(nextState)
+          ? `Override recorded for ${nextState.username}, but it is not in effect.`
+          : hasProAccess
+            ? `Bindersnap Pro access granted for ${nextState.username}.`
+            : `Bindersnap Pro access revoked for ${nextState.username}.`,
       );
     } catch (error) {
       setActionError(
@@ -385,7 +402,13 @@ export function AdminSubscriptionManagementPage({
                 </div>
                 <div>
                   <dt>Manual override</dt>
-                  <dd>{accessState.override ? "Active" : "Not active"}</dd>
+                  <dd>
+                    {!accessState.override
+                      ? "Not active"
+                      : isOverrideOutranked(accessState)
+                        ? "Active but not in effect"
+                        : "Active"}
+                  </dd>
                 </div>
                 <div>
                   <dt>Updated</dt>
@@ -396,6 +419,15 @@ export function AdminSubscriptionManagementPage({
                   <dd>{accessState.override?.updatedBy ?? "Not reported"}</dd>
                 </div>
               </dl>
+
+              {isOverrideOutranked(accessState) ? (
+                <p className="admin-pro-muted" role="status">
+                  {accessState.username} is on the deployment&apos;s paywall
+                  bypass list, which the server resolves ahead of manual
+                  overrides. Pro access stays on until that list changes —
+                  granting or revoking here will not move it.
+                </p>
+              ) : null}
 
               <div className="admin-pro-actions">
                 <button
