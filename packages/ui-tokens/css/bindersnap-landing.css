@@ -1361,17 +1361,31 @@ body::after {
    Sits just above the final CTA, where the reader's remaining objection is
    trust rather than fit. Intentionally the quietest block on the page: paper-
    warm surface, no shadow, and no coral — the CTA below owns coral in this
-   region.
+   region. The eyebrow is mono like every other section label but deliberately
+   muted rather than coral, for the same reason.
+
+   Layout: the note reads top to bottom as a short letter — copy first, then a
+   sign-off row that pairs the portrait with the name so the face and the
+   attribution are read together.
 ───────────────────────────────────── */
 
 .section-founder {
   padding: var(--brand-section-padding-y) var(--brand-page-padding-x) 0;
 }
 
+.founder-eyebrow {
+  max-width: 640px;
+  margin: 0 auto var(--brand-space-5);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-label);
+  font-weight: var(--brand-weight-medium);
+  letter-spacing: var(--brand-tracking-wider);
+  text-transform: uppercase;
+  color: var(--bs-text-muted);
+  transition: color var(--brand-transition-base);
+}
+
 .founder-inner {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--brand-space-6);
   max-width: 640px;
   margin: 0 auto;
   padding: var(--brand-space-8);
@@ -1382,18 +1396,9 @@ body::after {
   transition: var(--bs-mode-transition);
 }
 
-.founder-portrait {
-  flex: 0 0 auto;
-  width: 72px;
-  height: 72px;
-  border-radius: var(--brand-radius-full);
-  border: 1px solid var(--bs-rule);
-  object-fit: cover;
-}
-
 .founder-body {
   font-size: 15px;
-  font-weight: var(--brand-weight-light);
+  font-weight: var(--brand-weight-regular);
   color: var(--bs-text-secondary);
   line-height: var(--brand-leading-relaxed);
   margin: 0;
@@ -1402,9 +1407,24 @@ body::after {
 
 .founder-sign {
   display: flex;
+  align-items: center;
+  gap: var(--brand-space-4);
+  margin: var(--brand-space-6) 0 0;
+}
+
+.founder-portrait {
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--brand-radius-full);
+  border: 1px solid var(--bs-rule);
+  object-fit: cover;
+}
+
+.founder-sign-id {
+  display: flex;
   flex-direction: column;
   gap: 2px;
-  margin: var(--brand-space-4) 0 0;
 }
 
 .founder-name {
@@ -1421,7 +1441,7 @@ body::after {
   font-weight: var(--brand-weight-light);
   letter-spacing: var(--brand-tracking-wide);
   text-transform: uppercase;
-  color: var(--bs-text-muted);
+  color: var(--bs-text-secondary);
   transition: color var(--brand-transition-base);
 }
 
@@ -1893,9 +1913,6 @@ footer {
     font-size: 10px;
   }
   .founder-inner {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--brand-space-5);
     padding: var(--brand-space-6);
   }
 
