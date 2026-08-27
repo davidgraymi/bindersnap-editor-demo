@@ -21,6 +21,10 @@ const ALLOWED_TAGS = [
   "em",
   "u",
   "s",
+  // The change comparison marks what a version added and removed. Both are
+  // plain semantic HTML with no behaviour of their own.
+  "ins",
+  "del",
   "a",
   "img",
   "table",

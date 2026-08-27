@@ -9,6 +9,12 @@ env = "BUN_PUBLIC_*"
 # and are intentionally not covered here.
 
 [test]
+# Installs a baseline DOM before any module loads. react-dom reads the presence
+# of `window` once at import time and disables `input` handling without it, so
+# component tests that type into a field need this to run first. See the file
+# for the full story.
+preload = ["./scripts/test-preload-dom.ts"]
+
 # Per-test timeout in milliseconds. Keeps slow tests from blocking the suite.
 timeout = 10000
 

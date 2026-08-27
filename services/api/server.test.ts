@@ -140,15 +140,16 @@ beforeEach(() => {
       const pageUsers = matchedUsers.slice(start, start + limit);
 
       return new Response(
-        JSON.stringify(
-          pageUsers.map((user, index) => ({
+        JSON.stringify({
+          ok: true,
+          data: pageUsers.map((user, index) => ({
             id: index + 1,
             login: user.login,
             full_name: user.fullName ?? "",
             email: user.email,
             avatar_url: "",
           })),
-        ),
+        }),
         {
           status: 200,
           headers: {
@@ -1178,6 +1179,237 @@ describe("admin subscription access overrides", () => {
         ),
       );
       expect(gatedAfterClear.status).toBe(200);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("an admin grant opens subscription-gated routes for a user with no subscription", async () => {
+    const server = createApiServer();
+    const adminUsername = `admin-${randomUUID()}`;
+    const memberUsername = `member-${randomUUID()}`;
+    const adminSessionId = await seedSession(adminUsername, { isAdmin: true });
+    const memberSessionId = await seedSession(memberUsername);
+
+    seedGiteaUser({
+      login: memberUsername,
+      email: `${memberUsername}@${config.emailDomain}`,
+    });
+
+    try {
+      // Nothing has been granted yet, so the paywall is closed.
+      const gatedBefore = await server.fetch(
+        makeSessionRequest(
+          `/api/app/users/search?q=${encodeURIComponent(adminUsername)}`,
+          memberSessionId,
+        ),
+      );
+      expect(gatedBefore.status).toBe(402);
+
+      const grant = await server.fetch(
+        makeSessionRequest(
+          `/api/app/admin/subscriptions/access/${encodeURIComponent(memberUsername)}`,
+          adminSessionId,
+          { method: "PUT", body: { access: "grant", reason: "beta comp" } },
+        ),
+      );
+
+      expect(grant.status).toBe(200);
+      expect(await grant.json()).toMatchObject({
+        user: {
+          username: memberUsername,
+          hasAccess: true,
+          accessSource: "admin_grant",
+          override: {
+            access: "grant",
+            reason: "beta comp",
+            updatedBy: adminUsername,
+          },
+        },
+      });
+
+      const openAfterGrant = await server.fetch(
+        makeSessionRequest(
+          `/api/app/users/search?q=${encodeURIComponent(adminUsername)}`,
+          memberSessionId,
+        ),
+      );
+      expect(openAfterGrant.status).toBe(200);
+
+      // The grant is durable: a later read reports it, not just the write.
+      const listed = await server.fetch(
+        makeSessionRequest(
+          `/api/app/admin/subscriptions/access?q=${encodeURIComponent(memberUsername)}`,
+          adminSessionId,
+        ),
+      );
+      expect(listed.status).toBe(200);
+      const payload = (await listed.json()) as {
+        users: Array<{ username: string; hasAccess: boolean }>;
+      };
+      expect(payload.users).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            username: memberUsername,
+            hasAccess: true,
+            accessSource: "admin_grant",
+          }),
+        ]),
+      );
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("a grant flips to a revoke without needing a clear in between", async () => {
+    const server = createApiServer();
+    const adminUsername = `admin-${randomUUID()}`;
+    const memberUsername = `member-${randomUUID()}`;
+    const adminSessionId = await seedSession(adminUsername, { isAdmin: true });
+    await seedSession(memberUsername);
+
+    const setAccess = (access: "grant" | "revoke") =>
+      server.fetch(
+        makeSessionRequest(
+          `/api/app/admin/subscriptions/access/${encodeURIComponent(memberUsername)}`,
+          adminSessionId,
+          { method: "PUT", body: { access } },
+        ),
+      );
+
+    try {
+      expect(await (await setAccess("grant")).json()).toMatchObject({
+        user: { hasAccess: true, accessSource: "admin_grant" },
+      });
+      expect(await (await setAccess("revoke")).json()).toMatchObject({
+        user: { hasAccess: false, accessSource: "admin_revoke" },
+      });
+      expect(await (await setAccess("grant")).json()).toMatchObject({
+        user: { hasAccess: true, accessSource: "admin_grant" },
+      });
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("the paywall bypass list outranks an admin revoke", async () => {
+    const server = createApiServer();
+    const adminUsername = `admin-${randomUUID()}`;
+    const bypassUsername = `bypassed-${randomUUID()}`;
+    const adminSessionId = await seedSession(adminUsername, { isAdmin: true });
+    const bypassSessionId = await seedSession(bypassUsername);
+
+    config.bypassSubscriptionForUsers.push(bypassUsername);
+
+    try {
+      const revoke = await server.fetch(
+        makeSessionRequest(
+          `/api/app/admin/subscriptions/access/${encodeURIComponent(bypassUsername)}`,
+          adminSessionId,
+          { method: "PUT", body: { access: "revoke" } },
+        ),
+      );
+
+      expect(revoke.status).toBe(200);
+      // The override is recorded, but config_bypass is resolved first, so the
+      // revoke does not actually take away access. The admin UI leans on this
+      // shape to tell the admin their revoke is inert.
+      expect(await revoke.json()).toMatchObject({
+        user: {
+          username: bypassUsername,
+          hasAccess: true,
+          accessSource: "config_bypass",
+          override: { access: "revoke", updatedBy: adminUsername },
+        },
+      });
+
+      const stillOpen = await server.fetch(
+        makeSessionRequest(
+          `/api/app/users/search?q=${encodeURIComponent(adminUsername)}`,
+          bypassSessionId,
+        ),
+      );
+      expect(stillOpen.status).toBe(200);
+    } finally {
+      config.bypassSubscriptionForUsers =
+        config.bypassSubscriptionForUsers.filter(
+          (username) => username !== bypassUsername,
+        );
+      server.stop(true);
+    }
+  });
+
+  test("an admin cannot grant or revoke their own access", async () => {
+    const server = createApiServer();
+    const adminUsername = `admin-${randomUUID()}`;
+    const adminSessionId = await seedSession(adminUsername, { isAdmin: true });
+
+    try {
+      for (const method of ["PUT", "DELETE"] as const) {
+        const response = await server.fetch(
+          makeSessionRequest(
+            `/api/app/admin/subscriptions/access/${encodeURIComponent(adminUsername)}`,
+            adminSessionId,
+            method === "PUT"
+              ? { method, body: { access: "grant" } }
+              : { method },
+          ),
+        );
+
+        expect(response.status).toBe(400);
+        expect(await response.json()).toMatchObject({
+          error: "Admin overrides can only target another user.",
+        });
+      }
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("access must be grant or revoke", async () => {
+    const server = createApiServer();
+    const adminSessionId = await seedSession(`admin-${randomUUID()}`, {
+      isAdmin: true,
+    });
+    const memberUsername = `member-${randomUUID()}`;
+
+    try {
+      for (const body of [{}, { access: "" }, { access: "delete" }]) {
+        const response = await server.fetch(
+          makeSessionRequest(
+            `/api/app/admin/subscriptions/access/${encodeURIComponent(memberUsername)}`,
+            adminSessionId,
+            { method: "PUT", body },
+          ),
+        );
+
+        expect(response.status).toBe(400);
+      }
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  test("a non-admin cannot grant themselves access", async () => {
+    const server = createApiServer();
+    const memberUsername = `member-${randomUUID()}`;
+    const memberSessionId = await seedSession(memberUsername);
+
+    try {
+      const response = await server.fetch(
+        makeSessionRequest(
+          `/api/app/admin/subscriptions/access/${encodeURIComponent(memberUsername)}`,
+          memberSessionId,
+          { method: "PUT", body: { access: "grant" } },
+        ),
+      );
+
+      expect(response.status).toBe(403);
+
+      const stillGated = await server.fetch(
+        makeSessionRequest(`/api/app/users/search?q=someone`, memberSessionId),
+      );
+      expect(stillGated.status).toBe(402);
     } finally {
       server.stop(true);
     }

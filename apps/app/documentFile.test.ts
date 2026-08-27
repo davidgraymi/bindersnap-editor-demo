@@ -21,7 +21,9 @@ test("classifyDocumentFile picks the renderer for each file type", () => {
   expect(classifyDocumentFile("ledger.csv")).toBe("text");
   expect(classifyDocumentFile("contract.pdf")).toBe("pdf");
   expect(classifyDocumentFile("scan.PNG")).toBe("image");
-  expect(classifyDocumentFile("contract.docx")).toBe("unsupported");
+  expect(classifyDocumentFile("contract.docx")).toBe("word");
+  // A legacy .doc is a binary format no browser library reads.
+  expect(classifyDocumentFile("contract.doc")).toBe("unsupported");
   expect(classifyDocumentFile(null)).toBe("unsupported");
 });
 

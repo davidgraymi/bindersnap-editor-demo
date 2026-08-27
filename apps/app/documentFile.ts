@@ -6,7 +6,7 @@
  * plainly when we cannot, rather than pretending a preview exists.
  */
 export type DocumentPreviewKind =
-  "markdown" | "text" | "pdf" | "image" | "unsupported";
+  "markdown" | "text" | "pdf" | "image" | "word" | "unsupported";
 
 const MARKDOWN_EXTENSIONS = new Set(["md", "markdown", "mdown", "mkd"]);
 
@@ -53,6 +53,10 @@ export function classifyDocumentFile(
   if (MARKDOWN_EXTENSIONS.has(extension)) return "markdown";
   if (TEXT_EXTENSIONS.has(extension)) return "text";
   if (extension === "pdf") return "pdf";
+  // A .docx is XML in a ZIP and reads perfectly well in a browser. A legacy
+  // .doc is a binary format from another era that nothing in a browser can
+  // open, so it keeps the honest "download it" card.
+  if (extension === "docx") return "word";
   // SVG is deliberately excluded: it is a script-bearing document, not a
   // picture, and we never render untrusted markup inline.
   if (IMAGE_EXTENSIONS.has(extension)) return "image";

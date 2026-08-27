@@ -8,6 +8,7 @@ import {
   describeFileKind,
   formatFileSize,
 } from "../documentFile";
+import { docxToHtml } from "../docxHtml";
 import { markdownToHtml } from "../markdown";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
@@ -30,6 +31,8 @@ type PreviewState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "text"; text: string; markdown: boolean; size: number }
+  /** A Word file, read into the semantic HTML that was inside it all along. */
+  | { status: "richText"; html: string; size: number }
   | { status: "object"; url: string; kind: "pdf" | "image"; size: number }
   | { status: "unsupported"; size: number | null }
   | { status: "error"; message: string };
@@ -52,8 +55,9 @@ function describePreviewFailure(message: string): string {
  * Renders the document itself.
  *
  * The whole point of the page is to answer "what does the approved version
- * actually say?" without a round trip through Word. Text, Markdown, PDFs and
- * images render inline; anything else says so plainly and offers the file.
+ * actually say?" without a round trip through Word. Text, Markdown, Word
+ * files, PDFs and images render inline; anything else says so plainly and
+ * offers the file.
  */
 export function DocumentPreview({
   owner,
@@ -90,6 +94,17 @@ export function DocumentPreview({
         const blob = await downloadDocument(owner, repo, gitRef);
         if (cancelled) return;
         setLoadedBlob(blob);
+
+        if (kind === "word") {
+          const html = await docxToHtml(blob);
+          if (cancelled) return;
+          setState({
+            status: "richText",
+            html: sanitizeHtml(html),
+            size: blob.size,
+          });
+          return;
+        }
 
         if (kind === "markdown" || kind === "text") {
           const slice =
@@ -196,7 +211,9 @@ export function DocumentPreview({
           {fileName ?? "No file"}
         </span>
         <span className="doc-preview-toolbar-spacer" />
-        {state.status === "text" || state.status === "object" ? (
+        {state.status === "text" ||
+        state.status === "object" ||
+        state.status === "richText" ? (
           <span className="doc-preview-size">{formatFileSize(state.size)}</span>
         ) : null}
         <button
@@ -237,6 +254,13 @@ export function DocumentPreview({
               alt={fileName ?? "Document"}
             />
           </div>
+        ) : state.status === "richText" ? (
+          <article
+            className="doc-preview-sheet doc-preview-prose"
+            // Mammoth emits a small semantic subset of HTML, and the result is
+            // sanitized before it lands here.
+            dangerouslySetInnerHTML={{ __html: state.html }}
+          />
         ) : markdownHtml !== null ? (
           <article
             className="doc-preview-sheet doc-preview-prose"
