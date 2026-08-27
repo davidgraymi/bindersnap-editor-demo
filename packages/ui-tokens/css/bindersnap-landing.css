@@ -1232,7 +1232,10 @@ body::after {
 ───────────────────────────────────── */
 
 .section-review {
-  padding: var(--brand-section-padding-y) var(--brand-page-padding-x);
+  /* Bottom padding is trimmed (vs. the standard section rhythm) because the
+     founder coda follows immediately and supplies its own pause. */
+  padding: var(--brand-section-padding-y) var(--brand-page-padding-x)
+    var(--brand-space-16);
 }
 
 .review-inner {
@@ -1359,22 +1362,25 @@ body::after {
    FOUNDER NOTE
 
    Sits just above the final CTA, where the reader's remaining objection is
-   trust rather than fit. Intentionally the quietest block on the page: paper-
-   warm surface, no shadow, and no coral — the CTA below owns coral in this
-   region. The eyebrow is mono like every other section label but deliberately
-   muted rather than coral, for the same reason.
+   trust rather than fit — nothing else on the page names a human. Read as a
+   short signed letter: a real photograph at its natural 3:4 proportion beside
+   the note, the name set in Lora italic like a signature, a hairline sign-off
+   rule. Intentionally the quietest block on the page — paper-warm surface, no
+   shadow, and no coral (the CTA below owns coral in this region). The eyebrow
+   is mono like every other section label but deliberately muted, not coral.
 
-   Layout: the note reads top to bottom as a short letter — copy first, then a
-   sign-off row that pairs the portrait with the name so the face and the
-   attribution are read together.
+   Spacing: this is a coda, not a full section. It hangs close to the CTA below
+   it (0 bottom padding) and takes a shorter lead-in from the review section
+   above (which trims its own bottom padding to match) so the note does not
+   read as stranded in open space between the two.
 ───────────────────────────────────── */
 
 .section-founder {
-  padding: var(--brand-section-padding-y) var(--brand-page-padding-x) 0;
+  padding: var(--brand-space-16) var(--brand-page-padding-x) 0;
 }
 
 .founder-eyebrow {
-  max-width: 640px;
+  max-width: 680px;
   margin: 0 auto var(--brand-space-5);
   font-family: var(--brand-font-mono);
   font-size: var(--brand-text-label);
@@ -1386,9 +1392,13 @@ body::after {
 }
 
 .founder-inner {
-  max-width: 640px;
+  display: grid;
+  grid-template-columns: 168px 1fr;
+  gap: var(--brand-space-8);
+  align-items: start;
+  max-width: 680px;
   margin: 0 auto;
-  padding: var(--brand-space-8);
+  padding: var(--brand-space-10);
   background: var(--bs-surface-2);
   border: 1px solid var(--bs-rule);
   border-radius: var(--brand-radius-xl);
@@ -1396,8 +1406,24 @@ body::after {
   transition: var(--bs-mode-transition);
 }
 
+.founder-portrait {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: var(--brand-radius-lg);
+  border: 1px solid var(--bs-rule);
+}
+
+.founder-note {
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-5);
+  min-width: 0;
+}
+
 .founder-body {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: var(--brand-weight-regular);
   color: var(--bs-text-secondary);
   line-height: var(--brand-leading-relaxed);
@@ -1405,31 +1431,19 @@ body::after {
   transition: color var(--brand-transition-base);
 }
 
-.founder-sign {
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-4);
-  margin: var(--brand-space-6) 0 0;
-}
-
-.founder-portrait {
-  flex: 0 0 auto;
-  width: 56px;
-  height: 56px;
-  border-radius: var(--brand-radius-full);
-  border: 1px solid var(--bs-rule);
-  object-fit: cover;
-}
-
-.founder-sign-id {
+.founder-signoff {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--brand-space-1);
+  margin: 0;
+  padding-top: var(--brand-space-4);
+  border-top: 1px solid var(--bs-rule-warm);
 }
 
 .founder-name {
   font-family: var(--brand-font-serif);
-  font-size: 15px;
+  font-style: italic;
+  font-size: 22px;
   font-weight: var(--brand-weight-semibold);
   color: var(--bs-text-primary);
   transition: color var(--brand-transition-base);
@@ -1869,7 +1883,9 @@ footer {
   }
 
   .section-review {
-    padding: var(--brand-section-padding-y-sm) var(--brand-page-padding-x);
+    /* Trimmed bottom — the founder coda follows immediately (see desktop). */
+    padding: var(--brand-section-padding-y-sm) var(--brand-page-padding-x)
+      var(--brand-space-8);
   }
   .review-grid {
     grid-template-columns: 1fr;
@@ -1888,7 +1904,7 @@ footer {
   }
 
   .section-founder {
-    padding: var(--brand-section-padding-y-sm) var(--brand-page-padding-x) 0;
+    padding: var(--brand-space-8) var(--brand-page-padding-x) 0;
   }
 
   .cta-inner {
@@ -1898,6 +1914,19 @@ footer {
   .footer-bottom {
     flex-direction: column;
     gap: var(--brand-space-2);
+  }
+}
+
+/* Founder note stacks before the two columns get too narrow to read; the
+   portrait then centers above the letter rather than hugging the left edge. */
+@media (max-width: 600px) {
+  .founder-inner {
+    grid-template-columns: 1fr;
+    gap: var(--brand-space-6);
+  }
+  .founder-portrait {
+    width: 148px;
+    justify-self: center;
   }
 }
 
