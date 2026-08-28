@@ -358,3 +358,40 @@ test("nothing published yet says so instead of drawing an empty line", async () 
 
   unmount();
 });
+
+test("the whole trail can leave as one file", async () => {
+  payload = { versions: [version()], canonicalFile: null };
+
+  const downloads: { name: string; href: string }[] = [];
+  const anchorProto = (
+    window as unknown as { HTMLAnchorElement: { prototype: HTMLAnchorElement } }
+  ).HTMLAnchorElement.prototype;
+  const realClick = anchorProto.click;
+  anchorProto.click = function capture(this: HTMLAnchorElement) {
+    downloads.push({ name: this.download, href: this.href });
+  };
+  const realCreate = URL.createObjectURL;
+  URL.createObjectURL = () => "blob:record";
+
+  const { container, unmount } = await render(
+    createElement(DocumentHistory, historyProps()),
+  );
+
+  const button = container.querySelector(
+    ".doc-record-export-btn",
+  ) as HTMLButtonElement;
+  expect(button.textContent).toContain("Export record");
+
+  flushSync(() => {
+    button.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  });
+
+  expect(downloads.length).toBe(1);
+  expect(downloads[0]!.name).toMatch(
+    /^contract-audit-record-\d{4}-\d{2}-\d{2}\.html$/,
+  );
+
+  anchorProto.click = realClick;
+  URL.createObjectURL = realCreate;
+  unmount();
+});
