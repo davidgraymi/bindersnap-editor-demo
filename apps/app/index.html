@@ -39,7 +39,39 @@
         opacity: 0;
         transition: opacity 0.15s;
       }
+
+      /*
+        Failure fallbacks. The page below the hero is hidden until
+        landing-inline.ts reveals #landing-content and the IntersectionObserver
+        adds .in to each .reveal, so anything that stops that module leaves a
+        blank page. Two nets:
+          - data-landing-fallback: set by the timer below when the module has
+            not reported ready, covering a slow, blocked, or broken bundle.
+          - <noscript>: covers JS being off entirely.
+        Both outrank the bare `.reveal` rule on specificity, so load order of
+        the external stylesheet does not matter.
+      */
+      html[data-landing-fallback] #landing-content {
+        opacity: 1;
+      }
+
+      html[data-landing-fallback] .reveal {
+        opacity: 1;
+        transform: none;
+      }
     </style>
+    <noscript>
+      <style>
+        #landing-content {
+          opacity: 1;
+        }
+
+        .reveal {
+          opacity: 1;
+          transform: none;
+        }
+      </style>
+    </noscript>
     <script>
       (function () {
         var s = localStorage.getItem("bs-theme");
@@ -48,6 +80,15 @@
           "data-theme",
           s || (p ? "dark" : "light"),
         );
+
+        // Classic (non-module) script, so it still runs when the module bundle
+        // fails to parse or never arrives. landing-inline.ts sets
+        // data-landing-ready as soon as it has taken over.
+        window.setTimeout(function () {
+          if (!document.documentElement.hasAttribute("data-landing-ready")) {
+            document.documentElement.setAttribute("data-landing-fallback", "");
+          }
+        }, 2000);
       })();
     </script>
   </head>
@@ -753,6 +794,67 @@
             <a class="review-link reveal" href="#signup"
               >Set the rules your accreditor asks for &rarr;</a
             >
+          </div>
+        </section>
+
+        <!--
+          FOUNDER NOTE
+          The page's remaining objection down here is trust, not fit: nothing
+          else on it names a human. Deliberately quiet — no coral, no card
+          shadow — so the CTA below keeps the only emphasis in this region.
+
+          The copy is David's own founding story, written up from how he tells
+          it. Two things about it are deliberate and should survive editing:
+
+            1. His wife is "my wife" — not named, not pictured, and her
+               employer is not identified. She is the reason the product
+               exists, but she did not sign up to be marketing. She gets the
+               final say on this paragraph before launch; if she would rather
+               not be here at all, the story still works in the first person
+               ("the policy system I kept hearing about").
+            2. The incumbent product is described, not named. The complaint is
+               real and specific, but naming a competitor to disparage it on a
+               public page buys a legal argument we have no reason to want.
+
+          Still true of the note: no customer, traction, credential, or
+          HIPAA/BAA claim anywhere in it.
+        -->
+        <section class="section-founder">
+          <div class="founder-eyebrow reveal">A Note From the Founder</div>
+          <div class="founder-inner reveal">
+            <div class="founder-note">
+              <p class="founder-body">
+                My wife came home frustrated with her policy system often enough
+                that I started asking questions. Reviewing a document meant
+                opening it in Word, which not everyone had. Getting one approved
+                meant a meeting, then an email chain, then keeping track of who
+                had signed off on which draft.
+              </p>
+              <p class="founder-body">
+                I build software for a living, and I kept thinking: isn't this
+                just a pull request? A change, the people who reviewed it, and
+                the exact version they approved, all in one record. Engineers
+                have worked this way for decades and stopped noticing it was
+                ever hard. She did not need more software. She needed the thing
+                my industry takes for granted.
+              </p>
+              <p class="founder-body">So I built it for her.</p>
+            </div>
+            <div class="founder-signoff">
+              <img
+                class="founder-portrait"
+                src="../../packages/ui-tokens/img/founder-profile.jpg"
+                width="480"
+                height="640"
+                loading="lazy"
+                decoding="async"
+                alt="David Gray, founder of Bindersnap"
+              />
+              <p class="founder-signature">
+                <span class="founder-name">David Gray</span>
+                <span class="founder-role">Founder, Bindersnap</span>
+              </p>
+            </div>
           </div>
         </section>
 

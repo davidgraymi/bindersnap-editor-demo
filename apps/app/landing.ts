@@ -94,8 +94,18 @@ export function bindSignupEnterKeys(
   }
 }
 
+/** Reveal every `.reveal` element at once, skipping the scroll animation. */
+function revealAll(doc: Document): void {
+  for (const element of doc.querySelectorAll(".reveal")) {
+    element.classList.add("in");
+  }
+}
+
 export function installScrollReveal(doc: Document = document): void {
+  // Without an observer there is nothing to drive the animation, and bailing
+  // out would leave every section below the hero stuck at opacity 0.
   if (typeof IntersectionObserver === "undefined") {
+    revealAll(doc);
     return;
   }
 

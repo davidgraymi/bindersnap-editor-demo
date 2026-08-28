@@ -1232,7 +1232,10 @@ body::after {
 ───────────────────────────────────── */
 
 .section-review {
-  padding: var(--brand-section-padding-y) var(--brand-page-padding-x);
+  /* Bottom padding is trimmed (vs. the standard section rhythm) because the
+     founder coda follows immediately and supplies its own pause. */
+  padding: var(--brand-section-padding-y) var(--brand-page-padding-x)
+    var(--brand-space-16);
 }
 
 .review-inner {
@@ -1317,17 +1320,27 @@ body::after {
   color: var(--bs-text-muted);
 }
 
+/* Secondary CTA. One shared treatment for every mid-page call to action so
+   they read as a set rather than as incidental prose links: outlined rather
+   than filled, because coral stays reserved for the hero and the final CTA.
+   The min-height makes it a comfortable touch target, which the previous
+   underlined-text version was not. */
 .review-link {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   margin-top: var(--brand-space-12);
-  font-size: 14px;
+  padding: 0 var(--brand-space-6);
+  font-size: 15px;
   font-weight: var(--brand-weight-medium);
   color: var(--bs-text-primary);
   text-decoration: none;
-  border-bottom: 1px solid var(--bs-rule);
-  padding-bottom: var(--brand-space-1);
+  background: var(--bs-surface-1);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
   transition:
     color var(--brand-transition-base),
+    background var(--brand-transition-base),
     border-color var(--brand-transition-base);
 }
 
@@ -1353,6 +1366,119 @@ body::after {
 
 .section-record {
   padding: var(--brand-section-padding-y) var(--brand-page-padding-x);
+}
+
+/* ─────────────────────────────────────
+   FOUNDER NOTE
+
+   Sits just above the final CTA, where the reader's remaining objection is
+   trust rather than fit — nothing else on the page names a human. Read as a
+   short signed letter: a real photograph at its natural 3:4 proportion beside
+   the note, the name set in Lora italic like a signature, a hairline sign-off
+   rule. Intentionally the quietest block on the page — paper-warm surface, no
+   shadow, and no coral (the CTA below owns coral in this region). The eyebrow
+   is mono like every other section label but deliberately muted, not coral.
+
+   Spacing: this is a coda, not a full section. It hangs close to the CTA below
+   it (0 bottom padding) and takes a shorter lead-in from the review section
+   above (which trims its own bottom padding to match) so the note does not
+   read as stranded in open space between the two.
+───────────────────────────────────── */
+
+.section-founder {
+  padding: var(--brand-space-16) var(--brand-page-padding-x) 0;
+}
+
+.founder-eyebrow {
+  max-width: 680px;
+  margin: 0 auto var(--brand-space-5);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-label);
+  font-weight: var(--brand-weight-medium);
+  letter-spacing: var(--brand-tracking-wider);
+  text-transform: uppercase;
+  color: var(--bs-text-muted);
+  transition: color var(--brand-transition-base);
+}
+
+/* Letter, then signature. The note runs full width and the portrait sits in
+   the sign-off row beside the name, the way a signed letter ends. The earlier
+   two-column layout put the face at the top of its own column, which left a
+   tall empty gutter beside the lower half of the note and no visual link
+   between the photograph and the signature several lines below it. */
+.founder-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-8);
+  max-width: 680px;
+  margin: 0 auto;
+  padding: var(--brand-space-10);
+  background: var(--bs-surface-2);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-xl);
+  text-align: left;
+  transition: var(--bs-mode-transition);
+}
+
+.founder-portrait {
+  flex: none;
+  width: 96px;
+  height: 128px; /* 3:4, matching the source crop */
+  object-fit: cover;
+  border-radius: var(--brand-radius-lg);
+  border: 1px solid var(--bs-rule);
+}
+
+.founder-note {
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-5);
+  min-width: 0;
+}
+
+.founder-body {
+  font-size: 16px;
+  font-weight: var(--brand-weight-regular);
+  color: var(--bs-text-secondary);
+  line-height: var(--brand-leading-relaxed);
+  margin: 0;
+  transition: color var(--brand-transition-base);
+}
+
+.founder-signoff {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-5);
+  margin: 0;
+  padding-top: var(--brand-space-6);
+  border-top: 1px solid var(--bs-rule-warm);
+}
+
+.founder-signature {
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-1);
+  margin: 0;
+  min-width: 0;
+}
+
+.founder-name {
+  font-family: var(--brand-font-serif);
+  font-style: italic;
+  font-size: 22px;
+  font-weight: var(--brand-weight-semibold);
+  color: var(--bs-text-primary);
+  transition: color var(--brand-transition-base);
+}
+
+.founder-role {
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-label);
+  font-weight: var(--brand-weight-light);
+  letter-spacing: var(--brand-tracking-wide);
+  text-transform: uppercase;
+  color: var(--bs-text-secondary);
+  transition: color var(--brand-transition-base);
 }
 
 /* ─────────────────────────────────────
@@ -1779,7 +1905,9 @@ footer {
   }
 
   .section-review {
-    padding: var(--brand-section-padding-y-sm) var(--brand-page-padding-x);
+    /* Trimmed bottom — the founder coda follows immediately (see desktop). */
+    padding: var(--brand-section-padding-y-sm) var(--brand-page-padding-x)
+      var(--brand-space-8);
   }
   .review-grid {
     grid-template-columns: 1fr;
@@ -1797,6 +1925,10 @@ footer {
     padding: 12px 20px;
   }
 
+  .section-founder {
+    padding: var(--brand-space-8) var(--brand-page-padding-x) 0;
+  }
+
   .cta-inner {
     padding: var(--brand-space-16) var(--brand-space-8);
   }
@@ -1804,6 +1936,21 @@ footer {
   .footer-bottom {
     flex-direction: column;
     gap: var(--brand-space-2);
+  }
+}
+
+/* The sign-off row is a small portrait beside two short lines, so it survives
+   narrow widths that the old two-column letter could not. Just tighten it. */
+@media (max-width: 600px) {
+  .founder-inner {
+    gap: var(--brand-space-6);
+  }
+  .founder-portrait {
+    width: 80px;
+    height: 107px;
+  }
+  .founder-signoff {
+    gap: var(--brand-space-4);
   }
 }
 
@@ -1818,6 +1965,10 @@ footer {
   .chaos-file {
     font-size: 10px;
   }
+  .founder-inner {
+    padding: var(--brand-space-6);
+  }
+
   .cta-inner {
     padding: var(--brand-space-12) var(--brand-space-6);
   }
@@ -1862,12 +2013,21 @@ footer {
    name .reveal / .in for the JS hook)
 ───────────────────────────────────── */
 
+/* The reveal transition has to re-declare the mode-transition properties.
+   `transition` is a shorthand, so a bare opacity/transform declaration here
+   would reset the `var(--bs-mode-transition)` that reveal-target cards such as
+   .founder-inner set on themselves, making them snap on the dark/light toggle
+   while their non-revealing neighbours fade. */
 .reveal {
   opacity: 0;
   transform: translateY(24px);
   transition:
     opacity var(--brand-transition-reveal),
-    transform var(--brand-transition-reveal);
+    transform var(--brand-transition-reveal),
+    background 0.25s ease,
+    color 0.25s ease,
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
 }
 
 .reveal.in {
@@ -1908,5 +2068,42 @@ footer {
   50% {
     opacity: 0.5;
     transform: scale(0.75);
+  }
+}
+
+/* ─────────────────────────────────────
+   REDUCED MOTION
+
+   Everything above is decoration: the reveal transition, the hero's staggered
+   fadeUp, the breathing status dot, and the smooth anchor scrolling. For a
+   reader who has asked for less motion, the page should simply be there.
+   `.reveal` is pinned visible here so content stays readable whether or not
+   the IntersectionObserver ever adds `.in`.
+───────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .reveal,
+  .reveal.in {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .reveal-d1,
+  .reveal-d2,
+  .reveal-d3 {
+    transition-delay: 0s;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
   }
 }

@@ -21,6 +21,10 @@ declare global {
 
 const landingContent = document.getElementById("landing-content");
 
+// Stand down the inline no-JS fallback timer in index.html: this module is
+// running, so it owns showing the content from here.
+document.documentElement.setAttribute("data-landing-ready", "");
+
 restoreTheme();
 for (const logoUse of document.querySelectorAll<SVGUseElement>(
   "[data-bindersnap-logo-mark] use",
