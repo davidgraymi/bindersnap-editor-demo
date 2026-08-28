@@ -48,8 +48,10 @@
           - data-landing-fallback: set by the timer below when the module has
             not reported ready, covering a slow, blocked, or broken bundle.
           - <noscript>: covers JS being off entirely.
-        Both outrank the bare `.reveal` rule on specificity, so load order of
-        the external stylesheet does not matter.
+        Both selectors are written to outrank the bare `.reveal` rule on
+        specificity, which is what makes them independent of load order: the
+        bundler injects the compiled stylesheet after this <head>, so a rule
+        here that merely ties on specificity loses to it.
       */
       html[data-landing-fallback] #landing-content {
         opacity: 1;
@@ -62,11 +64,15 @@
     </style>
     <noscript>
       <style>
-        #landing-content {
+        /* `html` prefixes are load-bearing, not decoration — see above. The
+           compiled stylesheet's own `.reveal { opacity: 0 }` is injected after
+           this block, so a bare `.reveal` here ties on specificity and loses,
+           leaving the whole page below the hero invisible with JS off. */
+        html #landing-content {
           opacity: 1;
         }
 
-        .reveal {
+        html .reveal {
           opacity: 1;
           transform: none;
         }
@@ -484,7 +490,29 @@
           </div>
         </section>
 
-        <!-- THE RECORD -->
+        <!--
+          THE RECORD
+
+          This section used to be a third consecutive 3-card grid, immediately
+          after The Solution and immediately before The Review. By the third
+          one the eye pattern-matches the layout and skims — which was exactly
+          the wrong thing to happen on the page's most differentiated claim.
+
+          So the mechanism is drawn instead of described: three entries of one
+          policy's approval record, each showing the fingerprint it carries
+          forward from the entry before it and the fingerprint it seals itself
+          with. The repeated hash strings are the whole point — `sealed` on one
+          entry is `carries` on the next, so the chain is legible without
+          reading a word of the copy around it.
+
+          The hashes are illustrative, not real, but they are consistent: read
+          left to right and each `carries` matches the previous `sealed`. Keep
+          that true if you ever change them.
+
+          The three claims that were the card headings survive underneath as a
+          compact row. Same substance, a quarter of the visual weight, and the
+          section no longer looks like the two either side of it.
+        -->
         <section class="section-record">
           <div class="review-inner">
             <div class="review-header reveal">
@@ -500,65 +528,136 @@
               </p>
             </div>
 
-            <div class="review-grid">
-              <div class="review-card reveal reveal-d1">
-                <div class="review-card-icon">
-                  <span
-                    class="landing-lucide-icon"
-                    data-lucide-icon="lock"
-                    data-lucide-size="16"
-                    data-lucide-stroke-width="1.8"
-                    aria-hidden="true"
-                  ></span>
-                </div>
-                <div class="review-card-tag">Sealed</div>
-                <h3>Every version gets a fingerprint</h3>
-                <p>
-                  When a version is approved, it is sealed with a fingerprint
-                  calculated from its exact contents. Change one word after the
-                  fact and the fingerprint no longer matches. There is no quiet
-                  edit.
-                </p>
-              </div>
+            <figure class="chain reveal">
+              <figcaption class="chain-caption">
+                Infection Control Policy &mdash; every version, in order
+              </figcaption>
 
-              <div class="review-card reveal reveal-d2">
-                <div class="review-card-icon">
-                  <span
-                    class="landing-lucide-icon"
-                    data-lucide-icon="shield"
-                    data-lucide-size="16"
-                    data-lucide-stroke-width="1.8"
-                    aria-hidden="true"
-                  ></span>
-                </div>
-                <div class="review-card-tag">Linked</div>
-                <h3>Each entry seals the one before it</h3>
-                <p>
-                  The record is a chain. Every entry carries the fingerprint of
-                  the entry before it, so a step cannot be removed, re-dated, or
-                  slipped in without breaking every link that follows.
-                </p>
-              </div>
+              <ol class="chain-track">
+                <li class="chain-entry">
+                  <div class="chain-entry-head">
+                    <span class="chain-entry-version">Version 1</span>
+                    <span class="chain-entry-state">
+                      <span
+                        class="landing-lucide-icon"
+                        data-lucide-icon="check"
+                        data-lucide-size="12"
+                        data-lucide-stroke-width="2.5"
+                        aria-hidden="true"
+                      ></span>
+                      Approved
+                    </span>
+                  </div>
+                  <p class="chain-entry-who">R. Alvarez, RN &middot; 4 Mar</p>
+                  <dl class="chain-fields">
+                    <div class="chain-field">
+                      <dt>carries</dt>
+                      <dd class="chain-hash is-first">first entry</dd>
+                    </div>
+                    <div class="chain-field">
+                      <dt>sealed</dt>
+                      <dd class="chain-hash">a91f04c</dd>
+                    </div>
+                  </dl>
+                </li>
 
-              <div class="review-card reveal reveal-d3">
-                <div class="review-card-icon">
-                  <span
-                    class="landing-lucide-icon"
-                    data-lucide-icon="file-text"
-                    data-lucide-size="16"
-                    data-lucide-stroke-width="1.8"
-                    aria-hidden="true"
-                  ></span>
-                </div>
-                <div class="review-card-tag">Open</div>
-                <h3>Not rows in our database</h3>
+                <li class="chain-entry">
+                  <div class="chain-entry-head">
+                    <span class="chain-entry-version">Version 2</span>
+                    <span class="chain-entry-state">
+                      <span
+                        class="landing-lucide-icon"
+                        data-lucide-icon="check"
+                        data-lucide-size="12"
+                        data-lucide-stroke-width="2.5"
+                        aria-hidden="true"
+                      ></span>
+                      Approved
+                    </span>
+                  </div>
+                  <p class="chain-entry-who">
+                    Dr. E. Whitfield &middot; 19 Jun
+                  </p>
+                  <dl class="chain-fields">
+                    <div class="chain-field">
+                      <dt>carries</dt>
+                      <dd class="chain-hash">a91f04c</dd>
+                    </div>
+                    <div class="chain-field">
+                      <dt>sealed</dt>
+                      <dd class="chain-hash">7c3e8b2</dd>
+                    </div>
+                  </dl>
+                </li>
+
+                <li class="chain-entry">
+                  <div class="chain-entry-head">
+                    <span class="chain-entry-version">Version 3</span>
+                    <span class="chain-entry-state">
+                      <span
+                        class="landing-lucide-icon"
+                        data-lucide-icon="check"
+                        data-lucide-size="12"
+                        data-lucide-stroke-width="2.5"
+                        aria-hidden="true"
+                      ></span>
+                      Approved
+                    </span>
+                  </div>
+                  <p class="chain-entry-who">R. Alvarez, RN &middot; 2 Dec</p>
+                  <dl class="chain-fields">
+                    <div class="chain-field">
+                      <dt>carries</dt>
+                      <dd class="chain-hash">7c3e8b2</dd>
+                    </div>
+                    <div class="chain-field">
+                      <dt>sealed</dt>
+                      <dd class="chain-hash">e5d19af</dd>
+                    </div>
+                  </dl>
+                </li>
+              </ol>
+
+              <p class="chain-note">
+                <span
+                  class="landing-lucide-icon"
+                  data-lucide-icon="unlink"
+                  data-lucide-size="16"
+                  data-lucide-stroke-width="1.8"
+                  aria-hidden="true"
+                ></span>
+                <span>
+                  Go back and change one word of version 2 and its fingerprint
+                  is no longer <code>7c3e8b2</code> &mdash; but version 3 still
+                  carries that. A step cannot be removed, re-dated, or slipped
+                  in without breaking every link that follows.
+                </span>
+              </p>
+            </figure>
+
+            <ul class="record-claims reveal">
+              <li class="record-claim">
+                <span class="record-claim-tag">Sealed</span>
                 <p>
-                  The record is kept as ordinary commits and plain files &mdash;
-                  the formats version control has used for twenty years. It is
-                  not a private schema that only we know how to read.
+                  The fingerprint is calculated from the version's exact
+                  contents. There is no quiet edit.
                 </p>
-              </div>
-            </div>
+              </li>
+              <li class="record-claim">
+                <span class="record-claim-tag">Linked</span>
+                <p>
+                  Every entry carries the fingerprint of the entry before it, so
+                  the order is part of the record too.
+                </p>
+              </li>
+              <li class="record-claim">
+                <span class="record-claim-tag">Open</span>
+                <p>
+                  Kept as ordinary commits and plain files &mdash; not a private
+                  schema that only we know how to read.
+                </p>
+              </li>
+            </ul>
 
             <a class="review-link reveal" href="#signup"
               >Start a record that cannot be quietly edited &rarr;</a

@@ -35,7 +35,14 @@ body {
   background: var(--bs-page-bg);
   color: var(--bs-text-primary);
   -webkit-font-smoothing: antialiased;
+  /* `overflow-x: hidden` computes `overflow-y` to `auto`, which promotes
+     <body> to the scroll container and leaves `scroll-behavior` stranded on
+     <html> — anchor jumps and programmatic scrolling then behave erratically.
+     `clip` suppresses horizontal overflow without creating a scroll container,
+     so <html> stays the scroller. `hidden` first for browsers that predate
+     `clip` (Safari < 16), which drop the second declaration. */
   overflow-x: hidden;
+  overflow-x: clip;
   transition: var(--bs-mode-transition);
 }
 
@@ -1368,6 +1375,242 @@ body::after {
   padding: var(--brand-section-padding-y) var(--brand-page-padding-x);
 }
 
+/* The chain diagram. Three entries of one policy's approval record, drawn so
+   the mechanism reads before the copy does: the hash a version `sealed` with
+   is the hash the next version `carries`, and the connector line makes the
+   hand-off literal.
+
+   Green rather than coral throughout — a verified record is a success state,
+   and the section's one coral element is its eyebrow. */
+.chain {
+  margin: 0 0 var(--brand-space-10);
+  padding: var(--brand-space-8);
+  background: var(--bs-surface-2);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-xl);
+  text-align: left;
+  transition: var(--bs-mode-transition);
+}
+
+.chain-caption {
+  padding-bottom: var(--brand-space-5);
+  margin-bottom: var(--brand-space-8);
+  border-bottom: 1px solid var(--bs-rule-warm);
+  font-size: 14px;
+  font-weight: var(--brand-weight-regular);
+  color: var(--bs-text-secondary);
+  transition: color var(--brand-transition-base);
+}
+
+.chain-track {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--brand-space-10);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.chain-entry {
+  position: relative;
+  padding: var(--brand-space-5);
+  background: var(--bs-surface-1);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+  transition: var(--bs-mode-transition);
+}
+
+/* The link itself: a rule across the grid gap with an arrowhead where it meets
+   the entry it feeds. Decoration only — the hand-off is stated in words by the
+   `carries` field inside each entry, so nothing here needs to be announced. */
+.chain-entry + .chain-entry::before,
+.chain-entry + .chain-entry::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  pointer-events: none;
+}
+
+.chain-entry + .chain-entry::before {
+  right: 100%;
+  width: var(--brand-space-10);
+  height: 1px;
+  background: var(--brand-green);
+  opacity: 0.45;
+}
+
+.chain-entry + .chain-entry::after {
+  right: calc(100% - 1px);
+  width: 6px;
+  height: 6px;
+  border-top: 1px solid var(--brand-green);
+  border-right: 1px solid var(--brand-green);
+  transform: translateY(-50%) rotate(45deg);
+  opacity: 0.7;
+}
+
+.chain-entry-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--brand-space-2);
+  margin-bottom: var(--brand-space-1);
+}
+
+.chain-entry-version {
+  font-family: var(--brand-font-serif);
+  font-size: 18px;
+  font-weight: var(--brand-weight-semibold);
+  color: var(--bs-text-primary);
+  transition: color var(--brand-transition-base);
+}
+
+.chain-entry-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+  padding: 3px var(--brand-space-2);
+  font-family: var(--brand-font-mono);
+  font-size: 10px;
+  font-weight: var(--brand-weight-medium);
+  letter-spacing: var(--brand-tracking-wide);
+  text-transform: uppercase;
+  color: var(--bs-text-secondary);
+  background: var(--bs-green-dim);
+  border-radius: var(--brand-radius-sm);
+  transition: color var(--brand-transition-base);
+}
+
+.chain-entry-state svg {
+  width: 12px;
+  height: 12px;
+  color: var(--brand-green);
+}
+
+.chain-entry-who {
+  font-size: 13px;
+  font-weight: var(--brand-weight-regular);
+  color: var(--bs-text-muted);
+  margin: 0 0 var(--brand-space-4);
+}
+
+.chain-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-2);
+  margin: 0;
+  padding-top: var(--brand-space-4);
+  border-top: 1px solid var(--bs-rule-warm);
+}
+
+.chain-field {
+  display: flex;
+  align-items: baseline;
+  gap: var(--brand-space-3);
+}
+
+.chain-field dt {
+  flex: none;
+  width: 52px;
+  font-family: var(--brand-font-mono);
+  font-size: 10px;
+  font-weight: var(--brand-weight-medium);
+  letter-spacing: var(--brand-tracking-wide);
+  text-transform: uppercase;
+  color: var(--bs-text-muted);
+}
+
+.chain-field dd {
+  margin: 0;
+  min-width: 0;
+}
+
+.chain-hash {
+  font-family: var(--brand-font-mono);
+  font-size: 13px;
+  font-weight: var(--brand-weight-medium);
+  color: var(--bs-text-primary);
+  transition: color var(--brand-transition-base);
+}
+
+/* Version 1 carries nothing. Set apart from the hashes so the eye does not
+   try to match it against one. */
+.chain-hash.is-first {
+  font-size: 12px;
+  font-weight: var(--brand-weight-regular);
+  font-style: italic;
+  color: var(--bs-text-muted);
+}
+
+.chain-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--brand-space-3);
+  /* Capped at a readable measure — the panel runs the full 1200px grid and an
+     uncapped line here is ~160 characters. */
+  max-width: 92ch;
+  margin: var(--brand-space-8) 0 0;
+  padding-top: var(--brand-space-6);
+  border-top: 1px solid var(--bs-rule-warm);
+  font-size: 14px;
+  font-weight: var(--brand-weight-regular);
+  line-height: var(--brand-leading-relaxed);
+  color: var(--bs-text-secondary);
+  transition: color var(--brand-transition-base);
+}
+
+.chain-note svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 4px;
+  color: var(--bs-text-faint);
+}
+
+.chain-note code {
+  font-family: var(--brand-font-mono);
+  font-size: 13px;
+  color: var(--bs-text-primary);
+}
+
+/* The three claims that used to be card headings. Same substance, a fraction
+   of the weight — the diagram above is what this section leads with now. */
+.record-claims {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--brand-space-8);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+}
+
+.record-claim {
+  padding-top: var(--brand-space-4);
+  border-top: 2px solid var(--bs-rule);
+}
+
+.record-claim-tag {
+  display: block;
+  margin-bottom: var(--brand-space-2);
+  font-family: var(--brand-font-mono);
+  font-size: 10px;
+  font-weight: var(--brand-weight-medium);
+  letter-spacing: var(--brand-tracking-wide);
+  text-transform: uppercase;
+  color: var(--bs-text-primary);
+  transition: color var(--brand-transition-base);
+}
+
+.record-claim p {
+  font-size: 14px;
+  font-weight: var(--brand-weight-light);
+  line-height: var(--brand-leading-relaxed);
+  color: var(--bs-text-muted);
+  margin: 0;
+}
+
 /* ─────────────────────────────────────
    FOUNDER NOTE
 
@@ -1917,6 +2160,35 @@ footer {
   }
   .section-record {
     padding: var(--brand-section-padding-y-sm) var(--brand-page-padding-x);
+  }
+
+  /* The chain turns vertical: entries stack and the connector runs down the
+     left, so the hand-off still reads in one direction. */
+  .chain {
+    padding: var(--brand-space-6);
+  }
+  .chain-track {
+    grid-template-columns: 1fr;
+    gap: var(--brand-space-8);
+  }
+  .chain-entry + .chain-entry::before {
+    top: auto;
+    right: auto;
+    bottom: 100%;
+    left: var(--brand-space-8);
+    width: 1px;
+    height: var(--brand-space-8);
+  }
+  .chain-entry + .chain-entry::after {
+    top: auto;
+    right: auto;
+    bottom: calc(100% - 3px);
+    left: calc(var(--brand-space-8) - 2px);
+    transform: rotate(135deg);
+  }
+  .record-claims {
+    grid-template-columns: 1fr;
+    gap: var(--brand-space-6);
   }
   .section-compare {
     padding: var(--brand-section-padding-y-sm) var(--brand-page-padding-x);

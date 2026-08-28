@@ -10,6 +10,7 @@ import {
   PencilLine,
   Shield,
   SunMedium,
+  Unlink,
   Users,
   X,
 } from "lucide-react";
@@ -26,6 +27,7 @@ const icons: Record<string, LucideIcon> = {
   shield: Shield,
   "pencil-line": PencilLine,
   "sun-medium": SunMedium,
+  unlink: Unlink,
   users: Users,
   x: X,
 };
