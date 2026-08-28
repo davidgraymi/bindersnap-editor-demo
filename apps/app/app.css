@@ -2779,6 +2779,37 @@ input {
   color: var(--bs-text-muted);
 }
 
+/* ── History tab — exporting the record ────────────────────────────
+   The trail on screen is for the people in the room. The export is for the
+   one person who is not: an auditor with no login, who needs the same facts
+   as a file. It sits above the spline because it is about the whole trail,
+   not about any one version.
+   ------------------------------------------------------------------ */
+.doc-record-export {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--brand-space-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--brand-space-5);
+  padding-bottom: var(--brand-space-4);
+  border-bottom: 1px solid var(--bs-rule);
+}
+
+.doc-record-export-copy {
+  margin: 0;
+  max-width: 48ch;
+  font-size: var(--brand-text-sm);
+  color: var(--bs-text-muted);
+}
+
+.doc-record-export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  white-space: nowrap;
+}
+
 /* ── History tab — the audit trail as a spline ─────────────────────
    One line down the page with a knot for every published version. Each knot
    is the change review that produced it, so the title is that review's title
