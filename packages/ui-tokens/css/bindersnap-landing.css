@@ -1320,17 +1320,27 @@ body::after {
   color: var(--bs-text-muted);
 }
 
+/* Secondary CTA. One shared treatment for every mid-page call to action so
+   they read as a set rather than as incidental prose links: outlined rather
+   than filled, because coral stays reserved for the hero and the final CTA.
+   The min-height makes it a comfortable touch target, which the previous
+   underlined-text version was not. */
 .review-link {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   margin-top: var(--brand-space-12);
-  font-size: 14px;
+  padding: 0 var(--brand-space-6);
+  font-size: 15px;
   font-weight: var(--brand-weight-medium);
   color: var(--bs-text-primary);
   text-decoration: none;
-  border-bottom: 1px solid var(--bs-rule);
-  padding-bottom: var(--brand-space-1);
+  background: var(--bs-surface-1);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
   transition:
     color var(--brand-transition-base),
+    background var(--brand-transition-base),
     border-color var(--brand-transition-base);
 }
 
@@ -1989,12 +1999,21 @@ footer {
    name .reveal / .in for the JS hook)
 ───────────────────────────────────── */
 
+/* The reveal transition has to re-declare the mode-transition properties.
+   `transition` is a shorthand, so a bare opacity/transform declaration here
+   would reset the `var(--bs-mode-transition)` that reveal-target cards such as
+   .founder-inner set on themselves, making them snap on the dark/light toggle
+   while their non-revealing neighbours fade. */
 .reveal {
   opacity: 0;
   transform: translateY(24px);
   transition:
     opacity var(--brand-transition-reveal),
-    transform var(--brand-transition-reveal);
+    transform var(--brand-transition-reveal),
+    background 0.25s ease,
+    color 0.25s ease,
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
 }
 
 .reveal.in {
@@ -2035,5 +2054,42 @@ footer {
   50% {
     opacity: 0.5;
     transform: scale(0.75);
+  }
+}
+
+/* ─────────────────────────────────────
+   REDUCED MOTION
+
+   Everything above is decoration: the reveal transition, the hero's staggered
+   fadeUp, the breathing status dot, and the smooth anchor scrolling. For a
+   reader who has asked for less motion, the page should simply be there.
+   `.reveal` is pinned visible here so content stays readable whether or not
+   the IntersectionObserver ever adds `.in`.
+───────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .reveal,
+  .reveal.in {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .reveal-d1,
+  .reveal-d2,
+  .reveal-d3 {
+    transition-delay: 0s;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
   }
 }

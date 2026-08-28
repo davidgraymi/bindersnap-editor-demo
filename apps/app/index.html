@@ -39,7 +39,39 @@
         opacity: 0;
         transition: opacity 0.15s;
       }
+
+      /*
+        Failure fallbacks. The page below the hero is hidden until
+        landing-inline.ts reveals #landing-content and the IntersectionObserver
+        adds .in to each .reveal, so anything that stops that module leaves a
+        blank page. Two nets:
+          - data-landing-fallback: set by the timer below when the module has
+            not reported ready, covering a slow, blocked, or broken bundle.
+          - <noscript>: covers JS being off entirely.
+        Both outrank the bare `.reveal` rule on specificity, so load order of
+        the external stylesheet does not matter.
+      */
+      html[data-landing-fallback] #landing-content {
+        opacity: 1;
+      }
+
+      html[data-landing-fallback] .reveal {
+        opacity: 1;
+        transform: none;
+      }
     </style>
+    <noscript>
+      <style>
+        #landing-content {
+          opacity: 1;
+        }
+
+        .reveal {
+          opacity: 1;
+          transform: none;
+        }
+      </style>
+    </noscript>
     <script>
       (function () {
         var s = localStorage.getItem("bs-theme");
@@ -48,6 +80,15 @@
           "data-theme",
           s || (p ? "dark" : "light"),
         );
+
+        // Classic (non-module) script, so it still runs when the module bundle
+        // fails to parse or never arrives. landing-inline.ts sets
+        // data-landing-ready as soon as it has taken over.
+        window.setTimeout(function () {
+          if (!document.documentElement.hasAttribute("data-landing-ready")) {
+            document.documentElement.setAttribute("data-landing-fallback", "");
+          }
+        }, 2000);
       })();
     </script>
   </head>
@@ -762,16 +803,16 @@
           else on it names a human. Deliberately quiet — no coral, no card
           shadow — so the CTA below keeps the only emphasis in this region.
 
-          TODO(#374): the body copy below is placeholder text. This is the one
-          paragraph on the page that has to be written first-person by the
-          founder, not generated. Before it ships:
-            1. Replace the lorem ipsum with the real note (~60-100 words):
-               why this exists and who it was built for, specific enough to be
-               unfakeable. No customer, traction, credential, or HIPAA/BAA
-               claims.
-            2. Get consent from the person it describes and agree how she is
-               referred to — named, role-only, or quoted. Do not name her or
-               use her likeness without an explicit yes.
+          TODO(#374): the body copy below is a DRAFT and needs David's own pass
+          before launch. It is written to be true as-is — it makes no customer,
+          traction, credential, or HIPAA/BAA claim, and it names no one but the
+          founder, so it is safe to ship unchanged if he likes it. It is
+          deliberately about the problem rather than a founding anecdote:
+            1. If David wants the personal story here instead (the specific
+               person he built this for), it replaces the first paragraph.
+               Nobody else gets named or described without their explicit yes.
+            2. Either way the final wording has to sound like him, not like
+               marketing copy. This draft is a starting point, not the answer.
         -->
         <section class="section-founder">
           <div class="founder-eyebrow reveal">A Note From the Founder</div>
@@ -787,12 +828,15 @@
             />
             <div class="founder-note">
               <p class="founder-body">
-                Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do
-                eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut
-                enim ad minim veniam, quis nostrud exercitation ullamco laboris
-                nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor
-                in reprehenderit in voluptate velit esse cillum dolore eu fugiat
-                nulla pariatur.
+                Every policy system I looked at assumed someone whose whole job
+                is keeping the record. Most practices do not have that person.
+                One person does it between everything else, and the proof of who
+                approved what ends up in a thread nobody can find a year later.
+              </p>
+              <p class="founder-body">
+                So I built the thing I would want on that person's desk. You
+                approve a policy, the record writes itself, and when a surveyor
+                asks which version you approved, the answer is already there.
               </p>
               <p class="founder-signoff">
                 <span class="founder-name">David Gray</span>
