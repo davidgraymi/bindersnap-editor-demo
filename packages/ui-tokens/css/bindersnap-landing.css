@@ -1401,11 +1401,15 @@ body::after {
   transition: color var(--brand-transition-base);
 }
 
+/* Letter, then signature. The note runs full width and the portrait sits in
+   the sign-off row beside the name, the way a signed letter ends. The earlier
+   two-column layout put the face at the top of its own column, which left a
+   tall empty gutter beside the lower half of the note and no visual link
+   between the photograph and the signature several lines below it. */
 .founder-inner {
-  display: grid;
-  grid-template-columns: 168px 1fr;
+  display: flex;
+  flex-direction: column;
   gap: var(--brand-space-8);
-  align-items: start;
   max-width: 680px;
   margin: 0 auto;
   padding: var(--brand-space-10);
@@ -1417,9 +1421,9 @@ body::after {
 }
 
 .founder-portrait {
-  width: 100%;
-  height: auto;
-  aspect-ratio: 3 / 4;
+  flex: none;
+  width: 96px;
+  height: 128px; /* 3:4, matching the source crop */
   object-fit: cover;
   border-radius: var(--brand-radius-lg);
   border: 1px solid var(--bs-rule);
@@ -1443,11 +1447,19 @@ body::after {
 
 .founder-signoff {
   display: flex;
+  align-items: center;
+  gap: var(--brand-space-5);
+  margin: 0;
+  padding-top: var(--brand-space-6);
+  border-top: 1px solid var(--bs-rule-warm);
+}
+
+.founder-signature {
+  display: flex;
   flex-direction: column;
   gap: var(--brand-space-1);
   margin: 0;
-  padding-top: var(--brand-space-4);
-  border-top: 1px solid var(--bs-rule-warm);
+  min-width: 0;
 }
 
 .founder-name {
@@ -1927,16 +1939,18 @@ footer {
   }
 }
 
-/* Founder note stacks before the two columns get too narrow to read; the
-   portrait then centers above the letter rather than hugging the left edge. */
+/* The sign-off row is a small portrait beside two short lines, so it survives
+   narrow widths that the old two-column letter could not. Just tighten it. */
 @media (max-width: 600px) {
   .founder-inner {
-    grid-template-columns: 1fr;
     gap: var(--brand-space-6);
   }
   .founder-portrait {
-    width: 148px;
-    justify-self: center;
+    width: 80px;
+    height: 107px;
+  }
+  .founder-signoff {
+    gap: var(--brand-space-4);
   }
 }
 
