@@ -549,8 +549,8 @@ const CHANGE_OUTCOME_LABELS: Record<ChangeOutcome, string> = {
 
 const CHANGE_OUTCOME_BADGE_TONES: Record<ChangeOutcome, string> = {
   published: "bs-status--published",
-  declined: "bs-status--changes",
-  withdrawn: "bs-status--working",
+  declined: "bs-status--declined",
+  withdrawn: "bs-status--withdrawn",
 };
 
 /** The badge on a change: where it stands, or how it ended. */

@@ -1,12 +1,19 @@
 import type { ReactNode } from "react";
 
 /**
- * The six tones a document, a change, or a review can be in — one primitive
+ * The tones a document, a change, or a review can be in — one primitive
  * standing in for the vault-status, vault-pending-badge and vault-triage-pill
  * family (see docs/design/design-system-audit.md, Task 4).
  */
 export type StatusTone =
-  "working" | "review" | "waiting" | "approved" | "changes" | "published";
+  | "working"
+  | "review"
+  | "waiting"
+  | "approved"
+  | "changes"
+  | "published"
+  | "declined"
+  | "withdrawn";
 
 export function StatusChip({
   tone,

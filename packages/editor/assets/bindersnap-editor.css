@@ -50,7 +50,7 @@
 
   /* ── Brand ── */
   --e-coral: var(--brand-coral);
-  --e-coral-dk: var(--brand-coral-dark);
+  --e-coral-dk: var(--bs-coral-text);
   --e-coral-dim: var(--bs-coral-dim);
   --e-coral-glow: var(--bs-coral-glow);
   --e-green: var(--brand-green);
@@ -546,7 +546,7 @@
 
 .bs-editor__preview-btn:hover {
   border-color: var(--brand-coral);
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
 }
 
 /* Selection bubble (mobile, iOS-notes feel) */
@@ -1563,7 +1563,7 @@
     var(--brand-coral-dark) 10%,
     var(--bs-page-bg)
   );
-  --bs-approval-badge-text: var(--brand-coral-dark);
+  --bs-approval-badge-text: var(--bs-coral-text);
   --bs-approval-link: var(--bs-text-secondary);
 }
 
@@ -1686,7 +1686,7 @@
     var(--brand-coral-dark) 10%,
     var(--bs-page-bg)
   );
-  --bs-approval-badge-text: var(--brand-coral-dark);
+  --bs-approval-badge-text: var(--bs-coral-text);
   --bs-approval-link: var(--bs-text-secondary);
 }
 
@@ -2438,8 +2438,10 @@
 }
 
 .resolve-btn {
-  background: var(--brand-coral);
-  color: var(--e-surface);
+  background: var(--bs-cta-fill);
+  /* White, not --e-surface: the CTA fill is tuned for white text in
+     both themes, and --e-surface goes to warm ink in dark mode. */
+  color: var(--brand-on-brand);
   padding: var(--brand-space-2) var(--brand-space-4);
   border-radius: var(--brand-radius-sm);
   border: none;
@@ -2449,7 +2451,7 @@
 }
 
 .resolve-btn:hover {
-  background: var(--brand-coral-dark);
+  background: var(--bs-cta-fill-hover);
 }
 
 .cancel-btn {

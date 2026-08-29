@@ -11,11 +11,16 @@ import type { LucideIcon } from "lucide-react";
  */
 export type AppIconSize = "xs" | "sm" | "md" | "lg";
 
+/**
+ * A var() in an SVG presentation attribute resolves, but an *undefined*
+ * one collapses the icon to 0x0 rather than falling back to lucide's
+ * default — so every reference carries the scale value as a fallback.
+ */
 const ICON_SIZE_VAR: Record<AppIconSize, string> = {
-  xs: "var(--brand-icon-xs)",
-  sm: "var(--brand-icon-sm)",
-  md: "var(--brand-icon-md)",
-  lg: "var(--brand-icon-lg)",
+  xs: "var(--brand-icon-xs, 12px)",
+  sm: "var(--brand-icon-sm, 14px)",
+  md: "var(--brand-icon-md, 16px)",
+  lg: "var(--brand-icon-lg, 20px)",
 };
 
 export function AppIcon({
@@ -37,7 +42,9 @@ export function AppIcon({
     <Icon
       size={ICON_SIZE_VAR[size]}
       strokeWidth={
-        heavy ? "var(--brand-icon-stroke-heavy)" : "var(--brand-icon-stroke)"
+        heavy
+          ? "var(--brand-icon-stroke-heavy, 2)"
+          : "var(--brand-icon-stroke, 1.5)"
       }
       className={className}
       aria-hidden={ariaHidden}

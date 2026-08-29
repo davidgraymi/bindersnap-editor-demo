@@ -158,10 +158,10 @@ body::after {
 }
 
 .nav-cta-link {
-  background: var(--brand-coral-dark);
-  color: var(--brand-on-brand) !important;
+  background: var(--brand-coral);
+  color: var(--brand-on-coral) !important;
   font-size: var(--brand-text-ui-md);
-  font-weight: var(--brand-weight-medium);
+  font-weight: var(--brand-weight-semibold);
   padding: 9px 22px;
   border-radius: var(--brand-radius-md);
   text-decoration: none;
@@ -173,7 +173,8 @@ body::after {
 
 .nav-cta-link:hover,
 .nav-cta-link:focus-visible {
-  background: var(--brand-coral-darker);
+  background: var(--brand-coral-dark);
+  color: var(--brand-on-brand) !important;
   transform: translateY(-1px);
 }
 
@@ -387,8 +388,8 @@ body::after {
 }
 
 .email-row button {
-  background: var(--brand-coral-dark);
-  color: var(--brand-on-brand);
+  background: var(--brand-coral);
+  color: var(--brand-on-coral);
   border: none;
   padding: 13px 24px;
   font-family: var(--brand-font-sans);
@@ -403,7 +404,10 @@ body::after {
 }
 
 .email-row button:hover {
-  background: var(--brand-coral-darker);
+  /* The fill darkens past what ink can sit on, so the label flips to
+     white — 4.61:1 there, 5.02:1 at rest. */
+  background: var(--brand-coral-dark);
+  color: var(--brand-on-brand);
 }
 
 .form-hint {
@@ -1923,8 +1927,8 @@ body::after {
 }
 
 .cta-email-row button {
-  background: var(--brand-coral-dark);
-  color: var(--brand-on-brand);
+  background: var(--brand-coral);
+  color: var(--brand-on-coral);
   border: none;
   padding: 12px 22px;
   font-family: var(--brand-font-sans);
@@ -1938,7 +1942,10 @@ body::after {
 }
 
 .cta-email-row button:hover {
-  background: var(--brand-coral-darker);
+  /* The fill darkens past what ink can sit on, so the label flips to
+     white — 4.61:1 there, 5.02:1 at rest. */
+  background: var(--brand-coral-dark);
+  color: var(--brand-on-brand);
 }
 
 /* ─────────────────────────────────────

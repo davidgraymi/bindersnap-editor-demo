@@ -91,6 +91,33 @@
   --bs-coral-dim: rgba(232, 93, 38, 0.1); /* Icon bg, badge bg */
   --bs-coral-glow: rgba(232, 93, 38, 0.06); /* Hero/section ambient wash */
 
+  /* ── PRIMARY CTA FILL (white-label buttons) ────────────────
+     For a filled button whose label is white. --brand-coral
+     cannot carry white text (3.49:1), so this holds the coral
+     hue at full chroma and drops lightness only until white
+     clears 4.5:1. Themed, because how far it has to drop
+     depends on the surround: on ink the softer
+     --brand-coral-dark reads warmer, so dark mode keeps that.
+
+     The landing CTAs do not use this. They fill with
+     --brand-coral and set their label in --brand-on-coral,
+     which keeps the page's one big button the same colour as
+     the hero's "approved."
+  ───────────────────────────────────────────────────────────── */
+  --bs-cta-fill: #ce4a09; /* rest  — 4.56:1 for white text */
+  --bs-cta-fill-hover: #ad3d06; /* hover — 6.09:1 */
+
+  /* ── CORAL AS TEXT ─────────────────────────────────────────
+     Coral-coloured labels, links and inline emphasis. Fills and
+     borders can stay on --brand-coral; text cannot, in either
+     direction: --brand-coral is 3.33:1 on paper, and the darker
+     --brand-coral-dark it was replaced with is 3.80:1 on ink.
+     One themed token, measured on --bs-page-bg and
+     --bs-surface-1, covers both. Text on the warm --bs-surface-2
+     card fill lands at 4.17:1 — use --bs-text-secondary there.
+  ───────────────────────────────────────────────────────────── */
+  --bs-coral-text: #c84a0b; /* 4.52:1 on page, 4.73:1 on surface-1 */
+
   /* ── SEMANTIC GREEN TINTS ──────────────────────────────────*/
   --bs-green-dim: rgba(22, 163, 74, 0.1); /* Compliance icon bg */
 
@@ -148,8 +175,8 @@
 
   /* ── Brand colors ── */
   --brand-coral: #e85d26; /* CTA, accent, emphasis — ONE per section. Fills, borders, non-text accents ONLY — white text on this fails WCAG AA (3.49:1) */
-  --brand-coral-dark: #c94d1a; /* Filled-button rest state — 4.61:1 for white text */
-  --brand-coral-darker: #ab4116; /* Filled-button hover/active state — 6.00:1 */
+  --brand-coral-dark: #c94d1a; /* Coral text/accent on paper; dark-mode --bs-cta-fill — 4.61:1 for white text */
+  --brand-coral-darker: #ab4116; /* Dark-mode --bs-cta-fill-hover — 6.00:1 */
   --brand-coral-mid: #f5d5c4; /* Decorative only — never for UI states */
   --brand-green: #16a34a; /* Compliance badges, "after" states — not for filled buttons (white text fails at 3.30:1) */
   --brand-green-dark: #128040; /* Filled-button rest state — 5.02:1 for white text */
@@ -170,6 +197,13 @@
   /* Text/icon colour on a solid coral or green fill — always white,
      regardless of theme, same reasoning as --brand-ink above */
   --brand-on-brand: #ffffff;
+
+  /* Text/icon on a solid --brand-coral fill. Ink, not white: white on coral
+     is 3.49:1 and fails AA at any size a button label is actually set in,
+     and darkening the fill to fix that puts a second, muddier coral on a
+     page whose accent is the real one. Ink measures 5.02:1 and lets the
+     CTA stay the exact colour of the hero's "approved." */
+  --brand-on-coral: #1c1917;
 
   /* Modal / overlay scrims — fixed black-alpha, same in both themes */
   --brand-scrim: rgba(0, 0, 0, 0.5);
@@ -361,6 +395,16 @@
   /* Tints: stronger in dark mode — same hue, higher alpha */
   --bs-coral-dim: rgba(232, 93, 38, 0.18);
   --bs-coral-glow: rgba(232, 93, 38, 0.1);
+
+  /* CTA fill: on ink the softer coral reads warmer than the
+     high-chroma light-mode value — see the note in :root. */
+  --bs-cta-fill: var(--brand-coral-dark); /* 4.61:1 for white text */
+  --bs-cta-fill-hover: var(--brand-coral-darker); /* 6.00:1 */
+
+  /* Coral text lifts on ink, the same move the status ramp makes —
+     this is the danger tone's dark foreground, reused so a coral
+     label and a declined chip stay the same colour. */
+  --bs-coral-text: #fb8c5a; /* 7.50:1 on page, 6.50:1 on surface-1 */
   --bs-green-dim: rgba(22, 163, 74, 0.18);
 
   /* Status ramp: lift the hue, keep the meaning — the light-mode
@@ -514,11 +558,11 @@ body::after {
 }
 
 .bs-btn-primary {
-  background: var(--brand-coral-dark);
+  background: var(--bs-cta-fill);
   color: var(--brand-on-brand);
 }
 .bs-btn-primary:hover {
-  background: var(--brand-coral-darker);
+  background: var(--bs-cta-fill-hover);
   box-shadow: var(--brand-shadow-coral);
 }
 
@@ -652,7 +696,7 @@ body::after {
 }
 
 /* ── Status chip ──────────────────────────────────────────────
-   One primitive, six tones, all reading from the Task 1 status
+   One primitive, eight tones, all reading from the Task 1 status
    ramp — replaces the vault-status, vault-pending-badge and
    vault-triage-pill family of one-off badge classes.
    Use with <StatusChip tone="…" /> (apps/app/components/StatusChip.tsx)
@@ -693,6 +737,20 @@ body::after {
 .bs-status--changes {
   background: var(--bs-status-danger-bg);
   color: var(--bs-status-danger-fg);
+}
+/* Terminal outcomes carry an outline. "Changes requested" and "Declined"
+   are the same hue because they are the same judgement — the outline is
+   what says one is still open and the other is closed. Same for
+   "Working" and "Withdrawn" in the muted family. */
+.bs-status--declined {
+  background: var(--bs-status-danger-bg);
+  color: var(--bs-status-danger-fg);
+  box-shadow: inset 0 0 0 1px var(--bs-status-danger-border);
+}
+.bs-status--withdrawn {
+  background: var(--bs-surface-2);
+  color: var(--bs-text-muted);
+  box-shadow: inset 0 0 0 1px var(--bs-rule);
 }
 
 /* ═════════════════════════════════════════════════════════════

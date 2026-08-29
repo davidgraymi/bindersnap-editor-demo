@@ -412,7 +412,8 @@ The token system has two layers:
   (`--bs-page-bg`, `--bs-surface-1`…`--bs-surface-3`, `--bs-text-primary`,
   `--bs-text-secondary`, `--bs-text-muted`, `--bs-text-faint`, `--bs-rule`,
   `--bs-rule-warm`, `--bs-shadow-sm`…`--bs-shadow-xl`, `--bs-coral-dim`,
-  `--bs-coral-glow`, `--bs-green-dim`, `--bs-status-warn-*`,
+  `--bs-coral-glow`, `--bs-coral-text`, `--bs-cta-fill`,
+  `--bs-cta-fill-hover`, `--bs-green-dim`, `--bs-status-warn-*`,
   `--bs-status-info-*`, `--bs-status-danger-*`, `--bs-status-ok-*`,
   `--bs-coral-border`, `--bs-coral-border-soft`, `--bs-green-border`,
   `--bs-green-border-soft`).
@@ -438,6 +439,10 @@ Key token categories, using the real names as defined in the token file:
 --bs-page-bg, --bs-surface-1, --bs-surface-2, --bs-surface-3, --bs-nav-bg
 --bs-text-primary, --bs-text-secondary, --bs-text-muted, --bs-text-faint
 --bs-rule, --bs-rule-warm
+
+/* Coral that has to stay legible in both themes (--bs-*, flip with theme) */
+--bs-cta-fill, --bs-cta-fill-hover   /* filled primary button       */
+--bs-coral-text                      /* coral labels, links, emphasis */
 
 /* Semantic status ramp (--bs-*, flip with theme) */
 --bs-status-warn-fg, --bs-status-warn-bg, --bs-status-warn-border      /* needs review        */
@@ -519,9 +524,20 @@ Reference `packages/ui-tokens/css/bindersnap-tokens.css` for all values.
 **Coral (`--brand-coral`, `#E85D26`):**
 Used for CTAs, the top-border reveal on hover cards, section eyebrow labels,
 waitlist badges, form focus rings, and key emphasis. Maximum one coral element
-per section. Never use coral decoratively. Filled buttons use
-`--brand-coral-dark` at rest and `--brand-coral` only on hover — the lighter
-value fails WCAG AA for white text at rest.
+per section. Never use coral decoratively.
+
+White on `--brand-coral` measures 3.49:1 and fails WCAG AA. That constrains
+every coral filled button, and the fix depends on what the label is:
+
+- **Landing CTAs** (hero, closing, nav) fill with `--brand-coral` and set the
+  label in `--brand-on-coral` — ink, 5.02:1. This keeps the page's buttons the
+  exact colour of the hero's _approved._ On hover the fill darkens to
+  `--brand-coral-dark` and the label flips to `--brand-on-brand` (4.61:1).
+- **White-label buttons** (in-app primaries, where an ink label would read as
+  disabled in dense UI) fill with `--bs-cta-fill` / `--bs-cta-fill-hover` —
+  the coral hue at full chroma, dropped in lightness until white clears 4.5:1.
+
+Never fill a button with `--brand-coral` and put white on it.
 
 **Ink (`--bs-text-primary`, `#1C1917` in light mode):**
 Primary text color. Dark backgrounds that are intentionally fixed regardless

@@ -24,6 +24,20 @@ const LITERAL_ALLOWLIST: ReadonlyArray<{ file: string; literal: string }> = [
   // .doc-compare-blend: mix-blend-mode: difference requires a true black
   // ground, not the warm-ink --brand-ink.
   { file: "apps/app/app.css", literal: "#000" },
+  // resolveCssColor()'s static fallback for --brand-coral: TipTap needs a
+  // resolved colour string, so the token is read at runtime and this is
+  // what it falls back to if the stylesheet has not loaded.
+  { file: "packages/editor/Editor.tsx", literal: "#E85D26" },
+];
+
+// Files exempt from the literal rule entirely, with the reason. Not a
+// convenience hatch — a file belongs here only if its colours are, by
+// design, not part of the themed system.
+const LITERAL_EXEMPT_FILES: ReadonlyArray<{ file: string; why: string }> = [
+  {
+    file: "apps/app/auditRecord.ts",
+    why: "a self-contained print stylesheet — black on white paper, deliberately not theme-reactive",
+  },
 ];
 
 // Custom properties set at runtime via an inline style (React `style={{}}`),
@@ -54,11 +68,20 @@ function walk(dir: string, extensions: string[]): string[] {
   return out;
 }
 
-/** CSS and HTML that ship real (non-editor-only, non-report) styling. */
+/**
+ * Everything that can ship a colour: stylesheets, the landing HTML, and
+ * the TS/TSX that can carry one in an inline `style={{}}` or a string
+ * handed to a library.
+ */
 const STYLE_FILES = [
-  ...walk(join(REPO_ROOT, "apps/app"), [".css", ".html"]),
+  ...walk(join(REPO_ROOT, "apps/app"), [".css", ".html", ".ts", ".tsx"]),
+  ...walk(join(REPO_ROOT, "packages/editor"), [".ts", ".tsx"]),
   join(REPO_ROOT, "packages/editor/assets/bindersnap-editor.css"),
-].filter((f) => f !== TOKENS_CSS_PATH);
+].filter(
+  (f) =>
+    f !== TOKENS_CSS_PATH &&
+    !LITERAL_EXEMPT_FILES.some((e) => relative(REPO_ROOT, f) === e.file),
+);
 
 /** Everywhere a token could reasonably be referenced: CSS, HTML, TS/TSX. */
 const SOURCE_FILES = [

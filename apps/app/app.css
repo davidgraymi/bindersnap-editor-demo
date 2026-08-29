@@ -125,7 +125,7 @@ input {
 
 .app-inline-error {
   margin: var(--brand-space-4) 0 0;
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
   font-size: var(--brand-text-sm);
 }
 
@@ -153,7 +153,7 @@ input {
 
 .app-login-switch-button:hover,
 .app-login-switch-button:focus-visible {
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
 }
 
 .app-login-hint {
@@ -547,7 +547,7 @@ input {
 }
 
 .vault-doc-error {
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
 }
 
 .vault-badges {
@@ -730,7 +730,7 @@ input {
    thinking it is this quarter's is the one mistake this page must prevent. */
 .doc-version-pill--past {
   background: var(--bs-coral-dim);
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
   box-shadow: inset 0 0 0 1px var(--brand-coral);
 }
 
@@ -845,7 +845,7 @@ input {
 }
 
 .doc-header-latest:hover {
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
 }
 
 .doc-header-latest:focus-visible {
@@ -859,7 +859,7 @@ input {
   align-items: center;
   gap: var(--brand-space-1-5);
   flex-shrink: 0;
-  background: var(--brand-coral-dark);
+  background: var(--bs-cta-fill);
   color: var(--brand-on-brand);
   border: none;
   border-radius: var(--brand-radius-md);
@@ -872,7 +872,7 @@ input {
 }
 
 .doc-header-submit:hover {
-  background: var(--brand-coral-darker);
+  background: var(--bs-cta-fill-hover);
 }
 
 .doc-header-submit:focus-visible {
@@ -1088,7 +1088,7 @@ input {
 }
 
 .doc-preview-fallback--error .doc-preview-fallback-note {
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
 }
 
 /* The sheet — the document reads like paper, not like a form field. */
@@ -1269,7 +1269,7 @@ input {
 
 /* The rail's one coral element, and the page's second: what is unfinished. */
 .doc-rail-title--urgent {
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
 }
 
 .doc-rail-card {
@@ -1308,7 +1308,7 @@ input {
   padding: 0;
   border: none;
   background: none;
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
   cursor: pointer;
   font-family: var(--brand-font-sans);
   text-align: left;
@@ -1561,7 +1561,7 @@ input {
 }
 
 .change-row-icon--declined {
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
 }
 
 .change-row-main {
@@ -1638,7 +1638,7 @@ input {
 .approval-meter--blocked {
   border-color: transparent;
   background: var(--bs-coral-dim);
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
 }
 
 /* The reason the pill exists: the count says how far, this says what is in the
@@ -1970,7 +1970,7 @@ input {
 }
 
 .rev-reviewer-remove:hover:not(:disabled) {
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
 }
 
 .rev-reviewers-anchor {
@@ -2136,7 +2136,7 @@ input {
   padding: var(--brand-space-3) var(--brand-space-4);
   background: var(--bs-coral-dim);
   border-radius: var(--brand-radius-md);
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
   font-size: var(--brand-text-sm);
 }
 
@@ -2822,7 +2822,7 @@ input {
    this page that says "you are here". */
 .doc-spline-entry--viewing .doc-spline-knot {
   border-color: var(--brand-coral);
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
 }
 
 .doc-spline-body {
@@ -3037,7 +3037,7 @@ input {
 
 .vault-pr-error {
   margin: var(--brand-space-3) 0 0;
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
   font-size: var(--brand-text-sm);
 }
 
@@ -3195,7 +3195,7 @@ input {
 
 .collaborator-manage-error {
   margin: 0;
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
 }
 
 .collaborators-table {
@@ -3335,7 +3335,7 @@ input {
 }
 
 .collaborator-remove-button:hover {
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
 }
 
 .collaborator-permission-select {
@@ -3484,7 +3484,7 @@ input {
 }
 
 .collaborators-search-error {
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
 }
 
 /* ── Document Permissions ───────────────────────────────────── */
@@ -3518,7 +3518,7 @@ input {
 
 .perms-notice--error p {
   margin: 0;
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
 }
 
 .perms-card {
@@ -3818,7 +3818,7 @@ input {
 .perms-save-error {
   margin: 0;
   font-size: var(--brand-text-sm);
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
 }
 
 .perms-save-success {
@@ -4143,7 +4143,7 @@ input {
 }
 
 .upload-validation-error {
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
   font-size: var(--brand-text-sm);
   margin: 0;
 }
@@ -4187,7 +4187,7 @@ input {
 }
 
 .upload-error-message {
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
   font-size: var(--brand-text-sm);
   padding: var(--brand-space-3);
   background: var(--bs-coral-dim);
@@ -4250,7 +4250,7 @@ input {
 
 .vault-triage-pill--active-changes {
   background: var(--bs-coral-dim);
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
   border-color: var(--bs-coral-border);
 }
 
@@ -5693,14 +5693,14 @@ input {
 
 /* The one coral element on the page: the work that is actually blocked. */
 .home-section-label--urgent {
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
 }
 
 .home-section-count {
   font-family: var(--brand-font-mono);
   font-size: var(--brand-text-label);
   background: var(--bs-coral-dim);
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
   border-radius: var(--brand-radius-full);
   padding: 1px var(--brand-space-2);
 }
@@ -5712,7 +5712,7 @@ input {
 .home-section-link {
   font-size: var(--brand-text-ui-md);
   font-weight: var(--brand-weight-medium);
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
   background: transparent;
   border: none;
   padding: 0;
@@ -5759,7 +5759,7 @@ input {
 
 .home-row-icon--urgent {
   background: var(--bs-coral-dim);
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
 }
 
 .home-row-icon--done {
@@ -5812,7 +5812,7 @@ input {
 
 .home-pill--review {
   background: var(--bs-coral-dim);
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
 }
 
 .home-pill--approved {
@@ -6223,7 +6223,7 @@ input {
 /* The only coral on the page: the row that is waiting on the reader. */
 .docs-list-item-icon--urgent {
   background: var(--bs-coral-dim);
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
 }
 
 .docs-list-item-body {
@@ -6263,7 +6263,7 @@ input {
 
 .docs-pill--review {
   background: var(--bs-coral-dim);
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
 }
 
 .docs-pill--approved {
@@ -6447,7 +6447,7 @@ input {
 
 .doc-compare-key--removed {
   background: var(--bs-coral-dim);
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
   text-decoration: line-through;
 }
 
@@ -6491,7 +6491,7 @@ input {
 .doc-compare-prose del,
 .doc-compare-plain del {
   background: var(--bs-coral-dim);
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
   text-decoration: line-through;
 }
 
@@ -6622,7 +6622,7 @@ input {
 }
 
 .doc-compare-fallback--error .doc-compare-fallback-note {
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
 }
 
 /* The way back out of the comparison, and across to the file itself. */
