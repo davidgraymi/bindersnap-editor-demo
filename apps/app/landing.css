@@ -1107,27 +1107,22 @@ body::after {
 }
 
 /* The ledger: one container, one row per pair, a spine down the middle. The
-   green edge marks the answering half without a second card around it. */
-.ledger {
-  background: var(--bs-surface-1);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-xl);
-  overflow: hidden;
-  transition: var(--bs-mode-transition);
-}
+   green edge marks the answering half without a second card around it.
 
-.ledger-row {
+   Flat cells in a two-column grid rather than nested rows — auto-placement
+   puts each pair on its own row here, and `order` can regroup them into two
+   runs when the columns collapse (see the 900px block). */
+.ledger {
   display: grid;
   /* minmax(0, …) rather than 1fr: one of the rows is a filename with no break
      opportunity in it, and an auto minimum would let that cell push the column
      past the container instead of wrapping. */
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  border-top: 1px solid var(--bs-rule-warm);
-}
-
-.ledger-row.is-head {
-  border-top: none;
-  border-bottom: 1px solid var(--bs-rule);
+  background: var(--bs-surface-1);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-xl);
+  overflow: hidden;
+  transition: var(--bs-mode-transition);
 }
 
 .ledger-cell {
@@ -1141,6 +1136,14 @@ body::after {
   color: var(--bs-text-secondary);
   min-width: 0;
   overflow-wrap: anywhere;
+  border-top: 1px solid var(--bs-rule-warm);
+}
+
+/* The two heads carry the rule under them, so the first pair does not add a
+   second one on top of it. */
+.ledger-cell:nth-child(3),
+.ledger-cell:nth-child(4) {
+  border-top: none;
 }
 
 .ledger-cell.before {
@@ -1151,10 +1154,9 @@ body::after {
    column, which is where the sale is. */
 .ledger-cell.after {
   border-left: 1px solid var(--bs-green-border-soft);
-  background: var(--bs-surface-1);
 }
 
-.ledger-row.is-head .ledger-cell {
+.ledger-cell.is-head {
   font-family: var(--brand-font-mono);
   font-size: var(--brand-text-ui-sm);
   font-weight: var(--brand-weight-medium);
@@ -1163,14 +1165,16 @@ body::after {
   align-items: center;
   padding-top: 20px;
   padding-bottom: 20px;
+  border-top: none;
+  border-bottom: 1px solid var(--bs-rule);
 }
 
-.ledger-row.is-head .ledger-cell.after {
+.ledger-cell.is-head.after {
   color: var(--brand-green);
   border-left-color: var(--bs-green-border);
 }
 
-.ledger-row.is-head .col-dot {
+.ledger-cell.is-head .col-dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
@@ -1178,7 +1182,7 @@ body::after {
   background: var(--bs-text-faint);
 }
 
-.ledger-row.is-head .ledger-cell.after .col-dot {
+.ledger-cell.is-head.after .col-dot {
   background: var(--brand-green);
 }
 
@@ -2105,12 +2109,37 @@ footer {
     border-left: none;
     border-top: 1px solid var(--bs-rule);
   }
+  /* No top rule on the first point — but it keeps its padding, or its icon
+     sits directly on the strip's own border. */
   .review-point:first-child {
     border-top: none;
-    padding-top: 0;
   }
-  .review-point:last-child {
-    padding-bottom: 0;
+
+  /* Below this width the two halves cannot sit side by side, and interleaving
+     them down one column reads as a single self-contradicting list. So they
+     split into two labelled runs — every complaint, then every answer — and
+     the ledger becomes two plain lists sharing one container. */
+  .ledger {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ledger-cell.is-head.before {
+    order: 0;
+  }
+  .ledger-cell.before {
+    order: 1;
+  }
+  .ledger-cell.is-head.after {
+    order: 2;
+    border-top: 1px solid var(--bs-rule);
+    padding-top: var(--brand-space-6);
+  }
+  /* The spine goes with the columns; each run separates on hairlines alone.
+     The base border rules still land: the two cells that open a run are the
+     same nth-child(3)/(4) that open the first pair on wide screens, and each
+     still follows the head that carries the rule above it. */
+  .ledger-cell.after {
+    order: 3;
+    border-left: none;
   }
 }
 
@@ -2211,25 +2240,15 @@ footer {
   .section-compare {
     padding: var(--brand-section-padding-y-sm) var(--brand-page-padding-x);
   }
-  /* The ledger keeps its pairs when it narrows: the two halves of a row
-     stack one above the other, so the answer still sits with its complaint
-     instead of five rows away in a second list. */
-  .ledger-row {
-    grid-template-columns: minmax(0, 1fr);
-  }
   .ledger-cell {
     padding: 12px 20px;
   }
-  .ledger-cell.after {
-    border-left: none;
-    border-top: 1px solid var(--bs-green-border-soft);
-  }
-  .ledger-row.is-head .ledger-cell {
+  .ledger-cell.is-head {
     padding-top: 14px;
     padding-bottom: 14px;
   }
-  .ledger-row.is-head .ledger-cell.after {
-    border-top-color: var(--bs-green-border);
+  .ledger-cell.is-head.after {
+    padding-top: var(--brand-space-5);
   }
 
   .section-founder {

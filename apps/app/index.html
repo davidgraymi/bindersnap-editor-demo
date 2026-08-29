@@ -678,10 +678,13 @@
 
           One ledger, not two boxes side by side. The pairs are the argument —
           each line of the shared drive answered on the same row — and reading
-          them across is a shorter trip than cross-referencing two lists. It
-          also spends one bordered container on this section where the old
-          two-column version spent two, which matters because the page already
-          has a diagram above it and a divided strip below it.
+          them across is a shorter trip than cross-referencing two lists.
+
+          The cells are flat children of the grid rather than wrapped in row
+          elements, which is what lets the layout regroup below 900px: `order`
+          collapses the interleaved pairs back into two labelled runs, because
+          alternating complaint/answer down a single column reads as one
+          contradictory list once they are no longer side by side.
         -->
         <section class="section-compare">
           <div class="compare-inner">
@@ -692,163 +695,148 @@
               </p>
             </div>
             <div class="ledger">
-              <div class="ledger-row is-head reveal">
-                <div class="ledger-cell before">
-                  <span class="col-dot" aria-hidden="true"></span>
-                  <span>Shared drive, email, and a SharePoint nobody owns</span>
-                </div>
-                <div class="ledger-cell after">
-                  <span class="col-dot" aria-hidden="true"></span>
-                  <span>With Bindersnap</span>
-                </div>
+              <div class="ledger-cell is-head before reveal">
+                <span class="col-dot" aria-hidden="true"></span>
+                <span>Shared drive, email, and a SharePoint nobody owns</span>
+              </div>
+              <div class="ledger-cell is-head after reveal">
+                <span class="col-dot" aria-hidden="true"></span>
+                <span>With Bindersnap</span>
               </div>
 
-              <div class="ledger-row reveal reveal-d1">
-                <div class="ledger-cell before">
-                  <span class="ledger-mark" aria-hidden="true">
-                    <span
-                      class="landing-lucide-icon"
-                      data-lucide-icon="x"
-                      data-lucide-size="16"
-                      data-lucide-stroke-width="1.75"
-                      aria-hidden="true"
-                    ></span>
-                  </span>
+              <div class="ledger-cell before reveal reveal-d1">
+                <span class="ledger-mark" aria-hidden="true">
                   <span
-                    >Three files in the policy folder that all look final</span
-                  >
-                </div>
-                <div class="ledger-cell after">
-                  <span class="ledger-mark" aria-hidden="true">
-                    <span
-                      class="landing-lucide-icon"
-                      data-lucide-icon="check"
-                      data-lucide-size="16"
-                      data-lucide-stroke-width="1.75"
-                      aria-hidden="true"
-                    ></span>
-                  </span>
-                  <span
-                    >One policy, one page, one current approved version</span
-                  >
-                </div>
+                    class="landing-lucide-icon"
+                    data-lucide-icon="x"
+                    data-lucide-size="16"
+                    data-lucide-stroke-width="1.75"
+                    aria-hidden="true"
+                  ></span>
+                </span>
+                <span
+                  >Three files in the policy folder that all look final</span
+                >
               </div>
 
-              <div class="ledger-row reveal reveal-d2">
-                <div class="ledger-cell before">
-                  <span class="ledger-mark" aria-hidden="true">
-                    <span
-                      class="landing-lucide-icon"
-                      data-lucide-icon="x"
-                      data-lucide-size="16"
-                      data-lucide-stroke-width="1.75"
-                      aria-hidden="true"
-                    ></span>
-                  </span>
+              <div class="ledger-cell after reveal reveal-d1">
+                <span class="ledger-mark" aria-hidden="true">
                   <span
-                    >Sign-offs in an inbox, sometimes a former
-                    employee&rsquo;s</span
-                  >
-                </div>
-                <div class="ledger-cell after">
-                  <span class="ledger-mark" aria-hidden="true">
-                    <span
-                      class="landing-lucide-icon"
-                      data-lucide-icon="check"
-                      data-lucide-size="16"
-                      data-lucide-stroke-width="1.75"
-                      aria-hidden="true"
-                    ></span>
-                  </span>
-                  <span
-                    >Every sign-off dated, named, and tied to a version</span
-                  >
-                </div>
+                    class="landing-lucide-icon"
+                    data-lucide-icon="check"
+                    data-lucide-size="16"
+                    data-lucide-stroke-width="1.75"
+                    aria-hidden="true"
+                  ></span>
+                </span>
+                <span>One policy, one page, one current approved version</span>
               </div>
 
-              <div class="ledger-row reveal reveal-d3">
-                <div class="ledger-cell before">
-                  <span class="ledger-mark" aria-hidden="true">
-                    <span
-                      class="landing-lucide-icon"
-                      data-lucide-icon="x"
-                      data-lucide-size="16"
-                      data-lucide-stroke-width="1.75"
-                      aria-hidden="true"
-                    ></span>
-                  </span>
-                  <span>IC_Policy_2026_rev3_FINAL_APPROVED(2).docx</span>
-                </div>
-                <div class="ledger-cell after">
-                  <span class="ledger-mark" aria-hidden="true">
-                    <span
-                      class="landing-lucide-icon"
-                      data-lucide-icon="check"
-                      data-lucide-size="16"
-                      data-lucide-stroke-width="1.75"
-                      aria-hidden="true"
-                    ></span>
-                  </span>
-                  <span>Version history instead of filename archaeology</span>
-                </div>
+              <div class="ledger-cell before reveal reveal-d2">
+                <span class="ledger-mark" aria-hidden="true">
+                  <span
+                    class="landing-lucide-icon"
+                    data-lucide-icon="x"
+                    data-lucide-size="16"
+                    data-lucide-stroke-width="1.75"
+                    aria-hidden="true"
+                  ></span>
+                </span>
+                <span
+                  >Sign-offs in an inbox, sometimes a former
+                  employee&rsquo;s</span
+                >
               </div>
 
-              <div class="ledger-row reveal reveal-d3">
-                <div class="ledger-cell before">
-                  <span class="ledger-mark" aria-hidden="true">
-                    <span
-                      class="landing-lucide-icon"
-                      data-lucide-icon="x"
-                      data-lucide-size="16"
-                      data-lucide-stroke-width="1.75"
-                      aria-hidden="true"
-                    ></span>
-                  </span>
-                  <span>Staff working from a copy somebody saved locally</span>
-                </div>
-                <div class="ledger-cell after">
-                  <span class="ledger-mark" aria-hidden="true">
-                    <span
-                      class="landing-lucide-icon"
-                      data-lucide-icon="check"
-                      data-lucide-size="16"
-                      data-lucide-stroke-width="1.75"
-                      aria-hidden="true"
-                    ></span>
-                  </span>
+              <div class="ledger-cell after reveal reveal-d2">
+                <span class="ledger-mark" aria-hidden="true">
                   <span
-                    >Nothing reaches the approved copy but a new version</span
-                  >
-                </div>
+                    class="landing-lucide-icon"
+                    data-lucide-icon="check"
+                    data-lucide-size="16"
+                    data-lucide-stroke-width="1.75"
+                    aria-hidden="true"
+                  ></span>
+                </span>
+                <span>Every sign-off dated, named, and tied to a version</span>
               </div>
 
-              <div class="ledger-row reveal reveal-d3">
-                <div class="ledger-cell before">
-                  <span class="ledger-mark" aria-hidden="true">
-                    <span
-                      class="landing-lucide-icon"
-                      data-lucide-icon="x"
-                      data-lucide-size="16"
-                      data-lucide-stroke-width="1.75"
-                      aria-hidden="true"
-                    ></span>
-                  </span>
+              <div class="ledger-cell before reveal reveal-d3">
+                <span class="ledger-mark" aria-hidden="true">
                   <span
-                    >Survey week starts with a weekend of reconstruction</span
-                  >
-                </div>
-                <div class="ledger-cell after">
-                  <span class="ledger-mark" aria-hidden="true">
-                    <span
-                      class="landing-lucide-icon"
-                      data-lucide-icon="check"
-                      data-lucide-size="16"
-                      data-lucide-stroke-width="1.75"
-                      aria-hidden="true"
-                    ></span>
-                  </span>
-                  <span>Every version and sign-off on one page, on demand</span>
-                </div>
+                    class="landing-lucide-icon"
+                    data-lucide-icon="x"
+                    data-lucide-size="16"
+                    data-lucide-stroke-width="1.75"
+                    aria-hidden="true"
+                  ></span>
+                </span>
+                <span>IC_Policy_2026_rev3_FINAL_APPROVED(2).docx</span>
+              </div>
+
+              <div class="ledger-cell after reveal reveal-d3">
+                <span class="ledger-mark" aria-hidden="true">
+                  <span
+                    class="landing-lucide-icon"
+                    data-lucide-icon="check"
+                    data-lucide-size="16"
+                    data-lucide-stroke-width="1.75"
+                    aria-hidden="true"
+                  ></span>
+                </span>
+                <span>Version history instead of filename archaeology</span>
+              </div>
+
+              <div class="ledger-cell before reveal reveal-d3">
+                <span class="ledger-mark" aria-hidden="true">
+                  <span
+                    class="landing-lucide-icon"
+                    data-lucide-icon="x"
+                    data-lucide-size="16"
+                    data-lucide-stroke-width="1.75"
+                    aria-hidden="true"
+                  ></span>
+                </span>
+                <span>Staff working from a copy somebody saved locally</span>
+              </div>
+
+              <div class="ledger-cell after reveal reveal-d3">
+                <span class="ledger-mark" aria-hidden="true">
+                  <span
+                    class="landing-lucide-icon"
+                    data-lucide-icon="check"
+                    data-lucide-size="16"
+                    data-lucide-stroke-width="1.75"
+                    aria-hidden="true"
+                  ></span>
+                </span>
+                <span>Nothing reaches the approved copy but a new version</span>
+              </div>
+
+              <div class="ledger-cell before reveal reveal-d3">
+                <span class="ledger-mark" aria-hidden="true">
+                  <span
+                    class="landing-lucide-icon"
+                    data-lucide-icon="x"
+                    data-lucide-size="16"
+                    data-lucide-stroke-width="1.75"
+                    aria-hidden="true"
+                  ></span>
+                </span>
+                <span>Survey week starts with a weekend of reconstruction</span>
+              </div>
+
+              <div class="ledger-cell after reveal reveal-d3">
+                <span class="ledger-mark" aria-hidden="true">
+                  <span
+                    class="landing-lucide-icon"
+                    data-lucide-icon="check"
+                    data-lucide-size="16"
+                    data-lucide-stroke-width="1.75"
+                    aria-hidden="true"
+                  ></span>
+                </span>
+                <span>Every version and sign-off on one page, on demand</span>
               </div>
             </div>
           </div>
