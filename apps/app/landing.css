@@ -73,7 +73,7 @@ body::after {
   line-height: 0;
 }
 
-/* Icon show/hide — mirrors .bs-theme-toggle from tokens */
+/* Icon show/hide, driven by the [data-theme] attribute */
 .icon-sun {
   display: none;
 }
@@ -159,9 +159,9 @@ body::after {
 
 .nav-cta-link {
   background: var(--brand-coral);
-  color: #fff !important;
-  font-size: 13px;
-  font-weight: var(--brand-weight-medium);
+  color: var(--brand-on-coral) !important;
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-semibold);
   padding: 9px 22px;
   border-radius: var(--brand-radius-md);
   text-decoration: none;
@@ -174,13 +174,14 @@ body::after {
 .nav-cta-link:hover,
 .nav-cta-link:focus-visible {
   background: var(--brand-coral-dark);
+  color: var(--brand-on-brand) !important;
   transform: translateY(-1px);
 }
 
 .nav-login-link {
   color: var(--bs-text-secondary);
   font-family: var(--brand-font-mono);
-  font-size: 12px;
+  font-size: var(--brand-text-ui-sm);
   letter-spacing: var(--brand-tracking-wide);
   text-decoration: none;
   text-transform: uppercase;
@@ -234,7 +235,7 @@ body::after {
 
 .hero-inner {
   position: relative;
-  z-index: 1;
+  z-index: var(--brand-z-raised);
   width: 100%;
   max-width: var(--brand-max-width);
   padding: var(--brand-space-20) var(--brand-page-padding-x) 0;
@@ -251,10 +252,10 @@ body::after {
   background: var(--bs-surface-1);
   border: 1px solid var(--bs-rule);
   border-radius: var(--brand-radius-full);
-  padding: 8px 16px 8px 10px;
+  padding: 8px 16px 8px var(--brand-space-2-5);
   box-shadow: var(--bs-shadow-sm);
   margin-bottom: var(--brand-space-10);
-  font-size: 13px;
+  font-size: var(--brand-text-ui-md);
   color: var(--bs-text-secondary);
   font-weight: var(--brand-weight-regular);
   animation: fadeUp 0.6s ease 0.05s both;
@@ -263,7 +264,7 @@ body::after {
 
 .chaos-file {
   font-family: var(--brand-font-mono);
-  font-size: 11px;
+  font-size: var(--brand-text-ui-xs);
   background: var(--bs-surface-2);
   border: 1px solid var(--bs-rule);
   border-radius: var(--brand-radius-sm);
@@ -313,7 +314,7 @@ body::after {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 2px;
+  bottom: var(--brand-space-0-5);
   height: 3px;
   background: var(--brand-coral);
   border-radius: 2px;
@@ -388,11 +389,11 @@ body::after {
 
 .email-row button {
   background: var(--brand-coral);
-  color: white;
+  color: var(--brand-on-coral);
   border: none;
   padding: 13px 24px;
   font-family: var(--brand-font-sans);
-  font-size: 14px;
+  font-size: var(--brand-text-sm);
   font-weight: var(--brand-weight-semibold);
   cursor: pointer;
   white-space: nowrap;
@@ -403,11 +404,14 @@ body::after {
 }
 
 .email-row button:hover {
+  /* The fill darkens past what ink can sit on, so the label flips to
+     white — 4.61:1 there, 5.02:1 at rest. */
   background: var(--brand-coral-dark);
+  color: var(--brand-on-brand);
 }
 
 .form-hint {
-  font-size: 12px;
+  font-size: var(--brand-text-ui-sm);
   line-height: var(--brand-leading-normal);
   color: var(--bs-text-faint);
   display: flex;
@@ -454,7 +458,7 @@ body::after {
 
 .mockup-dots {
   display: flex;
-  gap: 6px;
+  gap: var(--brand-space-1-5);
 }
 
 .mockup-dots span {
@@ -463,13 +467,13 @@ body::after {
   border-radius: 50%;
 }
 .mockup-dots span:nth-child(1) {
-  background: #fc685f;
+  background: var(--brand-mac-red);
 }
 .mockup-dots span:nth-child(2) {
-  background: #febc2e;
+  background: var(--brand-mac-yellow);
 }
 .mockup-dots span:nth-child(3) {
-  background: #28c840;
+  background: var(--brand-mac-green);
 }
 
 .mockup-bar {
@@ -479,7 +483,7 @@ body::after {
   border-radius: 6px;
   padding: 5px 12px;
   font-family: var(--brand-font-mono);
-  font-size: 11px;
+  font-size: var(--brand-text-ui-xs);
   color: var(--bs-text-faint);
   text-align: center;
   transition: var(--bs-mode-transition);
@@ -733,7 +737,7 @@ body::after {
 ───────────────────────────────────── */
 
 .chaos-strip {
-  background: #1c1917;
+  background: var(--brand-ink);
   padding: var(--brand-space-20) var(--brand-page-padding-x);
   position: relative;
   overflow: hidden;
@@ -746,12 +750,12 @@ body::after {
   background:
     radial-gradient(
       ellipse 60% 80% at 0% 50%,
-      rgba(232, 93, 38, 0.12),
+      var(--brand-coral-wash-1),
       transparent
     ),
     radial-gradient(
       ellipse 40% 60% at 100% 50%,
-      rgba(232, 93, 38, 0.07),
+      var(--brand-coral-wash-2),
       transparent
     );
   pointer-events: none;
@@ -765,12 +769,12 @@ body::after {
   gap: var(--brand-space-20);
   align-items: center;
   position: relative;
-  z-index: 1;
+  z-index: var(--brand-z-raised);
 }
 
 .chaos-left .overline {
   font-family: var(--brand-font-mono);
-  font-size: 11px;
+  font-size: var(--brand-text-ui-xs);
   font-weight: var(--brand-weight-medium);
   color: var(--brand-coral);
   letter-spacing: var(--brand-tracking-widest);
@@ -804,7 +808,7 @@ body::after {
 }
 
 .chaos-left p {
-  font-size: 16px;
+  font-size: var(--brand-text-body);
   font-weight: var(--brand-weight-light);
   line-height: var(--brand-leading-relaxed);
   color: var(--brand-on-dark-secondary);
@@ -813,15 +817,15 @@ body::after {
 /* Email thread mockup — intentionally always white.
    It simulates an email client UI so it must look like one. */
 .email-thread {
-  background: #ffffff;
+  background: var(--brand-mockup-bg);
   border-radius: var(--brand-radius-lg);
   overflow: hidden;
   box-shadow: var(--bs-shadow-xl);
 }
 
 .thread-header {
-  background: #f5f0e8;
-  border-bottom: 1px solid rgba(28, 25, 23, 0.1);
+  background: var(--brand-mockup-bg-alt);
+  border-bottom: 1px solid var(--brand-mockup-rule);
   padding: 14px 18px;
   display: flex;
   align-items: center;
@@ -839,22 +843,22 @@ body::after {
   border-radius: 50%;
 }
 .thread-dots span:nth-child(1) {
-  background: #fc685f;
+  background: var(--brand-mac-red);
   opacity: 0.7;
 }
 .thread-dots span:nth-child(2) {
-  background: #febc2e;
+  background: var(--brand-mac-yellow);
   opacity: 0.7;
 }
 .thread-dots span:nth-child(3) {
-  background: #28c840;
+  background: var(--brand-mac-green);
   opacity: 0.7;
 }
 
 .thread-subject {
-  font-size: 12px;
+  font-size: var(--brand-text-ui-sm);
   font-weight: var(--brand-weight-medium);
-  color: #44403c;
+  color: var(--brand-mockup-ink-soft);
   font-family: var(--brand-font-sans);
 }
 
@@ -864,7 +868,7 @@ body::after {
 
 .email-msg {
   padding: 14px 18px;
-  border-bottom: 1px solid rgba(28, 25, 23, 0.06);
+  border-bottom: 1px solid var(--brand-mockup-rule-soft);
   position: relative;
 }
 
@@ -876,25 +880,25 @@ body::after {
   display: flex;
   align-items: baseline;
   gap: var(--brand-space-2);
-  margin-bottom: 6px;
+  margin-bottom: var(--brand-space-1-5);
 }
 
 .email-from {
-  font-size: 12px;
+  font-size: var(--brand-text-ui-sm);
   font-weight: var(--brand-weight-semibold);
-  color: #1c1917;
+  color: var(--brand-mockup-ink);
 }
 
 .email-time {
   font-family: var(--brand-font-mono);
   font-size: 10px;
-  color: #a8a29e;
+  color: var(--brand-mockup-faint);
   margin-left: auto;
 }
 
 .email-body {
-  font-size: 12px;
-  color: #44403c;
+  font-size: var(--brand-text-ui-sm);
+  color: var(--brand-mockup-ink-soft);
   line-height: 1.55;
 }
 
@@ -902,14 +906,14 @@ body::after {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  background: #f5f0e8;
-  border: 1px solid rgba(28, 25, 23, 0.1);
+  background: var(--brand-mockup-bg-alt);
+  border: 1px solid var(--brand-mockup-rule);
   border-radius: var(--brand-radius-sm);
   padding: 3px 8px;
   font-family: var(--brand-font-mono);
   font-size: 10px;
-  color: #78716c;
-  margin-top: 6px;
+  color: var(--brand-mockup-muted);
+  margin-top: var(--brand-space-1-5);
 }
 
 .email-attach svg {
@@ -920,8 +924,8 @@ body::after {
 
 .reply-badge {
   display: inline-block;
-  background: rgba(232, 93, 38, 0.1);
-  color: #c94d1a;
+  background: var(--brand-mockup-highlight);
+  color: var(--brand-coral-dark);
   font-size: 10px;
   font-weight: var(--brand-weight-semibold);
   font-family: var(--brand-font-mono);
@@ -950,7 +954,7 @@ body::after {
   align-items: center;
   gap: var(--brand-space-2);
   font-family: var(--brand-font-mono);
-  font-size: 11px;
+  font-size: var(--brand-text-ui-xs);
   font-weight: var(--brand-weight-medium);
   color: var(--brand-coral);
   letter-spacing: var(--brand-tracking-wider);
@@ -985,7 +989,7 @@ body::after {
 
 .features-subtitle {
   text-align: center;
-  font-size: 16px;
+  font-size: var(--brand-text-body);
   font-weight: var(--brand-weight-light);
   color: var(--bs-text-muted);
   max-width: 480px;
@@ -1085,7 +1089,7 @@ body::after {
 }
 
 .feat p {
-  font-size: 14px;
+  font-size: var(--brand-text-sm);
   font-weight: var(--brand-weight-light);
   line-height: var(--brand-leading-relaxed);
   color: var(--bs-text-muted);
@@ -1129,7 +1133,7 @@ body::after {
 }
 
 .compare-header p {
-  font-size: 16px;
+  font-size: var(--brand-text-body);
   font-weight: var(--brand-weight-light);
   color: var(--bs-text-muted);
   line-height: var(--brand-leading-normal);
@@ -1174,7 +1178,7 @@ body::after {
 
 .compare-col-header span {
   font-family: var(--brand-font-mono);
-  font-size: 12px;
+  font-size: var(--brand-text-ui-sm);
   font-weight: var(--brand-weight-medium);
   letter-spacing: var(--brand-tracking-wide);
   text-transform: uppercase;
@@ -1187,10 +1191,10 @@ body::after {
   color: var(--brand-green);
 }
 .compare-col.after {
-  border-color: rgba(22, 163, 74, 0.25);
+  border-color: var(--bs-green-border);
 }
 .compare-col.after .compare-col-header {
-  border-color: rgba(22, 163, 74, 0.18);
+  border-color: var(--bs-green-border-soft);
 }
 
 .compare-items {
@@ -1213,7 +1217,7 @@ body::after {
   width: 16px;
   height: 16px;
   flex-shrink: 0;
-  margin-top: 2px;
+  margin-top: var(--brand-space-0-5);
 }
 
 .compare-col.before .compare-item svg {
@@ -1224,7 +1228,7 @@ body::after {
 }
 
 .compare-item span {
-  font-size: 14px;
+  font-size: var(--brand-text-sm);
   font-weight: var(--brand-weight-regular);
   line-height: var(--brand-leading-normal);
   color: var(--bs-text-secondary);
@@ -1266,7 +1270,7 @@ body::after {
 }
 
 .review-header p {
-  font-size: 16px;
+  font-size: var(--brand-text-body);
   font-weight: var(--brand-weight-light);
   line-height: var(--brand-leading-relaxed);
   color: var(--bs-text-muted);
@@ -1321,7 +1325,7 @@ body::after {
 }
 
 .review-card p {
-  font-size: 14px;
+  font-size: var(--brand-text-sm);
   font-weight: var(--brand-weight-light);
   line-height: var(--brand-leading-relaxed);
   color: var(--bs-text-muted);
@@ -1396,7 +1400,7 @@ body::after {
   padding-bottom: var(--brand-space-5);
   margin-bottom: var(--brand-space-8);
   border-bottom: 1px solid var(--bs-rule-warm);
-  font-size: 14px;
+  font-size: var(--brand-text-sm);
   font-weight: var(--brand-weight-regular);
   color: var(--bs-text-secondary);
   transition: color var(--brand-transition-base);
@@ -1489,7 +1493,7 @@ body::after {
 }
 
 .chain-entry-who {
-  font-size: 13px;
+  font-size: var(--brand-text-ui-md);
   font-weight: var(--brand-weight-regular);
   color: var(--bs-text-muted);
   margin: 0 0 var(--brand-space-4);
@@ -1528,7 +1532,7 @@ body::after {
 
 .chain-hash {
   font-family: var(--brand-font-mono);
-  font-size: 13px;
+  font-size: var(--brand-text-ui-md);
   font-weight: var(--brand-weight-medium);
   color: var(--bs-text-primary);
   transition: color var(--brand-transition-base);
@@ -1537,7 +1541,7 @@ body::after {
 /* Version 1 carries nothing. Set apart from the hashes so the eye does not
    try to match it against one. */
 .chain-hash.is-first {
-  font-size: 12px;
+  font-size: var(--brand-text-ui-sm);
   font-weight: var(--brand-weight-regular);
   font-style: italic;
   color: var(--bs-text-muted);
@@ -1553,7 +1557,7 @@ body::after {
   margin: var(--brand-space-8) 0 0;
   padding-top: var(--brand-space-6);
   border-top: 1px solid var(--bs-rule-warm);
-  font-size: 14px;
+  font-size: var(--brand-text-sm);
   font-weight: var(--brand-weight-regular);
   line-height: var(--brand-leading-relaxed);
   color: var(--bs-text-secondary);
@@ -1570,7 +1574,7 @@ body::after {
 
 .chain-note code {
   font-family: var(--brand-font-mono);
-  font-size: 13px;
+  font-size: var(--brand-text-ui-md);
   color: var(--bs-text-primary);
 }
 
@@ -1604,7 +1608,7 @@ body::after {
 }
 
 .record-claim p {
-  font-size: 14px;
+  font-size: var(--brand-text-sm);
   font-weight: var(--brand-weight-light);
   line-height: var(--brand-leading-relaxed);
   color: var(--bs-text-muted);
@@ -1680,7 +1684,7 @@ body::after {
 }
 
 .founder-body {
-  font-size: 16px;
+  font-size: var(--brand-text-body);
   font-weight: var(--brand-weight-regular);
   color: var(--bs-text-secondary);
   line-height: var(--brand-leading-relaxed);
@@ -1755,7 +1759,11 @@ body::after {
   left: 0;
   right: 0;
   height: 4px;
-  background: linear-gradient(to right, var(--brand-coral), #f5a623);
+  background: linear-gradient(
+    to right,
+    var(--brand-coral),
+    var(--brand-amber-accent)
+  );
 }
 
 /* Radial coral ambient wash */
@@ -1776,7 +1784,7 @@ body::after {
   align-items: center;
   gap: var(--brand-space-2);
   font-family: var(--brand-font-mono);
-  font-size: 11px;
+  font-size: var(--brand-text-ui-xs);
   font-weight: var(--brand-weight-medium);
   color: var(--brand-coral);
   letter-spacing: var(--brand-tracking-wider);
@@ -1810,7 +1818,7 @@ body::after {
 }
 
 .cta-inner > p {
-  font-size: 16px;
+  font-size: var(--brand-text-body);
   font-weight: var(--brand-weight-light);
   color: var(--bs-text-muted);
   line-height: var(--brand-leading-relaxed);
@@ -1824,7 +1832,7 @@ body::after {
   align-items: center;
   gap: var(--brand-space-2);
   position: relative;
-  z-index: 1;
+  z-index: var(--brand-z-raised);
 }
 
 /* Trust strip — the security facts, sitting with the form instead of in a
@@ -1839,14 +1847,14 @@ body::after {
   padding: var(--brand-space-6) 0 0;
   border-top: 1px solid var(--bs-rule);
   position: relative;
-  z-index: 1;
+  z-index: var(--brand-z-raised);
 }
 
 .trust-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: var(--brand-space-0-5);
   text-align: center;
 }
 
@@ -1864,7 +1872,7 @@ body::after {
 }
 
 .trust-item strong {
-  font-size: 13px;
+  font-size: var(--brand-text-ui-md);
   font-weight: var(--brand-weight-medium);
   color: var(--bs-text-primary);
   transition: color var(--brand-transition-base);
@@ -1920,11 +1928,11 @@ body::after {
 
 .cta-email-row button {
   background: var(--brand-coral);
-  color: white;
+  color: var(--brand-on-coral);
   border: none;
   padding: 12px 22px;
   font-family: var(--brand-font-sans);
-  font-size: 14px;
+  font-size: var(--brand-text-sm);
   font-weight: var(--brand-weight-semibold);
   cursor: pointer;
   white-space: nowrap;
@@ -1934,7 +1942,10 @@ body::after {
 }
 
 .cta-email-row button:hover {
+  /* The fill darkens past what ink can sit on, so the label flips to
+     white — 4.61:1 there, 5.02:1 at rest. */
   background: var(--brand-coral-dark);
+  color: var(--brand-on-brand);
 }
 
 /* ─────────────────────────────────────
@@ -1945,7 +1956,7 @@ body::after {
 ───────────────────────────────────── */
 
 footer {
-  background: #1c1917;
+  background: var(--brand-ink);
   padding: 56px var(--brand-page-padding-x) var(--brand-space-10);
 }
 
@@ -1968,8 +1979,8 @@ footer {
 .footer-logo-mark {
   width: 30px;
   height: 30px;
-  background: rgba(245, 240, 232, 0.08);
-  border: 1px solid rgba(245, 240, 232, 0.12);
+  background: var(--brand-on-dark-wash);
+  border: 1px solid var(--brand-on-dark-wash-border);
   border-radius: 7px;
   display: flex;
   align-items: center;
@@ -1989,7 +2000,7 @@ footer {
 }
 
 .footer-tagline {
-  font-size: 14px;
+  font-size: var(--brand-text-sm);
   font-weight: var(--brand-weight-light);
   color: var(--brand-on-dark-secondary);
   line-height: var(--brand-leading-relaxed);
@@ -2016,14 +2027,14 @@ footer {
 
 .footer-copy {
   font-family: var(--brand-font-mono);
-  font-size: 11px;
+  font-size: var(--brand-text-ui-xs);
   color: var(--brand-on-dark-secondary);
   letter-spacing: var(--brand-tracking-wide);
 }
 
 .footer-love {
   font-family: var(--brand-font-mono);
-  font-size: 11px;
+  font-size: var(--brand-text-ui-xs);
   color: var(--brand-on-dark-secondary);
   letter-spacing: 0.06em;
 }
@@ -2070,7 +2081,7 @@ footer {
     padding: var(--brand-space-12) var(--brand-page-padding-x) 0;
   }
   .hero-sub {
-    font-size: 16px;
+    font-size: var(--brand-text-body);
   }
   .hero-mockup {
     margin-top: var(--brand-space-12);
@@ -2103,7 +2114,7 @@ footer {
   .nav-login-link,
   .nav-cta-link {
     padding: 8px 16px;
-    font-size: 12px;
+    font-size: var(--brand-text-ui-sm);
   }
 
   .hero {
@@ -2267,7 +2278,7 @@ footer {
   }
   .email-row input {
     padding: 13px 14px;
-    font-size: 14px;
+    font-size: var(--brand-text-sm);
   }
   .cta-email-row {
     flex-direction: column;
@@ -2280,9 +2291,8 @@ footer {
 
 /* ─────────────────────────────────────
    SCROLL REVEAL
-   (uses same logic as .bs-reveal in
-   tokens, but with page-specific class
-   name .reveal / .in for the JS hook)
+   Page-specific — class names .reveal /
+   .in are the JS hook (landing-inline.ts).
 ───────────────────────────────────── */
 
 /* The reveal transition has to re-declare the mode-transition properties.

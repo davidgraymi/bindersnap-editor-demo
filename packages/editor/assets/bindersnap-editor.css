@@ -50,51 +50,47 @@
 
   /* ── Brand ── */
   --e-coral: var(--brand-coral);
-  --e-coral-dk: var(--brand-coral-dark);
+  --e-coral-dk: var(--bs-coral-text);
   --e-coral-dim: var(--bs-coral-dim);
   --e-coral-glow: var(--bs-coral-glow);
   --e-green: var(--brand-green);
   --e-green-dim: var(--bs-green-dim);
   --e-blue: hsl(212 92% 58%);
-  --e-blue-dim: color-mix(in srgb, var(--e-blue) 14%, var(--e-surface-1));
+  --e-blue-dim: color-mix(in srgb, var(--e-blue) 14%, var(--e-surface));
 
   /* ── Semantic extension colours ── */
   /* Merge conflicts */
   --e-conflict-ours: color-mix(
     in srgb,
     var(--brand-green) 14%,
-    var(--e-surface-1)
+    var(--e-surface)
   );
   --e-conflict-theirs: var(--e-blue-dim);
   --e-conflict-base: color-mix(
     in srgb,
     var(--bs-text-faint) 18%,
-    var(--e-surface-1)
+    var(--e-surface)
   );
   --e-conflict-bar-our: var(--brand-green);
   --e-conflict-bar-th: var(--e-blue);
   --e-conflict-bar-base: var(--bs-text-faint);
 
   /* Tracked changes */
-  --e-insert: color-mix(in srgb, var(--brand-green) 16%, var(--e-surface-1));
+  --e-insert: color-mix(in srgb, var(--brand-green) 16%, var(--e-surface));
   --e-insert-txt: var(--brand-green);
-  --e-delete: color-mix(in srgb, var(--brand-coral) 12%, var(--e-surface-1));
+  --e-delete: color-mix(in srgb, var(--brand-coral) 12%, var(--e-surface));
   --e-delete-txt: var(--brand-coral);
 
   /* Approval states */
-  --e-approved: color-mix(in srgb, var(--brand-green) 12%, var(--e-surface-1));
+  --e-approved: color-mix(in srgb, var(--brand-green) 12%, var(--e-surface));
   --e-approved-b: var(--brand-green);
-  --e-pending: color-mix(in srgb, var(--brand-coral) 12%, var(--e-surface-1));
+  --e-pending: color-mix(in srgb, var(--brand-coral) 12%, var(--e-surface));
   --e-pending-b: var(--brand-coral);
-  --e-rejected: color-mix(
-    in srgb,
-    var(--bs-text-primary) 8%,
-    var(--e-surface-1)
-  );
+  --e-rejected: color-mix(in srgb, var(--bs-text-primary) 8%, var(--e-surface));
   --e-rejected-b: var(--bs-text-primary);
 
   /* Comments */
-  --e-comment: color-mix(in srgb, var(--brand-coral) 12%, var(--e-surface-1));
+  --e-comment: color-mix(in srgb, var(--brand-coral) 12%, var(--e-surface));
   --e-comment-b: var(--brand-coral);
 
   /* ── Typography ── */
@@ -105,6 +101,7 @@
   /* ── Shadows ── */
   --e-shadow-sm: var(--bs-shadow-sm);
   --e-shadow-md: var(--bs-shadow-md);
+  --e-shadow-lg: var(--bs-shadow-lg);
 
   /* ── Transitions ── */
   --e-t-fast: var(--brand-transition-fast);
@@ -549,7 +546,7 @@
 
 .bs-editor__preview-btn:hover {
   border-color: var(--brand-coral);
-  color: var(--brand-coral-dark);
+  color: var(--bs-coral-text);
 }
 
 /* Selection bubble (mobile, iOS-notes feel) */
@@ -1376,7 +1373,7 @@
 
 .bs-editor .bs-conflict--resolved .bs-conflict__zone--ours,
 .bs-editor .bs-conflict--resolved .bs-conflict__zone--theirs {
-  background: color-mix(in srgb, var(--brand-green) 8%, var(--e-surface-1));
+  background: color-mix(in srgb, var(--brand-green) 8%, var(--e-surface));
 }
 
 /* ──────────────────────────────────────
@@ -1481,20 +1478,20 @@
    ────────────────────────────────────── */
 
 .bs-editor .bs-approval {
-  --bs-approval-accent: var(--color-muted);
-  --bs-approval-copy: var(--color-ink-soft);
+  --bs-approval-accent: var(--bs-text-muted);
+  --bs-approval-copy: var(--bs-text-secondary);
   --bs-approval-surface: color-mix(
     in srgb,
-    var(--color-muted) 8%,
-    var(--color-paper)
+    var(--bs-text-muted) 8%,
+    var(--bs-page-bg)
   );
   --bs-approval-badge-bg: color-mix(
     in srgb,
-    var(--color-muted) 10%,
-    var(--color-paper)
+    var(--bs-text-muted) 10%,
+    var(--bs-page-bg)
   );
-  --bs-approval-badge-text: var(--color-muted);
-  --bs-approval-link: var(--color-ink-soft);
+  --bs-approval-badge-text: var(--bs-text-muted);
+  --bs-approval-link: var(--bs-text-secondary);
 
   position: relative;
   display: flex;
@@ -1502,7 +1499,7 @@
   gap: var(--brand-space-3);
   padding: var(--brand-space-4) var(--brand-space-5);
   border: var(--e-border-1) solid
-    color-mix(in srgb, var(--bs-approval-accent) 22%, var(--color-rule));
+    color-mix(in srgb, var(--bs-approval-accent) 22%, var(--bs-rule));
   border-radius: var(--brand-radius-lg);
   background: var(--bs-approval-surface);
   box-shadow: var(--e-shadow-sm);
@@ -1520,54 +1517,54 @@
 }
 
 .bs-editor .bs-approval--approved {
-  --bs-approval-accent: var(--color-green);
-  --bs-approval-copy: var(--color-ink-soft);
+  --bs-approval-accent: var(--brand-green);
+  --bs-approval-copy: var(--bs-text-secondary);
   --bs-approval-surface: color-mix(
     in srgb,
-    var(--color-green) 10%,
-    var(--color-paper)
+    var(--brand-green) 10%,
+    var(--bs-page-bg)
   );
   --bs-approval-badge-bg: color-mix(
     in srgb,
-    var(--color-green) 12%,
-    var(--color-paper)
+    var(--brand-green) 12%,
+    var(--bs-page-bg)
   );
-  --bs-approval-badge-text: var(--color-green);
-  --bs-approval-link: var(--color-ink-soft);
+  --bs-approval-badge-text: var(--brand-green);
+  --bs-approval-link: var(--bs-text-secondary);
 }
 
 .bs-editor .bs-approval--pending {
-  --bs-approval-accent: var(--color-coral);
-  --bs-approval-copy: var(--color-ink-soft);
+  --bs-approval-accent: var(--brand-coral);
+  --bs-approval-copy: var(--bs-text-secondary);
   --bs-approval-surface: color-mix(
     in srgb,
-    var(--color-coral) 10%,
-    var(--color-paper)
+    var(--brand-coral) 10%,
+    var(--bs-page-bg)
   );
   --bs-approval-badge-bg: color-mix(
     in srgb,
-    var(--color-coral) 10%,
-    var(--color-paper)
+    var(--brand-coral) 10%,
+    var(--bs-page-bg)
   );
-  --bs-approval-badge-text: var(--color-coral);
-  --bs-approval-link: var(--color-ink-soft);
+  --bs-approval-badge-text: var(--brand-coral);
+  --bs-approval-link: var(--bs-text-secondary);
 }
 
 .bs-editor .bs-approval--rejected {
-  --bs-approval-accent: var(--color-coral-dark);
-  --bs-approval-copy: var(--color-ink-soft);
+  --bs-approval-accent: var(--brand-coral-dark);
+  --bs-approval-copy: var(--bs-text-secondary);
   --bs-approval-surface: color-mix(
     in srgb,
-    var(--color-coral-dark) 10%,
-    var(--color-paper)
+    var(--brand-coral-dark) 10%,
+    var(--bs-page-bg)
   );
   --bs-approval-badge-bg: color-mix(
     in srgb,
-    var(--color-coral-dark) 10%,
-    var(--color-paper)
+    var(--brand-coral-dark) 10%,
+    var(--bs-page-bg)
   );
-  --bs-approval-badge-text: var(--color-coral-dark);
-  --bs-approval-link: var(--color-ink-soft);
+  --bs-approval-badge-text: var(--bs-coral-text);
+  --bs-approval-link: var(--bs-text-secondary);
 }
 
 .bs-editor .bs-approval__badge {
@@ -1577,7 +1574,7 @@
   gap: var(--brand-space-2);
   padding: var(--brand-space-1) var(--brand-space-3);
   border: var(--e-border-1) solid
-    color-mix(in srgb, var(--bs-approval-badge-text) 24%, var(--color-rule));
+    color-mix(in srgb, var(--bs-approval-badge-text) 24%, var(--bs-rule));
   border-radius: var(--brand-radius-full);
   background: var(--bs-approval-badge-bg);
   color: var(--bs-approval-badge-text);
@@ -1596,7 +1593,7 @@
 
 .bs-editor .bs-approval__title {
   margin: 0;
-  color: var(--color-ink);
+  color: var(--bs-text-primary);
   font-family: var(--e-font-serif);
   font-size: var(--brand-text-h3);
   font-weight: 600;
@@ -1638,76 +1635,76 @@
 }
 
 .bs-editor .bs-approval__link:hover {
-  color: var(--color-ink);
+  color: var(--bs-text-primary);
   text-decoration-color: var(--bs-approval-accent);
 }
 
 .bs-editor .bs-approval--working {
-  --bs-approval-accent: var(--color-muted);
-  --bs-approval-copy: var(--color-muted);
+  --bs-approval-accent: var(--bs-text-muted);
+  --bs-approval-copy: var(--bs-text-muted);
   --bs-approval-surface: color-mix(
     in srgb,
-    var(--color-muted) 8%,
-    var(--color-paper)
+    var(--bs-text-muted) 8%,
+    var(--bs-page-bg)
   );
   --bs-approval-badge-bg: color-mix(
     in srgb,
-    var(--color-muted) 10%,
-    var(--color-paper)
+    var(--bs-text-muted) 10%,
+    var(--bs-page-bg)
   );
-  --bs-approval-badge-text: var(--color-muted);
-  --bs-approval-link: var(--color-muted);
+  --bs-approval-badge-text: var(--bs-text-muted);
+  --bs-approval-link: var(--bs-text-muted);
 }
 
 .bs-editor .bs-approval--in-review {
-  --bs-approval-accent: var(--color-coral);
-  --bs-approval-copy: var(--color-ink-soft);
+  --bs-approval-accent: var(--brand-coral);
+  --bs-approval-copy: var(--bs-text-secondary);
   --bs-approval-surface: color-mix(
     in srgb,
-    var(--color-coral) 10%,
-    var(--color-paper)
+    var(--brand-coral) 10%,
+    var(--bs-page-bg)
   );
   --bs-approval-badge-bg: color-mix(
     in srgb,
-    var(--color-coral) 10%,
-    var(--color-paper)
+    var(--brand-coral) 10%,
+    var(--bs-page-bg)
   );
-  --bs-approval-badge-text: var(--color-coral);
-  --bs-approval-link: var(--color-ink-soft);
+  --bs-approval-badge-text: var(--brand-coral);
+  --bs-approval-link: var(--bs-text-secondary);
 }
 
 .bs-editor .bs-approval--changes-requested {
-  --bs-approval-accent: var(--color-coral-dark);
-  --bs-approval-copy: var(--color-ink-soft);
+  --bs-approval-accent: var(--brand-coral-dark);
+  --bs-approval-copy: var(--bs-text-secondary);
   --bs-approval-surface: color-mix(
     in srgb,
-    var(--color-coral-dark) 10%,
-    var(--color-paper)
+    var(--brand-coral-dark) 10%,
+    var(--bs-page-bg)
   );
   --bs-approval-badge-bg: color-mix(
     in srgb,
-    var(--color-coral-dark) 10%,
-    var(--color-paper)
+    var(--brand-coral-dark) 10%,
+    var(--bs-page-bg)
   );
-  --bs-approval-badge-text: var(--color-coral-dark);
-  --bs-approval-link: var(--color-ink-soft);
+  --bs-approval-badge-text: var(--bs-coral-text);
+  --bs-approval-link: var(--bs-text-secondary);
 }
 
 .bs-editor .bs-approval--published {
-  --bs-approval-accent: var(--color-ink);
-  --bs-approval-copy: var(--color-ink-soft);
+  --bs-approval-accent: var(--bs-text-primary);
+  --bs-approval-copy: var(--bs-text-secondary);
   --bs-approval-surface: color-mix(
     in srgb,
-    var(--color-ink) 4%,
-    var(--color-paper)
+    var(--bs-text-primary) 4%,
+    var(--bs-page-bg)
   );
   --bs-approval-badge-bg: color-mix(
     in srgb,
-    var(--color-green) 12%,
-    var(--color-paper)
+    var(--brand-green) 12%,
+    var(--bs-page-bg)
   );
-  --bs-approval-badge-text: var(--color-green);
-  --bs-approval-link: var(--color-ink);
+  --bs-approval-badge-text: var(--brand-green);
+  --bs-approval-link: var(--bs-text-primary);
 }
 
 @keyframes approval-pulse {
@@ -1743,11 +1740,11 @@
 }
 
 .bs-editor .bs-comment-anchor:hover {
-  background: color-mix(in srgb, var(--brand-coral) 18%, var(--e-surface-1));
+  background: color-mix(in srgb, var(--brand-coral) 18%, var(--e-surface));
 }
 
 .bs-editor .bs-comment-anchor--active {
-  background: color-mix(in srgb, var(--brand-coral) 22%, var(--e-surface-1));
+  background: color-mix(in srgb, var(--brand-coral) 22%, var(--e-surface));
   outline: var(--e-border-1) solid var(--e-coral);
   outline-offset: var(--e-border-1);
 }
@@ -2155,7 +2152,7 @@
   padding: 0 var(--brand-space-3);
   background: var(--e-green-dim);
   border: var(--e-border-1) solid
-    color-mix(in srgb, var(--brand-green) 40%, var(--e-surface-1));
+    color-mix(in srgb, var(--brand-green) 40%, var(--e-surface));
   border-radius: var(--brand-radius-sm);
   color: var(--brand-green);
   font-size: var(--brand-text-sm);
@@ -2168,7 +2165,7 @@
 }
 
 .confirm-btn:hover {
-  background: color-mix(in srgb, var(--brand-green) 18%, var(--e-surface-1));
+  background: color-mix(in srgb, var(--brand-green) 18%, var(--e-surface));
   border-color: var(--brand-green);
 }
 
@@ -2441,8 +2438,10 @@
 }
 
 .resolve-btn {
-  background: var(--brand-coral);
-  color: var(--e-surface);
+  background: var(--bs-cta-fill);
+  /* White, not --e-surface: the CTA fill is tuned for white text in
+     both themes, and --e-surface goes to warm ink in dark mode. */
+  color: var(--brand-on-brand);
   padding: var(--brand-space-2) var(--brand-space-4);
   border-radius: var(--brand-radius-sm);
   border: none;
@@ -2452,7 +2451,7 @@
 }
 
 .resolve-btn:hover {
-  background: var(--brand-coral-dark);
+  background: var(--bs-cta-fill-hover);
 }
 
 .cancel-btn {

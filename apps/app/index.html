@@ -25,14 +25,26 @@
     <link
       rel="preload"
       as="style"
-      href="../../packages/ui-tokens/css/index.css"
+      href="@ui/css"
       onload="
         this.onload = null;
         this.rel = 'stylesheet';
       "
     />
     <noscript>
-      <link rel="stylesheet" href="../../packages/ui-tokens/css/index.css" />
+      <link rel="stylesheet" href="@ui/css" />
+    </noscript>
+    <link
+      rel="preload"
+      as="style"
+      href="./landing.css"
+      onload="
+        this.onload = null;
+        this.rel = 'stylesheet';
+      "
+    />
+    <noscript>
+      <link rel="stylesheet" href="./landing.css" />
     </noscript>
     <style>
       #landing-content {
@@ -321,7 +333,7 @@
                 somebody's inbox &mdash; sometimes one belonging to a person who
                 left two years ago. And when the survey window opens, the
                 question is always the same:
-                <em style="color: rgba(245, 240, 232, 0.5)"
+                <em style="color: var(--brand-on-dark-quote)"
                   >"Who approved this one, and when?"</em
                 >
                 <br /><br />
@@ -393,7 +405,7 @@
                 </div>
                 <div
                   class="email-msg"
-                  style="background: rgba(232, 93, 38, 0.04)"
+                  style="background: var(--brand-mockup-highlight)"
                 >
                   <div class="email-meta">
                     <span class="email-from">James (Administrator)</span>
@@ -401,7 +413,7 @@
                   </div>
                   <div
                     class="email-body"
-                    style="color: #c94d1a; font-weight: 500"
+                    style="color: var(--brand-coral-dark); font-weight: 500"
                   >
                     Survey window opens Monday. Which version do we hand them?
                   </div>
@@ -1046,7 +1058,7 @@
               <svg
                 viewBox="0 0 18 18"
                 fill="none"
-                style="color: rgba(245, 240, 232, 0.6)"
+                style="color: var(--brand-on-dark-secondary)"
                 data-bindersnap-logo-mark
                 aria-hidden="true"
               >

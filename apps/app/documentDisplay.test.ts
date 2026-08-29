@@ -175,7 +175,7 @@ test("a published change says which version it became", () => {
 
   expect(getChangeStateLabel(change)).toBe("Published");
   expect(getChangeStateBadgeClass(change)).toBe(
-    "vault-status-badge vault-status-published",
+    "bs-status bs-status--published",
   );
   expect(describeChangeOutcome(change)).toBe(
     "Published as v2 by Dana on Feb 3, 2026",
@@ -196,6 +196,10 @@ test("a declined change names who asked for the changes it never made", () => {
   });
 
   expect(getChangeStateLabel(change)).toBe("Declined");
+  // Declined is closed; changes-requested is still open. Same hue, own tone.
+  expect(getChangeStateBadgeClass(change)).toBe(
+    "bs-status bs-status--declined",
+  );
   expect(change.branchName).toBeNull();
   expect(describeChangeOutcome(change)).toBe(
     "Declined after Dana requested changes · closed Feb 4, 2026",
@@ -217,7 +221,7 @@ test("a withdrawn change says so rather than saying nothing", () => {
 
   expect(getChangeStateLabel(change)).toBe("Withdrawn");
   expect(getChangeStateBadgeClass(change)).toBe(
-    "vault-status-badge vault-status-withdrawn",
+    "bs-status bs-status--withdrawn",
   );
   expect(describeChangeOutcome(change)).toBe(
     "Withdrawn without a decision · closed Feb 5, 2026",
