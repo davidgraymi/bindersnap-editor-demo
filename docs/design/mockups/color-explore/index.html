@@ -1,0 +1,687 @@
+<title>Bindersnap Palette Lab</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Lora:wght@400;500;600&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+
+<style>
+/* ── Lab chrome tokens. Complete light set on bare :root. ───────────── */
+:root {
+  --paper: #eceef1;
+  --panel: #ffffff;
+  --panel-2: #e3e6ea;
+  --ink: #14161a;
+  --ink-2: #4a515b;
+  --ink-3: #737b86;
+  --line: rgba(20, 22, 26, 0.13);
+  --line-soft: rgba(20, 22, 26, 0.07);
+  --accent: #1f5f6e;
+  --accent-soft: rgba(31, 95, 110, 0.1);
+  --shadow: 0 1px 2px rgba(20, 22, 26, 0.05), 0 10px 30px rgba(20, 22, 26, 0.07);
+  --ok: #1c6b3a;
+  --bad: #a3341f;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0e1013;
+    --panel: #171a1f;
+    --panel-2: #1f242a;
+    --ink: #e9ecef;
+    --ink-2: #aeb5bd;
+    --ink-3: #7d858f;
+    --line: rgba(255, 255, 255, 0.12);
+    --line-soft: rgba(255, 255, 255, 0.06);
+    --accent: #6fc9da;
+    --accent-soft: rgba(111, 201, 218, 0.13);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 30px rgba(0, 0, 0, 0.5);
+    --ok: #63c98a;
+    --bad: #f08f74;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0e1013;
+  --panel: #171a1f;
+  --panel-2: #1f242a;
+  --ink: #e9ecef;
+  --ink-2: #aeb5bd;
+  --ink-3: #7d858f;
+  --line: rgba(255, 255, 255, 0.12);
+  --line-soft: rgba(255, 255, 255, 0.06);
+  --accent: #6fc9da;
+  --accent-soft: rgba(111, 201, 218, 0.13);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 30px rgba(0, 0, 0, 0.5);
+  --ok: #63c98a;
+  --bad: #f08f74;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Archivo", system-ui, -apple-system, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3 { text-wrap: balance; margin: 0; }
+.mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+
+/* ── Masthead ───────────────────────────────────────────────────────── */
+.masthead { padding: 56px 0 28px; }
+.kicker {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px; font-weight: 500; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--accent); margin: 0 0 14px;
+}
+.masthead h1 {
+  font-size: clamp(30px, 4.4vw, 46px); font-weight: 700;
+  letter-spacing: -0.03em; line-height: 1.05;
+}
+.masthead p {
+  margin: 16px 0 0; max-width: 62ch; color: var(--ink-2); font-size: 16px;
+}
+.masthead p + p { margin-top: 10px; }
+
+/* ── Sticky control bar ─────────────────────────────────────────────── */
+.bar {
+  position: sticky; top: 0; z-index: 20;
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  margin-top: 32px;
+}
+.bar-in {
+  max-width: 1180px; margin: 0 auto; padding: 10px 24px;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.jump {
+  font-family: "IBM Plex Mono", monospace; font-size: 11.5px; font-weight: 500;
+  letter-spacing: 0.04em; color: var(--ink-2); text-decoration: none;
+  padding: 5px 10px; border-radius: 6px; border: 1px solid transparent;
+  display: inline-flex; align-items: center; gap: 7px;
+}
+.jump:hover { background: var(--panel-2); color: var(--ink); }
+.jump:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 1px rgba(0,0,0,.16); }
+.spacer { flex: 1 1 auto; }
+.toggle {
+  display: inline-flex; border: 1px solid var(--line); border-radius: 999px;
+  padding: 2px; background: var(--panel); gap: 2px;
+}
+.toggle button {
+  font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 500;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  border: none; background: none; color: var(--ink-3);
+  padding: 5px 13px; border-radius: 999px; cursor: pointer;
+}
+.toggle button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.toggle button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── Palette section ────────────────────────────────────────────────── */
+.pal { padding: 54px 0 10px; scroll-margin-top: 60px; }
+.pal + .pal { border-top: 1px solid var(--line-soft); }
+.pal-head { display: flex; gap: 28px; align-items: flex-start; flex-wrap: wrap; margin-bottom: 26px; }
+.pal-id {
+  font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 500;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3);
+}
+.pal-head h2 { font-size: 27px; font-weight: 700; letter-spacing: -0.022em; margin: 6px 0 0; }
+.pal-head .why { margin: 9px 0 0; color: var(--ink-2); max-width: 54ch; font-size: 14.5px; }
+.tag {
+  display: inline-block; margin-top: 12px; font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px; letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--accent); background: var(--accent-soft);
+  padding: 3px 9px; border-radius: 5px;
+}
+.pal-meta { flex: 1 1 300px; min-width: 280px; }
+
+/* swatches */
+.swatches { display: flex; gap: 6px; flex-wrap: wrap; }
+.sw { width: 92px; }
+.sw-chip {
+  display: block; height: 46px; border-radius: 7px; border: 1px solid var(--line);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+}
+.sw-name {
+  font-family: "IBM Plex Mono", monospace; font-size: 9.5px; letter-spacing: 0.07em;
+  text-transform: uppercase; color: var(--ink-3); margin-top: 6px; display: block;
+}
+.sw-hex { font-family: "IBM Plex Mono", monospace; font-size: 10.5px; color: var(--ink-2); }
+
+/* contrast readout */
+.ratios { margin-top: 18px; display: grid; gap: 3px; }
+.ratio {
+  display: flex; align-items: center; gap: 9px;
+  font-family: "IBM Plex Mono", monospace; font-size: 11.5px; color: var(--ink-2);
+}
+.ratio b { font-weight: 500; color: var(--ink); font-variant-numeric: tabular-nums; min-width: 46px; text-align: right; }
+.ratio .lbl { flex: 1 1 auto; }
+.grade {
+  font-size: 9.5px; letter-spacing: 0.08em; padding: 1px 6px; border-radius: 4px;
+  border: 1px solid currentColor; flex: none;
+}
+.grade.pass { color: var(--ok); }
+.grade.fail { color: var(--bad); }
+
+/* ── Specimen stage ─────────────────────────────────────────────────── */
+.stage { display: flex; gap: 28px; align-items: flex-start; flex-wrap: wrap; }
+.stage-main { flex: 1 1 700px; min-width: 320px; }
+.stage-rail { flex: 0 1 300px; min-width: 260px; }
+.cap {
+  font-family: "IBM Plex Mono", monospace; font-size: 10px; letter-spacing: 0.13em;
+  text-transform: uppercase; color: var(--ink-3); margin: 0 0 9px;
+}
+.frame {
+  border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+  box-shadow: var(--shadow); background: var(--s-page);
+}
+.frame-bar {
+  display: flex; align-items: center; gap: 6px; padding: 9px 13px;
+  background: var(--s-surf2); border-bottom: 1px solid var(--s-rule);
+}
+.frame-bar i { width: 9px; height: 9px; border-radius: 50%; background: var(--s-rule); display: block; }
+.frame-bar span {
+  margin-left: 8px; font-family: "Geist Mono", monospace; font-size: 10.5px;
+  color: var(--s-faint);
+}
+.scroller { overflow-x: auto; }
+
+/* ═════ SPECIMEN — everything below reads only --s-* inline props ═════ */
+.spec { font-family: "Geist", system-ui, sans-serif; line-height: 1.55; }
+
+.app { width: 760px; background: var(--s-page); color: var(--s-pri); }
+
+.appnav {
+  display: flex; align-items: center; gap: 16px; height: 52px; padding: 0 18px;
+  border-bottom: 1px solid var(--s-rule); background: var(--s-surf1);
+}
+.brandmark {
+  width: 23px; height: 23px; border-radius: 7px; background: var(--s-accent);
+  display: flex; align-items: center; justify-content: center; flex: none;
+}
+.brandname { font-family: "Lora", Georgia, serif; font-weight: 600; font-size: 14.5px; letter-spacing: -0.01em; }
+.navlinks { display: flex; gap: 2px; }
+.navlink {
+  font-size: 12.5px; font-weight: 500; color: var(--s-muted);
+  padding: 5px 9px; border-radius: 6px;
+}
+.navlink.on { color: var(--s-pri); background: var(--s-surf2); }
+.searchbox {
+  display: flex; align-items: center; gap: 7px; width: 190px; height: 30px;
+  padding: 0 10px; background: var(--s-surf1); border: 1.5px solid var(--s-rule);
+  border-radius: 9px; color: var(--s-faint); font-size: 11.5px;
+}
+.searchbox kbd {
+  margin-left: auto; font-family: "Geist Mono", monospace; font-size: 9.5px;
+  border: 1px solid var(--s-rule); border-radius: 3px; padding: 0 4px;
+}
+.av {
+  width: 27px; height: 27px; border-radius: 999px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10.5px; font-weight: 600;
+  background: var(--s-info-bg); color: var(--s-info-fg);
+}
+
+.appbody { padding: 24px 26px 30px; }
+.apptitle {
+  font-family: "Lora", Georgia, serif; font-size: 24px; font-weight: 600;
+  letter-spacing: -0.015em; margin: 0 0 15px; color: var(--s-pri);
+}
+.filters { display: flex; align-items: center; gap: 7px; margin-bottom: 16px; }
+.fchip {
+  font-size: 12px; font-weight: 500; color: var(--s-muted);
+  padding: 5px 12px; border-radius: 999px;
+  border: 1px solid var(--s-rule); background: var(--s-surf1);
+}
+.fchip.on { background: var(--s-pri); color: var(--s-page); border-color: var(--s-pri); }
+.fchip.ghost { border-style: dashed; color: var(--s-faint); }
+.sortnote { margin-left: auto; font-size: 11.5px; color: var(--s-muted); }
+
+.list {
+  background: var(--s-surf1); border: 1px solid var(--s-rule);
+  border-radius: 13px; overflow: hidden;
+}
+.row {
+  display: flex; align-items: center; gap: 13px; padding: 12px 16px;
+  border-top: 1px solid var(--s-rule-soft);
+}
+.row:first-child { border-top: none; }
+.row.hl { background: var(--s-accent-dim); }
+.dicon {
+  width: 31px; height: 31px; border-radius: 8px; flex: none;
+  background: var(--s-surf2); color: var(--s-muted);
+  display: flex; align-items: center; justify-content: center;
+}
+.dicon.acc { background: var(--s-accent-dim); color: var(--s-accent-text); }
+.dname { font-size: 13.5px; font-weight: 500; color: var(--s-sec); }
+.dmeta { font-size: 11.5px; color: var(--s-muted); }
+.grow { flex: 1 1 auto; min-width: 0; }
+
+.pill {
+  font-family: "Geist Mono", monospace; font-size: 10px; font-weight: 500;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 3px 9px; border-radius: 5px; white-space: nowrap; flex: none;
+}
+.pill.warn { background: var(--s-warn-bg); color: var(--s-warn-fg); }
+.pill.info { background: var(--s-info-bg); color: var(--s-info-fg); }
+.pill.ok { background: var(--s-ok-bg); color: var(--s-ok-fg); }
+.pill.danger { background: var(--s-danger-bg); color: var(--s-danger-fg); box-shadow: inset 0 0 0 1px var(--s-danger-border); }
+.pill.idle { background: var(--s-surf2); color: var(--s-muted); }
+
+.footnote {
+  margin-top: 14px; display: flex; align-items: center; gap: 8px;
+  font-size: 11.5px; color: var(--s-muted);
+}
+.footnote em { font-style: normal; color: var(--s-accent-text); font-weight: 500; }
+
+/* rail */
+.railcard {
+  background: var(--s-surf1); border: 1px solid var(--s-rule);
+  border-radius: 13px; padding: 16px; display: grid; gap: 15px;
+}
+.railgroup { display: grid; gap: 8px; }
+.railgroup > .glabel {
+  font-family: "Geist Mono", monospace; font-size: 9.5px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--s-faint);
+}
+.btnrow { display: flex; gap: 7px; flex-wrap: wrap; }
+.btn {
+  font-family: "Geist", sans-serif; font-size: 12.5px; font-weight: 600;
+  padding: 8px 14px; border-radius: 8px; border: none; line-height: 1;
+}
+.btn.pri { background: var(--s-cta); color: #ffffff; }
+.btn.sec { background: var(--s-surf1); color: var(--s-pri); border: 1.5px solid var(--s-rule); }
+.btn.dgr { background: var(--s-danger-bg); color: var(--s-danger-fg); border: 1.5px solid var(--s-danger-border); }
+.pillwrap { display: flex; gap: 5px; flex-wrap: wrap; }
+.finput {
+  font-family: "Geist", sans-serif; font-size: 12.5px; color: var(--s-pri);
+  background: var(--s-surf1); border: 1.5px solid var(--s-accent);
+  border-radius: 9px; padding: 9px 11px;
+  box-shadow: 0 0 0 3px var(--s-accent-dim);
+}
+.ladder { display: flex; gap: 0; border-radius: 7px; overflow: hidden; border: 1px solid var(--s-rule); }
+.ladder div { flex: 1; height: 34px; }
+.textladder { display: grid; gap: 2px; font-size: 12.5px; }
+.textladder .t1 { color: var(--s-pri); font-weight: 600; }
+.textladder .t2 { color: var(--s-sec); }
+.textladder .t3 { color: var(--s-muted); }
+.textladder .t4 { color: var(--s-faint); }
+
+/* ── Verdict ────────────────────────────────────────────────────────── */
+.verdict { padding: 56px 0 80px; border-top: 1px solid var(--line); margin-top: 54px; }
+.verdict h2 { font-size: 26px; font-weight: 700; letter-spacing: -0.022em; }
+.vgrid { display: grid; gap: 14px; margin-top: 24px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.vcard {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  padding: 18px; display: grid; gap: 8px; align-content: start;
+}
+.vcard h3 { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px; }
+.vcard p { margin: 0; font-size: 13.5px; color: var(--ink-2); line-height: 1.55; }
+.vcard .verd {
+  font-family: "IBM Plex Mono", monospace; font-size: 10px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.note {
+  margin-top: 30px; padding: 18px 20px; border-left: 3px solid var(--accent);
+  background: var(--panel); border-radius: 0 10px 10px 0;
+}
+.note p { margin: 0; font-size: 14px; color: var(--ink-2); max-width: 68ch; }
+.note p + p { margin-top: 9px; }
+.note strong { color: var(--ink); font-weight: 600; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+@media (max-width: 780px) {
+  .masthead { padding-top: 36px; }
+  .pal { padding-top: 38px; }
+}
+</style>
+
+<header class="masthead wrap">
+  <p class="kicker">Bindersnap · design tokens v2.0</p>
+  <h1>What if Bindersnap weren't coral?</h1>
+  <p>Five palettes on the same Documents screen. The current warm-paper-and-coral system sits first as the control; four alternatives follow, each built on a different idea about what a document-custody product should feel like.</p>
+  <p>Only color changes. Type, spacing, radii and layout are held fixed at the values in <span class="mono" style="font-size:13px">packages/ui-tokens</span>, so what you're comparing is hue alone.</p>
+</header>
+
+<div class="bar">
+  <div class="bar-in">
+    <span class="pal-id" style="margin-right:4px">Jump</span>
+    <nav id="jumps" style="display:contents"></nav>
+    <span class="spacer"></span>
+    <span class="pal-id">Specimens</span>
+    <div class="toggle" role="group" aria-label="Specimen theme">
+      <button type="button" id="mLight" aria-pressed="true">Light</button>
+      <button type="button" id="mDark" aria-pressed="false">Dark</button>
+    </div>
+  </div>
+</div>
+
+<main id="sections" class="wrap"></main>
+
+<section class="verdict wrap">
+  <h2>Where each one lands</h2>
+  <div class="vgrid" id="verdicts"></div>
+  <div class="note">
+    <p><strong>How the accessible values were produced.</strong> Each palette declares only intent hues. The page then solves, per theme, for the accent-as-text colour, the CTA fill that carries white at 4.5:1, and all four status foregrounds — walking lightness while holding hue and saturation until each clears AA against its own surface. Status backgrounds and borders are that solved foreground mixed into the card fill at 12% and 28%.</p>
+    <p>This is the same work the current token file does by hand in its comments — <span class="mono" style="font-size:13px">--bs-cta-fill</span>, <span class="mono" style="font-size:13px">--bs-coral-text</span> and the dark-mode status lifts all exist because raw brand coral fails as text. Any palette adopted here would need those solved values written back into the token file as literals, with the ratios asserted in <span class="mono" style="font-size:13px">tokens.test.ts</span>.</p>
+  </div>
+</section>
+
+<script>
+/* ── colour maths ──────────────────────────────────────────────────── */
+const hex2rgb = h => { h = h.replace('#',''); return [0,2,4].map(i => parseInt(h.slice(i,i+2),16)); };
+const rgb2hex = c => '#' + c.map(v => Math.round(Math.max(0,Math.min(255,v))).toString(16).padStart(2,'0')).join('');
+const lum = h => { const [r,g,b] = hex2rgb(h).map(v => { v /= 255; return v <= 0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055, 2.4); }); return 0.2126*r + 0.7152*g + 0.0722*b; };
+const ratio = (a,b) => { const [x,y] = [lum(a), lum(b)].sort((p,q) => q-p); return (x+0.05)/(y+0.05); };
+const mix = (a,b,t) => { const A = hex2rgb(a), B = hex2rgb(b); return rgb2hex(A.map((v,i) => v*t + B[i]*(1-t))); };
+
+function rgb2hsl(h){
+  let [r,g,b] = hex2rgb(h).map(v => v/255);
+  const mx = Math.max(r,g,b), mn = Math.min(r,g,b), d = mx-mn;
+  let hh = 0; const l = (mx+mn)/2;
+  const s = d === 0 ? 0 : d/(1-Math.abs(2*l-1));
+  if (d !== 0) {
+    if (mx === r) hh = ((g-b)/d) % 6;
+    else if (mx === g) hh = (b-r)/d + 2;
+    else hh = (r-g)/d + 4;
+  }
+  return [((hh*60)+360)%360, s, l];
+}
+function hsl2rgb(hh,s,l){
+  const c = (1-Math.abs(2*l-1))*s, x = c*(1-Math.abs(((hh/60)%2)-1)), m = l-c/2;
+  let t = [0,0,0];
+  if (hh < 60) t = [c,x,0]; else if (hh < 120) t = [x,c,0]; else if (hh < 180) t = [0,c,x];
+  else if (hh < 240) t = [0,x,c]; else if (hh < 300) t = [x,0,c]; else t = [c,0,x];
+  return rgb2hex(t.map(v => (v+m)*255));
+}
+
+/* Walk lightness (hue + saturation held) until `colour` clears `target`
+   against `bg`. Direction is chosen by which way the background sits. */
+function solve(colour, bg, target){
+  const [hh,s] = rgb2hsl(colour);
+  let [,,l] = rgb2hsl(colour);
+  if (ratio(colour, bg) >= target) return colour;
+  const up = lum(bg) < 0.4;
+  for (let i = 0; i < 100; i++) {
+    l += up ? 0.01 : -0.01;
+    if (l <= 0 || l >= 1) break;
+    const c = hsl2rgb(hh, s, l);
+    if (ratio(c, bg) >= target) return c;
+  }
+  return up ? '#ffffff' : '#000000';
+}
+
+/* ── palettes: intent hues only ────────────────────────────────────── */
+const P = [
+  {
+    id: 'current', n: 'Paper & Coral', tag: 'Shipping today',
+    why: 'Warm paper, warm ink, one high-chroma coral. Reads like a printed document with a highlighter through it — friendly, a little editorial, unmistakably not enterprise software.',
+    verdict: 'Control',
+    take: 'The warmth is the brand and it is genuinely distinctive. The cost shows up in the token file: coral is too light to carry white text and too light to be text, so it needs three solved variants and a themed lift in dark mode.',
+    light: { page:'#fafaf7', s1:'#ffffff', s2:'#f5f0e8', s3:'#ede8df', pri:'#1c1917', sec:'#44403c', muted:'#78716c', faint:'#96908a', accent:'#e85d26', warn:'#8f5e02', info:'#1d4ed8', danger:'#c94d1a', ok:'#15803d' },
+    dark:  { page:'#1c1917', s1:'#292524', s2:'#33302e', s3:'#44403c', pri:'#f5f0e8', sec:'#e7e4df', muted:'#a8a29e', faint:'#78716c', accent:'#e85d26', warn:'#fbbf24', info:'#93c5fd', danger:'#fb8c5a', ok:'#4ade80' }
+  },
+  {
+    id: 'slate', n: 'Slate & Signal', tag: 'The safe pivot',
+    why: 'Cool blue-grey neutrals with an indigo accent. Drops the paper metaphor entirely and reads as infrastructure — the register of a tool people log into every day rather than one they visit.',
+    verdict: 'Legible, forgettable',
+    take: 'Every ratio clears AA with almost no solving, and indigo works as text, fill and border unchanged. It also looks like every other B2B product, which is exactly the trade being offered.',
+    light: { page:'#f6f7f9', s1:'#ffffff', s2:'#eef1f5', s3:'#e1e6ed', pri:'#14181f', sec:'#333c49', muted:'#5f6b7a', faint:'#8b95a3', accent:'#3b5bdb', warn:'#a16207', info:'#0369a1', danger:'#be123c', ok:'#047857' },
+    dark:  { page:'#12151a', s1:'#1b1f26', s2:'#232830', s3:'#2f3641', pri:'#eef1f5', sec:'#d3d9e1', muted:'#98a2b0', faint:'#6d7684', accent:'#7c8ff5', warn:'#fbbf24', info:'#7dd3fc', danger:'#fb7185', ok:'#34d399' }
+  },
+  {
+    id: 'archive', n: 'Archive Green', tag: 'Nearest neighbour',
+    why: 'Keeps the warm bone paper and swaps coral for a deep record-room green, with brass reserved for warnings. The temperature stays; the accent stops shouting.',
+    verdict: 'Strong contender',
+    take: 'The one alternative that keeps what makes the current system feel like paper. Deep green is dark enough to carry white on a button unmodified — the single biggest maintenance win on this page. Watch the collision with approved-state green.',
+    light: { page:'#f7f6f1', s1:'#fffefb', s2:'#efece2', s3:'#e3dfd2', pri:'#1a1c18', sec:'#3d423a', muted:'#6b7165', faint:'#949a8c', accent:'#2f6b4a', warn:'#8a6410', info:'#2b5f8f', danger:'#a63a20', ok:'#3f7d33' },
+    dark:  { page:'#171913', s1:'#21241c', s2:'#2b2f25', s3:'#3a3f32', pri:'#f2f1e6', sec:'#dedcce', muted:'#a4a795', faint:'#787b6b', accent:'#64c58f', warn:'#e0b755', info:'#8fbde8', danger:'#f0906f', ok:'#8fd07a' }
+  },
+  {
+    id: 'oxblood', n: 'Ink & Oxblood', tag: 'The risk',
+    why: 'Pure white page, near-black ink, oxblood accent. No warmth in the neutrals at all — the contrast does the work. Law-library register: serious, printed, permanent.',
+    verdict: 'Sharpest, coldest',
+    take: 'The highest-contrast option by a distance and the most confident-looking. It is also unforgiving — every misaligned edge shows on pure white, and oxblood next to a red danger state needs deliberate separation.',
+    light: { page:'#ffffff', s1:'#ffffff', s2:'#f2f0ee', s3:'#e5e2de', pri:'#0a0a0a', sec:'#2e2c2b', muted:'#63605d', faint:'#918c88', accent:'#9b2c2c', warn:'#8a5a00', info:'#1e40af', danger:'#b91c1c', ok:'#166534' },
+    dark:  { page:'#0d0c0c', s1:'#171514', s2:'#211e1d', s3:'#2f2b29', pri:'#f7f5f3', sec:'#ded9d5', muted:'#a09995', faint:'#736c68', accent:'#e08585', warn:'#e3b341', info:'#93b4fd', danger:'#f87171', ok:'#5cc98a' }
+  },
+  {
+    id: 'plum', n: 'Plum & Teal', tag: 'The outlier',
+    why: 'A faintly violet neutral under a deep plum accent, with teal carrying the informational states. Keeps a warm cast without repeating coral, and gives the two most common chips genuinely different hues.',
+    verdict: 'Distinctive, demanding',
+    take: 'Plum is dark enough for white text out of the box and reads as text without correction — mechanically the easiest palette here. Whether a compliance product wants to look this editorial is the actual question.',
+    light: { page:'#f8f5f7', s1:'#ffffff', s2:'#f0e9ef', s3:'#e4dae4', pri:'#191419', sec:'#3b333c', muted:'#6a6070', faint:'#968c9a', accent:'#7a2f6b', warn:'#8a5b0f', info:'#0f766e', danger:'#b03060', ok:'#3f7d4f' },
+    dark:  { page:'#171418', s1:'#221d24', s2:'#2c262f', s3:'#3a333e', pri:'#f3eef4', sec:'#ddd5df', muted:'#a79cad', faint:'#7a7180', accent:'#d99ecb', warn:'#e6bb5c', info:'#5eead4', danger:'#f19bb8', ok:'#7fd08f' }
+  }
+];
+
+/* ── derive a full token set for one palette + mode ────────────────── */
+function tokens(p, mode){
+  const c = p[mode], t = {};
+  t['--s-page'] = c.page; t['--s-surf1'] = c.s1; t['--s-surf2'] = c.s2; t['--s-surf3'] = c.s3;
+  t['--s-pri'] = c.pri; t['--s-sec'] = c.sec; t['--s-muted'] = c.muted; t['--s-faint'] = c.faint;
+  t['--s-rule'] = mix(c.pri, c.page, 0.13);
+  t['--s-rule-soft'] = mix(c.pri, c.page, 0.07);
+  t['--s-accent'] = c.accent;
+  t['--s-accent-text'] = solve(c.accent, c.s1, 4.5);
+  t['--s-accent-dim'] = mix(c.accent, c.s1, 0.12);
+  t['--s-cta'] = solve(c.accent, '#ffffff', 4.5);
+  for (const k of ['warn','info','danger','ok']) {
+    /* A chip's label sits on a tint of itself, not on the bare card, so
+       solving against the card alone leaves several of these below AA.
+       Re-solve against the fill each pass until the pair converges. */
+    let fg = solve(c[k], c.s1, 4.5);
+    for (let i = 0; i < 6; i++) {
+      const bg = mix(fg, c.s1, 0.12);
+      if (ratio(fg, bg) >= 4.5) break;
+      fg = solve(fg, bg, 4.5);
+    }
+    t[`--s-${k}-fg`] = fg;
+    t[`--s-${k}-bg`] = mix(fg, c.s1, 0.12);
+    t[`--s-${k}-border`] = mix(fg, c.s1, 0.28);
+  }
+  return t;
+}
+
+/* ── markup ────────────────────────────────────────────────────────── */
+const fileIcon = `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 1.6h5.4L12.8 5v9.4H4V1.6z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M9.4 1.6V5h3.4" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>`;
+
+const rows = [
+  ['Vendor Agreement',     'Jack owns · v3 · 2 open changes · updated 2h ago',            'warn',   'Needs your review', true],
+  ['Q3 Compliance Policy', 'You own · v3 · your v4 proposal in review · yesterday',        'info',   'In review',         false],
+  ['Data Retention Policy','You own · v1 · 1 open change, ready to publish · 3h ago',      'ok',     'Ready to publish',  false],
+  ['Employee Handbook',    'Priya owns · v7 · reviewer asked for edits · 2d ago',          'danger', 'Changes requested', false],
+  ['Security Addendum',    'You own · draft · not yet shared · 5d ago',                    'idle',   'Working',           false]
+];
+
+function screenHTML(){
+  return `<div class="app">
+    <div class="appnav">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="brandmark"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 2h8v12l-4-3-4 3V2z" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"/></svg></span>
+        <span class="brandname">Bindersnap</span>
+      </div>
+      <div class="navlinks"><span class="navlink">Home</span><span class="navlink on">Documents</span></div>
+      <span class="grow"></span>
+      <div class="searchbox">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Search documents<kbd>/</kbd>
+      </div>
+      <button class="btn pri" type="button" tabindex="-1">New document</button>
+      <span class="av">DG</span>
+    </div>
+    <div class="appbody">
+      <h3 class="apptitle">Documents</h3>
+      <div class="filters">
+        <span class="fchip on">I contribute to</span>
+        <span class="fchip">I own</span>
+        <span class="fchip ghost">+ Filter by person</span>
+        <span class="sortnote">Sorted by last updated</span>
+      </div>
+      <div class="list">
+        ${rows.map(([name, meta, tone, label, hl]) => `
+          <div class="row${hl ? ' hl' : ''}">
+            <span class="dicon${hl ? ' acc' : ''}">${fileIcon}</span>
+            <span class="grow"><span class="dname" style="display:block">${name}</span><span class="dmeta">${meta}</span></span>
+            <span class="pill ${tone}">${label}</span>
+          </div>`).join('')}
+      </div>
+      <p class="footnote">Showing 5 of 34 documents · <em>2 need your attention</em></p>
+    </div>
+  </div>`;
+}
+
+function railHTML(){
+  return `<div class="railcard">
+    <div class="railgroup">
+      <span class="glabel">Buttons</span>
+      <div class="btnrow">
+        <button class="btn pri" type="button" tabindex="-1">Publish</button>
+        <button class="btn sec" type="button" tabindex="-1">Preview</button>
+        <button class="btn dgr" type="button" tabindex="-1">Withdraw</button>
+      </div>
+    </div>
+    <div class="railgroup">
+      <span class="glabel">Status ramp</span>
+      <div class="pillwrap">
+        <span class="pill idle">Working</span>
+        <span class="pill warn">Needs review</span>
+        <span class="pill info">Waiting</span>
+        <span class="pill ok">Approved</span>
+        <span class="pill danger">Declined</span>
+      </div>
+    </div>
+    <div class="railgroup">
+      <span class="glabel">Input, focused</span>
+      <div class="finput">Vendor Agreement v4</div>
+    </div>
+    <div class="railgroup">
+      <span class="glabel">Surface steps</span>
+      <div class="ladder">
+        <div style="background:var(--s-page)"></div>
+        <div style="background:var(--s-surf1)"></div>
+        <div style="background:var(--s-surf2)"></div>
+        <div style="background:var(--s-surf3)"></div>
+      </div>
+    </div>
+    <div class="railgroup">
+      <span class="glabel">Text hierarchy</span>
+      <div class="textladder">
+        <span class="t1">Primary — headings</span>
+        <span class="t2">Secondary — body copy</span>
+        <span class="t3">Muted — metadata</span>
+        <span class="t4">Faint — placeholders</span>
+      </div>
+    </div>
+  </div>`;
+}
+
+const SW = [['Page','page'],['Card','s1'],['Alt','s2'],['Ink','pri'],['Accent','accent'],['Approved','ok'],['Declined','danger']];
+
+function build(mode){
+  const secs = document.getElementById('sections');
+  const jumps = document.getElementById('jumps');
+  secs.innerHTML = '';
+  jumps.innerHTML = P.map(p =>
+    `<a class="jump" href="#${p.id}"><span class="dot" style="background:${p[mode].accent}"></span>${p.n}</a>`
+  ).join('');
+
+  P.forEach((p, i) => {
+    const c = p[mode], t = tokens(p, mode);
+    const checks = [
+      ['Body text on page',        ratio(c.sec, c.page)],
+      ['Metadata on page',         ratio(c.muted, c.page)],
+      ['Accent as text on card',   ratio(t['--s-accent-text'], c.s1)],
+      ['White on CTA fill',        ratio('#ffffff', t['--s-cta'])],
+      ['Approved chip label',      ratio(t['--s-ok-fg'], t['--s-ok-bg'])],
+      ['Declined chip label',      ratio(t['--s-danger-fg'], t['--s-danger-bg'])]
+    ];
+    const shifted = t['--s-accent-text'].toLowerCase() !== c.accent.toLowerCase();
+
+    const sec = document.createElement('section');
+    sec.className = 'pal';
+    sec.id = p.id;
+    sec.innerHTML = `
+      <div class="pal-head">
+        <div class="pal-meta">
+          <span class="pal-id">${String(i + 1).padStart(2, '0')} · ${p.id}</span>
+          <h2>${p.n}</h2>
+          <p class="why">${p.why}</p>
+          <span class="tag">${p.tag}</span>
+        </div>
+        <div class="pal-meta">
+          <div class="swatches">
+            ${SW.map(([label, key]) => `
+              <span class="sw">
+                <span class="sw-chip" style="background:${c[key]}"></span>
+                <span class="sw-name">${label}</span>
+                <span class="sw-hex">${c[key].toUpperCase()}</span>
+              </span>`).join('')}
+          </div>
+          <div class="ratios">
+            ${checks.map(([label, r]) => `
+              <span class="ratio">
+                <span class="lbl">${label}</span>
+                <b>${r.toFixed(2)}:1</b>
+                <span class="grade ${r >= 4.5 ? 'pass' : 'fail'}">${r >= 7 ? 'AAA' : r >= 4.5 ? 'AA' : 'FAIL'}</span>
+              </span>`).join('')}
+            <span class="ratio" style="margin-top:6px;color:var(--ink-3)">
+              <span class="lbl">Accent as text ${shifted
+                ? `auto-corrected to <span style="color:${t['--s-accent-text']}">${t['--s-accent-text'].toUpperCase()}</span>`
+                : 'usable unmodified'}</span>
+            </span>
+          </div>
+        </div>
+      </div>
+      <div class="stage spec">
+        <div class="stage-main">
+          <p class="cap">Documents — ${mode} mode</p>
+          <div class="frame">
+            <div class="frame-bar"><i></i><i></i><i></i><span>app.bindersnap.com/documents</span></div>
+            <div class="scroller">${screenHTML()}</div>
+          </div>
+        </div>
+        <div class="stage-rail">
+          <p class="cap">Components</p>
+          ${railHTML()}
+        </div>
+      </div>`;
+
+    const stage = sec.querySelector('.stage');
+    Object.entries(t).forEach(([k, v]) => stage.style.setProperty(k, v));
+    sec.querySelector('.frame').style.background = c.page;
+    secs.appendChild(sec);
+  });
+
+  document.getElementById('verdicts').innerHTML = P.map(p => `
+    <div class="vcard">
+      <span class="verd">${p.verdict}</span>
+      <h3><span class="dot" style="background:${p[mode].accent}"></span>${p.n}</h3>
+      <p>${p.take}</p>
+    </div>`).join('');
+}
+
+let mode = 'light';
+const bL = document.getElementById('mLight'), bD = document.getElementById('mDark');
+function setMode(m){
+  mode = m;
+  bL.setAttribute('aria-pressed', String(m === 'light'));
+  bD.setAttribute('aria-pressed', String(m === 'dark'));
+  build(m);
+}
+bL.addEventListener('click', () => setMode('light'));
+bD.addEventListener('click', () => setMode('dark'));
+
+try {
+  const saved = localStorage.getItem('bs-palette-lab-mode');
+  if (saved === 'dark' || saved === 'light') mode = saved;
+} catch (e) { /* storage unavailable — light is fine */ }
+setMode(mode);
+[bL, bD].forEach(b => b.addEventListener('click', () => {
+  try { localStorage.setItem('bs-palette-lab-mode', mode); } catch (e) { /* no-op */ }
+}));
+</script>
