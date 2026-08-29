@@ -18,7 +18,7 @@ bun run build         # Build SPA to dist/
 
 # Tests
 bun run test          # All unit tests (test:app + test:ops)
-bun run test:app      # apps/app, packages/editor, packages/utils
+bun run test:app      # apps/app, packages/editor, packages/utils, packages/ui-tokens
 bun run test:ops      # services/api, scripts, infra/backups
 bun run test:integration  # Playwright (requires: bun run up)
 bun test path/to/file.test.ts  # Single file

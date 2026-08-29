@@ -33,7 +33,7 @@
     "summarize": "bun scripts/summarize-lighthouse.ts",
     "test": "bun run test:all",
     "test:all": "bun run test:app && bun run test:ops && bun run test:seed",
-    "test:app": "bun test apps/app packages/editor packages/utils",
+    "test:app": "bun test apps/app packages/editor packages/utils packages/ui-tokens",
     "test:ops": "bun test services/api scripts infra/backups",
     "test:integration": "bunx playwright test --config=playwright.config.ts",
     "test:seed": "bun test tests/seed-scenario.test.ts tests/seed-documents.test.ts",

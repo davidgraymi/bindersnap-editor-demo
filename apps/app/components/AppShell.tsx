@@ -5,6 +5,7 @@ import { buildDocumentsUrl, parseDocumentsViewState } from "../documentsView";
 import type { AppRoute } from "../routes";
 import { ActivityLogPage } from "./ActivityLogPage";
 import { AdminSubscriptionManagementPage } from "./AdminSubscriptionManagementPage";
+import { AppIcon } from "./AppIcon";
 import { BindersnapLogoMark } from "./BindersnapLogoMark";
 import { CreateDocumentModal } from "./CreateDocumentModal";
 import { DocumentDetail } from "./DocumentDetail";
@@ -60,13 +61,13 @@ function getInitials(name: string): string {
 function renderProfileMenuIcon(icon: string) {
   switch (icon) {
     case "documents":
-      return <FileText size={16} strokeWidth={1.5} aria-hidden="true" />;
+      return <AppIcon icon={FileText} size="md" />;
     case "appearance":
-      return <Moon size={16} strokeWidth={1.5} aria-hidden="true" />;
+      return <AppIcon icon={Moon} size="md" />;
     case "admin":
-      return <Shield size={16} strokeWidth={1.5} aria-hidden="true" />;
+      return <AppIcon icon={Shield} size="md" />;
     case "signout":
-      return <LogOut size={16} strokeWidth={1.5} aria-hidden="true" />;
+      return <AppIcon icon={LogOut} size="md" />;
     default:
       return null;
   }
@@ -166,7 +167,7 @@ export function AppShell({
             type="button"
             aria-label="Notifications"
           >
-            <Bell size={16} strokeWidth={1.5} aria-hidden="true" />
+            <AppIcon icon={Bell} size="md" />
           </button>
 
           {/* User profile: avatar with dropdown */}

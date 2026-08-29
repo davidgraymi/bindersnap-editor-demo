@@ -1,3 +1,5 @@
+import { StatusChip } from "./StatusChip";
+
 export function ActivityLogPage() {
   return (
     <div className="activity-page app-page-shell">
@@ -38,9 +40,7 @@ export function ActivityLogPage() {
             </h2>
           </div>
           <div className="activity-coming-soon">
-            <span className="vault-status-badge vault-status-working">
-              Coming soon
-            </span>
+            <StatusChip tone="working">Coming soon</StatusChip>
           </div>
         </div>
         <p className="activity-placeholder-body">

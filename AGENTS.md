@@ -382,11 +382,11 @@ a single principle:
 1. **Empathy before product.** Lead with the pain, not the feature. The hero of
    any page is the problem the user recognizes — the product is the resolution.
 
-2. **Coral is the hero, not the chorus.** Use `--color-coral` for exactly ONE
+2. **Coral is the hero, not the chorus.** Use `--brand-coral` for exactly ONE
    primary action or emphasis element per section. When everything is coral,
    nothing is.
 
-3. **Paper over white.** The default background is `--color-paper` (`#FAFAF7`),
+3. **Paper over white.** The default background is `--bs-page-bg` (`#FAFAF7`),
    not pure `#FFFFFF`. White is reserved for card interiors only.
 
 ---
@@ -400,54 +400,99 @@ reference these before writing any styles or generating any visual assets:
 - **Social media & brand cheat sheet:** [`docs/bindersnap-social-cheatsheet.html`](docs/bindersnap-social-cheatsheet.html)
 - **Open design system work:** [`docs/design/design-system-audit.md`](docs/design/design-system-audit.md)
 
-> **The token vocabulary below is out of date.** `--space-*`, `--radius-*` and
-> `--text-*` do not exist; the real names are `--brand-space-*`,
-> `--brand-radius-*` and `--brand-text-*`. Read the token file itself until
-> Task 2 of the audit lands.
-
 ### `packages/ui-tokens/css/bindersnap-tokens.css`
 
 This is the single source of truth for all visual values. Import it once at the
 root of your stylesheet. **Never hardcode hex values or pixel sizes in component
 files** — always use the CSS variables defined here.
 
-Key token categories:
+The token system has two layers:
+
+- **`--bs-*` semantic tokens** — what components use. They flip in dark mode
+  (`--bs-page-bg`, `--bs-surface-1`…`--bs-surface-3`, `--bs-text-primary`,
+  `--bs-text-secondary`, `--bs-text-muted`, `--bs-text-faint`, `--bs-rule`,
+  `--bs-rule-warm`, `--bs-shadow-sm`…`--bs-shadow-xl`, `--bs-coral-dim`,
+  `--bs-coral-glow`, `--bs-green-dim`, `--bs-status-warn-*`,
+  `--bs-status-info-*`, `--bs-status-danger-*`, `--bs-status-ok-*`,
+  `--bs-coral-border`, `--bs-coral-border-soft`, `--bs-green-border`,
+  `--bs-green-border-soft`).
+- **`--brand-*` fixed tokens** — never change between modes
+  (`--brand-coral`, `--brand-coral-dark`, `--brand-green`,
+  `--brand-font-serif`, `--brand-font-sans`, `--brand-font-mono`,
+  `--brand-text-*` type scale, `--brand-space-*` spacing scale,
+  `--brand-radius-*`, `--brand-shadow-coral`, `--brand-transition-*`,
+  `--brand-z-*`, plus a small set of intentionally-fixed values —
+  `--brand-ink`, `--brand-on-brand`, `--brand-scrim*`, `--brand-mockup-*`,
+  `--brand-mac-*` — for sections and mockups that stay the same regardless
+  of theme).
+
+**Rule: components always reference `--bs-*` semantic tokens. Never
+reference `--brand-*` directly in component styles unless the value is
+intentionally fixed across modes** (e.g. the chaos strip is always dark
+ink, the email-thread mockup is always a light UI).
+
+Key token categories, using the real names as defined in the token file:
 
 ```css
-/* Colors */
---color-coral, --color-coral-dark, --color-coral-dim, --color-coral-glow
---color-ink, --color-ink-mid, --color-ink-soft
---color-paper, --color-paper-warm, --color-paper-mid
---color-muted, --color-muted-light, --color-rule
---color-green, --color-green-dim
+/* Semantic surfaces / text / borders (--bs-*, flip with theme) */
+--bs-page-bg, --bs-surface-1, --bs-surface-2, --bs-surface-3, --bs-nav-bg
+--bs-text-primary, --bs-text-secondary, --bs-text-muted, --bs-text-faint
+--bs-rule, --bs-rule-warm
 
-/* Typography */
---font-serif    /* 'Lora' — headlines only */
---font-sans     /* 'Geist' — body and UI */
---font-mono     /* 'Geist Mono' — labels, code, metadata */
+/* Semantic status ramp (--bs-*, flip with theme) */
+--bs-status-warn-fg, --bs-status-warn-bg, --bs-status-warn-border      /* needs review        */
+--bs-status-info-fg, --bs-status-info-bg, --bs-status-info-border      /* waiting             */
+--bs-status-danger-fg, --bs-status-danger-bg, --bs-status-danger-border /* changes / declined */
+--bs-status-ok-fg, --bs-status-ok-bg, --bs-status-ok-border            /* approved            */
 
-/* Type scale */
---text-display, --text-h1, --text-h2, --text-h3
---text-body-lg, --text-body, --text-sm, --text-xs, --text-label
+/* Fixed brand colors (--brand-*, never flip) */
+--brand-coral, --brand-coral-dark, --brand-coral-mid
+--brand-green, --brand-green-dim
+--brand-ink                          /* chaos strip / footer fill   */
+--brand-on-brand                     /* text/icon on a solid fill   */
 
-/* Spacing (base-8 system) */
---space-1 through --space-24
+/* Typography (--brand-*) */
+--brand-font-serif    /* 'Lora' — headlines only */
+--brand-font-sans     /* 'Geist' — body and UI */
+--brand-font-mono     /* 'Geist Mono' — labels, code, metadata */
 
-/* Border radius */
---radius-xs (2px) through --radius-2xl (24px), --radius-full
+/* Type scale (--brand-*) */
+--brand-text-h1, --brand-text-h2, --brand-text-h3
+--brand-text-body-lg, --brand-text-body, --brand-text-sm, --brand-text-xs
+--brand-text-label
+--brand-text-ui-xs, --brand-text-ui-sm, --brand-text-ui-md  /* dense UI */
+
+/* Spacing (--brand-*, base-8 with three sub-8 steps for dense UI) */
+--brand-space-1, --brand-space-2, --brand-space-3, --brand-space-4,
+--brand-space-5, --brand-space-6, --brand-space-8, --brand-space-10,
+--brand-space-12, --brand-space-16, --brand-space-20, --brand-space-24,
+--brand-space-30
+--brand-space-0-5, --brand-space-1-5, --brand-space-2-5
+
+/* Border radius (--brand-*) */
+--brand-radius-xs, --brand-radius-sm, --brand-radius-md, --brand-radius-lg,
+--brand-radius-xl, --brand-radius-2xl, --brand-radius-full
 
 /* Shadows */
---shadow-sm, --shadow-md, --shadow-lg, --shadow-xl, --shadow-coral
+--bs-shadow-sm, --bs-shadow-md, --bs-shadow-lg, --bs-shadow-xl  /* flip with theme */
+--brand-shadow-coral                                            /* fixed */
+--bs-elevation-card, --bs-elevation-menu, --bs-elevation-modal   /* named by role */
 
-/* Transitions */
---transition-fast (0.15s), --transition-base (0.2s), --transition-slow (0.3s)
---transition-reveal (0.7s)  /* scroll-reveal animations */
+/* Transitions (--brand-*) */
+--brand-transition-fast (0.15s), --brand-transition-base (0.2s)
+--brand-transition-slow (0.3s), --brand-transition-reveal (0.7s)
+
+/* Icons (--brand-*) */
+--brand-icon-xs, --brand-icon-sm, --brand-icon-md, --brand-icon-lg
+--brand-icon-stroke, --brand-icon-stroke-heavy
 ```
 
 The file also includes pre-built utility classes for common patterns:
-`.bs-btn-primary`, `.bs-btn-secondary`, `.bs-btn-dark`, `.bs-card`,
-`.bs-input`, `.bs-email-row`, `.bs-eyebrow`, `.bs-pill`, `.bs-file-chip`,
-`.bs-reveal` / `.bs-in` (scroll reveal).
+`.bs-btn` (`.bs-btn-primary`, `.bs-btn-secondary`, `.bs-btn-dark`, size and
+danger modifiers), `.bs-card`, `.bs-input`, `.bs-eyebrow`, `.bs-label`,
+`.bs-status` (tone modifiers). The landing page's own primitives — the email
+capture row, the reveal-on-scroll animation, the comparison table row — live
+in `apps/app/landing.css` instead; see Component Patterns below.
 
 ---
 
@@ -471,38 +516,53 @@ use Geist for a main headline.
 
 Reference `packages/ui-tokens/css/bindersnap-tokens.css` for all values.
 
-**Coral (`--color-coral`, `#E85D26`):**
+**Coral (`--brand-coral`, `#E85D26`):**
 Used for CTAs, the top-border reveal on hover cards, section eyebrow labels,
 waitlist badges, form focus rings, and key emphasis. Maximum one coral element
-per section. Never use coral decoratively.
+per section. Never use coral decoratively. Filled buttons use
+`--brand-coral-dark` at rest and `--brand-coral` only on hover — the lighter
+value fails WCAG AA for white text at rest.
 
-**Ink (`--color-ink`, `#1C1917`):**
-Primary text color, dark backgrounds (nav bar, dark sections, footer). Not pure
-black — this is a warm charcoal.
+**Ink (`--bs-text-primary`, `#1C1917` in light mode):**
+Primary text color. Dark backgrounds that are intentionally fixed regardless
+of theme (nav bar in some contexts, the chaos strip, the footer) use
+`--brand-ink`. Not pure black — this is a warm charcoal.
 
-**Paper (`--color-paper`, `#FAFAF7`):**
+**Paper (`--bs-page-bg`, `#FAFAF7` in light mode):**
 Default page background. Never use `#FFFFFF` as a page background. White is
-reserved for card and input interiors only.
+reserved for card and input interiors only (`--bs-surface-1`).
 
-**Paper Warm (`--color-paper-warm`, `#F5F0E8`):**
+**Paper Warm (`--bs-surface-2`, `#F5F0E8` in light mode):**
 Alternating section backgrounds, card backgrounds, tag fills.
 
-**Muted (`--color-muted`, `#78716C`):**
-Secondary body text. Never use color lighter than `--color-muted-light`
-(`#A8A29E`) for any text that must be readable.
+**Muted (`--bs-text-muted`) and faint (`--bs-text-faint`):**
+`--bs-text-muted` is secondary body text. `--bs-text-faint` is the floor —
+placeholders and hints only — never use anything lighter for text that must
+be readable.
 
-**Green (`--color-green`, `#16A34A`):**
+**Green (`--brand-green`, `#16A34A`):**
 Success states, compliance badges, "after" column in comparisons, the live dot
 in the nav badge. Not an accent — only use for positive/success semantic meaning.
+
+**Status ramp (`--bs-status-warn-*`, `--bs-status-info-*`,
+`--bs-status-danger-*`, `--bs-status-ok-*`):**
+Use these — never a hand-picked hex — for anything that isn't plain coral or
+green: needs-review (amber), waiting (blue), declined/changes (a coral-adjacent
+but distinct hue), approved (green). Each is a `-fg`/`-bg`/`-border` triad and
+each flips in dark mode; a literal amber or blue will pass contrast in light
+mode and silently fail it in dark mode.
 
 ---
 
 ## Spacing
 
-All spacing is on a base-8 system. Use `--space-*` tokens from the CSS file.
-Never introduce a spacing value that isn't on the scale (4, 8, 12, 16, 20, 24,
-32, 40, 48, 64, 80, 96, 120px). Section vertical padding is `--space-30`
-(120px) by default, `--space-24` (96px) for compressed sections.
+Spacing is base-8 from 12px up: use `--brand-space-*` tokens from the CSS file
+(4, 8, 12, 16, 20, 24, 32, 40, 48, 64, 80, 96, 120px — `--brand-space-1`
+through `--brand-space-30`). Below 12px, three sub-8 steps exist for dense UI
+(chips, icon rows, table cells): `--brand-space-0-5` (2px), `--brand-space-1-5`
+(6px), `--brand-space-2-5` (10px). Use one of these thirteen tokens — never a
+raw pixel value. Section vertical padding is `--brand-space-30` (120px) by
+default, `--brand-space-24` (96px) for compressed sections.
 
 ---
 
@@ -510,15 +570,15 @@ Never introduce a spacing value that isn't on the scale (4, 8, 12, 16, 20, 24,
 
 Each radius value has a specific semantic use. Do not apply them arbitrarily:
 
-| Token           | Value  | Use                                           |
-| --------------- | ------ | --------------------------------------------- |
-| `--radius-xs`   | 2px    | Code blocks, compliance badges, table rows    |
-| `--radius-sm`   | 4px    | Tags, pills, small chips                      |
-| `--radius-md`   | 8px    | Nav elements, feature icons, small cards      |
-| `--radius-lg`   | 12px   | Inputs, form elements, standard cards         |
-| `--radius-xl`   | 16px   | Large cards, feature panels, comparison boxes |
-| `--radius-2xl`  | 24px   | CTA boxes, hero containers, modal dialogs     |
-| `--radius-full` | 9999px | Pills, avatar badges, the nav badge           |
+| Token                 | Value  | Use                                           |
+| --------------------- | ------ | --------------------------------------------- |
+| `--brand-radius-xs`   | 2px    | Code blocks, compliance badges, table rows    |
+| `--brand-radius-sm`   | 4px    | Tags, pills, small chips                      |
+| `--brand-radius-md`   | 8px    | Nav elements, feature icons, small cards      |
+| `--brand-radius-lg`   | 12px   | Inputs, form elements, standard cards         |
+| `--brand-radius-xl`   | 16px   | Large cards, feature panels, comparison boxes |
+| `--brand-radius-2xl`  | 24px   | CTA boxes, hero containers, modal dialogs     |
+| `--brand-radius-full` | 9999px | Pills, avatar badges, the nav badge           |
 
 ---
 
@@ -558,10 +618,10 @@ Before/After:       "From reply-all chaos to a clean audit trail — in one tool
 ### Email capture form
 
 The primary conversion element on every marketing page. Always use the
-`.bs-email-row` pattern from the token file: email input + coral button inside
-a shared rounded container with a coral focus ring. Form hint text below in
-`--font-mono` at `--text-label` size. Always include the waitlist counter with
-avatar stack above the form.
+`.email-row` pattern from `apps/app/landing.css`: email input + coral button
+inside a shared rounded container with a coral focus ring. Form hint text
+below in `--brand-font-mono` at `--brand-text-label` size. Always include the
+waitlist counter with avatar stack above the form.
 
 ### Section eyebrow label
 
@@ -579,15 +639,17 @@ via `scaleX`. Never apply this pattern to non-interactive content.
 
 ### Scroll reveal
 
-Add `.bs-reveal` to any element that should animate in on scroll. Add
-`.bs-reveal-d1` through `.bs-reveal-d4` for staggered delays. Initialize with
-the IntersectionObserver snippet in the token file's comments.
+Add `.reveal` (defined in `apps/app/landing.css`) to any element that should
+animate in on scroll. Add `.reveal-d1` through `.reveal-d3` for staggered
+delays. The IntersectionObserver that adds `.in` on intersect lives in
+`landing-inline.ts`.
 
 ### Dark sections
 
-When a section uses `--color-ink` as the background (the villain/problem
-section, footer), text uses `#F5F0E8` (paper cream), secondary text uses
-`rgba(245,240,232,0.6)`, and rules use `rgba(255,255,255,0.08)`.
+When a section uses `--brand-ink` as the background (the villain/problem
+section, footer — always dark, regardless of theme), text uses
+`--brand-on-dark-primary`, secondary text uses `--brand-on-dark-secondary`,
+and rules use `--brand-on-dark-rule`.
 
 ---
 
@@ -611,14 +673,16 @@ product, not a plugin.**
 When generating new pages, components, or templates:
 
 1. Import `packages/ui-tokens/css/bindersnap-tokens.css` before any other stylesheet
-2. Use `--color-*`, `--font-*`, `--space-*`, `--radius-*`, `--shadow-*`
-   variables throughout — zero hardcoded values
+2. Components always reference `--bs-*` semantic tokens. Never reference
+   `--brand-*` directly in component styles unless the value is
+   intentionally fixed across modes — zero hardcoded values
 3. Check `docs/bindersnap-social-cheatsheet.html` for exact dimensions before
    generating any image assets or meta tags
-4. Default background is always `var(--color-paper)` (`#FAFAF7`), never `#fff`
+4. Default background is always `var(--bs-page-bg)` (`#FAFAF7`), never `#fff`
 5. Every new section needs: a `.bs-eyebrow` label, a Lora serif headline, and
    a single clear action — never two competing CTAs
-6. Add `.bs-reveal` to any block-level element introduced below the fold
+6. Add `.reveal` (from `apps/app/landing.css`) to any block-level element
+   introduced below the fold, on marketing pages only
 
 ---
 

@@ -1,0 +1,9 @@
+{
+  "name": "@ui",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./css": "./css/index.css",
+    "./img/*": "./img/*"
+  }
+}

@@ -74,16 +74,16 @@ export function getApprovalStateLabel(state: string): string {
   return APPROVAL_STATE_LABELS[state] ?? "Draft";
 }
 
-const APPROVAL_STATE_BADGE_CLASSES: Record<string, string> = {
-  approved: "vault-status-approved",
-  changes_requested: "vault-status-changes",
-  in_review: "vault-status-review",
-  published: "vault-status-published",
+const APPROVAL_STATE_BADGE_TONES: Record<string, string> = {
+  approved: "bs-status--approved",
+  changes_requested: "bs-status--changes",
+  in_review: "bs-status--review",
+  published: "bs-status--published",
 };
 
 export function getApprovalStateBadgeClass(state: string): string {
-  return `vault-status-badge ${
-    APPROVAL_STATE_BADGE_CLASSES[state] ?? "vault-status-working"
+  return `bs-status ${
+    APPROVAL_STATE_BADGE_TONES[state] ?? "bs-status--working"
   }`;
 }
 
@@ -160,11 +160,11 @@ export function getReviewStateBadgeClass(
 ): string {
   switch (state) {
     case "approved":
-      return "vault-status-badge vault-status-approved";
+      return "bs-status bs-status--approved";
     case "changes_requested":
-      return "vault-status-badge vault-status-changes";
+      return "bs-status bs-status--changes";
     default:
-      return "vault-status-badge vault-status-working";
+      return "bs-status bs-status--working";
   }
 }
 
@@ -547,10 +547,10 @@ const CHANGE_OUTCOME_LABELS: Record<ChangeOutcome, string> = {
   withdrawn: "Withdrawn",
 };
 
-const CHANGE_OUTCOME_BADGE_CLASSES: Record<ChangeOutcome, string> = {
-  published: "vault-status-published",
-  declined: "vault-status-declined",
-  withdrawn: "vault-status-withdrawn",
+const CHANGE_OUTCOME_BADGE_TONES: Record<ChangeOutcome, string> = {
+  published: "bs-status--published",
+  declined: "bs-status--changes",
+  withdrawn: "bs-status--working",
 };
 
 /** The badge on a change: where it stands, or how it ended. */
@@ -562,7 +562,7 @@ export function getChangeStateLabel(change: ChangeRecord): string {
 
 export function getChangeStateBadgeClass(change: ChangeRecord): string {
   return change.outcome
-    ? `vault-status-badge ${CHANGE_OUTCOME_BADGE_CLASSES[change.outcome]}`
+    ? `bs-status ${CHANGE_OUTCOME_BADGE_TONES[change.outcome]}`
     : getApprovalStateBadgeClass(change.approvalState);
 }
 

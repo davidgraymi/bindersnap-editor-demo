@@ -175,7 +175,7 @@ test("a published change says which version it became", () => {
 
   expect(getChangeStateLabel(change)).toBe("Published");
   expect(getChangeStateBadgeClass(change)).toBe(
-    "vault-status-badge vault-status-published",
+    "bs-status bs-status--published",
   );
   expect(describeChangeOutcome(change)).toBe(
     "Published as v2 by Dana on Feb 3, 2026",
@@ -216,9 +216,7 @@ test("a withdrawn change says so rather than saying nothing", () => {
   });
 
   expect(getChangeStateLabel(change)).toBe("Withdrawn");
-  expect(getChangeStateBadgeClass(change)).toBe(
-    "vault-status-badge vault-status-withdrawn",
-  );
+  expect(getChangeStateBadgeClass(change)).toBe("bs-status bs-status--working");
   expect(describeChangeOutcome(change)).toBe(
     "Withdrawn without a decision · closed Feb 5, 2026",
   );
