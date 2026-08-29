@@ -1,0 +1,1492 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bindersnap Design System Audit</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap"
+    />
+
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+      body,
+      h1,
+      h2,
+      h3,
+      p,
+      ul,
+      figure {
+        margin: 0;
+      }
+      img {
+        max-width: 100%;
+      }
+
+      :root {
+        --paper: #fafaf7;
+        --surface: #ffffff;
+        --surface-2: #f5f0e8;
+        --surface-3: #ede8df;
+        --ink: #1c1917;
+        --ink-2: #44403c;
+        --muted: #78716c;
+        --faint: #8f8880;
+        --rule: rgba(28, 25, 23, 0.11);
+        --rule-soft: rgba(28, 25, 23, 0.06);
+
+        --coral: #e85d26;
+        --coral-dark: #c94d1a;
+        --coral-dim: rgba(232, 93, 38, 0.09);
+
+        /* The status ramp this audit recommends — used here to demonstrate it. */
+        --crit-fg: #c94d1a;
+        --crit-bg: rgba(201, 77, 26, 0.09);
+        --warn-fg: #8f5e02;
+        --warn-bg: rgba(143, 94, 2, 0.1);
+        --ok-fg: #15803d;
+        --ok-bg: rgba(21, 128, 61, 0.09);
+        --info-fg: #1d4ed8;
+        --info-bg: rgba(29, 78, 216, 0.08);
+
+        --shadow:
+          0 1px 2px rgba(28, 25, 23, 0.04), 0 4px 16px rgba(28, 25, 23, 0.05);
+
+        --font-serif: "Lora", Georgia, "Times New Roman", serif;
+        --font-sans: "Geist", system-ui, -apple-system, sans-serif;
+        --font-mono:
+          "Geist Mono", "Fira Code", ui-monospace, Consolas, monospace;
+
+        --col: 62rem;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) {
+          --paper: #1c1917;
+          --surface: #292524;
+          --surface-2: #33302e;
+          --surface-3: #44403c;
+          --ink: #f5f0e8;
+          --ink-2: #e7e4df;
+          --muted: #a8a29e;
+          --faint: #948d86;
+          --rule: rgba(255, 255, 255, 0.1);
+          --rule-soft: rgba(255, 255, 255, 0.055);
+
+          --coral: #f0703c;
+          --coral-dark: #fb8c5a;
+          --coral-dim: rgba(232, 93, 38, 0.16);
+
+          --crit-fg: #fb8c5a;
+          --crit-bg: rgba(232, 93, 38, 0.15);
+          --warn-fg: #fbbf24;
+          --warn-bg: rgba(251, 191, 36, 0.13);
+          --ok-fg: #4ade80;
+          --ok-bg: rgba(74, 222, 128, 0.12);
+          --info-fg: #93c5fd;
+          --info-bg: rgba(147, 197, 253, 0.12);
+
+          --shadow:
+            0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.35);
+        }
+      }
+
+      :root[data-theme="dark"] {
+        --paper: #1c1917;
+        --surface: #292524;
+        --surface-2: #33302e;
+        --surface-3: #44403c;
+        --ink: #f5f0e8;
+        --ink-2: #e7e4df;
+        --muted: #a8a29e;
+        --faint: #948d86;
+        --rule: rgba(255, 255, 255, 0.1);
+        --rule-soft: rgba(255, 255, 255, 0.055);
+
+        --coral: #f0703c;
+        --coral-dark: #fb8c5a;
+        --coral-dim: rgba(232, 93, 38, 0.16);
+
+        --crit-fg: #fb8c5a;
+        --crit-bg: rgba(232, 93, 38, 0.15);
+        --warn-fg: #fbbf24;
+        --warn-bg: rgba(251, 191, 36, 0.13);
+        --ok-fg: #4ade80;
+        --ok-bg: rgba(74, 222, 128, 0.12);
+        --info-fg: #93c5fd;
+        --info-bg: rgba(147, 197, 253, 0.12);
+
+        --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.35);
+      }
+
+      body {
+        background: var(--paper);
+        color: var(--ink-2);
+        font-family: var(--font-sans);
+        font-weight: 400;
+        font-size: 16px;
+        line-height: 1.65;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .wrap {
+        max-width: var(--col);
+        margin: 0 auto;
+        padding: clamp(2.5rem, 6vw, 5rem) clamp(1.15rem, 4vw, 2.5rem) 6rem;
+        display: flex;
+        flex-direction: column;
+        gap: 4.5rem;
+      }
+
+      /* ── type ─────────────────────────────────────────────── */
+      h1,
+      h2,
+      h3 {
+        font-family: var(--font-serif);
+        color: var(--ink);
+        font-weight: 600;
+        line-height: 1.15;
+        text-wrap: balance;
+      }
+      h1 {
+        font-size: clamp(2.1rem, 5vw, 3.1rem);
+        letter-spacing: -0.02em;
+      }
+      h2 {
+        font-size: clamp(1.5rem, 3vw, 1.95rem);
+        letter-spacing: -0.015em;
+      }
+      h3 {
+        font-size: 1.12rem;
+        font-weight: 600;
+      }
+      p {
+        max-width: 68ch;
+      }
+      a {
+        color: var(--coral-dark);
+        text-decoration-thickness: 1px;
+        text-underline-offset: 2px;
+      }
+      a:focus-visible,
+      summary:focus-visible {
+        outline: 2px solid var(--coral);
+        outline-offset: 3px;
+        border-radius: 3px;
+      }
+      code,
+      .mono {
+        font-family: var(--font-mono);
+        font-size: 0.855em;
+      }
+      code {
+        background: var(--surface-2);
+        border: 1px solid var(--rule-soft);
+        border-radius: 3px;
+        padding: 0.08em 0.34em;
+        color: var(--ink);
+        white-space: nowrap;
+      }
+
+      .eyebrow {
+        font-family: var(--font-mono);
+        font-size: 0.6875rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        color: var(--muted);
+      }
+
+      /* ── masthead ─────────────────────────────────────────── */
+      .masthead {
+        display: flex;
+        flex-direction: column;
+        gap: 1.15rem;
+      }
+      .masthead .rule-top {
+        height: 3px;
+        width: 54px;
+        background: var(--coral);
+        border-radius: 2px;
+      }
+      .lede {
+        font-size: 1.16rem;
+        line-height: 1.6;
+        color: var(--ink-2);
+      }
+      .scope {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem 1.6rem;
+        padding-top: 1.15rem;
+        border-top: 1px solid var(--rule);
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* ── scorecard ────────────────────────────────────────── */
+      .scorecard {
+        background: var(--surface);
+        border: 1px solid var(--rule);
+        border-radius: 14px;
+        box-shadow: var(--shadow);
+        padding: clamp(1.5rem, 4vw, 2.25rem);
+        display: flex;
+        flex-direction: column;
+        gap: 2rem;
+      }
+      .score-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 0.7rem 1.6rem;
+      }
+      .score-num {
+        font-family: var(--font-serif);
+        font-size: 3.4rem;
+        line-height: 0.9;
+        color: var(--ink);
+        font-variant-numeric: tabular-nums;
+      }
+      .score-num span {
+        font-size: 1.5rem;
+        color: var(--muted);
+      }
+      .score-gloss {
+        flex: 1 1 20rem;
+        min-width: 16rem;
+        color: var(--muted);
+        font-size: 0.94rem;
+      }
+
+      .split {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+        gap: 1rem;
+      }
+      .split-card {
+        background: var(--surface-2);
+        border-radius: 10px;
+        padding: 1rem 1.15rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+      }
+      .split-card b {
+        font-family: var(--font-mono);
+        font-size: 1.5rem;
+        font-weight: 500;
+        color: var(--ink);
+        font-variant-numeric: tabular-nums;
+      }
+      .split-card .lbl {
+        font-size: 0.83rem;
+        color: var(--muted);
+      }
+
+      .meters {
+        display: flex;
+        flex-direction: column;
+        gap: 0.85rem;
+      }
+      .meter {
+        display: grid;
+        grid-template-columns: minmax(9.5rem, 15rem) 1fr auto;
+        align-items: center;
+        gap: 0.6rem 1rem;
+      }
+      .meter .name {
+        font-size: 0.88rem;
+        color: var(--ink-2);
+      }
+      .meter .track {
+        height: 6px;
+        background: var(--surface-3);
+        border-radius: 99px;
+        overflow: hidden;
+      }
+      .meter .fill {
+        height: 100%;
+        border-radius: 99px;
+        display: block;
+      }
+      .meter .val {
+        font-family: var(--font-mono);
+        font-size: 0.76rem;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+        min-width: 3.4rem;
+        text-align: right;
+      }
+      .f-ok {
+        background: var(--ok-fg);
+      }
+      .f-warn {
+        background: var(--warn-fg);
+      }
+      .f-crit {
+        background: var(--crit-fg);
+      }
+      @media (max-width: 560px) {
+        .meter {
+          grid-template-columns: 1fr auto;
+        }
+        .meter .track {
+          grid-column: 1 / -1;
+          order: 3;
+        }
+      }
+
+      /* ── sections ─────────────────────────────────────────── */
+      section {
+        display: flex;
+        flex-direction: column;
+        gap: 1.35rem;
+      }
+      .sec-head {
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
+      }
+
+      /* ── findings ─────────────────────────────────────────── */
+      .findings {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+      .finding {
+        background: var(--surface);
+        border: 1px solid var(--rule);
+        border-left: 3px solid var(--sev, var(--muted));
+        border-radius: 4px 12px 12px 4px;
+        padding: 1.25rem 1.4rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.7rem;
+      }
+      .finding--crit {
+        --sev: var(--crit-fg);
+      }
+      .finding--warn {
+        --sev: var(--warn-fg);
+      }
+      .finding--info {
+        --sev: var(--info-fg);
+      }
+      .f-top {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.6rem;
+      }
+      .chip {
+        font-family: var(--font-mono);
+        font-size: 0.63rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.11em;
+        padding: 0.22em 0.6em;
+        border-radius: 99px;
+        white-space: nowrap;
+      }
+      .chip-crit {
+        background: var(--crit-bg);
+        color: var(--crit-fg);
+      }
+      .chip-warn {
+        background: var(--warn-bg);
+        color: var(--warn-fg);
+      }
+      .chip-info {
+        background: var(--info-bg);
+        color: var(--info-fg);
+      }
+      .chip-ok {
+        background: var(--ok-bg);
+        color: var(--ok-fg);
+      }
+      .chip-cost {
+        background: var(--surface-2);
+        color: var(--muted);
+      }
+      .finding h3 {
+        flex: 1 1 18rem;
+      }
+      .finding p {
+        margin: 0;
+        font-size: 0.95rem;
+      }
+      .fix {
+        background: var(--surface-2);
+        border-radius: 8px;
+        padding: 0.85rem 1rem;
+        font-size: 0.9rem;
+      }
+      .fix .eyebrow {
+        display: block;
+        margin-bottom: 0.35rem;
+      }
+
+      /* ── tables ───────────────────────────────────────────── */
+      .tw {
+        overflow-x: auto;
+        border: 1px solid var(--rule);
+        border-radius: 12px;
+        background: var(--surface);
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 0.875rem;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 0.68rem 1rem;
+        border-bottom: 1px solid var(--rule-soft);
+        vertical-align: top;
+      }
+      thead th {
+        font-family: var(--font-mono);
+        font-size: 0.66rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--muted);
+        font-weight: 500;
+        background: var(--surface-2);
+        border-bottom: 1px solid var(--rule);
+        white-space: nowrap;
+      }
+      tbody tr:last-child td {
+        border-bottom: none;
+      }
+      td.num {
+        font-family: var(--font-mono);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      td.tok {
+        font-family: var(--font-mono);
+        font-size: 0.8rem;
+        color: var(--ink);
+        white-space: nowrap;
+      }
+      .pass {
+        color: var(--ok-fg);
+        font-weight: 500;
+      }
+      .fail {
+        color: var(--crit-fg);
+        font-weight: 500;
+      }
+
+      /* ── code blocks ──────────────────────────────────────── */
+      pre {
+        background: var(--surface);
+        border: 1px solid var(--rule);
+        border-radius: 12px;
+        padding: 1.05rem 1.2rem;
+        overflow-x: auto;
+        font-family: var(--font-mono);
+        font-size: 0.78rem;
+        line-height: 1.7;
+        color: var(--ink-2);
+        tab-size: 2;
+      }
+      pre .c {
+        color: var(--faint);
+      }
+      pre .t {
+        color: var(--coral-dark);
+      }
+
+      /* ── working / lists ──────────────────────────────────── */
+      ul.tight {
+        padding-left: 1.15rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+        max-width: 68ch;
+      }
+      ul.tight li {
+        font-size: 0.95rem;
+      }
+      ul.tight li::marker {
+        color: var(--coral);
+      }
+
+      .callout {
+        border-left: 3px solid var(--coral);
+        background: var(--coral-dim);
+        border-radius: 4px 10px 10px 4px;
+        padding: 1rem 1.25rem;
+        font-size: 0.95rem;
+      }
+      .callout p {
+        margin: 0;
+      }
+
+      details {
+        border: 1px solid var(--rule);
+        border-radius: 12px;
+        background: var(--surface);
+        padding: 0.9rem 1.2rem;
+      }
+      summary {
+        cursor: pointer;
+        font-weight: 500;
+        color: var(--ink);
+        font-size: 0.94rem;
+      }
+      details[open] summary {
+        margin-bottom: 0.8rem;
+      }
+      .cols {
+        columns: 2 13rem;
+        column-gap: 2rem;
+        font-family: var(--font-mono);
+        font-size: 0.76rem;
+        color: var(--muted);
+        line-height: 1.9;
+      }
+
+      footer {
+        border-top: 1px solid var(--rule);
+        padding-top: 1.35rem;
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        color: var(--faint);
+        line-height: 1.8;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <!-- ═══ MASTHEAD ═══ -->
+      <header class="masthead">
+        <div class="rule-top"></div>
+        <p class="eyebrow">Design System Audit · 28 Aug 2026</p>
+        <h1>A strong token layer with no floors built on top of it</h1>
+        <p class="lede">
+          Bindersnap's token architecture is better than most systems this size
+          — two clean layers, real dark mode, 99% colour adoption. Everything
+          <em>above</em> the tokens is missing: the component primitives exist
+          but nobody uses them, the documentation describes tokens that were
+          deleted, and nothing in CI stops any of it from drifting further.
+        </p>
+        <div class="scope">
+          <span>4 stylesheets</span>
+          <span>12,629 lines</span>
+          <span>118 tokens</span>
+          <span>1,101 class selectors</span>
+          <span>39 components</span>
+        </div>
+      </header>
+
+      <!-- ═══ SCORECARD ═══ -->
+      <div class="scorecard">
+        <div class="score-head">
+          <div class="score-num">57<span>/100</span></div>
+          <p class="score-gloss">
+            The average hides the real shape of the problem. Split the system at
+            the token line and the two halves score almost two-to-one apart —
+            which is exactly where the work is.
+          </p>
+        </div>
+
+        <div class="split">
+          <div class="split-card">
+            <b
+              >76<span style="font-size: 0.9rem; color: var(--muted)"
+                >/100</span
+              ></b
+            >
+            <span class="lbl"
+              >Token layer — architecture, colour, type, spacing</span
+            >
+          </div>
+          <div class="split-card">
+            <b
+              >38<span style="font-size: 0.9rem; color: var(--muted)"
+                >/100</span
+              ></b
+            >
+            <span class="lbl"
+              >Above the tokens — components, docs, accessibility,
+              enforcement</span
+            >
+          </div>
+        </div>
+
+        <div class="meters">
+          <div class="meter">
+            <span class="name">Token architecture</span>
+            <span class="track"
+              ><span class="fill f-ok" style="width: 87%"></span
+            ></span>
+            <span class="val">13/15</span>
+          </div>
+          <div class="meter">
+            <span class="name">Colour tokenisation</span>
+            <span class="track"
+              ><span class="fill f-ok" style="width: 93%"></span
+            ></span>
+            <span class="val">14/15</span>
+          </div>
+          <div class="meter">
+            <span class="name">Spacing tokenisation</span>
+            <span class="track"
+              ><span class="fill f-warn" style="width: 65%"></span
+            ></span>
+            <span class="val">6/10</span>
+          </div>
+          <div class="meter">
+            <span class="name">Type tokenisation</span>
+            <span class="track"
+              ><span class="fill f-warn" style="width: 50%"></span
+            ></span>
+            <span class="val">5/10</span>
+          </div>
+          <div class="meter">
+            <span class="name">Accessibility</span>
+            <span class="track"
+              ><span class="fill f-crit" style="width: 47%"></span
+            ></span>
+            <span class="val">7/15</span>
+          </div>
+          <div class="meter">
+            <span class="name">Component layer</span>
+            <span class="track"
+              ><span class="fill f-crit" style="width: 40%"></span
+            ></span>
+            <span class="val">8/20</span>
+          </div>
+          <div class="meter">
+            <span class="name">Documentation accuracy</span>
+            <span class="track"
+              ><span class="fill f-crit" style="width: 40%"></span
+            ></span>
+            <span class="val">4/10</span>
+          </div>
+          <div class="meter">
+            <span class="name">Enforcement (lint / tests)</span>
+            <span class="track"
+              ><span class="fill f-crit" style="width: 2%"></span
+            ></span>
+            <span class="val">0/5</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ WHAT'S WORKING ═══ -->
+      <section>
+        <div class="sec-head">
+          <p class="eyebrow">Baseline</p>
+          <h2>What's already right</h2>
+        </div>
+        <p>
+          Worth stating plainly before the findings, because these are the parts
+          you should not touch while fixing the rest.
+        </p>
+        <ul class="tight">
+          <li>
+            <strong>The two-layer split is the correct architecture.</strong>
+            <code>--bs-*</code> semantic tokens flip with the theme;
+            <code>--brand-*</code> tokens never do. The file states the rule and
+            the codebase mostly follows it.
+          </li>
+          <li>
+            <strong>Colour adoption is near-total.</strong> Across 12,629 lines
+            of CSS there are 34 hardcoded hex values and 27 raw
+            <code>rgba()</code> — and almost all of them cluster into one cause
+            (below), not scattered sloppiness.
+          </li>
+          <li>
+            <strong>Dark mode is designed, not inverted.</strong> Four warm-ink
+            surface steps mirroring the paper steps, a cream text ramp, stronger
+            tints, higher-opacity shadows. Only 15
+            <code>[data-theme="dark"]</code> component overrides are needed in
+            the whole app — the token layer absorbs the rest.
+          </li>
+          <li>
+            <strong>The three-font stack is enforced in practice.</strong> Lora
+            / Geist / Geist Mono, loaded once, used by role. No drift into a
+            fourth face.
+          </li>
+          <li>
+            <strong><code>prefers-reduced-motion</code> is handled</strong> in
+            both the app and landing stylesheets.
+          </li>
+        </ul>
+      </section>
+
+      <!-- ═══ TOKEN COVERAGE ═══ -->
+      <section>
+        <div class="sec-head">
+          <p class="eyebrow">Coverage</p>
+          <h2>Where values escape the system</h2>
+        </div>
+
+        <div class="tw">
+          <table>
+            <thead>
+              <tr>
+                <th>Category</th>
+                <th>Tokens defined</th>
+                <th>Tokenised</th>
+                <th>Raw values</th>
+                <th>Distinct off-scale values</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Colour</td>
+                <td class="num">28</td>
+                <td class="num pass">~99%</td>
+                <td class="num">61 literals</td>
+                <td>13 hex, 14 rgba</td>
+              </tr>
+              <tr>
+                <td>Spacing</td>
+                <td class="num">13</td>
+                <td class="num">518 / 792 &nbsp;(65%)</td>
+                <td class="num fail">274</td>
+                <td>
+                  28 — led by <code>2px</code>, <code>3px</code>,
+                  <code>6px</code>, <code>10px</code>, <code>5px</code>
+                </td>
+              </tr>
+              <tr>
+                <td>Typography</td>
+                <td class="num">9</td>
+                <td class="num">163 / 322 &nbsp;(50%)</td>
+                <td class="num fail">149</td>
+                <td>
+                  19 — led by <code>13px</code>&nbsp;(24×),
+                  <code>11px</code>&nbsp;(23×), <code>12.5px</code>&nbsp;(18×)
+                </td>
+              </tr>
+              <tr>
+                <td>Radius</td>
+                <td class="num">7</td>
+                <td class="num pass">~95%</td>
+                <td class="num">12</td>
+                <td>
+                  7 — <code>2</code>, <code>3</code>, <code>6</code>,
+                  <code>7</code>, <code>9</code>, <code>12</code>,
+                  <code>99px</code>
+                </td>
+              </tr>
+              <tr>
+                <td>Z-index</td>
+                <td class="num">7</td>
+                <td class="num">21 / 31 &nbsp;(68%)</td>
+                <td class="num">10</td>
+                <td>
+                  7 — <code>1</code>, <code>2</code>, <code>10</code>,
+                  <code>20</code>, <code>30</code>, <code>99</code>,
+                  <code>100</code>
+                </td>
+              </tr>
+              <tr>
+                <td>Icon size / stroke</td>
+                <td class="num fail">0</td>
+                <td class="num fail">0%</td>
+                <td class="num">~120 call sites</td>
+                <td>8 sizes, 9 stroke widths</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout">
+          <p>
+            The type and spacing gaps are not discipline problems — they're
+            <em>scale</em> problems. The scales were designed for a marketing
+            page and never extended for dense product UI. There is no step
+            between <code>0.75rem</code> (12px) and
+            <code>0.875rem</code> (14px), so 13px gets typed by hand 24 times.
+            Spacing starts at 4px, so 2px and 6px get typed by hand 46 times.
+          </p>
+        </div>
+      </section>
+
+      <!-- ═══ FINDINGS ═══ -->
+      <section>
+        <div class="sec-head">
+          <p class="eyebrow">Findings</p>
+          <h2>Ten things to fix, in the order I'd fix them</h2>
+          <p>
+            Ranked by damage-per-hour, not by size. The first three are half a
+            day of work between them.
+          </p>
+        </div>
+
+        <div class="findings">
+          <!-- 1 -->
+          <article class="finding finding--crit">
+            <div class="f-top">
+              <span class="chip chip-crit">Critical</span>
+              <h3>
+                1 &nbsp;· &nbsp;The palette has two hues; the product needs six
+              </h3>
+              <span class="chip chip-cost">~2h</span>
+            </div>
+            <p>
+              The system defines coral and green. The app also needs to say
+              <em>needs review</em>, <em>waiting</em>, <em>informational</em>,
+              and <em>destructive</em> — and every one of those is a hardcoded
+              literal: amber <code>#d97706</code>/<code>#b45309</code>, blue
+              <code>#1d4ed8</code>/<code>#3b82f6</code>, violet
+              <code>#7c3aed</code>, teal <code>#0f766e</code>. That accounts for
+              nearly all 61 colour literals in the codebase.
+            </p>
+            <p>
+              Because they're literals, they don't flip with the theme — which
+              makes this an accessibility bug, not just a tidiness one. Measured
+              against the dark surface they sit on:
+            </p>
+            <div class="tw">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Component</th>
+                    <th>Foreground</th>
+                    <th>Light</th>
+                    <th>Dark</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><code>.vault-triage-pill--active-waiting</code></td>
+                    <td class="tok">#1d4ed8</td>
+                    <td class="num pass">5.96 ✓</td>
+                    <td class="num fail">2.02 ✕</td>
+                  </tr>
+                  <tr>
+                    <td><code>.rev-avatar--tone1</code></td>
+                    <td class="tok">#1d4ed8</td>
+                    <td class="num pass">5.72 ✓</td>
+                    <td class="num fail">2.15 ✕</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>.vault-triage-pill--active-needs-review</code>
+                    </td>
+                    <td class="tok">#b45309</td>
+                    <td class="num pass">4.29 ✓</td>
+                    <td class="num fail">2.46 ✕</td>
+                  </tr>
+                  <tr>
+                    <td><code>.rev-avatar--tone2</code></td>
+                    <td class="tok">#7c3aed</td>
+                    <td class="num pass">4.91 ✓</td>
+                    <td class="num fail">2.49 ✕</td>
+                  </tr>
+                  <tr>
+                    <td><code>.vault-status-review</code></td>
+                    <td class="tok">#b45309</td>
+                    <td class="num pass">4.42 ✓</td>
+                    <td class="num fail">2.56 ✕</td>
+                  </tr>
+                  <tr>
+                    <td>document status teal</td>
+                    <td class="tok">#0f766e</td>
+                    <td class="num pass">4.75 ✓</td>
+                    <td class="num fail">2.57 ✕</td>
+                  </tr>
+                  <tr>
+                    <td><code>.rev-avatar--tone4</code></td>
+                    <td class="tok">#b45309</td>
+                    <td class="num pass">4.39 ✓</td>
+                    <td class="num fail">2.76 ✕</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p>
+              Seven for seven. Every hardcoded status colour passes AA in light
+              mode and fails it in dark, and the triage pills — the primary
+              signal on the dashboard — are the worst of them at 2.02:1.
+            </p>
+            <div class="fix">
+              <span class="eyebrow">Fix</span>
+              Add a semantic status family as <code>--bs-*</code> triads so they
+              flip. This page uses the proposed ramp for its own severity chips
+              — the amber and coral you're reading are the light/dark pairs
+              below.
+              <pre><span class="c">/* :root — light */</span>
+<span class="t">--bs-status-warn-fg</span>:     #8f5e02;   <span class="c">/* needs review     */</span>
+<span class="t">--bs-status-warn-bg</span>:     rgba(143, 94, 2, 0.10);
+<span class="t">--bs-status-warn-border</span>: rgba(143, 94, 2, 0.22);
+<span class="t">--bs-status-info-fg</span>:     #1d4ed8;   <span class="c">/* waiting          */</span>
+<span class="t">--bs-status-danger-fg</span>:   #c94d1a;   <span class="c">/* changes / declined */</span>
+<span class="t">--bs-status-ok-fg</span>:       #15803d;   <span class="c">/* approved         */</span>
+
+<span class="c">/* [data-theme="dark"] — lift the hue, keep the meaning */</span>
+<span class="t">--bs-status-warn-fg</span>:     #fbbf24;   <span class="c">/* 2.46 → 6.78 */</span>
+<span class="t">--bs-status-info-fg</span>:     #93c5fd;   <span class="c">/* 2.02 → 6.50 */</span>
+<span class="t">--bs-status-danger-fg</span>:   #fb8c5a;   <span class="c">/* 3.29 → 4.99 */</span>
+<span class="t">--bs-status-ok-fg</span>:       #4ade80;   <span class="c">/* 4.60 → 6.78 */</span></pre>
+              Then delete the seven <code>[data-theme="dark"]</code> component
+              overrides that exist only to patch this.
+            </div>
+          </article>
+
+          <!-- 2 -->
+          <article class="finding finding--crit">
+            <div class="f-top">
+              <span class="chip chip-crit">Critical</span>
+              <h3>
+                2 &nbsp;· &nbsp;AGENTS.md tells agents to use tokens that don't
+                exist
+              </h3>
+              <span class="chip chip-cost">~45m</span>
+            </div>
+            <p>
+              The frontend rules instruct:
+              <em
+                >"Use <code>--color-*</code>, <code>--font-*</code>,
+                <code>--space-*</code>, <code>--radius-*</code>,
+                <code>--shadow-*</code>."</em
+              >
+              Three of those five families are not defined anywhere.
+              <code>--space-4</code>, <code>--radius-md</code> and
+              <code>--text-h1</code> all resolve to nothing. The real names are
+              <code>--brand-space-4</code>, <code>--brand-radius-md</code>,
+              <code>--brand-text-h1</code>.
+            </p>
+            <p>
+              The AGENTS.md token reference block is the v1 vocabulary; the file
+              is v2. Any agent that follows the documentation writes CSS that
+              silently doesn't apply — and you have four agent definitions in
+              <code>.claude/</code> reading it.
+            </p>
+            <div class="fix">
+              <span class="eyebrow">Fix</span>
+              Rewrite the "Key token categories" block in
+              <a href="AGENTS.md">AGENTS.md</a> against the actual file, and
+              change the rule to "use <code>--bs-*</code> for anything
+              theme-reactive, <code>--brand-*</code> for anything fixed." That
+              sentence is the system's single most important rule and it
+              currently appears only as a comment inside the CSS.
+            </div>
+          </article>
+
+          <!-- 3 -->
+          <article class="finding finding--crit">
+            <div class="f-top">
+              <span class="chip chip-crit">Critical</span>
+              <h3>
+                3 &nbsp;· &nbsp;The contrast table in the token file is wrong
+              </h3>
+              <span class="chip chip-cost">~20m</span>
+            </div>
+            <p>
+              <code>bindersnap-tokens.css:219</code> claims
+              <em
+                >"Contrast ratios verified at WCAG AA for all text levels."</em
+              >
+              Three of the four rows are inaccurate, and one of them is a
+              failure being reported as a pass.
+            </p>
+            <div class="tw">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Token</th>
+                    <th>File claims</th>
+                    <th>Actual (on <code>#fafaf7</code>)</th>
+                    <th>Verdict</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="tok">--bs-text-primary</td>
+                    <td class="num">13.2</td>
+                    <td class="num">16.72</td>
+                    <td class="pass">understated</td>
+                  </tr>
+                  <tr>
+                    <td class="tok">--bs-text-secondary</td>
+                    <td class="num">9.4</td>
+                    <td class="num">9.82</td>
+                    <td class="pass">close</td>
+                  </tr>
+                  <tr>
+                    <td class="tok">--bs-text-muted</td>
+                    <td class="num">5.1</td>
+                    <td class="num">4.59</td>
+                    <td class="pass">still AA, but overstated</td>
+                  </tr>
+                  <tr>
+                    <td class="tok">--bs-text-faint</td>
+                    <td class="num">3.1</td>
+                    <td class="num">2.41</td>
+                    <td class="fail">fails even large-text AA (3.0)</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p>
+              <code>--bs-text-faint</code> is also asymmetric between themes —
+              2.41:1 in light, 3.65:1 in dark. It's used for input placeholders,
+              which is exactly where it matters.
+            </p>
+            <div class="fix">
+              <span class="eyebrow">Fix</span>
+              Darken light-mode <code>--bs-text-faint</code> from
+              <code>#a8a29e</code> to about <code>#96908a</code> (3.02:1),
+              correct the four numbers in the comment, and add the source of
+              truth — a unit test that recomputes them, so the comment can never
+              drift again.
+            </div>
+          </article>
+
+          <!-- 4 -->
+          <article class="finding finding--warn">
+            <div class="f-top">
+              <span class="chip chip-warn">High</span>
+              <h3>4 &nbsp;· &nbsp;Forty-four classes for one component</h3>
+              <span class="chip chip-cost">~1d</span>
+            </div>
+            <p>
+              A small rounded label showing a status is implemented 44 times
+              under 12 different naming families. The design system's own
+              <code>.bs-pill</code> and <code>.bs-nav-badge</code> are used
+              <strong>zero</strong> times in the app.
+            </p>
+            <details>
+              <summary>All 44 — pill, badge, chip, tag, status</summary>
+              <div class="cols">
+                .admin-pro-admin-pill<br />.admin-pro-status-badge<br />.app-topnav-badge<br />.app-user-badge<br />.app-workspace-pill<br />.audit-chip<br />.bs-file-chip<br />.bs-nav-badge<br />.bs-nav-badge-dot<br />.bs-pill<br />.chaos-pill<br />.chaos-pill-icon<br />.chaos-pill-text<br />.collaborator-existing-badge<br />.collaborator-panel-status<br />.collaborator-permission-badge<br />.cta-tag<br />.doc-compare-chip<br />.doc-version-pill<br />.docs-chip<br />.docs-chip-remove<br />.docs-pill<br />.eyebrow-tag<br />.feat-tag<br />.home-pill<br />.perms-picker-chip<br />.perms-picker-chip-remove<br />.perms-picker-chips<br />.record-claim-tag<br />.reply-badge<br />.rev-event-tag<br />.review-card-tag<br />.vault-badges<br />.vault-pending-badge<br />.vault-status-approved<br />.vault-status-badge<br />.vault-status-changes<br />.vault-status-declined<br />.vault-status-published<br />.vault-status-review<br />.vault-status-withdrawn<br />.vault-status-working<br />.vault-triage-pill<br />.footer-tagline
+              </div>
+            </details>
+            <p>
+              Buttons have the same shape of problem: 29 button classes across 8
+              families (<code>.rev-btn</code>, <code>.icon-btn</code>,
+              <code>.cancel-btn</code>, <code>.confirm-btn</code>,
+              <code>.resolve-btn</code>, <code>.change-row-btn</code>,
+              <code>.merge-toggle-btn</code>,
+              <code>.app-topnav-icon-btn</code>…), plus 48 blocks that set
+              <code>cursor: pointer</code> and roll their own padding.
+            </p>
+            <div class="fix">
+              <span class="eyebrow">Fix</span>
+              One <code>&lt;StatusChip tone size /&gt;</code> React primitive
+              backed by a single <code>.bs-status</code> class with tone
+              modifiers driven by finding 1's tokens. Six tones replace 44
+              classes. Do buttons second, the same way —
+              <code>.bs-btn</code> already exists and is used 71 times, so it
+              just needs the variants the app actually reaches for.
+            </div>
+          </article>
+
+          <!-- 5 -->
+          <article class="finding finding--warn">
+            <div class="f-top">
+              <span class="chip chip-warn">High</span>
+              <h3>5 &nbsp;· &nbsp;The primitives have no states</h3>
+              <span class="chip chip-cost">~3h</span>
+            </div>
+            <div class="tw">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Primitive</th>
+                    <th>Default</th>
+                    <th>Hover</th>
+                    <th>Focus</th>
+                    <th>Disabled</th>
+                    <th>Loading</th>
+                    <th>Error</th>
+                    <th>Sizes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="tok">.bs-btn</td>
+                    <td class="pass">✓</td>
+                    <td class="pass">✓</td>
+                    <td class="fail">✕</td>
+                    <td class="fail">✕</td>
+                    <td class="fail">✕</td>
+                    <td>—</td>
+                    <td class="fail">✕</td>
+                  </tr>
+                  <tr>
+                    <td class="tok">.bs-input</td>
+                    <td class="pass">✓</td>
+                    <td class="fail">✕</td>
+                    <td class="pass">✓</td>
+                    <td class="fail">✕</td>
+                    <td>—</td>
+                    <td class="fail">✕</td>
+                    <td class="fail">✕</td>
+                  </tr>
+                  <tr>
+                    <td class="tok">.bs-card</td>
+                    <td class="pass">✓</td>
+                    <td class="pass">✓</td>
+                    <td class="fail">✕</td>
+                    <td>—</td>
+                    <td>—</td>
+                    <td>—</td>
+                    <td class="fail">✕</td>
+                  </tr>
+                  <tr>
+                    <td class="tok">.bs-email-row</td>
+                    <td class="pass">✓</td>
+                    <td class="pass">✓</td>
+                    <td class="pass">✓</td>
+                    <td class="fail">✕</td>
+                    <td class="fail">✕</td>
+                    <td class="fail">✕</td>
+                    <td>—</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p>
+              <code>.bs-btn</code> has no <code>:focus-visible</code> at all —
+              the whole token file has zero. Across the app there are 67
+              <code>:hover</code> rules against 31 <code>:focus-visible</code>,
+              so roughly half of what responds to a mouse is invisible to a
+              keyboard. There is no destructive variant, so "Remove
+              collaborator" and "Publish" look the same.
+            </p>
+            <div class="fix">
+              <span class="eyebrow">Fix</span>
+              <code>.bs-btn:focus-visible</code>, <code>:disabled</code>,
+              <code>--sm</code>/<code>--lg</code>, <code>--danger</code>, and an
+              <code>[aria-busy]</code> spinner state — one block, and it raises
+              the floor for all 71 existing call sites at once.
+            </div>
+          </article>
+
+          <!-- 6 -->
+          <article class="finding finding--warn">
+            <div class="f-top">
+              <span class="chip chip-warn">High</span>
+              <h3>6 &nbsp;· &nbsp;Nothing enforces any of this</h3>
+              <span class="chip chip-cost">~2h</span>
+            </div>
+            <p>
+              There is no stylelint config, no CSS test, and Prettier only
+              checks formatting. Every finding on this page is free to regress
+              the day after it's fixed. You already treat TypeScript strict mode
+              as the linter — the stylesheets have no equivalent.
+            </p>
+            <div class="fix">
+              <span class="eyebrow">Fix</span>
+              A <code>packages/ui-tokens/tokens.test.ts</code> that parses the
+              CSS and asserts four things, runnable under
+              <code>bun run test:app</code> with no new dependency:
+              <pre>
+1. no hex or rgba() literal outside bindersnap-tokens.css
+2. every var(--…) reference resolves to a defined token
+3. every defined token is referenced at least once
+4. computed contrast for each text token meets its documented ratio</pre>
+              Rule 4 makes finding 3 permanently unrepeatable. Rule 1 needs an
+              allow-list for the handful of intentionally-fixed values (<code
+                >#000</code
+              >
+              on the blend-mode comparison, <code>.bs-btn-dark</code>).
+            </div>
+          </article>
+
+          <!-- 7 -->
+          <article class="finding finding--warn">
+            <div class="f-top">
+              <span class="chip chip-warn">High</span>
+              <h3>7 &nbsp;· &nbsp;White on coral and white on green fail AA</h3>
+              <span class="chip chip-cost">~30m</span>
+            </div>
+            <div class="tw">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Control</th>
+                    <th>Pairing</th>
+                    <th>Ratio</th>
+                    <th>AA (4.5)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><code>.rev-btn--green</code> — Approve</td>
+                    <td class="tok">#ffffff on #16a34a</td>
+                    <td class="num">3.30</td>
+                    <td class="fail">✕</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <code>.bs-btn-primary</code>,
+                      <code>.doc-header-submit</code>
+                    </td>
+                    <td class="tok">#ffffff on #e85d26</td>
+                    <td class="num">3.49</td>
+                    <td class="fail">✕</td>
+                  </tr>
+                  <tr>
+                    <td><code>.bs-btn-primary:hover</code></td>
+                    <td class="tok">#ffffff on #c94d1a</td>
+                    <td class="num">4.61</td>
+                    <td class="pass">✓</td>
+                  </tr>
+                  <tr>
+                    <td><code>.rev-btn--green:hover</code></td>
+                    <td class="tok">#ffffff on #128040</td>
+                    <td class="num">5.02</td>
+                    <td class="pass">✓</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p>
+              Both resting states fail; both hover states pass. Approve and
+              Publish are described in the code comment as
+              <em>"the only two things on this page that settle anything"</em> —
+              they should be the most legible controls in the product, and right
+              now they're the least.
+            </p>
+            <div class="fix">
+              <span class="eyebrow">Fix</span>
+              Either use the darker value at rest and reserve
+              <code>--brand-coral</code> for fills and accents, or accept it
+              under the 3:1 large-text exemption by raising button labels to
+              18px+. The first is one line; the second changes the visual weight
+              of every CTA. I'd take the first.
+            </div>
+          </article>
+
+          <!-- 8 -->
+          <article class="finding finding--info">
+            <div class="f-top">
+              <span class="chip chip-info">Medium</span>
+              <h3>8 &nbsp;· &nbsp;The legacy alias layer is 68% dead</h3>
+              <span class="chip chip-cost">~1h</span>
+            </div>
+            <p>
+              22 aliases live at the bottom of the token file under a comment
+              saying <em>"Remove once all components are migrated."</em> 15 of
+              them have zero references. The 7 survivors are used by exactly one
+              consumer — <code>packages/editor</code> — which is the only
+              package that never got migrated.
+            </p>
+            <p>
+              One alias is worse than dead:
+              <code>--color-ink-mid: #292524</code> is a raw hex sitting in the
+              alias block, so it points at nothing and would not flip with the
+              theme if it did.
+            </p>
+            <details>
+              <summary>15 dead tokens</summary>
+              <div class="cols">
+                --brand-tracking-normal<br />--brand-z-base<br />--brand-z-toast<br />--color-coral-dim<br />--color-coral-glow<br />--color-green-dim<br />--color-ink-mid<br />--color-muted-light<br />--color-paper-mid<br />--color-paper-warm<br />--font-mono<br />--shadow-sm<br />--shadow-md<br />--shadow-lg<br />--shadow-xl
+              </div>
+            </details>
+            <div class="fix">
+              <span class="eyebrow">Fix</span>
+              Migrate the editor's 68 <code>--color-*</code> references with a
+              scripted rename, delete the whole block, and let finding 6's rule
+              3 keep it dead.
+            </div>
+          </article>
+
+          <!-- 9 -->
+          <article class="finding finding--info">
+            <div class="f-top">
+              <span class="chip chip-info">Medium</span>
+              <h3>
+                9 &nbsp;· &nbsp;Two implementations of the same landing
+                primitives
+              </h3>
+              <span class="chip chip-cost">~2h</span>
+            </div>
+            <p>
+              <code>bindersnap-tokens.css</code> defines
+              <code>.bs-reveal</code>, <code>.bs-reveal-d1…d4</code> and
+              <code>.bs-compare-item</code>.
+              <code>bindersnap-landing.css</code> defines <code>.reveal</code>,
+              <code>.reveal-d1…d3</code> and <code>.compare-item</code> — the
+              same components, unprefixed. <code>index.html</code> uses the
+              unprefixed ones exclusively, so the <code>.bs-*</code> versions
+              are dead weight shipped on every page load.
+            </p>
+            <p>
+              Of the 21 primitives I checked, 5 are used anywhere and 16 are
+              used nowhere:
+              <code>bs-pill</code>, <code>bs-body</code>,
+              <code>bs-h1</code>–<code>h3</code>, <code>bs-display</code>,
+              <code>bs-container</code>, <code>bs-section</code>,
+              <code>bs-code</code>, <code>bs-file-chip</code>,
+              <code>bs-email-row</code>, <code>bs-nav-badge</code>,
+              <code>bs-compare-item</code>, <code>bs-accent</code>,
+              <code>bs-theme-toggle</code> and the reveal family all score zero.
+            </p>
+            <div class="fix">
+              <span class="eyebrow">Fix</span>
+              Pick one. Either adopt the <code>bs-</code> prefix in
+              <code>index.html</code> and delete the landing twins, or delete
+              the unused half of the token file's component section and stop
+              calling it a system. The second is more honest for a solo codebase
+              and is what I'd do — keep <code>.bs-btn</code>,
+              <code>.bs-card</code>, <code>.bs-input</code>,
+              <code>.bs-eyebrow</code>, <code>.bs-label</code>, add
+              <code>.bs-status</code>, drop the rest.
+            </div>
+          </article>
+
+          <!-- 10 -->
+          <article class="finding finding--info">
+            <div class="f-top">
+              <span class="chip chip-info">Medium</span>
+              <h3>
+                10 &nbsp;· &nbsp;A 2,381-line page stylesheet lives inside
+                <code>ui-tokens</code>
+              </h3>
+              <span class="chip chip-cost">~30m</span>
+            </div>
+            <p>
+              <code>packages/ui-tokens/</code> is described in AGENTS.md as "CSS
+              design tokens, fonts, icons," but 73% of its CSS is
+              <code>bindersnap-landing.css</code> — page-specific styling for
+              one route of one app. It also has no <code>package.json</code>, so
+              consumers reach it by relative path
+              (<code>../../packages/ui-tokens/css/index.css</code>) rather than
+              through the <code>@ui/*</code> alias the repo otherwise uses.
+            </p>
+            <div class="fix">
+              <span class="eyebrow">Fix</span>
+              Move <code>bindersnap-landing.css</code> to
+              <code>apps/app/landing.css</code> next to the component it styles,
+              and give <code>ui-tokens</code> a <code>package.json</code> with a
+              <code>./css</code> export. The package then contains only things
+              that are genuinely shared.
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- ═══ EXTENSIONS ═══ -->
+      <section>
+        <div class="sec-head">
+          <p class="eyebrow">Extend</p>
+          <h2>Four token families the system is missing</h2>
+          <p>
+            These aren't cleanup — they're new vocabulary the product has
+            already proven it needs, because it's been writing the values by
+            hand.
+          </p>
+        </div>
+
+        <h3>A dense UI type ramp</h3>
+        <p>
+          The nine-step scale runs from <code>--brand-text-label</code> (11px)
+          to <code>--brand-text-display</code>, with nothing designed for
+          tables, chips, and metadata rows. The evidence is 149 hand-typed sizes
+          across 19 values — including five half-pixel values
+          (<code>10.5</code>, <code>11.5</code>, <code>12.5</code>,
+          <code>13.5</code>, <code>14.5px</code>) that exist only because there
+          was no correct step to reach for.
+        </p>
+        <pre><span class="c">/* Fills the gap between --brand-text-xs (12px) and --brand-text-sm (14px) */</span>
+<span class="t">--brand-text-ui-xs</span>: 0.6875rem;  <span class="c">/* 11px   — replaces 23 hand-typed */</span>
+<span class="t">--brand-text-ui-sm</span>: 0.75rem;    <span class="c">/* 12px   — replaces 14 + 18 at 12.5 */</span>
+<span class="t">--brand-text-ui-md</span>: 0.8125rem;  <span class="c">/* 13px   — replaces 24 + 7 at 13.5 */</span>
+<span class="t">--brand-text-ui-lg</span>: 0.875rem;   <span class="c">/* 14px   — already exists as -sm */</span></pre>
+
+        <h3>Micro-spacing</h3>
+        <p>
+          The base-8 scale starts at 4px. The three most common raw spacing
+          values in the app are
+          <code>2px</code> (24×), <code>3px</code> (22×) and
+          <code>6px</code> (20×) — sub-step gaps inside chips, icon rows, and
+          inline stacks. AGENTS.md forbids off-scale values, so today the rule
+          is broken 274 times because following it is impossible.
+        </p>
+        <pre><span class="t">--brand-space-0-5</span>: 2px;   <span class="c">/* icon-to-label, chip internals */</span>
+<span class="t">--brand-space-1-5</span>: 6px;   <span class="c">/* inline stacks                 */</span>
+<span class="t">--brand-space-2-5</span>: 10px;  <span class="c">/* dense row padding             */</span></pre>
+        <p>
+          That's 3 steps absorbing roughly 70 of the 274 violations. Either add
+          them, or amend the rule in AGENTS.md to say the scale is base-8
+          <em>above 12px</em> and free below — but pick one, because right now
+          the documentation and the code disagree.
+        </p>
+
+        <h3>Icon sizing</h3>
+        <p>
+          Lucide icons are sized per call site with no tokens: 8 distinct sizes
+          and 9 distinct stroke widths, including <code>1.4</code>,
+          <code>1.5</code>, <code>1.6</code>, <code>1.7</code>,
+          <code>1.75</code>, <code>1.8</code>, <code>2</code>,
+          <code>2.2</code> and <code>2.5</code> — differences no one can see but
+          which guarantee two icons side by side never quite match.
+        </p>
+        <pre><span class="t">--brand-icon-xs</span>: 12px;  <span class="t">--brand-icon-sm</span>: 14px;
+<span class="t">--brand-icon-md</span>: 16px;  <span class="t">--brand-icon-lg</span>: 20px;
+<span class="t">--brand-icon-stroke</span>:      1.5;   <span class="c">/* default — already the plurality */</span>
+<span class="t">--brand-icon-stroke-heavy</span>: 2;     <span class="c">/* emphasis only                  */</span></pre>
+        <p>
+          Best expressed as an <code>&lt;Icon&gt;</code> wrapper around
+          lucide-react that takes <code>size="sm"</code> rather than
+          <code>size={14}</code>, so the tokens can't be bypassed.
+        </p>
+
+        <h3>Elevation and motion, stated as roles</h3>
+        <p>
+          Four shadow steps and four transition durations exist, but nothing
+          says which belongs to what. A card, a dropdown and a modal each pick a
+          shadow by feel. Name them by role (<code>--bs-elevation-card</code>,
+          <code>--bs-elevation-menu</code>, <code>--bs-elevation-modal</code>)
+          and the choice stops being a judgement call — and the same for the
+          seven raw z-index values still sitting outside the
+          <code>--brand-z-*</code> scale.
+        </p>
+      </section>
+
+      <!-- ═══ SEQUENCE ═══ -->
+      <section>
+        <div class="sec-head">
+          <p class="eyebrow">Sequence</p>
+          <h2>If you only do one afternoon of this</h2>
+        </div>
+        <p>
+          Findings 1, 2, 3 and 6, in that order. The status ramp removes almost
+          every hardcoded colour and fixes seven dark-mode contrast failures at
+          once. Correcting AGENTS.md stops agents generating new violations
+          while you fix the old ones. The contrast table takes twenty minutes.
+          And the token test makes all three permanent instead of a snapshot.
+        </p>
+        <p>
+          Findings 4 and 5 — the badge and button consolidation — are the
+          largest and the most deferrable. They're worth doing before the next
+          feature that needs a new status, not before the next release.
+        </p>
+      </section>
+
+      <footer>
+        Audited 28 Aug 2026 against <span class="mono">main</span> at
+        <span class="mono">e4e8b93</span>.<br />
+        Scope: packages/ui-tokens/css/bindersnap-tokens.css ·
+        packages/ui-tokens/css/bindersnap-landing.css · apps/app/app.css ·
+        packages/editor/assets/bindersnap-editor.css · apps/app/index.html ·
+        apps/app/components/*.tsx<br />
+        Contrast ratios computed to WCAG 2.1 relative luminance, alpha fills
+        composited over the surface token beneath them.
+      </footer>
+    </div>
+  </body>
+</html>
