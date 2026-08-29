@@ -398,6 +398,12 @@ reference these before writing any styles or generating any visual assets:
 
 - **CSS tokens:** [`packages/ui-tokens/css/bindersnap-tokens.css`](packages/ui-tokens/css/bindersnap-tokens.css)
 - **Social media & brand cheat sheet:** [`docs/bindersnap-social-cheatsheet.html`](docs/bindersnap-social-cheatsheet.html)
+- **Open design system work:** [`docs/design/design-system-audit.md`](docs/design/design-system-audit.md)
+
+> **The token vocabulary below is out of date.** `--space-*`, `--radius-*` and
+> `--text-*` do not exist; the real names are `--brand-space-*`,
+> `--brand-radius-*` and `--brand-text-*`. Read the token file itself until
+> Task 2 of the audit lands.
 
 ### `packages/ui-tokens/css/bindersnap-tokens.css`
 
