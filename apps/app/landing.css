@@ -942,11 +942,16 @@ body::after {
   padding: var(--brand-section-padding-y) var(--brand-page-padding-x);
   max-width: var(--brand-max-width);
   margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: var(--brand-space-16);
+  align-items: start;
 }
 
-.features-eyebrow {
-  text-align: center;
-  margin-bottom: var(--brand-space-4);
+/* The pitch holds its column while the three claims scroll past it. */
+.features-lede {
+  position: sticky;
+  top: calc(var(--brand-nav-height) + var(--brand-space-12));
 }
 
 .eyebrow-tag {
@@ -970,15 +975,19 @@ body::after {
   opacity: 0.4;
 }
 
+/* The lede's eyebrow is left-aligned, so it takes a rule on one side only —
+   the centred sections keep the symmetric pair. */
+.features-lede .eyebrow-tag::before {
+  display: none;
+}
+
 .features-title {
   font-family: var(--brand-font-serif);
   font-size: clamp(30px, 3.5vw, 46px);
   font-weight: var(--brand-weight-semibold);
   line-height: var(--brand-leading-snug);
   color: var(--bs-text-primary);
-  text-align: center;
-  max-width: var(--brand-max-width-text);
-  margin: 0 auto var(--brand-space-4);
+  margin: var(--brand-space-4) 0 var(--brand-space-4);
   transition: color var(--brand-transition-base);
 }
 
@@ -988,84 +997,46 @@ body::after {
 }
 
 .features-subtitle {
-  text-align: center;
   font-size: var(--brand-text-body);
   font-weight: var(--brand-weight-light);
   color: var(--bs-text-muted);
-  max-width: 480px;
-  margin: 0 auto var(--brand-space-20);
+  max-width: 420px;
   line-height: var(--brand-leading-relaxed);
 }
 
-.features-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--brand-space-6);
+.features-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
-/* Feature cards — reuses .bs-card pattern from tokens */
+/* A row on a hairline, not a card: no fill, no border box, no shadow. The
+   numeral carries the ordering that a three-across grid used to imply. */
 .feat {
-  background: var(--bs-surface-1);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-xl);
-  padding: 36px 32px;
-  position: relative;
-  overflow: hidden;
-  transition:
-    transform var(--brand-transition-slow),
-    box-shadow var(--brand-transition-slow),
-    border-color var(--brand-transition-slow),
-    background var(--brand-transition-base);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--brand-space-6);
+  padding: var(--brand-space-8) 0;
+  border-top: 1px solid var(--bs-rule);
 }
 
-.feat::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: var(--brand-coral);
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform var(--brand-transition-slow);
+.feat:first-child {
+  padding-top: 0;
+  border-top: none;
 }
 
-.feat:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--bs-shadow-lg);
-  border-color: transparent;
+.feat:last-child {
+  padding-bottom: 0;
 }
 
-.feat:hover::before {
-  transform: scaleX(1);
-}
-
-.feat-icon {
-  width: 48px;
-  height: 48px;
-  background: var(--bs-coral-dim);
-  border-radius: var(--brand-radius-lg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: var(--brand-space-6);
-  transition: background var(--brand-transition-base);
-}
-
-.feat:hover .feat-icon {
-  background: var(--brand-coral);
-}
-
-.feat-icon svg {
-  width: 22px;
-  height: 22px;
-  color: var(--brand-coral);
-  transition: color var(--brand-transition-base);
-}
-
-.feat:hover .feat-icon svg {
-  color: white;
+.feat-num {
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-medium);
+  color: var(--bs-text-faint);
+  letter-spacing: var(--brand-tracking-wide);
+  line-height: var(--brand-leading-snug);
+  padding-top: var(--brand-space-0-5);
 }
 
 .feat-tag {
@@ -1100,11 +1071,7 @@ body::after {
 ───────────────────────────────────── */
 
 .section-compare {
-  background: var(--bs-surface-2);
-  border-top: 1px solid var(--bs-rule);
-  border-bottom: 1px solid var(--bs-rule);
   padding: var(--brand-section-padding-y) var(--brand-page-padding-x);
-  transition: var(--bs-mode-transition);
 }
 
 .compare-inner {
@@ -1139,13 +1106,9 @@ body::after {
   line-height: var(--brand-leading-normal);
 }
 
-.compare-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--brand-space-6);
-}
-
-.compare-col {
+/* The ledger: one container, one row per pair, a spine down the middle. The
+   green edge marks the answering half without a second card around it. */
+.ledger {
   background: var(--bs-surface-1);
   border: 1px solid var(--bs-rule);
   border-radius: var(--brand-radius-xl);
@@ -1153,89 +1116,89 @@ body::after {
   transition: var(--bs-mode-transition);
 }
 
-.compare-col-header {
-  padding: 20px 28px;
+.ledger-row {
+  display: grid;
+  /* minmax(0, …) rather than 1fr: one of the rows is a filename with no break
+     opportunity in it, and an auto minimum would let that cell push the column
+     past the container instead of wrapping. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  border-top: 1px solid var(--bs-rule-warm);
+}
+
+.ledger-row.is-head {
+  border-top: none;
   border-bottom: 1px solid var(--bs-rule);
+}
+
+.ledger-cell {
   display: flex;
-  align-items: center;
-  gap: var(--brand-space-2);
-  transition: border-color var(--brand-transition-base);
+  align-items: flex-start;
+  gap: var(--brand-space-3);
+  padding: 16px 28px;
+  font-size: var(--brand-text-sm);
+  font-weight: var(--brand-weight-regular);
+  line-height: var(--brand-leading-normal);
+  color: var(--bs-text-secondary);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
-.compare-col-header .col-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
+.ledger-cell.before {
+  color: var(--bs-text-muted);
 }
 
-.compare-col.before .col-dot {
-  background: var(--bs-text-faint);
-}
-.compare-col.after .col-dot {
-  background: var(--brand-green);
+/* The spine. Green on the answering side so the eye lands on the right-hand
+   column, which is where the sale is. */
+.ledger-cell.after {
+  border-left: 1px solid var(--bs-green-border-soft);
+  background: var(--bs-surface-1);
 }
 
-.compare-col-header span {
+.ledger-row.is-head .ledger-cell {
   font-family: var(--brand-font-mono);
   font-size: var(--brand-text-ui-sm);
   font-weight: var(--brand-weight-medium);
   letter-spacing: var(--brand-tracking-wide);
   text-transform: uppercase;
+  align-items: center;
+  padding-top: 20px;
+  padding-bottom: 20px;
 }
 
-.compare-col.before .compare-col-header span {
-  color: var(--bs-text-muted);
-}
-.compare-col.after .compare-col-header span {
+.ledger-row.is-head .ledger-cell.after {
   color: var(--brand-green);
-}
-.compare-col.after {
-  border-color: var(--bs-green-border);
-}
-.compare-col.after .compare-col-header {
-  border-color: var(--bs-green-border-soft);
+  border-left-color: var(--bs-green-border);
 }
 
-.compare-items {
-  padding: 8px 0;
+.ledger-row.is-head .col-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--bs-text-faint);
 }
 
-.compare-item {
+.ledger-row.is-head .ledger-cell.after .col-dot {
+  background: var(--brand-green);
+}
+
+.ledger-mark {
   display: flex;
-  align-items: flex-start;
-  gap: var(--brand-space-3);
-  padding: 14px 28px;
-  border-bottom: 1px solid var(--bs-rule-warm);
-}
-
-.compare-item:last-child {
-  border-bottom: none;
-}
-
-.compare-item svg {
-  width: 16px;
-  height: 16px;
   flex-shrink: 0;
   margin-top: var(--brand-space-0-5);
 }
 
-.compare-col.before .compare-item svg {
+.ledger-mark svg {
+  width: 16px;
+  height: 16px;
+}
+
+.ledger-cell.before .ledger-mark svg {
   color: var(--bs-text-faint);
 }
-.compare-col.after .compare-item svg {
+
+.ledger-cell.after .ledger-mark svg {
   color: var(--brand-green);
-}
-
-.compare-item span {
-  font-size: var(--brand-text-sm);
-  font-weight: var(--brand-weight-regular);
-  line-height: var(--brand-leading-normal);
-  color: var(--bs-text-secondary);
-}
-
-.compare-col.before .compare-item span {
-  color: var(--bs-text-muted);
 }
 
 /* ─────────────────────────────────────
@@ -1278,22 +1241,32 @@ body::after {
   margin: 0 auto;
 }
 
-.review-grid {
+/* A divided strip, not three cards. The three points share one surface and
+   are separated by hairlines — the same substance as the old card row without
+   a fourth set of rounded boxes on a page that already has plenty. */
+.review-strip {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: var(--brand-space-6);
   text-align: left;
+  border-top: 1px solid var(--bs-rule);
+  border-bottom: 1px solid var(--bs-rule);
 }
 
-.review-card {
-  background: var(--bs-surface-1);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-xl);
-  padding: var(--brand-space-8);
-  transition: var(--bs-mode-transition);
+.review-point {
+  padding: var(--brand-space-10) var(--brand-space-8);
+  border-left: 1px solid var(--bs-rule);
 }
 
-.review-card-icon {
+.review-point:first-child {
+  border-left: none;
+  padding-left: 0;
+}
+
+.review-point:last-child {
+  padding-right: 0;
+}
+
+.review-point-icon {
   width: var(--brand-space-8);
   height: var(--brand-space-8);
   display: flex;
@@ -1305,7 +1278,7 @@ body::after {
   margin-bottom: var(--brand-space-5);
 }
 
-.review-card-tag {
+.review-point-tag {
   font-family: var(--brand-font-mono);
   font-size: 10px;
   font-weight: var(--brand-weight-medium);
@@ -1315,7 +1288,7 @@ body::after {
   margin-bottom: var(--brand-space-2);
 }
 
-.review-card h3 {
+.review-point h3 {
   font-family: var(--brand-font-serif);
   font-size: 21px;
   font-weight: var(--brand-weight-semibold);
@@ -1324,7 +1297,7 @@ body::after {
   margin-bottom: var(--brand-space-3);
 }
 
-.review-card p {
+.review-point p {
   font-size: var(--brand-text-sm);
   font-weight: var(--brand-weight-light);
   line-height: var(--brand-leading-relaxed);
@@ -1389,7 +1362,7 @@ body::after {
 .chain {
   margin: 0 0 var(--brand-space-10);
   padding: var(--brand-space-8);
-  background: var(--bs-surface-2);
+  background: var(--bs-surface-1);
   border: 1px solid var(--bs-rule);
   border-radius: var(--brand-radius-xl);
   text-align: left;
@@ -1579,20 +1552,30 @@ body::after {
 }
 
 /* The three claims that used to be card headings. Same substance, a fraction
-   of the weight — the diagram above is what this section leads with now. */
+   of the weight — the diagram above is what this section leads with now, and
+   these read as one divided line under it rather than three more blocks. */
 .record-claims {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: var(--brand-space-8);
   list-style: none;
   margin: 0;
   padding: 0;
   text-align: left;
+  border-top: 1px solid var(--bs-rule);
 }
 
 .record-claim {
-  padding-top: var(--brand-space-4);
-  border-top: 2px solid var(--bs-rule);
+  padding: var(--brand-space-5) var(--brand-space-8);
+  border-left: 1px solid var(--bs-rule);
+}
+
+.record-claim:first-child {
+  border-left: none;
+  padding-left: 0;
+}
+
+.record-claim:last-child {
+  padding-right: 0;
 }
 
 .record-claim-tag {
@@ -2054,11 +2037,11 @@ footer {
   .hero-mockup {
     max-width: 980px;
   }
-  .features-grid {
-    grid-template-columns: repeat(2, 1fr);
+  .section-features {
+    gap: var(--brand-space-12);
   }
-  .review-grid {
-    grid-template-columns: repeat(2, 1fr);
+  .review-point {
+    padding: var(--brand-space-8) var(--brand-space-6);
   }
 }
 
@@ -2102,8 +2085,32 @@ footer {
     gap: var(--brand-space-12);
   }
 
-  .compare-grid {
+  /* The lede stops holding its column once the two stack. */
+  .section-features {
     grid-template-columns: 1fr;
+    gap: var(--brand-space-10);
+  }
+  .features-lede {
+    position: static;
+  }
+  .features-subtitle {
+    max-width: var(--brand-max-width-text);
+  }
+
+  .review-strip {
+    grid-template-columns: 1fr;
+  }
+  .review-point {
+    padding: var(--brand-space-8) 0;
+    border-left: none;
+    border-top: 1px solid var(--bs-rule);
+  }
+  .review-point:first-child {
+    border-top: none;
+    padding-top: 0;
+  }
+  .review-point:last-child {
+    padding-bottom: 0;
   }
 }
 
@@ -2151,23 +2158,16 @@ footer {
     display: none;
   }
 
-  .features-grid {
-    grid-template-columns: 1fr;
-  }
   .feat {
-    padding: 28px 24px;
+    grid-template-columns: 1fr;
+    gap: var(--brand-space-2);
+    padding: var(--brand-space-6) 0;
   }
 
   .section-review {
     /* Trimmed bottom — the founder coda follows immediately (see desktop). */
     padding: var(--brand-section-padding-y-sm) var(--brand-page-padding-x)
       var(--brand-space-8);
-  }
-  .review-grid {
-    grid-template-columns: 1fr;
-  }
-  .review-card {
-    padding: 28px 24px;
   }
   .section-record {
     padding: var(--brand-section-padding-y-sm) var(--brand-page-padding-x);
@@ -2199,13 +2199,37 @@ footer {
   }
   .record-claims {
     grid-template-columns: 1fr;
-    gap: var(--brand-space-6);
+  }
+  .record-claim {
+    padding: var(--brand-space-5) 0;
+    border-left: none;
+    border-top: 1px solid var(--bs-rule);
+  }
+  .record-claim:first-child {
+    border-top: none;
   }
   .section-compare {
     padding: var(--brand-section-padding-y-sm) var(--brand-page-padding-x);
   }
-  .compare-item {
+  /* The ledger keeps its pairs when it narrows: the two halves of a row
+     stack one above the other, so the answer still sits with its complaint
+     instead of five rows away in a second list. */
+  .ledger-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ledger-cell {
     padding: 12px 20px;
+  }
+  .ledger-cell.after {
+    border-left: none;
+    border-top: 1px solid var(--bs-green-border-soft);
+  }
+  .ledger-row.is-head .ledger-cell {
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+  .ledger-row.is-head .ledger-cell.after {
+    border-top-color: var(--bs-green-border);
   }
 
   .section-founder {

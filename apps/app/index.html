@@ -423,82 +423,78 @@
           </div>
         </section>
 
-        <!-- FEATURES -->
-        <section class="section-band">
+        <!--
+          FEATURES / THE SOLUTION
+
+          Not a card grid. This section and The Review used to be the same
+          three-across row of bordered cards, with the chain diagram and the
+          before/after boxes between them — four consecutive sections of
+          "centred header, then a row of boxes." The eye pattern-matches that
+          by the second one and starts skimming, which is the wrong thing to
+          happen on the half of the page that leads to the CTA.
+
+          So each of those four now has a shape of its own, and this is the
+          airy one: the pitch holds the left column while the three claims run
+          down the right as plain rows on hairlines. No card, no fill, no
+          shadow — the weight builds in the sections below it instead.
+        -->
+        <section>
           <div class="section-features">
-            <div class="features-eyebrow reveal">
+            <div class="features-lede reveal">
               <div class="eyebrow-tag">The Solution</div>
+              <h2 class="features-title">
+                You already have the policies. What you need is the proof.
+              </h2>
+              <p class="features-subtitle">
+                Word, PDF, whatever the last person left behind &mdash;
+                Bindersnap versions and approves your files exactly as they are.
+              </p>
             </div>
-            <h2 class="features-title reveal">
-              You already have the policies.<br />What you need is the proof.
-            </h2>
-            <p class="features-subtitle reveal">
-              Word, PDF, whatever the last person left behind &mdash; Bindersnap
-              versions and approves your files exactly as they are.
-            </p>
 
-            <div class="features-grid">
-              <div class="feat reveal reveal-d1">
-                <div class="feat-tag">Store</div>
-                <div class="feat-icon">
-                  <span
-                    class="landing-lucide-icon"
-                    data-lucide-icon="file-text"
-                    data-lucide-size="22"
-                    data-lucide-stroke-width="1.8"
-                    aria-hidden="true"
-                  ></span>
+            <ol class="features-list">
+              <li class="feat reveal reveal-d1">
+                <span class="feat-num" aria-hidden="true">01</span>
+                <div class="feat-body">
+                  <div class="feat-tag">Store</div>
+                  <h3>Every Policy, One Place</h3>
+                  <p>
+                    Every policy gets its own page, its own version history, and
+                    its own approval record. Point your staff at one link
+                    instead of a folder they have to guess their way through. No
+                    migration project, no consultant.
+                  </p>
                 </div>
-                <h3>Every Policy, One Place</h3>
-                <p>
-                  Every policy gets its own page, its own version history, and
-                  its own approval record. Point your staff at one link instead
-                  of a folder they have to guess their way through. No migration
-                  project, no consultant.
-                </p>
-              </div>
+              </li>
 
-              <div class="feat reveal reveal-d2">
-                <div class="feat-tag">Approve</div>
-                <div class="feat-icon">
-                  <span
-                    class="landing-lucide-icon"
-                    data-lucide-icon="badge-check"
-                    data-lucide-size="22"
-                    data-lucide-stroke-width="1.8"
-                    aria-hidden="true"
-                  ></span>
+              <li class="feat reveal reveal-d2">
+                <span class="feat-num" aria-hidden="true">02</span>
+                <div class="feat-body">
+                  <div class="feat-tag">Approve</div>
+                  <h3>Sign-Off That Cannot Be Back-Dated</h3>
+                  <p>
+                    Every approval is stamped with the person, the date, and the
+                    version they actually read. Approved versions lock &mdash; a
+                    revision arrives as a new version with its own review, never
+                    as a quiet edit to the one already signed.
+                  </p>
                 </div>
-                <h3>Sign-Off That Cannot Be Back-Dated</h3>
-                <p>
-                  Every approval is stamped with the person, the date, and the
-                  version they actually read. Approved versions lock &mdash; a
-                  revision arrives as a new version with its own review, never
-                  as a quiet edit to the one already signed.
-                </p>
-              </div>
+              </li>
 
-              <div class="feat reveal reveal-d3">
-                <div class="feat-tag">Produce</div>
-                <div class="feat-icon">
-                  <span
-                    class="landing-lucide-icon"
-                    data-lucide-icon="shield"
-                    data-lucide-size="22"
-                    data-lucide-stroke-width="1.8"
-                    aria-hidden="true"
-                  ></span>
+              <li class="feat reveal reveal-d3">
+                <span class="feat-num" aria-hidden="true">03</span>
+                <div class="feat-body">
+                  <div class="feat-tag">Produce</div>
+                  <h3>Evidence While They Wait</h3>
+                  <p>
+                    Asked who approved the current version and when? It is on
+                    the page, in front of you, while the surveyor is still in
+                    the room. Asked for the whole history? Every version is
+                    there in order, each with the sign-offs it collected &mdash;
+                    no support ticket, no vendor in the middle.
+                  </p>
                 </div>
-                <h3>Evidence While They Wait</h3>
-                <p>
-                  Asked who approved the current version and when? It is on the
-                  page, in front of you, while the surveyor is still in the
-                  room. Asked for the whole history? Every version is there in
-                  order, each with the sign-offs it collected &mdash; no support
-                  ticket, no vendor in the middle.
-                </p>
-              </div>
-            </div>
+              </li>
+            </ol>
           </div>
         </section>
 
@@ -525,7 +521,7 @@
           compact row. Same substance, a quarter of the visual weight, and the
           section no longer looks like the two either side of it.
         -->
-        <section class="section-record">
+        <section class="section-record section-band">
           <div class="review-inner">
             <div class="review-header reveal">
               <div class="eyebrow-tag">The Record</div>
@@ -677,7 +673,16 @@
           </div>
         </section>
 
-        <!-- BEFORE / AFTER -->
+        <!--
+          BEFORE / AFTER
+
+          One ledger, not two boxes side by side. The pairs are the argument —
+          each line of the shared drive answered on the same row — and reading
+          them across is a shorter trip than cross-referencing two lists. It
+          also spends one bordered container on this section where the old
+          two-column version spent two, which matters because the page already
+          has a diagram above it and a divided strip below it.
+        -->
         <section class="section-compare">
           <div class="compare-inner">
             <div class="compare-header reveal">
@@ -686,83 +691,35 @@
                 Same policies, same people &mdash; a very different survey week.
               </p>
             </div>
-            <div class="compare-grid">
-              <div class="compare-col before reveal reveal-d1">
-                <div class="compare-col-header">
-                  <div class="col-dot"></div>
+            <div class="ledger">
+              <div class="ledger-row is-head reveal">
+                <div class="ledger-cell before">
+                  <span class="col-dot" aria-hidden="true"></span>
                   <span>Shared drive, email, and a SharePoint nobody owns</span>
                 </div>
-                <div class="compare-items">
-                  <div class="compare-item">
-                    <span
-                      class="landing-lucide-icon"
-                      data-lucide-icon="x"
-                      data-lucide-size="16"
-                      data-lucide-stroke-width="1.75"
-                      aria-hidden="true"
-                    ></span>
-                    <span
-                      >Three files in the policy folder that all look
-                      final</span
-                    >
-                  </div>
-                  <div class="compare-item">
-                    <span
-                      class="landing-lucide-icon"
-                      data-lucide-icon="x"
-                      data-lucide-size="16"
-                      data-lucide-stroke-width="1.75"
-                      aria-hidden="true"
-                    ></span>
-                    <span
-                      >Sign-offs in an inbox, sometimes a former
-                      employee's</span
-                    >
-                  </div>
-                  <div class="compare-item">
-                    <span
-                      class="landing-lucide-icon"
-                      data-lucide-icon="x"
-                      data-lucide-size="16"
-                      data-lucide-stroke-width="1.75"
-                      aria-hidden="true"
-                    ></span>
-                    <span>IC_Policy_2026_rev3_FINAL_APPROVED(2).docx</span>
-                  </div>
-                  <div class="compare-item">
-                    <span
-                      class="landing-lucide-icon"
-                      data-lucide-icon="x"
-                      data-lucide-size="16"
-                      data-lucide-stroke-width="1.75"
-                      aria-hidden="true"
-                    ></span>
-                    <span
-                      >Survey week starts with a weekend of reconstruction</span
-                    >
-                  </div>
-                  <div class="compare-item">
-                    <span
-                      class="landing-lucide-icon"
-                      data-lucide-icon="x"
-                      data-lucide-size="16"
-                      data-lucide-stroke-width="1.75"
-                      aria-hidden="true"
-                    ></span>
-                    <span
-                      >Staff working from a copy somebody saved locally</span
-                    >
-                  </div>
+                <div class="ledger-cell after">
+                  <span class="col-dot" aria-hidden="true"></span>
+                  <span>With Bindersnap</span>
                 </div>
               </div>
 
-              <div class="compare-col after reveal reveal-d2">
-                <div class="compare-col-header">
-                  <div class="col-dot"></div>
-                  <span>With Bindersnap</span>
+              <div class="ledger-row reveal reveal-d1">
+                <div class="ledger-cell before">
+                  <span class="ledger-mark" aria-hidden="true">
+                    <span
+                      class="landing-lucide-icon"
+                      data-lucide-icon="x"
+                      data-lucide-size="16"
+                      data-lucide-stroke-width="1.75"
+                      aria-hidden="true"
+                    ></span>
+                  </span>
+                  <span
+                    >Three files in the policy folder that all look final</span
+                  >
                 </div>
-                <div class="compare-items">
-                  <div class="compare-item">
+                <div class="ledger-cell after">
+                  <span class="ledger-mark" aria-hidden="true">
                     <span
                       class="landing-lucide-icon"
                       data-lucide-icon="check"
@@ -770,11 +727,31 @@
                       data-lucide-stroke-width="1.75"
                       aria-hidden="true"
                     ></span>
+                  </span>
+                  <span
+                    >One policy, one page, one current approved version</span
+                  >
+                </div>
+              </div>
+
+              <div class="ledger-row reveal reveal-d2">
+                <div class="ledger-cell before">
+                  <span class="ledger-mark" aria-hidden="true">
                     <span
-                      >One policy, one page, one current approved version</span
-                    >
-                  </div>
-                  <div class="compare-item">
+                      class="landing-lucide-icon"
+                      data-lucide-icon="x"
+                      data-lucide-size="16"
+                      data-lucide-stroke-width="1.75"
+                      aria-hidden="true"
+                    ></span>
+                  </span>
+                  <span
+                    >Sign-offs in an inbox, sometimes a former
+                    employee&rsquo;s</span
+                  >
+                </div>
+                <div class="ledger-cell after">
+                  <span class="ledger-mark" aria-hidden="true">
                     <span
                       class="landing-lucide-icon"
                       data-lucide-icon="check"
@@ -782,11 +759,28 @@
                       data-lucide-stroke-width="1.75"
                       aria-hidden="true"
                     ></span>
+                  </span>
+                  <span
+                    >Every sign-off dated, named, and tied to a version</span
+                  >
+                </div>
+              </div>
+
+              <div class="ledger-row reveal reveal-d3">
+                <div class="ledger-cell before">
+                  <span class="ledger-mark" aria-hidden="true">
                     <span
-                      >Every sign-off dated, named, and tied to a version</span
-                    >
-                  </div>
-                  <div class="compare-item">
+                      class="landing-lucide-icon"
+                      data-lucide-icon="x"
+                      data-lucide-size="16"
+                      data-lucide-stroke-width="1.75"
+                      aria-hidden="true"
+                    ></span>
+                  </span>
+                  <span>IC_Policy_2026_rev3_FINAL_APPROVED(2).docx</span>
+                </div>
+                <div class="ledger-cell after">
+                  <span class="ledger-mark" aria-hidden="true">
                     <span
                       class="landing-lucide-icon"
                       data-lucide-icon="check"
@@ -794,9 +788,26 @@
                       data-lucide-stroke-width="1.75"
                       aria-hidden="true"
                     ></span>
-                    <span>Version history instead of filename archaeology</span>
-                  </div>
-                  <div class="compare-item">
+                  </span>
+                  <span>Version history instead of filename archaeology</span>
+                </div>
+              </div>
+
+              <div class="ledger-row reveal reveal-d3">
+                <div class="ledger-cell before">
+                  <span class="ledger-mark" aria-hidden="true">
+                    <span
+                      class="landing-lucide-icon"
+                      data-lucide-icon="x"
+                      data-lucide-size="16"
+                      data-lucide-stroke-width="1.75"
+                      aria-hidden="true"
+                    ></span>
+                  </span>
+                  <span>Staff working from a copy somebody saved locally</span>
+                </div>
+                <div class="ledger-cell after">
+                  <span class="ledger-mark" aria-hidden="true">
                     <span
                       class="landing-lucide-icon"
                       data-lucide-icon="check"
@@ -804,11 +815,30 @@
                       data-lucide-stroke-width="1.75"
                       aria-hidden="true"
                     ></span>
+                  </span>
+                  <span
+                    >Nothing reaches the approved copy but a new version</span
+                  >
+                </div>
+              </div>
+
+              <div class="ledger-row reveal reveal-d3">
+                <div class="ledger-cell before">
+                  <span class="ledger-mark" aria-hidden="true">
                     <span
-                      >Nothing reaches the approved copy but a new version</span
-                    >
-                  </div>
-                  <div class="compare-item">
+                      class="landing-lucide-icon"
+                      data-lucide-icon="x"
+                      data-lucide-size="16"
+                      data-lucide-stroke-width="1.75"
+                      aria-hidden="true"
+                    ></span>
+                  </span>
+                  <span
+                    >Survey week starts with a weekend of reconstruction</span
+                  >
+                </div>
+                <div class="ledger-cell after">
+                  <span class="ledger-mark" aria-hidden="true">
                     <span
                       class="landing-lucide-icon"
                       data-lucide-icon="check"
@@ -816,10 +846,8 @@
                       data-lucide-stroke-width="1.75"
                       aria-hidden="true"
                     ></span>
-                    <span
-                      >Every version and sign-off on one page, on demand</span
-                    >
-                  </div>
+                  </span>
+                  <span>Every version and sign-off on one page, on demand</span>
                 </div>
               </div>
             </div>
@@ -827,7 +855,7 @@
         </section>
 
         <!-- REVIEW DISCUSSIONS -->
-        <section class="section-review">
+        <section class="section-review section-band">
           <div class="review-inner">
             <div class="review-header reveal">
               <div class="eyebrow-tag">The Review</div>
@@ -840,9 +868,9 @@
               </p>
             </div>
 
-            <div class="review-grid">
-              <div class="review-card reveal reveal-d1">
-                <div class="review-card-icon">
+            <div class="review-strip">
+              <div class="review-point reveal reveal-d1">
+                <div class="review-point-icon">
                   <span
                     class="landing-lucide-icon"
                     data-lucide-icon="users"
@@ -851,7 +879,7 @@
                     aria-hidden="true"
                   ></span>
                 </div>
-                <div class="review-card-tag">Threaded</div>
+                <div class="review-point-tag">Threaded</div>
                 <h3>Every question stays with its version</h3>
                 <p>
                   The Medical Director raises a point, the author replies
@@ -861,8 +889,8 @@
                 </p>
               </div>
 
-              <div class="review-card reveal reveal-d2">
-                <div class="review-card-icon">
+              <div class="review-point reveal reveal-d2">
+                <div class="review-point-icon">
                   <span
                     class="landing-lucide-icon"
                     data-lucide-icon="check"
@@ -871,7 +899,7 @@
                     aria-hidden="true"
                   ></span>
                 </div>
-                <div class="review-card-tag">Enforced</div>
+                <div class="review-point-tag">Enforced</div>
                 <h3>Set the rule once. It holds.</h3>
                 <p>
                   Require two approvals, or the Medical Director specifically.
@@ -881,8 +909,8 @@
                 </p>
               </div>
 
-              <div class="review-card reveal reveal-d3">
-                <div class="review-card-icon">
+              <div class="review-point reveal reveal-d3">
+                <div class="review-point-icon">
                   <span
                     class="landing-lucide-icon"
                     data-lucide-icon="shield"
@@ -891,7 +919,7 @@
                     aria-hidden="true"
                   ></span>
                 </div>
-                <div class="review-card-tag">Recorded</div>
+                <div class="review-point-tag">Recorded</div>
                 <h3>The publish gate keeps its own history</h3>
                 <p>
                   The rule that holds a version back while a question is open is
