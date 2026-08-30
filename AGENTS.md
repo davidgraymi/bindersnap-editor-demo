@@ -649,9 +649,34 @@ Every section opens with a mono label in coral with flanking line decorations:
 
 ### Card hover pattern
 
-Feature cards use `.bs-card`. On hover: translate up 4px, elevate shadow,
-border becomes transparent, and a 3px coral top border scales in from the left
-via `scaleX`. Never apply this pattern to non-interactive content.
+Cards use `.bs-card`. On hover: translate up 4px, elevate shadow, border
+becomes transparent, and a 3px coral top border scales in from the left via
+`scaleX`. Never apply this pattern to non-interactive content — and note that
+the landing page's mid-page sections deliberately do not use cards at all (see
+Landing page scroll rhythm).
+
+### Landing page scroll rhythm
+
+The four sections between the chaos strip and the founder note — The Solution,
+The Record, the before/after, The Review — each have a **different silhouette,
+on purpose**:
+
+| Section        | Shape                                               | Tone   |
+| -------------- | --------------------------------------------------- | ------ |
+| The Solution   | sticky left lede + three numbered rows on hairlines | paper  |
+| The Record     | one framed chain diagram + a divided claims line    | tinted |
+| Before / after | one ledger, the pairs answering across each row     | paper  |
+| The Review     | a three-column strip divided by hairlines           | tinted |
+
+They used to be four consecutive "centred header, then a row of bordered
+cards" sections. The eye pattern-matches that by the second one and starts
+skimming — on the half of the page that leads to the CTA, which is exactly
+where interest should be building instead.
+
+So when you add or rework a section in this stretch: **do not reach for a
+three-across card grid**, and keep the tinted/paper alternation intact
+(`.section-band` puts a bare `<section>` on the tinted beat). If a new section
+needs a shape, give it one nothing adjacent already has.
 
 ### Scroll reveal
 
