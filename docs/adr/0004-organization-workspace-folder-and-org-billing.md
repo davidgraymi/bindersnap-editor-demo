@@ -43,7 +43,7 @@ below.**
 | ---------------- | ----------------------------------- | --------------------------------------- |
 | **Organization** | A Gitea organization                | Who we bill, and who your people are    |
 | **Workspace**    | A set of Gitea teams in that org    | What rules apply, and who can act       |
-| **Folder**       | Metadata in the org's config repo   | How you find things                     |
+| **Folder**       | A row in the API's SQLite database  | How you find things                     |
 | Document         | A Gitea repository owned by the org | The record itself (ADR 0001, unchanged) |
 
 The rule a customer can hold in their head:
@@ -218,53 +218,141 @@ override already exists.
 `AGENTS.md` says Gitea is the only datastore with sessions as the sole exception.
 That has not been true since Stripe landed: `subscriptions`,
 `subscription_access_overrides`, `processed_webhook_events`, and
-`webhook_customer_state` are all SQLite. This ADR states the rule that was
-actually being followed, and binds it:
+`webhook_customer_state` are all SQLite. Rather than widen an exception one
+feature at a time, this section replaces the rule with a decision procedure.
 
-> **If losing it would corrupt the audit record, it lives in Gitea. If losing it
-> would only mean re-entering a credit card, it may live in SQLite.**
->
-> SQLite may hold commercial facts and references to Gitea objects. It may never
-> hold governance facts — who is a member, who may approve, what the policy is,
-> what happened.
+### The three questions, in order
 
-Drop the SQLite file and a customer loses their billing linkage and their
-sessions. They lose no document, no version, no approval, no comment, no
-membership, and no permission.
+**1. Does Gitea model this natively?** Branch protection, org membership, teams
+and their unit permissions, PR reviews, assignees, review requests, comment
+reactions, repo topics. If yes, **use the Gitea primitive and never shadow it.**
+Gitea keeps these in its own database and enforces them at merge time. A copy of
+a Gitea-enforced fact in our storage is a bug waiting for the two to disagree —
+and when they disagree, the one that matters is the one Gitea enforced.
 
-| Fact                                               | Where                                                   |
-| -------------------------------------------------- | ------------------------------------------------------- |
-| Organization identity, name                        | Gitea org                                               |
-| Human identity, credentials                        | Gitea user                                              |
-| Who belongs to the organization                    | Gitea org membership                                    |
-| Workspace existence, name, roles                   | Gitea teams (`<ws>-admins/-authors/-reviewers`)         |
-| Who can do what, where                             | Gitea team membership + unit permissions                |
-| Which documents are in a workspace                 | Gitea team↔repo attachment                              |
-| Document, versions, approvals, threads, audit      | Gitea repo / PR / reviews / comments (ADR 0001)         |
-| Per-document review policy                         | `.bindersnap/config.json` on `bindersnap-config` branch |
-| Workspace policy defaults, folders, departments    | `org.json` in the org's `.bindersnap` config repo       |
-| Stripe customer / subscription / trial / overrides | SQLite                                                  |
+**2. Is this evidence?** Evidence is a fact about _what happened_ that a surveyor
+could ask us to prove after the fact, where "our database says so" is not an
+acceptable answer. Documents, versions, who approved, when, what they said, what
+changed. **Evidence is a git object in the document's own repository** — a
+commit, a pull request, a review, a comment, a tag. This never moves. Not to
+SQLite, not to Postgres, not as an optimization.
 
-### The org config repo
+**3. Everything else is configuration.** How the app should behave right now:
+workspace display names, folder trees, department lists, review cadence,
+notification preferences, billing. **Configuration is a typed, indexed, migrated
+table in SQLite.** Not a file in a git repository.
 
-Workspace display names, review-policy defaults, the folder tree (#365), and the
-department list (#371) have no Gitea primitive. They go in a private repo named
-`.bindersnap` in the org, attached to no workspace team, holding
-`workspaces/<slug>.json`.
+### Why configuration does not belong in a git repo
 
-This is not a second datastore — it is the pattern already blessed for
-per-document policy (`reviewSettings.ts`), one level up. And it is better than a
-SQLite row for a compliance product: every settings change is a commit with an
-author and a timestamp, so "who changed the approval rule for the Nursing binder,
-and when" is answerable by the same machinery that answers it for documents.
+The existing per-document policy file (`.bindersnap/config.json` on a
+`bindersnap-config` branch, `reviewSettings.ts`) is the pattern this ADR was
+originally going to extend upward to the workspace. On inspection it should not
+be extended, and it should eventually be retired. Git is superb at one thing that
+no database gives us for free, and that one thing is not what this file is doing.
 
-Two mechanics, stated so they are not re-litigated:
+**What git uniquely provides:** content-addressed, tamper-evident history that
+travels with a clone, and a point-in-time read of any file _as of any commit or
+tag_ — `GET contents?ref=v3.2`. That last property is the whole reason to accept
+git's costs.
 
-- **Writes are compare-and-swap** on the file SHA via the contents API, exactly as
-  `reviewSettings.ts` does. Concurrent admins get a conflict, never a lost update.
-- **Reads are not cached** (the no-cache rule stands). One small file over
-  loopback from a co-located Gitea is acceptable. If it ever is not, the answer is
-  conditional requests, not a database.
+**What git costs, concretely, in this codebase:**
+
+| Cost                               | Detail                                                                                                                                                  |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Every read is a network round trip | No local index. `getReviewSettings` is one HTTP call, and the no-cache rule means it is one call _every time_.                                          |
+| Every write is 2–4 calls           | Read for the SHA, create the config branch on first write, then PUT. Plus a commit, tree and blob object that live forever.                             |
+| No cross-object query              | "Which policies are due for review this month" is not a query. It is N HTTP calls, one per document, on every page load.                                |
+| No transaction across files        | Compare-and-swap per file is the ceiling. Two documents cannot be changed atomically.                                                                   |
+| No types, no constraints           | A malformed file must degrade rather than fail — and in our code it degrades **silently to the permissive policy**. A corrupt byte turns off a control. |
+| Monotonic growth                   | Nothing is ever deleted. Fine for a checkbox toggled twice a year; not fine for anything with write volume.                                             |
+
+**And the file does not even buy the one thing git is for.** `bindersnap-config`
+is branched off `main` once and then diverges; the document's version commits
+never land on it. So there is no ref at which you can read "the policy as of
+version 3.2." The design pays every cost above and receives a change log — which
+an append-only table would also give us, indexed, in one query.
+
+This is the direct answer to "Gitea keeps its settings in a database, so do
+ours need to be in a repo?" **No.** Gitea is right. Settings are configuration,
+configuration is queried, and git cannot query.
+
+### When configuration shapes evidence, stamp it onto the event
+
+The real requirement behind the config file is legitimate: a surveyor may ask
+"was this approval obtained under a rule that required resolved threads?" The
+answer to that is not to version the configuration. It is:
+
+> **Git stores what happened. The database stores how the app is configured. When
+> configuration shapes what happened, do not version the configuration — stamp it
+> onto the event.**
+
+At publish time, the effective policy is written into the publish record itself —
+the annotated tag and the merge commit message carry the approvals required, the
+approvers, and whether thread resolution was enforced. That is better evidence
+than a versioned config file in every way that matters: it is immutable, it is
+attached to the exact event, it needs no join against historical settings, and it
+survives being handed to an auditor as a git log with no application running.
+
+A settings _change_ is still worth recording — who turned off the thread
+requirement, and when. That is an append-only `settings_events` table. It is
+telemetry about administration, not evidence about a document, and it does not
+need git.
+
+### The third category: derived indexes
+
+The documents list already fans out to roughly three Gitea calls per repository
+(`getLatestDocTag`, `listPullRequestsWithReviews`, `readRequiredApprovals`). At
+200 policies that is 600 calls per page load, and the review-cycle due queue
+(#373) and department completion reporting (#371) both want questions that fan
+out the same way. The no-cache rule cannot survive that, and it should not have
+to.
+
+A **derived index** is permitted, under three conditions that make it not a
+second source of truth:
+
+1. It is **rebuildable from Gitea from scratch**, at any time, by a job that
+   takes no input but Gitea.
+2. **No request handler writes to it as its primary action.** It is populated by
+   webhook and by reconcile, never as the authoritative result of a user action.
+3. **Dropping it loses nothing but speed.** If the answer would differ from
+   Gitea, Gitea wins, and the reconciler is the bug report.
+
+That is what "no cache" was protecting against — a cache that becomes the truth —
+and these three conditions are the protection, stated so the rule can be followed
+instead of worked around.
+
+### The table
+
+| Fact                                                      | Where                                            | Why                                     |
+| --------------------------------------------------------- | ------------------------------------------------ | --------------------------------------- |
+| Organization identity, membership                         | Gitea org                                        | Native primitive                        |
+| Workspace roles and permissions                           | Gitea teams                                      | Native, and Gitea enforces it           |
+| Which documents are in a workspace                        | Gitea team↔repo attachment                       | Native                                  |
+| Required approvals, stale-approval dismissal              | Gitea branch protection                          | Native, enforced at merge               |
+| Document, versions, approvals, reviews, threads, tags     | Gitea repo and PR objects                        | Evidence (ADR 0001)                     |
+| The policy in force at a publish                          | Stamped into the tag and merge commit            | Evidence, self-contained                |
+| Workspace names, folder tree, departments, review cadence | SQLite                                           | Configuration; queried across documents |
+| Per-document review policy                                | SQLite (migrating off `.bindersnap/config.json`) | Configuration                           |
+| Settings change history                                   | SQLite, append-only                              | Administrative telemetry                |
+| Stripe customer, subscription, trial, overrides           | SQLite                                           | Commercial                              |
+| List/queue read models                                    | SQLite, derived                                  | Speed only; rebuildable                 |
+
+### What this costs, honestly
+
+Losing the SQLite file now costs more than it did: sessions, billing, workspace
+names, folder trees, and policy settings. It still costs **no evidence** — not one
+document, version, approval, comment, review, membership or permission. Policies
+would revert to defaults and admins would re-set them; nothing a customer could be
+asked to produce in an audit is gone. That asymmetry is the whole justification
+for the split, and it is why the durability answer is Litestream (ADR 0003) plus
+the staleness alarm in #221 rather than storing configuration in git to avoid
+trusting a database we already trust with sessions and money.
+
+**The tripwire, and it is the one that matters.** This is the direction #366 asks
+about, and it stops here. Configuration and derived indexes may live in SQLite.
+**Evidence may not.** Any proposal to move a document, a version, an approval, a
+review, a comment, a membership or a permission out of Gitea is a new ADR
+arguing that on its own merits — not a patch, and not a performance fix.
 
 ## Migration
 
@@ -289,6 +377,13 @@ be, and every month of delay makes it more expensive.
 5. **Keep per-repo collaborators as the exception.** Outside counsel who should
    see exactly one document is a legitimate residual use, and the natural home for
    #364's one-time approval links.
+6. **Retire the config-branch policy file.** Stamp the effective policy into the
+   annotated tag and merge commit at publish time first — that is the part with
+   evidentiary value and it can ship on its own. Then move
+   `blockOnUnresolvedThreads` into the settings table, reading through to
+   `.bindersnap/config.json` for repos that still carry one, and stop writing new
+   config branches. Existing config branches are left in place; they are history,
+   and deleting them buys nothing.
 
 Verification before the old path is deleted: every pre-migration document URL
 resolves, every pre-migration approval is present in the record, and an
@@ -318,8 +413,8 @@ integration test covers the migrated path end to end.
 
 **The tripwire.** This makes Gitea's org and team model load-bearing for
 permissions. If we ever need a permission Gitea cannot express, the answer is a
-new ADR — not an app-side ACL table added quietly. That path is #366, and it is a
-decision about the whole product, not a patch.
+new ADR — not an app-side ACL table added quietly. Permissions are enforcement,
+and enforcement stays where the merge happens.
 
 ## Reversal: TECHNICAL_VISION Q6
 

@@ -248,27 +248,36 @@ login time, stores it in its SQLite session store, and sets an `HttpOnly`
 `bindersnap_session` cookie on the browser. The primary auth path is always the session cookie.
 No bearer tokens in cookies. No Gitea credentials in `sessionStorage` or `localStorage`.
 
-### The record lives in Gitea. SQLite holds only the commercial relationship.
+### Evidence lives in Gitea. Configuration lives in SQLite.
 
-Documents, versions, approvals, comments, and audit trail are all stored as
-first-class Gitea primitives: repos, branches, commits, pull requests, reviews,
-tags, and issue comments. There is no metadata JSON file and no shadow state
-outside of Gitea.
+Three questions, in order, from
+`docs/adr/0004-organization-workspace-folder-and-org-billing.md`:
 
-The line, from `docs/adr/0004-organization-workspace-folder-and-org-billing.md`:
+1. **Does Gitea model it natively?** Branch protection, org membership, teams and
+   their unit permissions, PR reviews, assignees, review requests, reactions,
+   topics. Use the Gitea primitive and **never shadow it** — when a copy
+   disagrees with Gitea, the one Gitea enforced at merge is the one that counts.
+2. **Is it evidence** — a fact about what happened that a surveyor could ask us to
+   prove? Documents, versions, approvals, reviews, comments, tags. **It is a git
+   object in the document's repo, permanently.** Never SQLite, not even as an
+   optimization.
+3. **Everything else is configuration** — workspace names, folder trees,
+   departments, review cadence, per-document policy, billing. **A typed, indexed,
+   migrated SQLite table.** Not a file in a git repo: git cannot query, so any
+   question spanning documents becomes N network calls.
 
-> **If losing it would corrupt the audit record, it lives in Gitea. If losing it
-> would only mean re-entering a credit card, it may live in SQLite.**
+**When configuration shapes evidence, stamp it onto the event.** The policy in
+force at a publish is written into the annotated tag and merge commit, not looked
+up later from a versioned config file.
 
-The BFF's SQLite database therefore holds sessions (session → Gitea token) and
-the Stripe linkage (`subscriptions`, `subscription_access_overrides`,
-`processed_webhook_events`, `webhook_customer_state`, and organization billing
-state). It may never hold a governance fact — who is a member, who may approve,
-what the policy is, what happened. Those are Gitea's, always.
+A **derived index** in SQLite is allowed only if it is rebuildable from Gitea from
+scratch, is never written by a request handler as its primary action, and loses
+nothing but speed when dropped. Anything else that duplicates Gitea state is a
+cache, and caches are still banned.
 
-The consequence: reading app state means calling the Gitea API. This is
-intentional. Do not introduce a local cache, a Postgres instance, or any
-persistence layer that duplicates Gitea state.
+Migrating in: `.bindersnap/config.json` on the `bindersnap-config` branch
+(`reviewSettings.ts`) predates this rule and is moving to the settings table.
+Do not copy the pattern.
 
 **Organization, workspace, folder.** An organization is a Gitea org and owns
 every document repo. A workspace is a set of Gitea teams within it
