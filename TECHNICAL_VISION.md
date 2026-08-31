@@ -108,8 +108,9 @@ system. The reasoning:
   certain finance). A SaaS-only version control backend would be a blocker.
 
 **What Gitea stores:** Each Bindersnap document is a file (ProseMirror JSON,
-serialized to a `.json` file) in a Gitea repository. Each workspace or team has
-its own repository. Saves become commits. Reviews become pull requests. Approvals
+serialized to a `.json` file) in a Gitea repository. Each document has its own
+repository (ADR 0001); a workspace is a set of Gitea teams over many of them
+(ADR 0004). Saves become commits. Reviews become pull requests. Approvals
 become merge events on protected branches.
 
 **What Gitea does NOT do:** Gitea has no awareness of the editor UI, real-time
@@ -611,8 +612,9 @@ infrastructure.
 │  LAYER 2 — Everything persistent (Gitea, self-hosted)                 │
 │                                                                        │
 │  Documents     → .json files committed to repos                       │
-│  Workspaces    → Gitea organizations                                  │
-│  Members/roles → Gitea organization teams + permissions               │
+│  Organizations → Gitea organizations (own every document repo)        │
+│  Workspaces    → Gitea teams (admins / authors / reviewers)           │
+│  Members/roles → Gitea org membership + team unit permissions         │
 │  Users/auth    → Gitea user accounts (OAuth2, SSH, API tokens)        │
 │  Branches      → git branches (flat slugs, no state prefix)          │
 │  PRs/review    → Gitea pull requests (state = workflow state)         │
@@ -1185,17 +1187,26 @@ teams often require Word format for their own document management systems.
 This is likely a Phase 2 or 3 requirement but the architecture should not
 preclude it.
 
-**Q6: Gitea repo structure — RESOLVED**  
+**Q6: Gitea repo structure — RESOLVED, THEN REVERSED**  
 ~~One repo per workspace or one repo per document?~~  
-**Decision:** One Gitea repository per workspace (Gitea organization). Documents
-are individual `.json` files within that repository. A workspace is a collection
-of documents that are versioned and published together — which maps exactly to a
-git repository containing multiple files. Documents that need independent
-versioning get their own workspace (repository). This is the standard git
-answer to the question and requires no special handling. File-level history is
-scoped using Gitea's `GET /repos/{owner}/{repo}/commits?path={filepath}` API.
-Clause files live in the same repo under a `/clauses/` directory, governed by
-CODEOWNERS.
+~~**Decision:** One Gitea repository per workspace (Gitea organization).
+Documents are individual `.json` files within that repository.~~
+
+**Reversed by ADR 0004.** The shipped product is **one repository per document**
+(ADR 0001), because approval rules and branch protection are per document and a
+repository is the smallest thing Gitea can protect. The containers are:
+
+- **Organization** — a Gitea org. Owns every document repo; the billing and
+  identity boundary.
+- **Workspace** — a set of Gitea teams within that org (`-admins`, `-authors`,
+  `-reviewers`) sharing one repo set. Governs rules and access.
+- **Folder** — browsing metadata inside a workspace. Carries no permissions and
+  so may nest freely.
+
+File-level history within a repo still uses
+`GET /repos/{owner}/{repo}/commits?path={filepath}`. Clause files live in the
+document's own repo under `/clauses/`, governed by CODEOWNERS. See
+`docs/adr/0004-organization-workspace-folder-and-org-billing.md`.
 
 **Q7: Conflict marker parsing edge cases**  
 When Gitea's merge produces conflict markers that bisect a JSON structure (e.g.,

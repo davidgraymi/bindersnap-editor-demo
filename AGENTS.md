@@ -248,17 +248,35 @@ login time, stores it in its SQLite session store, and sets an `HttpOnly`
 `bindersnap_session` cookie on the browser. The primary auth path is always the session cookie.
 No bearer tokens in cookies. No Gitea credentials in `sessionStorage` or `localStorage`.
 
-### All data lives in Gitea. No secondary database.
+### The record lives in Gitea. SQLite holds only the commercial relationship.
 
 Documents, versions, approvals, comments, and audit trail are all stored as
 first-class Gitea primitives: repos, branches, commits, pull requests, reviews,
-tags, and issue comments. There is no app-managed database, no metadata JSON
-file, and no shadow state outside of Gitea. The only exception is the BFF's
-SQLite session store, which holds only session → Gitea token mappings.
+tags, and issue comments. There is no metadata JSON file and no shadow state
+outside of Gitea.
+
+The line, from `docs/adr/0004-organization-workspace-folder-and-org-billing.md`:
+
+> **If losing it would corrupt the audit record, it lives in Gitea. If losing it
+> would only mean re-entering a credit card, it may live in SQLite.**
+
+The BFF's SQLite database therefore holds sessions (session → Gitea token) and
+the Stripe linkage (`subscriptions`, `subscription_access_overrides`,
+`processed_webhook_events`, `webhook_customer_state`, and organization billing
+state). It may never hold a governance fact — who is a member, who may approve,
+what the policy is, what happened. Those are Gitea's, always.
 
 The consequence: reading app state means calling the Gitea API. This is
 intentional. Do not introduce a local cache, a Postgres instance, or any
 persistence layer that duplicates Gitea state.
+
+**Organization, workspace, folder.** An organization is a Gitea org and owns
+every document repo. A workspace is a set of Gitea teams within it
+(`<ws>-admins`, `<ws>-authors`, `<ws>-reviewers`) sharing one repo set — not a
+second Gitea org. A folder is browsing metadata that carries no permissions.
+Review policy resolves through exactly two levels: workspace default, then
+document override. Billing keys to the organization, never to a username, a
+workspace, or a document. See ADR 0004.
 
 **Review threads** follow the same rule. Gitea has no thread primitive (its
 review comments are anchored to a file path and line, which is meaningless for

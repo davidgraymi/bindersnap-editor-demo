@@ -66,7 +66,7 @@ Settled. Do not reopen. If a task requires violating one, open a `human-needed` 
 
 1. **BFF owns auth; Gitea tokens stay server-side.** The browser receives only an `HttpOnly` session cookie. No bearer tokens in `sessionStorage` or `localStorage`.
 
-2. **Gitea is the only datastore.** No Postgres, no cache, no shadow state beyond the BFF's SQLite session store.
+2. **The record lives in Gitea.** No Postgres, no cache, no shadow state. The BFF's SQLite database holds sessions and the Stripe linkage only — never a governance fact (membership, permissions, policy, history). See `docs/adr/0004-organization-workspace-folder-and-org-billing.md`.
 
 3. **File uploads flow browser → BFF → Gitea.** The BFF reads the file as base64 and commits to the Gitea contents API. See `docs/adr/0001-external-file-workflow-contract.md` — that ADR is law.
 
