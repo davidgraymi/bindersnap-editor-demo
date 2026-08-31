@@ -252,17 +252,73 @@ login time, stores it in its SQLite session store, and sets an `HttpOnly`
 `bindersnap_session` cookie on the browser. The primary auth path is always the session cookie.
 No bearer tokens in cookies. No Gitea credentials in `sessionStorage` or `localStorage`.
 
-### All data lives in Gitea. No secondary database.
+### Organization, workspace, folder, document.
 
-Documents, versions, approvals, comments, and audit trail are all stored as
-first-class Gitea primitives: repos, branches, commits, pull requests, reviews,
-tags, and issue comments. There is no app-managed database, no metadata JSON
-file, and no shadow state outside of Gitea. The only exception is the BFF's
-SQLite session store, which holds only session → Gitea token mappings.
+An **organization** is a Gitea org and owns everything. A **workspace** is a Gitea
+repository owned by that org — it is the binder: one set of rules, one set of
+people. A **folder** is a directory inside it. A **document** is a file inside
+that directory. Rules are the repo's branch protection, plus `.gitea/CODEOWNERS`
+for per-folder reviewers. Billing keys to the organization, never to a username, a
+workspace, or a document.
 
-The consequence: reading app state means calling the Gitea API. This is
-intentional. Do not introduce a local cache, a Postgres instance, or any
-persistence layer that duplicates Gitea state.
+The rule: **different rules or different people means a new workspace; just
+finding things means a new folder.**
+
+A change is a pull request and may touch several documents; each document it
+publishes gets its own tag on the shared merge commit. Retiring a document is
+`git rm` in an approved change — the history stays.
+
+This is design, recorded in
+`docs/adr/0004-organization-workspace-folder-and-org-billing.md`, and it
+supersedes ADR 0001's "one document equals one repository". The routes and BFF
+endpoints documented above describe the **shipped** one-repo-per-document code,
+which is still what runs.
+
+### Evidence lives in Gitea. Configuration lives in SQLite.
+
+Three questions, in order, from
+`docs/adr/0004-organization-workspace-folder-and-org-billing.md`:
+
+1. **Does Gitea model it natively?** Branch protection, org membership, teams and
+   their unit permissions, PR reviews, assignees, review requests, reactions,
+   topics. Use the Gitea primitive and **never shadow it** — when a copy
+   disagrees with Gitea, the one Gitea enforced at merge is the one that counts.
+2. **Is it evidence** — a fact about what happened that a surveyor could ask us to
+   prove? Documents, versions, approvals, reviews, comments, tags. **It is a git
+   object in the document's repo, permanently.** Never SQLite, not even as an
+   optimization.
+3. **Everything else is configuration** — workspace names, folder trees,
+   departments, review cadence, per-document policy, billing. **A typed, indexed,
+   migrated SQLite table.** Not a file in a git repo: git cannot query, so any
+   question spanning documents becomes N network calls.
+
+**When configuration shapes evidence, stamp it onto the event.** The policy in
+force at a publish is written into the annotated tag and merge commit, not looked
+up later from a versioned config file.
+
+A **derived index** in SQLite is allowed only if it is rebuildable from Gitea from
+scratch, is never written by a request handler as its primary action, and loses
+nothing but speed when dropped. Every row keys on an immutable git coordinate (a
+tag name, a commit SHA) so it is either correct or detectably stale, never subtly
+wrong. **The index serves browsing; Gitea serves proving** — no publish gate,
+approval check, or audit export may read it. Anything else that duplicates Gitea
+state is a cache, and caches are still banned.
+
+`.gitea/CODEOWNERS` is the one configuration that belongs in git: it is read at
+pull-request time and lives on the same timeline as the content it governs, so
+`?ref=<tag>` answers "who owned this policy when this version was approved."
+
+Migrating in: `.bindersnap/config.json` on the `bindersnap-config` branch
+(`reviewSettings.ts`) predates this rule and is moving to a per-workspace settings
+row. Do not copy the pattern.
+
+**Organization, workspace, folder.** An organization is a Gitea org and owns
+every document repo. A workspace is a set of Gitea teams within it
+(`<ws>-admins`, `<ws>-authors`, `<ws>-reviewers`) sharing one repo set — not a
+second Gitea org. A folder is browsing metadata that carries no permissions.
+Review policy resolves through exactly two levels: workspace default, then
+document override. Billing keys to the organization, never to a username, a
+workspace, or a document. See ADR 0004.
 
 **Review threads** follow the same rule. Gitea has no thread primitive (its
 review comments are anchored to a file path and line, which is meaningless for
