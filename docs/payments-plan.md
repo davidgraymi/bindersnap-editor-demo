@@ -502,7 +502,7 @@ Stripe does not publish a stable, comprehensive list of webhook-sending IPs and 
 ## Verification
 
 1. `stripe listen --forward-to localhost:8787/stripe/webhook` running in terminal
-2. `bun run up` + `bun run dev:api` + `bun run dev:app`
+2. `bun run up` (the stack is the app server — do not add a second SPA on another port; the API only allows the `APP_PORT` origin)
 3. Sign up → confirm immediate redirect to `/billing`
 4. Click **Subscribe** → confirm redirect to Stripe hosted checkout
 5. Complete test payment (card `4242 4242 4242 4242`) → API logs show webhook received
