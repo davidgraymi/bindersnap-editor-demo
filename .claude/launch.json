@@ -22,9 +22,7 @@
       "autoPort": false,
       "env": {
         "PORT": "5174",
-        "APP_PORT": "5174",
-        "BUN_PUBLIC_API_BASE_URL": "http://localhost:8788",
-        "BUN_PUBLIC_API_URL": "http://localhost:8788"
+        "APP_PORT": "5174"
       }
     }
   ]

@@ -20,18 +20,23 @@ workspace shell when a valid session is present.
 
 ## Local dev
 
-Run the unified SPA + API together:
-
-```bash
-bun run dev:api
-bun run dev:app
-```
-
-Or run the full stack through Docker:
+Run the full stack. It is the only configuration in which the SPA can reach the
+API, and the only one with data in it:
 
 ```bash
 bun run up
 ```
+
+The app container bind-mounts the repo and runs `bun --hot server.ts`, so this
+already is the hot-reloading dev server — edits appear at
+`http://localhost:${APP_PORT:-5173}` without a restart.
+
+`bun run dev:app` on its own serves the landing page and nothing else. It has no
+API: with `BUN_PUBLIC_API_BASE_URL` unset the browser calls the app server
+same-origin, and `server.ts` answers every path with the SPA's HTML, so each API
+call comes back as an unparseable 200. Pointing it at a running stack does not
+help either — the API sends CORS headers only for `http://localhost:${APP_PORT}`,
+so a second SPA on a second port is blocked on every request.
 
 ## Deployment note
 

@@ -18,7 +18,7 @@ Everything needed to run the **full Bindersnap target architecture locally** for
 bun run test:integration
 ```
 
-No shell scripts. No manual `docker compose up` beforehand. Playwright's
+No shell scripts. No manual `bun run up` beforehand. Playwright's
 `globalSetup` starts the full Docker Compose stack, including the local Caddy
 proxy in front of the API, waits until the stack is reachable, then runs all
 `*.pw.ts` test files. `globalTeardown` shuts the stack down when the run
@@ -191,7 +191,7 @@ bun run test:seed
 ## Re-seeding from scratch
 
 ```bash
-docker compose down -v   # destroys volumes
+bun run down             # destroys volumes
 bun run test:integration # starts fresh and re-seeds
 ```
 
