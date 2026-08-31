@@ -78,18 +78,6 @@ container, which leaves the stack in a half-state.
 
 Bun monorepo — one SPA, shared packages, backend services.
 
-| Directory              | Purpose                                     |
-| ---------------------- | ------------------------------------------- |
-| `apps/app/`            | Unified SPA → GitHub Pages                  |
-| `packages/ui-tokens/`  | CSS design tokens (single source of truth)  |
-| `packages/utils/`      | Shared utilities                            |
-| `services/api/`        | Auth + data BFF (port 8787)                 |
-| `services/hocuspocus/` | Yjs WebSocket collaboration server          |
-| `deploy/`              | Configuration as code (pyinfra push deploy) |
-| `infra/`               | Infrastructure as code (Terraform only)     |
-
-**Path aliases:** `@editor/*`, `@gitea/*`, `@ui/*`, `@utils/*`
-
 Production is **one EC2 host** running the `docker-compose.prod.yml` stack (API,
 Gitea, Hocuspocus, Caddy, Litestream). `deploy/deploy.py` configures it over an
 SSH-through-SSM tunnel on every push to `main`; Terraform only provisions AWS
