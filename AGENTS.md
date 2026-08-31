@@ -170,15 +170,19 @@ the source of truth.
 
 ### The integration testing stack
 
-`docker-compose.yml` runs Gitea + Hocuspocus locally. `docker compose up` seeds
-demo users and documents automatically from `tests/seed-data/dev.yaml` — which
+`docker-compose.yml` runs the whole stack locally — Gitea, the seed job,
+Hocuspocus, the API, Caddy and the app. Start it with `bun run up` (and stop it
+with `bun run down`; those two scripts are the only supported lifecycle). It
+seeds demo users and documents automatically from `tests/seed-data/dev.yaml` — which
 carries the same clinic policy as a Word file, a PDF, and a Markdown file, so
 the preview and comparison screens can be checked against every file type the
 app meets. Use this to:
 
 - Verify Gitea service implementations against a real API
 - Run integration tests (`bun run test:integration`)
-- See how the real app looks with realistic data
+- See how the real app looks with realistic data — the app container is the
+  hot-reloading dev server, so edits show up at `http://localhost:${APP_PORT:-5173}`
+  without a restart. See "Validating a change in the browser" in `CLAUDE.md`.
 
 See `tests/README.md` for full usage.
 

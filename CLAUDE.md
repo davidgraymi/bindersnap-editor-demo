@@ -9,27 +9,29 @@
 All commands use **Bun** as the runtime and package manager.
 
 ```bash
-# Development (run both together)
-bun run dev:app       # SPA (hot reload, port 5173)
-bun run dev:api       # API service (hot reload, port 8787)
+# Run the app (Gitea + seed + Hocuspocus + API + Caddy + app)
+bun run up            # Start — the only way to get a working, seeded app
+bun run down          # Tear down
+
+# Partial servers — neither gives you a working app on its own
+bun run dev:app       # SPA only: landing page and other UI that calls no API.
+                      # Binds APP_PORT from .env (5173 if unset).
+bun run dev:api       # API only: still needs Gitea, which only `bun run up` runs.
 
 # Build
 bun run build         # Build SPA to dist/
 
 # Tests
-bun run test          # All unit tests (test:app + test:ops)
+bun run test          # All unit tests (test:app + test:ops + test:seed)
 bun run test:app      # apps/app, packages/editor, packages/utils, packages/ui-tokens
 bun run test:ops      # services/api, scripts, infra/backups
-bun run test:integration  # Playwright (requires: bun run up)
+bun run test:integration  # Playwright — starts and stops its own stack
+                          # SKIP_STACK=1 reuses a running `bun run up` stack
 bun test path/to/file.test.ts  # Single file
 
 # Code formatting
 bun run format        # Format all source files
 bun run format:check  # Check without writing
-
-# Local dev stack (Gitea + Hocuspocus + app)
-bun run up            # Start
-bun run down          # Tear down
 ```
 
 Test files live alongside source as `*.test.ts`. TypeScript strict mode is the linter.
@@ -45,6 +47,30 @@ source deploy/.venv/bin/activate
 deploy/bin/ssm-connect.sh --dry   # report changes without applying
 deploy/bin/ssm-connect.sh         # apply
 ```
+
+## Validating a change in the browser
+
+`bun run up` is the only way to see the real app. Its `app` container bind-mounts
+the repo and runs `bun --hot server.ts` — it **is** the dev server. Edits under
+`apps/` and `packages/` hot-reload at `http://localhost:${APP_PORT:-5173}` with
+nothing to restart. Sign in as `alice`, `bob`, `carol`, or `dan`; every seeded
+account uses the password `dev`.
+
+Ports come from `.env`, not from the defaults above. A worktree with its own
+`STACK_NAME` and port block serves the app on that block's `APP_PORT`.
+
+**Do not start a second SPA on another port to preview a change.** The API sends
+CORS headers for exactly one origin — `http://localhost:${APP_PORT}`, set as
+`BINDERSNAP_APP_ORIGIN` in `docker-compose.yml` — and compose does not pass
+`BINDERSNAP_ALLOWED_ORIGINS` through, so there is no override. A `bun run dev:app`
+on any other port gets every API call blocked by CORS and can never sign in. It
+renders the landing page and nothing behind auth.
+
+A dependency change is the one thing hot reload cannot pick up: the container
+bakes its own `node_modules` into a volume at image build, so a package added on
+the host stays invisible until the stack is rebuilt. Fix that with a full
+`bun run down && bun run up` — never by killing a process or rebuilding a single
+container, which leaves the stack in a half-state.
 
 ---
 
