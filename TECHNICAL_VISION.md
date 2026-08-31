@@ -108,9 +108,9 @@ system. The reasoning:
   certain finance). A SaaS-only version control backend would be a blocker.
 
 **What Gitea stores:** Each Bindersnap document is a file (ProseMirror JSON,
-serialized to a `.json` file) in a Gitea repository. Each document has its own
-repository (ADR 0001); a workspace is a set of Gitea teams over many of them
-(ADR 0004). Saves become commits. Reviews become pull requests. Approvals
+serialized to a `.json` file) in a Gitea repository. One repository is one
+workspace, and a document is a file at a path inside it (ADR 0004). Saves become
+commits. Reviews become pull requests. Approvals
 become merge events on protected branches.
 
 **What Gitea does NOT do:** Gitea has no awareness of the editor UI, real-time
@@ -612,9 +612,10 @@ infrastructure.
 │  LAYER 2 — Everything persistent (Gitea, self-hosted)                 │
 │                                                                        │
 │  Documents     → .json files committed to repos                       │
-│  Organizations → Gitea organizations (own every document repo)        │
-│  Workspaces    → Gitea teams (admins / authors / reviewers)           │
-│  Members/roles → Gitea org membership + team unit permissions         │
+│  Organizations → Gitea organizations (own every workspace repo)       │
+│  Workspaces    → Gitea repositories (rules = branch protection)       │
+│  Folders       → directories in the workspace repository              │
+│  Members/roles → Gitea org teams granted onto the workspace repo      │
 │  Users/auth    → Gitea user accounts (OAuth2, SSH, API tokens)        │
 │  Branches      → git branches (flat slugs, no state prefix)          │
 │  PRs/review    → Gitea pull requests (state = workflow state)         │
@@ -1187,26 +1188,29 @@ teams often require Word format for their own document management systems.
 This is likely a Phase 2 or 3 requirement but the architecture should not
 preclude it.
 
-**Q6: Gitea repo structure — RESOLVED, THEN REVERSED**  
+**Q6: Gitea repo structure — RESOLVED**  
 ~~One repo per workspace or one repo per document?~~  
-~~**Decision:** One Gitea repository per workspace (Gitea organization).
-Documents are individual `.json` files within that repository.~~
+**Decision: one repository per workspace**, confirmed by ADR 0004. A workspace is
+the binder — one set of rules, one set of people — and that is exactly what a
+Gitea repository is: collaborators and teams, branch protection, a tree, and a
+complete audit trail. The containers are:
 
-**Reversed by ADR 0004.** The shipped product is **one repository per document**
-(ADR 0001), because approval rules and branch protection are per document and a
-repository is the smallest thing Gitea can protect. The containers are:
-
-- **Organization** — a Gitea org. Owns every document repo; the billing and
+- **Organization** — a Gitea org. Owns every workspace repo; the billing and
   identity boundary.
-- **Workspace** — a set of Gitea teams within that org (`-admins`, `-authors`,
-  `-reviewers`) sharing one repo set. Governs rules and access.
-- **Folder** — browsing metadata inside a workspace. Carries no permissions and
-  so may nest freely.
+- **Workspace** — a Gitea repository. Rules are its branch protection; per-folder
+  reviewer rules are `.gitea/CODEOWNERS`.
+- **Folder** — a directory in that repository. Nests freely.
+- **Document** — a file in that directory.
 
-File-level history within a repo still uses
-`GET /repos/{owner}/{repo}/commits?path={filepath}`. Clause files live in the
-document's own repo under `/clauses/`, governed by CODEOWNERS. See
-`docs/adr/0004-organization-workspace-folder-and-org-billing.md`.
+The shipped code is still one repository per _document_ (ADR 0001); ADR 0004 is
+the design that changes it.
+
+**What Q6 got wrong:** documents do not have to be `.json`. The file vault stores
+the uploaded `.docx`, `.xlsx` or PDF as-is (ADR 0001); the inline editor stores
+ProseMirror JSON. Both are files at a path in the workspace repo, and file-level
+history is `GET /repos/{owner}/{repo}/commits?path={filepath}` either way. Clause
+files live under `/clauses/` in the same workspace repo, governed by CODEOWNERS.
+See `docs/adr/0004-organization-workspace-folder-and-org-billing.md`.
 
 **Q7: Conflict marker parsing edge cases**  
 When Gitea's merge produces conflict markers that bisect a JSON structure (e.g.,

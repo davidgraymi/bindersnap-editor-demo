@@ -248,6 +248,28 @@ login time, stores it in its SQLite session store, and sets an `HttpOnly`
 `bindersnap_session` cookie on the browser. The primary auth path is always the session cookie.
 No bearer tokens in cookies. No Gitea credentials in `sessionStorage` or `localStorage`.
 
+### Organization, workspace, folder, document.
+
+An **organization** is a Gitea org and owns everything. A **workspace** is a Gitea
+repository owned by that org — it is the binder: one set of rules, one set of
+people. A **folder** is a directory inside it. A **document** is a file inside
+that directory. Rules are the repo's branch protection, plus `.gitea/CODEOWNERS`
+for per-folder reviewers. Billing keys to the organization, never to a username, a
+workspace, or a document.
+
+The rule: **different rules or different people means a new workspace; just
+finding things means a new folder.**
+
+A change is a pull request and may touch several documents; each document it
+publishes gets its own tag on the shared merge commit. Retiring a document is
+`git rm` in an approved change — the history stays.
+
+This is design, recorded in
+`docs/adr/0004-organization-workspace-folder-and-org-billing.md`, and it
+supersedes ADR 0001's "one document equals one repository". The routes and BFF
+endpoints documented above describe the **shipped** one-repo-per-document code,
+which is still what runs.
+
 ### Evidence lives in Gitea. Configuration lives in SQLite.
 
 Three questions, in order, from
@@ -272,12 +294,19 @@ up later from a versioned config file.
 
 A **derived index** in SQLite is allowed only if it is rebuildable from Gitea from
 scratch, is never written by a request handler as its primary action, and loses
-nothing but speed when dropped. Anything else that duplicates Gitea state is a
-cache, and caches are still banned.
+nothing but speed when dropped. Every row keys on an immutable git coordinate (a
+tag name, a commit SHA) so it is either correct or detectably stale, never subtly
+wrong. **The index serves browsing; Gitea serves proving** — no publish gate,
+approval check, or audit export may read it. Anything else that duplicates Gitea
+state is a cache, and caches are still banned.
+
+`.gitea/CODEOWNERS` is the one configuration that belongs in git: it is read at
+pull-request time and lives on the same timeline as the content it governs, so
+`?ref=<tag>` answers "who owned this policy when this version was approved."
 
 Migrating in: `.bindersnap/config.json` on the `bindersnap-config` branch
-(`reviewSettings.ts`) predates this rule and is moving to the settings table.
-Do not copy the pattern.
+(`reviewSettings.ts`) predates this rule and is moving to a per-workspace settings
+row. Do not copy the pattern.
 
 **Organization, workspace, folder.** An organization is a Gitea org and owns
 every document repo. A workspace is a set of Gitea teams within it

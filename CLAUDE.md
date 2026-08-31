@@ -66,9 +66,9 @@ Settled. Do not reopen. If a task requires violating one, open a `human-needed` 
 
 1. **BFF owns auth; Gitea tokens stay server-side.** The browser receives only an `HttpOnly` session cookie. No bearer tokens in `sessionStorage` or `localStorage`.
 
-2. **Evidence lives in Gitea; configuration lives in SQLite.** Use the Gitea primitive where one exists and never shadow it. Documents, versions, approvals, reviews, comments and tags are git objects, permanently — never SQLite, not even as an optimization. Settings, folders, departments and billing are SQLite tables, not files in a git repo. Derived indexes are allowed only if rebuildable from Gitea and droppable without loss. See `docs/adr/0004-organization-workspace-folder-and-org-billing.md`.
+2. **Evidence lives in Gitea; configuration lives in SQLite.** Use the Gitea primitive where one exists and never shadow it. Documents, versions, approvals, reviews, comments and tags are git objects, permanently — never SQLite, not even as an optimization. Settings, departments and billing are SQLite tables, not files in a git repo. Derived indexes are allowed only if rebuildable from Gitea and droppable without loss. See `docs/adr/0004-organization-workspace-folder-and-org-billing.md`.
 
-3. **File uploads flow browser → BFF → Gitea.** The BFF reads the file as base64 and commits to the Gitea contents API. See `docs/adr/0001-external-file-workflow-contract.md` — that ADR is law.
+3. **File uploads flow browser → BFF → Gitea.** The BFF reads the file as base64 and commits to the Gitea contents API. See `docs/adr/0001-external-file-workflow-contract.md` — that ADR is law, except its "one document = one repository" point, superseded by ADR 0004 (a repository is a workspace; a document is a file inside it).
 
 4. **Two independent workflows.** File vault (external uploads) and inline editor are separate. Do not conflate them.
 

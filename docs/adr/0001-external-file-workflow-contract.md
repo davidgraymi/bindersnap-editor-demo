@@ -1,8 +1,16 @@
 # ADR 0001: External-File Workflow Contract (Upload-as-PR)
 
-Status: Accepted (MVP contract)  
+Status: Accepted (MVP contract); core model partly superseded by ADR 0004  
 Date: 2026-04-01  
 Related: [Issue #85](https://github.com/davidgraymi/bindersnap-editor-demo/issues/85), #71, #72, #73
+
+> **Amendment (ADR 0004).** Point 1 of the Core Model below — "one document equals
+> one Gitea repository" — is superseded. A repository is now a **workspace**, and a
+> document is a file at a path inside it. Everything else in this ADR stands
+> unchanged and remains law: each revision is a reviewable version, each version is
+> a pull request into protected `main`, merging publishes, and prior versions stay
+> immutable and downloadable. A change may now touch more than one document, in
+> which case each document it publishes gets its own tag on the shared merge commit.
 
 ## Why This Exists
 
@@ -13,7 +21,7 @@ This ADR is the source-of-truth contract for that MVP workflow.
 
 ## Core Model
 
-1. One document equals one Gitea repository for MVP.
+1. ~~One document equals one Gitea repository for MVP.~~ One workspace equals one Gitea repository; a document is a file inside it (ADR 0004).
 2. Each uploaded file revision creates a new reviewable version.
 3. Each version is represented by a pull request from an upload branch to `main`.
 4. Merging an approved pull request establishes the current published version.
