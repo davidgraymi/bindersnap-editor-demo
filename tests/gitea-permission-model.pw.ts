@@ -82,6 +82,48 @@ async function put(client: GiteaClient, path: string): Promise<void> {
   }
 }
 
+async function get<T>(client: GiteaClient, path: string): Promise<T> {
+  const untyped = client as unknown as {
+    GET: (
+      p: string,
+    ) => Promise<{ data?: T; error?: unknown; response: Response }>;
+  };
+  const { data, error, response } = await untyped.GET(path);
+  if (error !== undefined || !response.ok) {
+    throw new GiteaApiError(response.status, JSON.stringify(error ?? {}));
+  }
+  return data as T;
+}
+
+/**
+ * Wait until Gitea has finished computing the change's merge status.
+ *
+ * Opening a change kicks off an asynchronous conflict check, and a merge
+ * attempted before it lands is refused with "Please try again later" — which
+ * looks exactly like a branch-protection refusal from the outside and would
+ * make every assertion below meaningless. `mergeable` here is Gitea's
+ * "not checking, not conflicted, not a draft"; branch protection is decided
+ * separately, at merge, which is what these tests are actually about.
+ */
+async function waitForMergeCheck(
+  client: GiteaClient,
+  workspace: Workspace,
+  index: number,
+): Promise<void> {
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const pull = await get<{ mergeable?: boolean }>(
+      client,
+      `/repos/${workspace.org}/${workspace.repo}/pulls/${index}`,
+    );
+    if (pull.mergeable) return;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+
+  throw new Error(
+    `Gitea never finished the merge check for ${workspace.org}/${workspace.repo}#${index}.`,
+  );
+}
+
 /**
  * Provision an organization, a workspace repository owned by it, and the three
  * role teams granted onto that repository — the shape ADR 0004 §2 describes.
@@ -230,6 +272,8 @@ async function tryMerge(
   workspace: Workspace,
   index: number,
 ): Promise<{ ok: boolean; status: number; message: string }> {
+  await waitForMergeCheck(client, workspace, index);
+
   try {
     await post(
       client,
@@ -292,7 +336,9 @@ test.describe("ADR 0004: the Gitea permission model the workspace rests on", () 
     expect(review.official).toBe(true);
 
     const merge = await tryMerge(author, workspace, index);
-    expect(merge.ok).toBe(true);
+    expect(merge.ok, `merge refused: ${merge.status} ${merge.message}`).toBe(
+      true,
+    );
   });
 
   test("the approval does not count without the approvals whitelist", async () => {
@@ -362,6 +408,8 @@ test.describe("ADR 0004: the Gitea permission model the workspace rests on", () 
     // A code owner reviewing clears the team request and unblocks the merge.
     await approve(reviewer, workspace, index);
     const merge = await tryMerge(author, workspace, index);
-    expect(merge.ok).toBe(true);
+    expect(merge.ok, `merge refused: ${merge.status} ${merge.message}`).toBe(
+      true,
+    );
   });
 });
