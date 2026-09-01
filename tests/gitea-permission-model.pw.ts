@@ -203,7 +203,15 @@ async function provisionWorkspace(
     enable_push: false,
     block_on_rejected_reviews: true,
     block_on_official_review_requests: true,
-    dismiss_stale_approvals: true,
+    // Production provisioning turns this on; these tests turn it off, because
+    // its machinery is asynchronous and has nothing to do with what they
+    // assert. Committing the change's file is a push to the head branch, which
+    // queues Gitea's AddTestPullRequestTask; when that task lands after the
+    // approval it sees the diff-to-merge-base as changed and dismisses every
+    // approval (services/pull/pull.go). The approval is created official and
+    // then silently uncounted, which reads exactly like "a free reviewer's
+    // approval does not count" — the very thing under test.
+    dismiss_stale_approvals: false,
     enable_approvals_whitelist: options.enableApprovalsWhitelist,
     ...(options.enableApprovalsWhitelist
       ? {
@@ -280,9 +288,43 @@ async function approve(
   );
 }
 
+/**
+ * Wait until Gitea will actually count `expected` approvals toward
+ * `required_approvals` — official, not dismissed.
+ *
+ * A review can come back `official: true` from the create call and still not
+ * be counted a moment later, so asserting the response is not the same as
+ * asserting the state a merge reads. Polling the same shape the merge check
+ * reads turns any future divergence into a precise message rather than an
+ * intermittent "does not have enough approvals".
+ */
+async function waitForCountedApprovals(
+  reader: GiteaClient,
+  workspace: Workspace,
+  index: number,
+  expected: number,
+): Promise<void> {
+  let seen: ReviewRow[] = [];
+
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    seen = await listReviews(reader, workspace, index);
+    const counted = seen.filter(
+      (review) =>
+        review.state === "APPROVED" && review.official && !review.dismissed,
+    );
+    if (counted.length >= expected) return;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+
+  throw new Error(
+    `Expected ${expected} counted approval(s) on ${workspace.org}/${workspace.repo}#${index}, saw: ${JSON.stringify(seen)}`,
+  );
+}
+
 interface ReviewRow {
   state?: string;
   official?: boolean;
+  dismissed?: boolean;
   team?: unknown;
 }
 
@@ -384,6 +426,7 @@ test.describe("ADR 0004: the Gitea permission model the workspace rests on", () 
     // `official` is the whole ball game: GetGrantedApprovalsCount counts only
     // official approvals, so a non-official one satisfies nothing.
     expect(review.official).toBe(true);
+    await waitForCountedApprovals(admin, workspace, index, 1);
 
     const merge = await tryMerge(author, workspace, index);
     expect(merge.ok, `merge refused: ${merge.status} ${merge.message}`).toBe(
@@ -441,6 +484,7 @@ test.describe("ADR 0004: the Gitea permission model the workspace rests on", () 
     // this the merge is refused for the wrong reason and the gate under test
     // is never reached.
     await approve(secondReviewer, workspace, index);
+    await waitForCountedApprovals(admin, workspace, index, 1);
 
     const blocked = await tryMerge(author, workspace, index);
     expect(blocked.ok).toBe(false);
@@ -498,6 +542,7 @@ test.describe("ADR 0004: the Gitea permission model the workspace rests on", () 
     // code owner. There the merge is still refused; here it goes through, and
     // that difference is the finding.
     await approve(secondReviewer, workspace, index);
+    await waitForCountedApprovals(admin, workspace, index, 1);
 
     const merge = await tryMerge(author, workspace, index);
     expect(merge.ok, `merge refused: ${merge.status} ${merge.message}`).toBe(
