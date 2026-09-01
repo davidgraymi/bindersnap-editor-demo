@@ -7,11 +7,19 @@ import { provisionSignupBestEffort } from "./signup-provisioning";
 import { sessionStore, type SessionRecord } from "./sessions";
 import {
   subscriptionStore,
-  hasActiveSubscription,
+  organizationHasAccess,
   webhookEventStore,
   type EffectiveSubscriptionAccess,
   type SubscriptionAccessOverrideRecord,
 } from "./subscriptions";
+import { organizationStore } from "./organizations";
+import {
+  resolveOrganizationForUser,
+  resolveSessionOrganization,
+  type SessionOrganization,
+} from "./session-organization";
+import { listOrganizationOwners } from "./gitea-client/orgs";
+import { createPrivilegedGiteaClient } from "./privileged-client";
 import type Stripe from "stripe";
 import { extractCurrentPeriodEnd } from "./stripe/api-version";
 import { getStripeClient } from "./stripe/client";
@@ -588,34 +596,6 @@ function createServiceGiteaClient(): GiteaClient {
 }
 
 /**
- * A client that can read what the caller is not allowed to, or null.
- *
- * The service token is the real answer. Dev and test stacks come up without
- * one, so they fall back to the admin credentials the BFF already holds —
- * the same fallback `buildGiteaPrivilegedHeaders` makes for the raw-fetch
- * calls, kept in one shape so the two cannot drift apart.
- */
-function createPrivilegedGiteaClient(): GiteaClient | null {
-  if (config.giteaServiceToken) {
-    return createServiceGiteaClient();
-  }
-
-  if (
-    !config.isProduction &&
-    config.giteaAdminUsername &&
-    config.giteaAdminPassword
-  ) {
-    return createGiteaBasicAuthClient(
-      config.giteaUrl,
-      config.giteaAdminUsername,
-      config.giteaAdminPassword,
-    );
-  }
-
-  return null;
-}
-
-/**
  * How many approvals a document demands before anything can publish.
  *
  * Gitea serves branch protection only to an owner or a collaborator with admin
@@ -753,9 +733,18 @@ async function requireSubscription(
     });
     return auth;
   }
-  if (!(await hasActiveSubscription(auth.session.username))) {
+
+  // The organization is what owes us money, so it is what gets checked. A
+  // delinquent org blocks everyone in it — its reviewers included, because the
+  // org is delinquent, not them.
+  const organization = await resolveSessionOrganization(
+    auth.client,
+    auth.session,
+  );
+  if (!organization || !(await organizationHasAccess(organization.id))) {
     return json(402, { error: "Subscription required." }, baseHeaders);
   }
+
   return auth;
 }
 
@@ -807,7 +796,11 @@ async function requireSubscriptionOrAdmin(
     return auth;
   }
 
-  if (await hasActiveSubscription(auth.session.username)) {
+  const organization = await resolveSessionOrganization(
+    auth.client,
+    auth.session,
+  );
+  if (organization && (await organizationHasAccess(organization.id))) {
     return auth;
   }
 
@@ -819,43 +812,79 @@ async function requireSubscriptionOrAdmin(
   return json(402, { error: "Subscription required." }, baseHeaders);
 }
 
-async function resolveSubscriptionAccessSource(
-  username: string,
-): Promise<
-  "config_bypass" | "stripe" | "admin_grant" | "admin_revoke" | "none"
-> {
-  if (config.bypassSubscriptionForUsers.includes(username)) {
-    return "config_bypass";
-  }
+type SubscriptionAccessSource =
+  | "config_bypass"
+  | "stripe"
+  | "trial"
+  | "admin_grant"
+  | "admin_revoke"
+  | "no_organization"
+  | "none";
 
-  return (await subscriptionStore.resolveAccess(username)).source;
-}
-
-async function resolveSubscriptionAccessState(username: string): Promise<{
+interface SubscriptionAccessState {
   hasAccess: boolean;
-  source: "config_bypass" | "stripe" | "admin_grant" | "admin_revoke" | "none";
+  source: SubscriptionAccessSource;
   status: string | null;
   stripeStatus: string | null;
   currentPeriodEnd: number | null;
   cancelAtPeriodEnd: boolean;
   cancelAt: number | null;
+  trialEndsAt: number | null;
   override: SubscriptionAccessOverrideRecord | null;
-}> {
+  organization: { id: number; name: string } | null;
+}
+
+/**
+ * The billing state of an organization, in the shape the UI and the admin
+ * console both read. `username` only decides the dev bypass; everything else
+ * hangs off the organization, because that is who we bill.
+ */
+async function resolveSubscriptionAccessState(
+  username: string,
+  organization: SessionOrganization | null,
+): Promise<SubscriptionAccessState> {
+  const summary = organization
+    ? { id: organization.id, name: organization.name }
+    : null;
+
   if (config.bypassSubscriptionForUsers.includes(username)) {
+    const subscription = organization
+      ? await subscriptionStore.getByOrganization(organization.id)
+      : null;
     return {
       hasAccess: true,
       source: "config_bypass",
       status: "active",
-      stripeStatus:
-        (await subscriptionStore.getByUsername(username))?.status ?? null,
+      stripeStatus: subscription?.status ?? null,
       currentPeriodEnd: null,
       cancelAtPeriodEnd: false,
       cancelAt: null,
-      override: await subscriptionStore.getAccessOverride(username),
+      trialEndsAt: null,
+      override: organization
+        ? await subscriptionStore.getAccessOverride(organization.id)
+        : null,
+      organization: summary,
     };
   }
 
-  const access = await subscriptionStore.resolveAccess(username);
+  if (!organization) {
+    // An account that predates ADR 0004, or one whose signup provisioning
+    // failed. There is nothing to bill and nothing to grant.
+    return {
+      hasAccess: false,
+      source: "no_organization",
+      status: null,
+      stripeStatus: null,
+      currentPeriodEnd: null,
+      cancelAtPeriodEnd: false,
+      cancelAt: null,
+      trialEndsAt: null,
+      override: null,
+      organization: null,
+    };
+  }
+
+  const access = await subscriptionStore.resolveAccess(organization.id);
   return {
     hasAccess: access.hasAccess,
     source: access.source,
@@ -864,12 +893,16 @@ async function resolveSubscriptionAccessState(username: string): Promise<{
         ? "active"
         : access.source === "admin_revoke"
           ? "revoked"
-          : (access.subscription?.status ?? null),
+          : access.source === "trial"
+            ? "trialing"
+            : (access.subscription?.status ?? null),
     stripeStatus: access.subscription?.status ?? null,
     currentPeriodEnd: access.subscription?.currentPeriodEnd ?? null,
     cancelAtPeriodEnd: access.subscription?.cancelAtPeriodEnd ?? false,
     cancelAt: access.subscription?.cancelAt ?? null,
+    trialEndsAt: access.trialEndsAt,
     override: access.override,
+    organization: summary,
   };
 }
 
@@ -3621,15 +3654,29 @@ function accessStateUpdatedAt(access: EffectiveSubscriptionAccess): number {
   );
 }
 
+/**
+ * One row of the admin access console.
+ *
+ * The console is addressed by person because that is who an admin can name,
+ * but everything it reports and everything it changes belongs to that person's
+ * **organization** — so `organization` is on every row, and an account with
+ * none says so rather than silently reading as "no access".
+ */
 async function buildAdminSubscriptionAccessEntry(
+  client: GiteaClient,
   user: Pick<RepoUserSummary, "login" | "full_name" | "email">,
 ) {
-  const accessState = await resolveSubscriptionAccessState(user.login);
+  const organization = await resolveOrganizationForUser(client, user.login);
+  const accessState = await resolveSubscriptionAccessState(
+    user.login,
+    organization,
+  );
 
   return {
     username: user.login,
     fullName: user.full_name || undefined,
     email: user.email || undefined,
+    organization: accessState.organization,
     hasAccess: accessState.hasAccess,
     accessSource: accessState.source,
     status: accessState.status,
@@ -3637,7 +3684,52 @@ async function buildAdminSubscriptionAccessEntry(
     currentPeriodEnd: accessState.currentPeriodEnd,
     cancelAtPeriodEnd: accessState.cancelAtPeriodEnd,
     cancelAt: accessState.cancelAt,
+    trialEndsAt: accessState.trialEndsAt,
     override: serializeSubscriptionOverride(accessState.override),
+  };
+}
+
+/**
+ * One row of the browse listing, built from an organization outward.
+ *
+ * The admin console acts on people, so a row is labelled with one of the
+ * organization's owners — the same humans ADR 0004 says can change billing.
+ */
+async function buildAdminOrganizationAccessEntry(
+  client: GiteaClient,
+  access: EffectiveSubscriptionAccess,
+) {
+  const organization = await organizationStore.get(access.giteaOrgId);
+  const owners = organization
+    ? await listOrganizationOwners({ client, org: organization.name }).catch(
+        () => [],
+      )
+    : [];
+  const owner = owners[0] ?? null;
+
+  return {
+    username: owner?.login ?? "",
+    fullName: owner?.fullName || undefined,
+    email: owner?.email || undefined,
+    organization: organization
+      ? { id: organization.giteaOrgId, name: organization.name }
+      : { id: access.giteaOrgId, name: "" },
+    hasAccess: access.hasAccess,
+    accessSource: access.source,
+    status:
+      access.source === "admin_grant"
+        ? "active"
+        : access.source === "admin_revoke"
+          ? "revoked"
+          : access.source === "trial"
+            ? "trialing"
+            : (access.subscription?.status ?? null),
+    stripeStatus: access.subscription?.status ?? null,
+    currentPeriodEnd: access.subscription?.currentPeriodEnd ?? null,
+    cancelAtPeriodEnd: access.subscription?.cancelAtPeriodEnd ?? false,
+    cancelAt: access.subscription?.cancelAt ?? null,
+    trialEndsAt: access.trialEndsAt,
+    override: serializeSubscriptionOverride(access.override),
   };
 }
 
@@ -3676,6 +3768,9 @@ async function handleAdminSubscriptionAccessList(
   const limit = parsePositiveIntInput(url.searchParams.get("limit"), 12);
 
   if (query === "") {
+    // Browsing rather than searching. What we know billing about is
+    // organizations, so this walks those — and names each row by one of the
+    // org's owners, since a username is what the admin can act on.
     const offset = (page - 1) * limit;
     const accessRows = (await subscriptionStore.listKnownAccessStates()).sort(
       (left, right) => {
@@ -3685,18 +3780,16 @@ async function handleAdminSubscriptionAccessList(
           return updatedAtDiff;
         }
 
-        return left.username.localeCompare(right.username);
+        return left.giteaOrgId - right.giteaOrgId;
       },
     );
     const hasMore = accessRows.length > offset + limit;
     const users = await Promise.all(
-      accessRows.slice(offset, offset + limit).map((access) =>
-        buildAdminSubscriptionAccessEntry({
-          login: access.username,
-          full_name: "",
-          email: "",
-        }),
-      ),
+      accessRows
+        .slice(offset, offset + limit)
+        .map((access) =>
+          buildAdminOrganizationAccessEntry(auth.client, access),
+        ),
     );
 
     return json(
@@ -3724,7 +3817,9 @@ async function handleAdminSubscriptionAccessList(
       200,
       {
         users: await Promise.all(
-          result.users.map(buildAdminSubscriptionAccessEntry),
+          result.users.map((user) =>
+            buildAdminSubscriptionAccessEntry(auth.client, user),
+          ),
         ),
         page: result.page,
         limit: result.limit,
@@ -3777,8 +3872,21 @@ async function handleAdminSubscriptionAccessUpdate(
   const reasonInput = readInputString(payload, null, "reason");
   const reason = reasonInput === "" ? null : reasonInput;
 
+  // An override belongs to an organization, not a person: ADR 0004 bills the
+  // org, so comping or cutting off one member of it would be meaningless.
+  const organization = await resolveOrganizationForUser(auth.client, username);
+  if (!organization) {
+    return json(
+      404,
+      {
+        error: `${username} is not in an organization, so there is nothing to override.`,
+      },
+      baseHeaders,
+    );
+  }
+
   await subscriptionStore.putAccessOverride({
-    username,
+    giteaOrgId: organization.id,
     access,
     reason,
     updatedBy: auth.currentUser.username,
@@ -3788,7 +3896,7 @@ async function handleAdminSubscriptionAccessUpdate(
   return json(
     200,
     {
-      user: await buildAdminSubscriptionAccessEntry({
+      user: await buildAdminSubscriptionAccessEntry(auth.client, {
         login: username,
         full_name: "",
         email: "",
@@ -3821,14 +3929,25 @@ async function handleAdminSubscriptionAccessDelete(
     );
   }
 
-  await subscriptionStore.deleteAccessOverride(username);
+  const organization = await resolveOrganizationForUser(auth.client, username);
+  if (!organization) {
+    return json(
+      404,
+      {
+        error: `${username} is not in an organization, so there is no override to clear.`,
+      },
+      baseHeaders,
+    );
+  }
+
+  await subscriptionStore.deleteAccessOverride(organization.id);
 
   return json(
     200,
     {
       ok: true,
       username,
-      user: await buildAdminSubscriptionAccessEntry({
+      user: await buildAdminSubscriptionAccessEntry(auth.client, {
         login: username,
         full_name: "",
         email: "",
@@ -4193,34 +4312,61 @@ async function handleStripeWebhook(
   }
 
   if (type === "checkout.session.completed" && data) {
-    const username = data.client_reference_id as string | undefined;
+    // client_reference_id carries the Gitea org id — checkout is bought by an
+    // organization. Session metadata is the fallback for a session created
+    // before the re-key.
+    const sessionMetadata = (data.metadata ?? {}) as Record<string, unknown>;
+    const orgIdRaw =
+      (data.client_reference_id as string | undefined) ??
+      (typeof sessionMetadata.bindersnap_gitea_org_id === "string"
+        ? sessionMetadata.bindersnap_gitea_org_id
+        : undefined);
+    const giteaOrgId = orgIdRaw ? Number.parseInt(orgIdRaw, 10) : NaN;
+    const username =
+      typeof sessionMetadata.bindersnap_username === "string"
+        ? sessionMetadata.bindersnap_username
+        : null;
     const customerId = data.customer as string | undefined;
     const subscriptionId = data.subscription as string | undefined;
 
-    if (username && customerId && subscriptionId) {
+    if (
+      Number.isSafeInteger(giteaOrgId) &&
+      giteaOrgId > 0 &&
+      customerId &&
+      subscriptionId
+    ) {
       try {
         const sub = await stripe.subscriptions.retrieve(subscriptionId);
         await subscriptionStore.upsert(
           buildStripeSubscriptionRecord(
-            username,
+            giteaOrgId,
             customerId,
             sub as unknown as Record<string, unknown>,
           ),
         );
-        logger.info("Subscription activated", { username, status: sub.status });
+        logger.info("Subscription activated", {
+          giteaOrgId,
+          status: sub.status,
+        });
 
-        // Backfill bindersnap_username metadata onto the Stripe Customer.
-        // This ensures future subscription webhooks can reconcile via customer metadata.
+        // Stamp the org id onto the Stripe Customer so later subscription
+        // webhooks, which carry only a customer, can reconcile from it.
         try {
           await stripe.customers.update(customerId, {
-            metadata: { bindersnap_username: username },
+            metadata: {
+              bindersnap_gitea_org_id: String(giteaOrgId),
+              ...(username ? { bindersnap_username: username } : {}),
+            },
           });
-          logger.info("Backfilled customer metadata", { customerId, username });
+          logger.info("Backfilled customer metadata", {
+            customerId,
+            giteaOrgId,
+          });
         } catch (metadataErr) {
           // Non-fatal: subscription is already activated; log and continue.
           logger.warn("Failed to backfill customer metadata", {
             customerId,
-            username,
+            giteaOrgId,
             error:
               metadataErr instanceof Error
                 ? metadataErr.message
@@ -4235,7 +4381,7 @@ async function handleStripeWebhook(
             event_id: eventId,
             event_type: type,
             customer_id: customerId ?? null,
-            username,
+            giteaOrgId,
             subscriptionId,
             error: err instanceof Error ? err.message : String(err),
           },
@@ -4247,6 +4393,15 @@ async function handleStripeWebhook(
           baseHeaders,
         );
       }
+    } else {
+      logger.warn(
+        "Checkout completed without a resolvable Bindersnap organization",
+        {
+          event_id: eventId,
+          customer_id: customerId ?? null,
+          client_reference_id: data.client_reference_id ?? null,
+        },
+      );
     }
   } else if (
     (type === "customer.subscription.created" ||
@@ -4292,7 +4447,7 @@ async function handleStripeWebhook(
             "Reconciled missing subscription row from Stripe customer metadata",
             {
               customer: customerId,
-              username: reconciled.record.username,
+              giteaOrgId: reconciled.record.giteaOrgId,
               subscriptionId: reconciled.record.stripeSubscriptionId,
               eventType: type,
             },
@@ -4362,12 +4517,21 @@ async function handleBillingStatus(
   if (auth instanceof Response) return auth;
 
   const { username } = auth.session;
+  const organization = await resolveSessionOrganization(
+    auth.client,
+    auth.session,
+  );
 
   const priceInfo = await fetchStripePriceInfo();
-  const accessState = await resolveSubscriptionAccessState(username);
+  const accessState = await resolveSubscriptionAccessState(
+    username,
+    organization,
+  );
   return json(
     200,
     {
+      organization: accessState.organization,
+      trialEndsAt: accessState.trialEndsAt,
       status: accessState.status,
       stripeStatus: accessState.stripeStatus,
       currentPeriodEnd: accessState.currentPeriodEnd,
@@ -4404,8 +4568,22 @@ async function handleBillingCheckout(
     return json(503, { error: "Billing not configured." }, baseHeaders);
   }
 
-  const existingSubscription = await subscriptionStore.getByUsername(
-    auth.session.username,
+  // Checkout buys a subscription for the organization, not for the person
+  // clicking the button — so there has to be one.
+  const organization = await resolveSessionOrganization(
+    auth.client,
+    auth.session,
+  );
+  if (!organization) {
+    return json(
+      409,
+      { error: "You are not in an organization yet." },
+      baseHeaders,
+    );
+  }
+
+  const existingSubscription = await subscriptionStore.getByOrganization(
+    organization.id,
   );
   const userEmail = await fetchSessionUserEmail(auth.session);
 
@@ -4416,10 +4594,19 @@ async function handleBillingCheckout(
   const params: Stripe.Checkout.SessionCreateParams = {
     mode: "subscription",
     line_items: [{ price: config.stripePriceId, quantity: 1 }],
-    client_reference_id: auth.session.username,
-    metadata: { bindersnap_username: auth.session.username },
+    client_reference_id: String(organization.id),
+    // The org id is the key; the username records who set it up, which support
+    // wants and billing must never depend on.
+    metadata: {
+      bindersnap_gitea_org_id: String(organization.id),
+      bindersnap_organization: organization.name,
+      bindersnap_username: auth.session.username,
+    },
     subscription_data: {
-      metadata: { bindersnap_username: auth.session.username },
+      metadata: {
+        bindersnap_gitea_org_id: String(organization.id),
+        bindersnap_username: auth.session.username,
+      },
     },
     success_url: `${config.appOrigin}/billing?checkout=success`,
     cancel_url: `${config.appOrigin}/billing`,
@@ -4468,10 +4655,22 @@ async function handleDevGrantSubscription(
   if (auth instanceof Response) return auth;
 
   const { username } = auth.session;
+  const organization = await resolveSessionOrganization(
+    auth.client,
+    auth.session,
+  );
+  if (!organization) {
+    return json(
+      409,
+      { error: "You are not in an organization yet." },
+      baseHeaders,
+    );
+  }
+
   await subscriptionStore.upsert({
-    username,
-    stripeCustomerId: `cus_dev_${username}`,
-    stripeSubscriptionId: `sub_dev_${username}`,
+    giteaOrgId: organization.id,
+    stripeCustomerId: `cus_dev_org_${organization.id}`,
+    stripeSubscriptionId: `sub_dev_org_${organization.id}`,
     status: "active",
     currentPeriodEnd: Math.floor(Date.now() / 1000) + 365 * 24 * 60 * 60,
     cancelAtPeriodEnd: false,
@@ -4479,14 +4678,26 @@ async function handleDevGrantSubscription(
     updatedAt: Date.now(),
   });
 
-  return json(200, { ok: true, username }, baseHeaders);
+  return json(
+    200,
+    { ok: true, username, organization: organization.name },
+    baseHeaders,
+  );
 }
 
-async function buildLegacyAdminSubscriptionAccessState(username: string) {
-  const accessState = await resolveSubscriptionAccessState(username);
+async function buildLegacyAdminSubscriptionAccessState(
+  client: GiteaClient,
+  username: string,
+) {
+  const organization = await resolveOrganizationForUser(client, username);
+  const accessState = await resolveSubscriptionAccessState(
+    username,
+    organization,
+  );
 
   return {
     username,
+    organization: accessState.organization,
     hasProAccess: accessState.hasAccess,
     source: accessState.source,
     overrideActive: accessState.override !== null,
@@ -4522,7 +4733,10 @@ async function handleAdminSubscriptionStatus(
 
   return json(
     200,
-    await buildLegacyAdminSubscriptionAccessState(matchedUser.login),
+    await buildLegacyAdminSubscriptionAccessState(
+      auth.client,
+      matchedUser.login,
+    ),
     baseHeaders,
   );
 }
@@ -4550,16 +4764,34 @@ async function upsertLegacyAdminSubscriptionOverride(
     return json(404, { error: "User not found." }, baseHeaders);
   }
 
+  const organization = await resolveOrganizationForUser(
+    auth.client,
+    matchedUser.login,
+  );
+  if (!organization) {
+    return json(
+      404,
+      {
+        error: `${matchedUser.login} is not in an organization, so there is nothing to override.`,
+      },
+      baseHeaders,
+    );
+  }
+
   await subscriptionStore.putAccessOverride({
-    username: matchedUser.login,
+    giteaOrgId: organization.id,
     access,
+    reason: null,
     updatedBy: auth.currentUser.username,
     updatedAt: Date.now(),
   });
 
   return json(
     200,
-    await buildLegacyAdminSubscriptionAccessState(matchedUser.login),
+    await buildLegacyAdminSubscriptionAccessState(
+      auth.client,
+      matchedUser.login,
+    ),
     baseHeaders,
   );
 }
@@ -4614,7 +4846,13 @@ async function handleBillingPortal(
   const auth = await requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
 
-  const record = await subscriptionStore.getByUsername(auth.session.username);
+  const organization = await resolveSessionOrganization(
+    auth.client,
+    auth.session,
+  );
+  const record = organization
+    ? await subscriptionStore.getByOrganization(organization.id)
+    : null;
   if (!record) {
     return json(404, { error: "No subscription found." }, baseHeaders);
   }

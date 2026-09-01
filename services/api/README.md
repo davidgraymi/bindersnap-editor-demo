@@ -52,13 +52,33 @@ bun run serve:api
 
 ## Billing recovery
 
-Rebuild a missing subscription row from Stripe when a prior
-`checkout.session.completed` webhook was missed:
+Billing keys to the Gitea organization, not to a person (ADR 0004). Rebuild a
+missing subscription row from Stripe when a prior `checkout.session.completed`
+webhook was missed:
 
 ```bash
-bun run reconcile:stripe-customer -- --username alice
+bun run reconcile:stripe-customer -- --org 42
 bun run reconcile:stripe-customer -- --customer cus_123
 ```
+
+## Re-keying billing onto the organization
+
+Migration `0002_bill_the_organization` rebuilds `subscriptions` and
+`subscription_access_overrides` on `gitea_org_id`, and parks the old
+username-keyed rows in `legacy_username_subscriptions` and
+`legacy_username_subscription_access_overrides` — mapping a username to an
+organization needs Gitea, which SQL cannot reach.
+
+```bash
+bun run backfill:org-billing -- --dry   # report the mapping, write nothing
+bun run backfill:org-billing            # apply it, and stamp Stripe customers
+bun run backfill:org-billing -- --skip-stripe   # local half only
+```
+
+It never deletes a legacy row and reports every username it could not map
+rather than guessing. Re-running is safe. **Drop the legacy tables by hand,
+later, once the mapping has been checked** — that is a separate, deliberate
+act.
 
 ## MVP tradeoffs
 

@@ -11,10 +11,6 @@ import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
 import { signOutCurrentUser } from "./helpers";
 
-const API_BASE_URL =
-  process.env.BUN_PUBLIC_API_BASE_URL ??
-  `http://localhost:${process.env.API_PROXY_PORT ?? "8788"}`;
-
 function buildUniqueSignupCredentials() {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   return {
@@ -82,36 +78,22 @@ async function attachScreenshot(
   });
 }
 
-async function expectBillingPage(page: Page): Promise<void> {
-  await expect(page).toHaveURL(/\/billing$/);
-  await expect(
-    page.getByRole("heading", { name: "Start your subscription" }),
-  ).toBeVisible();
-}
-
-async function grantDevSubscriptionAndOpenWorkspace(
+/**
+ * A new account lands in its workspace, not at a card form.
+ *
+ * ADR 0004 gives every new organization a 14-day local trial, and #369 is
+ * explicit that there is no card during it — representing that in Stripe would
+ * create a customer and a subscription for every tire-kicker. So the billing
+ * page is somewhere a new user can go, not somewhere they are sent.
+ */
+async function expectWorkspaceOnTrial(
   page: Page,
   username: string,
 ): Promise<void> {
-  await page.evaluate(async (apiUrl) => {
-    const response = await fetch(`${apiUrl}/api/dev/grant-subscription`, {
-      method: "POST",
-      credentials: "include",
-    });
-    if (!response.ok) {
-      const payload = await response
-        .json()
-        .catch(() => ({ error: response.status }));
-      throw new Error(
-        `Grant subscription failed: ${(payload as { error?: unknown }).error ?? response.status}`,
-      );
-    }
-  }, API_BASE_URL);
-
-  await page.goto("/", { waitUntil: "domcontentloaded" });
   await expect(
     page.locator(`.app-topnav-avatar[aria-label="User: ${username}"]`),
   ).toBeVisible();
+  await expect(page).not.toHaveURL(/\/billing$/);
 }
 
 async function signUpAndReturnToLogin(
@@ -142,14 +124,13 @@ async function signUpAndReturnToLogin(
     password: credentials.password,
   });
 
-  await expectBillingPage(page);
+  await expectWorkspaceOnTrial(page, credentials.username);
   await attachScreenshot(
     page,
     testInfo,
-    `${screenshotPrefix}-billing-after-signup`,
+    `${screenshotPrefix}-workspace-after-signup`,
   );
 
-  await grantDevSubscriptionAndOpenWorkspace(page, credentials.username);
   await signOutCurrentUser(page);
   await page.goto("/login", { waitUntil: "domcontentloaded" });
   await expect(page).toHaveURL(/\/login$/);
@@ -296,8 +277,7 @@ test.describe("signup flow", () => {
     await fillSignupForm(page, firstAccount);
     await submitSignupForm(page);
 
-    await expectBillingPage(page);
-    await grantDevSubscriptionAndOpenWorkspace(page, firstAccount.username);
+    await expectWorkspaceOnTrial(page, firstAccount.username);
     await signOutCurrentUser(page);
     await page.goto("/login");
     await expect(page).toHaveURL(/\/login$/);

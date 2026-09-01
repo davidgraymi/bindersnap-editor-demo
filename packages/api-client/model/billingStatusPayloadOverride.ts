@@ -5,13 +5,16 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { BillingStatusPayloadOverrideAccess } from './billingStatusPayloadOverrideAccess.ts';
+import type { BillingStatusPayloadOverrideMode } from './billingStatusPayloadOverrideMode.ts';
 
 /**
  * @nullable
  */
 export type BillingStatusPayloadOverride = {
-  username: string;
   access: BillingStatusPayloadOverrideAccess;
+  mode?: BillingStatusPayloadOverrideMode;
+  /** @nullable */
+  reason?: string | null;
   updatedBy: string;
   updatedAt: number;
 } | null;

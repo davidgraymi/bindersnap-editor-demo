@@ -1942,6 +1942,26 @@
       "BillingStatusPayload": {
         "type": "object",
         "properties": {
+          "organization": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "number"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ]
+          },
+          "trialEndsAt": {
+            "type": "number",
+            "nullable": true
+          },
           "status": {
             "type": "string",
             "nullable": true
@@ -1966,8 +1986,10 @@
             "enum": [
               "config_bypass",
               "stripe",
+              "trial",
               "admin_grant",
               "admin_revoke",
+              "no_organization",
               "none",
               null
             ]
@@ -1976,15 +1998,23 @@
             "type": "object",
             "nullable": true,
             "properties": {
-              "username": {
-                "type": "string"
-              },
               "access": {
                 "type": "string",
                 "enum": [
                   "grant",
                   "revoke"
                 ]
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "grant",
+                  "revoke"
+                ]
+              },
+              "reason": {
+                "type": "string",
+                "nullable": true
               },
               "updatedBy": {
                 "type": "string"
@@ -1994,7 +2024,6 @@
               }
             },
             "required": [
-              "username",
               "access",
               "updatedBy",
               "updatedAt"
@@ -2026,6 +2055,8 @@
           }
         },
         "required": [
+          "organization",
+          "trialEndsAt",
           "status",
           "currentPeriodEnd",
           "cancelAtPeriodEnd",
@@ -2053,6 +2084,26 @@
                 "email": {
                   "type": "string"
                 },
+                "organization": {
+                  "type": "object",
+                  "nullable": true,
+                  "properties": {
+                    "id": {
+                      "type": "number"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name"
+                  ]
+                },
+                "trialEndsAt": {
+                  "type": "number",
+                  "nullable": true
+                },
                 "hasAccess": {
                   "type": "boolean"
                 },
@@ -2061,8 +2112,10 @@
                   "enum": [
                     "config_bypass",
                     "stripe",
+                    "trial",
                     "admin_grant",
                     "admin_revoke",
+                    "no_organization",
                     "none"
                   ]
                 },
@@ -2085,15 +2138,23 @@
                   "type": "object",
                   "nullable": true,
                   "properties": {
-                    "username": {
-                      "type": "string"
-                    },
                     "access": {
                       "type": "string",
                       "enum": [
                         "grant",
                         "revoke"
                       ]
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "grant",
+                        "revoke"
+                      ]
+                    },
+                    "reason": {
+                      "type": "string",
+                      "nullable": true
                     },
                     "updatedBy": {
                       "type": "string"
@@ -2103,7 +2164,6 @@
                     }
                   },
                   "required": [
-                    "username",
                     "access",
                     "updatedBy",
                     "updatedAt"
@@ -2112,6 +2172,7 @@
               },
               "required": [
                 "username",
+                "organization",
                 "hasAccess",
                 "accessSource",
                 "stripeStatus",
@@ -6900,6 +6961,26 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "organization": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "id": {
+                          "type": "number"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name"
+                      ]
+                    },
+                    "trialEndsAt": {
+                      "type": "number",
+                      "nullable": true
+                    },
                     "status": {
                       "type": "string",
                       "nullable": true
@@ -6924,8 +7005,10 @@
                       "enum": [
                         "config_bypass",
                         "stripe",
+                        "trial",
                         "admin_grant",
                         "admin_revoke",
+                        "no_organization",
                         "none",
                         null
                       ]
@@ -6934,15 +7017,23 @@
                       "type": "object",
                       "nullable": true,
                       "properties": {
-                        "username": {
-                          "type": "string"
-                        },
                         "access": {
                           "type": "string",
                           "enum": [
                             "grant",
                             "revoke"
                           ]
+                        },
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "grant",
+                            "revoke"
+                          ]
+                        },
+                        "reason": {
+                          "type": "string",
+                          "nullable": true
                         },
                         "updatedBy": {
                           "type": "string"
@@ -6952,7 +7043,6 @@
                         }
                       },
                       "required": [
-                        "username",
                         "access",
                         "updatedBy",
                         "updatedAt"
@@ -6984,6 +7074,8 @@
                     }
                   },
                   "required": [
+                    "organization",
+                    "trialEndsAt",
                     "status",
                     "currentPeriodEnd",
                     "cancelAtPeriodEnd",
@@ -7146,6 +7238,26 @@
                           "email": {
                             "type": "string"
                           },
+                          "organization": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "id": {
+                                "type": "number"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name"
+                            ]
+                          },
+                          "trialEndsAt": {
+                            "type": "number",
+                            "nullable": true
+                          },
                           "hasAccess": {
                             "type": "boolean"
                           },
@@ -7154,8 +7266,10 @@
                             "enum": [
                               "config_bypass",
                               "stripe",
+                              "trial",
                               "admin_grant",
                               "admin_revoke",
+                              "no_organization",
                               "none"
                             ]
                           },
@@ -7178,15 +7292,23 @@
                             "type": "object",
                             "nullable": true,
                             "properties": {
-                              "username": {
-                                "type": "string"
-                              },
                               "access": {
                                 "type": "string",
                                 "enum": [
                                   "grant",
                                   "revoke"
                                 ]
+                              },
+                              "mode": {
+                                "type": "string",
+                                "enum": [
+                                  "grant",
+                                  "revoke"
+                                ]
+                              },
+                              "reason": {
+                                "type": "string",
+                                "nullable": true
                               },
                               "updatedBy": {
                                 "type": "string"
@@ -7196,7 +7318,6 @@
                               }
                             },
                             "required": [
-                              "username",
                               "access",
                               "updatedBy",
                               "updatedAt"
@@ -7205,6 +7326,7 @@
                         },
                         "required": [
                           "username",
+                          "organization",
                           "hasAccess",
                           "accessSource",
                           "stripeStatus",
@@ -7300,6 +7422,26 @@
                         "email": {
                           "type": "string"
                         },
+                        "organization": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "id": {
+                              "type": "number"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name"
+                          ]
+                        },
+                        "trialEndsAt": {
+                          "type": "number",
+                          "nullable": true
+                        },
                         "hasAccess": {
                           "type": "boolean"
                         },
@@ -7308,8 +7450,10 @@
                           "enum": [
                             "config_bypass",
                             "stripe",
+                            "trial",
                             "admin_grant",
                             "admin_revoke",
+                            "no_organization",
                             "none"
                           ]
                         },
@@ -7332,15 +7476,23 @@
                           "type": "object",
                           "nullable": true,
                           "properties": {
-                            "username": {
-                              "type": "string"
-                            },
                             "access": {
                               "type": "string",
                               "enum": [
                                 "grant",
                                 "revoke"
                               ]
+                            },
+                            "mode": {
+                              "type": "string",
+                              "enum": [
+                                "grant",
+                                "revoke"
+                              ]
+                            },
+                            "reason": {
+                              "type": "string",
+                              "nullable": true
                             },
                             "updatedBy": {
                               "type": "string"
@@ -7350,7 +7502,6 @@
                             }
                           },
                           "required": [
-                            "username",
                             "access",
                             "updatedBy",
                             "updatedAt"
@@ -7359,6 +7510,7 @@
                       },
                       "required": [
                         "username",
+                        "organization",
                         "hasAccess",
                         "accessSource",
                         "stripeStatus",

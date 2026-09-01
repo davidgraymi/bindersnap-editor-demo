@@ -5,12 +5,17 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { SetAdminSubscriptionAccess200UserAccessSource } from './setAdminSubscriptionAccess200UserAccessSource.ts';
+import type { SetAdminSubscriptionAccess200UserOrganization } from './setAdminSubscriptionAccess200UserOrganization.ts';
 import type { SetAdminSubscriptionAccess200UserOverride } from './setAdminSubscriptionAccess200UserOverride.ts';
 
 export type SetAdminSubscriptionAccess200User = {
   username: string;
   fullName?: string;
   email?: string;
+  /** @nullable */
+  organization: SetAdminSubscriptionAccess200UserOrganization;
+  /** @nullable */
+  trialEndsAt?: number | null;
   hasAccess: boolean;
   accessSource: SetAdminSubscriptionAccess200UserAccessSource;
   /** @nullable */

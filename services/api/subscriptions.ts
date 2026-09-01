@@ -9,9 +9,21 @@ import {
   webhookCustomerState,
 } from "./db/schema";
 import { logger } from "./logger";
+import {
+  isInTrial,
+  organizationStore,
+  type OrganizationBackend,
+} from "./organizations";
+
+/**
+ * We bill the organization, never a person (ADR 0004). Every function here
+ * takes a Gitea org id: subscriptions, admin overrides and the trial all hang
+ * off the organization, so "who owes us money" survives the person who signed
+ * up leaving.
+ */
 
 export interface SubscriptionRecord {
-  username: string;
+  giteaOrgId: number;
   stripeCustomerId: string;
   stripeSubscriptionId: string;
   status: string; // 'active' | 'canceled' | 'past_due' | 'trialing'
@@ -24,7 +36,7 @@ export interface SubscriptionRecord {
 export type SubscriptionAccessOverrideValue = "grant" | "revoke";
 
 export interface SubscriptionAccessOverrideRecord {
-  username: string;
+  giteaOrgId: number;
   access: SubscriptionAccessOverrideValue;
   reason: string | null;
   updatedBy: string;
@@ -32,11 +44,13 @@ export interface SubscriptionAccessOverrideRecord {
 }
 
 export interface EffectiveSubscriptionAccess {
-  username: string;
+  giteaOrgId: number;
   hasAccess: boolean;
-  source: "stripe" | "admin_grant" | "admin_revoke" | "none";
+  source: "stripe" | "trial" | "admin_grant" | "admin_revoke" | "none";
   subscription: SubscriptionRecord | null;
   override: SubscriptionAccessOverrideRecord | null;
+  /** When the local trial ends, if one is what is granting access. */
+  trialEndsAt: number | null;
 }
 
 function hasStripeBackedAccess(record: SubscriptionRecord | null): boolean {
@@ -60,15 +74,15 @@ function hasStripeBackedAccess(record: SubscriptionRecord | null): boolean {
 // SQLite on the EBS data volume; async so callers never assume a sync
 // backend.
 export interface SubscriptionBackend {
-  getByUsername(username: string): Promise<SubscriptionRecord | null>;
+  getByOrganization(giteaOrgId: number): Promise<SubscriptionRecord | null>;
   getByCustomerId(customerId: string): Promise<SubscriptionRecord | null>;
   upsert(record: SubscriptionRecord): Promise<void>;
   getAccessOverride(
-    username: string,
+    giteaOrgId: number,
   ): Promise<SubscriptionAccessOverrideRecord | null>;
   putAccessOverride(record: SubscriptionAccessOverrideRecord): Promise<void>;
-  deleteAccessOverride(username: string): Promise<void>;
-  resolveAccess(username: string): Promise<EffectiveSubscriptionAccess>;
+  deleteAccessOverride(giteaOrgId: number): Promise<void>;
+  resolveAccess(giteaOrgId: number): Promise<EffectiveSubscriptionAccess>;
   listKnownAccessStates(): Promise<EffectiveSubscriptionAccess[]>;
 }
 
@@ -88,11 +102,11 @@ export interface WebhookEventBackend {
 export class SubscriptionCustomerConflictError extends Error {
   constructor(
     customerId: string,
-    existingUsername: string,
-    attemptedUsername: string,
+    existingGiteaOrgId: number,
+    attemptedGiteaOrgId: number,
   ) {
     super(
-      `Stripe customer ${customerId} is already bound to ${existingUsername}; cannot rebind to ${attemptedUsername}.`,
+      `Stripe customer ${customerId} is already bound to organization ${existingGiteaOrgId}; cannot rebind to ${attemptedGiteaOrgId}.`,
     );
     this.name = "SubscriptionCustomerConflictError";
   }
@@ -100,17 +114,24 @@ export class SubscriptionCustomerConflictError extends Error {
 
 export class SubscriptionStore implements SubscriptionBackend {
   private db: SqliteDb;
+  private organizations: OrganizationBackend;
 
-  constructor(path: string = config.sessionsDbPath) {
+  constructor(
+    path: string = config.sessionsDbPath,
+    organizations: OrganizationBackend = organizationStore,
+  ) {
     this.db = openSqliteDb(path);
+    this.organizations = organizations;
     this.enforceUniqueCustomerBindings();
   }
 
-  async getByUsername(username: string): Promise<SubscriptionRecord | null> {
+  async getByOrganization(
+    giteaOrgId: number,
+  ): Promise<SubscriptionRecord | null> {
     const row = this.db
       .select()
       .from(subscriptions)
-      .where(eq(subscriptions.username, username))
+      .where(eq(subscriptions.giteaOrgId, giteaOrgId))
       .get();
     return row ?? null;
   }
@@ -132,19 +153,19 @@ export class SubscriptionStore implements SubscriptionBackend {
     );
     if (
       existingCustomerRecord &&
-      existingCustomerRecord.username !== record.username
+      existingCustomerRecord.giteaOrgId !== record.giteaOrgId
     ) {
       logger.error("Rejected Stripe customer rebind attempt", {
         stripeCustomerId: record.stripeCustomerId,
-        existingUsername: existingCustomerRecord.username,
-        attemptedUsername: record.username,
+        existingGiteaOrgId: existingCustomerRecord.giteaOrgId,
+        attemptedGiteaOrgId: record.giteaOrgId,
         existingSubscriptionId: existingCustomerRecord.stripeSubscriptionId,
         attemptedSubscriptionId: record.stripeSubscriptionId,
       });
       throw new SubscriptionCustomerConflictError(
         record.stripeCustomerId,
-        existingCustomerRecord.username,
-        record.username,
+        existingCustomerRecord.giteaOrgId,
+        record.giteaOrgId,
       );
     }
 
@@ -152,7 +173,7 @@ export class SubscriptionStore implements SubscriptionBackend {
       .insert(subscriptions)
       .values(record)
       .onConflictDoUpdate({
-        target: subscriptions.username,
+        target: subscriptions.giteaOrgId,
         set: {
           stripeCustomerId: record.stripeCustomerId,
           stripeSubscriptionId: record.stripeSubscriptionId,
@@ -167,12 +188,12 @@ export class SubscriptionStore implements SubscriptionBackend {
   }
 
   async getAccessOverride(
-    username: string,
+    giteaOrgId: number,
   ): Promise<SubscriptionAccessOverrideRecord | null> {
     const row = this.db
       .select()
       .from(subscriptionAccessOverrides)
-      .where(eq(subscriptionAccessOverrides.username, username))
+      .where(eq(subscriptionAccessOverrides.giteaOrgId, giteaOrgId))
       .get();
     return row ?? null;
   }
@@ -184,7 +205,7 @@ export class SubscriptionStore implements SubscriptionBackend {
       .insert(subscriptionAccessOverrides)
       .values(record)
       .onConflictDoUpdate({
-        target: subscriptionAccessOverrides.username,
+        target: subscriptionAccessOverrides.giteaOrgId,
         set: {
           access: record.access,
           reason: record.reason,
@@ -195,70 +216,84 @@ export class SubscriptionStore implements SubscriptionBackend {
       .run();
   }
 
-  async deleteAccessOverride(username: string): Promise<void> {
+  async deleteAccessOverride(giteaOrgId: number): Promise<void> {
     this.db
       .delete(subscriptionAccessOverrides)
-      .where(eq(subscriptionAccessOverrides.username, username))
+      .where(eq(subscriptionAccessOverrides.giteaOrgId, giteaOrgId))
       .run();
   }
 
-  async resolveAccess(username: string): Promise<EffectiveSubscriptionAccess> {
-    const subscription = await this.getByUsername(username);
-    const override = await this.getAccessOverride(username);
+  /**
+   * Whether this organization may author right now, and on what authority.
+   *
+   * One precedence list, highest first, exactly as ADR 0004 states it. Keeping
+   * it in one function is the whole reason two sources of access truth — a
+   * Stripe subscription and a local trial column — are an acceptable cost.
+   *
+   *   1. `admin_revoke`  — no access, whatever else says.
+   *   2. `admin_grant`   — access; the comp mechanism.
+   *   3. Stripe `active` / `trialing`, with the 3-day grace on a stale period
+   *      end that covers a missed webhook.
+   *   4. The local trial: `organizations.trial_ends_at` still in the future.
+   *      A column rather than a Stripe trialing subscription because #369
+   *      wants no card at all, and representing that in Stripe would create a
+   *      customer and a subscription for every tire-kicker.
+   *   5. Otherwise, no access.
+   */
+  async resolveAccess(
+    giteaOrgId: number,
+  ): Promise<EffectiveSubscriptionAccess> {
+    const subscription = await this.getByOrganization(giteaOrgId);
+    const override = await this.getAccessOverride(giteaOrgId);
+    const organization = await this.organizations.get(giteaOrgId);
+    const trialEndsAt = organization?.trialEndsAt ?? null;
 
-    if (override?.access === "grant") {
-      return {
-        username,
-        hasAccess: true,
-        source: "admin_grant",
-        subscription,
-        override,
-      };
-    }
+    const base = { giteaOrgId, subscription, override, trialEndsAt };
 
     if (override?.access === "revoke") {
-      return {
-        username,
-        hasAccess: false,
-        source: "admin_revoke",
-        subscription,
-        override,
-      };
+      return { ...base, hasAccess: false, source: "admin_revoke" };
+    }
+
+    if (override?.access === "grant") {
+      return { ...base, hasAccess: true, source: "admin_grant" };
     }
 
     if (hasStripeBackedAccess(subscription)) {
-      return {
-        username,
-        hasAccess: true,
-        source: "stripe",
-        subscription,
-        override,
-      };
+      return { ...base, hasAccess: true, source: "stripe" };
     }
 
-    return {
-      username,
-      hasAccess: false,
-      source: "none",
-      subscription,
-      override,
-    };
+    if (isInTrial(organization)) {
+      return { ...base, hasAccess: true, source: "trial" };
+    }
+
+    return { ...base, hasAccess: false, source: "none" };
   }
 
   async listKnownAccessStates(): Promise<EffectiveSubscriptionAccess[]> {
-    const usernames = union(
-      this.db.select({ username: subscriptions.username }).from(subscriptions),
+    const orgIds = union(
       this.db
-        .select({ username: subscriptionAccessOverrides.username })
+        .select({ giteaOrgId: subscriptions.giteaOrgId })
+        .from(subscriptions),
+      this.db
+        .select({ giteaOrgId: subscriptionAccessOverrides.giteaOrgId })
         .from(subscriptionAccessOverrides),
     )
-      .orderBy(sql`username COLLATE NOCASE ASC`)
+      .orderBy(sql`gitea_org_id ASC`)
       .all()
-      .map((row) => row.username);
+      .map((row) => row.giteaOrgId);
 
-    return Promise.all(
-      usernames.map((username) => this.resolveAccess(username)),
+    // An organization on a trial has neither a subscription nor an override,
+    // so it would be invisible here — and "who is in a trial right now" is the
+    // question this list exists to answer for an admin.
+    const trialOrgIds = (await this.organizations.list())
+      .filter((organization) => isInTrial(organization))
+      .map((organization) => organization.giteaOrgId);
+
+    const allIds = [...new Set([...orgIds, ...trialOrgIds])].sort(
+      (a, b) => a - b,
     );
+
+    return Promise.all(allIds.map((orgId) => this.resolveAccess(orgId)));
   }
 
   // Legacy data hygiene: dedupe rows that predate the unique customer
@@ -285,7 +320,10 @@ export class SubscriptionStore implements SubscriptionBackend {
             .where(
               eq(subscriptions.stripeCustomerId, duplicate.stripeCustomerId),
             )
-            .orderBy(desc(subscriptions.updatedAt), asc(subscriptions.username))
+            .orderBy(
+              desc(subscriptions.updatedAt),
+              asc(subscriptions.giteaOrgId),
+            )
             .all();
 
           const [keptRow, ...removedRows] = rows;
@@ -295,15 +333,15 @@ export class SubscriptionStore implements SubscriptionBackend {
             "Deduplicating legacy Stripe customer bindings during subscription migration",
             {
               stripeCustomerId: duplicate.stripeCustomerId,
-              keptUsername: keptRow.username,
-              removedUsernames: removedRows.map((row) => row.username),
+              keptGiteaOrgId: keptRow.giteaOrgId,
+              removedGiteaOrgIds: removedRows.map((row) => row.giteaOrgId),
               duplicateCount: duplicate.duplicateCount,
             },
           );
 
           for (const row of removedRows) {
             tx.delete(subscriptions)
-              .where(eq(subscriptions.username, row.username))
+              .where(eq(subscriptions.giteaOrgId, row.giteaOrgId))
               .run();
           }
         }
@@ -429,8 +467,8 @@ class LazySubscriptionStore implements SubscriptionBackend {
     return this._store;
   }
 
-  getByUsername(username: string): Promise<SubscriptionRecord | null> {
-    return this.store.getByUsername(username);
+  getByOrganization(giteaOrgId: number): Promise<SubscriptionRecord | null> {
+    return this.store.getByOrganization(giteaOrgId);
   }
 
   getByCustomerId(customerId: string): Promise<SubscriptionRecord | null> {
@@ -442,21 +480,21 @@ class LazySubscriptionStore implements SubscriptionBackend {
   }
 
   getAccessOverride(
-    username: string,
+    giteaOrgId: number,
   ): Promise<SubscriptionAccessOverrideRecord | null> {
-    return this.store.getAccessOverride(username);
+    return this.store.getAccessOverride(giteaOrgId);
   }
 
   putAccessOverride(record: SubscriptionAccessOverrideRecord): Promise<void> {
     return this.store.putAccessOverride(record);
   }
 
-  deleteAccessOverride(username: string): Promise<void> {
-    return this.store.deleteAccessOverride(username);
+  deleteAccessOverride(giteaOrgId: number): Promise<void> {
+    return this.store.deleteAccessOverride(giteaOrgId);
   }
 
-  resolveAccess(username: string): Promise<EffectiveSubscriptionAccess> {
-    return this.store.resolveAccess(username);
+  resolveAccess(giteaOrgId: number): Promise<EffectiveSubscriptionAccess> {
+    return this.store.resolveAccess(giteaOrgId);
   }
 
   listKnownAccessStates(): Promise<EffectiveSubscriptionAccess[]> {
@@ -466,8 +504,9 @@ class LazySubscriptionStore implements SubscriptionBackend {
 
 export const subscriptionStore = new LazySubscriptionStore();
 
-export async function hasActiveSubscription(
-  username: string,
+/** Whether this organization may author right now. */
+export async function organizationHasAccess(
+  giteaOrgId: number,
 ): Promise<boolean> {
-  return (await subscriptionStore.resolveAccess(username)).hasAccess;
+  return (await subscriptionStore.resolveAccess(giteaOrgId)).hasAccess;
 }

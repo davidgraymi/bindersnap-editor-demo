@@ -56,8 +56,14 @@ export const organizations = sqliteTable(
   (table) => [index("idx_organizations_name").on(table.name)],
 );
 
+/**
+ * We bill the organization, never a person (ADR 0004). Keyed on the Gitea org
+ * id for the same reason `organizations` is: Gitea renames orgs, and the old
+ * `username` key broke silently when it did — as well as tying a customer's
+ * subscription to whichever human happened to sign up first.
+ */
 export const subscriptions = sqliteTable("subscriptions", {
-  username: text("username").primaryKey(),
+  giteaOrgId: integer("gitea_org_id").primaryKey(),
   stripeCustomerId: text("stripe_customer_id").notNull(),
   stripeSubscriptionId: text("stripe_subscription_id").notNull(),
   status: text("status").notNull(),
@@ -71,6 +77,42 @@ export const subscriptions = sqliteTable("subscriptions", {
 
 export const subscriptionAccessOverrides = sqliteTable(
   "subscription_access_overrides",
+  {
+    giteaOrgId: integer("gitea_org_id").primaryKey(),
+    access: text("access", { enum: ["grant", "revoke"] }).notNull(),
+    reason: text("reason"),
+    updatedBy: text("updated_by").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+);
+
+/**
+ * The username-keyed rows as they stood before the re-key, kept verbatim.
+ *
+ * Mapping a username to an organization needs Gitea, which a SQL migration
+ * cannot reach — so the migration parks the old rows here and
+ * `scripts/backfill-org-billing.ts` maps them. Nothing in the request path
+ * reads these tables. They are evidence that the re-key lost nothing, and they
+ * are dropped by hand once the backfill has been verified.
+ */
+export const legacyUsernameSubscriptions = sqliteTable(
+  "legacy_username_subscriptions",
+  {
+    username: text("username").primaryKey(),
+    stripeCustomerId: text("stripe_customer_id").notNull(),
+    stripeSubscriptionId: text("stripe_subscription_id").notNull(),
+    status: text("status").notNull(),
+    currentPeriodEnd: integer("current_period_end"),
+    cancelAtPeriodEnd: integer("cancel_at_period_end", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    cancelAt: integer("cancel_at"),
+    updatedAt: integer("updated_at").notNull(),
+  },
+);
+
+export const legacyUsernameSubscriptionAccessOverrides = sqliteTable(
+  "legacy_username_subscription_access_overrides",
   {
     username: text("username").primaryKey(),
     access: text("access", { enum: ["grant", "revoke"] }).notNull(),

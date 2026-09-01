@@ -5,13 +5,16 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { AdminSubscriptionAccessListPayloadUsersItemOverrideAccess } from './adminSubscriptionAccessListPayloadUsersItemOverrideAccess.ts';
+import type { AdminSubscriptionAccessListPayloadUsersItemOverrideMode } from './adminSubscriptionAccessListPayloadUsersItemOverrideMode.ts';
 
 /**
  * @nullable
  */
 export type AdminSubscriptionAccessListPayloadUsersItemOverride = {
-  username: string;
   access: AdminSubscriptionAccessListPayloadUsersItemOverrideAccess;
+  mode?: AdminSubscriptionAccessListPayloadUsersItemOverrideMode;
+  /** @nullable */
+  reason?: string | null;
   updatedBy: string;
   updatedAt: number;
 } | null;

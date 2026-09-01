@@ -281,6 +281,10 @@ export function App() {
     "active" | "none" | "loading" | null
   >(null);
   const [hasBillingStatusError, setHasBillingStatusError] = useState(false);
+  // Where the access comes from. A trial counts as access, but it is not a
+  // subscription — so a trialing customer must still be able to open the page
+  // where they buy one.
+  const [accessSource, setAccessSource] = useState<string | null>(null);
   const [currentPeriodEnd, setCurrentPeriodEnd] = useState<number | null>(null);
   const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(false);
   const [cancelAt, setCancelAt] = useState<number | null>(null);
@@ -296,6 +300,7 @@ export function App() {
     }
 
     setSubscriptionStatus("none");
+    setAccessSource(null);
     setHasBillingStatusError(false);
     setCurrentPeriodEnd(null);
     setCancelAtPeriodEnd(false);
@@ -319,6 +324,7 @@ export function App() {
           setSubscriptionStatus(
             resolveSubscriptionStatus(billing.status, billing.hasAccess),
           );
+          setAccessSource(billing.accessSource ?? null);
           setHasBillingStatusError(false);
           setCurrentPeriodEnd(billing.currentPeriodEnd);
           setCancelAtPeriodEnd(billing.cancelAtPeriodEnd);
@@ -326,6 +332,7 @@ export function App() {
           setPlan(billing.plan);
         } catch {
           setSubscriptionStatus("none");
+          setAccessSource(null);
           setHasBillingStatusError(true);
           setCurrentPeriodEnd(null);
           setCancelAtPeriodEnd(false);
@@ -444,16 +451,20 @@ export function App() {
       return;
     }
 
+    // Bounce back to the workspace only when there is genuinely nothing to do
+    // on this page. A customer on a trial has access but no subscription, and
+    // sending them home would leave them no way to become a paying one.
     if (
       user &&
       subscriptionStatus === "active" &&
+      accessSource === "stripe" &&
       route.kind === "billing" &&
       !isCheckoutSuccess
     ) {
       navigateTo({ kind: "home" }, true);
       return;
     }
-  }, [isCheckingSession, route, subscriptionStatus, user]);
+  }, [accessSource, isCheckingSession, route, subscriptionStatus, user]);
 
   useEffect(() => {
     if (route.kind !== "callback") {
@@ -533,6 +544,7 @@ export function App() {
         }}
         onSubscriptionConfirmed={() => {
           setSubscriptionStatus("active");
+          setAccessSource("stripe");
           setHasBillingStatusError(false);
           navigateTo({ kind: "home" }, true);
         }}

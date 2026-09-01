@@ -12,6 +12,9 @@ import {
   webhookEventStore,
 } from "./subscriptions";
 
+const TEST_GITEA_ORG_ID = 4004;
+const TEST_ORG_NAME = "adr0004-test-org";
+
 // ── Mock Gitea state ─────────────────────────────────────────────────────────
 
 type MockedGiteaUser = { login: string; email: string };
@@ -88,6 +91,14 @@ beforeEach(() => {
     const bodyText = rawBody || null;
 
     fetchCalls.push({ path: url.pathname, method, body: bodyText });
+
+    // ADR 0004: the paywall asks which organization the session belongs to.
+    if (url.pathname === "/api/v1/user/orgs") {
+      return new Response(
+        JSON.stringify([{ id: TEST_GITEA_ORG_ID, username: TEST_ORG_NAME }]),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
 
     // Gitea: GET /api/v1/user — authenticate token
     if (url.pathname === "/api/v1/user") {
@@ -351,7 +362,7 @@ async function seedSession(username: string): Promise<string> {
     expiresAt: Date.now() + 60_000,
   });
   await subscriptionStore.upsert({
-    username,
+    giteaOrgId: TEST_GITEA_ORG_ID,
     stripeCustomerId: `cus_${randomUUID()}`,
     stripeSubscriptionId: `sub_${randomUUID()}`,
     status: "active",

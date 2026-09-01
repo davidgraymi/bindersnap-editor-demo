@@ -5,12 +5,17 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { AdminSubscriptionAccessListPayloadUsersItemAccessSource } from './adminSubscriptionAccessListPayloadUsersItemAccessSource.ts';
+import type { AdminSubscriptionAccessListPayloadUsersItemOrganization } from './adminSubscriptionAccessListPayloadUsersItemOrganization.ts';
 import type { AdminSubscriptionAccessListPayloadUsersItemOverride } from './adminSubscriptionAccessListPayloadUsersItemOverride.ts';
 
 export type AdminSubscriptionAccessListPayloadUsersItem = {
   username: string;
   fullName?: string;
   email?: string;
+  /** @nullable */
+  organization: AdminSubscriptionAccessListPayloadUsersItemOrganization;
+  /** @nullable */
+  trialEndsAt?: number | null;
   hasAccess: boolean;
   accessSource: AdminSubscriptionAccessListPayloadUsersItemAccessSource;
   /** @nullable */

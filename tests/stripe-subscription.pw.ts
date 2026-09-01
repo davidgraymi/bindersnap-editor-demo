@@ -767,10 +767,15 @@ test.describe("Stripe subscription lifecycle", () => {
         .fill(credentials.password);
       await page.getByRole("button", { name: "Create account" }).click();
 
-      await expect(page).toHaveURL(/\/billing$/, { timeout: 20_000 });
+      // A new organization starts on a 14-day trial with no card (ADR 0004,
+      // #369), so signup lands in the workspace. Subscribing is a thing the
+      // customer chooses to do, which is what this test is about — so go and
+      // do it.
+      await expect(page).not.toHaveURL(/\/billing$/, { timeout: 20_000 });
+      await page.goto("/billing", { waitUntil: "domcontentloaded" });
       await expect(
-        page.getByRole("heading", { name: "Start your subscription" }),
-      ).toBeVisible();
+        page.getByRole("button", { name: "Subscribe now" }),
+      ).toBeVisible({ timeout: 20_000 });
 
       await page.getByRole("button", { name: "Subscribe now" }).click();
       await completeHostedStripeCheckout(page, credentials.email);
