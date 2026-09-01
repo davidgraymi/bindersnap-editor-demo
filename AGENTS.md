@@ -298,6 +298,22 @@ supersedes ADR 0001's "one document equals one repository". The routes and BFF
 endpoints documented above describe the **shipped** one-repo-per-document code,
 which is still what runs.
 
+### The paywall gates authoring, never reading.
+
+`requireSubscription` guards mutation and nothing else. Reads and exports stay
+open forever, whatever an organization owes us — holding a customer's approval
+history hostage is the one act that would poison a compliance reference
+permanently, and a surveyor's question does not pause for an invoice. Reads
+authenticate with `requireSession` instead.
+
+The rule is gated by intent, not by a route list, so a new `GET` that reaches
+for `requireSubscription` is the bug. `services/api/paywall-scope.test.ts`
+parses the router and fails on one, which is what ADR 0004 asks for in place of
+a route-by-route audit.
+
+When the paywall does bite it bites the organization, not the person: a
+delinquent org's reviewers are blocked from mutating too.
+
 ### Evidence lives in Gitea. Configuration lives in SQLite.
 
 Three questions, in order, from

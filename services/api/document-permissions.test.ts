@@ -680,7 +680,7 @@ describe("GET /api/app/documents/:owner/:repo/permissions", () => {
     }
   });
 
-  test("returns 402 when user has no active subscription", async () => {
+  test("is never gated by the paywall, because reading is never gated", async () => {
     const server = createApiServer();
     const sessionId = `sess_${randomUUID()}`;
     const giteaToken = `gitea_${randomUUID()}`;
@@ -698,6 +698,7 @@ describe("GET /api/app/documents/:owner/:repo/permissions", () => {
       createdAt: Date.now(),
       expiresAt: Date.now() + 60_000,
     });
+    seedRepo(username, "my-doc", { isPrivate: true });
     // no subscriptionStore.upsert — no active subscription
 
     try {
@@ -707,7 +708,11 @@ describe("GET /api/app/documents/:owner/:repo/permissions", () => {
           sessionId,
         ),
       );
-      expect(response.status).toBe(402);
+      // ADR 0004: the paywall gates authoring and mutation and nothing else.
+      // Who may act on a binder, and under what rules, is part of the record a
+      // surveyor can ask about — so a delinquent organization still reads it.
+      expect(response.status).not.toBe(402);
+      expect(response.status).toBe(200);
     } finally {
       server.stop(true);
     }

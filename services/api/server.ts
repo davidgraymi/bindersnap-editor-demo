@@ -668,7 +668,11 @@ async function resolveDocumentAccess(
   owner: string,
   repo: string,
 ): Promise<DocumentAccessContext | Response> {
-  const auth = await requireSubscription(req, baseHeaders);
+  // Reading the record is never gated (ADR 0004). Every caller of this is a
+  // GET, so a signed-in reader gets through whatever their organization owes
+  // us; the service-client fallback below is for the anonymous reader of a
+  // public repo, not for the delinquent one.
+  const auth = await requireSession(req, baseHeaders);
   if (!(auth instanceof Response)) {
     return {
       client: auth.client,
@@ -721,6 +725,21 @@ async function requireSession(
   return { session, client: createSessionGiteaClient(session) };
 }
 
+/**
+ * The paywall. It gates **authoring and mutation, and nothing else.**
+ *
+ * ADR 0004 makes this structural rather than a nicety: reads and exports stay
+ * open forever, whatever an organization owes us. Holding a customer's
+ * approval history hostage is the one act that would poison a compliance
+ * reference permanently, and a surveyor's question does not pause for an
+ * invoice. The rule is gated by intent, not by route list — so a new GET that
+ * reaches for this function is the bug, and `paywall-scope.test.ts` says so
+ * before review has to.
+ *
+ * When it does bite it bites the organization, not the person: a delinquent
+ * org's reviewers are blocked from mutating too, because the org is
+ * delinquent, not them.
+ */
 async function requireSubscription(
   req: Request,
   baseHeaders: Headers,
@@ -2099,7 +2118,8 @@ async function handleDocumentSearch(
   req: Request,
   baseHeaders: Headers,
 ): Promise<Response> {
-  const auth = await requireSubscription(req, baseHeaders);
+  // A read. Never gated — see resolveDocumentAccess.
+  const auth = await requireSession(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -2144,7 +2164,8 @@ async function handleDocuments(
   req: Request,
   baseHeaders: Headers,
 ): Promise<Response> {
-  const auth = await requireSubscription(req, baseHeaders);
+  // A read. Never gated — see resolveDocumentAccess.
+  const auth = await requireSession(req, baseHeaders);
   if (auth instanceof Response) {
     return auth;
   }
@@ -3925,7 +3946,9 @@ async function handleGetDocumentPermissions(
   owner: string,
   repo: string,
 ): Promise<Response> {
-  const auth = await requireSubscription(req, baseHeaders);
+  // A read: who may act on this binder, and what the rules are. Changing any
+  // of it is the PUT, and that is still gated.
+  const auth = await requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
   const { client, session } = auth;
 
