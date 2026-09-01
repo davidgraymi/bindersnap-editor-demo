@@ -455,8 +455,18 @@ async function getBillingStatus(
   return response.json() as Promise<BillingStatusPayload>;
 }
 
-async function getDocumentsHttpStatus(sessionCookie: string): Promise<number> {
+/**
+ * Ask the paywall, in the only way that still asks it.
+ *
+ * Reading is no longer gated — the record stays readable and exportable
+ * whatever an organization owes us — so a GET tells you nothing about a
+ * subscription any more. Authoring is what a subscription buys, so the probe
+ * is a create with nothing to create: `requireSubscription` runs before the
+ * body is parsed, which makes 402 the gated answer and 400 the ungated one.
+ */
+async function getAuthoringHttpStatus(sessionCookie: string): Promise<number> {
   const response = await fetch(`${API_BASE_URL}/api/app/documents`, {
+    method: "POST",
     headers: { Cookie: `bindersnap_session=${sessionCookie}` },
   });
   return response.status;
@@ -519,8 +529,8 @@ test.describe("Stripe subscription lifecycle", () => {
     expect(billingStatus.status).toBeNull();
     expect(billingStatus.currentPeriodEnd).toBeNull();
 
-    const docsStatus = await getDocumentsHttpStatus(sessionCookie);
-    expect(docsStatus).toBe(402);
+    const authoringStatus = await getAuthoringHttpStatus(sessionCookie);
+    expect(authoringStatus).toBe(402);
   });
 
   // -------------------------------------------------------------------------
@@ -534,7 +544,7 @@ test.describe("Stripe subscription lifecycle", () => {
     const sessionCookie = await signUpUser(credentials);
 
     // Pre-condition: paywalled
-    expect(await getDocumentsHttpStatus(sessionCookie)).toBe(402);
+    expect(await getAuthoringHttpStatus(sessionCookie)).toBe(402);
 
     const { customerId, subscriptionId } =
       await createTestCustomerAndSubscription(credentials.username);
@@ -559,7 +569,7 @@ test.describe("Stripe subscription lifecycle", () => {
       expect(typeof billing.currentPeriodEnd).toBe("number");
 
       // Access should now be granted
-      expect(await getDocumentsHttpStatus(sessionCookie)).toBe(200);
+      expect(await getAuthoringHttpStatus(sessionCookie)).toBe(400);
     } finally {
       await cancelTestSubscription(subscriptionId);
     }
@@ -580,7 +590,7 @@ test.describe("Stripe subscription lifecycle", () => {
         customer: customerId,
         subscription: subscriptionId,
       });
-      expect(await getDocumentsHttpStatus(sessionCookie)).toBe(200);
+      expect(await getAuthoringHttpStatus(sessionCookie)).toBe(400);
 
       // Simulate Stripe dunning: payment fails → subscription moves to past_due
       const updateResp = await postWebhook("customer.subscription.updated", {
@@ -595,7 +605,7 @@ test.describe("Stripe subscription lifecycle", () => {
       expect(billing.status).toBe("past_due");
 
       // Access must be revoked for past_due
-      expect(await getDocumentsHttpStatus(sessionCookie)).toBe(402);
+      expect(await getAuthoringHttpStatus(sessionCookie)).toBe(402);
     } finally {
       await cancelTestSubscription(subscriptionId);
     }
@@ -623,7 +633,7 @@ test.describe("Stripe subscription lifecycle", () => {
         status: "past_due",
         current_period_end: currentPeriodEnd,
       });
-      expect(await getDocumentsHttpStatus(sessionCookie)).toBe(402);
+      expect(await getAuthoringHttpStatus(sessionCookie)).toBe(402);
 
       // Simulate successful payment retry → active
       const renewedPeriodEnd = currentPeriodEnd + 30 * 24 * 60 * 60;
@@ -637,7 +647,7 @@ test.describe("Stripe subscription lifecycle", () => {
       const billing = await getBillingStatus(sessionCookie);
       expect(billing.status).toBe("active");
       expect(billing.currentPeriodEnd).toBe(renewedPeriodEnd);
-      expect(await getDocumentsHttpStatus(sessionCookie)).toBe(200);
+      expect(await getAuthoringHttpStatus(sessionCookie)).toBe(400);
     } finally {
       await cancelTestSubscription(subscriptionId);
     }
@@ -663,7 +673,7 @@ test.describe("Stripe subscription lifecycle", () => {
         customer: customerId,
         subscription: subscriptionId,
       });
-      expect(await getDocumentsHttpStatus(sessionCookie)).toBe(200);
+      expect(await getAuthoringHttpStatus(sessionCookie)).toBe(400);
 
       // Send a subscription.updated payload shaped like the new API:
       // NO top-level current_period_end; only items.data[0].current_period_end.
@@ -689,7 +699,7 @@ test.describe("Stripe subscription lifecycle", () => {
       // The handler must have picked up the nested period end, not the
       // (stale) one stored at activation time.
       expect(billing.currentPeriodEnd).toBe(newShapePeriodEnd);
-      expect(await getDocumentsHttpStatus(sessionCookie)).toBe(200);
+      expect(await getAuthoringHttpStatus(sessionCookie)).toBe(400);
     } finally {
       await cancelTestSubscription(subscriptionId);
     }
@@ -709,7 +719,7 @@ test.describe("Stripe subscription lifecycle", () => {
       customer: customerId,
       subscription: subscriptionId,
     });
-    expect(await getDocumentsHttpStatus(sessionCookie)).toBe(200);
+    expect(await getAuthoringHttpStatus(sessionCookie)).toBe(400);
 
     // Delete — no cleanup needed, subscription is being canceled here
     const deleteResp = await postWebhook("customer.subscription.deleted", {
@@ -722,7 +732,7 @@ test.describe("Stripe subscription lifecycle", () => {
 
     const billing = await getBillingStatus(sessionCookie);
     expect(billing.status).toBe("canceled");
-    expect(await getDocumentsHttpStatus(sessionCookie)).toBe(402);
+    expect(await getAuthoringHttpStatus(sessionCookie)).toBe(402);
   });
 
   test("billing/checkout returns a Stripe Checkout Session URL", async () => {
