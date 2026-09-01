@@ -832,7 +832,11 @@ test.describe("Stripe subscription lifecycle", () => {
     page,
   }) => {
     test.skip(!stripeFullyConfigured, "Stripe test credentials not configured");
-    test.setTimeout(120_000);
+    // The whole customer journey in one test: signup with provisioning, a
+    // round trip through Stripe's hosted page, the redirect back, and the
+    // webhook landing before the workspace unlocks. The waits below add up to
+    // more than two minutes of budget on their own.
+    test.setTimeout(240_000);
 
     const credentials = uniqueCredentials();
 
@@ -849,10 +853,23 @@ test.describe("Stripe subscription lifecycle", () => {
       await page.getByRole("button", { name: "Create account" }).click();
 
       // A new organization starts on a 14-day trial with no card (ADR 0004,
-      // #369), so signup lands in the workspace. Subscribing is a thing the
-      // customer chooses to do, which is what this test is about — so go and
-      // do it.
-      await expect(page).not.toHaveURL(/\/billing$/, { timeout: 20_000 });
+      // #369), so signup lands in the workspace rather than at a card form.
+      //
+      // Wait for the workspace itself, not for the absence of /billing: a
+      // negative URL assertion is satisfied the instant it is made, because
+      // the page is still on /signup while the server provisions the
+      // organization, its binder, three teams and the rules on `main`. That
+      // would send the rest of this test to /billing with no session, where
+      // the app renders the login view and no amount of waiting produces a
+      // subscribe button.
+      await expect(page).toHaveURL(/\/$/, { timeout: 60_000 });
+      await expect(
+        page.locator(
+          `.app-topnav-avatar[aria-label="User: ${credentials.username}"]`,
+        ),
+      ).toBeVisible({ timeout: 30_000 });
+
+      // Subscribing is now a thing the customer chooses to do, so go and do it.
       await page.goto("/billing", { waitUntil: "domcontentloaded" });
       await expect(
         page.getByRole("button", { name: "Subscribe now" }),
