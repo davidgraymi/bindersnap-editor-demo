@@ -141,7 +141,9 @@ a strike as well as a colour, so the comparison still reads without one.
 All browser-to-data calls go through the BFF. The browser never contacts Gitea
 directly.
 
-- `POST /auth/signup` — create Gitea account + session
+- `POST /auth/signup` — create Gitea account + session, then provision the
+  organization and its first binder (ADR 0004). Accepts an optional
+  `organization` display name; the org's Gitea name is derived from it
 - `POST /auth/login` — authenticate + set `HttpOnly` session cookie
 - `POST /auth/logout` — revoke session + Gitea token
 - `GET /auth/me` — return current session user + a Gitea token for the client

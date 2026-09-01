@@ -492,6 +492,7 @@ test("resolveGiteaTokenScopes includes all required write scopes by default", ()
     "write:user",
     "write:repository",
     "write:issue",
+    "write:organization",
   ]);
 });
 
@@ -502,6 +503,7 @@ test("resolveGiteaTokenScopes preserves configured scopes and adds missing requi
   expect(scopes).toContain("write:user");
   expect(scopes).toContain("write:repository");
   expect(scopes).toContain("write:issue");
+  expect(scopes).toContain("write:organization");
 });
 
 test("resolveGiteaTokenScopes de-duplicates repeated scopes", () => {

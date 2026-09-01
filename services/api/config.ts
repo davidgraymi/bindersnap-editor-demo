@@ -39,6 +39,11 @@ const REQUIRED_GITEA_TOKEN_SCOPES = [
   "write:user",
   "write:repository",
   "write:issue",
+  // ADR 0004: signup creates the organization with the new user's own token,
+  // which is what makes them its owner. Creating the org, its role teams and
+  // the grants onto the workspace repo all sit behind Gitea's organization
+  // scope, so a session token without it cannot provision anything.
+  "write:organization",
 ] as const;
 
 // Spec types — every env var must have an entry in one of the three registries below.

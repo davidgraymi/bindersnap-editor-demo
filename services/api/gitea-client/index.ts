@@ -8,6 +8,7 @@ export * from "./reactions";
 export * from "./reviewSettings";
 export * from "./repos";
 export * from "./uploads";
+export * from "./workspaces";
 
 // Re-export generated types for consumers that need raw Gitea API types
 export type { components, operations, paths } from "./spec/gitea";

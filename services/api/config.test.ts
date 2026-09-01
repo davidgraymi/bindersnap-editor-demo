@@ -21,6 +21,7 @@ describe("API config", () => {
       "write:user",
       "write:repository",
       "write:issue",
+      "write:organization",
     ]);
   });
 
