@@ -12,6 +12,8 @@
  * Requires the full Docker Compose stack — run via `bun run test:integration`.
  */
 
+import { randomUUID } from "node:crypto";
+
 import { expect, test } from "@playwright/test";
 
 import {
@@ -30,7 +32,9 @@ interface Credentials {
 }
 
 function buildCredentials(): Credentials {
-  const suffix = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  // randomUUID rather than Math.random: this builds a password, and a
+  // predictable one in a fixture is still a bad habit to copy.
+  const suffix = randomUUID().slice(0, 12);
   return {
     username: `provision-${suffix}`,
     email: `provision-${suffix}@users.bindersnap.local`,

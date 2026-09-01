@@ -20,6 +20,8 @@
  * Requires the full Docker Compose stack — run via `bun run test:integration`.
  */
 
+import { randomUUID } from "node:crypto";
+
 import { expect, test } from "@playwright/test";
 
 import {
@@ -37,7 +39,7 @@ const REVIEWER = "carol"; // seeded, reviews it without write access
 
 /** Unique per run so repeated runs never collide inside one Gitea volume. */
 function uniqueOrgName(): string {
-  return `bs-adr4-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  return `bs-adr4-${randomUUID().slice(0, 8)}`;
 }
 
 interface Workspace {
@@ -226,7 +228,7 @@ async function openChange(
   path: string,
   content: string,
 ): Promise<number> {
-  const branch = `change/${Date.now().toString(36)}`;
+  const branch = `change/${randomUUID().slice(0, 8)}`;
   await post(client, `/repos/${workspace.org}/${workspace.repo}/branches`, {
     new_branch_name: branch,
     old_ref_name: "main",
