@@ -86,18 +86,17 @@ the workspace was not a real object.
 
 Roles are org teams, each granted onto its workspace repo:
 
-| Team             | Access                                       | Who              |
-| ---------------- | -------------------------------------------- | ---------------- |
-| `<ws>-admins`    | Admin on the repo                            | Workspace owners |
-| `<ws>-authors`   | Write — push branches, open changes, merge   | Paid seats       |
-| `<ws>-reviewers` | Read on code; comment and approve on changes | **Free** (#369)  |
+| Team             | Unit map                                                           | Who              |
+| ---------------- | ------------------------------------------------------------------ | ---------------- |
+| `<ws>-admins`    | `permission: admin`                                                | Workspace owners |
+| `<ws>-authors`   | write on `repo.code`, `repo.pulls`, `repo.issues`, `repo.releases` | Paid seats       |
+| `<ws>-reviewers` | **read** on `repo.code`, `repo.pulls`, `repo.issues`               | **Free** (#369)  |
 
 Reviewers can open, comment on, approve and reject a change; they cannot push a
 version or merge. That is a Gitea permission, not an app check, which is what makes
-"reviewers are free forever" safe to promise. **The exact unit map
-(`repo.code` / `repo.pulls` / `repo.issues`) must be verified against Gitea 1.25
-before implementation** — the claim that a read-on-code team can still submit a
-review is the load-bearing one.
+"reviewers are free forever" safe to promise. Read on both units is the whole cost —
+see "Verified Against Gitea" below, which also records the branch-protection field
+that makes a read-only reviewer's approval actually count.
 
 ### 3. Folders are directories
 
@@ -135,8 +134,8 @@ merged, approved pull request — the product's core claim, unchanged from ADR 0
   binder, and binders are now cheap.
 - **Who must approve** is `.gitea/CODEOWNERS`, per folder, enforced by pairing it
   with `block_on_official_review_requests` so a merge is blocked while a code
-  owner's requested review is outstanding. Verify that pairing on 1.25 before
-  betting the feature on it.
+  owner's requested review is outstanding. Verified; the pattern syntax is a regex
+  rather than a glob, which the last section spells out.
 - **Reset approvals on a new version** is `dismiss_stale_approvals`, as today.
 - **Block on unresolved threads** has no Gitea equivalent, so it stays enforced by
   the BFF at publish time — now once per workspace instead of once per document,
@@ -181,6 +180,16 @@ are not seats.
 The count is therefore **derived from Gitea team membership**, not stored. There is
 no seat table to drift, and the nightly reconcile (`services/api/stripe/reconcile.ts`)
 is a recompute rather than a repair.
+
+**Read the permission, not the team name.** The `-admins`/`-authors` naming above is
+where write access normally lives, but it is not the criterion — the criterion is the
+sentence before it. Counting by name suffix would miss the Owners team, whose members
+have write access to every repository in the org, and an organization that noticed
+could move everyone into Owners and pay for nobody. So a seat-bearing team is any team
+with write or better on `repo.code` that is granted onto at least one repository, and
+the Owners team is one of them (`listBillableSeats`,
+`services/api/gitea-client/orgs.ts`). A team granted onto no repository grants access
+to nothing and costs nothing.
 
 Shape to hand to #369: an org-level plan with a base price including a band of
 authors, plus per-author overage — one predictable line item for procurement,
@@ -451,16 +460,96 @@ Deleting the source repositories is a separate, later, deliberate act.
 - **Evidence stays in Gitea.** Configuration and derived indexes may live in SQLite;
   nothing else may.
 
-## Open Before Implementation
+## Verified Against Gitea
 
-Two claims this design rests on that have not been verified against Gitea 1.25:
+Both claims this design rests on hold, with one correction that changes the
+implementation. The stack runs `gitea/gitea:1.26`; the executable proof is
+`tests/gitea-permission-model.pw.ts`, which provisions the shape below and
+asserts every statement here against a live Gitea.
 
-1. A team with read on `repo.code` and write on `repo.pulls` can submit a pull request
-   review, so reviewers can approve without write access.
-2. `.gitea/CODEOWNERS` plus `block_on_official_review_requests` blocks a merge while a
-   code owner's requested review is outstanding — that is, CODEOWNERS is enforcement
-   and not only auto-assignment.
+### 1. Reviewers can approve without write access — if the approvals whitelist is on
 
-If (1) is false, the free-reviewer tier needs a different permission shape. If (2) is
-false, per-folder rules fall back to per-workspace rules and #365 gets a smaller answer.
-Verify both against the local stack before writing any of this.
+**Submitting a review costs less than this ADR assumed.** Gitea's `/pulls` route
+group is guarded by `reqRepoReader(unit.TypeCode)` and `mustAllowPulls`
+(read on `repo.pulls`); the review endpoints add only `reqToken()` on top. So a
+reviewer team needs **read on `repo.code` and read on `repo.pulls`** — not write on
+`repo.pulls`. Commenting on a change is the same read: `CreateIssueComment` checks
+`CanReadIssuesOrPulls`, which for a pull request is `repo.pulls`.
+
+**Whether the approval counts is a separate question, and the default answer is no.**
+`GetGrantedApprovalsCount` counts only reviews with `official = true`, and
+`IsUserOfficialReviewer` resolves officialness as _"has write access on `repo.code`"_
+whenever `enable_approvals_whitelist` is false. Under the branch protection this repo
+ships today, a free reviewer's approval is recorded, displayed, and satisfies nothing —
+and their rejection blocks nothing either, because `MergeBlockedByRejectedReview`
+filters on the same flag.
+
+**The fix is one field.** Protect `main` with `enable_approvals_whitelist: true` and
+list the three role teams in `approvals_whitelist_teams`. Officialness then resolves as
+team membership rather than write access, and the free-reviewer tier works exactly as
+promised — still a Gitea permission, still not an app check.
+
+> A workspace's branch protection **must** set `enable_approvals_whitelist: true` with
+> the role teams whitelisted. Without it, reviewers are decorative. This is the one
+> setting that makes "reviewers are free forever" (#369) true rather than aspirational.
+
+### 2. CODEOWNERS is enforcement, not only auto-assignment
+
+`MergeBlockedByOfficialReviewRequests` is checked inside `CheckPullBranchProtections`,
+the function every merge path runs — not only in the web UI's merge box. A CODEOWNERS
+review request is created with `Official: IsOfficialReviewer(...)`, so **the same
+whitelist precondition applies**: without it, a code owner who lacks write access
+generates a non-official request that blocks nothing.
+
+With the whitelist on, the gate behaves exactly as section 5 wants: the merge is
+refused while the request is outstanding, and a review by any member of the requested
+team clears the request and releases the merge.
+
+**Name people, not teams.** This is the one place where the design as first
+written does not work. Gitea builds a user review request by clearing the flag
+on that user's previous reviews and _then_ creating the new one, but builds a
+team request the other way round — it creates the row and then runs
+`UPDATE review SET official = false WHERE issue_id = ? AND reviewer_team_id = ?`,
+which matches the row it has just written (`AddReviewRequest` and
+`AddTeamReviewRequest`, `models/issues/review.go`). A `@org/team` code owner is
+therefore always `official = false`, and `MergeBlockedByOfficialReviewRequests`
+only blocks on official requests. **A team code owner is assignment; a user code
+owner is enforcement.** So a generated `.gitea/CODEOWNERS` lists the individual
+owners of a folder.
+
+That is a Gitea bug rather than a design choice, and
+`tests/gitea-permission-model.pw.ts` pins both halves: the user case blocks the
+merge, and the team case is asserted non-blocking, so the day a Gitea fixes the
+ordering the test fails and tells us we can go back to teams. The cost until
+then is that a folder's owners are a list of people, which has to be
+regenerated when the people change — one more reason the generated file is
+generated rather than hand-edited.
+
+Three further mechanics that shape how CODEOWNERS must be written:
+
+- **Patterns are anchored regexes, not gitignore globs.** `ParseCodeOwnersLine`
+  compiles `^<pattern>$`. A folder rule is `policies/nursing/.*`; the bare
+  `policies/nursing/` a GitHub habit would produce matches nothing, silently.
+- **It is read from the base branch, never from the change.** The file is loaded from
+  the base repository's default-branch commit, so editing CODEOWNERS inside a pull
+  request does not govern that pull request. That is the correct behaviour for an
+  approval control, and it means a CODEOWNERS change is itself a change that `main`'s
+  existing owners approve.
+- **Draft changes and forks are skipped entirely.** `PullRequestCodeOwnersReview`
+  returns early for a work-in-progress pull request, so a draft has no code owners
+  requested and nothing blocking it. Publishing must therefore never merge from a
+  draft — check it at the gate.
+
+Teams are addressed as `@<org>/<team-name>`, matched on the team's exact name —
+which is how to write one when assignment without enforcement is what you want.
+
+### What this settles
+
+Neither fallback in the original open question is needed. The free-reviewer tier keeps
+its permission shape, and #365 gets the full per-folder answer — with one correction to
+the shape of the answer: a folder's owners are named individually rather than as a
+team, because a team request does not block a merge on Gitea 1.26.
+
+The cost is one extra field on every workspace's branch protection, one regex
+convention in the generated CODEOWNERS file, and regenerating that file when a
+folder's owners change.
