@@ -299,27 +299,42 @@ async function listReviews(
   );
 }
 
-/** Attempt a merge; resolve with the Gitea status rather than throwing. */
+/**
+ * Attempt a merge; resolve with the Gitea status rather than throwing.
+ *
+ * "Please try again later" is Gitea saying its merge check has not finished,
+ * not a verdict on the change — and submitting a review re-queues that check,
+ * so it can come back between the poll below and the merge call. Retrying on
+ * that one message is what keeps a timing answer from being read as a
+ * permission answer.
+ */
 async function tryMerge(
   client: GiteaClient,
   workspace: Workspace,
   index: number,
 ): Promise<{ ok: boolean; status: number; message: string }> {
-  await waitForMergeCheck(client, workspace, index);
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    await waitForMergeCheck(client, workspace, index);
 
-  try {
-    await post(
-      client,
-      `/repos/${workspace.org}/${workspace.repo}/pulls/${index}/merge`,
-      { Do: "merge" },
-    );
-    return { ok: true, status: 200, message: "" };
-  } catch (err) {
-    if (err instanceof GiteaApiError) {
-      return { ok: false, status: err.status, message: err.message };
+    try {
+      await post(
+        client,
+        `/repos/${workspace.org}/${workspace.repo}/pulls/${index}/merge`,
+        { Do: "merge" },
+      );
+      return { ok: true, status: 200, message: "" };
+    } catch (err) {
+      if (!(err instanceof GiteaApiError)) throw err;
+      if (!err.message.includes("Please try again later")) {
+        return { ok: false, status: err.status, message: err.message };
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
-    throw err;
   }
+
+  throw new Error(
+    `Gitea never finished the merge check for ${workspace.org}/${workspace.repo}#${index}.`,
+  );
 }
 
 test.describe("ADR 0004: the Gitea permission model the workspace rests on", () => {
