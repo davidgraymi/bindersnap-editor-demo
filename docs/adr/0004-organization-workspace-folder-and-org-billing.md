@@ -181,6 +181,16 @@ The count is therefore **derived from Gitea team membership**, not stored. There
 no seat table to drift, and the nightly reconcile (`services/api/stripe/reconcile.ts`)
 is a recompute rather than a repair.
 
+**Read the permission, not the team name.** The `-admins`/`-authors` naming above is
+where write access normally lives, but it is not the criterion — the criterion is the
+sentence before it. Counting by name suffix would miss the Owners team, whose members
+have write access to every repository in the org, and an organization that noticed
+could move everyone into Owners and pay for nobody. So a seat-bearing team is any team
+with write or better on `repo.code` that is granted onto at least one repository, and
+the Owners team is one of them (`listBillableSeats`,
+`services/api/gitea-client/orgs.ts`). A team granted onto no repository grants access
+to nothing and costs nothing.
+
 Shape to hand to #369: an org-level plan with a base price including a band of
 authors, plus per-author overage — one predictable line item for procurement,
 annual and invoiced for design partners, with the existing `admin_grant` override as
