@@ -170,21 +170,19 @@ export function makeClient() {
 }
 
 /**
- * Create a Gitea client authenticated as bob by requesting a fresh API token
- * for bob using his password credentials. Used in tests that require a second
- * distinct user (e.g., approving alice's own PR — Gitea disallows self-review).
+ * Mint a fresh API token for a seeded Gitea user from their password
+ * credentials. Tests that need a second distinct actor (Gitea disallows
+ * self-review, so approving alice's PR takes someone else) use this.
  */
-export async function createBobClient() {
-  const tokenName = `bindersnap-test-bob-${randomUUID()}`;
-  const credentials = Buffer.from(
-    `${GITEA_BOB_USER}:${GITEA_BOB_PASS}`,
-  ).toString("base64");
+export async function createUserToken(
+  username: string,
+  password: string = GITEA_ADMIN_PASS,
+): Promise<string> {
+  const tokenName = `bindersnap-test-${username}-${randomUUID()}`;
+  const credentials = Buffer.from(`${username}:${password}`).toString("base64");
 
   const response = await fetch(
-    new URL(
-      `/api/v1/users/${encodeURIComponent(GITEA_BOB_USER)}/tokens`,
-      GITEA_URL,
-    ),
+    new URL(`/api/v1/users/${encodeURIComponent(username)}/tokens`, GITEA_URL),
     {
       method: "POST",
       headers: {
@@ -197,15 +195,39 @@ export async function createBobClient() {
 
   if (response.status !== 201) {
     const body = await response.text();
-    throw new Error(`Failed to create bob token (${response.status}): ${body}`);
+    throw new Error(
+      `Failed to create ${username} token (${response.status}): ${body}`,
+    );
   }
 
   const json = (await response.json()) as { sha1?: string };
   if (!json.sha1) {
-    throw new Error("Bob token creation succeeded but no sha1 was returned.");
+    throw new Error(
+      `Token creation for ${username} succeeded but no sha1 was returned.`,
+    );
   }
 
-  return createGiteaClient(GITEA_URL, json.sha1);
+  return json.sha1;
+}
+
+/** A Gitea client authenticated as an arbitrary seeded user. */
+export async function createUserClient(
+  username: string,
+  password: string = GITEA_ADMIN_PASS,
+) {
+  return createGiteaClient(
+    GITEA_URL,
+    await createUserToken(username, password),
+  );
+}
+
+/**
+ * Create a Gitea client authenticated as bob by requesting a fresh API token
+ * for bob using his password credentials. Used in tests that require a second
+ * distinct user (e.g., approving alice's own PR — Gitea disallows self-review).
+ */
+export async function createBobClient() {
+  return createUserClient(GITEA_BOB_USER, GITEA_BOB_PASS);
 }
 
 // ---------------------------------------------------------------------------
