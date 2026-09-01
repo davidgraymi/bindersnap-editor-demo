@@ -247,6 +247,14 @@ async function openChange(
     `/repos/${workspace.org}/${workspace.repo}/pulls`,
     { head: branch, base: "main", title: `Revise ${path}` },
   );
+
+  // Settle before anyone acts on the change. Gitea computes a new pull
+  // request's state in the background, and a review submitted while that is
+  // still running can be dismissed by it — `dismiss_stale_approvals` is on, as
+  // it is in production. Waiting here is what makes these tests about
+  // permissions rather than about timing.
+  await waitForMergeCheck(client, workspace, pull.number);
+
   return pull.number;
 }
 
@@ -265,6 +273,25 @@ async function approve(
     client,
     `/repos/${workspace.org}/${workspace.repo}/pulls/${index}/reviews`,
     { event: "APPROVED", body: "Approved." },
+  );
+}
+
+interface ReviewRow {
+  state?: string;
+  official?: boolean;
+  team?: unknown;
+}
+
+async function listReviews(
+  client: GiteaClient,
+  workspace: Workspace,
+  index: number,
+): Promise<ReviewRow[]> {
+  return (
+    (await get<ReviewRow[]>(
+      client,
+      `/repos/${workspace.org}/${workspace.repo}/pulls/${index}/reviews`,
+    )) ?? []
   );
 }
 
@@ -365,10 +392,42 @@ test.describe("ADR 0004: the Gitea permission model the workspace rests on", () 
     expect(merge.message).toContain("approvals");
   });
 
-  test("CODEOWNERS plus block_on_official_review_requests blocks the merge", async () => {
+  test("a CODEOWNERS user blocks the merge until they review", async () => {
     // CODEOWNERS is read from the base repo's default branch, never from the
     // change under review. Gitea's patterns are anchored regexes (^...$), not
     // gitignore globs: a bare directory prefix matches nothing, hence `.*`.
+    const workspace = await provisionWorkspace(admin, {
+      enableApprovalsWhitelist: true,
+      codeowners: () => `policies/nursing/.*  @${REVIEWER}\n`,
+    });
+
+    const index = await openChange(
+      author,
+      workspace,
+      "policies/nursing/infection-control.md",
+      "Infection control policy, v1.\n",
+    );
+
+    const request = (await listReviews(admin, workspace, index)).find(
+      (review) => review.state === "REQUEST_REVIEW",
+    );
+    expect(request).toBeDefined();
+    // Official is what makes a request block anything.
+    expect(request?.official).toBe(true);
+
+    const blocked = await tryMerge(author, workspace, index);
+    expect(blocked.ok).toBe(false);
+    expect(blocked.message).toContain("official review requests");
+
+    // The code owner reviewing clears the request and releases the merge.
+    await approve(reviewer, workspace, index);
+    const merge = await tryMerge(author, workspace, index);
+    expect(merge.ok, `merge refused: ${merge.status} ${merge.message}`).toBe(
+      true,
+    );
+  });
+
+  test("a CODEOWNERS team is assigned but blocks nothing — Gitea 1.26 bug", async () => {
     const workspace = await provisionWorkspace(admin, {
       enableApprovalsWhitelist: true,
       codeowners: (org, repo) =>
@@ -382,33 +441,30 @@ test.describe("ADR 0004: the Gitea permission model the workspace rests on", () 
       "Infection control policy, v1.\n",
     );
 
-    const reviews = await (async () => {
-      const untyped = admin as unknown as {
-        GET: (p: string) => Promise<{
-          data?: Array<Record<string, unknown>>;
-          response: Response;
-        }>;
-      };
-      const { data } = await untyped.GET(
-        `/repos/${workspace.org}/${workspace.repo}/pulls/${index}/reviews`,
-      );
-      return data ?? [];
-    })();
-
-    // The requested reviewer is the team named by CODEOWNERS, and the request
-    // is official — which is what makes it block anything.
-    const teamRequest = reviews.find(
+    const request = (await listReviews(admin, workspace, index)).find(
       (review) => review.state === "REQUEST_REVIEW",
     );
-    expect(teamRequest).toBeDefined();
-    expect(teamRequest?.official).toBe(true);
 
-    const blocked = await tryMerge(author, workspace, index);
-    expect(blocked.ok).toBe(false);
-    expect(blocked.message).toContain("official review requests");
+    // The team is requested, so assignment works and reviewers are notified.
+    expect(request).toBeDefined();
+    expect(request?.team).toBeDefined();
 
-    // A code owner reviewing clears the team request and unblocks the merge.
-    await approve(reviewer, workspace, index);
+    // But the request is not official, so nothing is blocked by it.
+    //
+    // models/issues/review.go: AddReviewRequest clears the official flag on a
+    // user's previous reviews *before* creating the new request, while
+    // AddTeamReviewRequest creates the request first and then runs
+    // `UPDATE review SET official = false WHERE issue_id = ? AND
+    // reviewer_team_id = ?` — which matches the row it just wrote. A team
+    // request is therefore always official = false, and
+    // MergeBlockedByOfficialReviewRequests filters on official = true.
+    //
+    // This is a Gitea bug, not a design choice, and it decides how ADR 0004's
+    // per-folder rules have to be written: name people, not teams. If a later
+    // Gitea fixes the ordering, this test fails — which is the signal to go
+    // back to teams.
+    expect(request?.official).toBe(false);
+
     const merge = await tryMerge(author, workspace, index);
     expect(merge.ok, `merge refused: ${merge.status} ${merge.message}`).toBe(
       true,
