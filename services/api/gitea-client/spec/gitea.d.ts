@@ -1,4 +1,4 @@
-// Generated from Gitea 1.26.1 at 2026-05-02T01:12:03Z
+// Generated from Gitea 1.27.3 at 2026-09-01T12:44:23Z
 // Source: http://localhost:3000/swagger.v1.json
 // Note: Types have been extended via extensions.json
 // Do not edit manually — re-run: bun run generate:api
@@ -1060,7 +1060,8 @@ export interface paths {
         put?: never;
         /** Create a repository in an organization */
         post: operations["createOrgRepo"];
-        delete?: never;
+        /** Delete all repositories in an organization */
+        delete: operations["orgDeleteRepos"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1500,6 +1501,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/repos/{owner}/{repo}/actions/runs/{run}/attempts/{attempt}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Gets a specific workflow run attempt */
+        get: operations["getWorkflowRunAttempt"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/{owner}/{repo}/actions/runs/{run}/attempts/{attempt}/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lists all jobs for a workflow run attempt */
+        get: operations["listWorkflowRunAttemptJobs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/repos/{owner}/{repo}/actions/runs/{run}/jobs": {
         parameters: {
             query?: never;
@@ -1742,6 +1777,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List runs for a workflow */
+        get: operations["ActionsListWorkflowRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/repos/{owner}/{repo}/activities/feeds": {
         parameters: {
             query?: never;
@@ -1785,6 +1837,23 @@ export interface paths {
         };
         /** Return all users that have write access and can be assigned to issues */
         get: operations["repoGetAssignees"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/{owner}/{repo}/assignees/{assignee}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Check if a user can be assigned to issues in a repository */
+        get: operations["repoCheckAssignee"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2031,7 +2100,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get commit comparison information */
+        /**
+         * Get commit comparison information
+         * @description By default returns JSON commit comparison information. The raw diff or patch can be
+         *     requested with the `output` query parameter set to `diff` or `patch` respectively.
+         */
         get: operations["repoCompareDiff"];
         put?: never;
         post?: never;
@@ -2643,6 +2716,41 @@ export interface paths {
         head?: never;
         /** Edit an issue attachment */
         patch: operations["issueEditIssueAttachment"];
+        trace?: never;
+    };
+    "/repos/{owner}/{repo}/issues/{index}/assignees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add assignees to an issue */
+        post: operations["issueAddAssignees"];
+        /** Remove assignees from an issue */
+        delete: operations["issueRemoveAssignees"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/repos/{owner}/{repo}/issues/{index}/assignees/{assignee}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Check if a user can be assigned to an issue */
+        get: operations["issueCheckAssignee"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/repos/{owner}/{repo}/issues/{index}/blocks": {
@@ -3358,6 +3466,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/repos/{owner}/{repo}/pulls/{index}/comments/{id}/replies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reply to a pull request review comment */
+        post: operations["repoCreatePullReviewCommentReply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/repos/{owner}/{repo}/pulls/{index}/commits": {
         parameters: {
             query?: never;
@@ -3439,7 +3564,7 @@ export interface paths {
         /** List all reviews for a pull request */
         get: operations["repoListPullReviews"];
         put?: never;
-        /** Create a review to an pull request */
+        /** Create a review to a pull request */
         post: operations["repoCreatePullReview"];
         delete?: never;
         options?: never;
@@ -3457,7 +3582,7 @@ export interface paths {
         /** Get a specific review for a pull request */
         get: operations["repoGetPullReview"];
         put?: never;
-        /** Submit a pending review to an pull request */
+        /** Submit a pending review to a pull request */
         post: operations["repoSubmitPullReview"];
         /** Delete a specific review from a pull request */
         delete: operations["repoDeletePullReview"];
@@ -4385,6 +4510,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the currently authenticated token */
+        get: operations["getCurrentToken"];
+        put?: never;
+        post?: never;
+        /** Delete the currently authenticated token */
+        delete: operations["deleteCurrentToken"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/topics/search": {
         parameters: {
             query?: never;
@@ -4462,7 +4605,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Get an user's actions runner registration token */
+        /** Get a user's actions runner registration token */
         post: operations["userCreateRunnerRegistrationToken"];
         delete?: never;
         options?: never;
@@ -5541,10 +5684,21 @@ export interface components {
             /** Format: int64 */
             id?: number;
             path?: string;
+            /**
+             * @description PreviousAttemptURL is the API URL of the previous attempt of this run, e.g. ".../actions/runs/{run_id}/attempts/{attempt-1}".
+             *     It is set only when the current attempt is > 1 (i.e. a rerun). For the first attempt, or for legacy runs that pre-date ActionRunAttempt, it is null.
+             */
+            previous_attempt_url?: string;
+            pull_requests?: components["schemas"]["PullRequestMinimal"][];
             repository?: components["schemas"]["Repository"];
             /** Format: int64 */
             repository_id?: number;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description RunAttempt is 1-based for runs created after ActionRunAttempt was introduced.
+             *     A value of 0 is a legacy-only sentinel for runs created before attempts existed
+             *     and indicates no corresponding /attempts/{n} resource is available.
+             */
             run_attempt?: number;
             /** Format: int64 */
             run_number?: number;
@@ -5620,7 +5774,13 @@ export interface components {
         };
         /** @description AddCollaboratorOption options when adding a user as a collaborator of a repository */
         AddCollaboratorOption: {
-            /** @enum {string} */
+            /**
+             * @description Permission level to grant the collaborator
+             *     read RepoWritePermissionRead
+             *     write RepoWritePermissionWrite
+             *     admin RepoWritePermissionAdmin
+             * @enum {string}
+             */
             permission?: "read" | "write" | "admin";
         };
         /** @description AddTimeOption options for adding time to an issue */
@@ -5745,10 +5905,13 @@ export interface components {
             block_on_rejected_reviews?: boolean;
             /** @description Deprecated: true */
             branch_name?: string;
+            bypass_allowlist_teams?: string[];
+            bypass_allowlist_usernames?: string[];
             /** Format: date-time */
             created_at?: string;
             dismiss_stale_approvals?: boolean;
             enable_approvals_whitelist?: boolean;
+            enable_bypass_allowlist?: boolean;
             enable_force_push?: boolean;
             enable_force_push_allowlist?: boolean;
             enable_merge_whitelist?: boolean;
@@ -5857,12 +6020,12 @@ export interface components {
             sha?: string;
             /**
              * @description State is the overall combined status state
-             *     pending CommitStatusPending  CommitStatusPending is for when the CommitStatus is Pending
-             *     success CommitStatusSuccess  CommitStatusSuccess is for when the CommitStatus is Success
-             *     error CommitStatusError  CommitStatusError is for when the CommitStatus is Error
-             *     failure CommitStatusFailure  CommitStatusFailure is for when the CommitStatus is Failure
-             *     warning CommitStatusWarning  CommitStatusWarning is for when the CommitStatus is Warning
-             *     skipped CommitStatusSkipped  CommitStatusSkipped is for when CommitStatus is Skipped
+             *     pending CommitStatusPending is for when the CommitStatus is Pending
+             *     success CommitStatusSuccess is for when the CommitStatus is Success
+             *     error CommitStatusError is for when the CommitStatus is Error
+             *     failure CommitStatusFailure is for when the CommitStatus is Failure
+             *     warning CommitStatusWarning is for when the CommitStatus is Warning
+             *     skipped CommitStatusSkipped is for when CommitStatus is Skipped
              * @enum {string}
              */
             state?: "pending" | "success" | "error" | "failure" | "warning" | "skipped";
@@ -5982,12 +6145,12 @@ export interface components {
             id?: number;
             /**
              * @description State represents the status state (pending, success, error, failure)
-             *     pending CommitStatusPending  CommitStatusPending is for when the CommitStatus is Pending
-             *     success CommitStatusSuccess  CommitStatusSuccess is for when the CommitStatus is Success
-             *     error CommitStatusError  CommitStatusError is for when the CommitStatus is Error
-             *     failure CommitStatusFailure  CommitStatusFailure is for when the CommitStatus is Failure
-             *     warning CommitStatusWarning  CommitStatusWarning is for when the CommitStatus is Warning
-             *     skipped CommitStatusSkipped  CommitStatusSkipped is for when CommitStatus is Skipped
+             *     pending CommitStatusPending is for when the CommitStatus is Pending
+             *     success CommitStatusSuccess is for when the CommitStatus is Success
+             *     error CommitStatusError is for when the CommitStatus is Error
+             *     failure CommitStatusFailure is for when the CommitStatus is Failure
+             *     warning CommitStatusWarning is for when the CommitStatus is Warning
+             *     skipped CommitStatusSkipped is for when CommitStatus is Skipped
              * @enum {string}
              */
             status?: "pending" | "success" | "error" | "failure" | "warning" | "skipped";
@@ -6102,8 +6265,11 @@ export interface components {
             block_on_rejected_reviews?: boolean;
             /** @description Deprecated: true */
             branch_name?: string;
+            bypass_allowlist_teams?: string[];
+            bypass_allowlist_usernames?: string[];
             dismiss_stale_approvals?: boolean;
             enable_approvals_whitelist?: boolean;
+            enable_bypass_allowlist?: boolean;
             enable_force_push?: boolean;
             enable_force_push_allowlist?: boolean;
             enable_merge_whitelist?: boolean;
@@ -6224,6 +6390,8 @@ export interface components {
              * @description milestone id
              */
             milestone?: number;
+            /** @description list of project ids */
+            projects?: number[];
             ref?: string;
             title: string;
         };
@@ -6293,6 +6461,9 @@ export interface components {
             username: string;
             /**
              * @description possible values are `public` (default), `limited` or `private`
+             *     public UserVisibilityPublic
+             *     limited UserVisibilityLimited
+             *     private UserVisibilityPrivate
              * @enum {string}
              */
             visibility?: "public" | "limited" | "private";
@@ -6347,6 +6518,10 @@ export interface components {
             old_position?: number;
             /** @description the tree path */
             path?: string;
+        };
+        /** @description CreatePullReviewCommentReplyOptions are options to reply to a pull request review comment */
+        CreatePullReviewCommentReplyOptions: {
+            body?: string;
         };
         /** @description CreatePullReviewOptions are options to create a pull request review */
         CreatePullReviewOptions: {
@@ -6403,6 +6578,8 @@ export interface components {
             name: string;
             /**
              * @description ObjectFormatName of the underlying git repository, empty string for default (sha1)
+             *     sha1 ObjectFormatSHA1
+             *     sha256 ObjectFormatSHA256
              * @enum {string}
              */
             object_format_name?: "sha1" | "sha256";
@@ -6426,12 +6603,12 @@ export interface components {
             description?: string;
             /**
              * @description State represents the status state to set (pending, success, error, failure)
-             *     pending CommitStatusPending  CommitStatusPending is for when the CommitStatus is Pending
-             *     success CommitStatusSuccess  CommitStatusSuccess is for when the CommitStatus is Success
-             *     error CommitStatusError  CommitStatusError is for when the CommitStatus is Error
-             *     failure CommitStatusFailure  CommitStatusFailure is for when the CommitStatus is Failure
-             *     warning CommitStatusWarning  CommitStatusWarning is for when the CommitStatus is Warning
-             *     skipped CommitStatusSkipped  CommitStatusSkipped is for when CommitStatus is Skipped
+             *     pending CommitStatusPending is for when the CommitStatus is Pending
+             *     success CommitStatusSuccess is for when the CommitStatus is Success
+             *     error CommitStatusError is for when the CommitStatus is Error
+             *     failure CommitStatusFailure is for when the CommitStatus is Failure
+             *     warning CommitStatusWarning is for when the CommitStatus is Warning
+             *     skipped CommitStatusSkipped is for when CommitStatus is Skipped
              * @enum {string}
              */
             state?: "pending" | "success" | "error" | "failure" | "warning" | "skipped";
@@ -6485,6 +6662,14 @@ export interface components {
             units_map?: {
                 [key: string]: string;
             };
+            /**
+             * @description Team visibility within the organization. Defaults to "private".
+             *     public TeamVisibilityPublic
+             *     limited TeamVisibilityLimited
+             *     private TeamVisibilityPrivate
+             * @enum {string}
+             */
+            visibility?: "public" | "limited" | "private";
         };
         /** @description CreateUserOption create user options */
         CreateUserOption: {
@@ -6499,11 +6684,8 @@ export interface components {
             email: string;
             /** @description The full display name of the user */
             full_name?: string;
-            /**
-             * @description identifier of the user, provided by the external authenticator (if configured)
-             * @default empty
-             */
-            login_name: string;
+            /** @description identifier of the user, provided by the external authenticator (if configured) */
+            login_name?: string;
             /** @description Whether the user must change password on first login */
             must_change_password?: boolean;
             /** @description The plain text password for the user */
@@ -6519,8 +6701,14 @@ export interface components {
             source_id?: number;
             /** @description username of the user */
             username: string;
-            /** @description User visibility level: public, limited, or private */
-            visibility?: string;
+            /**
+             * @description User visibility level: public, limited, or private
+             *     public UserVisibilityPublic
+             *     limited UserVisibilityLimited
+             *     private UserVisibilityPrivate
+             * @enum {string}
+             */
+            visibility?: "public" | "limited" | "private";
         };
         /** @description CreateVariableOption the option when creating variable */
         CreateVariableOption: {
@@ -6559,6 +6747,29 @@ export interface components {
             prev?: string;
             /** @description The cron schedule expression (e.g., "0 0 * * *") */
             schedule?: string;
+        };
+        /** CurrentAccessToken represents the metadata of the currently authenticated token. */
+        CurrentAccessToken: {
+            /**
+             * Format: date-time
+             * @description The timestamp when the token was created
+             */
+            created_at?: string;
+            /**
+             * Format: int64
+             * @description The unique identifier of the access token
+             */
+            id?: number;
+            /**
+             * Format: date-time
+             * @description The timestamp when the token was last used
+             */
+            last_used_at?: string;
+            /** @description The name of the access token */
+            name?: string;
+            /** @description The scopes granted to this access token */
+            scopes?: string[];
+            user?: components["schemas"]["UserMeta"];
         };
         /** @description DeleteEmailOption options when deleting email addresses */
         DeleteEmailOption: {
@@ -6634,8 +6845,11 @@ export interface components {
             block_on_official_review_requests?: boolean;
             block_on_outdated_branch?: boolean;
             block_on_rejected_reviews?: boolean;
+            bypass_allowlist_teams?: string[];
+            bypass_allowlist_usernames?: string[];
             dismiss_stale_approvals?: boolean;
             enable_approvals_whitelist?: boolean;
+            enable_bypass_allowlist?: boolean;
             enable_force_push?: boolean;
             enable_force_push_allowlist?: boolean;
             enable_merge_whitelist?: boolean;
@@ -6706,6 +6920,8 @@ export interface components {
             due_date?: string;
             /** Format: int64 */
             milestone?: number;
+            /** @description list of project ids to set (replaces existing projects) */
+            projects?: number[];
             ref?: string;
             state?: string;
             title?: string;
@@ -6755,6 +6971,9 @@ export interface components {
             repo_admin_change_team_access?: boolean;
             /**
              * @description possible values are `public`, `limited` or `private`
+             *     public UserVisibilityPublic
+             *     limited UserVisibilityLimited
+             *     private UserVisibilityPrivate
              * @enum {string}
              */
             visibility?: "public" | "limited" | "private";
@@ -6822,6 +7041,8 @@ export interface components {
             allow_manual_merge?: boolean;
             /** @description either `true` to allow merging pull requests with a merge commit, or `false` to prevent merging pull requests with merge commits. */
             allow_merge_commits?: boolean;
+            /** @description either `true` to allow updating pull request branch by merge, or `false` to prevent it. */
+            allow_merge_update?: boolean;
             /** @description either `true` to allow rebase-merging pull requests, or `false` to prevent rebase-merging. */
             allow_rebase?: boolean;
             /** @description either `true` to allow rebase with explicit merge commits (--no-ff), or `false` to prevent rebase with explicit merge commits. */
@@ -6842,6 +7063,8 @@ export interface components {
             default_delete_branch_after_merge?: boolean;
             /** @description set to a merge style to be used by this repository: "merge", "rebase", "rebase-merge", "squash", or "fast-forward-only". */
             default_merge_style?: string;
+            /** @description set to an update style to be used by this repository: "merge" or "rebase". */
+            default_update_style?: string;
             /** @description a short description of the repository. */
             description?: string;
             /** @description enable prune - remove obsolete remote-tracking references when mirroring */
@@ -6869,6 +7092,12 @@ export interface components {
             internal_tracker?: components["schemas"]["InternalTracker"];
             /** @description set to a string like `8h30m0s` to set the mirror interval time */
             mirror_interval?: string;
+            /** @description authentication password for the remote repository (mirrors) */
+            mirror_password?: string;
+            /** @description authentication token for the remote repository (mirrors) */
+            mirror_token?: string;
+            /** @description authentication username for the remote repository (mirrors) */
+            mirror_username?: string;
             /** @description name of the repository */
             name?: string;
             /**
@@ -6932,6 +7161,15 @@ export interface components {
             units_map?: {
                 [key: string]: string;
             };
+            /**
+             * @description Team visibility within the organization. When omitted, visibility is
+             *     left unchanged.
+             *     public TeamVisibilityPublic
+             *     limited TeamVisibilityLimited
+             *     private TeamVisibilityPrivate
+             * @enum {string}
+             */
+            visibility?: "public" | "limited" | "private";
         };
         /** @description EditUserOption edit user options */
         EditUserOption: {
@@ -6953,11 +7191,8 @@ export interface components {
             full_name?: string;
             /** @description The user's location or address */
             location?: string;
-            /**
-             * @description identifier of the user, provided by the external authenticator (if configured)
-             * @default empty
-             */
-            login_name: string;
+            /** @description identifier of the user, provided by the external authenticator (if configured) */
+            login_name?: string;
             /**
              * Format: int64
              * @description Maximum number of repositories the user can create
@@ -6973,8 +7208,14 @@ export interface components {
             restricted?: boolean;
             /** Format: int64 */
             source_id: number;
-            /** @description User visibility level: public, limited, or private */
-            visibility?: string;
+            /**
+             * @description User visibility level: public, limited, or private
+             *     public UserVisibilityPublic
+             *     limited UserVisibilityLimited
+             *     private UserVisibilityPrivate
+             * @enum {string}
+             */
+            visibility?: "public" | "limited" | "private";
             /** @description The user's personal website URL */
             website?: string;
         };
@@ -7359,6 +7600,7 @@ export interface components {
             original_author_id?: number;
             /** Format: int64 */
             pin_order?: number;
+            projects?: components["schemas"]["Project"][];
             pull_request?: components["schemas"]["PullRequestMeta"];
             ref?: string;
             repository?: components["schemas"]["RepositoryMeta"];
@@ -7371,6 +7613,10 @@ export interface components {
             updated_at?: string;
             url?: string;
             user?: components["schemas"]["User"];
+        };
+        /** @description IssueAssigneesOption options for adding/removing issue assignees */
+        IssueAssigneesOption: {
+            assignees?: string[];
         };
         IssueConfig: {
             blank_issues_enabled?: boolean;
@@ -7494,27 +7740,16 @@ export interface components {
             /**
              * @description URL path for rendering issue, media and file links
              *     Expected format: /subpath/{user}/{repo}/src/{branch, commit, tag}/{identifier/path}/{file/dir}
-             *
-             *     in: body
              */
             Context?: string;
-            /**
-             * @description Mode to render (markdown, comment, wiki, file)
-             *
-             *     in: body
-             */
+            /** @description Mode to render (markdown, comment, wiki, file) */
             Mode?: string;
-            /**
-             * @description Text markdown to render
-             *
-             *     in: body
-             */
+            /** @description Text markdown to render */
             Text?: string;
             /**
              * @description Is it a wiki page? (use mode=wiki instead)
              *
              *     Deprecated: true
-             *     in: body
              */
             Wiki?: boolean;
         };
@@ -7523,33 +7758,18 @@ export interface components {
             /**
              * @description URL path for rendering issue, media and file links
              *     Expected format: /subpath/{user}/{repo}/src/{branch, commit, tag}/{identifier/path}/{file/dir}
-             *
-             *     in: body
              */
             Context?: string;
-            /**
-             * @description File path for detecting extension in file mode
-             *
-             *     in: body
-             */
+            /** @description File path for detecting extension in file mode */
             FilePath?: string;
-            /**
-             * @description Mode to render (markdown, comment, wiki, file)
-             *
-             *     in: body
-             */
+            /** @description Mode to render (markdown, comment, wiki, file) */
             Mode?: string;
-            /**
-             * @description Text markup to render
-             *
-             *     in: body
-             */
+            /** @description Text markup to render */
             Text?: string;
             /**
              * @description Is it a wiki page? (use mode=wiki instead)
              *
              *     Deprecated: true
-             *     in: body
              */
             Wiki?: boolean;
         };
@@ -7633,8 +7853,8 @@ export interface components {
             open_issues?: number;
             /**
              * @description State indicates if the milestone is open or closed
-             *     open StateOpen  StateOpen pr is opened
-             *     closed StateClosed  StateClosed pr is closed
+             *     open StateOpen pr is opened
+             *     closed StateClosed pr is closed
              * @enum {string}
              */
             state?: "open" | "closed";
@@ -7736,9 +7956,9 @@ export interface components {
             latest_comment_url?: string;
             /**
              * @description State indicates the current state of the notification subject
-             *     open NotifySubjectStateOpen  NotifySubjectStateOpen is an open subject
-             *     closed NotifySubjectStateClosed  NotifySubjectStateClosed is a closed subject
-             *     merged NotifySubjectStateMerged  NotifySubjectStateMerged is a merged pull request
+             *     open NotifySubjectStateOpen is an open subject
+             *     closed NotifySubjectStateClosed is a closed subject
+             *     merged NotifySubjectStateMerged is a merged pull request
              * @enum {string}
              */
             state?: "open" | "closed" | "merged";
@@ -7746,10 +7966,10 @@ export interface components {
             title?: string;
             /**
              * @description Type indicates the type of the notification subject
-             *     Issue NotifySubjectIssue  NotifySubjectIssue an issue is subject of an notification
-             *     Pull NotifySubjectPull  NotifySubjectPull an pull is subject of an notification
-             *     Commit NotifySubjectCommit  NotifySubjectCommit an commit is subject of an notification
-             *     Repository NotifySubjectRepository  NotifySubjectRepository an repository is subject of an notification
+             *     Issue NotifySubjectIssue a issue is subject of an notification
+             *     Pull NotifySubjectPull a pull is subject of an notification
+             *     Commit NotifySubjectCommit a commit is subject of an notification
+             *     Repository NotifySubjectRepository a repository is subject of an notification
              * @enum {string}
              */
             type?: "Issue" | "Pull" | "Commit" | "Repository";
@@ -7828,8 +8048,14 @@ export interface components {
              *     deprecated
              */
             username?: string;
-            /** @description The visibility level of the organization (public, limited, private) */
-            visibility?: string;
+            /**
+             * @description The visibility level of the organization (public, limited, private)
+             *     public UserVisibilityPublic
+             *     limited UserVisibilityLimited
+             *     private UserVisibilityPrivate
+             * @enum {string}
+             */
+            visibility?: "public" | "limited" | "private";
             /** @description The website URL of the organization */
             website?: string;
         };
@@ -7952,6 +8178,41 @@ export interface components {
             pull?: boolean;
             push?: boolean;
         };
+        /** @description Project represents a project */
+        Project: {
+            /** Format: date-time */
+            closed_at?: string;
+            /** Format: date-time */
+            created_at?: string;
+            /**
+             * Format: int64
+             * @description CreatorID is the user who created the project
+             */
+            creator_id?: number;
+            /** @description Description provides details about the project */
+            description?: string;
+            /**
+             * Format: int64
+             * @description ID is the unique identifier for the project
+             */
+            id?: number;
+            /** @description IsClosed indicates if the project is closed */
+            is_closed?: boolean;
+            /**
+             * Format: int64
+             * @description OwnerID is the owner of the project (for org-level projects)
+             */
+            owner_id?: number;
+            /**
+             * Format: int64
+             * @description RepoID is the repository this project belongs to (for repo-level projects)
+             */
+            repo_id?: number;
+            /** @description Title is the title of the project */
+            title?: string;
+            /** Format: date-time */
+            updated_at?: string;
+        };
         /** @description PublicKey publickey is a user key to push code to repository */
         PublicKey: {
             /** Format: date-time */
@@ -8072,8 +8333,8 @@ export interface components {
             review_comments?: number;
             /**
              * @description The current state of the pull request
-             *     open StateOpen  StateOpen pr is opened
-             *     closed StateClosed  StateClosed pr is closed
+             *     open StateOpen pr is opened
+             *     closed StateClosed pr is closed
              * @enum {string}
              */
             state?: "open" | "closed";
@@ -8092,6 +8353,32 @@ export interface components {
             merged?: boolean;
             /** Format: date-time */
             merged_at?: string;
+        };
+        /**
+         * @description PullRequestMinimal is the minimal information about a pull request, as
+         *     returned in the `pull_requests` field of a workflow run.
+         */
+        PullRequestMinimal: {
+            base?: components["schemas"]["PullRequestMinimalHead"];
+            head?: components["schemas"]["PullRequestMinimalHead"];
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            number?: number;
+            url?: string;
+        };
+        /** PullRequestMinimalHead is a minimal description of one side of a pull request. */
+        PullRequestMinimalHead: {
+            ref?: string;
+            repo?: components["schemas"]["PullRequestMinimalHeadRepo"];
+            sha?: string;
+        };
+        /** PullRequestMinimalHeadRepo is a minimal description of the repository on one side of a pull request. */
+        PullRequestMinimalHeadRepo: {
+            /** Format: int64 */
+            id?: number;
+            name?: string;
+            url?: string;
         };
         /** @description PullReview represents a pull request review */
         PullReview: {
@@ -8235,8 +8522,16 @@ export interface components {
         };
         /** @description RepoCollaboratorPermission to get repository permission for a collaborator */
         RepoCollaboratorPermission: {
-            /** @description Permission level of the collaborator */
-            permission?: string;
+            /**
+             * @description Permission level of the collaborator
+             *     none AccessLevelNameNone
+             *     read AccessLevelNameRead
+             *     write AccessLevelNameWrite
+             *     admin AccessLevelNameAdmin
+             *     owner AccessLevelNameOwner
+             * @enum {string}
+             */
+            permission?: "none" | "read" | "write" | "admin" | "owner";
             /** @description RoleName is the name of the permission role */
             role_name?: string;
             user?: components["schemas"]["User"];
@@ -8268,6 +8563,7 @@ export interface components {
             allow_fast_forward_only_merge?: boolean;
             allow_manual_merge?: boolean;
             allow_merge_commits?: boolean;
+            allow_merge_update?: boolean;
             allow_rebase?: boolean;
             allow_rebase_explicit?: boolean;
             allow_rebase_update?: boolean;
@@ -8287,6 +8583,7 @@ export interface components {
             default_delete_branch_after_merge?: boolean;
             default_merge_style?: string;
             default_target_branch?: string;
+            default_update_style?: string;
             description?: string;
             empty?: boolean;
             external_tracker?: components["schemas"]["ExternalTracker"];
@@ -8316,10 +8613,14 @@ export interface components {
             mirror?: boolean;
             mirror_interval?: string;
             /** Format: date-time */
+            mirror_last_sync_at?: string;
+            /** Format: date-time */
             mirror_updated?: string;
             name?: string;
             /**
              * @description ObjectFormatName of the underlying git repository
+             *     sha1 ObjectFormatSHA1
+             *     sha256 ObjectFormatSHA256
              * @enum {string}
              */
             object_format_name?: "sha1" | "sha256";
@@ -8493,6 +8794,17 @@ export interface components {
             units_map?: {
                 [key: string]: string;
             };
+            /**
+             * @description Team visibility within the organization. "private" teams are only
+             *     listable by members and org owners; "limited" teams are listable by
+             *     any organization member; "public" teams are listable by any signed-in
+             *     user.
+             *     public TeamVisibilityPublic
+             *     limited TeamVisibilityLimited
+             *     private TeamVisibilityPrivate
+             * @enum {string}
+             */
+            visibility?: "public" | "limited" | "private";
         };
         /**
          * Format: int64
@@ -8546,6 +8858,10 @@ export interface components {
             /** Format: date-time */
             updated_at?: string;
             user?: components["schemas"]["User"];
+        };
+        /** @description TopicListResponse returns a list of TopicResponse */
+        TopicListResponse: {
+            topics?: components["schemas"]["TopicResponse"][];
         };
         /** @description TopicName a list of repo topic names */
         TopicName: {
@@ -8706,11 +9022,8 @@ export interface components {
             location?: string;
             /** @description login of the user, same as `username` */
             login?: string;
-            /**
-             * @description identifier of the user, provided by the external authenticator (if configured)
-             * @default empty
-             */
-            login_name: string;
+            /** @description identifier of the user, provided by the external authenticator (if configured) */
+            login_name?: string;
             /** @description Is user login prohibited */
             prohibit_login?: boolean;
             /** @description Is user restricted */
@@ -8722,8 +9035,14 @@ export interface components {
             source_id?: number;
             /** Format: int64 */
             starred_repos_count?: number;
-            /** @description User visibility level option: public, limited, private */
-            visibility?: string;
+            /**
+             * @description User visibility level option: public, limited, private
+             *     public UserVisibilityPublic
+             *     limited UserVisibilityLimited
+             *     private UserVisibilityPrivate
+             * @enum {string}
+             */
+            visibility?: "public" | "limited" | "private";
             /** @description the user's website */
             website?: string;
         };
@@ -8742,6 +9061,16 @@ export interface components {
             /** Format: int64 */
             contributions?: number;
             timestamp?: components["schemas"]["TimeStamp"];
+        };
+        /** UserMeta represents minimal user information for the token owner. */
+        UserMeta: {
+            /**
+             * Format: int64
+             * @description The unique identifier of the user
+             */
+            id?: number;
+            /** @description The username of the user */
+            login?: string;
         };
         /** @description UserSettings represents user settings */
         UserSettings: {
@@ -9118,6 +9447,15 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["Cron"][];
+            };
+        };
+        /** @description CurrentAccessToken represents the currently authenticated access token. */
+        CurrentAccessToken: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["CurrentAccessToken"];
             };
         };
         /** @description DeployKey */
@@ -9962,7 +10300,7 @@ export interface components {
                 [name: string]: unknown;
             };
             content: {
-                "application/json": components["schemas"]["TopicResponse"][];
+                "application/json": components["schemas"]["TopicListResponse"];
             };
         };
         /** @description TopicNames */
@@ -10025,7 +10363,7 @@ export interface components {
                 [name: string]: unknown;
             };
             content: {
-                "application/json": components["schemas"]["UserSettings"][];
+                "application/json": components["schemas"]["UserSettings"];
             };
         };
         /** @description VariableList */
@@ -10243,6 +10581,11 @@ export interface components {
                 "application/json": components["schemas"]["IssueLabelsOption"];
             };
         };
+        IssueAssigneesOption: {
+            content: {
+                "application/json": components["schemas"]["IssueAssigneesOption"];
+            };
+        };
         CreateHookOption: {
             content: {
                 "application/json": components["schemas"]["CreateHookOption"];
@@ -10334,6 +10677,10 @@ export interface operations {
                 page?: number;
                 /** @description page size of results */
                 limit?: number;
+                /** @description sort jobs by attribute. Supported values are "id". Default is "id" */
+                sort?: string;
+                /** @description sort order, either "asc" (ascending) or "desc" (descending). Default is "asc" */
+                order?: string;
             };
             header?: never;
             path?: never;
@@ -10344,6 +10691,7 @@ export interface operations {
             200: components["responses"]["WorkflowJobsList"];
             400: components["responses"]["error"];
             404: components["responses"]["notFound"];
+            422: components["responses"]["validationError"];
         };
     };
     getAdminRunners: {
@@ -12195,6 +12543,24 @@ export interface operations {
             404: components["responses"]["notFound"];
         };
     };
+    orgDeleteRepos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description name of the organization */
+                org: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            202: components["responses"]["empty"];
+            204: components["responses"]["empty"];
+            403: components["responses"]["forbidden"];
+            404: components["responses"]["notFound"];
+        };
+    };
     orgListTeams: {
         parameters: {
             query?: {
@@ -12761,6 +13127,10 @@ export interface operations {
                 page?: number;
                 /** @description page size of results */
                 limit?: number;
+                /** @description sort jobs by attribute. Supported values are "id". Default is "id" */
+                sort?: string;
+                /** @description sort order, either "asc" (ascending) or "desc" (descending). Default is "asc" */
+                order?: string;
             };
             header?: never;
             path: {
@@ -12776,6 +13146,7 @@ export interface operations {
             200: components["responses"]["WorkflowJobsList"];
             400: components["responses"]["error"];
             404: components["responses"]["notFound"];
+            422: components["responses"]["validationError"];
         };
     };
     getWorkflowJob: {
@@ -12948,6 +13319,8 @@ export interface operations {
                 actor?: string;
                 /** @description triggering sha of the workflow run */
                 head_sha?: string;
+                /** @description if true, the `pull_requests` field on each returned run is emptied */
+                exclude_pull_requests?: boolean;
                 /** @description page number of results to return (1-based) */
                 page?: number;
                 /** @description page size of results */
@@ -13041,6 +13414,59 @@ export interface operations {
             404: components["responses"]["notFound"];
         };
     };
+    getWorkflowRunAttempt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description owner of the repo */
+                owner: string;
+                /** @description name of the repository */
+                repo: string;
+                /** @description id of the run */
+                run: number;
+                /** @description logical attempt number of the run */
+                attempt: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["WorkflowRun"];
+            400: components["responses"]["error"];
+            404: components["responses"]["notFound"];
+        };
+    };
+    listWorkflowRunAttemptJobs: {
+        parameters: {
+            query?: {
+                /** @description workflow status (pending, queued, in_progress, failure, success, skipped) */
+                status?: string;
+                /** @description page number of results to return (1-based) */
+                page?: number;
+                /** @description page size of results */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description owner of the repo */
+                owner: string;
+                /** @description name of the repository */
+                repo: string;
+                /** @description id of the workflow run */
+                run: number;
+                /** @description logical attempt number of the run */
+                attempt: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["WorkflowJobsList"];
+            400: components["responses"]["error"];
+            404: components["responses"]["notFound"];
+        };
+    };
     listWorkflowRunJobs: {
         parameters: {
             query?: {
@@ -13050,6 +13476,10 @@ export interface operations {
                 page?: number;
                 /** @description page size of results */
                 limit?: number;
+                /** @description sort jobs by attribute. Supported values are "id". Default is "id" */
+                sort?: string;
+                /** @description sort order, either "asc" (ascending) or "desc" (descending). Default is "asc" */
+                order?: string;
             };
             header?: never;
             path: {
@@ -13067,6 +13497,7 @@ export interface operations {
             200: components["responses"]["WorkflowJobsList"];
             400: components["responses"]["error"];
             404: components["responses"]["notFound"];
+            422: components["responses"]["validationError"];
         };
     };
     rerunWorkflowJob: {
@@ -13091,6 +13522,7 @@ export interface operations {
             400: components["responses"]["error"];
             403: components["responses"]["forbidden"];
             404: components["responses"]["notFound"];
+            409: components["responses"]["error"];
             422: components["responses"]["validationError"];
         };
     };
@@ -13114,6 +13546,7 @@ export interface operations {
             400: components["responses"]["error"];
             403: components["responses"]["forbidden"];
             404: components["responses"]["notFound"];
+            409: components["responses"]["error"];
             422: components["responses"]["validationError"];
         };
     };
@@ -13137,6 +13570,7 @@ export interface operations {
             400: components["responses"]["error"];
             403: components["responses"]["forbidden"];
             404: components["responses"]["notFound"];
+            409: components["responses"]["error"];
             422: components["responses"]["validationError"];
         };
     };
@@ -13479,6 +13913,8 @@ export interface operations {
             query?: {
                 /** @description Whether the response should include the workflow run ID and URLs. */
                 return_run_details?: boolean;
+                /** @description For a scoped workflow, the ID of the source repository providing it; omit or 0 for a repo-level workflow. */
+                scoped_workflow_source_repo_id?: number;
             };
             header?: never;
             path: {
@@ -13539,6 +13975,47 @@ export interface operations {
             404: components["responses"]["notFound"];
             409: components["responses"]["conflict"];
             422: components["responses"]["validationError"];
+        };
+    };
+    ActionsListWorkflowRuns: {
+        parameters: {
+            query?: {
+                /** @description workflow event name */
+                event?: string;
+                /** @description workflow branch */
+                branch?: string;
+                /** @description workflow status (pending, queued, in_progress, failure, success, skipped) */
+                status?: string;
+                /** @description triggered by user */
+                actor?: string;
+                /** @description triggering sha of the workflow run */
+                head_sha?: string;
+                /** @description if true, the `pull_requests` field on each returned run is emptied */
+                exclude_pull_requests?: boolean;
+                /** @description For a scoped workflow, the ID of the source repository providing it; omit or 0 for a repo-level workflow. */
+                scoped_workflow_source_repo_id?: number;
+                /** @description page number of results to return (1-based) */
+                page?: number;
+                /** @description page size of results */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description owner of the repo */
+                owner: string;
+                /** @description name of the repo */
+                repo: string;
+                /** @description id of the workflow, must be the workflow file name (e.g. `build.yml`) */
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["WorkflowRunsList"];
+            400: components["responses"]["error"];
+            403: components["responses"]["forbidden"];
+            404: components["responses"]["notFound"];
         };
     };
     repoListActivityFeeds: {
@@ -13610,6 +14087,27 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["UserList"];
+            404: components["responses"]["notFound"];
+        };
+    };
+    repoCheckAssignee: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description owner of the repo */
+                owner: string;
+                /** @description name of the repo */
+                repo: string;
+                /** @description username of the user to check for being an assignee */
+                assignee: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["empty"];
+            400: components["responses"]["error"];
             404: components["responses"]["notFound"];
         };
     };
@@ -13792,6 +14290,8 @@ export interface operations {
                 page?: number;
                 /** @description page size of results */
                 limit?: number;
+                /** @description branch name substring to filter by */
+                q?: string;
             };
             header?: never;
             path: {
@@ -14175,14 +14675,17 @@ export interface operations {
     };
     repoCompareDiff: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description return the raw comparison as `diff` or `patch` instead of JSON */
+                output?: "diff" | "patch";
+            };
             header?: never;
             path: {
                 /** @description owner of the repo */
                 owner: string;
                 /** @description name of the repo */
                 repo: string;
-                /** @description compare two branches or commits */
+                /** @description compare two refs as `base...head` (or `base..head`); refs may be branches, tags, full or short SHAs (including branch names that contain slashes), optionally with a `^` or `~N` revision suffix. */
                 basehead: string;
             };
             cookie?: never;
@@ -14190,6 +14693,7 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["Compare"];
+            400: components["responses"]["error"];
             404: components["responses"]["notFound"];
         };
     };
@@ -15514,6 +16018,74 @@ export interface operations {
             404: components["responses"]["error"];
             422: components["responses"]["validationError"];
             423: components["responses"]["repoArchivedError"];
+        };
+    };
+    issueAddAssignees: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description owner of the repo */
+                owner: string;
+                /** @description name of the repo */
+                repo: string;
+                /** @description index of the issue */
+                index: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["IssueAssigneesOption"];
+        responses: {
+            201: components["responses"]["Issue"];
+            400: components["responses"]["error"];
+            403: components["responses"]["forbidden"];
+            404: components["responses"]["notFound"];
+            422: components["responses"]["validationError"];
+        };
+    };
+    issueRemoveAssignees: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description owner of the repo */
+                owner: string;
+                /** @description name of the repo */
+                repo: string;
+                /** @description index of the issue */
+                index: number;
+            };
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["IssueAssigneesOption"];
+        responses: {
+            200: components["responses"]["Issue"];
+            403: components["responses"]["forbidden"];
+            404: components["responses"]["notFound"];
+            422: components["responses"]["validationError"];
+        };
+    };
+    issueCheckAssignee: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description owner of the repo */
+                owner: string;
+                /** @description name of the repo */
+                repo: string;
+                /** @description index of the issue */
+                index: number;
+                /** @description username of the user to check for being an assignee */
+                assignee: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["empty"];
+            400: components["responses"]["error"];
+            404: components["responses"]["notFound"];
         };
     };
     issueListBlocks: {
@@ -17140,6 +17712,34 @@ export interface operations {
             404: components["responses"]["notFound"];
         };
     };
+    repoCreatePullReviewCommentReply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description owner of the repo */
+                owner: string;
+                /** @description name of the repo */
+                repo: string;
+                /** @description index of the pull request */
+                index: number;
+                /** @description id of the review comment to reply to */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePullReviewCommentReplyOptions"];
+            };
+        };
+        responses: {
+            201: components["responses"]["PullReviewComment"];
+            400: components["responses"]["validationError"];
+            404: components["responses"]["notFound"];
+            422: components["responses"]["validationError"];
+        };
+    };
     repoGetPullRequestCommits: {
         parameters: {
             query?: {
@@ -17612,6 +18212,7 @@ export interface operations {
             400: components["responses"]["error"];
             403: components["responses"]["forbidden"];
             404: components["responses"]["notFound"];
+            422: components["responses"]["validationError"];
         };
     };
     repoGetPushMirrorByRemoteName: {
@@ -18473,6 +19074,7 @@ export interface operations {
         requestBody?: never;
         responses: {
             204: components["responses"]["empty"];
+            403: components["responses"]["forbidden"];
             404: components["responses"]["notFound"];
             405: components["responses"]["error"];
             422: components["responses"]["validationError"];
@@ -18495,6 +19097,7 @@ export interface operations {
         requestBody?: never;
         responses: {
             204: components["responses"]["empty"];
+            403: components["responses"]["forbidden"];
             404: components["responses"]["notFound"];
             405: components["responses"]["error"];
             422: components["responses"]["validationError"];
@@ -19211,6 +19814,36 @@ export interface operations {
             404: components["responses"]["notFound"];
         };
     };
+    getCurrentToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["CurrentAccessToken"];
+        };
+    };
+    deleteCurrentToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description token deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     topicSearch: {
         parameters: {
             query: {
@@ -19253,6 +19886,10 @@ export interface operations {
                 page?: number;
                 /** @description page size of results */
                 limit?: number;
+                /** @description sort jobs by attribute. Supported values are "id". Default is "id" */
+                sort?: string;
+                /** @description sort order, either "asc" (ascending) or "desc" (descending). Default is "asc" */
+                order?: string;
             };
             header?: never;
             path?: never;
@@ -19263,6 +19900,7 @@ export interface operations {
             200: components["responses"]["WorkflowJobsList"];
             400: components["responses"]["error"];
             404: components["responses"]["notFound"];
+            422: components["responses"]["validationError"];
         };
     };
     getUserRunners: {
@@ -19634,6 +20272,7 @@ export interface operations {
         requestBody: components["requestBodies"]["CreateOAuth2ApplicationOptions"];
         responses: {
             200: components["responses"]["OAuth2Application"];
+            400: components["responses"]["error"];
             404: components["responses"]["notFound"];
         };
     };
