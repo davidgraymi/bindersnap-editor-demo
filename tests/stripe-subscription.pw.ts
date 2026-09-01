@@ -462,12 +462,27 @@ async function getBillingStatus(
  * whatever an organization owes us — so a GET tells you nothing about a
  * subscription any more. Authoring is what a subscription buys, so the probe
  * is a create with nothing to create: `requireSubscription` runs before the
- * body is parsed, which makes 402 the gated answer and 400 the ungated one.
+ * body is parsed, which makes 402 the gated answer.
+ *
+ * `Origin` is not decoration. `enforceStateChangingOrigin` rejects every
+ * non-GET without an allowed origin with a 403 *before routing*, so a probe
+ * that omits it never reaches the paywall and reports the same 403 whether or
+ * not the organization has paid.
+ *
+ * The ungated answer is asserted as "not 402" rather than as one status: what
+ * this suite is about is whether the paywall let the request through, and
+ * pinning the validation error that follows would make every future change to
+ * that validation look like a billing regression.
  */
 async function getAuthoringHttpStatus(sessionCookie: string): Promise<number> {
   const response = await fetch(`${API_BASE_URL}/api/app/documents`, {
     method: "POST",
-    headers: { Cookie: `bindersnap_session=${sessionCookie}` },
+    headers: {
+      Cookie: `bindersnap_session=${sessionCookie}`,
+      Origin: APP_ORIGIN,
+      "Content-Type": "application/json",
+    },
+    body: "{}",
   });
   return response.status;
 }
@@ -569,7 +584,7 @@ test.describe("Stripe subscription lifecycle", () => {
       expect(typeof billing.currentPeriodEnd).toBe("number");
 
       // Access should now be granted
-      expect(await getAuthoringHttpStatus(sessionCookie)).toBe(400);
+      expect(await getAuthoringHttpStatus(sessionCookie)).not.toBe(402);
     } finally {
       await cancelTestSubscription(subscriptionId);
     }
@@ -590,7 +605,7 @@ test.describe("Stripe subscription lifecycle", () => {
         customer: customerId,
         subscription: subscriptionId,
       });
-      expect(await getAuthoringHttpStatus(sessionCookie)).toBe(400);
+      expect(await getAuthoringHttpStatus(sessionCookie)).not.toBe(402);
 
       // Simulate Stripe dunning: payment fails → subscription moves to past_due
       const updateResp = await postWebhook("customer.subscription.updated", {
@@ -647,7 +662,7 @@ test.describe("Stripe subscription lifecycle", () => {
       const billing = await getBillingStatus(sessionCookie);
       expect(billing.status).toBe("active");
       expect(billing.currentPeriodEnd).toBe(renewedPeriodEnd);
-      expect(await getAuthoringHttpStatus(sessionCookie)).toBe(400);
+      expect(await getAuthoringHttpStatus(sessionCookie)).not.toBe(402);
     } finally {
       await cancelTestSubscription(subscriptionId);
     }
@@ -673,7 +688,7 @@ test.describe("Stripe subscription lifecycle", () => {
         customer: customerId,
         subscription: subscriptionId,
       });
-      expect(await getAuthoringHttpStatus(sessionCookie)).toBe(400);
+      expect(await getAuthoringHttpStatus(sessionCookie)).not.toBe(402);
 
       // Send a subscription.updated payload shaped like the new API:
       // NO top-level current_period_end; only items.data[0].current_period_end.
@@ -699,7 +714,7 @@ test.describe("Stripe subscription lifecycle", () => {
       // The handler must have picked up the nested period end, not the
       // (stale) one stored at activation time.
       expect(billing.currentPeriodEnd).toBe(newShapePeriodEnd);
-      expect(await getAuthoringHttpStatus(sessionCookie)).toBe(400);
+      expect(await getAuthoringHttpStatus(sessionCookie)).not.toBe(402);
     } finally {
       await cancelTestSubscription(subscriptionId);
     }
@@ -719,7 +734,7 @@ test.describe("Stripe subscription lifecycle", () => {
       customer: customerId,
       subscription: subscriptionId,
     });
-    expect(await getAuthoringHttpStatus(sessionCookie)).toBe(400);
+    expect(await getAuthoringHttpStatus(sessionCookie)).not.toBe(402);
 
     // Delete — no cleanup needed, subscription is being canceled here
     const deleteResp = await postWebhook("customer.subscription.deleted", {
