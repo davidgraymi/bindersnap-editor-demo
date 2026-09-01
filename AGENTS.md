@@ -268,6 +268,28 @@ A change is a pull request and may touch several documents; each document it
 publishes gets its own tag on the shared merge commit. Retiring a document is
 `git rm` in an approved change — the history stays.
 
+Role teams, verified against Gitea 1.26 by
+`tests/gitea-permission-model.pw.ts`: `<ws>-admins` is `permission: admin`,
+`<ws>-authors` is write on `repo.code`/`repo.pulls`/`repo.issues`/`repo.releases`,
+`<ws>-reviewers` is **read** on `repo.code`/`repo.pulls`/`repo.issues`. Read on
+both units is all a reviewer needs to comment, approve and reject.
+
+**Every workspace's branch protection must set `enable_approvals_whitelist: true`
+with the three role teams in `approvals_whitelist_teams`.** Without it Gitea
+resolves "official reviewer" as "has write access on `repo.code`", so a free
+reviewer's approval is recorded and counts for nothing, their rejection blocks
+nothing, and a CODEOWNERS request blocks no merge. This one field is what makes
+free reviewers real. `.gitea/CODEOWNERS` patterns are anchored regexes, not
+gitignore globs — a folder rule is `policies/nursing/.*` — and the file is read
+from the base branch, so a CODEOWNERS change never governs its own change.
+
+**A CODEOWNERS entry names people, not teams.** Gitea 1.26 writes a team review
+request and then clears its own `official` flag (`AddTeamReviewRequest`,
+`models/issues/review.go`), so a team code owner is assignment only and blocks
+no merge; a user code owner blocks it. `tests/gitea-permission-model.pw.ts`
+asserts both, so the day Gitea fixes the ordering the team case fails and says
+so.
+
 This is design, recorded in
 `docs/adr/0004-organization-workspace-folder-and-org-billing.md`, and it
 supersedes ADR 0001's "one document equals one repository". The routes and BFF
@@ -311,14 +333,6 @@ pull-request time and lives on the same timeline as the content it governs, so
 Migrating in: `.bindersnap/config.json` on the `bindersnap-config` branch
 (`reviewSettings.ts`) predates this rule and is moving to a per-workspace settings
 row. Do not copy the pattern.
-
-**Organization, workspace, folder.** An organization is a Gitea org and owns
-every document repo. A workspace is a set of Gitea teams within it
-(`<ws>-admins`, `<ws>-authors`, `<ws>-reviewers`) sharing one repo set — not a
-second Gitea org. A folder is browsing metadata that carries no permissions.
-Review policy resolves through exactly two levels: workspace default, then
-document override. Billing keys to the organization, never to a username, a
-workspace, or a document. See ADR 0004.
 
 **Review threads** follow the same rule. Gitea has no thread primitive (its
 review comments are anchored to a file path and line, which is meaningless for
