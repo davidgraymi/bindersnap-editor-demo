@@ -4685,6 +4685,49 @@ async function handleDevGrantSubscription(
   );
 }
 
+/**
+ * Dev only: end this organization's trial, so the paywall can be observed.
+ *
+ * Every new organization gets 14 days (ADR 0004, #369), which is exactly the
+ * behaviour an integration test asserting "a delinquent organization cannot
+ * author" has to get past. Ending the trial is the honest way to do that —
+ * the alternative is a test that never sees the paywall it claims to check.
+ */
+async function handleDevEndTrial(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  if (config.isProduction || !config.devFeaturesEnabled) {
+    return json(404, { error: "Not found." }, baseHeaders);
+  }
+
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const organization = await resolveSessionOrganization(
+    auth.client,
+    auth.session,
+  );
+  if (!organization) {
+    return json(
+      409,
+      { error: "You are not in an organization yet." },
+      baseHeaders,
+    );
+  }
+
+  const existing = await organizationStore.get(organization.id);
+  await organizationStore.upsert({
+    giteaOrgId: organization.id,
+    name: organization.name,
+    createdBy: existing?.createdBy ?? auth.session.username,
+    createdAt: existing?.createdAt ?? Math.floor(Date.now() / 1000),
+    trialEndsAt: Math.floor(Date.now() / 1000) - 1,
+  });
+
+  return json(200, { ok: true, organization: organization.name }, baseHeaders);
+}
+
 async function buildLegacyAdminSubscriptionAccessState(
   client: GiteaClient,
   username: string,
@@ -5048,6 +5091,8 @@ export function createApiServer() {
         method === "POST"
       ) {
         response = await handleDevGrantSubscription(req, baseHeaders);
+      } else if (pathname === "/api/dev/end-trial" && method === "POST") {
+        response = await handleDevEndTrial(req, baseHeaders);
       } else {
         const reviewMatch = pathname.match(
           /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/reviews$/,

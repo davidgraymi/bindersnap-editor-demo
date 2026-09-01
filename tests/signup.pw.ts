@@ -90,9 +90,12 @@ async function expectWorkspaceOnTrial(
   page: Page,
   username: string,
 ): Promise<void> {
+  // Signup provisions the organization, its first binder, three role teams and
+  // a protected branch before it answers, so the workspace takes longer to
+  // appear than the 5 s default allows.
   await expect(
     page.locator(`.app-topnav-avatar[aria-label="User: ${username}"]`),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 30_000 });
   await expect(page).not.toHaveURL(/\/billing$/);
 }
 

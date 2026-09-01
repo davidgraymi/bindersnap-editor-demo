@@ -56,7 +56,13 @@ async function signUp(
   await page.getByRole("button", { name: "Create account" }).click();
 
   // ADR 0004 gives a new organization a 14-day trial with no card (#369), so
-  // signup lands in the workspace rather than at a payment form.
+  // signup lands in the workspace rather than at a payment form. Provisioning
+  // runs before signup answers, so give it room.
+  await expect(
+    page.locator(
+      `.app-topnav-avatar[aria-label="User: ${credentials.username}"]`,
+    ),
+  ).toBeVisible({ timeout: 30_000 });
   await expect(page).not.toHaveURL(/\/billing$/);
 }
 
