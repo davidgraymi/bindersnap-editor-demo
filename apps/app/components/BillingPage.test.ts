@@ -1,4 +1,5 @@
 import { expect, test, mock } from "bun:test";
+import { hasManageableSubscription } from "./billingAccess";
 import {
   VISIBLE_POLLING_DELAYS_MS,
   BACKGROUND_POLL_INTERVAL_MS,
@@ -55,4 +56,25 @@ test("long-tail path: visible phase exhausted then background activation trigger
   expect(callCount).toBeGreaterThanOrEqual(11);
   expect(mockFetch).toHaveBeenCalled();
   expect(mockOnConfirmed).toHaveBeenCalled();
+});
+
+// ---------------------------------------------------------------------------
+// Which panel the page shows
+// ---------------------------------------------------------------------------
+
+test("a trialing organization has no subscription to manage", () => {
+  // The trial grants access, so subscriptionStatus reads "active" — but there
+  // is nothing behind it. Treating that as a subscription sends someone who
+  // has never paid to a Stripe portal for a customer that does not exist, and
+  // hides "Subscribe now" on the only page where they could become a paying
+  // customer.
+  expect(hasManageableSubscription("active", "trial")).toBe(false);
+});
+
+test("only Stripe-backed access is a subscription", () => {
+  expect(hasManageableSubscription("active", "stripe")).toBe(true);
+  expect(hasManageableSubscription("active", "admin_grant")).toBe(false);
+  expect(hasManageableSubscription("active", null)).toBe(false);
+  expect(hasManageableSubscription("none", "stripe")).toBe(false);
+  expect(hasManageableSubscription("loading", "stripe")).toBe(false);
 });

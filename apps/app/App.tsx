@@ -529,6 +529,7 @@ export function App() {
     return (
       <BillingPage
         subscriptionStatus={subscriptionStatus ?? "loading"}
+        accessSource={accessSource}
         hasBillingStatusError={hasBillingStatusError}
         currentPeriodEnd={currentPeriodEnd}
         cancelAtPeriodEnd={cancelAtPeriodEnd}
