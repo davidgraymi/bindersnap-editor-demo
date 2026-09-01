@@ -49,7 +49,11 @@ async function signUp(credentials: Credentials): Promise<void> {
     body: JSON.stringify({ ...credentials, organization: "Mercy Health" }),
   });
 
-  expect(response.status, `signup failed: ${await response.text()}`).toBe(200);
+  // Read the body once. `expect`'s message argument is evaluated eagerly, so
+  // awaiting `response.text()` inside it consumes the body before anything
+  // else can read it.
+  const body = await response.text();
+  expect(response.status, `signup failed: ${body}`).toBe(200);
 }
 
 /** Read Gitea as the newly created user, with their own token. */
@@ -58,11 +62,10 @@ async function giteaGet<T>(token: string, path: string): Promise<T> {
     headers: { Authorization: `token ${token}`, Accept: "application/json" },
   });
 
-  expect(response.status, `GET ${path} failed: ${await response.text()}`).toBe(
-    200,
-  );
+  const body = await response.text();
+  expect(response.status, `GET ${path} failed: ${body}`).toBe(200);
 
-  return (await response.json()) as T;
+  return JSON.parse(body) as T;
 }
 
 test("signup creates the organization, its first binder, and its rules", async () => {
