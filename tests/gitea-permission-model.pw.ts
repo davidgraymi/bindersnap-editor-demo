@@ -36,6 +36,9 @@ test.describe.configure({ mode: "serial", timeout: 120_000 });
 
 const AUTHOR = GITEA_BOB_USER; // seeded, opens the change
 const REVIEWER = "carol"; // seeded, reviews it without write access
+// A second free reviewer, so a change can reach its approval count without the
+// code owner — which is the only way to observe the CODEOWNERS gate on its own.
+const SECOND_REVIEWER = "dan";
 
 /** Unique per run so repeated runs never collide inside one Gitea volume. */
 function uniqueOrgName(): string {
@@ -192,6 +195,7 @@ async function provisionWorkspace(
   }
   await put(admin, `/teams/${authors.id}/members/${AUTHOR}`);
   await put(admin, `/teams/${reviewers.id}/members/${REVIEWER}`);
+  await put(admin, `/teams/${reviewers.id}/members/${SECOND_REVIEWER}`);
 
   await post(admin, `/repos/${org}/${repo}/branch_protections`, {
     rule_name: "main",
@@ -322,11 +326,13 @@ test.describe("ADR 0004: the Gitea permission model the workspace rests on", () 
   let admin: GiteaClient;
   let author: GiteaClient;
   let reviewer: GiteaClient;
+  let secondReviewer: GiteaClient;
 
   test.beforeAll(async () => {
     admin = await createUserClient(GITEA_ADMIN_USER);
     author = await createUserClient(AUTHOR);
     reviewer = await createUserClient(REVIEWER);
+    secondReviewer = await createUserClient(SECOND_REVIEWER);
   });
 
   test("a reviewer without write access can approve, and the approval counts", async () => {
@@ -392,7 +398,7 @@ test.describe("ADR 0004: the Gitea permission model the workspace rests on", () 
     expect(merge.message).toContain("approvals");
   });
 
-  test("a CODEOWNERS user blocks the merge until they review", async () => {
+  test("a CODEOWNERS user blocks the merge even once the count is met", async () => {
     // CODEOWNERS is read from the base repo's default branch, never from the
     // change under review. Gitea's patterns are anchored regexes (^...$), not
     // gitignore globs: a bare directory prefix matches nothing, hence `.*`.
@@ -415,8 +421,16 @@ test.describe("ADR 0004: the Gitea permission model the workspace rests on", () 
     // Official is what makes a request block anything.
     expect(request?.official).toBe(true);
 
+    // Satisfy the approval count with somebody who is not the code owner.
+    // Gitea checks approvals before it checks outstanding requests, so without
+    // this the merge is refused for the wrong reason and the gate under test
+    // is never reached.
+    await approve(secondReviewer, workspace, index);
+
     const blocked = await tryMerge(author, workspace, index);
     expect(blocked.ok).toBe(false);
+    // Enough approvals, and still refused: CODEOWNERS is enforcement over and
+    // above the count, which is the whole claim.
     expect(blocked.message).toContain("official review requests");
 
     // The code owner reviewing clears the request and releases the merge.
@@ -464,6 +478,11 @@ test.describe("ADR 0004: the Gitea permission model the workspace rests on", () 
     // Gitea fixes the ordering, this test fails — which is the signal to go
     // back to teams.
     expect(request?.official).toBe(false);
+
+    // Same shape as the user case: the count is met by somebody who is not a
+    // code owner. There the merge is still refused; here it goes through, and
+    // that difference is the finding.
+    await approve(secondReviewer, workspace, index);
 
     const merge = await tryMerge(author, workspace, index);
     expect(merge.ok, `merge refused: ${merge.status} ${merge.message}`).toBe(
