@@ -36,6 +36,13 @@ services:
       - GITEA__database__DB_TYPE=sqlite3
       - GITEA__database__PATH=/data/gitea.db
       - GITEA__service__DISABLE_REGISTRATION=false
+      # ADR 0004: signup creates the organization with the new user's own
+      # token, so a new account must be allowed to create one. Gitea's default
+      # is already true, but provisioning fails with a bare 403 when it is not
+      # — asserted here rather than inherited, so an upgrade cannot silently
+      # un-provision every new account.
+      - GITEA__service__DEFAULT_ALLOW_CREATE_ORGANIZATION=true
+      - GITEA__admin__DISABLE_REGULAR_ORG_CREATION=false
       - GITEA__cors__ENABLED=true
       - GITEA__cors__ALLOW_DOMAIN=http://localhost:${APP_PORT:-5173}
       - GITEA__cors__METHODS=GET,POST,PUT,PATCH,DELETE,OPTIONS
