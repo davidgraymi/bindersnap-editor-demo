@@ -18,7 +18,20 @@ Branches stack `3 → 4 → 5`. A fix on a lower branch must be merged forward
 before pushing. Everything except the one failure below is green: unit, seed,
 build, formatting, CodeQL and the rest of the integration suite.
 
-## The one open failure
+## Fixed since these notes were written
+
+1. **`CanCreateOrganization()` 403** — signup's 403 with a nil body was Gitea
+   refusing at `org.Create`. Both compose files now state
+   `DEFAULT_ALLOW_CREATE_ORGANIZATION=true` and
+   `DISABLE_REGULAR_ORG_CREATION=false` rather than inheriting them. The first
+   test of `signup-provisioning.pw.ts` passes as of that change.
+2. **The invisible-name collision**, predicted below and then confirmed by the
+   second test failing exactly where expected. Gitea answers
+   `GET /orgs/{org}` for a private organization the caller cannot see with a
+   404, identical to a free name — so asking is not enough. Creation is now the
+   availability check: a 422 steps to the next candidate, and only a 422 does.
+
+## The one open failure (historical — kept for the method)
 
 `tests/signup-provisioning.pw.ts:83` — after `POST /auth/signup`, Gitea answers
 `GET /user/orgs` with `[]` for the new user, so no organization was created.
