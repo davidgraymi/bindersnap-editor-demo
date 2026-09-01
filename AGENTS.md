@@ -285,6 +285,13 @@ free reviewers real. `.gitea/CODEOWNERS` patterns are anchored regexes, not
 gitignore globs — a folder rule is `policies/nursing/.*` — and the file is read
 from the base branch, so a CODEOWNERS change never governs its own change.
 
+**A CODEOWNERS entry names people, not teams.** Gitea 1.26 writes a team review
+request and then clears its own `official` flag (`AddTeamReviewRequest`,
+`models/issues/review.go`), so a team code owner is assignment only and blocks
+no merge; a user code owner blocks it. `tests/gitea-permission-model.pw.ts`
+asserts both, so the day Gitea fixes the ordering the team case fails and says
+so.
+
 This is design, recorded in
 `docs/adr/0004-organization-workspace-folder-and-org-billing.md`, and it
 supersedes ADR 0001's "one document equals one repository". The routes and BFF
