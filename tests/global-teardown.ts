@@ -27,6 +27,7 @@ const GITEA_PORT = process.env.GITEA_PORT ?? "3000";
 const HOCUSPOCUS_PORT = process.env.HOCUSPOCUS_PORT ?? "1234";
 const RESULTS_DIR = resolve(ROOT, "test-results");
 const API_LOG_PATH = resolve(RESULTS_DIR, "api.log");
+const MAX_PRINTED_ERROR_LINES = 100;
 
 function log(message: string): void {
   process.stdout.write(`[global-teardown] ${message}\n`);
@@ -46,10 +47,12 @@ function log(message: string): void {
 function captureApiLogs(env: NodeJS.ProcessEnv): void {
   const result = spawnSync(
     "docker",
-    [...COMPOSE_ARGS, "logs", "--no-color", "--tail", "5000", "api"],
-    // A debug-level API log runs to megabytes; the 1MB default would truncate
-    // it into an ENOBUFS failure and lose the whole capture.
-    { encoding: "utf8", env, maxBuffer: 64 * 1024 * 1024 },
+    // The whole log, not a tail: the API logs at debug level here, so a run of
+    // eighty specs buries an early error thousands of lines deep. The 1MB
+    // default maxBuffer would truncate that into an ENOBUFS failure and lose
+    // the capture entirely.
+    [...COMPOSE_ARGS, "logs", "--no-color", "api"],
+    { encoding: "utf8", env, maxBuffer: 256 * 1024 * 1024 },
   );
 
   const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
@@ -76,8 +79,14 @@ function captureApiLogs(env: NodeJS.ProcessEnv): void {
   }
 
   log(`API logged ${errors.length} error line(s):`);
-  for (const line of errors) {
+  // A cascade repeats one cause; the rest are in the artefact.
+  for (const line of errors.slice(0, MAX_PRINTED_ERROR_LINES)) {
     process.stdout.write(`${line}\n`);
+  }
+  if (errors.length > MAX_PRINTED_ERROR_LINES) {
+    log(
+      `${errors.length - MAX_PRINTED_ERROR_LINES} more error line(s) in ${API_LOG_PATH}.`,
+    );
   }
 }
 
