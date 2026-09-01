@@ -115,14 +115,9 @@ export async function provisionSignup(
 ): Promise<SignupProvisionResult> {
   const { client, username } = params;
 
-  const orgName = await resolveAvailableOrganizationName(
+  const provisioned = await provisionOrganizationUnderAvailableName({
     client,
-    deriveOrganizationName(username, params.organizationName),
-  );
-
-  const provisioned = await provisionOrganization({
-    client,
-    orgName,
+    base: deriveOrganizationName(username, params.organizationName),
     orgFullName: params.organizationName?.trim() || undefined,
     workspaceName: params.workspaceName ?? DEFAULT_WORKSPACE_NAME,
     workspaceDescription: DEFAULT_WORKSPACE_DESCRIPTION,
@@ -139,19 +134,63 @@ export async function provisionSignup(
   return { organization, provisioned };
 }
 
-async function resolveAvailableOrganizationName(
-  client: GiteaClient,
-  base: string,
-): Promise<string> {
+interface ProvisionUnderAvailableNameParams {
+  client: GiteaClient;
+  base: string;
+  orgFullName?: string;
+  workspaceName: string;
+  workspaceDescription?: string;
+}
+
+/**
+ * Step through `name`, `name-2`, `name-3` … until one is actually free.
+ *
+ * Asking whether a name is taken is not enough, because the honest answer is
+ * not always available: organizations are private, and Gitea answers
+ * `GET /orgs/{org}` for a private organization the caller cannot see with a
+ * **404**, identical to the answer for a name nobody holds. Two customers of
+ * the same name is the ordinary case — every second one would be told the name
+ * was free and then refused at creation.
+ *
+ * So the creation itself is the availability check. Gitea rejects a taken name
+ * with 422 (`ErrUserAlreadyExist`, or a reserved or malformed name), and 422 is
+ * the only status that means "try the next one" — anything else is a real
+ * failure and is raised rather than walked past twenty times.
+ *
+ * A 422 leaves nothing behind: the organization is the first thing
+ * `provisionOrganization` creates, so a failure there is a failure before any
+ * workspace, team or rule exists.
+ */
+async function provisionOrganizationUnderAvailableName(
+  params: ProvisionUnderAvailableNameParams,
+): Promise<ProvisionedOrganization> {
+  const { client, base, ...rest } = params;
+  let lastConflict: GiteaApiError | null = null;
+
   for (let attempt = 1; attempt <= MAX_NAME_ATTEMPTS; attempt += 1) {
-    const candidate = nameAttempt(base, attempt);
-    if (!(await findOrganization({ client, org: candidate }))) {
-      return candidate;
+    const orgName = nameAttempt(base, attempt);
+
+    // A name we can see is taken is not worth a create call. This also keeps
+    // provisioning out of an organization that exists and is visible but is
+    // somebody else's.
+    if (await findOrganization({ client, org: orgName })) {
+      continue;
+    }
+
+    try {
+      return await provisionOrganization({ client, orgName, ...rest });
+    } catch (err) {
+      if (err instanceof GiteaApiError && err.status === 422) {
+        lastConflict = err;
+        continue;
+      }
+      throw err;
     }
   }
 
   throw new Error(
-    `Unable to find an available organization name based on "${base}".`,
+    `Unable to find an available organization name based on "${base}"` +
+      (lastConflict ? `: ${lastConflict.message}` : "."),
   );
 }
 

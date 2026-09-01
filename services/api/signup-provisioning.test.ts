@@ -22,11 +22,22 @@ interface Handlers {
 /** A handler returning this answers 404, the way a real Gitea would. */
 const NOT_FOUND = Symbol("not-found");
 
+/** A handler returning this answers 422, the way Gitea refuses a taken name. */
+const ALREADY_EXISTS = Symbol("already-exists");
+
 function notFound() {
   return {
     data: undefined,
     error: { message: "not found" },
     response: new Response(null, { status: 404 }),
+  };
+}
+
+function alreadyExists() {
+  return {
+    data: undefined,
+    error: { message: "user already exists [name: mercy-health]" },
+    response: new Response(null, { status: 422 }),
   };
 }
 
@@ -40,6 +51,9 @@ function createMockClient(handlers: Handlers) {
       const data = await handler(init);
       if (data === NOT_FOUND) {
         return notFound();
+      }
+      if (data === ALREADY_EXISTS) {
+        return alreadyExists();
       }
       return {
         data,
@@ -93,8 +107,17 @@ function createMemoryStore(): OrganizationBackend & {
  * A Gitea that answers every provisioning call. `existingOrgs` decides which
  * org names are already taken, which is how the collision path is exercised.
  */
-function createProvisioningClient(existingOrgs: string[] = []) {
+function createProvisioningClient(
+  existingOrgs: string[] = [],
+  /**
+   * Names held by a **private** organization this caller cannot see. Gitea
+   * answers `GET /orgs/{org}` for those with a 404 — indistinguishable from a
+   * free name — and only refuses at creation, with a 422.
+   */
+  invisiblyTaken: string[] = [],
+) {
   const taken = new Set(existingOrgs);
+  const hidden = new Set(invisiblyTaken);
   const created: { orgs: string[]; teams: string[]; repos: string[] } = {
     orgs: [],
     teams: [],
@@ -119,6 +142,9 @@ function createProvisioningClient(existingOrgs: string[] = []) {
       },
       POST: {
         "/orgs": (init: { body: { username: string } }) => {
+          if (hidden.has(init.body.username)) {
+            return ALREADY_EXISTS;
+          }
           created.orgs.push(init.body.username);
           return {
             id: 77,
@@ -248,4 +274,46 @@ test("provisionSignupBestEffort never fails the signup it is part of", async () 
   expect(
     await provisionSignupBestEffort({ client, username: "alice", store }),
   ).toBeNull();
+});
+
+test("a name held by an organization the signer-up cannot see steps to the next", async () => {
+  // The ordinary case for two customers of the same name. Gitea answers
+  // `GET /orgs/mercy-health` with 404 when the organization is private and
+  // this user is not in it, so the name looks free and only the create refuses.
+  const gitea = createProvisioningClient([], ["mercy-health"]);
+
+  const result = await provisionSignup({
+    client: gitea.client,
+    username: "bob",
+    organizationName: "Mercy Health",
+    store: createMemoryStore(),
+  });
+
+  expect(gitea.created.orgs).toEqual(["mercy-health-2"]);
+  expect(result.provisioned.organization.name).toBe("mercy-health-2");
+  // And the binder is built inside the organization that was actually created.
+  expect(gitea.created.repos).toEqual(["policies"]);
+});
+
+test("an invisible collision does not swallow a real creation failure", async () => {
+  // 422 means "that name is taken". Anything else is a genuine failure and must
+  // surface on the first attempt rather than being walked past twenty times.
+  const gitea = createMockClient({
+    GET: { "/orgs/{org}": () => NOT_FOUND },
+    POST: { "/orgs": () => NOT_FOUND },
+  });
+
+  await expect(
+    provisionSignup({
+      client: gitea.client,
+      username: "bob",
+      organizationName: "Mercy Health",
+      store: createMemoryStore(),
+    }),
+  ).rejects.toThrow();
+
+  // One create attempt, not twenty.
+  expect(
+    gitea.mockPost.mock.calls.filter((call) => call[0] === "/orgs"),
+  ).toHaveLength(1);
 });
