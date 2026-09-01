@@ -46,6 +46,10 @@ import {
 // ---------------------------------------------------------------------------
 
 test.beforeAll(async () => {
+  // Seeding the stack is a run of Gitea API calls, not an instant. The
+  // suite-wide 10s budget is sized for assertions, not for setup.
+  test.setTimeout(90_000);
+
   installMemorySessionStorage();
   await resolveAndStoreToken("bindersnap-download-test");
 });
