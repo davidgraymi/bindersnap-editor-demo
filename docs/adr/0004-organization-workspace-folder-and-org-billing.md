@@ -505,7 +505,27 @@ With the whitelist on, the gate behaves exactly as section 5 wants: the merge is
 refused while the request is outstanding, and a review by any member of the requested
 team clears the request and releases the merge.
 
-Three mechanics that shape how CODEOWNERS must be written:
+**Name people, not teams.** This is the one place where the design as first
+written does not work. Gitea builds a user review request by clearing the flag
+on that user's previous reviews and _then_ creating the new one, but builds a
+team request the other way round — it creates the row and then runs
+`UPDATE review SET official = false WHERE issue_id = ? AND reviewer_team_id = ?`,
+which matches the row it has just written (`AddReviewRequest` and
+`AddTeamReviewRequest`, `models/issues/review.go`). A `@org/team` code owner is
+therefore always `official = false`, and `MergeBlockedByOfficialReviewRequests`
+only blocks on official requests. **A team code owner is assignment; a user code
+owner is enforcement.** So a generated `.gitea/CODEOWNERS` lists the individual
+owners of a folder.
+
+That is a Gitea bug rather than a design choice, and
+`tests/gitea-permission-model.pw.ts` pins both halves: the user case blocks the
+merge, and the team case is asserted non-blocking, so the day a Gitea fixes the
+ordering the test fails and tells us we can go back to teams. The cost until
+then is that a folder's owners are a list of people, which has to be
+regenerated when the people change — one more reason the generated file is
+generated rather than hand-edited.
+
+Three further mechanics that shape how CODEOWNERS must be written:
 
 - **Patterns are anchored regexes, not gitignore globs.** `ParseCodeOwnersLine`
   compiles `^<pattern>$`. A folder rule is `policies/nursing/.*`; the bare
@@ -520,11 +540,16 @@ Three mechanics that shape how CODEOWNERS must be written:
   requested and nothing blocking it. Publishing must therefore never merge from a
   draft — check it at the gate.
 
-Teams are addressed as `@<org>/<team-name>`, matched on the team's exact name.
+Teams are addressed as `@<org>/<team-name>`, matched on the team's exact name —
+which is how to write one when assignment without enforcement is what you want.
 
 ### What this settles
 
-Neither fallback in the original open question is needed: the free-reviewer tier keeps
-its permission shape, and #365 gets the full per-folder answer. The cost is one extra
-field on every workspace's branch protection and one regex convention in the generated
-CODEOWNERS file.
+Neither fallback in the original open question is needed. The free-reviewer tier keeps
+its permission shape, and #365 gets the full per-folder answer — with one correction to
+the shape of the answer: a folder's owners are named individually rather than as a
+team, because a team request does not block a merge on Gitea 1.26.
+
+The cost is one extra field on every workspace's branch protection, one regex
+convention in the generated CODEOWNERS file, and regenerating that file when a
+folder's owners change.
