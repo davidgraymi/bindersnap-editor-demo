@@ -463,9 +463,16 @@ Deleting the source repositories is a separate, later, deliberate act.
 ## Verified Against Gitea
 
 Both claims this design rests on hold, with one correction that changes the
-implementation. The stack runs `gitea/gitea:1.26`; the executable proof is
+implementation. The stack runs `gitea/gitea:1.27.3`; the executable proof is
 `tests/gitea-permission-model.pw.ts`, which provisions the shape below and
 asserts every statement here against a live Gitea.
+
+First verified against 1.26. Re-verified against 1.27.3 after #387 upgraded the
+stack: all four cases still pass, and the four functions the findings rest on —
+`AddReviewRequest`, `AddTeamReviewRequest`, `MergeBlockedByOfficialReviewRequests`
+and `CheckPullBranchProtections` — are unchanged between the two releases apart
+from an unrelated `isCodeOwners` parameter threaded through for comment
+attribution.
 
 ### 1. Reviewers can approve without write access — if the approvals whitelist is on
 
@@ -535,10 +542,14 @@ Three further mechanics that shape how CODEOWNERS must be written:
   request does not govern that pull request. That is the correct behaviour for an
   approval control, and it means a CODEOWNERS change is itself a change that `main`'s
   existing owners approve.
-- **Draft changes and forks are skipped entirely.** `PullRequestCodeOwnersReview`
-  returns early for a work-in-progress pull request, so a draft has no code owners
+- **Draft changes are skipped entirely.** `PullRequestCodeOwnersReview` returns
+  early for a work-in-progress pull request, so a draft has no code owners
   requested and nothing blocking it. Publishing must therefore never merge from a
-  draft — check it at the gate.
+  draft — check it at the gate. It also returns early when the _base_ repository
+  is itself a fork; that is a property of the base, not of where the change came
+  from, so a change opened from a fork into a workspace repository does get its
+  code owners. Workspace repositories are never forks, so this branch never fires
+  for us.
 
 Teams are addressed as `@<org>/<team-name>`, matched on the team's exact name —
 which is how to write one when assignment without enforcement is what you want.
@@ -548,7 +559,7 @@ which is how to write one when assignment without enforcement is what you want.
 Neither fallback in the original open question is needed. The free-reviewer tier keeps
 its permission shape, and #365 gets the full per-folder answer — with one correction to
 the shape of the answer: a folder's owners are named individually rather than as a
-team, because a team request does not block a merge on Gitea 1.26.
+team, because a team request does not block a merge on Gitea 1.26 or 1.27.3.
 
 The cost is one extra field on every workspace's branch protection, one regex
 convention in the generated CODEOWNERS file, and regenerating that file when a

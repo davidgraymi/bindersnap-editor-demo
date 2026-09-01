@@ -44,7 +44,7 @@ function accessRank(access: string | undefined): number {
 }
 
 /**
- * The unit map each role gets, verified against Gitea 1.26 by
+ * The unit map each role gets, verified against Gitea 1.27.3 by
  * `tests/gitea-permission-model.pw.ts`.
  *
  * Reviewers get **read** on both `repo.code` and `repo.pulls` and nothing more.
