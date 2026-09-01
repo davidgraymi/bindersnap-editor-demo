@@ -196,6 +196,14 @@ async function logInWithIdentifier(
 }
 
 test.describe("signup flow", () => {
+  // Signup is no longer one Gitea call. ADR 0004 has it create the
+  // organization, its first binder, that binder's three role teams and the
+  // rules on `main` before it answers, and the round trip through sign-out and
+  // back in adds waits of its own — `signOutCurrentUser` alone allows 20s.
+  // None of that fits the 10s default, which is sized for an assertion rather
+  // than for a whole account lifecycle.
+  test.describe.configure({ timeout: 90_000 });
+
   test("landing signup carries the typed email into the signup form", async ({
     page,
   }) => {
