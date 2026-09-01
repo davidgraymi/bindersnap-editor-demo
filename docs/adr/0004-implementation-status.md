@@ -29,7 +29,63 @@ not strand someone at a login form for an account that exists) and logs it at
 error level. That log now survives the run — see below — so **the next step is
 to read it, not to re-derive it.**
 
-### How to read the cause
+### The cause, found
+
+The api.log capture answered it on its first run
+([job 99855912222](https://github.com/davidgraymi/bindersnap-editor-demo/actions/runs/33507742009/job/99855912222)):
+
+```json
+{
+  "level": "error",
+  "message": "Failed to provision organization at signup",
+  "username": "signup-…",
+  "status": 403,
+  "error": "%!s(<nil>)"
+}
+```
+
+**403, with a nil error body.** Gitea emits exactly two `403`s that log a nil
+error, and only one is on this path — `routers/api/v1/org/org.go:248`:
+
+```go
+if !ctx.Doer.CanCreateOrganization() {
+    ctx.APIError(http.StatusForbidden, nil)   // formats as %!s(<nil>)
+    return
+}
+```
+
+So Gitea is refusing at `CanCreateOrganization()`, which is
+
+```go
+u.IsAdmin || (u.AllowCreateOrganization && !setting.Admin.DisableRegularOrgCreation)
+```
+
+Every signup fails this way, not just the one the test asserts on — the same
+error line appears for each `stripe-*` user in the run.
+
+`AllowCreateOrganization` is set once, at user creation, from
+`setting.Service.DefaultAllowCreateOrganization && !setting.Admin.DisableRegularOrgCreation`
+(`models/user/user.go`, `createUser`). Gitea's admin `CreateUserOption` has **no
+field for it**, so `createGiteaUser` cannot ask for it in the payload — the
+stack's Gitea settings decide, and this stack sets neither, so both should be
+at their permissive defaults. Resolve that contradiction before choosing a fix;
+the two candidate fixes are:
+
+1. Set `GITEA__service__DEFAULT_ALLOW_CREATE_ORGANIZATION=true` explicitly in
+   `docker-compose.yml` and `deploy/files/docker-compose.prod.yml`, so the
+   behaviour does not depend on a Gitea default that can move under us. Cheap,
+   and it makes the requirement legible next to the other `GITEA__` settings.
+2. Have `createGiteaUser` follow the create with
+   `PATCH /api/v1/admin/users/{username}` carrying
+   `allow_create_organization: true` (`EditUserOption` _does_ have the field).
+   Independent of server configuration, at the cost of one more round trip on
+   the signup path.
+
+Prefer (1) if it reproduces, and add an integration assertion that a fresh user
+can create an org, so a Gitea upgrade that flips the default fails loudly
+instead of silently un-provisioning every new account.
+
+### How to read the cause (for the next one)
 
 `tests/global-teardown.ts` saves the whole API container log to
 `test-results/api.log` before `docker compose down`, and the CI job uploads it
