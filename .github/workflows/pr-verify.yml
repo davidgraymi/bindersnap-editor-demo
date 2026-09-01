@@ -206,4 +206,5 @@ jobs:
           path: |
             test-results/playwright-report
             test-results/playwright
+            test-results/api.log
           if-no-files-found: ignore

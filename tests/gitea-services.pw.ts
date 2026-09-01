@@ -59,6 +59,12 @@ import {
 // ---------------------------------------------------------------------------
 
 test.beforeAll(async () => {
+  // This hook seeds the stack and then waits on Gitea's review indexing, which
+  // `pollUntil` alone allows 30s for. The suite-wide 10s budget cannot cover
+  // that, so a loaded runner fails the hook rather than the assertion it was
+  // preparing for.
+  test.setTimeout(90_000);
+
   installMemorySessionStorage();
   await resolveAndStoreToken("bindersnap-services");
 

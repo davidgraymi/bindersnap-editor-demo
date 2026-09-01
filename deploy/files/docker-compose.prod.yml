@@ -47,6 +47,13 @@ services:
       - GITEA__service__REQUIRE_SIGNIN_VIEW=true
       - GITEA__service__ALLOW_ONLY_EXTERNAL_REGISTRATION=false
       - GITEA__service__ENABLE_CAPTCHA=false
+      # ADR 0004: signup creates the organization with the new user's own
+      # token, so a new account must be allowed to create one. Gitea's default
+      # is already true, but provisioning fails with a bare 403 when it is not
+      # — asserted here rather than inherited, so an upgrade cannot silently
+      # un-provision every new account.
+      - GITEA__service__DEFAULT_ALLOW_CREATE_ORGANIZATION=true
+      - GITEA__admin__DISABLE_REGULAR_ORG_CREATION=false
       # --- CORS ---
       - GITEA__cors__ENABLED=true
       - GITEA__cors__ALLOW_DOMAIN=https://bindersnap.com
@@ -107,7 +114,7 @@ services:
       - BINDERSNAP_SESSION_COOKIE_DOMAIN=${BINDERSNAP_SESSION_COOKIE_DOMAIN:-.bindersnap.com}
       - BINDERSNAP_SESSION_COOKIE_SAME_SITE=${BINDERSNAP_SESSION_COOKIE_SAME_SITE:-Lax}
       - BINDERSNAP_USER_EMAIL_DOMAIN=${BINDERSNAP_USER_EMAIL_DOMAIN:-users.bindersnap.com}
-      - BINDERSNAP_GITEA_TOKEN_SCOPES=${BINDERSNAP_GITEA_TOKEN_SCOPES:-write:user,write:repository,write:issue}
+      - BINDERSNAP_GITEA_TOKEN_SCOPES=${BINDERSNAP_GITEA_TOKEN_SCOPES:-write:user,write:repository,write:issue,write:organization}
       - BINDERSNAP_REQUIRE_HTTPS=true
       - BINDERSNAP_AUTH_RATE_LIMIT_ENABLED=true
       - BINDERSNAP_SESSIONS_DB_PATH=/var/lib/bindersnap/sessions.db

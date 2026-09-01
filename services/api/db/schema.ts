@@ -27,6 +27,35 @@ export const sessions = sqliteTable(
   (table) => [index("idx_sessions_expires").on(table.expiresAt)],
 );
 
+/**
+ * The organization is a Gitea org, so everything Gitea models natively —
+ * identity, membership, who owns it — is read from Gitea and never mirrored
+ * here. This table holds only the facts Gitea has no primitive for: the local
+ * trial window, and (once billing is re-keyed) the Stripe linkage.
+ *
+ * Keyed on the Gitea org id rather than the org name because Gitea renames
+ * organizations (`POST /orgs/{org}/rename`) and a name key breaks silently
+ * when it happens. The name is carried alongside for display only — treat it
+ * as a cache of Gitea's answer, never as an identifier.
+ */
+export const organizations = sqliteTable(
+  "organizations",
+  {
+    giteaOrgId: integer("gitea_org_id").primaryKey(),
+    name: text("name").notNull(),
+    createdBy: text("created_by").notNull(),
+    createdAt: integer("created_at").notNull(),
+    /**
+     * #369 wants no card during the trial, so the trial is a local column
+     * rather than a Stripe `trialing` subscription — representing it in Stripe
+     * would create a customer and a subscription for every tire-kicker. Unix
+     * seconds, or null for an org that never had one.
+     */
+    trialEndsAt: integer("trial_ends_at"),
+  },
+  (table) => [index("idx_organizations_name").on(table.name)],
+);
+
 export const subscriptions = sqliteTable("subscriptions", {
   username: text("username").primaryKey(),
   stripeCustomerId: text("stripe_customer_id").notNull(),

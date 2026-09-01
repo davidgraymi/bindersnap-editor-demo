@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { config, type SessionCookieSameSite } from "./config";
 import { logger } from "./logger";
 import { runSessionReaper } from "./session-reaper";
+import { provisionSignupBestEffort } from "./signup-provisioning";
 import { sessionStore, type SessionRecord } from "./sessions";
 import {
   subscriptionStore,
@@ -1572,19 +1573,31 @@ async function resolveLoginUsername(
   return { kind: "not_found" };
 }
 
-async function createAuthenticatedSession(
+type EstablishedSession =
+  | { ok: true; session: SessionRecord; headers: Headers }
+  | { ok: false; response: Response };
+
+/**
+ * Mint the Gitea token, store the session, and build the cookie — without
+ * writing the response yet, so signup can act as the new user (creating their
+ * organization) before answering.
+ */
+async function establishSession(
   username: string,
   password: string,
   req: Request,
   baseHeaders: Headers,
   rememberMe = true,
-): Promise<Response> {
+): Promise<EstablishedSession> {
   const tokenName = `bindersnap-session-${randomUUID()}`;
   const token = await createUserToken(username, password, tokenName).catch(
     () => null,
   );
   if (!token) {
-    return json(502, { error: "Unable to sign in." }, baseHeaders);
+    return {
+      ok: false,
+      response: json(502, { error: "Unable to sign in." }, baseHeaders),
+    };
   }
 
   const lifetime = buildSessionLifetime(rememberMe);
@@ -1600,6 +1613,10 @@ async function createAuthenticatedSession(
     }),
   });
 
+  return { ok: true, session, headers };
+}
+
+function sessionResponse(session: SessionRecord, headers: Headers): Response {
   return json(
     200,
     {
@@ -1610,6 +1627,27 @@ async function createAuthenticatedSession(
     },
     headers,
   );
+}
+
+async function createAuthenticatedSession(
+  username: string,
+  password: string,
+  req: Request,
+  baseHeaders: Headers,
+  rememberMe = true,
+): Promise<Response> {
+  const established = await establishSession(
+    username,
+    password,
+    req,
+    baseHeaders,
+    rememberMe,
+  );
+  if (!established.ok) {
+    return established.response;
+  }
+
+  return sessionResponse(established.session, established.headers);
 }
 
 async function createLoginSession(
@@ -1808,12 +1846,15 @@ async function handleSignup(
     username?: unknown;
     email?: unknown;
     password?: unknown;
+    organization?: unknown;
   }>(req);
   const username =
     typeof payload?.username === "string" ? payload.username : "";
   const email = typeof payload?.email === "string" ? payload.email : "";
   const password =
     typeof payload?.password === "string" ? payload.password : "";
+  const organization =
+    typeof payload?.organization === "string" ? payload.organization : "";
 
   if (!username || !email || !password) {
     return json(
@@ -1840,17 +1881,42 @@ async function handleSignup(
     clientIp,
   });
 
-  const response = await createLoginSession(
-    username,
+  const loginName = await verifyUserCredentials(username, password).catch(
+    () => null,
+  );
+  if (!loginName) {
+    return json(401, { error: "Invalid username or password." }, baseHeaders);
+  }
+
+  const established = await establishSession(
+    loginName,
     password,
     req,
     baseHeaders,
   );
-  if (response.ok) {
-    resetAuthRateLimit(req, "signup");
-    logger.debug("Session created after signup", { username, clientIp });
+  if (!established.ok) {
+    return established.response;
   }
-  return response;
+
+  resetAuthRateLimit(req, "signup");
+  logger.debug("Session created after signup", { username, clientIp });
+
+  // ADR 0004: signup creates the organization and its first binder. It runs
+  // with the new user's own token, which is what makes them its owner — the
+  // service account would own it instead, and ownership is the whole point.
+  //
+  // Best effort on purpose. The account and the session are already real, and
+  // a Gitea hiccup here should not strand someone at a login form for an
+  // account that exists. Provisioning is idempotent, so the repair is to run
+  // it again — the same job the backfill does for every account that predates
+  // this.
+  await provisionSignupBestEffort({
+    client: createSessionGiteaClient(established.session),
+    username: established.session.username,
+    organizationName: organization,
+  });
+
+  return sessionResponse(established.session, established.headers);
 }
 
 async function handleLogin(
