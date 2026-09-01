@@ -154,6 +154,28 @@ truth for runtime config, so reverting the offending commit and letting
 `deploy-pyinfra.yml` run re-applies the prior config (and force-recreates the
 stack because the files changed).
 
+### Gitea version changes are not covered by a git revert
+
+Gitea runs its own database migrations against `/data/gitea.db` the first time a
+new version boots, and those migrations are one-way — Gitea refuses to start
+against a database stamped by a newer version. So bumping `gitea/gitea:<tag>` in
+`deploy/files/docker-compose.prod.yml` is the one config change a `git revert`
+alone cannot undo: reverting the tag brings back the old binary on top of an
+already-migrated database and the container will fail to start.
+
+Rolling a Gitea upgrade back means restoring the database too:
+
+1. Revert the tag bump on `main` so the deploy stops pulling the newer image.
+2. Stop the stack on the host, then restore `gitea.db` from a point in time
+   before the upgrade with `scripts/restore.sh` (Litestream replicates it to S3
+   continuously) or from the DLM snapshot of the EBS volume.
+3. Bring the stack back up and confirm Gitea boots and `/api/v1/version`
+   reports the older version.
+
+Because of this, treat a Gitea bump as its own deploy: merge it on its own,
+confirm the Litestream replica is current beforehand, and watch the container
+come up rather than batching it with application changes.
+
 ## Validation Checklist
 
 - A push to `main` publishes the SPA to GitHub Pages from `dist/`.

@@ -22,7 +22,7 @@ services:
       - ./data/gitea:/data
 
   gitea:
-    image: gitea/gitea:1.26
+    image: gitea/gitea:1.27.3
     container_name: ${STACK_NAME:-bindersnap}-gitea
     restart: unless-stopped
     depends_on:
@@ -33,6 +33,14 @@ services:
       - USER_GID=1000
       - GITEA__server__ROOT_URL=http://localhost:${GITEA_PORT:-3000}
       - GITEA__server__HTTP_PORT=${GITEA_PORT:-3000}
+      # Gitea >= 1.26 defaults PUBLIC_URL_DETECTION to `auto`, which builds the
+      # absolute URLs in API responses (avatar_url, html_url) from the request's
+      # own Host header. The API container calls Gitea at http://gitea:3000, so
+      # `auto` would hand the browser avatar and comment links pointing at the
+      # internal compose hostname, which no browser can resolve. ROOT_URL is set
+      # explicitly above and is the only origin the browser can reach, so pin
+      # the detection off and always answer with it.
+      - GITEA__server__PUBLIC_URL_DETECTION=never
       - GITEA__database__DB_TYPE=sqlite3
       - GITEA__database__PATH=/data/gitea.db
       - GITEA__service__DISABLE_REGISTRATION=false
