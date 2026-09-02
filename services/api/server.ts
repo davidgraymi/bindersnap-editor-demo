@@ -2191,23 +2191,31 @@ async function handleDocuments(
     const documents = await Promise.all(
       repos.map(async (repo) => {
         try {
-          const [latestTag, openWithReviews, requiredApprovals] =
-            await Promise.all([
-              getLatestDocTag(client, repo.owner.login, repo.name),
-              listPullRequestsWithReviews({
-                client,
-                owner: repo.owner.login,
-                repo: repo.name,
-                state: "open",
-              }),
-              // A row is worth showing without its approval policy; it is not
-              // worth failing the whole list for.
-              readRequiredApprovals(repo.owner.login, repo.name),
-            ]);
-          const pendingPRs = openWithReviews
-            .filter((entry) =>
-              (entry.pullRequest.head?.ref ?? "").startsWith("upload/"),
-            )
+          const [latestTag, openWithReviews] = await Promise.all([
+            getLatestDocTag(client, repo.owner.login, repo.name),
+            listPullRequestsWithReviews({
+              client,
+              owner: repo.owner.login,
+              repo: repo.name,
+              state: "open",
+            }),
+          ]);
+          const pending = openWithReviews.filter((entry) =>
+            (entry.pullRequest.head?.ref ?? "").startsWith("upload/"),
+          );
+          // The approval policy only ever answers "how many approvals does
+          // this change still need", so a document with nothing in flight has
+          // no question to ask — and most of them don't. Asking anyway spent a
+          // Gitea round trip per row, which across a workspace was the largest
+          // part of this list's cost.
+          //
+          // A row is worth showing without its approval policy; it is not
+          // worth failing the whole list for.
+          const requiredApprovals =
+            pending.length > 0
+              ? await readRequiredApprovals(repo.owner.login, repo.name)
+              : null;
+          const pendingPRs = pending
             .map((entry) => ({
               ...entry.pullRequest,
               reviewers: buildChangeReviewers({
