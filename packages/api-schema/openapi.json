@@ -2304,6 +2304,502 @@
           "hasMore",
           "query"
         ]
+      },
+      "HomeChangesPayload": {
+        "type": "object",
+        "properties": {
+          "open": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "repo": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "owner": {
+                      "type": "object",
+                      "properties": {
+                        "login": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "login"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "owner"
+                  ]
+                },
+                "latestTag": {
+                  "type": "object",
+                  "nullable": true,
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "number"
+                    },
+                    "sha": {
+                      "type": "string"
+                    },
+                    "created": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "version",
+                    "sha",
+                    "created"
+                  ]
+                },
+                "pendingPRs": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "number"
+                      },
+                      "number": {
+                        "type": "number"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "state": {
+                        "type": "string"
+                      },
+                      "created": {
+                        "type": "string"
+                      },
+                      "created_at": {
+                        "type": "string"
+                      },
+                      "updated_at": {
+                        "type": "string"
+                      },
+                      "branchName": {
+                        "type": "string"
+                      },
+                      "approvalCount": {
+                        "type": "number"
+                      },
+                      "requiredApprovals": {
+                        "type": "number",
+                        "nullable": true
+                      },
+                      "isApproved": {
+                        "type": "boolean"
+                      },
+                      "isRejected": {
+                        "type": "boolean"
+                      },
+                      "reviewers": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "login": {
+                              "type": "string"
+                            },
+                            "fullName": {
+                              "type": "string"
+                            },
+                            "avatarUrl": {
+                              "type": "string"
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "approved",
+                                "changes_requested",
+                                "commented",
+                                "awaiting"
+                              ]
+                            },
+                            "reviewedAt": {
+                              "type": "string"
+                            },
+                            "stale": {
+                              "type": "boolean"
+                            },
+                            "requested": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "login",
+                            "fullName",
+                            "avatarUrl",
+                            "status",
+                            "reviewedAt",
+                            "stale",
+                            "requested"
+                          ]
+                        }
+                      },
+                      "assignee": {
+                        "type": "object",
+                        "nullable": true,
+                        "properties": {
+                          "login": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "avatarUrl": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "login",
+                          "fullName",
+                          "avatarUrl"
+                        ]
+                      },
+                      "body": {
+                        "type": "string"
+                      },
+                      "approvalState": {
+                        "type": "string",
+                        "enum": [
+                          "working",
+                          "in_review",
+                          "changes_requested",
+                          "approved",
+                          "published"
+                        ]
+                      },
+                      "user": {
+                        "type": "object",
+                        "nullable": true,
+                        "properties": {
+                          "login": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "login"
+                        ]
+                      },
+                      "reviews": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "number"
+                            },
+                            "author": {
+                              "type": "object",
+                              "properties": {
+                                "login": {
+                                  "type": "string"
+                                },
+                                "fullName": {
+                                  "type": "string"
+                                },
+                                "avatarUrl": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "login",
+                                "fullName",
+                                "avatarUrl"
+                              ]
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "approved",
+                                "changes_requested",
+                                "commented",
+                                "other"
+                              ]
+                            },
+                            "body": {
+                              "type": "string"
+                            },
+                            "submittedAt": {
+                              "type": "string"
+                            },
+                            "stale": {
+                              "type": "boolean"
+                            },
+                            "dismissed": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "author",
+                            "state",
+                            "body",
+                            "submittedAt",
+                            "stale",
+                            "dismissed"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "number",
+                      "title",
+                      "state",
+                      "created",
+                      "branchName",
+                      "approvalCount",
+                      "requiredApprovals",
+                      "isApproved",
+                      "isRejected",
+                      "reviewers",
+                      "assignee",
+                      "approvalState"
+                    ]
+                  }
+                },
+                "error": {
+                  "type": "string",
+                  "nullable": true
+                }
+              },
+              "required": [
+                "repo",
+                "latestTag",
+                "pendingPRs",
+                "error"
+              ]
+            }
+          },
+          "decided": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "owner": {
+                  "type": "string"
+                },
+                "repo": {
+                  "type": "string"
+                },
+                "changes": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "number": {
+                        "type": "number"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "body": {
+                        "type": "string"
+                      },
+                      "branchName": {
+                        "type": "string"
+                      },
+                      "submittedBy": {
+                        "type": "string"
+                      },
+                      "submittedAt": {
+                        "type": "string"
+                      },
+                      "closedAt": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "outcome": {
+                        "type": "string",
+                        "enum": [
+                          "published",
+                          "declined",
+                          "withdrawn"
+                        ]
+                      },
+                      "decidedBy": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "publishedVersion": {
+                        "type": "number",
+                        "nullable": true
+                      },
+                      "reviews": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "number"
+                            },
+                            "author": {
+                              "type": "object",
+                              "properties": {
+                                "login": {
+                                  "type": "string"
+                                },
+                                "fullName": {
+                                  "type": "string"
+                                },
+                                "avatarUrl": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "login",
+                                "fullName",
+                                "avatarUrl"
+                              ]
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "approved",
+                                "changes_requested",
+                                "commented",
+                                "other"
+                              ]
+                            },
+                            "body": {
+                              "type": "string"
+                            },
+                            "submittedAt": {
+                              "type": "string"
+                            },
+                            "stale": {
+                              "type": "boolean"
+                            },
+                            "dismissed": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "author",
+                            "state",
+                            "body",
+                            "submittedAt",
+                            "stale",
+                            "dismissed"
+                          ]
+                        }
+                      },
+                      "reviewers": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "login": {
+                              "type": "string"
+                            },
+                            "fullName": {
+                              "type": "string"
+                            },
+                            "avatarUrl": {
+                              "type": "string"
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "approved",
+                                "changes_requested",
+                                "commented",
+                                "awaiting"
+                              ]
+                            },
+                            "reviewedAt": {
+                              "type": "string"
+                            },
+                            "stale": {
+                              "type": "boolean"
+                            },
+                            "requested": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "login",
+                            "fullName",
+                            "avatarUrl",
+                            "status",
+                            "reviewedAt",
+                            "stale",
+                            "requested"
+                          ]
+                        }
+                      },
+                      "assignee": {
+                        "type": "object",
+                        "nullable": true,
+                        "properties": {
+                          "login": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "avatarUrl": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "login",
+                          "fullName",
+                          "avatarUrl"
+                        ]
+                      },
+                      "approvalCount": {
+                        "type": "number"
+                      },
+                      "requiredApprovals": {
+                        "type": "number",
+                        "nullable": true
+                      }
+                    },
+                    "required": [
+                      "number",
+                      "title",
+                      "body",
+                      "branchName",
+                      "submittedBy",
+                      "submittedAt",
+                      "closedAt",
+                      "outcome",
+                      "decidedBy",
+                      "publishedVersion",
+                      "reviews",
+                      "reviewers",
+                      "assignee",
+                      "approvalCount",
+                      "requiredApprovals"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "owner",
+                "repo",
+                "changes"
+              ]
+            }
+          }
+        },
+        "required": [
+          "open",
+          "decided"
+        ]
       }
     },
     "parameters": {}
@@ -2568,11 +3064,29 @@
             "required": false,
             "name": "q",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "number",
+              "nullable": true
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "number",
+              "nullable": true
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
           }
         ],
         "responses": {
           "200": {
-            "description": "Workspace documents",
+            "description": "One page of workspace documents",
             "content": {
               "application/json": {
                 "schema": {
@@ -2867,10 +3381,22 @@
                           "error"
                         ]
                       }
+                    },
+                    "page": {
+                      "type": "number"
+                    },
+                    "limit": {
+                      "type": "number"
+                    },
+                    "hasMore": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
-                    "documents"
+                    "documents",
+                    "page",
+                    "limit",
+                    "hasMore"
                   ]
                 }
               }
@@ -2995,6 +3521,519 @@
                     "prTitle",
                     "branchName",
                     "commitSha"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/home/changes": {
+      "get": {
+        "operationId": "getHomeChanges",
+        "tags": [
+          "documents"
+        ],
+        "responses": {
+          "200": {
+            "description": "The change requests the reader is part of",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "open": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "repo": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "owner": {
+                                "type": "object",
+                                "properties": {
+                                  "login": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "login"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "owner"
+                            ]
+                          },
+                          "latestTag": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "version": {
+                                "type": "number"
+                              },
+                              "sha": {
+                                "type": "string"
+                              },
+                              "created": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "version",
+                              "sha",
+                              "created"
+                            ]
+                          },
+                          "pendingPRs": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "number"
+                                },
+                                "number": {
+                                  "type": "number"
+                                },
+                                "title": {
+                                  "type": "string"
+                                },
+                                "state": {
+                                  "type": "string"
+                                },
+                                "created": {
+                                  "type": "string"
+                                },
+                                "created_at": {
+                                  "type": "string"
+                                },
+                                "updated_at": {
+                                  "type": "string"
+                                },
+                                "branchName": {
+                                  "type": "string"
+                                },
+                                "approvalCount": {
+                                  "type": "number"
+                                },
+                                "requiredApprovals": {
+                                  "type": "number",
+                                  "nullable": true
+                                },
+                                "isApproved": {
+                                  "type": "boolean"
+                                },
+                                "isRejected": {
+                                  "type": "boolean"
+                                },
+                                "reviewers": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "login": {
+                                        "type": "string"
+                                      },
+                                      "fullName": {
+                                        "type": "string"
+                                      },
+                                      "avatarUrl": {
+                                        "type": "string"
+                                      },
+                                      "status": {
+                                        "type": "string",
+                                        "enum": [
+                                          "approved",
+                                          "changes_requested",
+                                          "commented",
+                                          "awaiting"
+                                        ]
+                                      },
+                                      "reviewedAt": {
+                                        "type": "string"
+                                      },
+                                      "stale": {
+                                        "type": "boolean"
+                                      },
+                                      "requested": {
+                                        "type": "boolean"
+                                      }
+                                    },
+                                    "required": [
+                                      "login",
+                                      "fullName",
+                                      "avatarUrl",
+                                      "status",
+                                      "reviewedAt",
+                                      "stale",
+                                      "requested"
+                                    ]
+                                  }
+                                },
+                                "assignee": {
+                                  "type": "object",
+                                  "nullable": true,
+                                  "properties": {
+                                    "login": {
+                                      "type": "string"
+                                    },
+                                    "fullName": {
+                                      "type": "string"
+                                    },
+                                    "avatarUrl": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "login",
+                                    "fullName",
+                                    "avatarUrl"
+                                  ]
+                                },
+                                "body": {
+                                  "type": "string"
+                                },
+                                "approvalState": {
+                                  "type": "string",
+                                  "enum": [
+                                    "working",
+                                    "in_review",
+                                    "changes_requested",
+                                    "approved",
+                                    "published"
+                                  ]
+                                },
+                                "user": {
+                                  "type": "object",
+                                  "nullable": true,
+                                  "properties": {
+                                    "login": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "login"
+                                  ]
+                                },
+                                "reviews": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "number"
+                                      },
+                                      "author": {
+                                        "type": "object",
+                                        "properties": {
+                                          "login": {
+                                            "type": "string"
+                                          },
+                                          "fullName": {
+                                            "type": "string"
+                                          },
+                                          "avatarUrl": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "login",
+                                          "fullName",
+                                          "avatarUrl"
+                                        ]
+                                      },
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "approved",
+                                          "changes_requested",
+                                          "commented",
+                                          "other"
+                                        ]
+                                      },
+                                      "body": {
+                                        "type": "string"
+                                      },
+                                      "submittedAt": {
+                                        "type": "string"
+                                      },
+                                      "stale": {
+                                        "type": "boolean"
+                                      },
+                                      "dismissed": {
+                                        "type": "boolean"
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "author",
+                                      "state",
+                                      "body",
+                                      "submittedAt",
+                                      "stale",
+                                      "dismissed"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "number",
+                                "title",
+                                "state",
+                                "created",
+                                "branchName",
+                                "approvalCount",
+                                "requiredApprovals",
+                                "isApproved",
+                                "isRejected",
+                                "reviewers",
+                                "assignee",
+                                "approvalState"
+                              ]
+                            }
+                          },
+                          "error": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "repo",
+                          "latestTag",
+                          "pendingPRs",
+                          "error"
+                        ]
+                      }
+                    },
+                    "decided": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "owner": {
+                            "type": "string"
+                          },
+                          "repo": {
+                            "type": "string"
+                          },
+                          "changes": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "number": {
+                                  "type": "number"
+                                },
+                                "title": {
+                                  "type": "string"
+                                },
+                                "body": {
+                                  "type": "string"
+                                },
+                                "branchName": {
+                                  "type": "string"
+                                },
+                                "submittedBy": {
+                                  "type": "string"
+                                },
+                                "submittedAt": {
+                                  "type": "string"
+                                },
+                                "closedAt": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "outcome": {
+                                  "type": "string",
+                                  "enum": [
+                                    "published",
+                                    "declined",
+                                    "withdrawn"
+                                  ]
+                                },
+                                "decidedBy": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "publishedVersion": {
+                                  "type": "number",
+                                  "nullable": true
+                                },
+                                "reviews": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "number"
+                                      },
+                                      "author": {
+                                        "type": "object",
+                                        "properties": {
+                                          "login": {
+                                            "type": "string"
+                                          },
+                                          "fullName": {
+                                            "type": "string"
+                                          },
+                                          "avatarUrl": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "login",
+                                          "fullName",
+                                          "avatarUrl"
+                                        ]
+                                      },
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "approved",
+                                          "changes_requested",
+                                          "commented",
+                                          "other"
+                                        ]
+                                      },
+                                      "body": {
+                                        "type": "string"
+                                      },
+                                      "submittedAt": {
+                                        "type": "string"
+                                      },
+                                      "stale": {
+                                        "type": "boolean"
+                                      },
+                                      "dismissed": {
+                                        "type": "boolean"
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "author",
+                                      "state",
+                                      "body",
+                                      "submittedAt",
+                                      "stale",
+                                      "dismissed"
+                                    ]
+                                  }
+                                },
+                                "reviewers": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "login": {
+                                        "type": "string"
+                                      },
+                                      "fullName": {
+                                        "type": "string"
+                                      },
+                                      "avatarUrl": {
+                                        "type": "string"
+                                      },
+                                      "status": {
+                                        "type": "string",
+                                        "enum": [
+                                          "approved",
+                                          "changes_requested",
+                                          "commented",
+                                          "awaiting"
+                                        ]
+                                      },
+                                      "reviewedAt": {
+                                        "type": "string"
+                                      },
+                                      "stale": {
+                                        "type": "boolean"
+                                      },
+                                      "requested": {
+                                        "type": "boolean"
+                                      }
+                                    },
+                                    "required": [
+                                      "login",
+                                      "fullName",
+                                      "avatarUrl",
+                                      "status",
+                                      "reviewedAt",
+                                      "stale",
+                                      "requested"
+                                    ]
+                                  }
+                                },
+                                "assignee": {
+                                  "type": "object",
+                                  "nullable": true,
+                                  "properties": {
+                                    "login": {
+                                      "type": "string"
+                                    },
+                                    "fullName": {
+                                      "type": "string"
+                                    },
+                                    "avatarUrl": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "login",
+                                    "fullName",
+                                    "avatarUrl"
+                                  ]
+                                },
+                                "approvalCount": {
+                                  "type": "number"
+                                },
+                                "requiredApprovals": {
+                                  "type": "number",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "number",
+                                "title",
+                                "body",
+                                "branchName",
+                                "submittedBy",
+                                "submittedAt",
+                                "closedAt",
+                                "outcome",
+                                "decidedBy",
+                                "publishedVersion",
+                                "reviews",
+                                "reviewers",
+                                "assignee",
+                                "approvalCount",
+                                "requiredApprovals"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "owner",
+                          "repo",
+                          "changes"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "open",
+                    "decided"
                   ]
                 }
               }

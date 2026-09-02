@@ -21,6 +21,7 @@ import {
   SetCommentReactionBodySchema,
   DocumentPermissionsPayloadSchema,
   DocumentSearchResultsPayloadSchema,
+  HomeChangesPayloadSchema,
   InitialDocumentUploadResultSchema,
   PublishDocumentBodySchema,
   PublishDocumentResultSchema,
@@ -163,17 +164,40 @@ registry.registerPath({
       owner: z.string().optional(),
       member: z.string().optional(),
       q: z.string().optional(),
+      page: z.coerce.number().optional(),
+      limit: z.coerce.number().optional(),
     }),
   },
   responses: {
     200: {
-      description: "Workspace documents",
+      description: "One page of workspace documents",
       content: {
         "application/json": {
           schema: z.object({
             documents: z.array(WorkspaceDocumentSummarySchema),
+            page: z.number(),
+            limit: z.number(),
+            /** Gitea reports no total, so a full page is the only hint of another. */
+            hasMore: z.boolean(),
           }),
         },
+      },
+    },
+  },
+});
+
+registry.register("HomeChangesPayload", HomeChangesPayloadSchema);
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/home/changes",
+  operationId: "getHomeChanges",
+  tags: ["documents"],
+  responses: {
+    200: {
+      description: "The change requests the reader is part of",
+      content: {
+        "application/json": { schema: HomeChangesPayloadSchema },
       },
     },
   },

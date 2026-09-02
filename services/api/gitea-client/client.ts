@@ -1,6 +1,11 @@
 import createClient from "openapi-fetch";
 
+import { giteaRequestGate } from "./request-gate";
 import type { paths } from "./spec/gitea";
+
+/** Every Gitea call queues here. See `request-gate.ts` for why. */
+const gatedFetch = (input: Request): Promise<Response> =>
+  giteaRequestGate.run(() => globalThis.fetch(input));
 
 export type GiteaClient = ReturnType<typeof createGiteaClient>;
 
@@ -12,6 +17,7 @@ export function createGiteaClient(baseUrl: string, token: string) {
   return createClient<paths>({
     baseUrl: `${baseUrl}/api/v1`,
     headers,
+    fetch: gatedFetch,
   });
 }
 
@@ -34,6 +40,7 @@ export function createGiteaBasicAuthClient(
       Accept: "application/json",
       Authorization: `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`,
     },
+    fetch: gatedFetch,
   });
 }
 
