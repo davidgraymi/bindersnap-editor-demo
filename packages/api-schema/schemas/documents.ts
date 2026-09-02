@@ -409,6 +409,41 @@ export const ClosedChangesPayloadSchema = z.object({
 export type ClosedChangesPayload = z.infer<typeof ClosedChangesPayloadSchema>;
 
 /**
+ * Everything the home page renders, in one payload.
+ *
+ * Home is a query — "the changes I am part of" — not a page of the document
+ * list, so it carries only what its rows are derived from. The repository is
+ * named rather than described because a row links to a change, never to a
+ * document.
+ */
+export const HomeOpenDocumentSchema = z.object({
+  repo: z.object({
+    name: z.string(),
+    owner: z.object({ login: z.string() }),
+  }),
+  latestTag: DocTagSchema.nullable(),
+  pendingPRs: z.array(PullRequestWithApprovalStateSchema),
+  /** Set when this document could not be read; its rows are simply absent. */
+  error: z.string().nullable(),
+});
+export type HomeOpenDocument = z.infer<typeof HomeOpenDocumentSchema>;
+
+export const HomeDecidedDocumentSchema = z.object({
+  owner: z.string(),
+  repo: z.string(),
+  changes: z.array(ClosedChangeSchema),
+});
+export type HomeDecidedDocument = z.infer<typeof HomeDecidedDocumentSchema>;
+
+export const HomeChangesPayloadSchema = z.object({
+  /** Documents with changes in flight that the reader is part of. */
+  open: z.array(HomeOpenDocumentSchema),
+  /** Recently decided changes, newest first, before the page trims them. */
+  decided: z.array(HomeDecidedDocumentSchema),
+});
+export type HomeChangesPayload = z.infer<typeof HomeChangesPayloadSchema>;
+
+/**
  * One update to what a change proposes.
  *
  * A change is not a single file — a submitter answers a reviewer by uploading

@@ -16,6 +16,7 @@ import type {
   GetDocumentDetail200,
   GetDocumentHistory200,
   GetDocumentPermissions200,
+  GetHomeChanges200,
   ListChangeUpdates200,
   ListDocumentCollaborators200,
   ListDocumentCollaboratorsParams,
@@ -120,6 +121,38 @@ if(createDocumentBody.description !== undefined) {
     method: 'POST'
     ,
     body: formData
+  }
+);}
+
+
+export type getHomeChangesResponse200 = {
+  data: GetHomeChanges200
+  status: 200
+}
+
+export type getHomeChangesResponseSuccess = (getHomeChangesResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getHomeChangesResponse = (getHomeChangesResponseSuccess)
+
+export const getGetHomeChangesUrl = () => {
+
+
+
+
+  return `/api/app/home/changes`
+}
+
+export const getHomeChanges = async ( options?: Parameters<typeof customFetch>[1]): Promise<getHomeChangesResponse> => {
+
+  return customFetch<getHomeChangesResponse>(getGetHomeChangesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
   }
 );}
 

@@ -769,3 +769,96 @@ export async function removePullReviewers(
     throw toGiteaApiError(response.status, error);
   }
 }
+
+/**
+ * Which changes a reader is part of, across every repository at once.
+ *
+ * The home page is a query, not a list: "the changes waiting on me" is a
+ * filter across the whole workspace, so it cannot be answered by walking
+ * repositories one at a time and stopping early. Walking all of them is what
+ * made it slow — the cost grew with the size of the workspace rather than with
+ * how much of it the reader is actually involved in.
+ *
+ * Gitea can answer the question directly. `/repos/issues/search` filters by
+ * the caller's own involvement across every repository they can see, so one
+ * request finds the candidates and the expensive per-change reads are spent
+ * only where they can matter. A reader with a dozen changes in flight pays for
+ * a dozen whether the workspace holds thirty documents or three thousand.
+ *
+ * The four filters are separate requests because Gitea ORs nothing for us:
+ * each is its own question, and a change can answer more than one, so the
+ * results are unioned and deduplicated here.
+ */
+export type InvolvementFilter =
+  "created" | "review_requested" | "reviewed" | "assigned";
+
+const INVOLVEMENT_FILTERS: InvolvementFilter[] = [
+  "created",
+  "review_requested",
+  "reviewed",
+  "assigned",
+];
+
+/** One change the reader is part of, as the cross-repository search reports it. */
+export interface InvolvedChangeRef {
+  owner: string;
+  repo: string;
+  number: number;
+  /** Last movement, used to rank candidates before the detailed reads. */
+  updatedAt: string;
+}
+
+export interface SearchInvolvedChangesParams {
+  client: GiteaClient;
+  state: "open" | "closed";
+  /** How many results each filter may return. */
+  limit?: number;
+}
+
+export async function searchInvolvedChanges(
+  params: SearchInvolvedChangesParams,
+): Promise<InvolvedChangeRef[]> {
+  const { client, state, limit = 50 } = params;
+
+  const pages = await Promise.all(
+    INVOLVEMENT_FILTERS.map(async (filter) => {
+      try {
+        return await unwrap(
+          client.GET("/repos/issues/search", {
+            params: {
+              query: { type: "pulls", state, limit, [filter]: true },
+            },
+          }),
+        );
+      } catch {
+        // One filter failing is a thinner answer, not a broken page. A reader
+        // who sees their own submissions but not their review requests is
+        // better served than one who sees an error.
+        return [];
+      }
+    }),
+  );
+
+  const byKey = new Map<string, InvolvedChangeRef>();
+  for (const issue of pages.flat()) {
+    const fullName = issue.repository?.full_name ?? "";
+    const slash = fullName.indexOf("/");
+    const number = issue.number;
+    if (slash < 1 || typeof number !== "number") continue;
+
+    const key = `${fullName}#${number}`;
+    if (byKey.has(key)) continue;
+
+    byKey.set(key, {
+      owner: fullName.slice(0, slash),
+      repo: fullName.slice(slash + 1),
+      number,
+      updatedAt: issue.updated_at ?? issue.created_at ?? "",
+    });
+  }
+
+  // Newest movement first, so a caller that truncates keeps what matters.
+  return [...byKey.values()].sort((left, right) =>
+    right.updatedAt.localeCompare(left.updatedAt),
+  );
+}

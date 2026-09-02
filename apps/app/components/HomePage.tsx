@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ArrowRightToLine, Check, Clock, X } from "lucide-react";
 
-import {
-  getClosedChanges,
-  getWorkspaceDocuments,
-  type WorkspaceDocumentSummary,
-} from "../api";
+import { getHomeChanges, type HomeOpenDocument } from "../api";
 import {
   buildDecidedChangeRows,
   buildOpenChangeRows,
@@ -14,7 +10,6 @@ import {
   getGreetingName,
   selectSubmissions,
   selectWaitingOnYou,
-  type ClosedChangesForDocument,
   type HomeChangeRow,
   type HomeDecidedRow,
 } from "../homeChanges";
@@ -43,7 +38,7 @@ export function HomePage({
   onBrowseDocuments,
   onNewDocument,
 }: HomePageProps) {
-  const [documents, setDocuments] = useState<WorkspaceDocumentSummary[]>([]);
+  const [documents, setDocuments] = useState<HomeOpenDocument[]>([]);
   const [decided, setDecided] = useState<HomeDecidedRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -53,44 +48,29 @@ export function HomePage({
     setError(null);
 
     try {
-      const workspace = await getWorkspaceDocuments();
-      setDocuments(workspace);
-
-      // Closed changes are per-document by design — Gitea is the only store
-      // and it has no cross-repo view of them. A workspace is a handful of
-      // documents, so asking each one is cheaper than the state we would have
-      // to keep to avoid it. A document that refuses simply contributes
-      // nothing to the section.
-      const settled = await Promise.allSettled(
-        workspace.map(async (document): Promise<ClosedChangesForDocument> => {
-          const payload = await getClosedChanges(
-            document.repo.owner.login,
-            document.repo.name,
-          );
-          return {
-            owner: document.repo.owner.login,
-            repo: document.repo.name,
-            changes: payload.changes,
-          };
-        }),
-      );
+      // One request. Home is a query — "the changes I am part of" — and the
+      // server answers it against every document at once, so the page no
+      // longer walks the workspace or asks each document for its own history.
+      const { open, decided: decidedDocuments } = await getHomeChanges();
+      setDocuments(open);
 
       const ownedRepos = new Set(
-        workspace
-          .filter((document) => document.repo.owner.login === currentUsername)
-          .map(
-            (document) => `${document.repo.owner.login}/${document.repo.name}`,
-          ),
+        [
+          ...open.map((document) => ({
+            owner: document.repo.owner.login,
+            repo: document.repo.name,
+          })),
+          ...decidedDocuments.map((document) => ({
+            owner: document.owner,
+            repo: document.repo,
+          })),
+        ]
+          .filter((ref) => ref.owner === currentUsername)
+          .map((ref) => `${ref.owner}/${ref.repo}`),
       );
 
       setDecided(
-        buildDecidedChangeRows(
-          settled.flatMap((result) =>
-            result.status === "fulfilled" ? [result.value] : [],
-          ),
-          currentUsername,
-          ownedRepos,
-        ),
+        buildDecidedChangeRows(decidedDocuments, currentUsername, ownedRepos),
       );
     } catch (loadError) {
       setError(

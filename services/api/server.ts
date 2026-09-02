@@ -43,6 +43,7 @@ import {
   buildVersionRecords,
   toVersionReviews,
 } from "./document-history";
+import type { ClosedChange } from "../../packages/api-schema/schemas/documents";
 import {
   addRepoCollaborator,
   bootstrapEmptyMainBranch,
@@ -56,8 +57,6 @@ import {
   getRepoInfo,
   listDocTags,
   listRepoCollaborators,
-  listWorkspaceRepos,
-  searchWorkspaceRepos,
   searchWorkspaceReposPage,
   repoExists,
   searchUsers,
@@ -82,6 +81,8 @@ import {
   listBranchUpdates,
   listPullRequests,
   listPullRequestsWithReviews,
+  searchInvolvedChanges,
+  type InvolvedChangeRef,
   mergeOrResolveConflicts,
   removePullReviewers,
   requestPullReviewers,
@@ -107,6 +108,28 @@ import { buildChangeUpdates } from "./change-updates";
  * costing every reader a long walk through Gitea's commit pages.
  */
 const CHANGE_UPDATE_LIMIT = 50;
+
+/**
+ * How many documents one page of the library holds.
+ *
+ * Each row costs Gitea calls of its own — its tags, its open changes, and the
+ * reviews on them — so this is the real cost knob for the list, not just a
+ * render budget. Twenty-five fills a tall screen with room to spare, which is
+ * what the reader needs before they scroll for more.
+ */
+const DOCUMENTS_PAGE_SIZE = 25;
+
+/** The most a caller may ask for in one page, however large a limit they send. */
+const MAX_DOCUMENTS_PAGE_SIZE = 50;
+
+/**
+ * How many recently decided changes home considers.
+ *
+ * It renders at most five, but the search cannot know which of a reader's
+ * decided changes are theirs to look back on — that depends on the document's
+ * ownership, which is settled here. A small margin covers the trimming.
+ */
+const HOME_DECIDED_CANDIDATES = 12;
 
 const authAttempts = new Map<string, { count: number; resetAt: number }>();
 const checkoutAttempts = new Map<string, { count: number; resetAt: number }>();
@@ -2160,6 +2183,80 @@ async function handleDocumentSearch(
   }
 }
 
+/** One open change as a list row carries it — the wire shape, not Gitea's. */
+type PendingChangeRow = ReturnType<typeof buildPendingChangeRow>;
+
+function buildPendingChangeRow(
+  entry: PullRequestWithReviews,
+  requiredApprovals: number | null,
+) {
+  return {
+    ...entry.pullRequest,
+    reviewers: buildChangeReviewers({
+      requested: readRequestedReviewers(entry.pullRequest),
+      reviews: entry.reviews,
+      submittedBy: entry.pullRequest.user?.login ?? "",
+    }),
+    assignee: readAssignee(entry.pullRequest),
+    approvalCount: countApprovals(entry.reviews),
+    requiredApprovals,
+  };
+}
+
+/**
+ * A document's open changes, ready for a list row.
+ *
+ * Shared by the library list and the home page: both need the same three
+ * things about a document — the version it is on, the changes in flight, and
+ * how many approvals those still need — and both would rather show a row with
+ * a gap in it than fail the whole page for one unreachable repository.
+ */
+async function loadOpenChangeSummary(
+  client: GiteaClient,
+  owner: string,
+  repo: string,
+) {
+  try {
+    const [latestTag, openWithReviews] = await Promise.all([
+      getLatestDocTag(client, owner, repo),
+      listPullRequestsWithReviews({ client, owner, repo, state: "open" }),
+    ]);
+    const pending = openWithReviews.filter((entry) =>
+      (entry.pullRequest.head?.ref ?? "").startsWith("upload/"),
+    );
+    // The approval policy only ever answers "how many approvals does this
+    // change still need", so a document with nothing in flight has no question
+    // to ask — and most of them don't. Asking anyway spent a Gitea round trip
+    // per row, which across a workspace was the largest part of this cost.
+    //
+    // A row is worth showing without its approval policy; it is not worth
+    // failing the whole list for.
+    const requiredApprovals =
+      pending.length > 0 ? await readRequiredApprovals(owner, repo) : null;
+
+    return {
+      latestTag,
+      pendingPRs: pending
+        .map((entry) => buildPendingChangeRow(entry, requiredApprovals))
+        .sort((left, right) => (right.number ?? 0) - (left.number ?? 0)),
+      error: null,
+    };
+  } catch (err) {
+    const errorMessage =
+      err instanceof Error ? err.message : "Unable to load document details.";
+    logger.error("Failed to load details for repo", {
+      repo,
+      owner,
+      message: errorMessage,
+    });
+    return {
+      latestTag: null,
+      pendingPRs: [] as PendingChangeRow[],
+      error: errorMessage,
+    };
+  }
+}
+
 async function handleDocuments(
   req: Request,
   baseHeaders: Headers,
@@ -2175,93 +2272,188 @@ async function handleDocuments(
   const ownerUsername = reqUrl.searchParams.get("owner") || undefined;
   const memberUsername = reqUrl.searchParams.get("member") || undefined;
   const freeText = reqUrl.searchParams.get("q") || undefined;
+  const page = parsePositiveIntInput(reqUrl.searchParams.get("page"), 1);
+  const limit = Math.min(
+    parsePositiveIntInput(
+      reqUrl.searchParams.get("limit"),
+      DOCUMENTS_PAGE_SIZE,
+    ),
+    MAX_DOCUMENTS_PAGE_SIZE,
+  );
 
   try {
-    let repos: WorkspaceRepo[];
-    if (ownerUsername || memberUsername || freeText) {
-      repos = await searchWorkspaceRepos({
-        client,
-        q: freeText,
-        ownerUsername,
-        memberUsername,
-      });
-    } else {
-      repos = await listWorkspaceRepos(client);
-    }
+    // One page, always. The unpaged read asked Gitea for a hardcoded 100 and
+    // silently dropped anything past it, so a workspace's 101st document
+    // simply did not exist as far as this list was concerned.
+    const { repos, hasMore } = await searchWorkspaceReposPage({
+      client,
+      q: freeText,
+      ownerUsername,
+      memberUsername,
+      page,
+      limit,
+    });
     const documents = await Promise.all(
-      repos.map(async (repo) => {
-        try {
-          const [latestTag, openWithReviews] = await Promise.all([
-            getLatestDocTag(client, repo.owner.login, repo.name),
-            listPullRequestsWithReviews({
-              client,
-              owner: repo.owner.login,
-              repo: repo.name,
-              state: "open",
-            }),
-          ]);
-          const pending = openWithReviews.filter((entry) =>
-            (entry.pullRequest.head?.ref ?? "").startsWith("upload/"),
-          );
-          // The approval policy only ever answers "how many approvals does
-          // this change still need", so a document with nothing in flight has
-          // no question to ask — and most of them don't. Asking anyway spent a
-          // Gitea round trip per row, which across a workspace was the largest
-          // part of this list's cost.
-          //
-          // A row is worth showing without its approval policy; it is not
-          // worth failing the whole list for.
-          const requiredApprovals =
-            pending.length > 0
-              ? await readRequiredApprovals(repo.owner.login, repo.name)
-              : null;
-          const pendingPRs = pending
-            .map((entry) => ({
-              ...entry.pullRequest,
-              reviewers: buildChangeReviewers({
-                requested: readRequestedReviewers(entry.pullRequest),
-                reviews: entry.reviews,
-                submittedBy: entry.pullRequest.user?.login ?? "",
-              }),
-              assignee: readAssignee(entry.pullRequest),
-              approvalCount: countApprovals(entry.reviews),
-              requiredApprovals,
-            }))
-            .sort((left, right) => (right.number ?? 0) - (left.number ?? 0));
-
-          return {
-            repo: normalizeWorkspaceRepoSummary(repo),
-            latestTag,
-            pendingPRs,
-            error: null,
-          };
-        } catch (err) {
-          const errorMessage =
-            err instanceof Error
-              ? err.message
-              : "Unable to load document details.";
-          logger.error("Failed to load details for repo", {
-            repo: repo.name,
-            owner: repo.owner?.login,
-            message: errorMessage,
-          });
-          return {
-            repo: normalizeWorkspaceRepoSummary(repo),
-            latestTag: null,
-            pendingPRs: [] as PullRequestWithApprovalState[],
-            error: errorMessage,
-          };
-        }
-      }),
+      repos.map(async (repo) => ({
+        repo: normalizeWorkspaceRepoSummary(repo),
+        ...(await loadOpenChangeSummary(client, repo.owner.login, repo.name)),
+      })),
     );
 
-    return json(200, { documents }, baseHeaders);
+    return json(200, { documents, page, limit, hasMore }, baseHeaders);
   } catch (err) {
     return responseFromError(
       err,
       baseHeaders,
       "Unable to load workspace documents.",
     );
+  }
+}
+
+/**
+ * Everything the home page shows, in one request.
+ *
+ * Home asks "which changes am I part of", which is a filter across the whole
+ * workspace rather than a prefix of any list — so it cannot be paged, and it
+ * used to be answered by scanning every document and then asking each one for
+ * its closed changes too. That cost grew with the workspace while the answer
+ * did not: a reader with a dozen changes in flight has a dozen rows whether
+ * the workspace holds thirty documents or three thousand.
+ *
+ * Gitea can answer it directly, so the search picks the candidates and the
+ * expensive per-change reads are spent only where they can produce a row.
+ */
+async function handleHomeChanges(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  // A read. Never gated — see resolveDocumentAccess.
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) {
+    return auth;
+  }
+
+  const { client } = auth;
+
+  try {
+    const [openRefs, closedRefs] = await Promise.all([
+      searchInvolvedChanges({ client, state: "open" }),
+      searchInvolvedChanges({
+        client,
+        state: "closed",
+        limit: HOME_DECIDED_CANDIDATES,
+      }),
+    ]);
+
+    // Open changes are read per repository, because the reader's own rows are
+    // classified against every change in flight on that document — an approval
+    // policy is met or not against all of them, not just the ones they touched.
+    const openRepos = distinctRepoRefs(openRefs);
+
+    // Decided changes are read per change instead. A document's history has no
+    // upper bound, and home shows a handful of the most recent, so scanning
+    // whole repositories here would pay for years of records to print five.
+    const decidedByRepo = groupRefsByRepo(
+      closedRefs.slice(0, HOME_DECIDED_CANDIDATES),
+    );
+
+    const [open, decided] = await Promise.all([
+      Promise.all(
+        openRepos.map(async ({ owner, repo }) => ({
+          repo: { name: repo, owner: { login: owner } },
+          ...(await loadOpenChangeSummary(client, owner, repo)),
+        })),
+      ),
+      Promise.all(
+        decidedByRepo.map(({ owner, repo, numbers }) =>
+          loadDecidedChanges(client, owner, repo, numbers),
+        ),
+      ),
+    ]);
+
+    return json(200, { open, decided }, baseHeaders);
+  } catch (err) {
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to load your change requests.",
+    );
+  }
+}
+
+/** The distinct repositories a set of change references touches. */
+function distinctRepoRefs(
+  refs: InvolvedChangeRef[],
+): Array<{ owner: string; repo: string }> {
+  const seen = new Map<string, { owner: string; repo: string }>();
+  for (const ref of refs) {
+    const key = `${ref.owner}/${ref.repo}`;
+    if (!seen.has(key)) seen.set(key, { owner: ref.owner, repo: ref.repo });
+  }
+  return [...seen.values()];
+}
+
+/** The same references, gathered so one repository is read once. */
+function groupRefsByRepo(
+  refs: InvolvedChangeRef[],
+): Array<{ owner: string; repo: string; numbers: number[] }> {
+  const groups = new Map<
+    string,
+    { owner: string; repo: string; numbers: number[] }
+  >();
+  for (const ref of refs) {
+    const key = `${ref.owner}/${ref.repo}`;
+    const group = groups.get(key);
+    if (group) {
+      group.numbers.push(ref.number);
+    } else {
+      groups.set(key, {
+        owner: ref.owner,
+        repo: ref.repo,
+        numbers: [ref.number],
+      });
+    }
+  }
+  return [...groups.values()];
+}
+
+/**
+ * Named decided changes from one document.
+ *
+ * The tags are what turn a merged change into "published as v3", so they are
+ * read per document rather than per change.
+ */
+async function loadDecidedChanges(
+  client: GiteaClient,
+  owner: string,
+  repo: string,
+  numbers: number[],
+) {
+  try {
+    const [tags, requiredApprovals, entries] = await Promise.all([
+      listDocTags(client, owner, repo),
+      readRequiredApprovals(owner, repo),
+      Promise.all(
+        numbers.map((pullNumber) =>
+          getPullRequestWithReviews({ client, owner, repo, pullNumber }),
+        ),
+      ),
+    ]);
+
+    return {
+      owner,
+      repo,
+      changes: buildClosedChanges(entries, tags, requiredApprovals),
+    };
+  } catch (err) {
+    // A document that will not answer contributes nothing to the section
+    // rather than emptying it.
+    logger.error("Failed to load decided changes for repo", {
+      owner,
+      repo,
+      message: err instanceof Error ? err.message : String(err),
+    });
+    return { owner, repo, changes: [] as ClosedChange[] };
   }
 }
 
@@ -4791,6 +4983,8 @@ export function createApiServer() {
         response = await handleLogout(req, baseHeaders);
       } else if (pathname === "/auth/me" && method === "GET") {
         response = await handleAuthMe(req, baseHeaders);
+      } else if (pathname === "/api/app/home/changes" && method === "GET") {
+        response = await handleHomeChanges(req, baseHeaders);
       } else if (pathname === "/api/app/documents" && method === "GET") {
         response = await handleDocuments(req, baseHeaders);
       } else if (pathname === "/api/app/documents/search" && method === "GET") {
