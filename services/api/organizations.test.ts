@@ -119,3 +119,73 @@ describe("recordProvisionedOrganization", () => {
     expect(second.name).toBe("mercy-health-system");
   });
 });
+
+describe("who gets a trial", () => {
+  it("gives the trial to a person's first organization only", async () => {
+    const store = makeStore();
+
+    const first = await recordProvisionedOrganization({
+      giteaOrgId: 1,
+      name: "mercy-health",
+      createdBy: "alice",
+      store,
+      now: NOW,
+    });
+    expect(first.trialEndsAt).toBe(trialEndsAtFrom(NOW));
+
+    // Creating organizations is self-serve, so a trial per organization is a
+    // trial per afternoon for anyone willing to click twice. The second one is
+    // real and allowed; it just has to be paid for.
+    const second = await recordProvisionedOrganization({
+      giteaOrgId: 2,
+      name: "mercy-health-2",
+      createdBy: "alice",
+      store,
+      now: NOW,
+    });
+    expect(second.trialEndsAt).toBeNull();
+    expect(isInTrial(second, NOW)).toBe(false);
+  });
+
+  it("counts trials per person, not globally", async () => {
+    const store = makeStore();
+
+    await recordProvisionedOrganization({
+      giteaOrgId: 1,
+      name: "mercy-health",
+      createdBy: "alice",
+      store,
+      now: NOW,
+    });
+    const bobsFirst = await recordProvisionedOrganization({
+      giteaOrgId: 2,
+      name: "st-jude",
+      createdBy: "bob",
+      store,
+      now: NOW,
+    });
+
+    expect(bobsFirst.trialEndsAt).toBe(trialEndsAtFrom(NOW));
+  });
+
+  it("re-provisioning keeps the trial the organization already had", async () => {
+    const store = makeStore();
+
+    const created = await recordProvisionedOrganization({
+      giteaOrgId: 1,
+      name: "mercy-health",
+      createdBy: "alice",
+      store,
+      now: NOW,
+    });
+    const again = await recordProvisionedOrganization({
+      giteaOrgId: 1,
+      name: "mercy-health",
+      createdBy: "alice",
+      store,
+      now: NOW + 30 * DAY_MS,
+    });
+
+    expect(again.trialEndsAt).toBe(created.trialEndsAt);
+  });
+});

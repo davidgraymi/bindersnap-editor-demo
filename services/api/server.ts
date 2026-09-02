@@ -3,7 +3,6 @@ import { randomUUID } from "crypto";
 import { config, type SessionCookieSameSite } from "./config";
 import { logger } from "./logger";
 import { runSessionReaper } from "./session-reaper";
-import { provisionSignupBestEffort } from "./signup-provisioning";
 import { sessionStore, type SessionRecord } from "./sessions";
 import {
   subscriptionStore,
@@ -14,10 +13,13 @@ import {
 } from "./subscriptions";
 import { organizationStore } from "./organizations";
 import {
+  listSessionOrganizations,
   resolveOrganizationForUser,
   resolveSessionOrganization,
   type SessionOrganization,
 } from "./session-organization";
+import { claimLegacyBillingForOrganization } from "./legacy-billing-claim";
+import { provisionSignup } from "./signup-provisioning";
 import { listOrganizationOwners } from "./gitea-client/orgs";
 import { createPrivilegedGiteaClient } from "./privileged-client";
 import type Stripe from "stripe";
@@ -1668,7 +1670,11 @@ async function establishSession(
   return { ok: true, session, headers };
 }
 
-function sessionResponse(session: SessionRecord, headers: Headers): Response {
+function sessionResponse(
+  session: SessionRecord,
+  headers: Headers,
+  extra: { suggestedOrganizationName?: string | null } = {},
+): Response {
   return json(
     200,
     {
@@ -1676,6 +1682,9 @@ function sessionResponse(session: SessionRecord, headers: Headers): Response {
         username: session.username,
       },
       token: session.giteaToken,
+      ...(extra.suggestedOrganizationName
+        ? { suggestedOrganizationName: extra.suggestedOrganizationName }
+        : {}),
     },
     headers,
   );
@@ -1953,22 +1962,20 @@ async function handleSignup(
   resetAuthRateLimit(req, "signup");
   logger.debug("Session created after signup", { username, clientIp });
 
-  // ADR 0004: signup creates the organization and its first binder. It runs
-  // with the new user's own token, which is what makes them its owner — the
-  // service account would own it instead, and ownership is the whole point.
+  // Signup no longer creates an organization behind the person's back.
   //
-  // Best effort on purpose. The account and the session are already real, and
-  // a Gitea hiccup here should not strand someone at a login form for an
-  // account that exists. Provisioning is idempotent, so the repair is to run
-  // it again — the same job the backfill does for every account that predates
-  // this.
-  await provisionSignupBestEffort({
-    client: createSessionGiteaClient(established.session),
-    username: established.session.username,
-    organizationName: organization,
+  // It used to, deriving a name they never saw and could not change, which
+  // made naming — the one thing an organization needs from its owner —
+  // impossible. An account with no organization is now an ordinary state the
+  // app knows how to handle, and `POST /api/app/organizations` is the single
+  // way one gets created, for a new signup and for an account that predates
+  // ADR 0004 alike. One path, and the person names the thing.
+  //
+  // `organization` from the signup form is carried back to the client so the
+  // create-organization screen can arrive pre-filled rather than blank.
+  return sessionResponse(established.session, established.headers, {
+    suggestedOrganizationName: organization || null,
   });
-
-  return sessionResponse(established.session, established.headers);
 }
 
 async function handleLogin(
@@ -4509,6 +4516,118 @@ async function handleStripeWebhook(
   return json(200, { received: true }, baseHeaders);
 }
 
+/**
+ * The organizations this session belongs to.
+ *
+ * Not gated on a subscription: this is the question a person with no
+ * organization has to be able to ask, and gating it behind having one is a
+ * loop with no way out.
+ */
+async function handleListOrganizations(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const organizations = await listSessionOrganizations(auth.client);
+  return json(200, { organizations }, baseHeaders);
+}
+
+/**
+ * Create an organization, with the person creating it as its owner.
+ *
+ * Provisioning runs on the caller's own token, which is what makes them the
+ * owner — the service account would own it instead, and ownership surviving
+ * personnel changes is the whole reason ADR 0004's first level exists.
+ *
+ * Unlike signup, this reports failure. There is a person watching a form, and
+ * a silent failure here leaves them pressing a button that appears to do
+ * nothing.
+ */
+async function handleCreateOrganization(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const payload = await readJson<{ name?: unknown }>(req);
+  const name = typeof payload?.name === "string" ? payload.name.trim() : "";
+  if (!name) {
+    return json(
+      400,
+      { error: "An organization name is required." },
+      baseHeaders,
+    );
+  }
+
+  try {
+    const result = await provisionSignup({
+      client: auth.client,
+      username: auth.session.username,
+      organizationName: name,
+    });
+
+    // The billing half of the migration, for the account in front of us: a
+    // subscription parked under this username moves onto the organization it
+    // now has. Best effort — a person who just named their organization should
+    // not be shown an error because a legacy row could not be read.
+    const claim = await claimLegacyBillingForOrganization({
+      username: auth.session.username,
+      giteaOrgId: result.provisioned.organization.id,
+    }).catch((err) => {
+      logger.error("Failed to claim parked billing for a new organization", {
+        username: auth.session.username,
+        giteaOrgId: result.provisioned.organization.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return null;
+    });
+
+    logger.info("Organization created from the app", {
+      username: auth.session.username,
+      organization: result.organization.name,
+      giteaOrgId: result.organization.giteaOrgId,
+      claimedLegacyBilling: claim?.claimedSubscription ?? false,
+    });
+
+    return json(
+      201,
+      {
+        organization: {
+          id: result.organization.giteaOrgId,
+          name: result.organization.name,
+          workspace: result.provisioned.workspace.workspace.name,
+          trialEndsAt: result.organization.trialEndsAt,
+        },
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    const status = err instanceof GiteaApiError ? err.status : 502;
+    logger.error("Failed to create an organization", {
+      username: auth.session.username,
+      status,
+      error: err instanceof Error ? err.message : String(err),
+    });
+
+    if (status === 403) {
+      return json(
+        403,
+        { error: "This account is not allowed to create organizations." },
+        baseHeaders,
+      );
+    }
+
+    return json(
+      502,
+      { error: "Unable to create the organization. Please try again." },
+      baseHeaders,
+    );
+  }
+}
+
 async function handleBillingStatus(
   req: Request,
   baseHeaders: Headers,
@@ -5077,6 +5196,10 @@ export function createApiServer() {
         method === "GET"
       ) {
         response = await handleAdminSubscriptionAccessList(req, baseHeaders);
+      } else if (pathname === "/api/app/organizations" && method === "GET") {
+        response = await handleListOrganizations(req, baseHeaders);
+      } else if (pathname === "/api/app/organizations" && method === "POST") {
+        response = await handleCreateOrganization(req, baseHeaders);
       } else if (pathname === "/api/app/billing/status" && method === "GET") {
         response = await handleBillingStatus(req, baseHeaders);
       } else if (

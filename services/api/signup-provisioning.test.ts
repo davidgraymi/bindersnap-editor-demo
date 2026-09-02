@@ -97,6 +97,9 @@ function createMemoryStore(): OrganizationBackend & {
     async upsert(record) {
       rows.set(record.giteaOrgId, record);
     },
+    async listByCreator(createdBy: string) {
+      return [...rows.values()].filter((row) => row.createdBy === createdBy);
+    },
     async list() {
       return [...rows.values()];
     },
