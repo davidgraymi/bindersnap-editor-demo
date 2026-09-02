@@ -21,6 +21,9 @@ import type {
   DocumentHistoryPayload,
   DocumentPermissionsPayload,
   DocumentSearchResultsPayload,
+  HomeChangesPayload,
+  HomeDecidedDocument,
+  HomeOpenDocument,
   InitialDocumentUploadResult,
   ReactionKind,
   UploadResult,
@@ -60,6 +63,9 @@ export type {
   DocumentPermissionsPayload,
   DocumentSearchResultsPayload,
   DocumentVersionRecord,
+  HomeChangesPayload,
+  HomeDecidedDocument,
+  HomeOpenDocument,
   WorkspaceDocumentSummary,
   InitialDocumentUploadResult,
   PullRequestWithApprovalState,
@@ -191,18 +197,47 @@ export async function logoutSession(): Promise<void> {
 
 // Document functions
 
+/** One page of the library. Each row costs Gitea reads, so it is asked for in pages. */
+export interface WorkspaceDocumentsPage {
+  documents: WorkspaceDocumentSummary[];
+  page: number;
+  hasMore: boolean;
+}
+
 export async function getWorkspaceDocuments(
-  params?: DocumentSearchParams,
-): Promise<WorkspaceDocumentSummary[]> {
+  params?: DocumentSearchParams & { page?: number; limit?: number },
+): Promise<WorkspaceDocumentsPage> {
   try {
     const response = await DocumentsClient.listDocuments({
       owner: params?.ownerUsername,
       member: params?.memberUsername,
       q: params?.freeText,
+      page: params?.page,
+      limit: params?.limit,
     });
-    return response.data.documents ?? [];
+    return {
+      documents: response.data.documents ?? [],
+      page: response.data.page ?? params?.page ?? 1,
+      hasMore: response.data.hasMore ?? false,
+    };
   } catch (error) {
     handlePaymentRequired("/api/app/documents", error);
+  }
+}
+
+/**
+ * Every change the reader is part of, open and recently decided.
+ *
+ * One request. Home used to ask for the whole workspace and then ask each
+ * document for its closed changes, which cost a round trip per document to
+ * render a handful of rows.
+ */
+export async function getHomeChanges(): Promise<HomeChangesPayload> {
+  try {
+    const response = await DocumentsClient.getHomeChanges();
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired("/api/app/home/changes", error);
   }
 }
 

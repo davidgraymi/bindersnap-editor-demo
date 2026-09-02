@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FileText, Plus, X } from "lucide-react";
 
 import { getWorkspaceDocuments, type WorkspaceDocumentSummary } from "../api";
@@ -49,6 +49,12 @@ export function DocumentsPage({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [personPickerOpen, setPersonPickerOpen] = useState(false);
+  // Pages arrive as the reader scrolls. `page` is the last one that landed;
+  // `hasMore` is Gitea's only hint that another might exist.
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
   // Back and forward are the way out of a saved view, so the page follows the
   // address bar rather than its own memory of what was clicked.
@@ -69,15 +75,18 @@ export function DocumentsPage({
     setIsLoading(true);
     setError(null);
 
-    getWorkspaceDocuments(
-      toSearchParams(
+    getWorkspaceDocuments({
+      ...toSearchParams(
         { view: state.view, people: [], freeText: state.freeText },
         currentUsername,
       ),
-    )
+      page: 1,
+    })
       .then((fetched) => {
         if (cancelled) return;
-        setDocuments(fetched);
+        setDocuments(fetched.documents);
+        setPage(fetched.page);
+        setHasMore(fetched.hasMore);
         setIsLoading(false);
       })
       .catch((loadError: unknown) => {
@@ -88,6 +97,7 @@ export function DocumentsPage({
             : "Unable to load documents.",
         );
         setDocuments([]);
+        setHasMore(false);
         setIsLoading(false);
       });
 
@@ -95,6 +105,68 @@ export function DocumentsPage({
       cancelled = true;
     };
   }, [state.view, state.freeText, currentUsername]);
+
+  // One way to ask for the next page, however the reader got here.
+  const loadMore = useCallback(() => {
+    if (!hasMore || isLoading || isLoadingMore) return;
+
+    setIsLoadingMore(true);
+    getWorkspaceDocuments({
+      ...toSearchParams(
+        { view: state.view, people: [], freeText: state.freeText },
+        currentUsername,
+      ),
+      page: page + 1,
+    })
+      .then((fetched) => {
+        // A repository can move between pages while the reader scrolls, so
+        // rows are merged by identity rather than blindly appended.
+        setDocuments((current) => {
+          const seen = new Set(current.map((doc) => doc.repo.full_name));
+          return [
+            ...current,
+            ...fetched.documents.filter((doc) => !seen.has(doc.repo.full_name)),
+          ];
+        });
+        setPage(fetched.page);
+        setHasMore(fetched.hasMore);
+        setIsLoadingMore(false);
+      })
+      .catch(() => {
+        // Stop asking rather than looping on a page that will not load. The
+        // button stays, so the reader can try again themselves.
+        setIsLoadingMore(false);
+      });
+  }, [
+    hasMore,
+    isLoading,
+    isLoadingMore,
+    page,
+    state.view,
+    state.freeText,
+    currentUsername,
+  ]);
+
+  // Reaching the end of the list is the usual way to ask for more, so arriving
+  // at the sentinel loads the next page without anyone having to press
+  // anything. The button underneath is what happens when that does not fire —
+  // no IntersectionObserver, a browser that never scrolls, or a keyboard.
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || !hasMore || isLoading || isLoadingMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) loadMore();
+      },
+      // Fetch before the reader reaches the very bottom, so the next rows are
+      // usually already there by the time they would have waited for them.
+      { rootMargin: "400px" },
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [loadMore, hasMore, isLoading, isLoadingMore]);
 
   const visible = useMemo(
     () => applyPersonFilter(documents, state.people),
@@ -193,9 +265,27 @@ export function DocumentsPage({
         )}
       </section>
 
+      {/* Below the list, so seeing it means the reader wants more. */}
+      {hasMore && !isLoading && !error ? (
+        <div ref={sentinelRef} className="docs-more">
+          {isLoadingMore ? (
+            <SkeletonLine />
+          ) : (
+            <button
+              type="button"
+              className="docs-more-button"
+              onClick={loadMore}
+            >
+              Load more
+            </button>
+          )}
+        </div>
+      ) : null}
+
       {!isLoading && !error && rows.length > 0 ? (
         <p className="docs-count">
           {describeDocumentCount(state.view, rows.length, documents.length)}
+          {hasMore ? " so far" : ""}
         </p>
       ) : null}
     </div>

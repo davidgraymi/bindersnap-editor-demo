@@ -6295,6 +6295,33 @@ input {
   color: var(--bs-text-faint);
 }
 
+/*
+ * The trigger for the next page. It needs real height: a zero-height box is
+ * not something an IntersectionObserver can reliably see, and this one has to
+ * be seen to do its job.
+ */
+.docs-more {
+  display: flex;
+  justify-content: center;
+  min-height: 48px;
+  padding: 8px 4px 0;
+}
+
+.docs-more-button {
+  padding: 8px 18px;
+  border: 1px solid var(--bs-rule);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+  cursor: pointer;
+}
+
+.docs-more-button:hover {
+  color: var(--bs-text-primary);
+  border-color: var(--bs-text-faint);
+}
+
 @media (max-width: 960px) {
   .document-detail-header {
     flex-direction: column;
