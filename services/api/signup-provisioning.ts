@@ -1,3 +1,8 @@
+import {
+  MAX_ORGANIZATION_NAME_LENGTH as MAX_NAME_LENGTH,
+  slugifyOrganizationName,
+} from "../../packages/utils/organizationName";
+
 import { GiteaApiError, type GiteaClient } from "./gitea-client/client";
 import { findOrganization } from "./gitea-client/orgs";
 import {
@@ -26,33 +31,13 @@ export const DEFAULT_WORKSPACE_NAME = "policies";
 const DEFAULT_WORKSPACE_DESCRIPTION =
   "Your first binder: one set of rules, one set of people.";
 
-/** Gitea usernames and organization names share one namespace. */
-const MAX_NAME_LENGTH = 40;
-
 /**
  * How many `-2`, `-3` … suffixes to try before giving up. Collisions are rare
  * and each attempt is a round trip, so the bound is small on purpose.
  */
 const MAX_NAME_ATTEMPTS = 20;
 
-/**
- * Reduce a display name to something Gitea will accept as an org username:
- * alphanumerics, dash, underscore and dot, not starting or ending with a
- * separator.
- */
-export function slugifyOrganizationName(input: string): string {
-  const slug = input
-    .normalize("NFKD")
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, "-")
-    .replace(/^[-._]+/, "")
-    .replace(/[-._]+$/, "")
-    .replace(/-{2,}/g, "-")
-    .slice(0, MAX_NAME_LENGTH)
-    .replace(/[-._]+$/, "");
-
-  return slug;
-}
+export { slugifyOrganizationName };
 
 /**
  * The organization's Gitea name.

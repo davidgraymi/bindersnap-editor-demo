@@ -33,6 +33,12 @@ import {
 } from "./schemas/documents";
 import { SearchUsersPayloadSchema } from "./schemas/users";
 import {
+  NewOrganizationBodySchema,
+  CreatedOrganizationPayloadSchema,
+  OrganizationListPayloadSchema,
+  OrganizationSummarySchema,
+} from "./schemas/organizations";
+import {
   BillingActionBodySchema,
   BillingStatusPayloadSchema,
   BillingUrlResultSchema,
@@ -66,6 +72,13 @@ registry.register(
 registry.register("DiscussionSummary", DiscussionSummarySchema);
 registry.register("ChangeUpdatesPayload", ChangeUpdatesPayloadSchema);
 registry.register("SearchUsersPayload", SearchUsersPayloadSchema);
+registry.register("OrganizationSummary", OrganizationSummarySchema);
+registry.register("OrganizationListPayload", OrganizationListPayloadSchema);
+registry.register("NewOrganizationBody", NewOrganizationBodySchema);
+registry.register(
+  "CreatedOrganizationPayload",
+  CreatedOrganizationPayloadSchema,
+);
 registry.register(
   "DocumentSearchResultsPayload",
   DocumentSearchResultsPayloadSchema,
@@ -644,6 +657,45 @@ registry.registerPath({
     200: {
       description: "User search results",
       content: { "application/json": { schema: SearchUsersPayloadSchema } },
+    },
+  },
+});
+
+// Organization routes
+registry.registerPath({
+  method: "get",
+  path: "/api/app/organizations",
+  operationId: "listOrganizations",
+  tags: ["organizations"],
+  responses: {
+    200: {
+      description: "The organizations this session belongs to",
+      content: {
+        "application/json": { schema: OrganizationListPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/organizations",
+  operationId: "createOrganization",
+  tags: ["organizations"],
+  request: {
+    body: {
+      required: true,
+      content: {
+        "application/json": { schema: NewOrganizationBodySchema },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "The organization, its first binder and its trial",
+      content: {
+        "application/json": { schema: CreatedOrganizationPayloadSchema },
+      },
     },
   },
 });

@@ -8,6 +8,7 @@ import * as DocumentsClient from "../../packages/api-client/documents/documents"
 import * as UsersClient from "../../packages/api-client/users/users";
 import * as BillingClient from "../../packages/api-client/billing/billing";
 import * as AdminClient from "../../packages/api-client/admin/admin";
+import * as OrganizationsClient from "../../packages/api-client/organizations/organizations";
 
 // Import generated types
 import type { SessionAuthState } from "../../packages/api-schema/schemas/auth";
@@ -27,6 +28,10 @@ import type {
   WorkspaceDocumentSummary,
 } from "../../packages/api-schema/schemas/documents";
 import type { SearchUsersPayload } from "../../packages/api-schema/schemas/users";
+import type {
+  CreatedOrganizationPayload,
+  OrganizationSummary,
+} from "../../packages/api-schema/schemas/organizations";
 import type {
   AdminSubscriptionAccessSource,
   BillingStatusPayload,
@@ -693,6 +698,26 @@ export async function publishDocument(
       error,
     );
   }
+}
+
+// Organization functions
+
+/**
+ * The organizations this session belongs to.
+ *
+ * An empty list is an ordinary answer, not an error: an account that predates
+ * ADR 0004, or one whose owner has not created an organization yet, has none.
+ */
+export async function fetchOrganizations(): Promise<OrganizationSummary[]> {
+  const response = await OrganizationsClient.listOrganizations();
+  return response.data.organizations;
+}
+
+export async function createOrganization(
+  name: string,
+): Promise<CreatedOrganizationPayload["organization"]> {
+  const response = await OrganizationsClient.createOrganization({ name });
+  return response.data.organization;
 }
 
 // Billing functions
