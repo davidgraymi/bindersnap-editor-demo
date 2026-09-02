@@ -14,6 +14,20 @@ file when the series lands.
 | [#392](https://github.com/davidgraymi/bindersnap-editor-demo/pull/392) | Reads are never gated               | **merged** |
 | [#393](https://github.com/davidgraymi/bindersnap-editor-demo/pull/393) | Bill the organization               | open       |
 
+## Why #393 carries the organization-creation flow too
+
+They cannot ship apart. The migration parks every username-keyed billing row
+and rebuilds the live tables org-keyed, so an account with no organization has
+nothing to key to — and until this branch, nothing created one except signup,
+silently, for new accounts only. Landing the re-key alone would lock every
+existing account out of authoring with no self-serve way back.
+
+So the same change that moves billing onto the organization also gives a person
+the way to have one: `POST /api/app/organizations`, a screen at
+`/organizations/new` that asks them to name it, and a claim that moves any
+billing parked under their username onto the organization they just created.
+Signup no longer provisions one behind their back.
+
 ## Defects found while getting this green
 
 Each cost a CI round and is worth not rediscovering.
