@@ -4598,6 +4598,10 @@ async function handleCreateOrganization(
         organization: {
           id: result.organization.giteaOrgId,
           name: result.organization.name,
+          // What they typed, not the slug we derived from it.
+          displayName:
+            result.provisioned.organization.fullName ||
+            result.organization.name,
           workspace: result.provisioned.workspace.workspace.name,
           trialEndsAt: result.organization.trialEndsAt,
         },

@@ -53,6 +53,7 @@ test("resolveSessionOrganization returns the session's one organization", async 
   expect(await resolveSessionOrganization(client, session)).toEqual({
     id: 42,
     name: "mercy-health",
+    displayName: "mercy-health",
   });
 });
 
@@ -88,6 +89,7 @@ test("several organizations resolve to the oldest, deterministically", async () 
   expect(await resolveSessionOrganization(client, session)).toEqual({
     id: 42,
     name: "mercy-health",
+    displayName: "mercy-health",
   });
 });
 
@@ -100,7 +102,7 @@ test("rows without an id are ignored", async () => {
   });
 
   expect(await listSessionOrganizations(client)).toEqual([
-    { id: 42, name: "mercy-health" },
+    { id: 42, name: "mercy-health", displayName: "mercy-health" },
   ]);
 });
 
@@ -117,6 +119,7 @@ test("resolveOrganizationForUser reads another person's organization", async () 
   expect(await resolveOrganizationForUser(client, "bob")).toEqual({
     id: 42,
     name: "mercy-health",
+    displayName: "mercy-health",
   });
   expect(get.mock.calls[0]?.[0]).toBe("/users/{username}/orgs");
 });
@@ -127,4 +130,22 @@ test("resolveOrganizationForUser returns null when Gitea will not say", async ()
   });
 
   expect(await resolveOrganizationForUser(client, "bob")).toBeNull();
+});
+
+test("the name the owner typed survives slugification", () => {
+  // "Mercy Health" becomes the org username `mercy-health`, which is a URL
+  // segment and a poor title. Gitea keeps the typed name in `full_name`, and
+  // this is what carries it back to the app.
+  const { client } = createClient({
+    "/user/orgs": {
+      status: 200,
+      body: [{ id: 42, username: "mercy-health-2", full_name: "Mercy Health" }],
+    },
+  });
+
+  return listSessionOrganizations(client).then((orgs) => {
+    expect(orgs).toEqual([
+      { id: 42, name: "mercy-health-2", displayName: "Mercy Health" },
+    ]);
+  });
 });

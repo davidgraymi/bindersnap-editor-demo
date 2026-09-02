@@ -19,21 +19,36 @@ import type { SessionRecord } from "./sessions";
 
 export interface SessionOrganization {
   id: number;
+  /** The Gitea org username: the URL segment, and never shown as a title. */
   name: string;
+  /**
+   * What the owner called it, from Gitea's `full_name`.
+   *
+   * Naming is the one thing an organization needs from the person who creates
+   * it, so the typed name has to survive the slugification that produces
+   * `name`. Falls back to the slug for an organization created before anyone
+   * was asked, or by hand in Gitea.
+   */
+  displayName: string;
 }
 
 interface GiteaOrgRow {
   id?: number;
   username?: string;
   name?: string;
+  full_name?: string;
 }
 
 function normalizeOrgRows(rows: GiteaOrgRow[]): SessionOrganization[] {
   return rows
-    .map((org) => ({
-      id: org.id ?? 0,
-      name: org.username ?? org.name ?? "",
-    }))
+    .map((org) => {
+      const name = org.username ?? org.name ?? "";
+      return {
+        id: org.id ?? 0,
+        name,
+        displayName: org.full_name?.trim() || name,
+      };
+    })
     .filter((org) => org.id > 0);
 }
 
