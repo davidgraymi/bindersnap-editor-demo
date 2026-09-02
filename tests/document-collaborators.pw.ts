@@ -55,14 +55,25 @@ async function signUp(
     .fill(credentials.password);
   await page.getByRole("button", { name: "Create account" }).click();
 
-  // ADR 0004 gives a new organization a 14-day trial with no card (#369), so
-  // signup lands in the workspace rather than at a payment form. Provisioning
-  // runs before signup answers, so give it room.
+  // Signup no longer creates an organization behind the person's back, so this
+  // is where a new account lands: naming the thing that will own its binders.
+  await expect(page).toHaveURL(/\/organizations\/new$/, { timeout: 30_000 });
+  await expect(
+    page.getByRole("heading", { name: /organization/i }),
+  ).toBeVisible({ timeout: 15_000 });
+
+  // Authoring needs an organization, so create one the way a person would.
+  await page.getByLabel("Organization name").fill("Mercy Health");
+  await page.getByRole("button", { name: "Create organization" }).click();
+
+  // Provisioning creates the organization, its first binder, three role teams
+  // and a protected branch before it answers, so the workspace takes longer to
+  // appear than the 5 s default allows.
   await expect(
     page.locator(
       `.app-topnav-avatar[aria-label="User: ${credentials.username}"]`,
     ),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible({ timeout: 60_000 });
   await expect(page).not.toHaveURL(/\/billing$/);
 }
 

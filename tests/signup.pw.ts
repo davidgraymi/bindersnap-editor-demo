@@ -79,23 +79,39 @@ async function attachScreenshot(
 }
 
 /**
- * A new account lands in its workspace, not at a card form.
+ * A new account is asked to name its organization, then lands in its
+ * workspace — not at a card form.
  *
  * ADR 0004 gives every new organization a 14-day local trial, and #369 is
  * explicit that there is no card during it — representing that in Stripe would
  * create a customer and a subscription for every tire-kicker. So the billing
  * page is somewhere a new user can go, not somewhere they are sent.
+ *
+ * Naming comes first because signup no longer guesses: an organization owns
+ * the binders, and the person who owns it is the one who should say what it is
+ * called.
  */
-async function expectWorkspaceOnTrial(
+async function signUpThroughOrganizationSetup(
   page: Page,
   username: string,
 ): Promise<void> {
-  // Signup provisions the organization, its first binder, three role teams and
-  // a protected branch before it answers, so the workspace takes longer to
+  // Signup no longer creates an organization behind the person's back, so this
+  // is where a new account lands: naming the thing that will own its binders.
+  await expect(page).toHaveURL(/\/organizations\/new$/, { timeout: 30_000 });
+  await expect(
+    page.getByRole("heading", { name: /organization/i }),
+  ).toBeVisible({ timeout: 15_000 });
+
+  // Authoring needs an organization, so create one the way a person would.
+  await page.getByLabel("Organization name").fill("Mercy Health");
+  await page.getByRole("button", { name: "Create organization" }).click();
+
+  // Provisioning creates the organization, its first binder, three role teams
+  // and a protected branch before it answers, so the workspace takes longer to
   // appear than the 5 s default allows.
   await expect(
     page.locator(`.app-topnav-avatar[aria-label="User: ${username}"]`),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible({ timeout: 60_000 });
   await expect(page).not.toHaveURL(/\/billing$/);
 }
 
@@ -127,7 +143,7 @@ async function signUpAndReturnToLogin(
     password: credentials.password,
   });
 
-  await expectWorkspaceOnTrial(page, credentials.username);
+  await signUpThroughOrganizationSetup(page, credentials.username);
   await attachScreenshot(
     page,
     testInfo,
@@ -288,7 +304,7 @@ test.describe("signup flow", () => {
     await fillSignupForm(page, firstAccount);
     await submitSignupForm(page);
 
-    await expectWorkspaceOnTrial(page, firstAccount.username);
+    await signUpThroughOrganizationSetup(page, firstAccount.username);
     await signOutCurrentUser(page);
     await page.goto("/login");
     await expect(page).toHaveURL(/\/login$/);
