@@ -10,6 +10,12 @@ export type SessionUser = z.infer<typeof SessionUserSchema>;
 export const SessionAuthStateSchema = z.object({
   user: SessionUserSchema.nullable(),
   token: z.string().nullable(),
+  /**
+   * What the signup form called their company, carried through so the
+   * create-organization screen arrives filled rather than blank. Absent on
+   * login, and on a signup that did not offer a name.
+   */
+  suggestedOrganizationName: z.string().nullable().optional(),
 });
 export type SessionAuthState = z.infer<typeof SessionAuthStateSchema>;
 

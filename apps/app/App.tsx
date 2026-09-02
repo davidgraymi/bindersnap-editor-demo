@@ -11,19 +11,23 @@ import "./app.css";
 import { AnonymousDocumentShell } from "./components/AnonymousDocumentShell";
 import { AppShell } from "./components/AppShell";
 import { BillingPage } from "./components/BillingPage";
+import { OrganizationSetupPage } from "./components/OrganizationSetupPage";
 import { BindersnapLogoMark } from "./components/BindersnapLogoMark";
 import { LandingPage } from "./components/LandingPage";
 import { WorkspaceSkeleton } from "./components/WorkspaceSkeleton";
 import {
   type SessionUser,
   createCheckoutSession,
+  createOrganization,
   createPortalSession,
   fetchBillingStatus,
+  fetchOrganizations,
   fetchSessionUser,
   login,
   logoutSession,
   signup,
 } from "./api";
+import type { OrganizationSummary } from "../../packages/api-schema/schemas/organizations";
 import { usePaymentRequiredHandler } from "./paymentRequired";
 import {
   asShellRoute,
@@ -42,6 +46,7 @@ type AuthView =
   | "landing"
   | "login"
   | "billing"
+  | "createOrganization"
   | "app"
   | "publicDoc";
 type AuthMode = "signin" | "signup";
@@ -285,6 +290,13 @@ export function App() {
   // subscription — so a trialing customer must still be able to open the page
   // where they buy one.
   const [accessSource, setAccessSource] = useState<string | null>(null);
+  // Which organizations this session is in. An empty list is an ordinary
+  // answer — an account that predates ADR 0004 has none — and it is also what
+  // decides whether we may promise a trial.
+  const [organizations, setOrganizations] = useState<OrganizationSummary[]>([]);
+  const [suggestedOrganizationName, setSuggestedOrganizationName] = useState<
+    string | null
+  >(null);
   const [currentPeriodEnd, setCurrentPeriodEnd] = useState<number | null>(null);
   const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(false);
   const [cancelAt, setCancelAt] = useState<number | null>(null);
@@ -320,6 +332,7 @@ export function App() {
         setSubscriptionStatus("loading");
         setHasBillingStatusError(false);
         try {
+          setOrganizations(await fetchOrganizations().catch(() => []));
           const billing = await fetchBillingStatus();
           setSubscriptionStatus(
             resolveSubscriptionStatus(billing.status, billing.hasAccess),
@@ -340,6 +353,7 @@ export function App() {
           setPlan(null);
         }
       } else {
+        setOrganizations([]);
         setSubscriptionStatus(null);
         setHasBillingStatusError(false);
         setCurrentPeriodEnd(null);
@@ -441,10 +455,27 @@ export function App() {
       return;
     }
 
+    // Someone with no organization has nothing to pay for yet, so sending them
+    // to a card form asks the wrong question. Send them to name an
+    // organization instead; the trial that comes with it is what carries them
+    // to a billing page later, when there is something to buy.
+    if (
+      user &&
+      accessSource === "no_organization" &&
+      route.kind !== "createOrganization" &&
+      route.kind !== "billing" &&
+      !isAdminSubscriptionRoute
+    ) {
+      navigateTo({ kind: "createOrganization" }, true);
+      return;
+    }
+
     if (
       user &&
       subscriptionStatus === "none" &&
+      accessSource !== "no_organization" &&
       route.kind !== "billing" &&
+      route.kind !== "createOrganization" &&
       !isAdminSubscriptionRoute
     ) {
       navigateTo({ kind: "billing" }, true);
@@ -498,6 +529,10 @@ export function App() {
       return "loading";
     }
 
+    if (route.kind === "createOrganization" && user) {
+      return "createOrganization";
+    }
+
     if (route.kind === "billing" && user) {
       return "billing";
     }
@@ -523,6 +558,28 @@ export function App() {
 
   if (view === "loading") {
     return <WorkspaceSkeleton label="Opening your workspace" />;
+  }
+
+  if (view === "createOrganization") {
+    return (
+      <OrganizationSetupPage
+        suggestedName={suggestedOrganizationName}
+        // Only their first gets a trial, and this screen must not promise one
+        // it cannot deliver.
+        isFirstOrganization={organizations.length === 0}
+        reason={accessSource === "no_organization" ? "blocked-write" : null}
+        onCreate={async (name) => {
+          await createOrganization(name);
+          // The organization changes what this session can do, so re-read
+          // access rather than guessing at it, then go to the workspace it
+          // just created.
+          await refreshSession();
+          setSuggestedOrganizationName(null);
+          navigateTo({ kind: "home" }, true);
+        }}
+        onSkip={() => navigateTo({ kind: "home" }, true)}
+      />
+    );
   }
 
   if (view === "billing") {
@@ -598,6 +655,11 @@ export function App() {
         }}
         onSignup={async (username, email, password) => {
           const authenticatedSession = await signup(username, email, password);
+          // Carried from the signup form so the create-organization screen
+          // arrives filled in rather than asking again.
+          setSuggestedOrganizationName(
+            authenticatedSession.suggestedOrganizationName ?? null,
+          );
           const signupUser =
             authenticatedSession.user ?? (await refreshSession());
           if (!signupUser) {
