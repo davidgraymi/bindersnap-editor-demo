@@ -38,12 +38,11 @@ function createSearchClient(byFilter: Record<string, SearchIssue[] | "fail">): {
         };
       }
 
-      const filter = [
-        "created",
-        "review_requested",
-        "reviewed",
-        "assigned",
-      ].find((name) => query[name] === true);
+      const filter =
+        ["created", "review_requested", "reviewed", "assigned"].find(
+          (name) => query[name] === true,
+        ) ??
+        (typeof query.owner === "string" ? `owner:${query.owner}` : undefined);
       const answer = filter ? byFilter[filter] : undefined;
 
       if (answer === "fail") {
@@ -181,4 +180,53 @@ test("passes the caller's limit to each filter", async () => {
   for (const query of calls()) {
     expect(query.limit).toBe(12);
   }
+});
+
+test("does not ask by owner unless a reader is named", async () => {
+  const { client, calls } = createSearchClient({});
+
+  await searchInvolvedChanges({ client, state: "open" });
+
+  expect(calls()).toHaveLength(4);
+  expect(calls().some((query) => "owner" in query)).toBe(false);
+});
+
+test("finds changes on a document the reader owns but never touched", async () => {
+  // Bob submitted a change to Alice's document and never asked her to review
+  // it. She owns the document, so it is still hers to see — and none of the
+  // "did you touch it" filters will find it.
+  const { client, calls } = createSearchClient({
+    "owner:alice": [issue("alice/handbook", 3, "2026-09-01T00:00:00Z")],
+  });
+
+  const refs = await searchInvolvedChanges({
+    client,
+    state: "open",
+    ownedBy: "alice",
+  });
+
+  expect(calls()).toHaveLength(5);
+  expect(refs).toEqual([
+    {
+      owner: "alice",
+      repo: "handbook",
+      number: 3,
+      updatedAt: "2026-09-01T00:00:00Z",
+    },
+  ]);
+});
+
+test("counts an owned change once when the reader also submitted it", async () => {
+  const { client } = createSearchClient({
+    created: [issue("alice/handbook", 3, "2026-09-01T00:00:00Z")],
+    "owner:alice": [issue("alice/handbook", 3, "2026-09-01T00:00:00Z")],
+  });
+
+  const refs = await searchInvolvedChanges({
+    client,
+    state: "open",
+    ownedBy: "alice",
+  });
+
+  expect(refs).toHaveLength(1);
 });

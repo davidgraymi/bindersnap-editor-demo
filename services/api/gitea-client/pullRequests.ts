@@ -785,9 +785,14 @@ export async function removePullReviewers(
  * only where they can matter. A reader with a dozen changes in flight pays for
  * a dozen whether the workspace holds thirty documents or three thousand.
  *
- * The four filters are separate requests because Gitea ORs nothing for us:
- * each is its own question, and a change can answer more than one, so the
- * results are unioned and deduplicated here.
+ * The filters are separate requests because Gitea ORs nothing for us: each is
+ * its own question, and a change can answer more than one, so the results are
+ * unioned and deduplicated here.
+ *
+ * Involvement is not only something the reader did. A change someone else
+ * submitted to a document the reader owns is still theirs to see, and none of
+ * the four "did you touch it" filters finds it — so ownership is asked
+ * separately, by repository owner.
  */
 export type InvolvementFilter =
   "created" | "review_requested" | "reviewed" | "assigned";
@@ -811,6 +816,11 @@ export interface InvolvedChangeRef {
 export interface SearchInvolvedChangesParams {
   client: GiteaClient;
   state: "open" | "closed";
+  /**
+   * Also find changes on repositories this user owns, whoever submitted them.
+   * Ownership is what makes someone answerable for a change they never touched.
+   */
+  ownedBy?: string;
   /** How many results each filter may return. */
   limit?: number;
 }
@@ -818,15 +828,22 @@ export interface SearchInvolvedChangesParams {
 export async function searchInvolvedChanges(
   params: SearchInvolvedChangesParams,
 ): Promise<InvolvedChangeRef[]> {
-  const { client, state, limit = 50 } = params;
+  const { client, state, ownedBy, limit = 50 } = params;
+
+  const queries: Array<Record<string, unknown>> = INVOLVEMENT_FILTERS.map(
+    (filter) => ({ [filter]: true }),
+  );
+  if (ownedBy) {
+    queries.push({ owner: ownedBy });
+  }
 
   const pages = await Promise.all(
-    INVOLVEMENT_FILTERS.map(async (filter) => {
+    queries.map(async (filter) => {
       try {
         return await unwrap(
           client.GET("/repos/issues/search", {
             params: {
-              query: { type: "pulls", state, limit, [filter]: true },
+              query: { type: "pulls", state, limit, ...filter },
             },
           }),
         );

@@ -2333,14 +2333,19 @@ async function handleHomeChanges(
     return auth;
   }
 
-  const { client } = auth;
+  const { client, session } = auth;
 
   try {
     const [openRefs, closedRefs] = await Promise.all([
-      searchInvolvedChanges({ client, state: "open" }),
+      searchInvolvedChanges({
+        client,
+        state: "open",
+        ownedBy: session.username,
+      }),
       searchInvolvedChanges({
         client,
         state: "closed",
+        ownedBy: session.username,
         limit: HOME_DECIDED_CANDIDATES,
       }),
     ]);
