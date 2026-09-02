@@ -8,4 +8,7 @@ import type { ListDocuments200DocumentsItem } from './listDocuments200DocumentsI
 
 export type ListDocuments200 = {
   documents: ListDocuments200DocumentsItem[];
+  page: number;
+  limit: number;
+  hasMore: boolean;
 };

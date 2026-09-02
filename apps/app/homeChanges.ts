@@ -1,7 +1,7 @@
 import type {
   ClosedChange,
+  HomeOpenDocument,
   PullRequestWithApprovalState,
-  WorkspaceDocumentSummary,
 } from "./api";
 import {
   capitalizeFirst,
@@ -144,7 +144,7 @@ function awaitingReviewerNames(change: PullRequestWithApprovalState): string[] {
     .map(getReviewerDisplayName);
 }
 
-function nextVersionOf(document: WorkspaceDocumentSummary): number {
+function nextVersionOf(document: HomeOpenDocument): number {
   return (document.latestTag?.version ?? 0) + 1;
 }
 
@@ -153,7 +153,7 @@ function submitterName(change: { user?: { login: string } | null }): string {
 }
 
 function classify(
-  document: WorkspaceDocumentSummary,
+  document: HomeOpenDocument,
   change: PullRequestWithApprovalState,
   username: string,
 ): HomeChangeKind | null {
@@ -179,7 +179,7 @@ function classify(
 }
 
 function describeOpenChange(
-  document: WorkspaceDocumentSummary,
+  document: HomeOpenDocument,
   change: PullRequestWithApprovalState,
   kind: HomeChangeKind,
   username: string,
@@ -226,7 +226,7 @@ function pillFor(
  * is a to-do list, not a workspace feed.
  */
 export function buildOpenChangeRows(
-  documents: WorkspaceDocumentSummary[],
+  documents: HomeOpenDocument[],
   username: string,
   now: number = Date.now(),
 ): HomeChangeRow[] {
