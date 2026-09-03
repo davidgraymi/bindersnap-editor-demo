@@ -549,24 +549,64 @@ async function addApprover(
   };
 }
 
+/**
+ * Approve, and make sure the approval actually stands.
+ *
+ * A binder protects `main` with `dismiss_stale_approvals`, so an approval made
+ * against a commit that is no longer the head is dismissed. Gitea processes a
+ * push asynchronously, so an approval submitted moments after one lands can be
+ * recorded against the old head and then dismissed — `stale: true`,
+ * `dismissed: true` — leaving the merge to fail with "Does not have enough
+ * approvals" and no visible reason.
+ *
+ * That behaviour is correct and worth keeping: a review of code that has since
+ * changed should not count. So this waits it out and re-approves, which is what
+ * a reviewer whose approval was dismissed would do.
+ */
 async function approveChange(
   approverToken: string,
   org: string,
   workspace: string,
   pullNumber: number,
 ): Promise<void> {
-  const response = await fetch(
-    `${GITEA_URL}/api/v1/repos/${org}/${workspace}/pulls/${pullNumber}/reviews`,
-    {
+  const reviewsUrl = `${GITEA_URL}/api/v1/repos/${org}/${workspace}/pulls/${pullNumber}/reviews`;
+
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    const response = await fetch(reviewsUrl, {
       method: "POST",
       headers: {
         Authorization: `token ${approverToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ event: "APPROVED", body: "Looks right." }),
-    },
+    });
+    expect(response.status, await response.text()).toBe(200);
+
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+
+    const reviews = (await (
+      await fetch(reviewsUrl, {
+        headers: { Authorization: `token ${approverToken}` },
+      })
+    ).json()) as Array<{
+      state?: string;
+      stale?: boolean;
+      dismissed?: boolean;
+    }>;
+
+    if (
+      reviews.some(
+        (review) =>
+          review.state === "APPROVED" && !review.stale && !review.dismissed,
+      )
+    ) {
+      return;
+    }
+  }
+
+  throw new Error(
+    `Approval on ${org}/${workspace}#${pullNumber} kept being dismissed as stale.`,
   );
-  expect(response.status, await response.text()).toBe(200);
 }
 
 async function publishChange(
