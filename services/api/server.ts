@@ -113,6 +113,7 @@ import {
   searchInvolvedChanges,
   type InvolvedChangeRef,
   mergeOrResolveConflicts,
+  mergeWorkspaceChange,
   removePullReviewers,
   requestPullReviewers,
   setPullRequestAssignees,
@@ -4895,7 +4896,7 @@ async function handlePublishWorkspaceChange(
       })),
     );
 
-    await mergeOrResolveConflicts({
+    await mergeWorkspaceChange({
       client,
       owner,
       repo: workspaceName,

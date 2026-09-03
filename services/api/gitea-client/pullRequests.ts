@@ -549,6 +549,45 @@ export async function mergePullRequest(
  * - If not mergeable: resolves conflicts by syncing the head branch with
  *   main, then retries the merge (slower path, up to 15 retries).
  */
+/**
+ * Merge a change in a binder, without the single-document rescue.
+ *
+ * `mergeOrResolveConflicts` falls back to rebasing and re-applying *the*
+ * document file when a merge fails — a rescue that only makes sense when a
+ * repository holds exactly one document, which is the model ADR 0004
+ * supersedes. In a binder it cannot work, and worse, it masks every ordinary
+ * merge failure as "Could not find document file on head branch".
+ *
+ * A conflict in a binder is a real conflict between people editing the same
+ * policy. It is theirs to resolve, so it is reported rather than guessed at.
+ */
+export async function mergeWorkspaceChange(params: {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+  pullNumber: number;
+  mergeStyle: "merge" | "squash" | "rebase";
+  message?: string;
+}): Promise<void> {
+  const { client, owner, repo, pullNumber, mergeStyle, message } = params;
+
+  const result = await attemptMerge(
+    client,
+    owner,
+    repo,
+    pullNumber,
+    mergeStyle,
+    message,
+  );
+
+  if (result === "conflict") {
+    throw toGiteaApiError(
+      409,
+      "This change conflicts with the binder's main branch. Update the change and try again.",
+    );
+  }
+}
+
 export async function mergeOrResolveConflicts(
   params: MergePullRequestParams,
 ): Promise<void> {
