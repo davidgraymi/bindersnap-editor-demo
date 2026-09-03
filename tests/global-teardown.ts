@@ -28,6 +28,7 @@ const HOCUSPOCUS_PORT = process.env.HOCUSPOCUS_PORT ?? "1234";
 const RESULTS_DIR = resolve(ROOT, "test-results");
 const API_LOG_PATH = resolve(RESULTS_DIR, "api.log");
 const MAX_PRINTED_ERROR_LINES = 100;
+const TAIL_LINES_WHEN_SILENT = 40;
 
 function log(message: string): void {
   process.stdout.write(`[global-teardown] ${message}\n`);
@@ -74,7 +75,19 @@ function captureApiLogs(env: NodeJS.ProcessEnv): void {
   const errors = output
     .split("\n")
     .filter((line) => line.includes('"level":"error"'));
+
   if (errors.length === 0) {
+    // No error lines is not the same as nothing wrong. An API that dies while
+    // loading — a bad import, a missing file in the container image — never
+    // reaches its logger, so it emits no JSON at all and this filter matches
+    // nothing. That failure shows up minutes later as global-setup timing out
+    // on a URL that was never going to answer, so print the tail rather than
+    // leave it to an artefact nobody knows to download.
+    const tail = output.trimEnd().split("\n").slice(-TAIL_LINES_WHEN_SILENT);
+    log(`API logged no errors; last ${tail.length} line(s):`);
+    for (const line of tail) {
+      process.stdout.write(`${line}\n`);
+    }
     return;
   }
 

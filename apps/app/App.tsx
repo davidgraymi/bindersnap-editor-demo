@@ -293,7 +293,13 @@ export function App() {
   // Which organizations this session is in. An empty list is an ordinary
   // answer — an account that predates ADR 0004 has none — and it is also what
   // decides whether we may promise a trial.
-  const [organizations, setOrganizations] = useState<OrganizationSummary[]>([]);
+  // `null` means "not known yet", which is not the same as "none". A failed
+  // read must not be mistaken for an account with no organization, or a
+  // transient error would tell someone who has one that they are about to
+  // create their first — and promise them a trial that is not coming.
+  const [organizations, setOrganizations] = useState<
+    OrganizationSummary[] | null
+  >(null);
   const [suggestedOrganizationName, setSuggestedOrganizationName] = useState<
     string | null
   >(null);
@@ -332,7 +338,7 @@ export function App() {
         setSubscriptionStatus("loading");
         setHasBillingStatusError(false);
         try {
-          setOrganizations(await fetchOrganizations().catch(() => []));
+          setOrganizations(await fetchOrganizations().catch(() => null));
           const billing = await fetchBillingStatus();
           setSubscriptionStatus(
             resolveSubscriptionStatus(billing.status, billing.hasAccess),
@@ -353,7 +359,7 @@ export function App() {
           setPlan(null);
         }
       } else {
-        setOrganizations([]);
+        setOrganizations(null);
         setSubscriptionStatus(null);
         setHasBillingStatusError(false);
         setCurrentPeriodEnd(null);
@@ -566,7 +572,7 @@ export function App() {
         suggestedName={suggestedOrganizationName}
         // Only their first gets a trial, and this screen must not promise one
         // it cannot deliver.
-        isFirstOrganization={organizations.length === 0}
+        isFirstOrganization={organizations?.length === 0}
         reason={accessSource === "no_organization" ? "blocked-write" : null}
         onCreate={async (name) => {
           await createOrganization(name);
