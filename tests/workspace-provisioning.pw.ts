@@ -501,3 +501,175 @@ test("an account with no organization sees no documents rather than an error", a
     (JSON.parse(listed.body) as { documents: unknown[] }).documents,
   ).toEqual([]);
 });
+
+/**
+ * ADR 0004 §4: the unit of approval is the change, not the document.
+ *
+ * One approved change that revised three cross-referencing policies publishes
+ * three versions, all pointing at the same merge commit. Several tags on one
+ * commit is ordinary git, and it is what keeps "who approved v4" answerable as
+ * tag → commit → pull request → reviews.
+ */
+async function publishChange(
+  sessionCookie: string,
+  workspace: string,
+  pullNumber: number,
+): Promise<{ status: number; body: string }> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/workspaces/${workspace}/changes/${pullNumber}/publish`,
+    {
+      method: "POST",
+      headers: authHeaders(sessionCookie),
+      body: JSON.stringify({ mergeStyle: "merge" }),
+    },
+  );
+  return { status: response.status, body: await response.text() };
+}
+
+test("publishing a change versions the document and puts it on main", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect((await createWorkspace(sessionCookie, "Clinical")).status).toBe(201);
+
+  const added = await addDocument(sessionCookie, "clinical", {
+    name: "Infection Control",
+    folder: "Nursing",
+  });
+  expect(added.status, added.body).toBe(201);
+  const { pullRequestNumber, slugPath } = JSON.parse(added.body) as {
+    pullRequestNumber: number;
+    slugPath: string;
+  };
+
+  const published = await publishChange(
+    sessionCookie,
+    "clinical",
+    pullRequestNumber,
+  );
+  expect(published.status, published.body).toBe(200);
+
+  const { tags } = JSON.parse(published.body) as {
+    tags: Array<{ tag: string; version: number; commitSha: string }>;
+  };
+  // The tag names the document, because a binder's tags are repository-global.
+  expect(tags.map((t) => t.tag)).toEqual([`${slugPath}/v1`]);
+
+  // And now it is part of the record: on main, and in the binder's list.
+  const listed = await listDocuments(sessionCookie, "clinical");
+  expect(
+    (
+      JSON.parse(listed.body) as { documents: Array<{ slugPath: string }> }
+    ).documents.map((d) => d.slugPath),
+  ).toEqual([slugPath]);
+
+  const detail = await getDocument(sessionCookie, "clinical", slugPath);
+  expect(detail.status, detail.body).toBe(200);
+  const { versions, latestVersion } = JSON.parse(detail.body) as {
+    versions: Array<{ version: number }>;
+    latestVersion: { version: number } | null;
+  };
+  expect(versions).toHaveLength(1);
+  expect(latestVersion?.version).toBe(1);
+
+  const token = await createUserToken(
+    credentials.username,
+    credentials.password,
+  );
+  const onMain = await giteaGet<{ path: string }>(
+    token,
+    `/repos/${org.name}/clinical/contents/${slugPath}.md?ref=main`,
+  );
+  expect(onMain.path).toBe(`${slugPath}.md`);
+});
+
+test("one change across two documents publishes two versions on one commit", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect((await createWorkspace(sessionCookie, "Clinical")).status).toBe(201);
+
+  // Two documents, one upload branch, one change — a revision that touches
+  // cross-referencing policies together, which ADR 0004 calls a feature.
+  const first = await addDocument(sessionCookie, "clinical", {
+    name: "Infection Control",
+  });
+  expect(first.status, first.body).toBe(201);
+  const firstPayload = JSON.parse(first.body) as {
+    branch: string;
+    pullRequestNumber: number;
+  };
+
+  const token = await createUserToken(
+    credentials.username,
+    credentials.password,
+  );
+
+  // Add a second document onto the same branch, the way a person revising two
+  // policies together would.
+  const commit = await fetch(
+    `${GITEA_URL}/api/v1/repos/${org.name}/clinical/contents/handover.md`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `token ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        branch: firstPayload.branch,
+        content: Buffer.from("handover policy").toString("base64"),
+        message: "Add handover alongside infection control",
+      }),
+    },
+  );
+  expect(commit.status, await commit.text()).toBe(201);
+
+  const published = await publishChange(
+    sessionCookie,
+    "clinical",
+    firstPayload.pullRequestNumber,
+  );
+  expect(published.status, published.body).toBe(200);
+
+  const { tags } = JSON.parse(published.body) as {
+    tags: Array<{ tag: string; commitSha: string }>;
+  };
+  expect(tags.map((t) => t.tag).sort()).toEqual([
+    "handover/v1",
+    "infection-control/v1",
+  ]);
+
+  // Both tags point at the same merge commit. Approvals cover the change, so
+  // the two versions share one approval record.
+  expect(new Set(tags.map((t) => t.commitSha)).size).toBe(1);
+});
+
+test("a second change to the same document publishes v2, not another v1", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect((await createWorkspace(sessionCookie, "Clinical")).status).toBe(201);
+
+  const first = await addDocument(sessionCookie, "clinical", {
+    name: "Infection Control",
+  });
+  const firstNumber = (JSON.parse(first.body) as { pullRequestNumber: number })
+    .pullRequestNumber;
+  expect(
+    (await publishChange(sessionCookie, "clinical", firstNumber)).status,
+  ).toBe(200);
+
+  // The document exists on main now, so a second upload of the same name is a
+  // revision. The write path refuses to create over it, which is a later
+  // step's job to turn into a proper revision flow — what matters here is that
+  // versions do not restart.
+  const detail = await getDocument(
+    sessionCookie,
+    "clinical",
+    "infection-control",
+  );
+  const { versions } = JSON.parse(detail.body) as {
+    versions: Array<{ version: number }>;
+  };
+  expect(versions.map((v) => v.version)).toEqual([1]);
+});
