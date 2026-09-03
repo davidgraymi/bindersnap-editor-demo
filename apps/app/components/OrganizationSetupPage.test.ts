@@ -96,7 +96,7 @@ test("offers no way to join an organization by typing its name", () => {
   const inputs = page.container.querySelectorAll("input");
 
   expect(inputs).toHaveLength(1);
-  expect(inputs[0]!.getAttribute("id")).toBe("organization-name");
+  expect(inputs[0]!.getAttribute("name")).toBe("organization-name");
   expect(page.html()).toContain("Ask an owner to add you");
   page.cleanup();
 });

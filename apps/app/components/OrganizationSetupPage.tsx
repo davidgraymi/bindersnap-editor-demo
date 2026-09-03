@@ -78,6 +78,7 @@ export function OrganizationSetupPage({
           </p>
 
           <form
+            className="app-form"
             onSubmit={async (event) => {
               event.preventDefault();
               if (!canSubmit) return;
@@ -102,20 +103,20 @@ export function OrganizationSetupPage({
               }
             }}
           >
-            <label className="app-field-label" htmlFor="organization-name">
-              Organization name
+            <label className="app-field">
+              <span className="bs-label">Organization name</span>
+              <input
+                className="bs-input"
+                name="organization-name"
+                type="text"
+                autoComplete="organization"
+                autoFocus
+                placeholder="Mercy Health"
+                value={name}
+                maxLength={100}
+                onChange={(event) => setName(event.target.value)}
+              />
             </label>
-            <input
-              id="organization-name"
-              name="organization-name"
-              type="text"
-              autoComplete="organization"
-              autoFocus
-              placeholder="Mercy Health"
-              value={name}
-              maxLength={100}
-              onChange={(event) => setName(event.target.value)}
-            />
 
             {/* What they type is not what Gitea can be given, so show the
                 address they are actually choosing before they commit to it. */}
@@ -143,7 +144,7 @@ export function OrganizationSetupPage({
             ) : null}
 
             <button
-              className="bs-btn bs-btn-primary"
+              className="bs-btn bs-btn-primary app-submit"
               type="submit"
               disabled={!canSubmit}
             >
