@@ -1,6 +1,7 @@
 import type { components } from "./spec/gitea";
 
 import { GiteaApiError, unwrap, type GiteaClient } from "./client";
+import { bootstrapEmptyMainBranch } from "./repos";
 import {
   createOrganization,
   createWorkspaceTeams,
@@ -270,6 +271,15 @@ export async function provisionWorkspace(
     name,
     description,
   });
+
+  // Gitea's `auto_init` writes a README, which is the only way to get a `main`
+  // to protect — but a binder holds policies, and a generated README is not
+  // one. Left in place it lists as a document called "README", which is a file
+  // nobody wrote showing up in front of a surveyor. Removing it leaves `main`
+  // with a commit and no files, which is what an empty binder is.
+  //
+  // Before protection, necessarily: afterwards nothing may push to `main`.
+  await bootstrapEmptyMainBranch({ client, owner: org, repo: name });
 
   const teams = await createWorkspaceTeams({ client, org, workspace: name });
 

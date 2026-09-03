@@ -9,6 +9,7 @@ interface Handlers {
   POST?: Record<string, Handler>;
   PUT?: Record<string, Handler>;
   PATCH?: Record<string, Handler>;
+  DELETE?: Record<string, Handler>;
 }
 
 /** A handler returning this answers 404, the way a real Gitea would. */
@@ -38,6 +39,7 @@ function createMockClient(handlers: Handlers) {
   const mockPost = method("POST");
   const mockPut = method("PUT");
   const mockPatch = method("PATCH");
+  const mockDelete = method("DELETE");
 
   return {
     client: {
@@ -45,13 +47,14 @@ function createMockClient(handlers: Handlers) {
       POST: mockPost,
       PUT: mockPut,
       PATCH: mockPatch,
-      DELETE: mock(),
+      DELETE: mockDelete,
       use: mock(),
     } as unknown as GiteaClient,
     mockGet,
     mockPost,
     mockPut,
     mockPatch,
+    mockDelete,
   };
 }
 
@@ -135,6 +138,7 @@ test("provisionWorkspace creates the repo, grants all three teams, then protects
       "/repos/{owner}/{repo}": () => NOT_FOUND,
       "/orgs/{org}/teams": () => [],
       "/repos/{owner}/{repo}/branch_protections/{name}": () => NOT_FOUND,
+      "/repos/{owner}/{repo}/contents/{filepath}": () => NOT_FOUND,
     },
     POST: {
       "/orgs/{org}/repos": (init: { body: { name: string } }) => {
@@ -301,4 +305,53 @@ test("listOrganizationWorkspaces treats an org with no binders as empty", async 
   expect(
     await listOrganizationWorkspaces({ client, org: "mercy-health" }),
   ).toEqual([]);
+});
+
+test("a new binder starts empty, without the README Gitea generates", async () => {
+  const deleted: string[] = [];
+
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}": () => NOT_FOUND,
+      "/orgs/{org}/teams": () => [],
+      "/repos/{owner}/{repo}/branch_protections/{name}": () => NOT_FOUND,
+      // `auto_init` is the only way to get a `main` to protect, and it writes
+      // this.
+      "/repos/{owner}/{repo}/contents/{filepath}": () => ({
+        sha: "readme-sha",
+        path: "README.md",
+      }),
+    },
+    POST: {
+      "/orgs/{org}/repos": (init: { body: { name: string } }) => ({
+        id: 1,
+        name: init.body.name,
+        full_name: `mercy-health/${init.body.name}`,
+        owner: { login: "mercy-health" },
+      }),
+      "/orgs/{org}/teams": (init: { body: { name: string } }) => ({
+        id: 1,
+        name: init.body.name,
+      }),
+      "/repos/{owner}/{repo}/branch_protections": () => ({}),
+    },
+    PUT: { "/teams/{id}/repos/{org}/{repo}": () => ({}) },
+    DELETE: {
+      "/repos/{owner}/{repo}/contents/{filepath}": () => {
+        deleted.push("README.md");
+        return {};
+      },
+    },
+  });
+
+  const { provisionWorkspace } = await import("./workspaces");
+  await provisionWorkspace({
+    client,
+    org: "mercy-health",
+    name: "clinical",
+  });
+
+  // A binder holds policies. A generated README is not one, and left in place
+  // it lists as a document called "README" in front of a surveyor.
+  expect(deleted).toEqual(["README.md"]);
 });
