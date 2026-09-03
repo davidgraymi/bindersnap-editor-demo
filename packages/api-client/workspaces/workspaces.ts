@@ -7,6 +7,8 @@
 import type {
   CreateWorkspace201,
   CreateWorkspaceBody,
+  CreateWorkspaceDocument201,
+  CreateWorkspaceDocumentBody,
   ListWorkspaces200
 } from '../model';
 
@@ -72,6 +74,45 @@ export const createWorkspace = async (createWorkspaceBody: CreateWorkspaceBody, 
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(createWorkspaceBody)
+  }
+);}
+
+
+export type createWorkspaceDocumentResponse201 = {
+  data: CreateWorkspaceDocument201
+  status: 201
+}
+
+export type createWorkspaceDocumentResponseSuccess = (createWorkspaceDocumentResponse201) & {
+  headers: Headers;
+};
+;
+
+export type createWorkspaceDocumentResponse = (createWorkspaceDocumentResponseSuccess)
+
+export const getCreateWorkspaceDocumentUrl = (workspace: string,) => {
+
+
+
+
+  return `/api/app/workspaces/${workspace}/documents`
+}
+
+export const createWorkspaceDocument = async (workspace: string,
+    createWorkspaceDocumentBody: CreateWorkspaceDocumentBody, options?: Parameters<typeof customFetch>[1]): Promise<createWorkspaceDocumentResponse> => {
+    const formData = new FormData();
+formData.append(`file`, createWorkspaceDocumentBody.file);
+formData.append(`name`, createWorkspaceDocumentBody.name);
+if(createWorkspaceDocumentBody.folder !== undefined) {
+ formData.append(`folder`, createWorkspaceDocumentBody.folder);
+ }
+
+  return customFetch<createWorkspaceDocumentResponse>(getCreateWorkspaceDocumentUrl(workspace),
+  {
+    ...options,
+    method: 'POST'
+    ,
+    body: formData
   }
 );}
 
