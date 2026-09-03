@@ -452,10 +452,12 @@ interface BillingStatusPayload {
 }
 
 /**
- * Sign up, and answer with the session plus the organization signup created.
+ * Sign up, then create the organization, and answer with both.
  *
  * Every test here needs the organization: it is what Stripe is keyed to, what
- * the paywall checks, and what owns the trial.
+ * the paywall checks, and what owns the trial. Signup no longer provisions one
+ * — ADR 0004 made naming it the owner's job — so the helper does what a person
+ * would do next, rather than reading back an organization nobody asked for.
  */
 async function signUpOrganization(credentials: {
   username: string;
@@ -463,12 +465,31 @@ async function signUpOrganization(credentials: {
   password: string;
 }): Promise<{ sessionCookie: string; giteaOrgId: number }> {
   const sessionCookie = await signUpUser(credentials);
+
+  const response = await fetch(`${API_BASE_URL}/api/app/organizations`, {
+    method: "POST",
+    headers: {
+      Cookie: `bindersnap_session=${sessionCookie}`,
+      "Content-Type": "application/json",
+      // A mutation, so it goes through the state-changing origin check.
+      Origin: APP_ORIGIN,
+    },
+    body: JSON.stringify({ name: credentials.username }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => "(no body)");
+    throw new Error(
+      `Creating an organization for ${credentials.username} failed (${response.status}): ${body}`,
+    );
+  }
+
   const billing = await getBillingStatus(sessionCookie);
   const giteaOrgId = billing.organization?.id;
 
   if (!giteaOrgId) {
     throw new Error(
-      `Signup did not provision an organization for ${credentials.username}.`,
+      `Billing status reported no organization for ${credentials.username} after creating one.`,
     );
   }
 
