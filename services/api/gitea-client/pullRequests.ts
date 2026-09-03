@@ -568,24 +568,62 @@ export async function mergeWorkspaceChange(params: {
   pullNumber: number;
   mergeStyle: "merge" | "squash" | "rebase";
   message?: string;
+  maxAttempts?: number;
 }): Promise<void> {
-  const { client, owner, repo, pullNumber, mergeStyle, message } = params;
-
-  const result = await attemptMerge(
+  const {
     client,
     owner,
     repo,
     pullNumber,
     mergeStyle,
     message,
-  );
+    maxAttempts = 10,
+  } = params;
+  const RETRY_DELAY_MS = 2000;
 
-  if (result === "conflict") {
-    throw toGiteaApiError(
-      409,
-      "This change conflicts with the binder's main branch. Update the change and try again.",
+  let lastError = "";
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const { response, error } = await client.POST(
+      "/repos/{owner}/{repo}/pulls/{index}/merge",
+      {
+        params: { path: { owner, repo, index: pullNumber } },
+        body: {
+          // The spec's own spelling. `Do` works too — Go matches JSON field
+          // names case-insensitively — but only the lowercase form typechecks.
+          do: mergeStyle,
+          ...(message ? { MergeMessageField: message } : {}),
+        },
+      },
     );
+
+    if (response.status >= 200 && response.status < 300) return;
+
+    lastError = toGiteaApiError(response.status, error).message;
+    const lowered = lastError.toLowerCase();
+
+    // Gitea recomputes mergeability asynchronously, and says so — under 405
+    // when the check has not finished or an approval is not yet indexed, and
+    // under 409 when a commit landed on the branch moments earlier. Both are
+    // "ask again", and neither is the branch being unmergeable.
+    const isTransient =
+      lowered.includes("please try again later") ||
+      lowered.includes("not have enough approvals") ||
+      lowered.includes("is being checked");
+
+    if (!isTransient || attempt === maxAttempts) break;
+
+    await new Promise<void>((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
   }
+
+  // Gitea's own words, kept: a conflict and a protection rule that was not
+  // satisfied are different problems for the person reading this, and
+  // flattening them into one sentence is what sent the last three failures
+  // chasing the wrong cause.
+  throw toGiteaApiError(
+    409,
+    `This change could not be merged into the binder's main branch: ${lastError}`,
+  );
 }
 
 export async function mergeOrResolveConflicts(
