@@ -1957,9 +1957,6 @@
               "displayName": {
                 "type": "string"
               },
-              "workspace": {
-                "type": "string"
-              },
               "trialEndsAt": {
                 "type": "number",
                 "nullable": true
@@ -1969,7 +1966,6 @@
               "id",
               "name",
               "displayName",
-              "workspace",
               "trialEndsAt"
             ]
           }
@@ -8189,9 +8185,6 @@
                         "displayName": {
                           "type": "string"
                         },
-                        "workspace": {
-                          "type": "string"
-                        },
                         "trialEndsAt": {
                           "type": "number",
                           "nullable": true
@@ -8201,7 +8194,6 @@
                         "id",
                         "name",
                         "displayName",
-                        "workspace",
                         "trialEndsAt"
                       ]
                     }

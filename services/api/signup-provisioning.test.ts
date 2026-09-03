@@ -202,7 +202,7 @@ test("nameAttempt suffixes only after the first try", () => {
   expect(nameAttempt("mercy-health", 3)).toBe("mercy-health-3");
 });
 
-test("provisionSignup creates the org, the first binder and its three teams", async () => {
+test("provisionSignup creates the organization and nothing else", async () => {
   const { client, created } = createProvisioningClient();
   const store = createMemoryStore();
 
@@ -215,12 +215,11 @@ test("provisionSignup creates the org, the first binder and its three teams", as
   });
 
   expect(created.orgs).toEqual(["mercy-health"]);
-  expect(created.repos).toEqual(["policies"]);
-  expect(created.teams).toEqual([
-    "policies-admins",
-    "policies-authors",
-    "policies-reviewers",
-  ]);
+  // No binder, and so no teams granted onto one. Naming the container a
+  // customer's records live in is the owner's call, and the "policies" repo
+  // this used to create was a guess that no document was ever written into.
+  expect(created.repos).toEqual([]);
+  expect(created.teams).toEqual([]);
 
   expect(result.organization.giteaOrgId).toBe(77);
   expect(result.organization.createdBy).toBe("alice");
@@ -294,8 +293,6 @@ test("a name held by an organization the signer-up cannot see steps to the next"
 
   expect(gitea.created.orgs).toEqual(["mercy-health-2"]);
   expect(result.provisioned.organization.name).toBe("mercy-health-2");
-  // And the binder is built inside the organization that was actually created.
-  expect(gitea.created.repos).toEqual(["policies"]);
 });
 
 test("an invisible collision does not swallow a real creation failure", async () => {

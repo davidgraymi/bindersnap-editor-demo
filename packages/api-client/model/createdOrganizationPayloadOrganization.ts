@@ -9,7 +9,6 @@ export type CreatedOrganizationPayloadOrganization = {
   id: number;
   name: string;
   displayName: string;
-  workspace: string;
   /** @nullable */
   trialEndsAt: number | null;
 };

@@ -30,8 +30,6 @@ export type NewOrganizationBody = z.infer<typeof NewOrganizationBodySchema>;
 
 export const CreatedOrganizationPayloadSchema = z.object({
   organization: OrganizationSummarySchema.extend({
-    /** The first binder, created with the organization. */
-    workspace: z.string(),
     /** Unix seconds, or null when this organization gets no trial. */
     trialEndsAt: z.number().nullable(),
   }),

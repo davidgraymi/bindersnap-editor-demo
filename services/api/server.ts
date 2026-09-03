@@ -4807,7 +4807,6 @@ async function handleCreateOrganization(
           displayName:
             result.provisioned.organization.fullName ||
             result.organization.name,
-          workspace: result.provisioned.workspace.workspace.name,
           trialEndsAt: result.organization.trialEndsAt,
         },
       },

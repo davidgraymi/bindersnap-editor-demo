@@ -393,9 +393,21 @@ that conversation, not a reason to shape the architecture now.
 
 Production data is minimal today. This is the cheapest this migration will ever be.
 
-1. **Org and first workspace on signup.** `POST /orgs` with the user's token; the
-   creator becomes an owner. Create the first workspace repo, protect `main`, and
-   create its three role teams.
+1. **Org on signup.** `POST /orgs` with the user's token; the creator becomes an
+   owner.
+
+   ~~Create the first workspace repo, protect `main`, and create its three role
+   teams.~~ **Amended 2026-09-03.** Signup — now organization creation, since the
+   two came apart — no longer creates a workspace. It shipped creating one called
+   `policies`, and that was wrong twice over: a binder is the container a
+   customer's records live in and its name is the owner's to choose, and because
+   step 2 below is not built yet, nothing was ever written into it. Documents are
+   still their own repositories, so the binder was created and then ignored — a
+   guess nobody made, that nobody could act on. Creating a workspace becomes a
+   thing a member does; `provisionWorkspace` is unchanged and is what will do it.
+   Step 2 is where a workspace starts holding documents, and it is the step that
+   decides what creating one has to ask for.
+
 2. **Documents are files.** Replace `createPrivateCurrentUserRepo` and the
    one-repo-per-document upload path with a commit to a path inside the workspace repo.
    ADR 0001's branch → pull request → review → merge → tag contract is unchanged; only
