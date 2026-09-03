@@ -2,6 +2,8 @@ import { expect, mock, test } from "bun:test";
 
 import type { GiteaClient } from "./client";
 import {
+  createDocumentVersionTag,
+  listChangedDocuments,
   listDocumentVersions,
   listWorkspaceDocuments,
   nextVersionFrom,
@@ -14,35 +16,43 @@ type Handler = (init?: any) => unknown;
 /** A handler returning this answers 404, the way a real Gitea would. */
 const NOT_FOUND = Symbol("not-found");
 
-function createMockClient(handlers: { GET?: Record<string, Handler> }) {
+function createMockClient(handlers: {
+  GET?: Record<string, Handler>;
+  POST?: Record<string, Handler>;
+}) {
   const notFound = () => ({
     data: undefined,
     error: { message: "not found" },
     response: new Response(null, { status: 404 }),
   });
 
-  const mockGet = mock(async (path: string, init?: unknown) => {
-    const handler = handlers.GET?.[path];
-    if (!handler) return notFound();
-    const data = await handler(init);
-    if (data === NOT_FOUND) return notFound();
-    return {
-      data,
-      error: undefined,
-      response: new Response(null, { status: 200 }),
-    };
-  });
+  const method = (verb: "GET" | "POST") =>
+    mock(async (path: string, init?: unknown) => {
+      const handler = handlers[verb]?.[path];
+      if (!handler) return notFound();
+      const data = await handler(init);
+      if (data === NOT_FOUND) return notFound();
+      return {
+        data,
+        error: undefined,
+        response: new Response(null, { status: 200 }),
+      };
+    });
+
+  const mockGet = method("GET");
+  const mockPost = method("POST");
 
   return {
     client: {
       GET: mockGet,
-      POST: mock(),
+      POST: mockPost,
       PUT: mock(),
       PATCH: mock(),
       DELETE: mock(),
       use: mock(),
     } as unknown as GiteaClient,
     mockGet,
+    mockPost,
   };
 }
 
@@ -175,4 +185,85 @@ test("the next version follows the highest published one", () => {
   ).toBe(5);
 
   expect(nextVersionTag("nursing/handover", [])).toBe("nursing/handover/v1");
+});
+
+test("listChangedDocuments answers with every document a change touched", async () => {
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/pulls/{index}/files": () => [
+        { filename: "nursing/handover.md" },
+        { filename: "admissions.md" },
+        // Repository furniture. A change that edits CODEOWNERS alongside two
+        // policies publishes two versions, not three.
+        { filename: ".gitea/CODEOWNERS" },
+      ],
+    },
+  });
+
+  const documents = await listChangedDocuments({
+    client,
+    org: "mercy-health",
+    workspace: "clinical",
+    pullNumber: 7,
+  });
+
+  // The unit of approval is the change, not the document (ADR 0004 §4), so
+  // publishing has to know every document it covers.
+  expect(documents.map((d) => d.slugPath)).toEqual([
+    "admissions",
+    "nursing/handover",
+  ]);
+});
+
+test("listChangedDocuments counts a document once, however many times it changed", async () => {
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/pulls/{index}/files": () => [
+        { filename: "nursing/handover.md" },
+        { filename: "nursing/handover.md" },
+      ],
+    },
+  });
+
+  expect(
+    await listChangedDocuments({
+      client,
+      org: "mercy-health",
+      workspace: "clinical",
+      pullNumber: 7,
+    }),
+  ).toHaveLength(1);
+});
+
+test("createDocumentVersionTag names the document in the tag", async () => {
+  let body: Record<string, unknown> = {};
+  const { client } = createMockClient({
+    POST: {
+      "/repos/{owner}/{repo}/tags": (init: {
+        body: Record<string, unknown>;
+      }) => {
+        body = init.body;
+        return { commit: { sha: "merge-sha" } };
+      },
+    },
+  });
+
+  const version = await createDocumentVersionTag({
+    client,
+    org: "mercy-health",
+    workspace: "clinical",
+    slugPath: "nursing/handover",
+    version: 2,
+    target: "main",
+  });
+
+  // Tags are repository-global and a binder holds many documents, so the
+  // version has to carry the document with it.
+  expect(body.tag_name).toBe("nursing/handover/v2");
+  expect(body.target).toBe("main");
+  expect(version).toEqual({
+    tag: "nursing/handover/v2",
+    version: 2,
+    commitSha: "merge-sha",
+  });
 });
