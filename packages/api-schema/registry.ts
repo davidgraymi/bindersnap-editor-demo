@@ -40,6 +40,12 @@ import {
   OrganizationSummarySchema,
 } from "./schemas/organizations";
 import {
+  CreatedWorkspacePayloadSchema,
+  NewWorkspaceBodySchema,
+  WorkspaceListPayloadSchema,
+  WorkspaceSummarySchema,
+} from "./schemas/workspaces";
+import {
   BillingActionBodySchema,
   BillingStatusPayloadSchema,
   BillingUrlResultSchema,
@@ -76,6 +82,9 @@ registry.register("SearchUsersPayload", SearchUsersPayloadSchema);
 registry.register("OrganizationSummary", OrganizationSummarySchema);
 registry.register("OrganizationListPayload", OrganizationListPayloadSchema);
 registry.register("NewOrganizationBody", NewOrganizationBodySchema);
+registry.register("WorkspaceSummary", WorkspaceSummarySchema);
+registry.register("WorkspaceListPayload", WorkspaceListPayloadSchema);
+registry.register("NewWorkspaceBody", NewWorkspaceBodySchema);
 registry.register(
   "CreatedOrganizationPayload",
   CreatedOrganizationPayloadSchema,
@@ -716,9 +725,48 @@ registry.registerPath({
   },
   responses: {
     201: {
-      description: "The organization, its first binder and its trial",
+      description: "The organization and its trial",
       content: {
         "application/json": { schema: CreatedOrganizationPayloadSchema },
+      },
+    },
+  },
+});
+
+// Workspace routes
+registry.registerPath({
+  method: "get",
+  path: "/api/app/workspaces",
+  operationId: "listWorkspaces",
+  tags: ["workspaces"],
+  responses: {
+    200: {
+      description: "The binders owned by this session's organization",
+      content: {
+        "application/json": { schema: WorkspaceListPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/workspaces",
+  operationId: "createWorkspace",
+  tags: ["workspaces"],
+  request: {
+    body: {
+      required: true,
+      content: {
+        "application/json": { schema: NewWorkspaceBodySchema },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "The binder, its role teams and its protected main",
+      content: {
+        "application/json": { schema: CreatedWorkspacePayloadSchema },
       },
     },
   },
