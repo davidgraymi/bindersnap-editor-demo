@@ -65,3 +65,59 @@ export const CreatedWorkspaceDocumentPayloadSchema = z.object({
 export type CreatedWorkspaceDocumentPayload = z.infer<
   typeof CreatedWorkspaceDocumentPayloadSchema
 >;
+
+/** A document as the binder holds it: a file at a path. */
+export const WorkspaceDocumentEntrySchema = z.object({
+  /** `clinical/infection-control.pdf` — where the file is. */
+  path: z.string(),
+  /** `clinical/infection-control` — the document's identity. */
+  slugPath: z.string(),
+  name: z.string(),
+  /** `clinical`, or "" at the binder's root. */
+  folder: z.string(),
+  size: z.number(),
+  sha: z.string(),
+});
+export type WorkspaceDocumentEntry = z.infer<
+  typeof WorkspaceDocumentEntrySchema
+>;
+
+/**
+ * A published version.
+ *
+ * The tag is the evidence: tag → commit → pull request → reviews is what makes
+ * "who approved v4" answerable exactly.
+ */
+export const DocumentVersionSchema = z.object({
+  tag: z.string(),
+  version: z.number(),
+  commitSha: z.string(),
+});
+export type DocumentVersion = z.infer<typeof DocumentVersionSchema>;
+
+export const WorkspaceDocumentListPayloadSchema = z.object({
+  organization: z.string().optional(),
+  workspace: z.string(),
+  documents: z.array(
+    WorkspaceDocumentEntrySchema.extend({
+      /** Open changes touching this document. Decides a badge, nothing more. */
+      openChangeCount: z.number(),
+    }),
+  ),
+});
+export type WorkspaceDocumentListPayload = z.infer<
+  typeof WorkspaceDocumentListPayloadSchema
+>;
+
+export const WorkspaceDocumentDetailPayloadSchema = z.object({
+  organization: z.string(),
+  workspace: z.string(),
+  document: WorkspaceDocumentEntrySchema,
+  /** Newest first. */
+  versions: z.array(DocumentVersionSchema),
+  latestVersion: DocumentVersionSchema.nullable(),
+  openChanges: z.array(z.unknown()),
+});
+export type WorkspaceDocumentDetailPayload = z.infer<
+  typeof WorkspaceDocumentDetailPayloadSchema
+>;

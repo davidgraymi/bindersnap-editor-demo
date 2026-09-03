@@ -40,6 +40,9 @@ import {
   OrganizationSummarySchema,
 } from "./schemas/organizations";
 import {
+  WorkspaceDocumentDetailPayloadSchema,
+  WorkspaceDocumentEntrySchema,
+  WorkspaceDocumentListPayloadSchema,
   CreatedWorkspaceDocumentPayloadSchema,
   CreatedWorkspacePayloadSchema,
   NewWorkspaceBodySchema,
@@ -86,6 +89,7 @@ registry.register("NewOrganizationBody", NewOrganizationBodySchema);
 registry.register("WorkspaceSummary", WorkspaceSummarySchema);
 registry.register("WorkspaceListPayload", WorkspaceListPayloadSchema);
 registry.register("NewWorkspaceBody", NewWorkspaceBodySchema);
+registry.register("WorkspaceDocumentEntry", WorkspaceDocumentEntrySchema);
 registry.register(
   "CreatedOrganizationPayload",
   CreatedOrganizationPayloadSchema,
@@ -768,6 +772,44 @@ registry.registerPath({
       description: "The binder, its role teams and its protected main",
       content: {
         "application/json": { schema: CreatedWorkspacePayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/workspaces/{workspace}/documents",
+  operationId: "listWorkspaceDocuments",
+  tags: ["workspaces"],
+  request: { params: z.object({ workspace: z.string() }) },
+  responses: {
+    200: {
+      description: "The binder's documents",
+      content: {
+        "application/json": { schema: WorkspaceDocumentListPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/workspaces/{workspace}/documents/{documentPath}",
+  operationId: "getWorkspaceDocument",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({
+      workspace: z.string(),
+      /** File path or identity — a URL may carry either. */
+      documentPath: z.string(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "One document, with its published versions",
+      content: {
+        "application/json": { schema: WorkspaceDocumentDetailPayloadSchema },
       },
     },
   },

@@ -9,6 +9,8 @@ import type {
   CreateWorkspaceBody,
   CreateWorkspaceDocument201,
   CreateWorkspaceDocumentBody,
+  GetWorkspaceDocument200,
+  ListWorkspaceDocuments200,
   ListWorkspaces200
 } from '../model';
 
@@ -78,6 +80,38 @@ export const createWorkspace = async (createWorkspaceBody: CreateWorkspaceBody, 
 );}
 
 
+export type listWorkspaceDocumentsResponse200 = {
+  data: ListWorkspaceDocuments200
+  status: 200
+}
+
+export type listWorkspaceDocumentsResponseSuccess = (listWorkspaceDocumentsResponse200) & {
+  headers: Headers;
+};
+;
+
+export type listWorkspaceDocumentsResponse = (listWorkspaceDocumentsResponseSuccess)
+
+export const getListWorkspaceDocumentsUrl = (workspace: string,) => {
+
+
+
+
+  return `/api/app/workspaces/${workspace}/documents`
+}
+
+export const listWorkspaceDocuments = async (workspace: string, options?: Parameters<typeof customFetch>[1]): Promise<listWorkspaceDocumentsResponse> => {
+
+  return customFetch<listWorkspaceDocumentsResponse>(getListWorkspaceDocumentsUrl(workspace),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
 export type createWorkspaceDocumentResponse201 = {
   data: CreateWorkspaceDocument201
   status: 201
@@ -113,6 +147,40 @@ if(createWorkspaceDocumentBody.folder !== undefined) {
     method: 'POST'
     ,
     body: formData
+  }
+);}
+
+
+export type getWorkspaceDocumentResponse200 = {
+  data: GetWorkspaceDocument200
+  status: 200
+}
+
+export type getWorkspaceDocumentResponseSuccess = (getWorkspaceDocumentResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getWorkspaceDocumentResponse = (getWorkspaceDocumentResponseSuccess)
+
+export const getGetWorkspaceDocumentUrl = (workspace: string,
+    documentPath: string,) => {
+
+
+
+
+  return `/api/app/workspaces/${workspace}/documents/${documentPath}`
+}
+
+export const getWorkspaceDocument = async (workspace: string,
+    documentPath: string, options?: Parameters<typeof customFetch>[1]): Promise<getWorkspaceDocumentResponse> => {
+
+  return customFetch<getWorkspaceDocumentResponse>(getGetWorkspaceDocumentUrl(workspace,documentPath),
+  {
+    ...options,
+    method: 'GET'
+
+
   }
 );}
 
