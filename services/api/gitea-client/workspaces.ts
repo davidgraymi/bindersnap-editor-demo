@@ -95,6 +95,30 @@ export async function createWorkspaceRepo(
   return normalizeWorkspace(repo);
 }
 
+export interface ListOrganizationWorkspacesParams {
+  client: GiteaClient;
+  org: string;
+}
+
+/**
+ * The organization's binders.
+ *
+ * Gitea answers with the repositories this token can see, which is the right
+ * answer rather than a convenient one: a member who cannot see a workspace has
+ * no business being told it exists.
+ */
+export async function listOrganizationWorkspaces(
+  params: ListOrganizationWorkspacesParams,
+): Promise<WorkspaceSummary[]> {
+  const { client, org } = params;
+
+  const repos = await unwrap(
+    client.GET("/orgs/{org}/repos", { params: { path: { org } } }),
+  );
+
+  return (repos ?? []).map(normalizeWorkspace);
+}
+
 export interface FindWorkspaceRepoParams {
   client: GiteaClient;
   org: string;

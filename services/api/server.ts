@@ -20,6 +20,12 @@ import {
 } from "./session-organization";
 import { claimLegacyBillingForOrganization } from "./legacy-billing-claim";
 import { provisionSignup } from "./signup-provisioning";
+import { slugifyOrganizationName } from "../../packages/utils/organizationName";
+import {
+  findWorkspaceRepo,
+  listOrganizationWorkspaces,
+  provisionWorkspace,
+} from "./gitea-client/workspaces";
 import { listOrganizationOwners } from "./gitea-client/orgs";
 import { createPrivilegedGiteaClient } from "./privileged-client";
 import type Stripe from "stripe";
@@ -4728,6 +4734,136 @@ async function handleStripeWebhook(
  * organization has to be able to ask, and gating it behind having one is a
  * loop with no way out.
  */
+/**
+ * The binders this session's organization owns.
+ *
+ * A read, so it is never gated (ADR 0004). A session with no organization has
+ * no binders rather than an error — that is an ordinary state now that an
+ * organization is something a person creates.
+ */
+async function handleListWorkspaces(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const organization = await resolveSessionOrganization(
+    auth.client,
+    auth.session,
+  );
+  if (!organization) {
+    return json(200, { workspaces: [] }, baseHeaders);
+  }
+
+  try {
+    const workspaces = await listOrganizationWorkspaces({
+      client: auth.client,
+      org: organization.name,
+    });
+    return json(200, { workspaces }, baseHeaders);
+  } catch (err) {
+    logger.error("Failed to list workspaces", {
+      username: auth.session.username,
+      organization: organization.name,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to list the binders.");
+  }
+}
+
+/**
+ * Create a binder, owned by the organization.
+ *
+ * A write, so it needs a subscription — and the 402 is what sends a session
+ * with no organization to name one first, since there is nothing to own a
+ * binder until then.
+ *
+ * The name is slugified the same way an organization's is, and for the same
+ * reason: "Clinical Policies" is not a name Gitea will take, and the person
+ * choosing it should be told the address they are choosing.
+ */
+async function handleCreateWorkspace(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const payload = await readJson<{ name?: unknown; description?: unknown }>(
+    req,
+  );
+  const requested =
+    typeof payload?.name === "string" ? payload.name.trim() : "";
+  if (!requested) {
+    return json(400, { error: "A binder name is required." }, baseHeaders);
+  }
+
+  const name = slugifyOrganizationName(requested);
+  if (!name) {
+    return json(
+      400,
+      { error: "That name has no letters or numbers Gitea can use." },
+      baseHeaders,
+    );
+  }
+
+  const description =
+    typeof payload?.description === "string"
+      ? payload.description.trim()
+      : undefined;
+
+  const organization = await resolveSessionOrganization(
+    auth.client,
+    auth.session,
+  );
+  if (!organization) {
+    return json(
+      409,
+      { error: "Create an organization before creating a binder." },
+      baseHeaders,
+    );
+  }
+
+  try {
+    const existing = await findWorkspaceRepo({
+      client: auth.client,
+      org: organization.name,
+      name,
+    });
+    if (existing) {
+      return json(
+        409,
+        { error: `A binder named "${name}" already exists.` },
+        baseHeaders,
+      );
+    }
+
+    const provisioned = await provisionWorkspace({
+      client: auth.client,
+      org: organization.name,
+      name,
+      description,
+    });
+
+    logger.info("Workspace created", {
+      username: auth.session.username,
+      organization: organization.name,
+      workspace: provisioned.workspace.name,
+    });
+
+    return json(201, { workspace: provisioned.workspace }, baseHeaders);
+  } catch (err) {
+    logger.error("Failed to create a workspace", {
+      username: auth.session.username,
+      organization: organization.name,
+      workspace: name,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to create the binder.");
+  }
+}
+
 async function handleListOrganizations(
   req: Request,
   baseHeaders: Headers,
@@ -5406,6 +5542,10 @@ export function createApiServer() {
         method === "GET"
       ) {
         response = await handleAdminSubscriptionAccessList(req, baseHeaders);
+      } else if (pathname === "/api/app/workspaces" && method === "GET") {
+        response = await handleListWorkspaces(req, baseHeaders);
+      } else if (pathname === "/api/app/workspaces" && method === "POST") {
+        response = await handleCreateWorkspace(req, baseHeaders);
       } else if (pathname === "/api/app/organizations" && method === "GET") {
         response = await handleListOrganizations(req, baseHeaders);
       } else if (pathname === "/api/app/organizations" && method === "POST") {

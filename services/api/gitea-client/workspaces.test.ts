@@ -245,3 +245,60 @@ test("createWorkspaceRepo makes a private, initialized binder", async () => {
   expect(body.auto_init).toBe(true);
   expect(body.default_branch).toBe("main");
 });
+
+test("listOrganizationWorkspaces returns the org's binders in the app's shape", async () => {
+  const { client } = createMockClient({
+    GET: {
+      "/orgs/{org}/repos": () => [
+        {
+          id: 7,
+          name: "clinical-policies",
+          full_name: "mercy-health/clinical-policies",
+          owner: { login: "mercy-health" },
+          description: "Nursing and clinical practice",
+        },
+        {
+          id: 9,
+          name: "hr",
+          full_name: "mercy-health/hr",
+          owner: { login: "mercy-health" },
+        },
+      ],
+    },
+  });
+
+  const { listOrganizationWorkspaces } = await import("./workspaces");
+  const workspaces = await listOrganizationWorkspaces({
+    client,
+    org: "mercy-health",
+  });
+
+  expect(workspaces).toEqual([
+    {
+      id: 7,
+      name: "clinical-policies",
+      fullName: "mercy-health/clinical-policies",
+      owner: "mercy-health",
+      description: "Nursing and clinical practice",
+    },
+    // A binder with no description is an ordinary binder, not a broken one.
+    {
+      id: 9,
+      name: "hr",
+      fullName: "mercy-health/hr",
+      owner: "mercy-health",
+      description: "",
+    },
+  ]);
+});
+
+test("listOrganizationWorkspaces treats an org with no binders as empty", async () => {
+  const { client } = createMockClient({
+    GET: { "/orgs/{org}/repos": () => [] },
+  });
+
+  const { listOrganizationWorkspaces } = await import("./workspaces");
+  expect(
+    await listOrganizationWorkspaces({ client, org: "mercy-health" }),
+  ).toEqual([]);
+});
