@@ -510,6 +510,65 @@ test("an account with no organization sees no documents rather than an error", a
  * commit is ordinary git, and it is what keeps "who approved v4" answerable as
  * tag → commit → pull request → reviews.
  */
+/**
+ * Put a second person on the binder's reviewers team, and have them approve.
+ *
+ * Nothing reaches `main` except a merged, approved change — that is the
+ * product's core claim, and the binder's protected `main` enforces it. A
+ * publish test that skipped this would be testing a wall that was not there.
+ *
+ * It also exercises the free-reviewer tier: the approvals whitelist is what
+ * makes a reviewer's approval count without giving them write access.
+ */
+async function addApprover(
+  ownerToken: string,
+  org: string,
+  workspace: string,
+): Promise<{ credentials: Credentials; token: string }> {
+  const credentials = buildCredentials();
+  await signUp(credentials);
+
+  const teams = await giteaGet<Array<{ id: number; name: string }>>(
+    ownerToken,
+    `/orgs/${org}/teams`,
+  );
+  const reviewers = teams.find(
+    (team) => team.name === `${workspace}-reviewers`,
+  );
+  expect(reviewers, `no ${workspace}-reviewers team`).toBeTruthy();
+
+  const added = await fetch(
+    `${GITEA_URL}/api/v1/teams/${reviewers!.id}/members/${credentials.username}`,
+    { method: "PUT", headers: { Authorization: `token ${ownerToken}` } },
+  );
+  expect([200, 204]).toContain(added.status);
+
+  return {
+    credentials,
+    token: await createUserToken(credentials.username, credentials.password),
+  };
+}
+
+async function approveChange(
+  approverToken: string,
+  org: string,
+  workspace: string,
+  pullNumber: number,
+): Promise<void> {
+  const response = await fetch(
+    `${GITEA_URL}/api/v1/repos/${org}/${workspace}/pulls/${pullNumber}/reviews`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `token ${approverToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ event: "APPROVED", body: "Looks right." }),
+    },
+  );
+  expect(response.status, await response.text()).toBe(200);
+}
+
 async function publishChange(
   sessionCookie: string,
   workspace: string,
@@ -542,6 +601,13 @@ test("publishing a change versions the document and puts it on main", async () =
     slugPath: string;
   };
 
+  const token = await createUserToken(
+    credentials.username,
+    credentials.password,
+  );
+  const approver = await addApprover(token, org.name, "clinical");
+  await approveChange(approver.token, org.name, "clinical", pullRequestNumber);
+
   const published = await publishChange(
     sessionCookie,
     "clinical",
@@ -572,10 +638,6 @@ test("publishing a change versions the document and puts it on main", async () =
   expect(versions).toHaveLength(1);
   expect(latestVersion?.version).toBe(1);
 
-  const token = await createUserToken(
-    credentials.username,
-    credentials.password,
-  );
   const onMain = await giteaGet<{ path: string }>(
     token,
     `/repos/${org.name}/clinical/contents/${slugPath}.md?ref=main`,
@@ -624,6 +686,14 @@ test("one change across two documents publishes two versions on one commit", asy
   );
   expect(commit.status, await commit.text()).toBe(201);
 
+  const approver = await addApprover(token, org.name, "clinical");
+  await approveChange(
+    approver.token,
+    org.name,
+    "clinical",
+    firstPayload.pullRequestNumber,
+  );
+
   const published = await publishChange(
     sessionCookie,
     "clinical",
@@ -647,7 +717,7 @@ test("one change across two documents publishes two versions on one commit", asy
 test("a second change to the same document publishes v2, not another v1", async () => {
   const credentials = buildCredentials();
   const sessionCookie = await signUp(credentials);
-  await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
   expect((await createWorkspace(sessionCookie, "Clinical")).status).toBe(201);
 
   const first = await addDocument(sessionCookie, "clinical", {
@@ -655,21 +725,104 @@ test("a second change to the same document publishes v2, not another v1", async 
   });
   const firstNumber = (JSON.parse(first.body) as { pullRequestNumber: number })
     .pullRequestNumber;
+
+  const ownerToken = await createUserToken(
+    credentials.username,
+    credentials.password,
+  );
+  const approver = await addApprover(ownerToken, org.name, "clinical");
+  await approveChange(approver.token, org.name, "clinical", firstNumber);
+
   expect(
     (await publishChange(sessionCookie, "clinical", firstNumber)).status,
   ).toBe(200);
 
-  // The document exists on main now, so a second upload of the same name is a
-  // revision. The write path refuses to create over it, which is a later
-  // step's job to turn into a proper revision flow — what matters here is that
-  // versions do not restart.
+  // A revision of a document that already exists. The upload endpoint refuses
+  // to create over it — turning that into a proper revision flow is a later
+  // step — so the change is built directly, the way that flow eventually will.
+  const branch = `upload/infection-control/${Date.now()}`;
+  const branched = await fetch(
+    `${GITEA_URL}/api/v1/repos/${org.name}/clinical/branches`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `token ${ownerToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        new_branch_name: branch,
+        old_branch_name: "main",
+      }),
+    },
+  );
+  expect(branched.status, await branched.text()).toBe(201);
+
+  const existing = await giteaGet<{ sha: string }>(
+    ownerToken,
+    `/repos/${org.name}/clinical/contents/infection-control.md?ref=main`,
+  );
+  const updated = await fetch(
+    `${GITEA_URL}/api/v1/repos/${org.name}/clinical/contents/infection-control.md`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `token ${ownerToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        branch,
+        sha: existing.sha,
+        content: Buffer.from("revised policy text").toString("base64"),
+        message: "Revise infection control",
+      }),
+    },
+  );
+  expect(updated.status, await updated.text()).toBe(200);
+
+  const secondPull = await fetch(
+    `${GITEA_URL}/api/v1/repos/${org.name}/clinical/pulls`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `token ${ownerToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        head: branch,
+        base: "main",
+        title: "Revise infection control",
+      }),
+    },
+  );
+  expect(secondPull.status, await secondPull.text()).toBe(201);
+  const secondNumber = ((await secondPull.json()) as { number: number }).number;
+
+  await approveChange(approver.token, org.name, "clinical", secondNumber);
+  const republished = await publishChange(
+    sessionCookie,
+    "clinical",
+    secondNumber,
+  );
+  expect(republished.status, republished.body).toBe(200);
+
+  // The version follows the highest already published, rather than restarting.
+  expect(
+    (JSON.parse(republished.body) as { tags: Array<{ tag: string }> }).tags.map(
+      (t) => t.tag,
+    ),
+  ).toEqual(["infection-control/v2"]);
+
   const detail = await getDocument(
     sessionCookie,
     "clinical",
     "infection-control",
   );
-  const { versions } = JSON.parse(detail.body) as {
+  const { versions, latestVersion } = JSON.parse(detail.body) as {
     versions: Array<{ version: number }>;
+    latestVersion: { version: number } | null;
   };
-  expect(versions.map((v) => v.version)).toEqual([1]);
+  // Newest first, and both versions kept: the record is every version, not the
+  // current one.
+  expect(versions.map((v) => v.version)).toEqual([2, 1]);
+  expect(latestVersion?.version).toBe(2);
 });
