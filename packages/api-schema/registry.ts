@@ -40,6 +40,7 @@ import {
   OrganizationSummarySchema,
 } from "./schemas/organizations";
 import {
+  CreatedWorkspaceDocumentPayloadSchema,
   CreatedWorkspacePayloadSchema,
   NewWorkspaceBodySchema,
   WorkspaceListPayloadSchema,
@@ -767,6 +768,44 @@ registry.registerPath({
       description: "The binder, its role teams and its protected main",
       content: {
         "application/json": { schema: CreatedWorkspacePayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/workspaces/{workspace}/documents",
+  operationId: "createWorkspaceDocument",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({ workspace: z.string() }),
+    body: {
+      required: true,
+      content: {
+        "multipart/form-data": {
+          schema: z.object({
+            file: z.string().openapi({
+              type: "string",
+              format: "binary",
+              description: "File upload",
+            }),
+            /** The title. Slugified into the path segment. */
+            name: z.string(),
+            /** Optional directory inside the binder. Nests as deep as wanted. */
+            folder: z.string().optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "The document's path, and the change that will publish it",
+      content: {
+        "application/json": {
+          schema: CreatedWorkspaceDocumentPayloadSchema,
+        },
       },
     },
   },

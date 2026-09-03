@@ -8415,6 +8415,92 @@
         }
       }
     },
+    "/api/app/workspaces/{workspace}/documents": {
+      "post": {
+        "operationId": "createWorkspaceDocument",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "workspace",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "File upload"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "folder": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "file",
+                  "name"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The document's path, and the change that will publish it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "documentPath": {
+                      "type": "string"
+                    },
+                    "slugPath": {
+                      "type": "string"
+                    },
+                    "branch": {
+                      "type": "string"
+                    },
+                    "pullRequestNumber": {
+                      "type": "number",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "workspace",
+                    "documentPath",
+                    "slugPath",
+                    "branch",
+                    "pullRequestNumber"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/app/billing/status": {
       "get": {
         "operationId": "getBillingStatus",

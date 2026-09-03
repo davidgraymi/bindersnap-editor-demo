@@ -119,6 +119,44 @@ export async function listOrganizationWorkspaces(
   return (repos ?? []).map(normalizeWorkspace);
 }
 
+export interface WorkspacePathExistsParams {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  path: string;
+  ref?: string;
+}
+
+/**
+ * Whether something already sits at this path in the binder.
+ *
+ * A binder holds many documents now, so "is this name taken?" is a question
+ * about a path rather than about a repository. Committing over an existing
+ * document would rewrite somebody else's policy while looking like a new one.
+ */
+export async function workspacePathExists(
+  params: WorkspacePathExistsParams,
+): Promise<boolean> {
+  const { client, org, workspace, path, ref = "main" } = params;
+
+  try {
+    await unwrap(
+      client.GET("/repos/{owner}/{repo}/contents/{filepath}", {
+        params: {
+          path: { owner: org, repo: workspace, filepath: path },
+          query: { ref },
+        },
+      }),
+    );
+    return true;
+  } catch (err) {
+    if (err instanceof GiteaApiError && err.status === 404) {
+      return false;
+    }
+    throw err;
+  }
+}
+
 export interface FindWorkspaceRepoParams {
   client: GiteaClient;
   org: string;

@@ -22,9 +22,14 @@ import { claimLegacyBillingForOrganization } from "./legacy-billing-claim";
 import { provisionSignup } from "./signup-provisioning";
 import { slugifyOrganizationName } from "../../packages/utils/organizationName";
 import {
+  buildDocumentFilePath,
+  buildDocumentSlugPath,
+} from "../../packages/utils/documentPath";
+import {
   findWorkspaceRepo,
   listOrganizationWorkspaces,
   provisionWorkspace,
+  workspacePathExists,
 } from "./gitea-client/workspaces";
 import { listOrganizationOwners } from "./gitea-client/orgs";
 import { createPrivilegedGiteaClient } from "./privileged-client";
@@ -4741,6 +4746,189 @@ async function handleStripeWebhook(
  * no binders rather than an error — that is an ordinary state now that an
  * organization is something a person creates.
  */
+/**
+ * Add a document to a binder, as a file at a path.
+ *
+ * ADR 0004's step 2. The document is no longer a repository of its own: it is
+ * a file inside the workspace that governs it, which is what makes one set of
+ * rules and one set of people cover every policy in the binder.
+ *
+ * ADR 0001's contract is unchanged — upload lands on a branch and opens a pull
+ * request, and nothing reaches `main` except a merged, approved change. Only
+ * the target repository and the path are new.
+ */
+async function handleCreateWorkspaceDocument(
+  req: Request,
+  baseHeaders: Headers,
+  workspaceName: string,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { session, client } = auth;
+  const form = await readMultipartBody(req);
+  if (!form) {
+    return json(
+      400,
+      { error: "Multipart form data is required." },
+      baseHeaders,
+    );
+  }
+
+  const file = parseOptionalFile(form.get("file"));
+  const name = parseOptionalString(form.get("name"));
+  const folder = parseOptionalString(form.get("folder")) || null;
+
+  if (!file || !name) {
+    return json(400, { error: "file and name are required." }, baseHeaders);
+  }
+
+  const validation = validateUploadFile(file);
+  if (!validation.valid) {
+    return json(
+      400,
+      { error: validation.reason ?? "Invalid file." },
+      baseHeaders,
+    );
+  }
+
+  const slugPath = buildDocumentSlugPath(name, folder);
+  if (slugPath === "") {
+    return json(
+      400,
+      { error: "That name has no letters or numbers to make a path from." },
+      baseHeaders,
+    );
+  }
+
+  const extension = getFileExtension(file.name);
+  const filePath = buildDocumentFilePath(name, extension, folder);
+
+  const organization = await resolveSessionOrganization(client, session);
+  if (!organization) {
+    return json(
+      409,
+      { error: "Create an organization before adding a document." },
+      baseHeaders,
+    );
+  }
+
+  try {
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: organization.name,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    if (
+      await workspacePathExists({
+        client,
+        org: organization.name,
+        workspace: workspaceName,
+        path: filePath,
+      })
+    ) {
+      return json(
+        409,
+        { error: `A document already lives at "${filePath}".` },
+        baseHeaders,
+      );
+    }
+
+    const buffer = await file.arrayBuffer();
+    const [fullHash, base64Content] = await Promise.all([
+      computeFileHashFromBuffer(buffer),
+      Buffer.from(buffer).toString("base64"),
+    ]);
+    const contentHash8 = fullHash.slice(0, 8);
+    const branchName = buildUploadBranchName(
+      slugPath,
+      session.username,
+      contentHash8,
+    );
+
+    // No repository to create and no rules to install: the binder already has
+    // a protected `main` and its role teams. That is the point of the level.
+    await createUploadBranch({
+      client,
+      owner: organization.name,
+      repo: workspaceName,
+      branchName,
+      from: "main",
+    });
+
+    const commitMessage = buildUploadCommitMessage({
+      docSlug: slugPath,
+      canonicalFile: filePath,
+      sourceFilename: file.name,
+      uploadBranch: branchName,
+      uploaderSlug: session.username,
+      fileHashSha256: fullHash,
+    });
+
+    await commitBinaryFile({
+      client,
+      owner: organization.name,
+      repo: workspaceName,
+      branch: branchName,
+      filePath,
+      base64Content,
+      message: commitMessage,
+      isNewFile: true,
+    });
+
+    const pr = await createPullRequest({
+      client,
+      owner: organization.name,
+      repo: workspaceName,
+      title: `Add ${slugPath}`,
+      head: branchName,
+      base: "main",
+      body: [
+        "Automated upload from Bindersnap.",
+        "",
+        `Source file: ${file.name}`,
+        `Document: ${slugPath}`,
+        `Binder: ${organization.name}/${workspaceName}`,
+        `Uploaded by: ${session.username}`,
+        `File hash (SHA-256): ${fullHash}`,
+      ].join("\n"),
+    });
+
+    logger.info("Workspace document created", {
+      username: session.username,
+      organization: organization.name,
+      workspace: workspaceName,
+      documentPath: filePath,
+    });
+
+    return json(
+      201,
+      {
+        organization: organization.name,
+        workspace: workspaceName,
+        documentPath: filePath,
+        slugPath,
+        branch: branchName,
+        pullRequestNumber: pr.number ?? null,
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to add a document to a workspace", {
+      username: session.username,
+      organization: organization.name,
+      workspace: workspaceName,
+      documentPath: filePath,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to add the document.");
+  }
+}
+
 async function handleListWorkspaces(
   req: Request,
   baseHeaders: Headers,
@@ -5627,8 +5815,17 @@ export function createApiServer() {
         const documentMatch = pathname.match(
           /^\/api\/app\/documents\/([^/]+)\/([^/]+)$/,
         );
+        const workspaceDocumentsMatch = pathname.match(
+          /^\/api\/app\/workspaces\/([^/]+)\/documents$/,
+        );
 
-        if (reviewMatch && method === "POST") {
+        if (workspaceDocumentsMatch && method === "POST") {
+          response = await handleCreateWorkspaceDocument(
+            req,
+            baseHeaders,
+            workspaceDocumentsMatch[1]!,
+          );
+        } else if (reviewMatch && method === "POST") {
           response = await handleDocumentReview(
             req,
             baseHeaders,

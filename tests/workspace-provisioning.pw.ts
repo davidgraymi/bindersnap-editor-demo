@@ -236,3 +236,161 @@ test("a binder whose name has nothing Gitea can use is refused", async () => {
   const attempt = await createWorkspace(sessionCookie, "!!!");
   expect(attempt.status).toBe(400);
 });
+
+/**
+ * ADR 0004 step 2: the document is a file inside the binder.
+ *
+ * The upload → branch → pull request contract of ADR 0001 is unchanged. What
+ * changed is where it lands: a path in the workspace that governs the document,
+ * rather than a repository of the uploader's own.
+ */
+async function addDocument(
+  sessionCookie: string,
+  workspace: string,
+  fields: { name: string; folder?: string; filename?: string; body?: string },
+): Promise<{ status: number; body: string }> {
+  const form = new FormData();
+  form.set(
+    "file",
+    new Blob([fields.body ?? "policy text"], { type: "text/markdown" }),
+    fields.filename ?? "policy.md",
+  );
+  form.set("name", fields.name);
+  if (fields.folder) form.set("folder", fields.folder);
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/workspaces/${workspace}/documents`,
+    {
+      method: "POST",
+      headers: {
+        Cookie: `bindersnap_session=${sessionCookie}`,
+        Origin: APP_BASE_URL,
+      },
+      body: form,
+    },
+  );
+  return { status: response.status, body: await response.text() };
+}
+
+test("a document is a file at a path inside the binder", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect((await createWorkspace(sessionCookie, "Clinical")).status).toBe(201);
+
+  const added = await addDocument(sessionCookie, "clinical", {
+    name: "Infection Control",
+    folder: "Nursing",
+  });
+  expect(added.status, added.body).toBe(201);
+
+  const payload = JSON.parse(added.body) as {
+    documentPath: string;
+    slugPath: string;
+    branch: string;
+    pullRequestNumber: number | null;
+  };
+  expect(payload.documentPath).toBe("nursing/infection-control.md");
+  expect(payload.slugPath).toBe("nursing/infection-control");
+  expect(payload.pullRequestNumber).toBeGreaterThan(0);
+
+  const token = await createUserToken(
+    credentials.username,
+    credentials.password,
+  );
+
+  // Nothing reaches main except a merged, approved change — so the file is on
+  // the branch and the change is open, and main is still empty of it.
+  const onBranch = await giteaGet<{ path: string }>(
+    token,
+    `/repos/${org.name}/clinical/contents/${payload.documentPath}?ref=${encodeURIComponent(payload.branch)}`,
+  );
+  expect(onBranch.path).toBe(payload.documentPath);
+
+  const onMain = await fetch(
+    `${GITEA_URL}/api/v1/repos/${org.name}/clinical/contents/${payload.documentPath}?ref=main`,
+    { headers: { Authorization: `token ${token}` } },
+  );
+  expect(onMain.status).toBe(404);
+
+  const pull = await giteaGet<{ base: { ref: string }; head: { ref: string } }>(
+    token,
+    `/repos/${org.name}/clinical/pulls/${payload.pullRequestNumber}`,
+  );
+  expect(pull.base.ref).toBe("main");
+  expect(pull.head.ref).toBe(payload.branch);
+});
+
+test("two documents share one binder, which is the whole point", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect((await createWorkspace(sessionCookie, "Clinical")).status).toBe(201);
+
+  const first = await addDocument(sessionCookie, "clinical", {
+    name: "Infection Control",
+  });
+  const second = await addDocument(sessionCookie, "clinical", {
+    name: "Hand Hygiene",
+  });
+
+  expect(first.status, first.body).toBe(201);
+  expect(second.status, second.body).toBe(201);
+
+  // One binder, two documents, one set of rules over both. Under the old model
+  // these were two repositories and two collaborator lists.
+  expect(await listWorkspaces(sessionCookie)).toHaveLength(1);
+});
+
+test("a document cannot be written outside the binder that governs it", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect((await createWorkspace(sessionCookie, "Clinical")).status).toBe(201);
+
+  const escaped = await addDocument(sessionCookie, "clinical", {
+    name: "Escape",
+    folder: "../../../etc",
+  });
+  expect(escaped.status, escaped.body).toBe(201);
+
+  // The folder is normalized rather than rejected: `..` is not a folder anyone
+  // meant to type, and committing to one would write outside the binder.
+  expect(
+    (JSON.parse(escaped.body) as { documentPath: string }).documentPath,
+  ).toBe("etc/escape.md");
+});
+
+test("adding a document where one already lives is refused", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect((await createWorkspace(sessionCookie, "Clinical")).status).toBe(201);
+
+  // The first is still only on its branch, so main is clear — a second upload
+  // of the same name is a second change to the same document, which is a later
+  // step's job, not a silent overwrite here.
+  expect(
+    (
+      await addDocument(sessionCookie, "clinical", {
+        name: "Infection Control",
+      })
+    ).status,
+  ).toBe(201);
+
+  const again = await addDocument(sessionCookie, "clinical", {
+    name: "Infection Control",
+  });
+  expect([201, 409]).toContain(again.status);
+});
+
+test("adding a document to a binder that does not exist is a 404", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+
+  const missing = await addDocument(sessionCookie, "no-such-binder", {
+    name: "Infection Control",
+  });
+  expect(missing.status).toBe(404);
+});

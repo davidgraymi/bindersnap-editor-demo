@@ -44,3 +44,24 @@ export const CreatedWorkspacePayloadSchema = z.object({
 export type CreatedWorkspacePayload = z.infer<
   typeof CreatedWorkspacePayloadSchema
 >;
+
+/**
+ * Where a document landed, and the change that will publish it.
+ *
+ * ADR 0004's step 2: the document is a file at a path inside the binder, not a
+ * repository of its own. `slugPath` is that path without its extension — the
+ * document's identity, and what its version tags are namespaced under.
+ */
+export const CreatedWorkspaceDocumentPayloadSchema = z.object({
+  organization: z.string(),
+  workspace: z.string(),
+  /** `clinical/infection-control.pdf` — where the file is. */
+  documentPath: z.string(),
+  /** `clinical/infection-control` — what the document is called. */
+  slugPath: z.string(),
+  branch: z.string(),
+  pullRequestNumber: z.number().nullable(),
+});
+export type CreatedWorkspaceDocumentPayload = z.infer<
+  typeof CreatedWorkspaceDocumentPayloadSchema
+>;

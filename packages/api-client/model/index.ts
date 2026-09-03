@@ -70,6 +70,8 @@ export * from './createOrganizationBody.ts';
 export * from './createWorkspace201.ts';
 export * from './createWorkspace201Workspace.ts';
 export * from './createWorkspaceBody.ts';
+export * from './createWorkspaceDocument201.ts';
+export * from './createWorkspaceDocumentBody.ts';
 export * from './discussionSummary.ts';
 export * from './discussionSummaryThreadsItem.ts';
 export * from './discussionSummaryThreadsItemCommentsItem.ts';
