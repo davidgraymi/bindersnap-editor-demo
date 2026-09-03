@@ -31,6 +31,11 @@ import {
   provisionWorkspace,
   workspacePathExists,
 } from "./gitea-client/workspaces";
+import {
+  findWorkspaceDocument,
+  listDocumentVersions,
+  listWorkspaceDocuments,
+} from "./gitea-client/workspaceDocuments";
 import { listOrganizationOwners } from "./gitea-client/orgs";
 import { createPrivilegedGiteaClient } from "./privileged-client";
 import type Stripe from "stripe";
@@ -4757,6 +4762,183 @@ async function handleStripeWebhook(
  * request, and nothing reaches `main` except a merged, approved change. Only
  * the target repository and the path are new.
  */
+/**
+ * The binder's documents.
+ *
+ * One recursive tree read instead of a repository search — the binder model's
+ * whole cost argument, per ADR 0004: "the documents list drops from roughly
+ * three Gitea calls per document to a handful per workspace".
+ *
+ * A read, so it is never gated.
+ */
+async function handleListWorkspaceDocuments(
+  req: Request,
+  baseHeaders: Headers,
+  workspaceName: string,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const organization = await resolveSessionOrganization(
+    auth.client,
+    auth.session,
+  );
+  if (!organization) {
+    return json(200, { workspace: workspaceName, documents: [] }, baseHeaders);
+  }
+
+  try {
+    const workspace = await findWorkspaceRepo({
+      client: auth.client,
+      org: organization.name,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    const documents = await listWorkspaceDocuments({
+      client: auth.client,
+      org: organization.name,
+      workspace: workspaceName,
+    });
+
+    // One call for the whole binder, then matched to documents by the upload
+    // branch convention — rather than one pull request query per document,
+    // which is the cost the binder exists to remove.
+    const openChanges = await listPullRequests({
+      client: auth.client,
+      owner: organization.name,
+      repo: workspaceName,
+      state: "open",
+    });
+
+    return json(
+      200,
+      {
+        organization: organization.name,
+        workspace: workspaceName,
+        documents: documents.map((document) => ({
+          ...document,
+          openChangeCount: openChanges.filter((pull) =>
+            changeTouchesDocument(pull, document.slugPath),
+          ).length,
+        })),
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to list workspace documents", {
+      username: auth.session.username,
+      organization: organization.name,
+      workspace: workspaceName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to list the documents.");
+  }
+}
+
+/**
+ * Whether an open change is about this document.
+ *
+ * Matched on the upload branch convention — `upload/<slugPath>/…` — because
+ * asking Gitea which files a pull request touches is a call per change, and
+ * this list exists to stop paying per document. The answer only decides a
+ * badge; nothing gates on it, so a convention is the right price.
+ */
+function changeTouchesDocument(
+  pull: { head?: { ref?: string } | null },
+  slugPath: string,
+): boolean {
+  const ref = pull.head?.ref ?? "";
+  return ref.startsWith(`upload/${slugPath}/`);
+}
+
+/**
+ * One document in a binder, with its published versions.
+ *
+ * Addressable by file path or by identity: a URL may carry
+ * `clinical/infection-control` or `clinical/infection-control.pdf`, and the
+ * extension is how we render a document rather than how a person refers to it.
+ */
+async function handleWorkspaceDocumentDetail(
+  req: Request,
+  baseHeaders: Headers,
+  workspaceName: string,
+  documentPath: string,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const organization = await resolveSessionOrganization(
+    auth.client,
+    auth.session,
+  );
+  if (!organization) {
+    return json(404, { error: "No such document." }, baseHeaders);
+  }
+
+  try {
+    const workspace = await findWorkspaceRepo({
+      client: auth.client,
+      org: organization.name,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    const document = await findWorkspaceDocument({
+      client: auth.client,
+      org: organization.name,
+      workspace: workspaceName,
+      documentPath,
+    });
+    if (!document) {
+      return json(404, { error: "No such document." }, baseHeaders);
+    }
+
+    const [versions, openChanges] = await Promise.all([
+      listDocumentVersions({
+        client: auth.client,
+        org: organization.name,
+        workspace: workspaceName,
+        slugPath: document.slugPath,
+      }),
+      listPullRequests({
+        client: auth.client,
+        owner: organization.name,
+        repo: workspaceName,
+        state: "open",
+      }),
+    ]);
+
+    return json(
+      200,
+      {
+        organization: organization.name,
+        workspace: workspaceName,
+        document,
+        versions,
+        latestVersion: versions[0] ?? null,
+        openChanges: openChanges.filter((pull) =>
+          changeTouchesDocument(pull, document.slugPath),
+        ),
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to read a workspace document", {
+      username: auth.session.username,
+      organization: organization.name,
+      workspace: workspaceName,
+      documentPath,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to read the document.");
+  }
+}
+
 async function handleCreateWorkspaceDocument(
   req: Request,
   baseHeaders: Headers,
@@ -5818,8 +6000,26 @@ export function createApiServer() {
         const workspaceDocumentsMatch = pathname.match(
           /^\/api\/app\/workspaces\/([^/]+)\/documents$/,
         );
+        // The document's path carries slashes — it is a path inside the binder,
+        // not one segment — so this captures the rest of the URL.
+        const workspaceDocumentMatch = pathname.match(
+          /^\/api\/app\/workspaces\/([^/]+)\/documents\/(.+)$/,
+        );
 
-        if (workspaceDocumentsMatch && method === "POST") {
+        if (workspaceDocumentsMatch && method === "GET") {
+          response = await handleListWorkspaceDocuments(
+            req,
+            baseHeaders,
+            workspaceDocumentsMatch[1]!,
+          );
+        } else if (workspaceDocumentMatch && method === "GET") {
+          response = await handleWorkspaceDocumentDetail(
+            req,
+            baseHeaders,
+            workspaceDocumentMatch[1]!,
+            decodeURIComponent(workspaceDocumentMatch[2]!),
+          );
+        } else if (workspaceDocumentsMatch && method === "POST") {
           response = await handleCreateWorkspaceDocument(
             req,
             baseHeaders,

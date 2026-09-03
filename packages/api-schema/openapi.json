@@ -2022,6 +2022,37 @@
           "name"
         ]
       },
+      "WorkspaceDocumentEntry": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "slugPath": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "folder": {
+            "type": "string"
+          },
+          "size": {
+            "type": "number"
+          },
+          "sha": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "slugPath",
+          "name",
+          "folder",
+          "size",
+          "sha"
+        ]
+      },
       "CreatedOrganizationPayload": {
         "type": "object",
         "properties": {
@@ -8416,6 +8447,84 @@
       }
     },
     "/api/app/workspaces/{workspace}/documents": {
+      "get": {
+        "operationId": "listWorkspaceDocuments",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "workspace",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The binder's documents",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "documents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "slugPath": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "folder": {
+                            "type": "string"
+                          },
+                          "size": {
+                            "type": "number"
+                          },
+                          "sha": {
+                            "type": "string"
+                          },
+                          "openChangeCount": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "slugPath",
+                          "name",
+                          "folder",
+                          "size",
+                          "sha",
+                          "openChangeCount"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "workspace",
+                    "documents"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "operationId": "createWorkspaceDocument",
         "tags": [
@@ -8493,6 +8602,139 @@
                     "slugPath",
                     "branch",
                     "pullRequestNumber"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/workspaces/{workspace}/documents/{documentPath}": {
+      "get": {
+        "operationId": "getWorkspaceDocument",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "workspace",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "documentPath",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One document, with its published versions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "document": {
+                      "type": "object",
+                      "properties": {
+                        "path": {
+                          "type": "string"
+                        },
+                        "slugPath": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "folder": {
+                          "type": "string"
+                        },
+                        "size": {
+                          "type": "number"
+                        },
+                        "sha": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "path",
+                        "slugPath",
+                        "name",
+                        "folder",
+                        "size",
+                        "sha"
+                      ]
+                    },
+                    "versions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "tag": {
+                            "type": "string"
+                          },
+                          "version": {
+                            "type": "number"
+                          },
+                          "commitSha": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "tag",
+                          "version",
+                          "commitSha"
+                        ]
+                      }
+                    },
+                    "latestVersion": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "tag": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "number"
+                        },
+                        "commitSha": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "tag",
+                        "version",
+                        "commitSha"
+                      ]
+                    },
+                    "openChanges": {
+                      "type": "array",
+                      "items": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "workspace",
+                    "document",
+                    "versions",
+                    "latestVersion",
+                    "openChanges"
                   ]
                 }
               }

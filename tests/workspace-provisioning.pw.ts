@@ -394,3 +394,100 @@ test("adding a document to a binder that does not exist is a 404", async () => {
   });
   expect(missing.status).toBe(404);
 });
+
+/**
+ * ADR 0004 step 2, read side: the documents list is one walk of one binder.
+ *
+ * It used to be a repository search — one repository per document, three Gitea
+ * calls each. The binder makes it a tree read, which is the cost argument the
+ * ADR makes for the model.
+ */
+async function listDocuments(
+  sessionCookie: string,
+  workspace: string,
+): Promise<{ status: number; body: string }> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/workspaces/${workspace}/documents`,
+    { headers: { Cookie: `bindersnap_session=${sessionCookie}` } },
+  );
+  return { status: response.status, body: await response.text() };
+}
+
+async function getDocument(
+  sessionCookie: string,
+  workspace: string,
+  documentPath: string,
+): Promise<{ status: number; body: string }> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/workspaces/${workspace}/documents/${documentPath}`,
+    { headers: { Cookie: `bindersnap_session=${sessionCookie}` } },
+  );
+  return { status: response.status, body: await response.text() };
+}
+
+test("a binder with nothing in it lists no documents, and is not an error", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect((await createWorkspace(sessionCookie, "Clinical")).status).toBe(201);
+
+  const listed = await listDocuments(sessionCookie, "clinical");
+  expect(listed.status, listed.body).toBe(200);
+  expect(
+    (JSON.parse(listed.body) as { documents: unknown[] }).documents,
+  ).toEqual([]);
+});
+
+test("an unpublished document is not in the binder's list, because main is the record", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect((await createWorkspace(sessionCookie, "Clinical")).status).toBe(201);
+
+  const added = await addDocument(sessionCookie, "clinical", {
+    name: "Infection Control",
+  });
+  expect(added.status, added.body).toBe(201);
+
+  // The upload is on a branch with an open change. Nothing reaches main except
+  // a merged, approved change, and the list reads main — so a document nobody
+  // has approved is not yet part of the record.
+  const listed = await listDocuments(sessionCookie, "clinical");
+  expect(listed.status, listed.body).toBe(200);
+  expect(
+    (JSON.parse(listed.body) as { documents: unknown[] }).documents,
+  ).toEqual([]);
+});
+
+test("listing a binder that does not exist is a 404", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+
+  expect((await listDocuments(sessionCookie, "no-such-binder")).status).toBe(
+    404,
+  );
+});
+
+test("asking for a document that is not there is a 404, not an empty document", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect((await createWorkspace(sessionCookie, "Clinical")).status).toBe(201);
+
+  expect(
+    (await getDocument(sessionCookie, "clinical", "nursing/handover")).status,
+  ).toBe(404);
+});
+
+test("an account with no organization sees no documents rather than an error", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+
+  // Reading is never gated, and having no organization is an ordinary state.
+  const listed = await listDocuments(sessionCookie, "clinical");
+  expect(listed.status, listed.body).toBe(200);
+  expect(
+    (JSON.parse(listed.body) as { documents: unknown[] }).documents,
+  ).toEqual([]);
+});
