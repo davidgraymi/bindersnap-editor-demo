@@ -175,6 +175,16 @@ test("a member creates the binder, and it belongs to the organization", async ()
   expect(repo.private).toBe(true);
   expect(repo.default_branch).toBe("main");
 
+  // A binder holds policies, and it starts with none. Gitea's `auto_init` is
+  // the only way to get a `main` to protect and it writes a README; left in
+  // place that lists as a document called "README" in front of a surveyor.
+  const contents = await fetch(
+    `${GITEA_URL}/api/v1/repos/${org.name}/clinical-policies/contents`,
+    { headers: { Authorization: `token ${token}` } },
+  );
+  expect(contents.status).toBe(200);
+  expect(await contents.json()).toEqual([]);
+
   const teams = await giteaGet<Array<{ name: string }>>(
     token,
     `/orgs/${org.name}/teams`,
