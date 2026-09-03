@@ -215,3 +215,83 @@ export function nextVersionTag(
 ): string {
   return buildDocumentVersionTag(slugPath, nextVersionFrom(versions));
 }
+
+interface ChangedFile {
+  filename?: string;
+}
+
+/**
+ * The documents a change touches.
+ *
+ * ADR 0004 §4: the unit of approval is the change, not the document. A pull
+ * request that revises three cross-referencing policies together is a feature
+ * — they should be revised and approved as one act — so publishing has to know
+ * every document it covers, not just one.
+ *
+ * Repository furniture is filtered out the same way it is in the list: a change
+ * that edits CODEOWNERS alongside two policies publishes two versions, not
+ * three.
+ */
+export async function listChangedDocuments(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  pullNumber: number;
+}): Promise<WorkspaceDocumentEntry[]> {
+  const { client, org, workspace, pullNumber } = params;
+
+  const files = (await unwrap(
+    client.GET("/repos/{owner}/{repo}/pulls/{index}/files", {
+      params: { path: { owner: org, repo: workspace, index: pullNumber } },
+    }),
+  )) as ChangedFile[];
+
+  const seen = new Set<string>();
+  const documents: WorkspaceDocumentEntry[] = [];
+
+  for (const file of files ?? []) {
+    const entry = toDocumentEntry({ path: file.filename ?? "", type: "blob" });
+    if (!entry || seen.has(entry.slugPath)) continue;
+
+    seen.add(entry.slugPath);
+    documents.push(entry);
+  }
+
+  return documents.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+/**
+ * Publish one document: a tag naming it, pointing at the merge commit.
+ *
+ * Several tags on one commit is ordinary git, and it is what lets one approved
+ * change publish `infection-control/v4`, `handover/v2` and `medication/v7`
+ * together while keeping each document's version its own.
+ */
+export async function createDocumentVersionTag(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  slugPath: string;
+  version: number;
+  target: string;
+}): Promise<DocumentVersion> {
+  const { client, org, workspace, slugPath, version, target } = params;
+  const tagName = buildDocumentVersionTag(slugPath, version);
+
+  const tag = (await unwrap(
+    client.POST("/repos/{owner}/{repo}/tags", {
+      params: { path: { owner: org, repo: workspace } },
+      body: {
+        tag_name: tagName,
+        target,
+        message: `Published ${slugPath} v${version}`,
+      },
+    }),
+  )) as GitTag;
+
+  return {
+    tag: tagName,
+    version,
+    commitSha: tag?.commit?.sha ?? "",
+  };
+}

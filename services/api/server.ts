@@ -32,9 +32,12 @@ import {
   workspacePathExists,
 } from "./gitea-client/workspaces";
 import {
+  createDocumentVersionTag,
   findWorkspaceDocument,
+  listChangedDocuments,
   listDocumentVersions,
   listWorkspaceDocuments,
+  nextVersionFrom,
 } from "./gitea-client/workspaceDocuments";
 import { listOrganizationOwners } from "./gitea-client/orgs";
 import { createPrivilegedGiteaClient } from "./privileged-client";
@@ -4771,6 +4774,168 @@ async function handleStripeWebhook(
  *
  * A read, so it is never gated.
  */
+/**
+ * Publish a change, and version every document it touched.
+ *
+ * ADR 0004 §4: the unit of approval is the change, not the document. One
+ * approved change that revised three cross-referencing policies publishes three
+ * versions — `infection-control/v4`, `handover/v2`, `medication/v7` — all
+ * pointing at the same merge commit. Several tags on one commit is ordinary
+ * git, and it is what keeps "who approved v4" answerable as tag → commit →
+ * pull request → reviews.
+ *
+ * The unresolved-thread gate is unchanged from the per-repository publish and
+ * still lives here: Gitea has no equivalent of GitHub's required conversation
+ * resolution, and the BFF is the only path to a merge, so it cannot be
+ * bypassed from the browser. Checked before the merge, never after.
+ */
+async function handlePublishWorkspaceChange(
+  req: Request,
+  baseHeaders: Headers,
+  workspaceName: string,
+  pullNumber: number,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { client, session } = auth;
+  const payload = (await readJsonBody(req)) ?? null;
+  const form = payload ? null : await readMultipartBody(req);
+  const mergeStyleRaw = readInputString(
+    payload,
+    form,
+    "mergeStyle",
+  ).toLowerCase();
+  const mergeStyle =
+    mergeStyleRaw === "squash" || mergeStyleRaw === "rebase"
+      ? (mergeStyleRaw as "squash" | "rebase")
+      : "merge";
+
+  const organization = await resolveSessionOrganization(client, session);
+  if (!organization) {
+    return json(404, { error: "No such binder." }, baseHeaders);
+  }
+
+  const owner = organization.name;
+
+  try {
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: owner,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    // Which documents this change covers has to be known before the merge:
+    // afterwards the branch is gone, and with it the question's cheapest
+    // answer.
+    const documents = await listChangedDocuments({
+      client,
+      org: owner,
+      workspace: workspaceName,
+      pullNumber,
+    });
+
+    if (documents.length === 0) {
+      return json(
+        409,
+        { error: "This change does not touch any document." },
+        baseHeaders,
+      );
+    }
+
+    const reviewSettings = await getReviewSettings({
+      client,
+      owner,
+      repo: workspaceName,
+    });
+    if (reviewSettings.blockOnUnresolvedThreads) {
+      const discussions = await listDiscussions({
+        client,
+        owner,
+        repo: workspaceName,
+        pullNumber,
+      });
+
+      if (discussions.unresolvedCount > 0) {
+        return json(
+          409,
+          {
+            error:
+              discussions.unresolvedCount === 1
+                ? "This change has 1 unresolved discussion thread. Resolve it before publishing."
+                : `This change has ${discussions.unresolvedCount} unresolved discussion threads. Resolve them before publishing.`,
+            unresolvedCount: discussions.unresolvedCount,
+          },
+          baseHeaders,
+        );
+      }
+    }
+
+    // Each document's next version is its own: they are versioned separately
+    // and a binder's documents do not advance in lockstep. Read before the
+    // merge so a failure here changes nothing.
+    const nextVersions = await Promise.all(
+      documents.map(async (document) => ({
+        document,
+        version: nextVersionFrom(
+          await listDocumentVersions({
+            client,
+            org: owner,
+            workspace: workspaceName,
+            slugPath: document.slugPath,
+          }),
+        ),
+      })),
+    );
+
+    await mergeOrResolveConflicts({
+      client,
+      owner,
+      repo: workspaceName,
+      pullNumber,
+      mergeStyle,
+    });
+
+    // Sequential: Gitea serializes repository writes, and a partial failure
+    // here is easier to read in order than interleaved.
+    const tags = [];
+    for (const { document, version } of nextVersions) {
+      tags.push(
+        await createDocumentVersionTag({
+          client,
+          org: owner,
+          workspace: workspaceName,
+          slugPath: document.slugPath,
+          version,
+          target: "main",
+        }),
+      );
+    }
+
+    logger.info("Workspace change published", {
+      username: session.username,
+      organization: owner,
+      workspace: workspaceName,
+      pullNumber,
+      tags: tags.map((tag) => tag.tag),
+    });
+
+    return json(200, { ok: true, tags }, baseHeaders);
+  } catch (err) {
+    logger.error("Failed to publish a workspace change", {
+      username: session.username,
+      organization: owner,
+      workspace: workspaceName,
+      pullNumber,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to publish the change.");
+  }
+}
+
 async function handleListWorkspaceDocuments(
   req: Request,
   baseHeaders: Headers,
@@ -6005,8 +6170,18 @@ export function createApiServer() {
         const workspaceDocumentMatch = pathname.match(
           /^\/api\/app\/workspaces\/([^/]+)\/documents\/(.+)$/,
         );
+        const workspacePublishMatch = pathname.match(
+          /^\/api\/app\/workspaces\/([^/]+)\/changes\/(\d+)\/publish$/,
+        );
 
-        if (workspaceDocumentsMatch && method === "GET") {
+        if (workspacePublishMatch && method === "POST") {
+          response = await handlePublishWorkspaceChange(
+            req,
+            baseHeaders,
+            workspacePublishMatch[1]!,
+            Number.parseInt(workspacePublishMatch[2] ?? "", 10),
+          );
+        } else if (workspaceDocumentsMatch && method === "GET") {
           response = await handleListWorkspaceDocuments(
             req,
             baseHeaders,
