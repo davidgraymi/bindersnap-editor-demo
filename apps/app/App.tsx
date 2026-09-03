@@ -595,9 +595,11 @@ export function App() {
         onCreate={async (name) => {
           await createOrganization(name);
           // The organization changes what this session can do, so re-read
-          // access rather than guessing at it, then go to the workspace it
-          // just created.
-          await refreshSession();
+          // access rather than guessing at it. If that read fails the
+          // organization still exists, and stranding someone on this form —
+          // the one screen that cannot help them any further — is the worst
+          // answer available; the next navigation reads it again anyway.
+          await refreshSession().catch(() => undefined);
           setSuggestedOrganizationName(null);
           setOrganizationSetupReason(null);
           navigateTo({ kind: "home" }, true);

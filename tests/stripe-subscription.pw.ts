@@ -452,12 +452,10 @@ interface BillingStatusPayload {
 }
 
 /**
- * Sign up, then create the organization, and answer with both.
+ * Sign up, and answer with the session plus the organization signup created.
  *
  * Every test here needs the organization: it is what Stripe is keyed to, what
- * the paywall checks, and what owns the trial. Signup no longer provisions one
- * — ADR 0004 made naming it the owner's job — so the helper does what a person
- * would do next, rather than reading back an organization nobody asked for.
+ * the paywall checks, and what owns the trial.
  */
 async function signUpOrganization(credentials: {
   username: string;
@@ -466,21 +464,23 @@ async function signUpOrganization(credentials: {
 }): Promise<{ sessionCookie: string; giteaOrgId: number }> {
   const sessionCookie = await signUpUser(credentials);
 
-  const response = await fetch(`${API_BASE_URL}/api/app/organizations`, {
+  // Signup no longer creates an organization — a person names their own, and
+  // this is that request. Everything below bills an organization, so there has
+  // to be one before any of it means anything.
+  const created = await fetch(`${API_BASE_URL}/api/app/organizations`, {
     method: "POST",
     headers: {
       Cookie: `bindersnap_session=${sessionCookie}`,
       "Content-Type": "application/json",
-      // A mutation, so it goes through the state-changing origin check.
       Origin: APP_ORIGIN,
     },
-    body: JSON.stringify({ name: credentials.username }),
+    body: JSON.stringify({ name: `Stripe Test ${credentials.username}` }),
   });
 
-  if (!response.ok) {
-    const body = await response.text().catch(() => "(no body)");
+  if (!created.ok) {
+    const body = await created.text().catch(() => "(no body)");
     throw new Error(
-      `Creating an organization for ${credentials.username} failed (${response.status}): ${body}`,
+      `Creating an organization failed (${created.status}): ${body}`,
     );
   }
 
@@ -489,7 +489,7 @@ async function signUpOrganization(credentials: {
 
   if (!giteaOrgId) {
     throw new Error(
-      `Billing status reported no organization for ${credentials.username} after creating one.`,
+      `No organization for ${credentials.username} after creating one.`,
     );
   }
 
@@ -873,15 +873,20 @@ test.describe("Stripe subscription lifecycle", () => {
         .fill(credentials.password);
       await page.getByRole("button", { name: "Create account" }).click();
 
-      // A new organization starts on a 14-day trial with no card (ADR 0004,
-      // #369), so signup lands in the workspace rather than at a card form.
-      //
+      // Signup no longer creates an organization behind the person's back, so
+      // the account lands here to name one. Everything after this bills that
+      // organization, so it has to exist first.
+      await expect(page).toHaveURL(/\/organizations\/new$/, {
+        timeout: 60_000,
+      });
+      await page.getByLabel("Organization name").fill("Mercy Health");
+      await page.getByRole("button", { name: "Create organization" }).click();
+
       // Wait for the workspace itself, not for the absence of /billing: a
-      // negative URL assertion is satisfied the instant it is made, because
-      // the page is still on /signup while the server provisions the
-      // organization, its binder, three teams and the rules on `main`. That
-      // would send the rest of this test to /billing with no session, where
-      // the app renders the login view and no amount of waiting produces a
+      // negative URL assertion is satisfied the instant it is made, while
+      // provisioning the organization, its binder, three teams and the rules
+      // on `main` is still in flight. That would send the rest of this test to
+      // /billing with no organization, where no amount of waiting produces a
       // subscribe button.
       await expect(page).toHaveURL(/\/$/, { timeout: 60_000 });
       await expect(
