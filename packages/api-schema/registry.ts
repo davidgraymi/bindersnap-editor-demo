@@ -756,6 +756,22 @@ registry.registerPath({
 });
 
 registry.registerPath({
+  method: "get",
+  path: "/api/app/orgs/{org}/binders",
+  operationId: "listOrganizationBinders",
+  tags: ["workspaces"],
+  request: { params: z.object({ org: z.string() }) },
+  responses: {
+    200: {
+      description: "The binders this organization owns",
+      content: {
+        "application/json": { schema: WorkspaceListPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
   method: "post",
   path: "/api/app/orgs/{org}/binders",
   operationId: "createBinder",

@@ -9,6 +9,12 @@ import * as UsersClient from "../../packages/api-client/users/users";
 import * as BillingClient from "../../packages/api-client/billing/billing";
 import * as AdminClient from "../../packages/api-client/admin/admin";
 import * as OrganizationsClient from "../../packages/api-client/organizations/organizations";
+import * as BindersClient from "../../packages/api-client/workspaces/workspaces";
+import type {
+  WorkspaceDocumentDetailPayload,
+  WorkspaceDocumentListPayload,
+  WorkspaceSummary,
+} from "../../packages/api-schema/schemas/workspaces";
 
 // Import generated types
 import type { SessionAuthState } from "../../packages/api-schema/schemas/auth";
@@ -753,6 +759,65 @@ export async function createOrganization(
 ): Promise<CreatedOrganizationPayload["organization"]> {
   const response = await OrganizationsClient.createOrganization({ name });
   return response.data.organization;
+}
+
+// Binder functions
+
+/**
+ * Every binder this session can act in, across every organization it belongs
+ * to — each one naming its owner, because that is what its address needs.
+ */
+export async function fetchBinders(): Promise<WorkspaceSummary[]> {
+  const response = await BindersClient.listBinders();
+  return response.data.workspaces;
+}
+
+/**
+ * The binders one organization owns.
+ *
+ * Distinct from `fetchBinders`, which answers a question about a person —
+ * everything I can act in, wherever it lives. This answers a question about an
+ * organization, which is what you are asking when you are looking at the
+ * organization rather than at your day.
+ */
+export async function fetchOrganizationBinders(
+  org: string,
+): Promise<WorkspaceSummary[]> {
+  const response = await BindersClient.listOrganizationBinders(org);
+  return response.data.workspaces;
+}
+
+export async function createBinder(
+  org: string,
+  name: string,
+  description?: string,
+): Promise<WorkspaceSummary> {
+  const response = await BindersClient.createBinder(org, {
+    name,
+    description,
+  });
+  return response.data.workspace;
+}
+
+export async function fetchBinderDocuments(
+  org: string,
+  binder: string,
+): Promise<WorkspaceDocumentListPayload> {
+  const response = await BindersClient.listBinderDocuments(org, binder);
+  return response.data;
+}
+
+export async function fetchBinderDocument(
+  org: string,
+  binder: string,
+  documentPath: string,
+): Promise<WorkspaceDocumentDetailPayload> {
+  const response = await BindersClient.getBinderDocument(
+    org,
+    binder,
+    documentPath,
+  );
+  return response.data;
 }
 
 // Billing functions

@@ -9,6 +9,18 @@ export type AppRoute =
   | { kind: "adminSubscriptions" }
   | { kind: "billing" }
   | { kind: "createOrganization" }
+  /** An organization: what it owns, and who is in it. `/{org}`. */
+  | { kind: "organization"; org: string }
+  /** A binder's documents: `/{org}/{binder}`. */
+  | { kind: "binder"; org: string; binder: string }
+  /** One document inside it: `/{org}/{binder}/{path}`. */
+  | {
+      kind: "binderDocument";
+      org: string;
+      binder: string;
+      /** May carry folders, and may or may not carry the file extension. */
+      documentPath: string;
+    }
   | {
       kind: "document";
       owner: string;
@@ -97,6 +109,26 @@ export function isLegacyDocumentTabPath(pathname: string): boolean {
 export function isLegacyInboxPath(pathname: string): boolean {
   return normalizePathname(pathname) === "/inbox";
 }
+
+/**
+ * First path segments that are the app's own, not an organization's.
+ *
+ * A bare `/{org}/{binder}` address means the app has to know which names are
+ * not organizations — the same problem GitHub solves by reserving `settings`,
+ * `login` and the rest. Anything added here must also be refused as an
+ * organization name, or somebody's binder becomes unreachable.
+ */
+export const RESERVED_FIRST_SEGMENTS = new Set([
+  "activity",
+  "admin",
+  "auth",
+  "billing",
+  "docs",
+  "documents",
+  "login",
+  "organizations",
+  "signup",
+]);
 
 export function getRoute(pathname: string): AppRoute {
   const normalizedPath = normalizePathname(pathname);
@@ -202,6 +234,27 @@ export function getRoute(pathname: string): AppRoute {
     };
   }
 
+  // `/{org}/{binder}` and `/{org}/{binder}/{path}`, the address Gitea and
+  // GitHub both use. It is matched last because it would otherwise swallow
+  // every route above it — see RESERVED_FIRST_SEGMENTS.
+  const orgMatch = normalizedPath.match(/^\/([^/]+)$/);
+  if (orgMatch && !RESERVED_FIRST_SEGMENTS.has(orgMatch[1]!)) {
+    return { kind: "organization", org: orgMatch[1]! };
+  }
+
+  const binderMatch = normalizedPath.match(/^\/([^/]+)\/([^/]+)(?:\/(.+))?$/);
+  if (binderMatch && !RESERVED_FIRST_SEGMENTS.has(binderMatch[1]!)) {
+    const documentPath = binderMatch[3];
+    return documentPath
+      ? {
+          kind: "binderDocument",
+          org: binderMatch[1]!,
+          binder: binderMatch[2]!,
+          documentPath,
+        }
+      : { kind: "binder", org: binderMatch[1]!, binder: binderMatch[2]! };
+  }
+
   return { kind: "home" };
 }
 
@@ -238,6 +291,12 @@ export function routeToPath(route: AppRoute): string {
       return "/billing";
     case "createOrganization":
       return "/organizations/new";
+    case "organization":
+      return `/${route.org}`;
+    case "binder":
+      return `/${route.org}/${route.binder}`;
+    case "binderDocument":
+      return `/${route.org}/${route.binder}/${route.documentPath}`;
     case "home":
     case "workspace":
     default:
@@ -250,7 +309,12 @@ export function isProtectedAppRoute(route: AppRoute): boolean {
     route.kind === "workspace" ||
     route.kind === "documents" ||
     route.kind === "activity" ||
-    route.kind === "adminSubscriptions"
+    route.kind === "adminSubscriptions" ||
+    // An organization's own pages need a session to resolve at all: which
+    // binders you can see is a question about you.
+    route.kind === "organization" ||
+    route.kind === "binder" ||
+    route.kind === "binderDocument"
   );
 }
 

@@ -11,7 +11,8 @@ import type {
   CreateBinderDocumentBody,
   GetBinderDocument200,
   ListBinderDocuments200,
-  ListBinders200
+  ListBinders200,
+  ListOrganizationBinders200
 } from '../model';
 
 import { customFetch } from '.././mutator.ts';
@@ -39,6 +40,38 @@ export const getListBindersUrl = () => {
 export const listBinders = async ( options?: Parameters<typeof customFetch>[1]): Promise<listBindersResponse> => {
 
   return customFetch<listBindersResponse>(getListBindersUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type listOrganizationBindersResponse200 = {
+  data: ListOrganizationBinders200
+  status: 200
+}
+
+export type listOrganizationBindersResponseSuccess = (listOrganizationBindersResponse200) & {
+  headers: Headers;
+};
+;
+
+export type listOrganizationBindersResponse = (listOrganizationBindersResponseSuccess)
+
+export const getListOrganizationBindersUrl = (org: string,) => {
+
+
+
+
+  return `/api/app/orgs/${org}/binders`
+}
+
+export const listOrganizationBinders = async (org: string, options?: Parameters<typeof customFetch>[1]): Promise<listOrganizationBindersResponse> => {
+
+  return customFetch<listOrganizationBindersResponse>(getListOrganizationBindersUrl(org),
   {
     ...options,
     method: 'GET'

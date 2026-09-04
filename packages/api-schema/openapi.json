@@ -8355,6 +8355,69 @@
       }
     },
     "/api/app/orgs/{org}/binders": {
+      "get": {
+        "operationId": "listOrganizationBinders",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The binders this organization owns",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "workspaces": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "number"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "owner": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "owner",
+                          "fullName",
+                          "description"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "workspaces"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "operationId": "createBinder",
         "tags": [
@@ -8501,6 +8564,26 @@
                           },
                           "openChangeCount": {
                             "type": "number"
+                          },
+                          "latestVersion": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "tag": {
+                                "type": "string"
+                              },
+                              "version": {
+                                "type": "number"
+                              },
+                              "commitSha": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "tag",
+                              "version",
+                              "commitSha"
+                            ]
                           }
                         },
                         "required": [
@@ -8510,7 +8593,8 @@
                           "folder",
                           "size",
                           "sha",
-                          "openChangeCount"
+                          "openChangeCount",
+                          "latestVersion"
                         ]
                       }
                     }
