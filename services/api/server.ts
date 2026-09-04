@@ -29,10 +29,10 @@ import {
   findWorkspaceRepo,
   listOrganizationWorkspaces,
   provisionWorkspace,
-  workspacePathExists,
 } from "./gitea-client/workspaces";
 import {
   createDocumentVersionTag,
+  findPendingDocumentBranch,
   findWorkspaceDocument,
   listChangedDocuments,
   listDocumentVersions,
@@ -5157,17 +5157,52 @@ async function handleCreateWorkspaceDocument(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
-    if (
-      await workspacePathExists({
-        client,
-        org: orgName,
-        workspace: workspaceName,
-        path: filePath,
-      })
-    ) {
+    // Refuse anything that would land on an address already taken — including
+    // the same name with a different extension. A URL has to name one thing:
+    // `policy.md` and `policy.pdf` would both be `nursing/policy`, so a link to
+    // that address would resolve to whichever came first alphabetically, and
+    // publishing one would write the other's version tag.
+    //
+    // The identity deliberately excludes the extension so that re-uploading a
+    // policy as a PDF keeps its history. That only works if nothing else can
+    // claim the same identity, which is what this enforces.
+    const collision = await findWorkspaceDocument({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      documentPath: slugPath,
+    });
+
+    if (collision) {
       return json(
         409,
-        { error: `A document already lives at "${filePath}".` },
+        {
+          error:
+            collision.path === filePath
+              ? `A document already lives at "${filePath}".`
+              : `"${collision.path}" already answers to "${slugPath}". Two documents cannot share one address.`,
+        },
+        baseHeaders,
+      );
+    }
+
+    // And one that is proposed but not yet published. `main` shows only
+    // published documents, so without this two uploads race for the same
+    // address, both succeed, and the collision appears later as two files
+    // answering to one URL.
+    const pending = await findPendingDocumentBranch({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      slugPath,
+    });
+
+    if (pending) {
+      return json(
+        409,
+        {
+          error: `An unpublished change already claims "${slugPath}" (${pending}).`,
+        },
         baseHeaders,
       );
     }

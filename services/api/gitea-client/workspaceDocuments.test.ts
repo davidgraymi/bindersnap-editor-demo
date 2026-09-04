@@ -3,6 +3,7 @@ import { expect, mock, test } from "bun:test";
 import type { GiteaClient } from "./client";
 import {
   createDocumentVersionTag,
+  findWorkspaceDocument,
   listChangedDocuments,
   listDocumentVersions,
   listWorkspaceDocuments,
@@ -266,4 +267,50 @@ test("createDocumentVersionTag names the document in the tag", async () => {
     version: 2,
     commitSha: "merge-sha",
   });
+});
+
+test("two documents differing only by extension share one identity", () => {
+  // The reason uploads refuse this. A URL has to name one thing, and the
+  // identity deliberately drops the extension so that re-uploading a policy as
+  // a PDF keeps its history — which only works if nothing else can claim the
+  // same identity.
+  const markdown = toDocumentEntry({ path: "nursing/policy.md", type: "blob" });
+  const pdf = toDocumentEntry({ path: "nursing/policy.pdf", type: "blob" });
+
+  expect(markdown?.slugPath).toBe("nursing/policy");
+  expect(pdf?.slugPath).toBe("nursing/policy");
+});
+
+test("an exact file path wins over an identity match", async () => {
+  // So a link carrying the extension always resolves to that exact file, even
+  // in a binder edited outside Bindersnap that already holds a collision.
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/git/trees/{sha}": () => ({
+        tree: [
+          { path: "nursing/policy.pdf", type: "blob", sha: "pdf" },
+          { path: "nursing/policy.md", type: "blob", sha: "md" },
+        ],
+      }),
+    },
+  });
+
+  const exact = await findWorkspaceDocument({
+    client,
+    org: "riverside-health",
+    workspace: "clinical",
+    documentPath: "nursing/policy.md",
+  });
+  expect(exact?.sha).toBe("md");
+
+  // And an identity-only link resolves the same way every time rather than
+  // alphabetically by accident.
+  const byIdentity = await findWorkspaceDocument({
+    client,
+    org: "riverside-health",
+    workspace: "clinical",
+    documentPath: "nursing/policy",
+  });
+  expect(byIdentity).not.toBeNull();
+  expect(byIdentity?.slugPath).toBe("nursing/policy");
 });
