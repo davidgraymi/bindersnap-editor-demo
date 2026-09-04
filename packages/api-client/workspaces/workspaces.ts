@@ -5,40 +5,40 @@
  * OpenAPI spec version: 1.0.0
  */
 import type {
-  CreateWorkspace201,
-  CreateWorkspaceBody,
-  CreateWorkspaceDocument201,
-  CreateWorkspaceDocumentBody,
-  GetWorkspaceDocument200,
-  ListWorkspaceDocuments200,
-  ListWorkspaces200
+  CreateBinder201,
+  CreateBinderBody,
+  CreateBinderDocument201,
+  CreateBinderDocumentBody,
+  GetBinderDocument200,
+  ListBinderDocuments200,
+  ListBinders200
 } from '../model';
 
 import { customFetch } from '.././mutator.ts';
 
-export type listWorkspacesResponse200 = {
-  data: ListWorkspaces200
+export type listBindersResponse200 = {
+  data: ListBinders200
   status: 200
 }
 
-export type listWorkspacesResponseSuccess = (listWorkspacesResponse200) & {
+export type listBindersResponseSuccess = (listBindersResponse200) & {
   headers: Headers;
 };
 ;
 
-export type listWorkspacesResponse = (listWorkspacesResponseSuccess)
+export type listBindersResponse = (listBindersResponseSuccess)
 
-export const getListWorkspacesUrl = () => {
-
-
+export const getListBindersUrl = () => {
 
 
-  return `/api/app/workspaces`
+
+
+  return `/api/app/binders`
 }
 
-export const listWorkspaces = async ( options?: Parameters<typeof customFetch>[1]): Promise<listWorkspacesResponse> => {
+export const listBinders = async ( options?: Parameters<typeof customFetch>[1]): Promise<listBindersResponse> => {
 
-  return customFetch<listWorkspacesResponse>(getListWorkspacesUrl(),
+  return customFetch<listBindersResponse>(getListBindersUrl(),
   {
     ...options,
     method: 'GET'
@@ -48,61 +48,64 @@ export const listWorkspaces = async ( options?: Parameters<typeof customFetch>[1
 );}
 
 
-export type createWorkspaceResponse201 = {
-  data: CreateWorkspace201
+export type createBinderResponse201 = {
+  data: CreateBinder201
   status: 201
 }
 
-export type createWorkspaceResponseSuccess = (createWorkspaceResponse201) & {
+export type createBinderResponseSuccess = (createBinderResponse201) & {
   headers: Headers;
 };
 ;
 
-export type createWorkspaceResponse = (createWorkspaceResponseSuccess)
+export type createBinderResponse = (createBinderResponseSuccess)
 
-export const getCreateWorkspaceUrl = () => {
-
-
+export const getCreateBinderUrl = (org: string,) => {
 
 
-  return `/api/app/workspaces`
+
+
+  return `/api/app/orgs/${org}/binders`
 }
 
-export const createWorkspace = async (createWorkspaceBody: CreateWorkspaceBody, options?: Parameters<typeof customFetch>[1]): Promise<createWorkspaceResponse> => {
+export const createBinder = async (org: string,
+    createBinderBody: CreateBinderBody, options?: Parameters<typeof customFetch>[1]): Promise<createBinderResponse> => {
 
-  return customFetch<createWorkspaceResponse>(getCreateWorkspaceUrl(),
+  return customFetch<createBinderResponse>(getCreateBinderUrl(org),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(createWorkspaceBody)
+    body: JSON.stringify(createBinderBody)
   }
 );}
 
 
-export type listWorkspaceDocumentsResponse200 = {
-  data: ListWorkspaceDocuments200
+export type listBinderDocumentsResponse200 = {
+  data: ListBinderDocuments200
   status: 200
 }
 
-export type listWorkspaceDocumentsResponseSuccess = (listWorkspaceDocumentsResponse200) & {
+export type listBinderDocumentsResponseSuccess = (listBinderDocumentsResponse200) & {
   headers: Headers;
 };
 ;
 
-export type listWorkspaceDocumentsResponse = (listWorkspaceDocumentsResponseSuccess)
+export type listBinderDocumentsResponse = (listBinderDocumentsResponseSuccess)
 
-export const getListWorkspaceDocumentsUrl = (workspace: string,) => {
+export const getListBinderDocumentsUrl = (org: string,
+    binder: string,) => {
 
 
 
 
-  return `/api/app/workspaces/${workspace}/documents`
+  return `/api/app/binders/${org}/${binder}/documents`
 }
 
-export const listWorkspaceDocuments = async (workspace: string, options?: Parameters<typeof customFetch>[1]): Promise<listWorkspaceDocumentsResponse> => {
+export const listBinderDocuments = async (org: string,
+    binder: string, options?: Parameters<typeof customFetch>[1]): Promise<listBinderDocumentsResponse> => {
 
-  return customFetch<listWorkspaceDocumentsResponse>(getListWorkspaceDocumentsUrl(workspace),
+  return customFetch<listBinderDocumentsResponse>(getListBinderDocumentsUrl(org,binder),
   {
     ...options,
     method: 'GET'
@@ -112,36 +115,38 @@ export const listWorkspaceDocuments = async (workspace: string, options?: Parame
 );}
 
 
-export type createWorkspaceDocumentResponse201 = {
-  data: CreateWorkspaceDocument201
+export type createBinderDocumentResponse201 = {
+  data: CreateBinderDocument201
   status: 201
 }
 
-export type createWorkspaceDocumentResponseSuccess = (createWorkspaceDocumentResponse201) & {
+export type createBinderDocumentResponseSuccess = (createBinderDocumentResponse201) & {
   headers: Headers;
 };
 ;
 
-export type createWorkspaceDocumentResponse = (createWorkspaceDocumentResponseSuccess)
+export type createBinderDocumentResponse = (createBinderDocumentResponseSuccess)
 
-export const getCreateWorkspaceDocumentUrl = (workspace: string,) => {
+export const getCreateBinderDocumentUrl = (org: string,
+    binder: string,) => {
 
 
 
 
-  return `/api/app/workspaces/${workspace}/documents`
+  return `/api/app/binders/${org}/${binder}/documents`
 }
 
-export const createWorkspaceDocument = async (workspace: string,
-    createWorkspaceDocumentBody: CreateWorkspaceDocumentBody, options?: Parameters<typeof customFetch>[1]): Promise<createWorkspaceDocumentResponse> => {
+export const createBinderDocument = async (org: string,
+    binder: string,
+    createBinderDocumentBody: CreateBinderDocumentBody, options?: Parameters<typeof customFetch>[1]): Promise<createBinderDocumentResponse> => {
     const formData = new FormData();
-formData.append(`file`, createWorkspaceDocumentBody.file);
-formData.append(`name`, createWorkspaceDocumentBody.name);
-if(createWorkspaceDocumentBody.folder !== undefined) {
- formData.append(`folder`, createWorkspaceDocumentBody.folder);
+formData.append(`file`, createBinderDocumentBody.file);
+formData.append(`name`, createBinderDocumentBody.name);
+if(createBinderDocumentBody.folder !== undefined) {
+ formData.append(`folder`, createBinderDocumentBody.folder);
  }
 
-  return customFetch<createWorkspaceDocumentResponse>(getCreateWorkspaceDocumentUrl(workspace),
+  return customFetch<createBinderDocumentResponse>(getCreateBinderDocumentUrl(org,binder),
   {
     ...options,
     method: 'POST'
@@ -151,31 +156,33 @@ if(createWorkspaceDocumentBody.folder !== undefined) {
 );}
 
 
-export type getWorkspaceDocumentResponse200 = {
-  data: GetWorkspaceDocument200
+export type getBinderDocumentResponse200 = {
+  data: GetBinderDocument200
   status: 200
 }
 
-export type getWorkspaceDocumentResponseSuccess = (getWorkspaceDocumentResponse200) & {
+export type getBinderDocumentResponseSuccess = (getBinderDocumentResponse200) & {
   headers: Headers;
 };
 ;
 
-export type getWorkspaceDocumentResponse = (getWorkspaceDocumentResponseSuccess)
+export type getBinderDocumentResponse = (getBinderDocumentResponseSuccess)
 
-export const getGetWorkspaceDocumentUrl = (workspace: string,
+export const getGetBinderDocumentUrl = (org: string,
+    binder: string,
     documentPath: string,) => {
 
 
 
 
-  return `/api/app/workspaces/${workspace}/documents/${documentPath}`
+  return `/api/app/binders/${org}/${binder}/documents/${documentPath}`
 }
 
-export const getWorkspaceDocument = async (workspace: string,
-    documentPath: string, options?: Parameters<typeof customFetch>[1]): Promise<getWorkspaceDocumentResponse> => {
+export const getBinderDocument = async (org: string,
+    binder: string,
+    documentPath: string, options?: Parameters<typeof customFetch>[1]): Promise<getBinderDocumentResponse> => {
 
-  return customFetch<getWorkspaceDocumentResponse>(getGetWorkspaceDocumentUrl(workspace,documentPath),
+  return customFetch<getBinderDocumentResponse>(getGetBinderDocumentUrl(org,binder,documentPath),
   {
     ...options,
     method: 'GET'

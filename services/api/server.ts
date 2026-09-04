@@ -4797,6 +4797,7 @@ async function handleStripeWebhook(
 async function handlePublishWorkspaceChange(
   req: Request,
   baseHeaders: Headers,
+  orgName: string,
   workspaceName: string,
   pullNumber: number,
 ): Promise<Response> {
@@ -4816,12 +4817,10 @@ async function handlePublishWorkspaceChange(
       ? (mergeStyleRaw as "squash" | "rebase")
       : "merge";
 
-  const organization = await resolveSessionOrganization(client, session);
-  if (!organization) {
-    return json(404, { error: "No such binder." }, baseHeaders);
-  }
-
-  const owner = organization.name;
+  // Authorization comes from the token, not from a membership lookup: a binder
+  // this session cannot see answers 404 from Gitea, which is the same answer a
+  // binder that does not exist gives — and the right one either way.
+  const owner = orgName;
 
   try {
     const workspace = await findWorkspaceRepo({
@@ -4944,23 +4943,16 @@ async function handlePublishWorkspaceChange(
 async function handleListWorkspaceDocuments(
   req: Request,
   baseHeaders: Headers,
+  orgName: string,
   workspaceName: string,
 ): Promise<Response> {
   const auth = await requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
 
-  const organization = await resolveSessionOrganization(
-    auth.client,
-    auth.session,
-  );
-  if (!organization) {
-    return json(200, { workspace: workspaceName, documents: [] }, baseHeaders);
-  }
-
   try {
     const workspace = await findWorkspaceRepo({
       client: auth.client,
-      org: organization.name,
+      org: orgName,
       name: workspaceName,
     });
     if (!workspace) {
@@ -4969,7 +4961,7 @@ async function handleListWorkspaceDocuments(
 
     const documents = await listWorkspaceDocuments({
       client: auth.client,
-      org: organization.name,
+      org: orgName,
       workspace: workspaceName,
     });
 
@@ -4978,7 +4970,7 @@ async function handleListWorkspaceDocuments(
     // which is the cost the binder exists to remove.
     const openChanges = await listPullRequests({
       client: auth.client,
-      owner: organization.name,
+      owner: orgName,
       repo: workspaceName,
       state: "open",
     });
@@ -4986,7 +4978,7 @@ async function handleListWorkspaceDocuments(
     return json(
       200,
       {
-        organization: organization.name,
+        organization: orgName,
         workspace: workspaceName,
         documents: documents.map((document) => ({
           ...document,
@@ -5000,7 +4992,7 @@ async function handleListWorkspaceDocuments(
   } catch (err) {
     logger.error("Failed to list workspace documents", {
       username: auth.session.username,
-      organization: organization.name,
+      organization: orgName,
       workspace: workspaceName,
       error: err instanceof Error ? err.message : String(err),
     });
@@ -5034,24 +5026,17 @@ function changeTouchesDocument(
 async function handleWorkspaceDocumentDetail(
   req: Request,
   baseHeaders: Headers,
+  orgName: string,
   workspaceName: string,
   documentPath: string,
 ): Promise<Response> {
   const auth = await requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
 
-  const organization = await resolveSessionOrganization(
-    auth.client,
-    auth.session,
-  );
-  if (!organization) {
-    return json(404, { error: "No such document." }, baseHeaders);
-  }
-
   try {
     const workspace = await findWorkspaceRepo({
       client: auth.client,
-      org: organization.name,
+      org: orgName,
       name: workspaceName,
     });
     if (!workspace) {
@@ -5060,7 +5045,7 @@ async function handleWorkspaceDocumentDetail(
 
     const document = await findWorkspaceDocument({
       client: auth.client,
-      org: organization.name,
+      org: orgName,
       workspace: workspaceName,
       documentPath,
     });
@@ -5071,13 +5056,13 @@ async function handleWorkspaceDocumentDetail(
     const [versions, openChanges] = await Promise.all([
       listDocumentVersions({
         client: auth.client,
-        org: organization.name,
+        org: orgName,
         workspace: workspaceName,
         slugPath: document.slugPath,
       }),
       listPullRequests({
         client: auth.client,
-        owner: organization.name,
+        owner: orgName,
         repo: workspaceName,
         state: "open",
       }),
@@ -5086,7 +5071,7 @@ async function handleWorkspaceDocumentDetail(
     return json(
       200,
       {
-        organization: organization.name,
+        organization: orgName,
         workspace: workspaceName,
         document,
         versions,
@@ -5100,7 +5085,7 @@ async function handleWorkspaceDocumentDetail(
   } catch (err) {
     logger.error("Failed to read a workspace document", {
       username: auth.session.username,
-      organization: organization.name,
+      organization: orgName,
       workspace: workspaceName,
       documentPath,
       error: err instanceof Error ? err.message : String(err),
@@ -5112,6 +5097,7 @@ async function handleWorkspaceDocumentDetail(
 async function handleCreateWorkspaceDocument(
   req: Request,
   baseHeaders: Headers,
+  orgName: string,
   workspaceName: string,
 ): Promise<Response> {
   const auth = await requireSubscription(req, baseHeaders);
@@ -5168,7 +5154,7 @@ async function handleCreateWorkspaceDocument(
   try {
     const workspace = await findWorkspaceRepo({
       client,
-      org: organization.name,
+      org: orgName,
       name: workspaceName,
     });
     if (!workspace) {
@@ -5178,7 +5164,7 @@ async function handleCreateWorkspaceDocument(
     if (
       await workspacePathExists({
         client,
-        org: organization.name,
+        org: orgName,
         workspace: workspaceName,
         path: filePath,
       })
@@ -5206,7 +5192,7 @@ async function handleCreateWorkspaceDocument(
     // a protected `main` and its role teams. That is the point of the level.
     await createUploadBranch({
       client,
-      owner: organization.name,
+      owner: orgName,
       repo: workspaceName,
       branchName,
       from: "main",
@@ -5223,7 +5209,7 @@ async function handleCreateWorkspaceDocument(
 
     await commitBinaryFile({
       client,
-      owner: organization.name,
+      owner: orgName,
       repo: workspaceName,
       branch: branchName,
       filePath,
@@ -5234,7 +5220,7 @@ async function handleCreateWorkspaceDocument(
 
     const pr = await createPullRequest({
       client,
-      owner: organization.name,
+      owner: orgName,
       repo: workspaceName,
       title: `Add ${slugPath}`,
       head: branchName,
@@ -5252,7 +5238,7 @@ async function handleCreateWorkspaceDocument(
 
     logger.info("Workspace document created", {
       username: session.username,
-      organization: organization.name,
+      organization: orgName,
       workspace: workspaceName,
       documentPath: filePath,
     });
@@ -5260,7 +5246,7 @@ async function handleCreateWorkspaceDocument(
     return json(
       201,
       {
-        organization: organization.name,
+        organization: orgName,
         workspace: workspaceName,
         documentPath: filePath,
         slugPath,
@@ -5272,7 +5258,7 @@ async function handleCreateWorkspaceDocument(
   } catch (err) {
     logger.error("Failed to add a document to a workspace", {
       username: session.username,
-      organization: organization.name,
+      organization: orgName,
       workspace: workspaceName,
       documentPath: filePath,
       error: err instanceof Error ? err.message : String(err),
@@ -5288,24 +5274,28 @@ async function handleListWorkspaces(
   const auth = await requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
 
-  const organization = await resolveSessionOrganization(
-    auth.client,
-    auth.session,
-  );
-  if (!organization) {
-    return json(200, { workspaces: [] }, baseHeaders);
-  }
-
   try {
-    const workspaces = await listOrganizationWorkspaces({
-      client: auth.client,
-      org: organization.name,
-    });
+    // Every organization this session belongs to, not the oldest one. Picking
+    // for them was always a guess, and a person in two organizations was shown
+    // whichever came first — including, in a dev stack, whichever test made one
+    // first. Each binder names its owner, so the caller can address it.
+    const organizations = await listSessionOrganizations(auth.client);
+
+    const workspaces = (
+      await Promise.all(
+        organizations.map((organization) =>
+          listOrganizationWorkspaces({
+            client: auth.client,
+            org: organization.name,
+          }).catch(() => []),
+        ),
+      )
+    ).flat();
+
     return json(200, { workspaces }, baseHeaders);
   } catch (err) {
     logger.error("Failed to list workspaces", {
       username: auth.session.username,
-      organization: organization.name,
       error: err instanceof Error ? err.message : String(err),
     });
     return responseFromError(err, baseHeaders, "Unable to list the binders.");
@@ -5326,6 +5316,7 @@ async function handleListWorkspaces(
 async function handleCreateWorkspace(
   req: Request,
   baseHeaders: Headers,
+  orgName: string,
 ): Promise<Response> {
   const auth = await requireSubscription(req, baseHeaders);
   if (auth instanceof Response) return auth;
@@ -5353,22 +5344,10 @@ async function handleCreateWorkspace(
       ? payload.description.trim()
       : undefined;
 
-  const organization = await resolveSessionOrganization(
-    auth.client,
-    auth.session,
-  );
-  if (!organization) {
-    return json(
-      409,
-      { error: "Create an organization before creating a binder." },
-      baseHeaders,
-    );
-  }
-
   try {
     const existing = await findWorkspaceRepo({
       client: auth.client,
-      org: organization.name,
+      org: orgName,
       name,
     });
     if (existing) {
@@ -5381,14 +5360,14 @@ async function handleCreateWorkspace(
 
     const provisioned = await provisionWorkspace({
       client: auth.client,
-      org: organization.name,
+      org: orgName,
       name,
       description,
     });
 
     logger.info("Workspace created", {
       username: auth.session.username,
-      organization: organization.name,
+      organization: orgName,
       workspace: provisioned.workspace.name,
     });
 
@@ -5396,7 +5375,7 @@ async function handleCreateWorkspace(
   } catch (err) {
     logger.error("Failed to create a workspace", {
       username: auth.session.username,
-      organization: organization.name,
+      organization: orgName,
       workspace: name,
       error: err instanceof Error ? err.message : String(err),
     });
@@ -6082,10 +6061,8 @@ export function createApiServer() {
         method === "GET"
       ) {
         response = await handleAdminSubscriptionAccessList(req, baseHeaders);
-      } else if (pathname === "/api/app/workspaces" && method === "GET") {
+      } else if (pathname === "/api/app/binders" && method === "GET") {
         response = await handleListWorkspaces(req, baseHeaders);
-      } else if (pathname === "/api/app/workspaces" && method === "POST") {
-        response = await handleCreateWorkspace(req, baseHeaders);
       } else if (pathname === "/api/app/organizations" && method === "GET") {
         response = await handleListOrganizations(req, baseHeaders);
       } else if (pathname === "/api/app/organizations" && method === "POST") {
@@ -6168,42 +6145,55 @@ export function createApiServer() {
           /^\/api\/app\/documents\/([^/]+)\/([^/]+)$/,
         );
         const workspaceDocumentsMatch = pathname.match(
-          /^\/api\/app\/workspaces\/([^/]+)\/documents$/,
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/documents$/,
         );
         // The document's path carries slashes — it is a path inside the binder,
         // not one segment — so this captures the rest of the URL.
         const workspaceDocumentMatch = pathname.match(
-          /^\/api\/app\/workspaces\/([^/]+)\/documents\/(.+)$/,
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/documents\/(.+)$/,
         );
         const workspacePublishMatch = pathname.match(
-          /^\/api\/app\/workspaces\/([^/]+)\/changes\/(\d+)\/publish$/,
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/publish$/,
+        );
+        const createBinderMatch = pathname.match(
+          /^\/api\/app\/orgs\/([^/]+)\/binders$/,
         );
 
-        if (workspacePublishMatch && method === "POST") {
+        if (createBinderMatch && method === "POST") {
+          response = await handleCreateWorkspace(
+            req,
+            baseHeaders,
+            createBinderMatch[1]!,
+          );
+        } else if (workspacePublishMatch && method === "POST") {
           response = await handlePublishWorkspaceChange(
             req,
             baseHeaders,
             workspacePublishMatch[1]!,
-            Number.parseInt(workspacePublishMatch[2] ?? "", 10),
+            workspacePublishMatch[2]!,
+            Number.parseInt(workspacePublishMatch[3] ?? "", 10),
           );
         } else if (workspaceDocumentsMatch && method === "GET") {
           response = await handleListWorkspaceDocuments(
             req,
             baseHeaders,
             workspaceDocumentsMatch[1]!,
+            workspaceDocumentsMatch[2]!,
           );
         } else if (workspaceDocumentMatch && method === "GET") {
           response = await handleWorkspaceDocumentDetail(
             req,
             baseHeaders,
             workspaceDocumentMatch[1]!,
-            decodeURIComponent(workspaceDocumentMatch[2]!),
+            workspaceDocumentMatch[2]!,
+            decodeURIComponent(workspaceDocumentMatch[3]!),
           );
         } else if (workspaceDocumentsMatch && method === "POST") {
           response = await handleCreateWorkspaceDocument(
             req,
             baseHeaders,
             workspaceDocumentsMatch[1]!,
+            workspaceDocumentsMatch[2]!,
           );
         } else if (reviewMatch && method === "POST") {
           response = await handleDocumentReview(

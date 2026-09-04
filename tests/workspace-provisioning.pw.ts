@@ -2,7 +2,7 @@
  * ADR 0004's second level, created by a member rather than by provisioning.
  *
  * Organizations no longer arrive with a binder: naming the container a
- * customer's records live in is the owner's call, so `POST /api/app/workspaces`
+ * customer's records live in is the owner's call, so `POST /api/app/orgs/{org}/binders`
  * is how one comes to exist. This asserts that against a real stack — the
  * repository is owned by the organization, `main` is protected, and the three
  * role teams are granted onto it, which is what makes a free reviewer's
@@ -91,10 +91,11 @@ interface WorkspaceSummary {
 
 async function createWorkspace(
   sessionCookie: string,
+  org: string,
   name: string,
   description?: string,
 ): Promise<{ status: number; body: string }> {
-  const response = await fetch(`${API_BASE_URL}/api/app/workspaces`, {
+  const response = await fetch(`${API_BASE_URL}/api/app/orgs/${org}/binders`, {
     method: "POST",
     headers: authHeaders(sessionCookie),
     body: JSON.stringify({ name, description }),
@@ -105,7 +106,7 @@ async function createWorkspace(
 async function listWorkspaces(
   sessionCookie: string,
 ): Promise<WorkspaceSummary[]> {
-  const response = await fetch(`${API_BASE_URL}/api/app/workspaces`, {
+  const response = await fetch(`${API_BASE_URL}/api/app/binders`, {
     headers: { Cookie: `bindersnap_session=${sessionCookie}` },
   });
   const body = await response.text();
@@ -130,7 +131,14 @@ test("an account with no organization has no binders, and is not an error", asyn
   // now that one is something a person creates.
   expect(await listWorkspaces(sessionCookie)).toEqual([]);
 
-  const attempt = await createWorkspace(sessionCookie, "Clinical Policies");
+  // The URL names an organization, so this is no longer "which organization
+  // did they mean" — it is a person with no subscription asking to create a
+  // binder somewhere they do not belong.
+  const attempt = await createWorkspace(
+    sessionCookie,
+    "some-other-organization",
+    "Clinical Policies",
+  );
   expect(attempt.status).toBe(402);
 });
 
@@ -223,16 +231,21 @@ test("a member creates the binder, and it belongs to the organization", async ()
 test("a second binder of the same name is refused, not silently reused", async () => {
   const credentials = buildCredentials();
   const sessionCookie = await signUp(credentials);
-  await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
 
   expect(
-    (await createWorkspace(sessionCookie, "Clinical Policies")).status,
+    (await createWorkspace(sessionCookie, org.name, "Clinical Policies"))
+      .status,
   ).toBe(201);
 
   // Provisioning is idempotent, which is right for repairing a partial failure
   // and wrong for a person naming a new binder: they would be handed somebody
   // else's rules and think they had made their own.
-  const second = await createWorkspace(sessionCookie, "Clinical Policies");
+  const second = await createWorkspace(
+    sessionCookie,
+    org.name,
+    "Clinical Policies",
+  );
   expect(second.status).toBe(409);
 
   expect(await listWorkspaces(sessionCookie)).toHaveLength(1);
@@ -241,9 +254,9 @@ test("a second binder of the same name is refused, not silently reused", async (
 test("a binder whose name has nothing Gitea can use is refused", async () => {
   const credentials = buildCredentials();
   const sessionCookie = await signUp(credentials);
-  await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
 
-  const attempt = await createWorkspace(sessionCookie, "!!!");
+  const attempt = await createWorkspace(sessionCookie, org.name, "!!!");
   expect(attempt.status).toBe(400);
 });
 
@@ -256,6 +269,7 @@ test("a binder whose name has nothing Gitea can use is refused", async () => {
  */
 async function addDocument(
   sessionCookie: string,
+  org: string,
   workspace: string,
   fields: { name: string; folder?: string; filename?: string; body?: string },
 ): Promise<{ status: number; body: string }> {
@@ -269,7 +283,7 @@ async function addDocument(
   if (fields.folder) form.set("folder", fields.folder);
 
   const response = await fetch(
-    `${API_BASE_URL}/api/app/workspaces/${workspace}/documents`,
+    `${API_BASE_URL}/api/app/binders/${org}/${workspace}/documents`,
     {
       method: "POST",
       headers: {
@@ -286,9 +300,11 @@ test("a document is a file at a path inside the binder", async () => {
   const credentials = buildCredentials();
   const sessionCookie = await signUp(credentials);
   const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
-  expect((await createWorkspace(sessionCookie, "Clinical")).status).toBe(201);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
 
-  const added = await addDocument(sessionCookie, "clinical", {
+  const added = await addDocument(sessionCookie, org.name, "clinical", {
     name: "Infection Control",
     folder: "Nursing",
   });
@@ -334,13 +350,15 @@ test("a document is a file at a path inside the binder", async () => {
 test("two documents share one binder, which is the whole point", async () => {
   const credentials = buildCredentials();
   const sessionCookie = await signUp(credentials);
-  await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
-  expect((await createWorkspace(sessionCookie, "Clinical")).status).toBe(201);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
 
-  const first = await addDocument(sessionCookie, "clinical", {
+  const first = await addDocument(sessionCookie, org.name, "clinical", {
     name: "Infection Control",
   });
-  const second = await addDocument(sessionCookie, "clinical", {
+  const second = await addDocument(sessionCookie, org.name, "clinical", {
     name: "Hand Hygiene",
   });
 
@@ -355,10 +373,12 @@ test("two documents share one binder, which is the whole point", async () => {
 test("a document cannot be written outside the binder that governs it", async () => {
   const credentials = buildCredentials();
   const sessionCookie = await signUp(credentials);
-  await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
-  expect((await createWorkspace(sessionCookie, "Clinical")).status).toBe(201);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
 
-  const escaped = await addDocument(sessionCookie, "clinical", {
+  const escaped = await addDocument(sessionCookie, org.name, "clinical", {
     name: "Escape",
     folder: "../../../etc",
   });
@@ -374,21 +394,23 @@ test("a document cannot be written outside the binder that governs it", async ()
 test("adding a document where one already lives is refused", async () => {
   const credentials = buildCredentials();
   const sessionCookie = await signUp(credentials);
-  await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
-  expect((await createWorkspace(sessionCookie, "Clinical")).status).toBe(201);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
 
   // The first is still only on its branch, so main is clear — a second upload
   // of the same name is a second change to the same document, which is a later
   // step's job, not a silent overwrite here.
   expect(
     (
-      await addDocument(sessionCookie, "clinical", {
+      await addDocument(sessionCookie, org.name, "clinical", {
         name: "Infection Control",
       })
     ).status,
   ).toBe(201);
 
-  const again = await addDocument(sessionCookie, "clinical", {
+  const again = await addDocument(sessionCookie, org.name, "clinical", {
     name: "Infection Control",
   });
   expect([201, 409]).toContain(again.status);
@@ -397,9 +419,9 @@ test("adding a document where one already lives is refused", async () => {
 test("adding a document to a binder that does not exist is a 404", async () => {
   const credentials = buildCredentials();
   const sessionCookie = await signUp(credentials);
-  await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
 
-  const missing = await addDocument(sessionCookie, "no-such-binder", {
+  const missing = await addDocument(sessionCookie, org.name, "no-such-binder", {
     name: "Infection Control",
   });
   expect(missing.status).toBe(404);
@@ -414,10 +436,11 @@ test("adding a document to a binder that does not exist is a 404", async () => {
  */
 async function listDocuments(
   sessionCookie: string,
+  org: string,
   workspace: string,
 ): Promise<{ status: number; body: string }> {
   const response = await fetch(
-    `${API_BASE_URL}/api/app/workspaces/${workspace}/documents`,
+    `${API_BASE_URL}/api/app/binders/${org}/${workspace}/documents`,
     { headers: { Cookie: `bindersnap_session=${sessionCookie}` } },
   );
   return { status: response.status, body: await response.text() };
@@ -425,11 +448,12 @@ async function listDocuments(
 
 async function getDocument(
   sessionCookie: string,
+  org: string,
   workspace: string,
   documentPath: string,
 ): Promise<{ status: number; body: string }> {
   const response = await fetch(
-    `${API_BASE_URL}/api/app/workspaces/${workspace}/documents/${documentPath}`,
+    `${API_BASE_URL}/api/app/binders/${org}/${workspace}/documents/${documentPath}`,
     { headers: { Cookie: `bindersnap_session=${sessionCookie}` } },
   );
   return { status: response.status, body: await response.text() };
@@ -438,10 +462,12 @@ async function getDocument(
 test("a binder with nothing in it lists no documents, and is not an error", async () => {
   const credentials = buildCredentials();
   const sessionCookie = await signUp(credentials);
-  await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
-  expect((await createWorkspace(sessionCookie, "Clinical")).status).toBe(201);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
 
-  const listed = await listDocuments(sessionCookie, "clinical");
+  const listed = await listDocuments(sessionCookie, org.name, "clinical");
   expect(listed.status, listed.body).toBe(200);
   expect(
     (JSON.parse(listed.body) as { documents: unknown[] }).documents,
@@ -451,10 +477,12 @@ test("a binder with nothing in it lists no documents, and is not an error", asyn
 test("an unpublished document is not in the binder's list, because main is the record", async () => {
   const credentials = buildCredentials();
   const sessionCookie = await signUp(credentials);
-  await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
-  expect((await createWorkspace(sessionCookie, "Clinical")).status).toBe(201);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
 
-  const added = await addDocument(sessionCookie, "clinical", {
+  const added = await addDocument(sessionCookie, org.name, "clinical", {
     name: "Infection Control",
   });
   expect(added.status, added.body).toBe(201);
@@ -462,7 +490,7 @@ test("an unpublished document is not in the binder's list, because main is the r
   // The upload is on a branch with an open change. Nothing reaches main except
   // a merged, approved change, and the list reads main — so a document nobody
   // has approved is not yet part of the record.
-  const listed = await listDocuments(sessionCookie, "clinical");
+  const listed = await listDocuments(sessionCookie, org.name, "clinical");
   expect(listed.status, listed.body).toBe(200);
   expect(
     (JSON.parse(listed.body) as { documents: unknown[] }).documents,
@@ -472,34 +500,41 @@ test("an unpublished document is not in the binder's list, because main is the r
 test("listing a binder that does not exist is a 404", async () => {
   const credentials = buildCredentials();
   const sessionCookie = await signUp(credentials);
-  await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
 
-  expect((await listDocuments(sessionCookie, "no-such-binder")).status).toBe(
-    404,
-  );
+  expect(
+    (await listDocuments(sessionCookie, org.name, "no-such-binder")).status,
+  ).toBe(404);
 });
 
 test("asking for a document that is not there is a 404, not an empty document", async () => {
   const credentials = buildCredentials();
   const sessionCookie = await signUp(credentials);
-  await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
-  expect((await createWorkspace(sessionCookie, "Clinical")).status).toBe(201);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
 
   expect(
-    (await getDocument(sessionCookie, "clinical", "nursing/handover")).status,
+    (await getDocument(sessionCookie, org.name, "clinical", "nursing/handover"))
+      .status,
   ).toBe(404);
 });
 
-test("an account with no organization sees no documents rather than an error", async () => {
+test("a binder in an organization you cannot see is simply not there", async () => {
   const credentials = buildCredentials();
   const sessionCookie = await signUp(credentials);
 
-  // Reading is never gated, and having no organization is an ordinary state.
-  const listed = await listDocuments(sessionCookie, "clinical");
-  expect(listed.status, listed.body).toBe(200);
-  expect(
-    (JSON.parse(listed.body) as { documents: unknown[] }).documents,
-  ).toEqual([]);
+  // Now that the URL names the organization, this is a different and better
+  // question than it was. Asking for someone else's binder answers 404 — the
+  // same answer a binder that does not exist gives, which is the only answer
+  // that does not disclose whether it does.
+  const listed = await listDocuments(
+    sessionCookie,
+    "some-other-organization",
+    "clinical",
+  );
+  expect(listed.status, listed.body).toBe(404);
 });
 
 /**
@@ -611,11 +646,12 @@ async function approveChange(
 
 async function publishChange(
   sessionCookie: string,
+  org: string,
   workspace: string,
   pullNumber: number,
 ): Promise<{ status: number; body: string }> {
   const response = await fetch(
-    `${API_BASE_URL}/api/app/workspaces/${workspace}/changes/${pullNumber}/publish`,
+    `${API_BASE_URL}/api/app/binders/${org}/${workspace}/changes/${pullNumber}/publish`,
     {
       method: "POST",
       headers: authHeaders(sessionCookie),
@@ -629,9 +665,11 @@ test("publishing a change versions the document and puts it on main", async () =
   const credentials = buildCredentials();
   const sessionCookie = await signUp(credentials);
   const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
-  expect((await createWorkspace(sessionCookie, "Clinical")).status).toBe(201);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
 
-  const added = await addDocument(sessionCookie, "clinical", {
+  const added = await addDocument(sessionCookie, org.name, "clinical", {
     name: "Infection Control",
     folder: "Nursing",
   });
@@ -650,6 +688,7 @@ test("publishing a change versions the document and puts it on main", async () =
 
   const published = await publishChange(
     sessionCookie,
+    org.name,
     "clinical",
     pullRequestNumber,
   );
@@ -662,14 +701,19 @@ test("publishing a change versions the document and puts it on main", async () =
   expect(tags.map((t) => t.tag)).toEqual([`${slugPath}/v1`]);
 
   // And now it is part of the record: on main, and in the binder's list.
-  const listed = await listDocuments(sessionCookie, "clinical");
+  const listed = await listDocuments(sessionCookie, org.name, "clinical");
   expect(
     (
       JSON.parse(listed.body) as { documents: Array<{ slugPath: string }> }
     ).documents.map((d) => d.slugPath),
   ).toEqual([slugPath]);
 
-  const detail = await getDocument(sessionCookie, "clinical", slugPath);
+  const detail = await getDocument(
+    sessionCookie,
+    org.name,
+    "clinical",
+    slugPath,
+  );
   expect(detail.status, detail.body).toBe(200);
   const { versions, latestVersion } = JSON.parse(detail.body) as {
     versions: Array<{ version: number }>;
@@ -689,11 +733,13 @@ test("one change across two documents publishes two versions on one commit", asy
   const credentials = buildCredentials();
   const sessionCookie = await signUp(credentials);
   const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
-  expect((await createWorkspace(sessionCookie, "Clinical")).status).toBe(201);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
 
   // Two documents, one upload branch, one change — a revision that touches
   // cross-referencing policies together, which ADR 0004 calls a feature.
-  const first = await addDocument(sessionCookie, "clinical", {
+  const first = await addDocument(sessionCookie, org.name, "clinical", {
     name: "Infection Control",
   });
   expect(first.status, first.body).toBe(201);
@@ -736,6 +782,7 @@ test("one change across two documents publishes two versions on one commit", asy
 
   const published = await publishChange(
     sessionCookie,
+    org.name,
     "clinical",
     firstPayload.pullRequestNumber,
   );
@@ -758,9 +805,11 @@ test("a second change to the same document publishes v2, not another v1", async 
   const credentials = buildCredentials();
   const sessionCookie = await signUp(credentials);
   const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
-  expect((await createWorkspace(sessionCookie, "Clinical")).status).toBe(201);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
 
-  const first = await addDocument(sessionCookie, "clinical", {
+  const first = await addDocument(sessionCookie, org.name, "clinical", {
     name: "Infection Control",
   });
   const firstNumber = (JSON.parse(first.body) as { pullRequestNumber: number })
@@ -774,7 +823,8 @@ test("a second change to the same document publishes v2, not another v1", async 
   await approveChange(approver.token, org.name, "clinical", firstNumber);
 
   expect(
-    (await publishChange(sessionCookie, "clinical", firstNumber)).status,
+    (await publishChange(sessionCookie, org.name, "clinical", firstNumber))
+      .status,
   ).toBe(200);
 
   // A revision of a document that already exists. The upload endpoint refuses
@@ -844,6 +894,7 @@ test("a second change to the same document publishes v2, not another v1", async 
   await approveChange(approver.token, org.name, "clinical", secondNumber);
   const republished = await publishChange(
     sessionCookie,
+    org.name,
     "clinical",
     secondNumber,
   );
@@ -858,6 +909,7 @@ test("a second change to the same document publishes v2, not another v1", async 
 
   const detail = await getDocument(
     sessionCookie,
+    org.name,
     "clinical",
     "infection-control",
   );
