@@ -838,7 +838,8 @@ test("a second change to the same document publishes v2, not another v1", async 
   // awaiting `.text()` inside it consumes the body before `.json()` can.
   const secondPullBody = await secondPull.text();
   expect(secondPull.status, secondPullBody).toBe(201);
-  const secondNumber = (JSON.parse(secondPullBody) as { number: number }).number;
+  const secondNumber = (JSON.parse(secondPullBody) as { number: number })
+    .number;
 
   await approveChange(approver.token, org.name, "clinical", secondNumber);
   const republished = await publishChange(
