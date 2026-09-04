@@ -502,6 +502,41 @@ export function pruneMissing(registry: Registry): Registry {
 // Compose
 // ---------------------------------------------------------------------------
 
+/**
+ * Delete a stack's seeded Gitea data.
+ *
+ * The Gitea container writes `data/gitea` as uid 1000, so a plain host `rm`
+ * fails with EPERM — which is also why a worktree whose stack has run cannot
+ * be deleted afterwards without sudo. Remove it the same way compose creates
+ * it: from a throwaway container running as root.
+ */
+export function removeGiteaData(path: string): void {
+  const dir = join(path, "data", "gitea");
+  if (!existsSync(dir)) return;
+
+  const viaContainer = spawnSync(
+    "docker",
+    [
+      "run",
+      "--rm",
+      "--user",
+      "0:0",
+      "-v",
+      `${join(path, "data")}:/data`,
+      "alpine:latest",
+      "rm",
+      "-rf",
+      "/data/gitea",
+    ],
+    { stdio: "ignore" },
+  );
+
+  if (viaContainer.status === 0 && !existsSync(dir)) return;
+
+  // Docker unavailable, or the files were the host user's all along.
+  rmSync(dir, { recursive: true, force: true });
+}
+
 function composeEnv(config: StackConfig): NodeJS.ProcessEnv {
   return {
     ...process.env,
@@ -639,10 +674,7 @@ async function cmdUp(args: string[]): Promise<void> {
   if (fresh) {
     log("--fresh: removing containers, volumes and seeded Gitea data");
     compose(config, ["down", "-v", "--remove-orphans"], { stdio: "pipe" });
-    rmSync(join(config.path, "data", "gitea"), {
-      recursive: true,
-      force: true,
-    });
+    removeGiteaData(config.path);
   }
 
   if (foreground) {
@@ -696,10 +728,7 @@ async function cmdDown(args: string[]): Promise<void> {
   log(`tearing down ${config.stackName} (slot ${config.slot}) only`);
   const result = compose(config, ["down", "-v", "--remove-orphans"]);
   if (args.includes("--clean")) {
-    rmSync(join(config.path, "data", "gitea"), {
-      recursive: true,
-      force: true,
-    });
+    removeGiteaData(config.path);
     log("removed seeded Gitea data");
   }
   if (result.status !== 0) {

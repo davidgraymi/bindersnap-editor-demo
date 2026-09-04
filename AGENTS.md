@@ -174,7 +174,10 @@ the source of truth.
 
 `docker-compose.yml` runs the whole stack locally — Gitea, the seed job,
 Hocuspocus, the API, Caddy and the app. Start it with `bun run up` (and stop it
-with `bun run down`; those two scripts are the only supported lifecycle). It
+with `bun run down`; those two scripts are the only supported lifecycle, and
+they are safe to run concurrently from several worktrees — each claims its own
+project name and port block, so neither can touch another's containers. Ask
+`bun run stack status` which ports are yours; never assume the defaults). It
 seeds demo users and documents automatically from `tests/seed-data/dev.yaml` — which
 carries the same clinic policy as a Word file, a PDF, and a Markdown file, so
 the preview and comparison screens can be checked against every file type the
@@ -183,8 +186,9 @@ app meets. Use this to:
 - Verify Gitea service implementations against a real API
 - Run integration tests (`bun run test:integration`)
 - See how the real app looks with realistic data — the app container is the
-  hot-reloading dev server, so edits show up at `http://localhost:${APP_PORT:-5173}`
-  without a restart. See "Validating a change in the browser" in `CLAUDE.md`.
+  hot-reloading dev server, so edits show up at the app URL `bun run stack
+status` prints, without a restart. See "Validating a change in the browser"
+  in `CLAUDE.md`.
 
 See `tests/README.md` for full usage.
 
