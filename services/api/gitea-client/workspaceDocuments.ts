@@ -146,10 +146,15 @@ export async function findWorkspaceDocument(
   const { documentPath } = params;
   const documents = await listWorkspaceDocuments(params);
 
+  // An exact file path wins over an identity match, so that a link carrying
+  // the extension always resolves to that exact file. Uploads refuse to create
+  // two documents sharing an identity, but a binder edited outside Bindersnap
+  // could still hold one — and resolving it deterministically beats resolving
+  // it alphabetically.
   return (
-    documents.find(
-      (entry) => entry.path === documentPath || entry.slugPath === documentPath,
-    ) ?? null
+    documents.find((entry) => entry.path === documentPath) ??
+    documents.find((entry) => entry.slugPath === documentPath) ??
+    null
   );
 }
 
@@ -294,4 +299,49 @@ export async function createDocumentVersionTag(params: {
     version,
     commitSha: tag?.commit?.sha ?? "",
   };
+}
+
+interface GitBranch {
+  name?: string;
+}
+
+/**
+ * A document proposed at this address but not yet published, if there is one.
+ *
+ * `main` holds only published documents, so checking the tree alone lets two
+ * uploads race for one address: both are accepted, and they collide later as
+ * two files answering to a single URL. The upload branch carries the identity
+ * (`upload/<slugPath>/…`), which is what makes pending work visible here.
+ *
+ * Answers with the branch name so the caller can say which change already
+ * claims the address, rather than only that something does.
+ */
+export async function findPendingDocumentBranch(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  slugPath: string;
+}): Promise<string | null> {
+  const { client, org, workspace, slugPath } = params;
+
+  try {
+    const branches = (await unwrap(
+      client.GET("/repos/{owner}/{repo}/branches", {
+        params: {
+          path: { owner: org, repo: workspace },
+          query: { limit: 100 },
+        },
+      }),
+    )) as GitBranch[];
+
+    const prefix = `upload/${slugPath}/`;
+    return (
+      (branches ?? []).find((branch) => (branch.name ?? "").startsWith(prefix))
+        ?.name ?? null
+    );
+  } catch (err) {
+    // A binder with no branches yet is not a conflict.
+    if (err instanceof GiteaApiError && err.status === 404) return null;
+    throw err;
+  }
 }

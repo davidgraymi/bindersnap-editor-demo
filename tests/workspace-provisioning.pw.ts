@@ -922,3 +922,33 @@ test("a second change to the same document publishes v2, not another v1", async 
   expect(versions.map((v) => v.version)).toEqual([2, 1]);
   expect(latestVersion?.version).toBe(2);
 });
+
+test("two documents cannot claim one address", async () => {
+  // A URL has to name one thing, or a link somebody sends is a coin toss. The
+  // identity drops the extension deliberately — re-uploading a policy as a PDF
+  // should keep its history — so nothing else may claim the same identity.
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const first = await addDocument(sessionCookie, org.name, "clinical", {
+    name: "Policy",
+    folder: "Nursing",
+    filename: "policy.md",
+  });
+  expect(first.status, first.body).toBe(201);
+
+  // Same name, different extension. `main` does not have the first one yet —
+  // it is still an open change — which is exactly the race that made this
+  // slip through: the tree alone cannot see it, but the upload branch can.
+  const second = await addDocument(sessionCookie, org.name, "clinical", {
+    name: "Policy",
+    folder: "Nursing",
+    filename: "policy.pdf",
+  });
+  expect(second.status, second.body).toBe(409);
+  expect(second.body).toContain("nursing/policy");
+});
