@@ -118,22 +118,63 @@ export interface SeedCollaborator {
   permission: "read" | "write" | "admin";
 }
 
-export interface SeedDocumentRepo {
-  owner: string;
-  repo: string;
+/**
+ * A document: a file inside a binder, at a path.
+ *
+ * ADR 0004's fourth level. It used to be a repository of its own, which is why
+ * this once carried an `owner` — a document belonged to whoever made it. It
+ * belongs to the organization now, and the binder decides who may act on it.
+ */
+export interface SeedBinderDocument {
+  /** Becomes the file's name inside the binder. */
+  name: string;
+  /** A directory inside the binder. Omit for a document at its root. */
+  folder?: string;
   description: string;
   /** How every version of this document is stored. Defaults to the editor's JSON. */
   format: SeedDocumentFormat;
-  collaborators: SeedCollaborator[];
-  /** Applied to `main` in order. Published ones become doc/vNNNN tags. */
+  /** Applied in order. Published ones become `<slugPath>/vN` tags. */
   changes: SeedChange[];
+}
+
+/** Which of the binder's three role teams somebody is in. */
+export type SeedBinderRole = "admins" | "authors" | "reviewers";
+
+export interface SeedBinderMember {
+  user: string;
+  role: SeedBinderRole;
+}
+
+/**
+ * A binder: one Gitea repository owned by the organization.
+ *
+ * "If you need different rules or different people, make a workspace. If you
+ * just need to find things, make a folder." Members are the binder's, because
+ * access is uniform within one — that is the whole reason the level exists.
+ */
+export interface SeedBinder {
+  name: string;
+  description: string;
+  members: SeedBinderMember[];
+  documents: SeedBinderDocument[];
+}
+
+/** The organization that owns every binder, and is who we bill. */
+export interface SeedOrganization {
+  /** The Gitea org username — a URL segment. */
+  name: string;
+  /** What its owner calls it. */
+  displayName: string;
+  /** The account that creates it, and therefore owns it. */
+  owner: string;
 }
 
 export interface SeedScenario {
   /** The password every seeded account is created with. */
   password: string;
   users: SeedUser[];
-  documents: SeedDocumentRepo[];
+  organization: SeedOrganization;
+  binders: SeedBinder[];
 }
 
 // ---------------------------------------------------------------------------
@@ -307,28 +348,12 @@ function parseChange(value: unknown, path: string): SeedChange {
   };
 }
 
-function parseDocumentRepo(value: unknown, path: string): SeedDocumentRepo {
+function parseBinderDocument(value: unknown, path: string): SeedBinderDocument {
   const raw = asRecord(value, path);
 
-  const collaborators = asArray(raw.collaborators, `${path}.collaborators`).map(
-    (collaborator, index) => {
-      const collaboratorPath = `${path}.collaborators[${index}]`;
-      const rawCollaborator = asRecord(collaborator, collaboratorPath);
-      return {
-        user: asString(rawCollaborator.user, `${collaboratorPath}.user`),
-        permission: asEnum(
-          rawCollaborator.permission,
-          `${collaboratorPath}.permission`,
-          ["read", "write", "admin"] as const,
-          "write",
-        ),
-      };
-    },
-  );
-
   return {
-    owner: asString(raw.owner, `${path}.owner`),
-    repo: asString(raw.repo, `${path}.repo`),
+    name: asString(raw.name, `${path}.name`),
+    folder: optionalString(raw.folder, `${path}.folder`),
     description: asString(raw.description, `${path}.description`),
     format: asEnum(
       raw.format,
@@ -336,9 +361,38 @@ function parseDocumentRepo(value: unknown, path: string): SeedDocumentRepo {
       SEED_DOCUMENT_FORMATS,
       "prosemirror",
     ),
-    collaborators,
     changes: asArray(raw.changes, `${path}.changes`).map((change, index) =>
       parseChange(change, `${path}.changes[${index}]`),
+    ),
+  };
+}
+
+function parseBinder(value: unknown, path: string): SeedBinder {
+  const raw = asRecord(value, path);
+
+  const members = asArray(raw.members, `${path}.members`).map(
+    (member, index) => {
+      const memberPath = `${path}.members[${index}]`;
+      const rawMember = asRecord(member, memberPath);
+      return {
+        user: asString(rawMember.user, `${memberPath}.user`),
+        role: asEnum(
+          rawMember.role,
+          `${memberPath}.role`,
+          ["admins", "authors", "reviewers"] as const,
+          "authors",
+        ),
+      };
+    },
+  );
+
+  return {
+    name: asString(raw.name, `${path}.name`),
+    description: asString(raw.description, `${path}.description`),
+    members,
+    documents: asArray(raw.documents, `${path}.documents`).map(
+      (document, index) =>
+        parseBinderDocument(document, `${path}.documents[${index}]`),
     ),
   };
 }
@@ -367,9 +421,18 @@ export function parseSeedScenario(source: string): SeedScenario {
     fail("scenario.users", "a scenario needs at least one user");
   }
 
-  const documents = asArray(raw.documents, "scenario.documents").map(
-    (document, index) =>
-      parseDocumentRepo(document, `scenario.documents[${index}]`),
+  const organizationRaw = asRecord(raw.organization, "scenario.organization");
+  const organization = {
+    name: asString(organizationRaw.name, "scenario.organization.name"),
+    displayName: asString(
+      organizationRaw.displayName,
+      "scenario.organization.displayName",
+    ),
+    owner: asString(organizationRaw.owner, "scenario.organization.owner"),
+  };
+
+  const binders = asArray(raw.binders, "scenario.binders").map(
+    (binder, index) => parseBinder(binder, `scenario.binders[${index}]`),
   );
 
   const known = new Set(users.map((user) => user.username));
@@ -379,53 +442,68 @@ export function parseSeedScenario(source: string): SeedScenario {
     }
   };
 
-  const seenRepos = new Set<string>();
-  documents.forEach((document, index) => {
-    const path = `scenario.documents[${index}]`;
-    requireKnown(document.owner, `${path}.owner`);
+  requireKnown(organization.owner, "scenario.organization.owner");
 
-    const fullName = `${document.owner}/${document.repo}`;
-    if (seenRepos.has(fullName)) {
-      fail(`${path}.repo`, `duplicate document "${fullName}"`);
+  const seenBinders = new Set<string>();
+
+  binders.forEach((binder, binderIndex) => {
+    const binderPath = `scenario.binders[${binderIndex}]`;
+    // A binder is one repository, so its branch names are shared by every
+    // document in it — two documents proposing the same branch would be one
+    // change wearing two names.
+    const seenBranches = new Set<string>();
+
+    if (seenBinders.has(binder.name)) {
+      fail(`${binderPath}.name`, `duplicate binder "${binder.name}"`);
     }
-    seenRepos.add(fullName);
+    seenBinders.add(binder.name);
 
-    document.collaborators.forEach((collaborator, cIndex) => {
-      requireKnown(collaborator.user, `${path}.collaborators[${cIndex}].user`);
-      if (collaborator.user === document.owner) {
-        fail(
-          `${path}.collaborators[${cIndex}].user`,
-          "the owner is already a collaborator",
-        );
-      }
+    binder.members.forEach((member, mIndex) => {
+      requireKnown(member.user, `${binderPath}.members[${mIndex}].user`);
     });
 
-    const seenBranches = new Set<string>();
-    document.changes.forEach((change, cIndex) => {
-      const changePath = `${path}.changes[${cIndex}]`;
-      if (seenBranches.has(change.branch)) {
-        fail(`${changePath}.branch`, `duplicate branch "${change.branch}"`);
-      }
-      seenBranches.add(change.branch);
+    // A document's identity is its path, and two documents at one path are one
+    // document — so the collision has to be caught here rather than discovered
+    // as a silent overwrite halfway through seeding.
+    const seenPaths = new Set<string>();
 
-      if (change.author) requireKnown(change.author, `${changePath}.author`);
-      change.reviews.forEach((review, rIndex) =>
-        requireKnown(review.by, `${changePath}.reviews[${rIndex}].by`),
-      );
-      change.threads.forEach((thread, tIndex) => {
-        const threadPath = `${changePath}.threads[${tIndex}]`;
-        requireKnown(thread.by, `${threadPath}.by`);
-        if (thread.resolvedBy) {
-          requireKnown(thread.resolvedBy, `${threadPath}.resolvedBy`);
+    binder.documents.forEach((document, index) => {
+      const path = `${binderPath}.documents[${index}]`;
+      const slugPath = document.folder
+        ? `${document.folder}/${document.name}`
+        : document.name;
+
+      if (seenPaths.has(slugPath)) {
+        fail(`${path}.name`, `duplicate document path "${slugPath}"`);
+      }
+      seenPaths.add(slugPath);
+
+      document.changes.forEach((change, cIndex) => {
+        const changePath = `${path}.changes[${cIndex}]`;
+        if (seenBranches.has(change.branch)) {
+          fail(`${changePath}.branch`, `duplicate branch "${change.branch}"`);
         }
-        thread.replies.forEach((reply, rIndex) =>
-          requireKnown(reply.by, `${threadPath}.replies[${rIndex}].by`),
+        seenBranches.add(change.branch);
+
+        if (change.author) requireKnown(change.author, `${changePath}.author`);
+        change.reviews.forEach((review, rIndex) =>
+          requireKnown(review.by, `${changePath}.reviews[${rIndex}].by`),
         );
+        change.threads.forEach((thread, tIndex) => {
+          const threadPath = `${changePath}.threads[${tIndex}]`;
+          requireKnown(thread.by, `${threadPath}.by`);
+          if (thread.resolvedBy) {
+            requireKnown(thread.resolvedBy, `${threadPath}.resolvedBy`);
+          }
+          thread.replies.forEach((reply, rIndex) =>
+            requireKnown(reply.by, `${threadPath}.replies[${rIndex}].by`),
+          );
+        });
       });
     });
   });
 
-  return { password, users, documents };
+  return { password, users, organization, binders };
 }
 
 export function loadSeedScenario(path: string | URL): SeedScenario {
