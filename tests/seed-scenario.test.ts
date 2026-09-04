@@ -361,7 +361,7 @@ describe("tests/seed-data/dev.yaml", () => {
   test("puts every binder under the one organization", () => {
     // ADR 0004: one organization per customer, and it owns every binder. The
     // dev stack should look like the product, not like a special case.
-    expect(scenario.organization.name).toBe("mercy-health");
+    expect(scenario.organization.name).toBe("riverside-health");
     expect(scenario.binders.length).toBeGreaterThanOrEqual(2);
   });
 

@@ -58,7 +58,13 @@ function accessRank(access: string | undefined): number {
  * it needs `enable_approvals_whitelist` on the workspace's branch protection
  * with these teams whitelisted. See ADR 0004, "Verified Against Gitea".
  */
-const ROLE_TEAM_OPTIONS: Record<WorkspaceRole, CreateTeamOption> = {
+/**
+ * Exported because the dev seed creates the same teams over raw HTTP, and two
+ * definitions would drift. They already did: the seed once sent `units`, which
+ * Gitea ignores in favour of `units_map`, and the teams came out with
+ * permission "none" — members of a binder who could not touch it.
+ */
+export const ROLE_TEAM_OPTIONS: Record<WorkspaceRole, CreateTeamOption> = {
   admins: {
     name: "",
     permission: "admin",
