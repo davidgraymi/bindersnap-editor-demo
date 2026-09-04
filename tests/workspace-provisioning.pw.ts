@@ -152,6 +152,7 @@ test("a member creates the binder, and it belongs to the organization", async ()
 
   const created = await createWorkspace(
     sessionCookie,
+    org.name,
     "Clinical Policies",
     "Nursing and clinical practice",
   );
