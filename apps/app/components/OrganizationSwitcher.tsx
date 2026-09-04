@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Building2, ChevronDown } from "lucide-react";
 
 import { fetchOrganizations } from "../api";
@@ -30,6 +30,18 @@ export function OrganizationSwitcher({
   const [organizations, setOrganizations] = useState<OrganizationSummary[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  // Where the fixed menu hangs. The nav clips its overflow, so the menu cannot
+  // be positioned within it — it is placed against the viewport instead, under
+  // the button it belongs to.
+  const [anchor, setAnchor] = useState<{ top: number; left: number } | null>(
+    null,
+  );
+
+  const placeMenu = useCallback(() => {
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (rect) setAnchor({ top: rect.bottom + 6, left: rect.left });
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -59,6 +71,14 @@ export function OrganizationSwitcher({
     return () => document.removeEventListener("mousedown", closeOnOutsideClick);
   }, [isOpen]);
 
+  // A resize moves the button out from under an open menu, so the menu follows.
+  useEffect(() => {
+    if (!isOpen) return;
+
+    window.addEventListener("resize", placeMenu);
+    return () => window.removeEventListener("resize", placeMenu);
+  }, [isOpen, placeMenu]);
+
   if (organizations.length === 0) return null;
 
   const label =
@@ -85,18 +105,26 @@ export function OrganizationSwitcher({
   return (
     <div ref={containerRef} style={{ position: "relative" }}>
       <button
+        ref={buttonRef}
         type="button"
         className="app-topnav-link"
         aria-haspopup="menu"
         aria-expanded={isOpen}
-        onClick={() => setIsOpen((open) => !open)}
+        onClick={() => {
+          placeMenu();
+          setIsOpen((open) => !open);
+        }}
       >
         <Building2 size={14} strokeWidth={1.5} aria-hidden="true" /> {label}{" "}
         <ChevronDown size={14} strokeWidth={1.5} aria-hidden="true" />
       </button>
 
-      {isOpen ? (
-        <div className="app-menu" role="menu">
+      {isOpen && anchor ? (
+        <div
+          className="app-menu"
+          role="menu"
+          style={{ top: anchor.top, left: anchor.left }}
+        >
           {organizations.map((organization) => (
             <button
               key={organization.id}
