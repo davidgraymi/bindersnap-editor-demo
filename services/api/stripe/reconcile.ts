@@ -18,6 +18,33 @@ function readString(
   return typeof value === "string" && value.trim() !== "" ? value : null;
 }
 
+/**
+ * The organization a Stripe customer belongs to.
+ *
+ * ADR 0004 bills the organization, so this is the identifier every Stripe
+ * object carries. `bindersnap_username` is still written alongside it — it
+ * records who set the subscription up, which support needs — but it is never
+ * the key, because the person who signed up can leave and the org's
+ * subscription must not leave with them.
+ *
+ * A customer created before the re-key has no org id. That is not an error to
+ * paper over: `scripts/backfill-org-billing.ts` stamps it, and until it does
+ * the customer is skipped rather than guessed at.
+ */
+export function getBindersnapOrganizationIdFromStripeCustomer(
+  customer: Stripe.Customer | Stripe.DeletedCustomer | null | undefined,
+): number | null {
+  if (!customer) return null;
+  if ((customer as Stripe.DeletedCustomer).deleted) return null;
+  const metadata = (customer as Stripe.Customer).metadata ?? null;
+  const raw = metadata?.bindersnap_gitea_org_id;
+  if (typeof raw !== "string" || raw.trim() === "") return null;
+
+  const orgId = Number.parseInt(raw.trim(), 10);
+  return Number.isSafeInteger(orgId) && orgId > 0 ? orgId : null;
+}
+
+/** Who set the subscription up. Support metadata; never a key. */
 export function getBindersnapUsernameFromStripeCustomer(
   customer: Stripe.Customer | Stripe.DeletedCustomer | null | undefined,
 ): string | null {
@@ -31,7 +58,7 @@ export function getBindersnapUsernameFromStripeCustomer(
 }
 
 export function buildStripeSubscriptionRecord(
-  username: string,
+  giteaOrgId: number,
   customerId: string,
   subscription: StripeObjectLike,
   now = Date.now(),
@@ -42,7 +69,7 @@ export function buildStripeSubscriptionRecord(
   }
 
   return {
-    username,
+    giteaOrgId,
     stripeCustomerId: customerId,
     stripeSubscriptionId: subscriptionId,
     status: readString(subscription, "status") ?? "active",
@@ -86,8 +113,8 @@ export async function reconcileStripeCustomerByCustomerId(
   },
 ): Promise<StripeReconciliationResult | null> {
   const customer = await stripe.customers.retrieve(customerId);
-  const username = getBindersnapUsernameFromStripeCustomer(customer);
-  if ((customer as Stripe.DeletedCustomer).deleted || !username) {
+  const giteaOrgId = getBindersnapOrganizationIdFromStripeCustomer(customer);
+  if ((customer as Stripe.DeletedCustomer).deleted || !giteaOrgId) {
     return null;
   }
 
@@ -102,7 +129,7 @@ export async function reconcileStripeCustomerByCustomerId(
     customer: customer as Stripe.Customer,
     subscription,
     record: buildStripeSubscriptionRecord(
-      username,
+      giteaOrgId,
       customerId,
       subscription,
       options?.now,
@@ -110,13 +137,13 @@ export async function reconcileStripeCustomerByCustomerId(
   };
 }
 
-export async function reconcileStripeCustomerByUsername(
+export async function reconcileStripeCustomerByOrganization(
   stripe: Stripe,
-  username: string,
+  giteaOrgId: number,
   now = Date.now(),
 ): Promise<StripeReconciliationResult | null> {
   const search = await stripe.customers.search({
-    query: `metadata['bindersnap_username']:'${escapeStripeSearchString(username)}'`,
+    query: `metadata['bindersnap_gitea_org_id']:'${escapeStripeSearchString(String(giteaOrgId))}'`,
     limit: 1,
   });
   const customer = search.data[0];
@@ -129,7 +156,7 @@ export async function reconcileStripeCustomerByUsername(
     customer,
     subscription,
     record: buildStripeSubscriptionRecord(
-      username,
+      giteaOrgId,
       customer.id,
       subscription,
       now,

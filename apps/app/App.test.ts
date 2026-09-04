@@ -529,3 +529,158 @@ test("resolveSignupPrefill reads the landing email from the query string", () =>
     email: "team@bindersnap.com",
   });
 });
+
+/**
+ * The three defects this suite exists to keep out.
+ *
+ * A session with no organization has `hasAccess: false` and no subscription
+ * status, so every "is this customer paid up?" test in the app reads it as
+ * "none". It is not the same thing: there is nothing to buy until an
+ * organization exists, and ADR 0004 keeps reading free regardless. Conflating
+ * two sent a new signup to a card form, rendered the billing page at
+ * `/organizations/new`, and left "Skip for now" with nowhere to go.
+ */
+function organizationSetupHeading(container: HTMLElement): string | null {
+  const headings = [...container.querySelectorAll("h1")].map(
+    (heading) => heading.textContent?.trim() ?? "",
+  );
+
+  return (
+    headings.find((text) => /organization/i.test(text)) ??
+    (headings.length > 0 ? null : null)
+  );
+}
+
+function skipButton(container: HTMLElement): HTMLElement | null {
+  return (
+    [...container.querySelectorAll("button")].find(
+      (button) => button.textContent?.trim() === "Skip for now",
+    ) ?? null
+  );
+}
+
+function signedInWithNoOrganization() {
+  mockFetchSessionUser.mockImplementation(async () => ({
+    user: { username: "casey", fullName: "Casey Example" },
+    token: "session-token",
+  }));
+  mockFetchBillingStatus.mockImplementation(async () => ({
+    status: null,
+    currentPeriodEnd: null,
+    cancelAtPeriodEnd: false,
+    cancelAt: null,
+    hasAccess: false,
+    accessSource: "no_organization",
+    override: null,
+    plan: null,
+  }));
+}
+
+test("App shows the setup screen at /organizations/new, not the billing page", async () => {
+  installDom("/organizations/new");
+  signedInWithNoOrganization();
+
+  const { App } = await import("./App");
+  const { container, unmount } = mountApp(App);
+
+  try {
+    await waitFor(() => {
+      expect(organizationSetupHeading(container)).toBe(
+        "Create your organization",
+      );
+      expect(window.location.pathname).toBe("/organizations/new");
+      expect(
+        container.querySelector('[data-testid="billing-page"]'),
+      ).toBeNull();
+    });
+  } finally {
+    unmount();
+  }
+});
+
+test("App lets an account with no organization read, instead of gating every route", async () => {
+  installDom("/docs/mercy-health/binder");
+  signedInWithNoOrganization();
+
+  const { App } = await import("./App");
+  const { container, unmount } = mountApp(App);
+
+  try {
+    await waitFor(() => {
+      const appShell = container.querySelector<HTMLElement>(
+        '[data-testid="app-shell"]',
+      );
+
+      expect(appShell?.dataset.routeKind).toBe("document");
+      expect(window.location.pathname).toBe("/docs/mercy-health/binder");
+      expect(
+        container.querySelector('[data-testid="billing-page"]'),
+      ).toBeNull();
+      expect(skipButton(container)).toBeNull();
+    });
+  } finally {
+    unmount();
+  }
+});
+
+test("App lets Skip for now leave the setup screen and stay gone", async () => {
+  installDom("/organizations/new");
+  signedInWithNoOrganization();
+
+  const { App } = await import("./App");
+  const { container, unmount } = mountApp(App);
+
+  try {
+    await waitFor(() => {
+      expect(skipButton(container)).not.toBeNull();
+    });
+
+    flushSync(() => {
+      skipButton(container)!.click();
+    });
+
+    // The old redirect sent them straight back here, so the assertion that
+    // matters is that the workspace is still on screen a tick later.
+    await waitFor(() => {
+      expect(
+        container.querySelector('[data-testid="app-shell"]'),
+      ).not.toBeNull();
+      expect(window.location.pathname).toBe("/");
+      expect(skipButton(container)).toBeNull();
+    });
+  } finally {
+    unmount();
+  }
+});
+
+test("App asks a no-organization session to name one when a write is refused", async () => {
+  signedInWithNoOrganization();
+
+  const { App } = await import("./App");
+  const { notifyPaymentRequired } = await import("./paymentRequired");
+  const { container, unmount } = mountApp(App);
+
+  try {
+    await waitFor(() => {
+      expect(
+        container.querySelector('[data-testid="app-shell"]'),
+      ).not.toBeNull();
+    });
+
+    notifyPaymentRequired();
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/organizations/new");
+      // The wording is the whole point: they were stopped mid-write, not sent
+      // here by their own navigation.
+      expect(organizationSetupHeading(container)).toBe(
+        "Name your organization to start writing",
+      );
+      expect(
+        container.querySelector('[data-testid="billing-page"]'),
+      ).toBeNull();
+    });
+  } finally {
+    unmount();
+  }
+});

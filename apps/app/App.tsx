@@ -11,19 +11,23 @@ import "./app.css";
 import { AnonymousDocumentShell } from "./components/AnonymousDocumentShell";
 import { AppShell } from "./components/AppShell";
 import { BillingPage } from "./components/BillingPage";
+import { OrganizationSetupPage } from "./components/OrganizationSetupPage";
 import { BindersnapLogoMark } from "./components/BindersnapLogoMark";
 import { LandingPage } from "./components/LandingPage";
 import { WorkspaceSkeleton } from "./components/WorkspaceSkeleton";
 import {
   type SessionUser,
   createCheckoutSession,
+  createOrganization,
   createPortalSession,
   fetchBillingStatus,
+  fetchOrganizations,
   fetchSessionUser,
   login,
   logoutSession,
   signup,
 } from "./api";
+import type { OrganizationSummary } from "../../packages/api-schema/schemas/organizations";
 import { usePaymentRequiredHandler } from "./paymentRequired";
 import {
   asShellRoute,
@@ -42,6 +46,7 @@ type AuthView =
   | "landing"
   | "login"
   | "billing"
+  | "createOrganization"
   | "app"
   | "publicDoc";
 type AuthMode = "signin" | "signup";
@@ -281,6 +286,29 @@ export function App() {
     "active" | "none" | "loading" | null
   >(null);
   const [hasBillingStatusError, setHasBillingStatusError] = useState(false);
+  // Where the access comes from. A trial counts as access, but it is not a
+  // subscription — so a trialing customer must still be able to open the page
+  // where they buy one.
+  const [accessSource, setAccessSource] = useState<string | null>(null);
+  // Which organizations this session is in. An empty list is an ordinary
+  // answer — an account that predates ADR 0004 has none — and it is also what
+  // decides whether we may promise a trial.
+  // `null` means "not known yet", which is not the same as "none". A failed
+  // read must not be mistaken for an account with no organization, or a
+  // transient error would tell someone who has one that they are about to
+  // create their first — and promise them a trial that is not coming.
+  const [organizations, setOrganizations] = useState<
+    OrganizationSummary[] | null
+  >(null);
+  const [suggestedOrganizationName, setSuggestedOrganizationName] = useState<
+    string | null
+  >(null);
+  // Why the setup screen is on screen: a write that needed an organization, or
+  // ordinary navigation. A new signup arrives here too and must not be told it
+  // was blocked from something it never tried.
+  const [organizationSetupReason, setOrganizationSetupReason] = useState<
+    "blocked-write" | null
+  >(null);
   const [currentPeriodEnd, setCurrentPeriodEnd] = useState<number | null>(null);
   const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(false);
   const [cancelAt, setCancelAt] = useState<number | null>(null);
@@ -295,13 +323,25 @@ export function App() {
       return;
     }
 
+    // A write refused because the session has no organization is not a refusal
+    // to serve someone who has not paid — there is nothing to buy yet. This is
+    // the moment ADR 0004 means when it says the question comes back:
+    // authoring is what needs an organization, so ask for one rather than for
+    // a card.
+    if (accessSource === "no_organization") {
+      setOrganizationSetupReason("blocked-write");
+      navigateTo({ kind: "createOrganization" }, true);
+      return;
+    }
+
     setSubscriptionStatus("none");
+    setAccessSource(null);
     setHasBillingStatusError(false);
     setCurrentPeriodEnd(null);
     setCancelAtPeriodEnd(false);
     setCancelAt(null);
     navigateTo({ kind: "billing" }, true);
-  }, [user]);
+  }, [accessSource, user]);
 
   const refreshSession = useCallback(async () => {
     setIsCheckingSession(true);
@@ -315,10 +355,12 @@ export function App() {
         setSubscriptionStatus("loading");
         setHasBillingStatusError(false);
         try {
+          setOrganizations(await fetchOrganizations().catch(() => null));
           const billing = await fetchBillingStatus();
           setSubscriptionStatus(
             resolveSubscriptionStatus(billing.status, billing.hasAccess),
           );
+          setAccessSource(billing.accessSource ?? null);
           setHasBillingStatusError(false);
           setCurrentPeriodEnd(billing.currentPeriodEnd);
           setCancelAtPeriodEnd(billing.cancelAtPeriodEnd);
@@ -326,6 +368,7 @@ export function App() {
           setPlan(billing.plan);
         } catch {
           setSubscriptionStatus("none");
+          setAccessSource(null);
           setHasBillingStatusError(true);
           setCurrentPeriodEnd(null);
           setCancelAtPeriodEnd(false);
@@ -333,6 +376,8 @@ export function App() {
           setPlan(null);
         }
       } else {
+        setOrganizations(null);
+        setOrganizationSetupReason(null);
         setSubscriptionStatus(null);
         setHasBillingStatusError(false);
         setCurrentPeriodEnd(null);
@@ -434,26 +479,39 @@ export function App() {
       return;
     }
 
+    // No redirect for a session with no organization. Reads are free under
+    // ADR 0004, so gating every route would contradict the rule the API
+    // already enforces — and it would trap the person who pressed "Skip for now",
+    // since skipping navigates to exactly the route this would bounce back.
+    // Signup sends them to the setup screen, and `handlePaymentRequired`
+    // brings them back when a write actually needs an organization.
+
     if (
       user &&
       subscriptionStatus === "none" &&
+      accessSource !== "no_organization" &&
       route.kind !== "billing" &&
+      route.kind !== "createOrganization" &&
       !isAdminSubscriptionRoute
     ) {
       navigateTo({ kind: "billing" }, true);
       return;
     }
 
+    // Bounce back to the workspace only when there is genuinely nothing to do
+    // on this page. A customer on a trial has access but no subscription, and
+    // sending them home would leave them no way to become a paying one.
     if (
       user &&
       subscriptionStatus === "active" &&
+      accessSource === "stripe" &&
       route.kind === "billing" &&
       !isCheckoutSuccess
     ) {
       navigateTo({ kind: "home" }, true);
       return;
     }
-  }, [isCheckingSession, route, subscriptionStatus, user]);
+  }, [accessSource, isCheckingSession, route, subscriptionStatus, user]);
 
   useEffect(() => {
     if (route.kind !== "callback") {
@@ -471,9 +529,17 @@ export function App() {
       return "callback";
     }
 
+    // A session with no organization reads "none" here, because it has no
+    // access — but it has not failed to pay, and there is nothing for it to
+    // buy. Letting this branch answer for it sent it to the card form no
+    // matter where it was going, which is what made `/organizations/new`
+    // render billing and left the setup screen reachable only by people who
+    // already had an organization.
     if (
       user &&
       subscriptionStatus === "none" &&
+      accessSource !== "no_organization" &&
+      route.kind !== "createOrganization" &&
       !(route.kind === "adminSubscriptions" && user.isAdmin)
     ) {
       return "billing";
@@ -487,6 +553,10 @@ export function App() {
       return "loading";
     }
 
+    if (route.kind === "createOrganization" && user) {
+      return "createOrganization";
+    }
+
     if (route.kind === "billing" && user) {
       return "billing";
     }
@@ -496,7 +566,7 @@ export function App() {
     }
 
     return user ? "app" : "login";
-  }, [isCheckingSession, route, subscriptionStatus, user]);
+  }, [accessSource, isCheckingSession, route, subscriptionStatus, user]);
 
   useEffect(() => {
     document.body.setAttribute("data-app-view", view);
@@ -514,10 +584,41 @@ export function App() {
     return <WorkspaceSkeleton label="Opening your workspace" />;
   }
 
+  if (view === "createOrganization") {
+    return (
+      <OrganizationSetupPage
+        suggestedName={suggestedOrganizationName}
+        // Only their first gets a trial, and this screen must not promise one
+        // it cannot deliver.
+        isFirstOrganization={organizations?.length === 0}
+        reason={organizationSetupReason}
+        onCreate={async (name) => {
+          await createOrganization(name);
+          // The organization changes what this session can do, so re-read
+          // access rather than guessing at it. If that read fails the
+          // organization still exists, and stranding someone on this form —
+          // the one screen that cannot help them any further — is the worst
+          // answer available; the next navigation reads it again anyway.
+          await refreshSession().catch(() => undefined);
+          setSuggestedOrganizationName(null);
+          setOrganizationSetupReason(null);
+          navigateTo({ kind: "home" }, true);
+        }}
+        onSkip={() => {
+          // Skipping has to actually leave. Reading is free, so the workspace
+          // is a legitimate place to be without an organization.
+          setOrganizationSetupReason(null);
+          navigateTo({ kind: "home" }, true);
+        }}
+      />
+    );
+  }
+
   if (view === "billing") {
     return (
       <BillingPage
         subscriptionStatus={subscriptionStatus ?? "loading"}
+        accessSource={accessSource}
         hasBillingStatusError={hasBillingStatusError}
         currentPeriodEnd={currentPeriodEnd}
         cancelAtPeriodEnd={cancelAtPeriodEnd}
@@ -533,6 +634,7 @@ export function App() {
         }}
         onSubscriptionConfirmed={() => {
           setSubscriptionStatus("active");
+          setAccessSource("stripe");
           setHasBillingStatusError(false);
           navigateTo({ kind: "home" }, true);
         }}
@@ -585,6 +687,11 @@ export function App() {
         }}
         onSignup={async (username, email, password) => {
           const authenticatedSession = await signup(username, email, password);
+          // Carried from the signup form so the create-organization screen
+          // arrives filled in rather than asking again.
+          setSuggestedOrganizationName(
+            authenticatedSession.suggestedOrganizationName ?? null,
+          );
           const signupUser =
             authenticatedSession.user ?? (await refreshSession());
           if (!signupUser) {
@@ -598,7 +705,11 @@ export function App() {
               "Account created, but the session could not be verified.",
             );
           }
-          navigateTo({ kind: "home" }, true);
+          // Signup no longer creates an organization behind the person's back,
+          // so naming one is the next step — not a wall they hit on the way
+          // somewhere else. They arrive un-blocked, and may skip.
+          setOrganizationSetupReason(null);
+          navigateTo({ kind: "createOrganization" }, true);
         }}
       />
     );

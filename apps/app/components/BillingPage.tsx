@@ -8,9 +8,16 @@ import {
   runBackgroundPoll,
 } from "./checkoutPolling";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
+import { hasManageableSubscription } from "./billingAccess";
 
 interface BillingPageProps {
   subscriptionStatus: "active" | "none" | "loading";
+  /**
+   * Why this session has access. A trial grants access without a subscription,
+   * so `subscriptionStatus` alone cannot tell "already paying" from "trialing"
+   * — only `"stripe"` means there is a subscription to show or manage.
+   */
+  accessSource: string | null;
   hasBillingStatusError: boolean;
   currentPeriodEnd: number | null;
   cancelAtPeriodEnd: boolean;
@@ -30,6 +37,7 @@ interface BillingPageProps {
 
 export function BillingPage({
   subscriptionStatus,
+  accessSource,
   hasBillingStatusError,
   currentPeriodEnd,
   cancelAtPeriodEnd,
@@ -164,7 +172,11 @@ export function BillingPage({
     );
   }
 
-  if (subscriptionStatus === "active") {
+  // Only a Stripe-backed subscription gets the manage panel. A trialing
+  // organization is "active" too — it has access — but it has nothing to
+  // manage and every reason to be shown the way to subscribe, which is the
+  // whole point of the page it just navigated to.
+  if (hasManageableSubscription(subscriptionStatus, accessSource)) {
     const renewalLabel = cancelAtPeriodEnd
       ? cancelAt !== null
         ? `Cancels on ${new Date(cancelAt * 1000).toLocaleDateString()}`

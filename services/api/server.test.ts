@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "crypto";
 
 import { config } from "./config";
+import { OrganizationStore, organizationStore } from "./organizations";
 import { createApiServer } from "./server";
 import { SessionStore, sessionStore } from "./sessions";
 import { resetStripeClientForTests } from "./stripe/client";
@@ -41,6 +42,12 @@ const originalSessionsDbPath = config.sessionsDbPath;
 let fetchCalls: MockedFetchCall[] = [];
 let giteaUsersByLogin = new Map<string, MockedGiteaUser>();
 let giteaLoginsByToken = new Map<string, string>();
+// ADR 0004: billing keys to the organization, so every seeded session needs
+// one. `orgIdFor` is what a test uses to seed or assert a subscription row.
+let giteaOrgsByUsername = new Map<string, { id: number; username: string }>();
+// org name -> its Owners team members, for the admin browse listing.
+let giteaOrgOwners = new Map<string, MockedGiteaUser[]>();
+let nextGiteaOrgId = 4000;
 let stripeSubscriptionsById = new Map<string, MockedStripeResource>();
 let stripeCustomersById = new Map<string, MockedStripeResource>();
 
@@ -59,10 +66,15 @@ beforeEach(() => {
     new SubscriptionStore(config.sessionsDbPath);
   (webhookEventStore as { _store: WebhookEventStore | null })._store =
     new WebhookEventStore(config.sessionsDbPath);
+  (organizationStore as { _store: OrganizationStore | null })._store =
+    new OrganizationStore(config.sessionsDbPath);
 
   fetchCalls = [];
   giteaUsersByLogin = new Map();
   giteaLoginsByToken = new Map();
+  giteaOrgsByUsername = new Map();
+  giteaOrgOwners = new Map();
+  nextGiteaOrgId = 4000;
   stripeSubscriptionsById = new Map();
   stripeCustomersById = new Map();
   globalThis.fetch = (async (input, init) => {
@@ -73,7 +85,12 @@ beforeEach(() => {
           ? input.toString()
           : input.url;
     const url = new URL(requestUrl);
-    const headers = new Headers(init?.headers);
+    // openapi-fetch calls fetch(new Request(...)) rather than fetch(url, init),
+    // so the auth header lives on the Request for typed-client calls.
+    const headers =
+      input instanceof Request
+        ? new Headers(input.headers)
+        : new Headers(init?.headers);
     const body =
       typeof init?.body === "string"
         ? init.body
@@ -87,6 +104,74 @@ beforeEach(() => {
       idempotencyKey: headers.get("Idempotency-Key") ?? null,
       body,
     });
+
+    const orgTeamsMatch = url.pathname.match(
+      /^\/api\/v1\/orgs\/([^/]+)\/teams$/,
+    );
+    if (orgTeamsMatch) {
+      const orgName = decodeURIComponent(orgTeamsMatch[1] ?? "");
+      const teams = giteaOrgOwners.has(orgName)
+        ? [
+            {
+              id: ownersTeamIdFor(orgName),
+              name: "Owners",
+              permission: "owner",
+            },
+          ]
+        : [];
+      return new Response(JSON.stringify(teams), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const teamMembersMatch = url.pathname.match(
+      /^\/api\/v1\/teams\/(\d+)\/members$/,
+    );
+    if (teamMembersMatch) {
+      const teamId = Number.parseInt(teamMembersMatch[1] ?? "0", 10);
+      const orgName = [...giteaOrgOwners.keys()].find(
+        (name) => ownersTeamIdFor(name) === teamId,
+      );
+      const members = orgName ? (giteaOrgOwners.get(orgName) ?? []) : [];
+      return new Response(
+        JSON.stringify(
+          members.map((member, index) => ({
+            id: index + 1,
+            login: member.login,
+            full_name: member.fullName ?? "",
+            email: member.email,
+          })),
+        ),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    const userOrgsMatch = url.pathname.match(
+      /^\/api\/v1\/users\/([^/]+)\/orgs$/,
+    );
+    if (userOrgsMatch) {
+      const organization = giteaOrgsByUsername.get(
+        decodeURIComponent(userOrgsMatch[1] ?? ""),
+      );
+      return new Response(JSON.stringify(organization ? [organization] : []), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    if (url.pathname === "/api/v1/user/orgs") {
+      const authHeader = headers.get("Authorization") ?? "";
+      const token = authHeader.startsWith("token ")
+        ? authHeader.slice("token ".length)
+        : "";
+      const login = giteaLoginsByToken.get(token);
+      const organization = login ? giteaOrgsByUsername.get(login) : null;
+      return new Response(JSON.stringify(organization ? [organization] : []), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
 
     if (url.pathname === "/api/v1/user") {
       const authHeader = headers.get("Authorization") ?? "";
@@ -245,12 +330,22 @@ async function seedSession(
     email?: string;
     fullName?: string;
     isAdmin?: boolean;
+    /** Pass false for an account that predates ADR 0004 and has no org. */
+    withOrganization?: boolean;
   },
 ): Promise<string> {
   const sessionId = `sess_${randomUUID()}`;
   const giteaToken = `gitea_token_${randomUUID()}`;
   const email =
     options?.email ?? `${username.toLowerCase()}@${config.emailDomain}`;
+
+  if (options?.withOrganization !== false) {
+    nextGiteaOrgId += 1;
+    giteaOrgsByUsername.set(username, {
+      id: nextGiteaOrgId,
+      username: `${username}-org`,
+    });
+  }
 
   giteaUsersByLogin.set(username, {
     login: username,
@@ -268,6 +363,34 @@ async function seedSession(
     expiresAt: Date.now() + 60_000,
   });
   return sessionId;
+}
+
+/** A stable synthetic team id for an org's Owners team. */
+function ownersTeamIdFor(orgName: string): number {
+  let hash = 0;
+  for (const char of orgName) {
+    hash = (hash * 31 + char.charCodeAt(0)) % 100_000;
+  }
+  return 900_000 + hash;
+}
+
+/** Register an organization for a user without creating a session for them. */
+function seedOrganizationFor(username: string): number {
+  nextGiteaOrgId += 1;
+  giteaOrgsByUsername.set(username, {
+    id: nextGiteaOrgId,
+    username: `${username}-org`,
+  });
+  return nextGiteaOrgId;
+}
+
+/** The Gitea org id seeded for a user. Billing hangs off this, not the name. */
+function orgIdFor(username: string): number {
+  const organization = giteaOrgsByUsername.get(username);
+  if (!organization) {
+    throw new Error(`No organization was seeded for ${username}.`);
+  }
+  return organization.id;
 }
 
 function getFetchCallsByPath(path: string): MockedFetchCall[] {
@@ -472,7 +595,7 @@ describe("billing Stripe idempotency", () => {
     }
   });
 
-  test("checkout includes customer_email and bindersnap username metadata when no subscription exists", async () => {
+  test("checkout carries the organization, not the person, into Stripe", async () => {
     const server = createApiServer();
     const username = `checkout-metadata-${randomUUID()}`;
     const email = `${username}@${config.emailDomain}`;
@@ -489,6 +612,12 @@ describe("billing Stripe idempotency", () => {
 
       const form = getPostedFormBody(checkoutCalls[0]!);
       expect(form.get("customer_email")).toBe(email);
+      // The org id is the key Stripe carries; the username records who set it
+      // up, which support wants and billing must never depend on.
+      expect(form.get("metadata[bindersnap_gitea_org_id]")).toBe(
+        String(orgIdFor(username)),
+      );
+      expect(form.get("client_reference_id")).toBe(String(orgIdFor(username)));
       expect(form.get("metadata[bindersnap_username]")).toBe(username);
       expect(form.get("customer")).toBeNull();
     } finally {
@@ -504,7 +633,7 @@ describe("billing Stripe idempotency", () => {
     const sessionId = await seedSession(username, { email });
 
     await subscriptionStore.upsert({
-      username,
+      giteaOrgId: orgIdFor(username),
       stripeCustomerId: existingCustomerId,
       stripeSubscriptionId: "sub_existing_123",
       status: "incomplete",
@@ -526,7 +655,9 @@ describe("billing Stripe idempotency", () => {
       const form = getPostedFormBody(checkoutCalls[0]!);
       expect(form.get("customer")).toBe(existingCustomerId);
       expect(form.get("customer_email")).toBeNull();
-      expect(form.get("metadata[bindersnap_username]")).toBe(username);
+      expect(form.get("metadata[bindersnap_gitea_org_id]")).toBe(
+        String(orgIdFor(username)),
+      );
     } finally {
       server.stop(true);
     }
@@ -538,7 +669,7 @@ describe("billing Stripe idempotency", () => {
     const sessionId = await seedSession(username);
 
     await subscriptionStore.upsert({
-      username,
+      giteaOrgId: orgIdFor(username),
       stripeCustomerId: "cus_test_123",
       stripeSubscriptionId: "sub_test_123",
       status: "active",
@@ -581,7 +712,7 @@ describe("billing Stripe idempotency", () => {
     const clientKey = randomUUID();
 
     await subscriptionStore.upsert({
-      username,
+      giteaOrgId: orgIdFor(username),
       stripeCustomerId: "cus_test_456",
       stripeSubscriptionId: "sub_test_456",
       status: "active",
@@ -709,9 +840,11 @@ describe("billing Stripe webhook recovery", () => {
     const subscriptionId = `sub_${randomUUID()}`;
     const currentPeriodEnd = Math.floor(Date.now() / 1000) + 3_600;
 
+    const giteaOrgId = seedOrganizationFor(username);
     mockStripeCustomer(customerId, {
       id: customerId,
       metadata: {
+        bindersnap_gitea_org_id: String(giteaOrgId),
         bindersnap_username: username,
       },
     });
@@ -739,8 +872,8 @@ describe("billing Stripe webhook recovery", () => {
       expect(getFetchCallsByPath(`/v1/customers/${customerId}`)).toHaveLength(
         1,
       );
-      expect(await subscriptionStore.getByUsername(username)).toEqual({
-        username,
+      expect(await subscriptionStore.getByOrganization(giteaOrgId)).toEqual({
+        giteaOrgId,
         stripeCustomerId: customerId,
         stripeSubscriptionId: subscriptionId,
         status: "active",
@@ -761,9 +894,11 @@ describe("billing Stripe webhook recovery", () => {
     const subscriptionId = `sub_${randomUUID()}`;
     const cancelAt = Math.floor(Date.now() / 1000) + 600;
 
+    const giteaOrgId = seedOrganizationFor(username);
     mockStripeCustomer(customerId, {
       id: customerId,
       metadata: {
+        bindersnap_gitea_org_id: String(giteaOrgId),
         bindersnap_username: username,
       },
     });
@@ -790,8 +925,8 @@ describe("billing Stripe webhook recovery", () => {
       expect(getFetchCallsByPath(`/v1/customers/${customerId}`)).toHaveLength(
         1,
       );
-      expect(await subscriptionStore.getByUsername(username)).toEqual({
-        username,
+      expect(await subscriptionStore.getByOrganization(giteaOrgId)).toEqual({
+        giteaOrgId,
         stripeCustomerId: customerId,
         stripeSubscriptionId: subscriptionId,
         status: "canceled",
@@ -812,9 +947,11 @@ describe("billing Stripe webhook recovery", () => {
     const subscriptionId = `sub_${randomUUID()}`;
     const currentPeriodEnd = Math.floor(Date.now() / 1000) + 3_600;
 
+    const giteaOrgId = seedOrganizationFor(username);
     mockStripeCustomer(customerId, {
       id: customerId,
       metadata: {
+        bindersnap_gitea_org_id: String(giteaOrgId),
         bindersnap_username: username,
       },
     });
@@ -842,8 +979,8 @@ describe("billing Stripe webhook recovery", () => {
       expect(getFetchCallsByPath(`/v1/customers/${customerId}`)).toHaveLength(
         1,
       );
-      expect(await subscriptionStore.getByUsername(username)).toEqual({
-        username,
+      expect(await subscriptionStore.getByOrganization(giteaOrgId)).toEqual({
+        giteaOrgId,
         stripeCustomerId: customerId,
         stripeSubscriptionId: subscriptionId,
         status: "active",
@@ -857,9 +994,10 @@ describe("billing Stripe webhook recovery", () => {
     }
   });
 
-  test("checkout.session.completed backfills bindersnap_username metadata onto Stripe Customer", async () => {
+  test("checkout.session.completed stamps the organization onto the Stripe customer", async () => {
     const server = createApiServer();
     const username = `checkout-backfill-${randomUUID()}`;
+    const giteaOrgId = seedOrganizationFor(username);
     const customerId = `cus_${randomUUID()}`;
     const subscriptionId = `sub_${randomUUID()}`;
     const currentPeriodEnd = Math.floor(Date.now() / 1000) + 3_600;
@@ -886,7 +1024,9 @@ describe("billing Stripe webhook recovery", () => {
           created: Math.floor(Date.now() / 1000),
           data: {
             object: {
-              client_reference_id: username,
+              // Checkout is bought by an organization, so this is its id.
+              client_reference_id: String(giteaOrgId),
+              metadata: { bindersnap_username: username },
               customer: customerId,
               subscription: subscriptionId,
             },
@@ -899,7 +1039,8 @@ describe("billing Stripe webhook recovery", () => {
         getFetchCallsByPath(`/v1/subscriptions/${subscriptionId}`),
       ).toHaveLength(1);
 
-      // Verify customer metadata was backfilled
+      // Later subscription webhooks carry only a customer, so the org id has
+      // to be stamped onto it or they cannot reconcile.
       const customerUpdateCalls = fetchCalls.filter(
         (c) => c.path === `/v1/customers/${customerId}` && c.method === "POST",
       );
@@ -907,10 +1048,13 @@ describe("billing Stripe webhook recovery", () => {
       const updateBody = new URLSearchParams(
         customerUpdateCalls[0]!.body ?? "",
       );
+      expect(updateBody.get("metadata[bindersnap_gitea_org_id]")).toBe(
+        String(giteaOrgId),
+      );
       expect(updateBody.get("metadata[bindersnap_username]")).toBe(username);
 
-      expect(await subscriptionStore.getByUsername(username)).toEqual({
-        username,
+      expect(await subscriptionStore.getByOrganization(giteaOrgId)).toEqual({
+        giteaOrgId,
         stripeCustomerId: customerId,
         stripeSubscriptionId: subscriptionId,
         status: "active",
@@ -996,7 +1140,7 @@ describe("admin subscription access overrides", () => {
     const sessionId = await seedSession(username);
 
     await subscriptionStore.upsert({
-      username,
+      giteaOrgId: orgIdFor(username),
       stripeCustomerId: `cus_${randomUUID()}`,
       stripeSubscriptionId: `sub_${randomUUID()}`,
       status: "active",
@@ -1006,7 +1150,7 @@ describe("admin subscription access overrides", () => {
       updatedAt: Date.now(),
     });
     await subscriptionStore.putAccessOverride({
-      username,
+      giteaOrgId: orgIdFor(username),
       access: "revoke",
       reason: "manual review hold",
       updatedBy: "admin-user",
@@ -1036,7 +1180,7 @@ describe("admin subscription access overrides", () => {
     }
   });
 
-  test("admin list without a query includes Stripe-backed and override-only users", async () => {
+  test("admin list without a query walks organizations and names each by an owner", async () => {
     const server = createApiServer();
     const adminSessionId = await seedSession(`admin-${randomUUID()}`, {
       isAdmin: true,
@@ -1053,8 +1197,26 @@ describe("admin subscription access overrides", () => {
       email: `${overrideUser}@${config.emailDomain}`,
     });
 
+    // Browsing lists organizations, because that is what we know billing
+    // about — and labels each row with one of its owners, since a username is
+    // what an admin can act on.
+    for (const user of [stripeUser, overrideUser]) {
+      const giteaOrgId = seedOrganizationFor(user);
+      const orgName = `${user}-org`;
+      giteaOrgOwners.set(orgName, [
+        { login: user, email: `${user}@${config.emailDomain}` },
+      ]);
+      await organizationStore.upsert({
+        giteaOrgId,
+        name: orgName,
+        createdBy: user,
+        createdAt: Math.floor(Date.now() / 1000),
+        trialEndsAt: null,
+      });
+    }
+
     await subscriptionStore.upsert({
-      username: stripeUser,
+      giteaOrgId: orgIdFor(stripeUser),
       stripeCustomerId: `cus_${randomUUID()}`,
       stripeSubscriptionId: `sub_${randomUUID()}`,
       status: "active",
@@ -1064,7 +1226,7 @@ describe("admin subscription access overrides", () => {
       updatedAt: Date.now() - 1_000,
     });
     await subscriptionStore.putAccessOverride({
-      username: overrideUser,
+      giteaOrgId: orgIdFor(overrideUser),
       access: "grant",
       reason: "manual comp",
       updatedBy: "admin-user",
@@ -1109,7 +1271,7 @@ describe("admin subscription access overrides", () => {
     const memberSessionId = await seedSession(memberUsername);
 
     await subscriptionStore.upsert({
-      username: memberUsername,
+      giteaOrgId: orgIdFor(memberUsername),
       stripeCustomerId: `cus_${randomUUID()}`,
       stripeSubscriptionId: `sub_${randomUUID()}`,
       status: "active",

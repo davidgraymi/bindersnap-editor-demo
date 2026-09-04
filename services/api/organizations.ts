@@ -34,6 +34,8 @@ export interface OrganizationBackend {
   getByName(name: string): Promise<OrganizationRecord | null>;
   upsert(record: OrganizationRecord): Promise<void>;
   list(): Promise<OrganizationRecord[]>;
+  /** Every organization this person created. Decides who gets a trial. */
+  listByCreator(createdBy: string): Promise<OrganizationRecord[]>;
 }
 
 /** The trial window that starts at signup, in Unix seconds. */
@@ -96,6 +98,14 @@ export class OrganizationStore implements OrganizationBackend {
       .run();
   }
 
+  async listByCreator(createdBy: string): Promise<OrganizationRecord[]> {
+    return this.db
+      .select()
+      .from(organizations)
+      .where(eq(organizations.createdBy, createdBy))
+      .all();
+  }
+
   async list(): Promise<OrganizationRecord[]> {
     return this.db.select().from(organizations).all();
   }
@@ -122,6 +132,10 @@ class LazyOrganizationStore implements OrganizationBackend {
 
   upsert(record: OrganizationRecord): Promise<void> {
     return this.store.upsert(record);
+  }
+
+  listByCreator(createdBy: string): Promise<OrganizationRecord[]> {
+    return this.store.listByCreator(createdBy);
   }
 
   list(): Promise<OrganizationRecord[]> {
@@ -154,9 +168,33 @@ export async function recordProvisionedOrganization(params: {
     name: params.name,
     createdBy: existing?.createdBy ?? params.createdBy,
     createdAt: existing?.createdAt ?? Math.floor(now / 1000),
-    trialEndsAt: existing?.trialEndsAt ?? trialEndsAtFrom(now),
+    trialEndsAt:
+      existing?.trialEndsAt ??
+      (await resolveTrialEnd(store, params.createdBy, now)),
   };
 
   await store.upsert(record);
   return record;
+}
+
+/**
+ * The trial goes to a person's **first** organization, not to every one they
+ * create.
+ *
+ * Creating an organization is self-serve, and a trial is 14 days of the
+ * product for free — so a per-organization trial is a per-afternoon trial for
+ * anyone willing to click twice. Their second organization is real (a
+ * consultant's second client, a company splitting a department out) and can be
+ * created freely; it just has to be paid for to author in.
+ *
+ * Re-provisioning never reaches here: an organization that already has a
+ * record keeps whatever trial it was given.
+ */
+async function resolveTrialEnd(
+  store: OrganizationBackend,
+  createdBy: string,
+  nowMs: number,
+): Promise<number | null> {
+  const alreadyCreated = await store.listByCreator(createdBy);
+  return alreadyCreated.length === 0 ? trialEndsAtFrom(nowMs) : null;
 }

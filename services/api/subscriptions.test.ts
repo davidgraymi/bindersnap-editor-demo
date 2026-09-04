@@ -3,13 +3,29 @@ import { describe, it, expect } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { OrganizationStore } from "./organizations";
 import { SubscriptionStore } from "./subscriptions";
 
 // Use an in-memory SQLite DB for tests.
 const TEST_DB = ":memory:";
 
 function makeStore() {
-  return new SubscriptionStore(TEST_DB);
+  // The store reads the organizations table for the trial layer, so it needs an
+  // organization backend. `:memory:` gives each connection its own database,
+  // which is exactly right here: no organization has a trial, so access comes
+  // only from Stripe and from admin overrides.
+  return new SubscriptionStore(TEST_DB, new OrganizationStore(TEST_DB));
+}
+
+/**
+ * A subscription store and an organization store over one file, so the trial
+ * layer of `resolveAccess` can actually be exercised.
+ */
+function makeStorePair() {
+  const temp = makeTempDbPath();
+  const organizations = new OrganizationStore(temp.path);
+  const store = new SubscriptionStore(temp.path, organizations);
+  return { store, organizations, cleanup: temp.cleanup };
 }
 
 function makeTempDbPath() {
@@ -52,6 +68,31 @@ async function captureStdout<T>(
   }
 }
 
+// Billing keys to the organization (ADR 0004); these ids stand in for real
+// Gitea org ids, one per fixture that used to be named by a person.
+const ORG: Record<string, number> = {
+  alice: 1000,
+  bob: 1001,
+  carol: 1002,
+  drew: 1003,
+  "override-only": 1004,
+  "override-user": 1005,
+  "stripe-only": 1006,
+  "stripe-user": 1007,
+  u1: 1008,
+  u2: 1009,
+  u3: 1010,
+  u4: 1011,
+  u5: 1012,
+  u6: 1013,
+  u7: 1014,
+  v1: 1015,
+  v2: 1016,
+  v3: 1017,
+  nobody: 1018,
+  nonexistent: 1019,
+};
+
 const now = Math.floor(Date.now() / 1000);
 const futureEnd = now + 30 * 24 * 60 * 60; // 30 days from now
 const recentEnd = now - 1 * 24 * 60 * 60; // 1 day ago (within buffer)
@@ -61,7 +102,7 @@ describe("SubscriptionStore", () => {
   it("upserts and retrieves by username", async () => {
     const store = makeStore();
     await store.upsert({
-      username: "alice",
+      giteaOrgId: ORG["alice"],
       stripeCustomerId: "cus_1",
       stripeSubscriptionId: "sub_1",
       status: "active",
@@ -70,7 +111,7 @@ describe("SubscriptionStore", () => {
       cancelAt: null,
       updatedAt: Date.now(),
     });
-    const record = await store.getByUsername("alice");
+    const record = await store.getByOrganization(ORG["alice"]);
     expect(record?.status).toBe("active");
     expect(record?.stripeCustomerId).toBe("cus_1");
   });
@@ -78,7 +119,7 @@ describe("SubscriptionStore", () => {
   it("upserts and retrieves by customer ID", async () => {
     const store = makeStore();
     await store.upsert({
-      username: "bob",
+      giteaOrgId: ORG["bob"],
       stripeCustomerId: "cus_2",
       stripeSubscriptionId: "sub_2",
       status: "trialing",
@@ -88,13 +129,13 @@ describe("SubscriptionStore", () => {
       updatedAt: Date.now(),
     });
     const record = await store.getByCustomerId("cus_2");
-    expect(record?.username).toBe("bob");
+    expect(record?.giteaOrgId).toBe(ORG["bob"]);
   });
 
   it("updates on conflict", async () => {
     const store = makeStore();
     await store.upsert({
-      username: "carol",
+      giteaOrgId: ORG["carol"],
       stripeCustomerId: "cus_3",
       stripeSubscriptionId: "sub_3",
       status: "active",
@@ -104,7 +145,7 @@ describe("SubscriptionStore", () => {
       updatedAt: Date.now(),
     });
     await store.upsert({
-      username: "carol",
+      giteaOrgId: ORG["carol"],
       stripeCustomerId: "cus_3",
       stripeSubscriptionId: "sub_3",
       status: "canceled",
@@ -113,14 +154,14 @@ describe("SubscriptionStore", () => {
       cancelAt: null,
       updatedAt: Date.now(),
     });
-    const record = await store.getByUsername("carol");
+    const record = await store.getByOrganization(ORG["carol"]);
     expect(record?.status).toBe("canceled");
   });
 
-  it("rebinds a username to a new stripe customer and clears the old customer lookup", async () => {
+  it("rebinds an organization to a new stripe customer and clears the old customer lookup", async () => {
     const store = makeStore();
     await store.upsert({
-      username: "carol",
+      giteaOrgId: ORG["carol"],
       stripeCustomerId: "cus_old",
       stripeSubscriptionId: "sub_old",
       status: "active",
@@ -131,7 +172,7 @@ describe("SubscriptionStore", () => {
     });
 
     await store.upsert({
-      username: "carol",
+      giteaOrgId: ORG["carol"],
       stripeCustomerId: "cus_new",
       stripeSubscriptionId: "sub_new",
       status: "trialing",
@@ -144,14 +185,14 @@ describe("SubscriptionStore", () => {
     expect(await store.getByCustomerId("cus_old")).toBeNull();
 
     const rebound = await store.getByCustomerId("cus_new");
-    expect(rebound?.username).toBe("carol");
+    expect(rebound?.giteaOrgId).toBe(ORG["carol"]);
     expect(rebound?.stripeSubscriptionId).toBe("sub_new");
   });
 
-  it("replaces all persisted billing fields on username conflict", async () => {
+  it("replaces all persisted billing fields on organization conflict", async () => {
     const store = makeStore();
     await store.upsert({
-      username: "drew",
+      giteaOrgId: ORG["drew"],
       stripeCustomerId: "cus_drew_1",
       stripeSubscriptionId: "sub_drew_1",
       status: "active",
@@ -162,7 +203,7 @@ describe("SubscriptionStore", () => {
     });
 
     await store.upsert({
-      username: "drew",
+      giteaOrgId: ORG["drew"],
       stripeCustomerId: "cus_drew_2",
       stripeSubscriptionId: "sub_drew_2",
       status: "past_due",
@@ -172,9 +213,9 @@ describe("SubscriptionStore", () => {
       updatedAt: 20,
     });
 
-    const record = await store.getByUsername("drew");
+    const record = await store.getByOrganization(ORG["drew"]);
     expect(record).toEqual({
-      username: "drew",
+      giteaOrgId: ORG["drew"],
       stripeCustomerId: "cus_drew_2",
       stripeSubscriptionId: "sub_drew_2",
       status: "past_due",
@@ -185,15 +226,15 @@ describe("SubscriptionStore", () => {
     });
   });
 
-  it("returns null for unknown username", async () => {
+  it("returns null for an unknown organization", async () => {
     const store = makeStore();
-    expect(await store.getByUsername("nobody")).toBeNull();
+    expect(await store.getByOrganization(ORG["nobody"])).toBeNull();
   });
 
-  it("rejects rebinding an existing Stripe customer to a different username", async () => {
+  it("rejects rebinding an existing Stripe customer to a different organization", async () => {
     const store = makeStore();
     await store.upsert({
-      username: "alice",
+      giteaOrgId: ORG["alice"],
       stripeCustomerId: "cus_shared",
       stripeSubscriptionId: "sub_alice",
       status: "active",
@@ -206,7 +247,7 @@ describe("SubscriptionStore", () => {
     const { output } = await captureStdout(async () => {
       await expect(
         store.upsert({
-          username: "bob",
+          giteaOrgId: ORG["bob"],
           stripeCustomerId: "cus_shared",
           stripeSubscriptionId: "sub_bob",
           status: "active",
@@ -215,20 +256,26 @@ describe("SubscriptionStore", () => {
           cancelAt: null,
           updatedAt: 101,
         }),
-      ).rejects.toThrow(/already bound to alice/i);
+      ).rejects.toThrow(
+        new RegExp(`already bound to organization ${ORG["alice"]}`, "i"),
+      );
     });
 
-    expect((await store.getByCustomerId("cus_shared"))?.username).toBe("alice");
-    expect(await store.getByUsername("bob")).toBeNull();
+    expect((await store.getByCustomerId("cus_shared"))?.giteaOrgId).toBe(
+      ORG["alice"],
+    );
+    expect(await store.getByOrganization(ORG["bob"])).toBeNull();
     expect(output).toContain("Rejected Stripe customer rebind attempt");
-    expect(output).toContain('"existingUsername":"alice"');
-    expect(output).toContain('"attemptedUsername":"bob"');
+    expect(output).toContain(`"existingGiteaOrgId":${ORG["alice"]}`);
+    expect(output).toContain(`"attemptedGiteaOrgId":${ORG["bob"]}`);
   });
 
-  it("deduplicates legacy customer bindings during migration and recreates the unique index", async () => {
+  it("parks legacy username-keyed rows instead of dropping them", async () => {
     const tempDb = makeTempDbPath();
 
     try {
+      // A database as it stood before the re-key: keyed on username, which is
+      // what production holds today.
       const legacyDb = new Database(tempDb.path);
       legacyDb.exec(`
         CREATE TABLE subscriptions (
@@ -241,72 +288,76 @@ describe("SubscriptionStore", () => {
           cancel_at INTEGER,
           updated_at INTEGER NOT NULL
         );
-        CREATE INDEX idx_subscriptions_customer ON subscriptions(stripe_customer_id);
+        CREATE TABLE subscription_access_overrides (
+          username TEXT PRIMARY KEY,
+          access TEXT NOT NULL,
+          reason TEXT,
+          updated_by TEXT NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+        INSERT INTO subscriptions VALUES
+          ('alice', 'cus_alice', 'sub_alice', 'active', 99999999, 0, NULL, 100);
+        INSERT INTO subscription_access_overrides VALUES
+          ('bob', 'grant', 'design partner', 'admin', 200);
       `);
-
-      legacyDb
-        .query<
-          void,
-          [
-            string,
-            string,
-            string,
-            string,
-            number | null,
-            number,
-            number | null,
-            number,
-          ]
-        >(
-          `INSERT INTO subscriptions (username, stripe_customer_id, stripe_subscription_id, status, current_period_end, cancel_at_period_end, cancel_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .run(
-          "alice",
-          "cus_dup",
-          "sub_old",
-          "past_due",
-          expiredEnd,
-          0,
-          null,
-          100,
-        );
-      legacyDb
-        .query<
-          void,
-          [
-            string,
-            string,
-            string,
-            string,
-            number | null,
-            number,
-            number | null,
-            number,
-          ]
-        >(
-          `INSERT INTO subscriptions (username, stripe_customer_id, stripe_subscription_id, status, current_period_end, cancel_at_period_end, cancel_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .run(
-          "bob",
-          "cus_dup",
-          "sub_new",
-          "active",
-          futureEnd,
-          1,
-          futureEnd,
-          200,
-        );
       legacyDb.close();
+
+      // Opening the store applies the migration.
+      const store = new SubscriptionStore(tempDb.path);
+      expect(await store.getByCustomerId("cus_alice")).toBeNull();
+
+      const migratedDb = new Database(tempDb.path, { readonly: true });
+      const parkedSubscriptions = migratedDb
+        .query<{ username: string; stripe_customer_id: string }, []>(
+          "SELECT username, stripe_customer_id FROM legacy_username_subscriptions",
+        )
+        .all();
+      const parkedOverrides = migratedDb
+        .query<{ username: string; access: string }, []>(
+          "SELECT username, access FROM legacy_username_subscription_access_overrides",
+        )
+        .all();
+      migratedDb.close();
+
+      // Mapping a username to an organization needs Gitea, which SQL cannot
+      // reach — so the migration keeps every row for the backfill rather than
+      // guessing or discarding. Losing a paying customer's subscription to a
+      // schema change is the one outcome this has to make impossible.
+      expect(parkedSubscriptions).toEqual([
+        { username: "alice", stripe_customer_id: "cus_alice" },
+      ]);
+      expect(parkedOverrides).toEqual([{ username: "bob", access: "grant" }]);
+    } finally {
+      tempDb.cleanup();
+    }
+  });
+
+  it("deduplicates duplicate customer bindings and recreates the unique index", async () => {
+    const tempDb = makeTempDbPath();
+
+    try {
+      // Migrate first, then drop the guard and force a duplicate in — the
+      // shape a database would be in if two organizations had ever been bound
+      // to one Stripe customer.
+      new SubscriptionStore(tempDb.path);
+
+      const seedDb = new Database(tempDb.path);
+      seedDb.exec("DROP INDEX IF EXISTS idx_subscriptions_customer");
+      seedDb.exec(`
+        INSERT INTO subscriptions VALUES
+          (${ORG["alice"]}, 'cus_dup', 'sub_old', 'past_due', ${expiredEnd}, 0, NULL, 100),
+          (${ORG["bob"]}, 'cus_dup', 'sub_new', 'active', ${futureEnd}, 1, ${futureEnd}, 200);
+      `);
+      seedDb.close();
 
       const { result: store, output } = await captureStdout(
         () => new SubscriptionStore(tempDb.path),
       );
 
-      expect(await store.getByUsername("alice")).toBeNull();
+      // Newest write wins; the older binding is dropped and said so out loud.
+      expect(await store.getByOrganization(ORG["alice"])).toBeNull();
       expect(await store.getByCustomerId("cus_dup")).toEqual({
-        username: "bob",
+        giteaOrgId: ORG["bob"],
         stripeCustomerId: "cus_dup",
         stripeSubscriptionId: "sub_new",
         status: "active",
@@ -318,8 +369,8 @@ describe("SubscriptionStore", () => {
       expect(output).toContain(
         "Deduplicating legacy Stripe customer bindings during subscription migration",
       );
-      expect(output).toContain('"keptUsername":"bob"');
-      expect(output).toContain('"removedUsernames":["alice"]');
+      expect(output).toContain(`"keptGiteaOrgId":${ORG["bob"]}`);
+      expect(output).toContain(`"removedGiteaOrgIds":[${ORG["alice"]}]`);
 
       const migratedDb = new Database(tempDb.path, { readonly: true });
       const indexes = migratedDb
@@ -341,13 +392,13 @@ describe("SubscriptionStore", () => {
   });
 });
 
-describe("hasActiveSubscription — expiry logic", () => {
-  // hasActiveSubscription uses the lazy singleton subscriptionStore which opens
+describe("organizationHasAccess — expiry logic", () => {
+  // organizationHasAccess uses the lazy singleton subscriptionStore which opens
   // the real DB path. To test it in isolation we exercise the logic directly
   // via SubscriptionStore with an in-memory DB and call the standalone function
   // by temporarily swapping the underlying store. Because that module-level
   // store is not easily injectable, we test the logic through SubscriptionStore
-  // directly and validate the hasActiveSubscription function separately using
+  // directly and validate the organizationHasAccess function separately using
   // the module-level store backed by a temp in-memory path.
   //
   // For the expiry tests we import and call a fresh store directly.
@@ -355,7 +406,7 @@ describe("hasActiveSubscription — expiry logic", () => {
   it("active with future currentPeriodEnd → active", async () => {
     const store = makeStore();
     await store.upsert({
-      username: "u1",
+      giteaOrgId: ORG["u1"],
       stripeCustomerId: "cus_u1",
       stripeSubscriptionId: "sub_u1",
       status: "active",
@@ -364,7 +415,7 @@ describe("hasActiveSubscription — expiry logic", () => {
       cancelAt: null,
       updatedAt: Date.now(),
     });
-    const record = await store.getByUsername("u1");
+    const record = await store.getByOrganization(ORG["u1"]);
     expect(record?.status).toBe("active");
     // Verify the expiry guard logic directly:
     const bufferSeconds = 3 * 24 * 60 * 60;
@@ -377,7 +428,7 @@ describe("hasActiveSubscription — expiry logic", () => {
   it("active with currentPeriodEnd 4 days ago → expired (beyond 3-day buffer)", async () => {
     const store = makeStore();
     await store.upsert({
-      username: "u2",
+      giteaOrgId: ORG["u2"],
       stripeCustomerId: "cus_u2",
       stripeSubscriptionId: "sub_u2",
       status: "active",
@@ -386,7 +437,7 @@ describe("hasActiveSubscription — expiry logic", () => {
       cancelAt: null,
       updatedAt: Date.now(),
     });
-    const record = await store.getByUsername("u2");
+    const record = await store.getByOrganization(ORG["u2"]);
     const bufferSeconds = 3 * 24 * 60 * 60;
     const expired =
       record!.currentPeriodEnd !== null &&
@@ -397,7 +448,7 @@ describe("hasActiveSubscription — expiry logic", () => {
   it("active with currentPeriodEnd 1 day ago → still valid (within 3-day buffer)", async () => {
     const store = makeStore();
     await store.upsert({
-      username: "u3",
+      giteaOrgId: ORG["u3"],
       stripeCustomerId: "cus_u3",
       stripeSubscriptionId: "sub_u3",
       status: "active",
@@ -406,7 +457,7 @@ describe("hasActiveSubscription — expiry logic", () => {
       cancelAt: null,
       updatedAt: Date.now(),
     });
-    const record = await store.getByUsername("u3");
+    const record = await store.getByOrganization(ORG["u3"]);
     const bufferSeconds = 3 * 24 * 60 * 60;
     const expired =
       record!.currentPeriodEnd !== null &&
@@ -417,7 +468,7 @@ describe("hasActiveSubscription — expiry logic", () => {
   it("active with null currentPeriodEnd → not expired", async () => {
     const store = makeStore();
     await store.upsert({
-      username: "u4",
+      giteaOrgId: ORG["u4"],
       stripeCustomerId: "cus_u4",
       stripeSubscriptionId: "sub_u4",
       status: "active",
@@ -426,7 +477,7 @@ describe("hasActiveSubscription — expiry logic", () => {
       cancelAt: null,
       updatedAt: Date.now(),
     });
-    const record = await store.getByUsername("u4");
+    const record = await store.getByOrganization(ORG["u4"]);
     const bufferSeconds = 3 * 24 * 60 * 60;
     const expired =
       record!.currentPeriodEnd !== null &&
@@ -437,7 +488,7 @@ describe("hasActiveSubscription — expiry logic", () => {
   it("trialing with future currentPeriodEnd → not expired", async () => {
     const store = makeStore();
     await store.upsert({
-      username: "u5",
+      giteaOrgId: ORG["u5"],
       stripeCustomerId: "cus_u5",
       stripeSubscriptionId: "sub_u5",
       status: "trialing",
@@ -446,7 +497,7 @@ describe("hasActiveSubscription — expiry logic", () => {
       cancelAt: null,
       updatedAt: Date.now(),
     });
-    const record = await store.getByUsername("u5");
+    const record = await store.getByOrganization(ORG["u5"]);
     expect(record?.status).toBe("trialing");
     const bufferSeconds = 3 * 24 * 60 * 60;
     const expired =
@@ -458,7 +509,7 @@ describe("hasActiveSubscription — expiry logic", () => {
   it("past_due status → not active regardless of period end", async () => {
     const store = makeStore();
     await store.upsert({
-      username: "u6",
+      giteaOrgId: ORG["u6"],
       stripeCustomerId: "cus_u6",
       stripeSubscriptionId: "sub_u6",
       status: "past_due",
@@ -467,7 +518,7 @@ describe("hasActiveSubscription — expiry logic", () => {
       cancelAt: null,
       updatedAt: Date.now(),
     });
-    const record = await store.getByUsername("u6");
+    const record = await store.getByOrganization(ORG["u6"]);
     expect(record?.status === "active" || record?.status === "trialing").toBe(
       false,
     );
@@ -476,7 +527,7 @@ describe("hasActiveSubscription — expiry logic", () => {
   it("canceled status → not active", async () => {
     const store = makeStore();
     await store.upsert({
-      username: "u7",
+      giteaOrgId: ORG["u7"],
       stripeCustomerId: "cus_u7",
       stripeSubscriptionId: "sub_u7",
       status: "canceled",
@@ -485,7 +536,7 @@ describe("hasActiveSubscription — expiry logic", () => {
       cancelAt: null,
       updatedAt: Date.now(),
     });
-    const record = await store.getByUsername("u7");
+    const record = await store.getByOrganization(ORG["u7"]);
     expect(record?.status === "active" || record?.status === "trialing").toBe(
       false,
     );
@@ -493,7 +544,7 @@ describe("hasActiveSubscription — expiry logic", () => {
 
   it("no record → not active", async () => {
     const store = makeStore();
-    expect(await store.getByUsername("nonexistent")).toBeNull();
+    expect(await store.getByOrganization(ORG["nonexistent"])).toBeNull();
   });
 });
 
@@ -502,7 +553,7 @@ describe("SubscriptionStore — cancel_at_period_end", () => {
     const store = makeStore();
     const cancelTs = futureEnd;
     await store.upsert({
-      username: "v1",
+      giteaOrgId: ORG["v1"],
       stripeCustomerId: "cus_v1",
       stripeSubscriptionId: "sub_v1",
       status: "active",
@@ -511,7 +562,7 @@ describe("SubscriptionStore — cancel_at_period_end", () => {
       cancelAt: cancelTs,
       updatedAt: Date.now(),
     });
-    const record = await store.getByUsername("v1");
+    const record = await store.getByOrganization(ORG["v1"]);
     expect(record?.cancelAtPeriodEnd).toBe(true);
     expect(record?.cancelAt).toBe(cancelTs);
   });
@@ -519,7 +570,7 @@ describe("SubscriptionStore — cancel_at_period_end", () => {
   it("cancelAtPeriodEnd defaults to false when stored as 0", async () => {
     const store = makeStore();
     await store.upsert({
-      username: "v2",
+      giteaOrgId: ORG["v2"],
       stripeCustomerId: "cus_v2",
       stripeSubscriptionId: "sub_v2",
       status: "active",
@@ -528,7 +579,7 @@ describe("SubscriptionStore — cancel_at_period_end", () => {
       cancelAt: null,
       updatedAt: Date.now(),
     });
-    const record = await store.getByUsername("v2");
+    const record = await store.getByOrganization(ORG["v2"]);
     expect(record?.cancelAtPeriodEnd).toBe(false);
     expect(record?.cancelAt).toBeNull();
   });
@@ -536,7 +587,7 @@ describe("SubscriptionStore — cancel_at_period_end", () => {
   it("upsert clears cancelAtPeriodEnd when subscription renews", async () => {
     const store = makeStore();
     await store.upsert({
-      username: "v3",
+      giteaOrgId: ORG["v3"],
       stripeCustomerId: "cus_v3",
       stripeSubscriptionId: "sub_v3",
       status: "active",
@@ -546,7 +597,7 @@ describe("SubscriptionStore — cancel_at_period_end", () => {
       updatedAt: Date.now(),
     });
     await store.upsert({
-      username: "v3",
+      giteaOrgId: ORG["v3"],
       stripeCustomerId: "cus_v3",
       stripeSubscriptionId: "sub_v3",
       status: "active",
@@ -555,7 +606,7 @@ describe("SubscriptionStore — cancel_at_period_end", () => {
       cancelAt: null,
       updatedAt: Date.now(),
     });
-    const record = await store.getByUsername("v3");
+    const record = await store.getByOrganization(ORG["v3"]);
     expect(record?.cancelAtPeriodEnd).toBe(false);
     expect(record?.cancelAt).toBeNull();
   });
@@ -566,15 +617,15 @@ describe("SubscriptionStore — admin overrides", () => {
     const store = makeStore();
 
     await store.putAccessOverride({
-      username: "override-user",
+      giteaOrgId: ORG["override-user"],
       access: "grant",
       reason: "manual comp",
       updatedBy: "admin-user",
       updatedAt: 123,
     });
 
-    expect(await store.getAccessOverride("override-user")).toEqual({
-      username: "override-user",
+    expect(await store.getAccessOverride(ORG["override-user"])).toEqual({
+      giteaOrgId: ORG["override-user"],
       access: "grant",
       reason: "manual comp",
       updatedBy: "admin-user",
@@ -586,7 +637,7 @@ describe("SubscriptionStore — admin overrides", () => {
     const store = makeStore();
 
     await store.upsert({
-      username: "stripe-user",
+      giteaOrgId: ORG["stripe-user"],
       stripeCustomerId: "cus_override",
       stripeSubscriptionId: "sub_override",
       status: "active",
@@ -596,39 +647,41 @@ describe("SubscriptionStore — admin overrides", () => {
       updatedAt: 100,
     });
     await store.putAccessOverride({
-      username: "stripe-user",
+      giteaOrgId: ORG["stripe-user"],
       access: "revoke",
       reason: "manual review hold",
       updatedBy: "admin-user",
       updatedAt: 200,
     });
 
-    expect(await store.resolveAccess("stripe-user")).toEqual({
-      username: "stripe-user",
+    expect(await store.resolveAccess(ORG["stripe-user"])).toEqual({
+      giteaOrgId: ORG["stripe-user"],
       hasAccess: false,
       source: "admin_revoke",
       subscription: expect.objectContaining({
         status: "active",
       }),
       override: {
-        username: "stripe-user",
+        giteaOrgId: ORG["stripe-user"],
         access: "revoke",
         reason: "manual review hold",
         updatedBy: "admin-user",
         updatedAt: 200,
       },
+      trialEndsAt: null,
     });
 
-    await store.deleteAccessOverride("stripe-user");
+    await store.deleteAccessOverride(ORG["stripe-user"]);
 
-    expect(await store.resolveAccess("stripe-user")).toEqual({
-      username: "stripe-user",
+    expect(await store.resolveAccess(ORG["stripe-user"])).toEqual({
+      giteaOrgId: ORG["stripe-user"],
       hasAccess: true,
       source: "stripe",
       subscription: expect.objectContaining({
         status: "active",
       }),
       override: null,
+      trialEndsAt: null,
     });
   });
 
@@ -636,7 +689,7 @@ describe("SubscriptionStore — admin overrides", () => {
     const store = makeStore();
 
     await store.upsert({
-      username: "stripe-only",
+      giteaOrgId: ORG["stripe-only"],
       stripeCustomerId: "cus_list",
       stripeSubscriptionId: "sub_list",
       status: "active",
@@ -646,7 +699,7 @@ describe("SubscriptionStore — admin overrides", () => {
       updatedAt: 10,
     });
     await store.putAccessOverride({
-      username: "override-only",
+      giteaOrgId: ORG["override-only"],
       access: "grant",
       reason: null,
       updatedBy: "admin-user",
@@ -656,16 +709,115 @@ describe("SubscriptionStore — admin overrides", () => {
     expect(await store.listKnownAccessStates()).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          username: "override-only",
+          giteaOrgId: ORG["override-only"],
           source: "admin_grant",
           hasAccess: true,
         }),
         expect.objectContaining({
-          username: "stripe-only",
+          giteaOrgId: ORG["stripe-only"],
           source: "stripe",
           hasAccess: true,
         }),
       ]),
     );
+  });
+});
+
+describe("resolveAccess — the ADR 0004 precedence", () => {
+  const ORG_ID = 9001;
+
+  function seedOrganization(
+    organizations: OrganizationStore,
+    trialEndsAt: number | null,
+  ) {
+    return organizations.upsert({
+      giteaOrgId: ORG_ID,
+      name: "mercy-health",
+      createdBy: "alice",
+      createdAt: now,
+      trialEndsAt,
+    });
+  }
+
+  it("grants access on a running local trial with no Stripe subscription at all", async () => {
+    const { store, organizations, cleanup } = makeStorePair();
+    try {
+      await seedOrganization(organizations, futureEnd);
+
+      const access = await store.resolveAccess(ORG_ID);
+      // #369 wants no card during the trial, so there is deliberately no
+      // Stripe customer to read this from.
+      expect(access.hasAccess).toBe(true);
+      expect(access.source).toBe("trial");
+      expect(access.trialEndsAt).toBe(futureEnd);
+      expect(access.subscription).toBeNull();
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("does not grant access on an expired trial", async () => {
+    const { store, organizations, cleanup } = makeStorePair();
+    try {
+      await seedOrganization(organizations, expiredEnd);
+
+      const access = await store.resolveAccess(ORG_ID);
+      expect(access.hasAccess).toBe(false);
+      expect(access.source).toBe("none");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("ranks Stripe above the trial, and an admin revoke above everything", async () => {
+    const { store, organizations, cleanup } = makeStorePair();
+    try {
+      await seedOrganization(organizations, futureEnd);
+      await store.upsert({
+        giteaOrgId: ORG_ID,
+        stripeCustomerId: "cus_trial",
+        stripeSubscriptionId: "sub_trial",
+        status: "active",
+        currentPeriodEnd: futureEnd,
+        cancelAtPeriodEnd: false,
+        cancelAt: null,
+        updatedAt: Date.now(),
+      });
+
+      // Paying beats trialling: the source has to name the real authority, or
+      // the billing page tells a paying customer they are on a trial.
+      expect((await store.resolveAccess(ORG_ID)).source).toBe("stripe");
+
+      await store.putAccessOverride({
+        giteaOrgId: ORG_ID,
+        access: "revoke",
+        reason: "abuse",
+        updatedBy: "admin",
+        updatedAt: Date.now(),
+      });
+
+      // A revoke outranks an active subscription and a running trial alike.
+      const revoked = await store.resolveAccess(ORG_ID);
+      expect(revoked.hasAccess).toBe(false);
+      expect(revoked.source).toBe("admin_revoke");
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("lists an organization that only has a trial", async () => {
+    const { store, organizations, cleanup } = makeStorePair();
+    try {
+      await seedOrganization(organizations, futureEnd);
+
+      // An org on a trial has neither a subscription row nor an override, so
+      // walking only those two tables would make it invisible to an admin —
+      // and "who is trialling right now" is what this list is for.
+      expect(await store.listKnownAccessStates()).toEqual([
+        expect.objectContaining({ giteaOrgId: ORG_ID, source: "trial" }),
+      ]);
+    } finally {
+      cleanup();
+    }
   });
 });

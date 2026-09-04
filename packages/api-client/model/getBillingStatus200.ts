@@ -5,10 +5,15 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { GetBillingStatus200AccessSource } from './getBillingStatus200AccessSource.ts';
+import type { GetBillingStatus200Organization } from './getBillingStatus200Organization.ts';
 import type { GetBillingStatus200Override } from './getBillingStatus200Override.ts';
 import type { GetBillingStatus200Plan } from './getBillingStatus200Plan.ts';
 
 export type GetBillingStatus200 = {
+  /** @nullable */
+  organization: GetBillingStatus200Organization;
+  /** @nullable */
+  trialEndsAt: number | null;
   /** @nullable */
   status: string | null;
   /** @nullable */

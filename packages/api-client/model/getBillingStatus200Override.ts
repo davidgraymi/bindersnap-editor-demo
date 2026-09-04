@@ -5,13 +5,16 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { GetBillingStatus200OverrideAccess } from './getBillingStatus200OverrideAccess.ts';
+import type { GetBillingStatus200OverrideMode } from './getBillingStatus200OverrideMode.ts';
 
 /**
  * @nullable
  */
 export type GetBillingStatus200Override = {
-  username: string;
   access: GetBillingStatus200OverrideAccess;
+  mode?: GetBillingStatus200OverrideMode;
+  /** @nullable */
+  reason?: string | null;
   updatedBy: string;
   updatedAt: number;
 } | null;

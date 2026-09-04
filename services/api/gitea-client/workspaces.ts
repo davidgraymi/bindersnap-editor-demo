@@ -46,7 +46,6 @@ export interface ProvisionedWorkspace {
 
 export interface ProvisionedOrganization {
   organization: GiteaOrganization;
-  workspace: ProvisionedWorkspace;
 }
 
 function normalizeWorkspace(repo: Repository): WorkspaceSummary {
@@ -275,15 +274,17 @@ export interface ProvisionOrganizationParams {
   /** The org's Gitea username. */
   orgName: string;
   orgFullName?: string;
-  /** The first binder. */
-  workspaceName: string;
-  workspaceDescription?: string;
-  requiredApprovals?: number;
 }
 
 /**
- * Signup's whole job, per ADR 0004's migration step 1: the organization, its
- * first workspace, that workspace's rules and role teams.
+ * The organization, and nothing else.
+ *
+ * It used to arrive with a binder called "policies" that nobody asked for.
+ * Naming the container a customer's records live in is the owner's decision,
+ * and guessing it produced a repository that no document ever went into —
+ * documents are still their own repositories today, so the binder was created
+ * and then ignored. A workspace is now something a member makes, with
+ * `provisionWorkspace`, when they have one to make.
  *
  * The client's token decides who owns the organization — Gitea puts the
  * creating user in the Owners team — so this must be called with the new
@@ -302,13 +303,5 @@ export async function provisionOrganization(
       fullName: orgFullName,
     }));
 
-  const workspace = await provisionWorkspace({
-    client,
-    org: orgName,
-    name: params.workspaceName,
-    description: params.workspaceDescription,
-    requiredApprovals: params.requiredApprovals,
-  });
-
-  return { organization, workspace };
+  return { organization };
 }

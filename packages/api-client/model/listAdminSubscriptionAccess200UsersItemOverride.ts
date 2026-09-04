@@ -5,13 +5,16 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { ListAdminSubscriptionAccess200UsersItemOverrideAccess } from './listAdminSubscriptionAccess200UsersItemOverrideAccess.ts';
+import type { ListAdminSubscriptionAccess200UsersItemOverrideMode } from './listAdminSubscriptionAccess200UsersItemOverrideMode.ts';
 
 /**
  * @nullable
  */
 export type ListAdminSubscriptionAccess200UsersItemOverride = {
-  username: string;
   access: ListAdminSubscriptionAccess200UsersItemOverrideAccess;
+  mode?: ListAdminSubscriptionAccess200UsersItemOverrideMode;
+  /** @nullable */
+  reason?: string | null;
   updatedBy: string;
   updatedAt: number;
 } | null;

@@ -5,12 +5,13 @@ import type Stripe from "stripe";
 import { getStripeClient } from "../services/api/stripe/client";
 import {
   reconcileStripeCustomerByCustomerId,
-  reconcileStripeCustomerByUsername,
+  reconcileStripeCustomerByOrganization,
 } from "../services/api/stripe/reconcile";
 import { subscriptionStore } from "../services/api/subscriptions";
 
 type ReconcileArgs = {
-  username: string | null;
+  /** Gitea org id. Billing keys to the organization (ADR 0004). */
+  giteaOrgId: number | null;
   customerId: string | null;
 };
 
@@ -23,17 +24,21 @@ type RunReconcileStripeCustomerCliOptions = {
 };
 
 function parseArgs(argv: string[]): ReconcileArgs {
-  let username: string | null = null;
+  let giteaOrgId: number | null = null;
   let customerId: string | null = null;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (arg === "--username") {
+    if (arg === "--org") {
       const value = argv[index + 1]?.trim();
       if (!value) {
-        throw new Error("Missing value for --username.");
+        throw new Error("Missing value for --org.");
       }
-      username = value;
+      const parsed = Number.parseInt(value, 10);
+      if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+        throw new Error("--org takes a Gitea organization id.");
+      }
+      giteaOrgId = parsed;
       index += 1;
       continue;
     }
@@ -51,13 +56,13 @@ function parseArgs(argv: string[]): ReconcileArgs {
     throw new Error(`Unknown argument: ${arg}`);
   }
 
-  if ((username ? 1 : 0) + (customerId ? 1 : 0) !== 1) {
+  if ((giteaOrgId ? 1 : 0) + (customerId ? 1 : 0) !== 1) {
     throw new Error(
-      "Pass exactly one of --username <value> or --customer <value>.",
+      "Pass exactly one of --org <gitea org id> or --customer <value>.",
     );
   }
 
-  return { username, customerId };
+  return { giteaOrgId, customerId };
 }
 
 export async function runReconcileStripeCustomerCli(
@@ -67,13 +72,13 @@ export async function runReconcileStripeCustomerCli(
   const stripe = options.stripe ?? getStripeClient();
 
   const args = parseArgs(argv);
-  const result = args.username
-    ? await reconcileStripeCustomerByUsername(stripe, args.username)
+  const result = args.giteaOrgId
+    ? await reconcileStripeCustomerByOrganization(stripe, args.giteaOrgId)
     : await reconcileStripeCustomerByCustomerId(stripe, args.customerId!);
 
   if (!result) {
     throw new Error(
-      "Unable to rebuild the subscription row from Stripe. Check that the customer exists, has metadata.bindersnap_username, and has at least one subscription.",
+      "Unable to rebuild the subscription row from Stripe. Check that the customer exists, has metadata.bindersnap_gitea_org_id, and has at least one subscription.",
     );
   }
 
@@ -86,7 +91,7 @@ export async function runReconcileStripeCustomerCli(
     JSON.stringify(
       {
         ok: true,
-        username: result.record.username,
+        giteaOrgId: result.record.giteaOrgId,
         stripeCustomerId: result.record.stripeCustomerId,
         stripeSubscriptionId: result.record.stripeSubscriptionId,
         status: result.record.status,

@@ -106,16 +106,17 @@ async function stripeFetch(
  * placed in `trialing` status so the webhook handler can successfully fetch
  * it from Stripe.
  */
-async function createTestCustomerAndSubscription(username: string): Promise<{
+async function createTestCustomerAndSubscription(giteaOrgId: number): Promise<{
   customerId: string;
   subscriptionId: string;
   currentPeriodEnd: number;
 }> {
-  // Customer
+  // Customer. Billing keys to the organization (ADR 0004), so this is the id
+  // every webhook reconciles from.
   const customer = await stripeFetch(
     "/v1/customers",
     new URLSearchParams({
-      "metadata[bindersnap_username]": username,
+      "metadata[bindersnap_gitea_org_id]": String(giteaOrgId),
     }),
   );
   const customerId = customer.id as string;
@@ -444,6 +445,78 @@ async function signUpUser(credentials: {
 interface BillingStatusPayload {
   status: string | null;
   currentPeriodEnd: number | null;
+  hasAccess?: boolean;
+  accessSource?: string | null;
+  trialEndsAt?: number | null;
+  organization?: { id: number; name: string } | null;
+}
+
+/**
+ * Sign up, and answer with the session plus the organization signup created.
+ *
+ * Every test here needs the organization: it is what Stripe is keyed to, what
+ * the paywall checks, and what owns the trial.
+ */
+async function signUpOrganization(credentials: {
+  username: string;
+  email: string;
+  password: string;
+}): Promise<{ sessionCookie: string; giteaOrgId: number }> {
+  const sessionCookie = await signUpUser(credentials);
+
+  // Signup no longer creates an organization — a person names their own, and
+  // this is that request. Everything below bills an organization, so there has
+  // to be one before any of it means anything.
+  const created = await fetch(`${API_BASE_URL}/api/app/organizations`, {
+    method: "POST",
+    headers: {
+      Cookie: `bindersnap_session=${sessionCookie}`,
+      "Content-Type": "application/json",
+      Origin: APP_ORIGIN,
+    },
+    body: JSON.stringify({ name: `Stripe Test ${credentials.username}` }),
+  });
+
+  if (!created.ok) {
+    const body = await created.text().catch(() => "(no body)");
+    throw new Error(
+      `Creating an organization failed (${created.status}): ${body}`,
+    );
+  }
+
+  const billing = await getBillingStatus(sessionCookie);
+  const giteaOrgId = billing.organization?.id;
+
+  if (!giteaOrgId) {
+    throw new Error(
+      `No organization for ${credentials.username} after creating one.`,
+    );
+  }
+
+  return { sessionCookie, giteaOrgId };
+}
+
+/**
+ * End the organization's trial, so the paywall is observable.
+ *
+ * A new organization has 14 days with no card (#369), and the trial sits below
+ * Stripe in the precedence list — so a past_due subscription on a trialing
+ * organization still has access. A test about Stripe revoking access has to
+ * get past the trial first, or it is asserting nothing.
+ */
+async function endTrial(sessionCookie: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/dev/end-trial`, {
+    method: "POST",
+    headers: {
+      Cookie: `bindersnap_session=${sessionCookie}`,
+      Origin: APP_ORIGIN,
+    },
+  });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => "(no body)");
+    throw new Error(`Ending the trial failed (${response.status}): ${body}`);
+  }
 }
 
 async function getBillingStatus(
@@ -456,23 +529,12 @@ async function getBillingStatus(
 }
 
 /**
- * Ask the paywall, in the only way that still asks it.
+ * The status the paywall answers with, probed by attempting to author.
  *
- * Reading is no longer gated — the record stays readable and exportable
- * whatever an organization owes us — so a GET tells you nothing about a
- * subscription any more. Authoring is what a subscription buys, so the probe
- * is a create with nothing to create: `requireSubscription` runs before the
- * body is parsed, which makes 402 the gated answer.
- *
- * `Origin` is not decoration. `enforceStateChangingOrigin` rejects every
- * non-GET without an allowed origin with a 403 *before routing*, so a probe
- * that omits it never reaches the paywall and reports the same 403 whether or
- * not the organization has paid.
- *
- * The ungated answer is asserted as "not 402" rather than as one status: what
- * this suite is about is whether the paywall let the request through, and
- * pinning the validation error that follows would make every future change to
- * that validation look like a billing regression.
+ * Reading is never gated (ADR 0004), so a GET can no longer tell us anything
+ * about billing. Creating a document is gated, and `requireSubscription` runs
+ * before the request body is validated — so a deliberately empty POST answers
+ * 402 when the organization is blocked and 400 when it is not.
  */
 async function getAuthoringHttpStatus(sessionCookie: string): Promise<number> {
   const response = await fetch(`${API_BASE_URL}/api/app/documents`, {
@@ -536,16 +598,25 @@ test.describe("Stripe subscription lifecycle", () => {
   // 2. Paywall enforcement — no Stripe key required
   // -------------------------------------------------------------------------
 
-  test("new user has no subscription and is blocked by the paywall", async () => {
+  test("a new organization authors on its trial, and is blocked once it ends", async () => {
     const credentials = uniqueCredentials();
-    const sessionCookie = await signUpUser(credentials);
+    const { sessionCookie } = await signUpOrganization(credentials);
 
-    const billingStatus = await getBillingStatus(sessionCookie);
-    expect(billingStatus.status).toBeNull();
-    expect(billingStatus.currentPeriodEnd).toBeNull();
+    // #369: fourteen days, no card. There is deliberately no Stripe customer
+    // behind this, which is the whole reason the trial is a local column.
+    const trialing = await getBillingStatus(sessionCookie);
+    expect(trialing.hasAccess).toBe(true);
+    expect(trialing.accessSource).toBe("trial");
+    expect(trialing.trialEndsAt).toBeGreaterThan(Math.floor(Date.now() / 1000));
+    expect(await getAuthoringHttpStatus(sessionCookie)).not.toBe(402);
 
-    const authoringStatus = await getAuthoringHttpStatus(sessionCookie);
-    expect(authoringStatus).toBe(402);
+    await endTrial(sessionCookie);
+
+    // And now the paywall bites, because there is nothing else granting
+    // access.
+    const expired = await getBillingStatus(sessionCookie);
+    expect(expired.hasAccess).toBe(false);
+    expect(await getAuthoringHttpStatus(sessionCookie)).toBe(402);
   });
 
   // -------------------------------------------------------------------------
@@ -556,18 +627,20 @@ test.describe("Stripe subscription lifecycle", () => {
     test.skip(!stripeFullyConfigured, "Stripe test credentials not configured");
 
     const credentials = uniqueCredentials();
-    const sessionCookie = await signUpUser(credentials);
+    const { sessionCookie, giteaOrgId } = await signUpOrganization(credentials);
+    await endTrial(sessionCookie);
 
-    // Pre-condition: paywalled
+    // Pre-condition: the trial is over and nothing has been paid, so authoring
+    // is blocked.
     expect(await getAuthoringHttpStatus(sessionCookie)).toBe(402);
 
     const { customerId, subscriptionId } =
-      await createTestCustomerAndSubscription(credentials.username);
+      await createTestCustomerAndSubscription(giteaOrgId);
 
     try {
       const webhookResp = await postWebhook("checkout.session.completed", {
         id: `cs_test_${Date.now()}`,
-        client_reference_id: credentials.username,
+        client_reference_id: String(giteaOrgId),
         customer: customerId,
         subscription: subscriptionId,
         payment_status: "paid",
@@ -594,14 +667,15 @@ test.describe("Stripe subscription lifecycle", () => {
     test.skip(!stripeFullyConfigured, "Stripe test credentials not configured");
 
     const credentials = uniqueCredentials();
-    const sessionCookie = await signUpUser(credentials);
+    const { sessionCookie, giteaOrgId } = await signUpOrganization(credentials);
+    await endTrial(sessionCookie);
     const { customerId, subscriptionId, currentPeriodEnd } =
-      await createTestCustomerAndSubscription(credentials.username);
+      await createTestCustomerAndSubscription(giteaOrgId);
 
     try {
       // Activate via checkout webhook
       await postWebhook("checkout.session.completed", {
-        client_reference_id: credentials.username,
+        client_reference_id: String(giteaOrgId),
         customer: customerId,
         subscription: subscriptionId,
       });
@@ -630,13 +704,14 @@ test.describe("Stripe subscription lifecycle", () => {
     test.skip(!stripeFullyConfigured, "Stripe test credentials not configured");
 
     const credentials = uniqueCredentials();
-    const sessionCookie = await signUpUser(credentials);
+    const { sessionCookie, giteaOrgId } = await signUpOrganization(credentials);
+    await endTrial(sessionCookie);
     const { customerId, subscriptionId, currentPeriodEnd } =
-      await createTestCustomerAndSubscription(credentials.username);
+      await createTestCustomerAndSubscription(giteaOrgId);
 
     try {
       await postWebhook("checkout.session.completed", {
-        client_reference_id: credentials.username,
+        client_reference_id: String(giteaOrgId),
         customer: customerId,
         subscription: subscriptionId,
       });
@@ -677,14 +752,15 @@ test.describe("Stripe subscription lifecycle", () => {
     test.skip(!stripeFullyConfigured, "Stripe test credentials not configured");
 
     const credentials = uniqueCredentials();
-    const sessionCookie = await signUpUser(credentials);
+    const { sessionCookie, giteaOrgId } = await signUpOrganization(credentials);
+    await endTrial(sessionCookie);
     const { customerId, subscriptionId } =
-      await createTestCustomerAndSubscription(credentials.username);
+      await createTestCustomerAndSubscription(giteaOrgId);
 
     try {
       // Activate first via the normal checkout webhook path.
       await postWebhook("checkout.session.completed", {
-        client_reference_id: credentials.username,
+        client_reference_id: String(giteaOrgId),
         customer: customerId,
         subscription: subscriptionId,
       });
@@ -724,13 +800,14 @@ test.describe("Stripe subscription lifecycle", () => {
     test.skip(!stripeFullyConfigured, "Stripe test credentials not configured");
 
     const credentials = uniqueCredentials();
-    const sessionCookie = await signUpUser(credentials);
+    const { sessionCookie, giteaOrgId } = await signUpOrganization(credentials);
+    await endTrial(sessionCookie);
     const { customerId, subscriptionId, currentPeriodEnd } =
-      await createTestCustomerAndSubscription(credentials.username);
+      await createTestCustomerAndSubscription(giteaOrgId);
 
     // Activate
     await postWebhook("checkout.session.completed", {
-      client_reference_id: credentials.username,
+      client_reference_id: String(giteaOrgId),
       customer: customerId,
       subscription: subscriptionId,
     });
@@ -754,7 +831,7 @@ test.describe("Stripe subscription lifecycle", () => {
     test.skip(!stripeFullyConfigured, "Stripe test credentials not configured");
 
     const credentials = uniqueCredentials();
-    const sessionCookie = await signUpUser(credentials);
+    const { sessionCookie } = await signUpOrganization(credentials);
 
     const response = await fetch(`${API_BASE_URL}/api/app/billing/checkout`, {
       method: "POST",
@@ -776,7 +853,11 @@ test.describe("Stripe subscription lifecycle", () => {
     page,
   }) => {
     test.skip(!stripeFullyConfigured, "Stripe test credentials not configured");
-    test.setTimeout(120_000);
+    // The whole customer journey in one test: signup with provisioning, a
+    // round trip through Stripe's hosted page, the redirect back, and the
+    // webhook landing before the workspace unlocks. The waits below add up to
+    // more than two minutes of budget on their own.
+    test.setTimeout(240_000);
 
     const credentials = uniqueCredentials();
 
@@ -792,10 +873,33 @@ test.describe("Stripe subscription lifecycle", () => {
         .fill(credentials.password);
       await page.getByRole("button", { name: "Create account" }).click();
 
-      await expect(page).toHaveURL(/\/billing$/, { timeout: 20_000 });
+      // Signup no longer creates an organization behind the person's back, so
+      // the account lands here to name one. Everything after this bills that
+      // organization, so it has to exist first.
+      await expect(page).toHaveURL(/\/organizations\/new$/, {
+        timeout: 60_000,
+      });
+      await page.getByLabel("Organization name").fill("Mercy Health");
+      await page.getByRole("button", { name: "Create organization" }).click();
+
+      // Wait for the workspace itself, not for the absence of /billing: a
+      // negative URL assertion is satisfied the instant it is made, while
+      // provisioning the organization, its binder, three teams and the rules
+      // on `main` is still in flight. That would send the rest of this test to
+      // /billing with no organization, where no amount of waiting produces a
+      // subscribe button.
+      await expect(page).toHaveURL(/\/$/, { timeout: 60_000 });
       await expect(
-        page.getByRole("heading", { name: "Start your subscription" }),
-      ).toBeVisible();
+        page.locator(
+          `.app-topnav-avatar[aria-label="User: ${credentials.username}"]`,
+        ),
+      ).toBeVisible({ timeout: 30_000 });
+
+      // Subscribing is now a thing the customer chooses to do, so go and do it.
+      await page.goto("/billing", { waitUntil: "domcontentloaded" });
+      await expect(
+        page.getByRole("button", { name: "Subscribe now" }),
+      ).toBeVisible({ timeout: 20_000 });
 
       await page.getByRole("button", { name: "Subscribe now" }).click();
       await completeHostedStripeCheckout(page, credentials.email);

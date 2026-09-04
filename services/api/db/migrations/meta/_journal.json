@@ -15,6 +15,13 @@
       "when": 1788232838290,
       "tag": "0001_organizations",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788234293834,
+      "tag": "0002_bill_the_organization",
+      "breakpoints": true
     }
   ]
 }

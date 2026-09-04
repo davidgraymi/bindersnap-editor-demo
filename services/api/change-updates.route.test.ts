@@ -12,6 +12,9 @@ import {
   webhookEventStore,
 } from "./subscriptions";
 
+const TEST_GITEA_ORG_ID = 4004;
+const TEST_ORG_NAME = "adr0004-test-org";
+
 /**
  * The updates route, end to end.
  *
@@ -83,6 +86,11 @@ beforeEach(() => {
     const method =
       input instanceof Request ? input.method : (init?.method ?? "GET");
     const path = url.pathname;
+
+    // ADR 0004: the paywall asks which organization the session belongs to.
+    if (path === "/api/v1/user/orgs") {
+      return json([{ id: TEST_GITEA_ORG_ID, username: TEST_ORG_NAME }]);
+    }
 
     if (path === "/api/v1/user") {
       const auth = headers.get("Authorization") ?? "";
@@ -176,7 +184,7 @@ async function seedSession(username: string): Promise<string> {
     expiresAt: Date.now() + 60_000,
   });
   await subscriptionStore.upsert({
-    username,
+    giteaOrgId: TEST_GITEA_ORG_ID,
     stripeCustomerId: `cus_${randomUUID()}`,
     stripeSubscriptionId: `sub_${randomUUID()}`,
     status: "active",

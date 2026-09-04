@@ -1,4 +1,5 @@
 import { describe, it, expect } from "bun:test";
+import { OrganizationStore } from "../organizations";
 import { WebhookEventStore, SubscriptionStore } from "../subscriptions";
 
 const TEST_DB = ":memory:";
@@ -8,7 +9,10 @@ function makeWebhookStore() {
 }
 
 function makeSubStore() {
-  return new SubscriptionStore(TEST_DB);
+  // Billing keys to the organization (ADR 0004), so the store needs an
+  // organization backend for its trial layer. No organization here has a
+  // trial, so access comes only from Stripe.
+  return new SubscriptionStore(TEST_DB, new OrganizationStore(TEST_DB));
 }
 
 const NOW = Math.floor(Date.now() / 1000);
@@ -152,7 +156,7 @@ describe("Webhook idempotency — duplicate delivery produces single side effect
     async function processCheckout() {
       if (await whStore.isProcessed(EVENT_ID)) return false;
       await subStore.upsert({
-        username: "alice",
+        giteaOrgId: 5001,
         stripeCustomerId: CUSTOMER,
         stripeSubscriptionId: "sub_1",
         status: "active",
@@ -175,7 +179,7 @@ describe("Webhook idempotency — duplicate delivery produces single side effect
 
     expect(first).toBe(true);
     expect(second).toBe(false);
-    expect((await subStore.getByUsername("alice"))?.status).toBe("active");
+    expect((await subStore.getByOrganization(5001))?.status).toBe("active");
   });
 });
 
@@ -189,7 +193,7 @@ describe("Webhook out-of-order — past_due-after-active stays active", () => {
 
     // 1. Process the active event (arrives first, as expected)
     await subStore.upsert({
-      username: "bob",
+      giteaOrgId: 5002,
       stripeCustomerId: CUSTOMER,
       stripeSubscriptionId: "sub_2",
       status: "active",
@@ -211,7 +215,7 @@ describe("Webhook out-of-order — past_due-after-active stays active", () => {
 
     if (!isOOO) {
       // Would have executed side effect (not reached in this test)
-      const record = (await subStore.getByUsername("bob"))!;
+      const record = (await subStore.getByOrganization(5002))!;
       await subStore.upsert({
         ...record,
         status: "past_due",
@@ -220,7 +224,7 @@ describe("Webhook out-of-order — past_due-after-active stays active", () => {
     }
 
     // State must remain active
-    expect((await subStore.getByUsername("bob"))?.status).toBe("active");
+    expect((await subStore.getByOrganization(5002))?.status).toBe("active");
   });
 });
 
@@ -230,7 +234,7 @@ describe("Webhook cancel_at_period_end — persisted and reflected in record", (
     const CANCEL_AT = NOW + 30 * 86400;
 
     await subStore.upsert({
-      username: "dana",
+      giteaOrgId: 5003,
       stripeCustomerId: CUSTOMER,
       stripeSubscriptionId: "sub_cancel",
       status: "active",
@@ -249,7 +253,7 @@ describe("Webhook cancel_at_period_end — persisted and reflected in record", (
       updatedAt: Date.now(),
     });
 
-    const updated = await subStore.getByUsername("dana");
+    const updated = await subStore.getByOrganization(5003);
     expect(updated?.cancelAtPeriodEnd).toBe(true);
     expect(updated?.cancelAt).toBe(CANCEL_AT);
     expect(updated?.status).toBe("active");
@@ -260,7 +264,7 @@ describe("Webhook cancel_at_period_end — persisted and reflected in record", (
     const CANCEL_AT = NOW + 30 * 86400;
 
     await subStore.upsert({
-      username: "evan",
+      giteaOrgId: 5004,
       stripeCustomerId: "cus_evan",
       stripeSubscriptionId: "sub_evan",
       status: "active",
@@ -278,7 +282,7 @@ describe("Webhook cancel_at_period_end — persisted and reflected in record", (
       updatedAt: Date.now(),
     });
 
-    const updated = await subStore.getByUsername("evan");
+    const updated = await subStore.getByOrganization(5004);
     expect(updated?.cancelAtPeriodEnd).toBe(false);
     expect(updated?.cancelAt).toBeNull();
   });

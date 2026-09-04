@@ -8,6 +8,7 @@ type StripeApiVersion = NonNullable<
 
 import { runReconcileStripeCustomerCli } from "../../scripts/reconcile-stripe-customer";
 import { STRIPE_API_VERSION } from "./stripe/api-version";
+import { OrganizationStore } from "./organizations";
 import { SubscriptionStore } from "./subscriptions";
 
 type MockedStripeResponse = {
@@ -26,8 +27,10 @@ beforeEach(() => {
   fetchCalls = [];
   stdoutChunks = [];
   stripeResponses = new Map();
+  const testDbPath = `/tmp/bindersnap-reconcile-test-${randomUUID()}.sqlite`;
   testStore = new SubscriptionStore(
-    `/tmp/bindersnap-reconcile-test-${randomUUID()}.sqlite`,
+    testDbPath,
+    new OrganizationStore(testDbPath),
   );
 
   globalThis.fetch = (async (input, init) => {
@@ -79,7 +82,7 @@ function makeStripeClient(): Stripe {
 
 describe("runReconcileStripeCustomerCli", () => {
   test("rebuilds a subscription row from --customer", async () => {
-    const username = `customer-reconcile-${randomUUID()}`;
+    const giteaOrgId = 7101;
     const customerId = `cus_${randomUUID()}`;
     const subscriptionId = `sub_${randomUUID()}`;
     const currentPeriodEnd = Math.floor(Date.now() / 1000) + 3_600;
@@ -88,7 +91,7 @@ describe("runReconcileStripeCustomerCli", () => {
       id: customerId,
       object: "customer",
       metadata: {
-        bindersnap_username: username,
+        bindersnap_gitea_org_id: String(giteaOrgId),
       },
     });
     mockStripeResponse(
@@ -127,8 +130,8 @@ describe("runReconcileStripeCustomerCli", () => {
         ),
       ),
     ).toBe(true);
-    expect(await testStore.getByUsername(username)).toEqual({
-      username,
+    expect(await testStore.getByOrganization(giteaOrgId)).toEqual({
+      giteaOrgId,
       stripeCustomerId: customerId,
       stripeSubscriptionId: subscriptionId,
       status: "active",
@@ -137,11 +140,11 @@ describe("runReconcileStripeCustomerCli", () => {
       cancelAt: null,
       updatedAt: expect.any(Number),
     });
-    expect(stdoutChunks.join("")).toContain(`"username": "${username}"`);
+    expect(stdoutChunks.join("")).toContain(`"giteaOrgId": ${giteaOrgId}`);
   });
 
-  test("rebuilds a subscription row from --username", async () => {
-    const username = `username-reconcile-${randomUUID()}`;
+  test("rebuilds a subscription row from --org", async () => {
+    const giteaOrgId = 7102;
     const customerId = `cus_${randomUUID()}`;
     const subscriptionId = `sub_${randomUUID()}`;
     const currentPeriodEnd = Math.floor(Date.now() / 1000) + 1_800;
@@ -152,7 +155,7 @@ describe("runReconcileStripeCustomerCli", () => {
           id: customerId,
           object: "customer",
           metadata: {
-            bindersnap_username: username,
+            bindersnap_gitea_org_id: String(giteaOrgId),
           },
         },
       ],
@@ -176,7 +179,7 @@ describe("runReconcileStripeCustomerCli", () => {
       },
     );
 
-    await runReconcileStripeCustomerCli(["--username", username], {
+    await runReconcileStripeCustomerCli(["--org", String(giteaOrgId)], {
       stripe: makeStripeClient(),
       store: testStore,
       writeStdout: (output) => {
@@ -188,7 +191,9 @@ describe("runReconcileStripeCustomerCli", () => {
       path.startsWith("/v1/customers/search"),
     );
     expect(searchCall).toBeDefined();
-    expect(searchCall).toContain(username);
+    // The search is by organization: a customer is bound to the org, never to
+    // whichever human happened to click Subscribe.
+    expect(searchCall).toContain("bindersnap_gitea_org_id");
     expect(
       fetchCalls.some((path) =>
         path.startsWith(
@@ -196,8 +201,8 @@ describe("runReconcileStripeCustomerCli", () => {
         ),
       ),
     ).toBe(true);
-    expect(await testStore.getByUsername(username)).toEqual({
-      username,
+    expect(await testStore.getByOrganization(giteaOrgId)).toEqual({
+      giteaOrgId,
       stripeCustomerId: customerId,
       stripeSubscriptionId: subscriptionId,
       status: "trialing",

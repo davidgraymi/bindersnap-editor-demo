@@ -6,173 +6,86 @@ file when the series lands.
 
 ## Where the series stands
 
-| PR                                                                     | Branch                         | State                                 |
-| ---------------------------------------------------------------------- | ------------------------------ | ------------------------------------- |
-| [#389](https://github.com/davidgraymi/bindersnap-editor-demo/pull/389) | `…-1-verify-gitea-permissions` | **merged**                            |
-| [#390](https://github.com/davidgraymi/bindersnap-editor-demo/pull/390) | `…-2-orgs-teams-client`        | **merged**                            |
-| [#391](https://github.com/davidgraymi/bindersnap-editor-demo/pull/391) | `…-3-workspace-provisioning`   | open — one integration failure, below |
-| [#392](https://github.com/davidgraymi/bindersnap-editor-demo/pull/392) | `…-4-reads-never-gated`        | open — inherits #391's failure        |
-| [#393](https://github.com/davidgraymi/bindersnap-editor-demo/pull/393) | `…-5-bill-the-organization`    | open — inherits it too                |
+| PR                                                                     | What it did                         | State      |
+| ---------------------------------------------------------------------- | ----------------------------------- | ---------- |
+| [#389](https://github.com/davidgraymi/bindersnap-editor-demo/pull/389) | Verified the Gitea permission model | **merged** |
+| [#390](https://github.com/davidgraymi/bindersnap-editor-demo/pull/390) | Organization and team client        | **merged** |
+| [#391](https://github.com/davidgraymi/bindersnap-editor-demo/pull/391) | Org + first binder at signup        | **merged** |
+| [#392](https://github.com/davidgraymi/bindersnap-editor-demo/pull/392) | Reads are never gated               | **merged** |
+| [#393](https://github.com/davidgraymi/bindersnap-editor-demo/pull/393) | Bill the organization               | open       |
 
-Branches stack `3 → 4 → 5`. A fix on a lower branch must be merged forward
-before pushing. Everything except the one failure below is green: unit, seed,
-build, formatting, CodeQL and the rest of the integration suite.
+## Why #393 carries the organization-creation flow too
 
-## Fixed since these notes were written
+They cannot ship apart. The migration parks every username-keyed billing row
+and rebuilds the live tables org-keyed, so an account with no organization has
+nothing to key to — and until this branch, nothing created one except signup,
+silently, for new accounts only. Landing the re-key alone would lock every
+existing account out of authoring with no self-serve way back.
 
-1. **`CanCreateOrganization()` 403** — signup's 403 with a nil body was Gitea
-   refusing at `org.Create`. Both compose files now state
-   `DEFAULT_ALLOW_CREATE_ORGANIZATION=true` and
-   `DISABLE_REGULAR_ORG_CREATION=false` rather than inheriting them. The first
-   test of `signup-provisioning.pw.ts` passes as of that change.
-2. **The invisible-name collision**, predicted below and then confirmed by the
-   second test failing exactly where expected. Gitea answers
+So the same change that moves billing onto the organization also gives a person
+the way to have one: `POST /api/app/organizations`, a screen at
+`/organizations/new` that asks them to name it, and a claim that moves any
+billing parked under their username onto the organization they just created.
+Signup no longer provisions one behind their back.
+
+## Defects found while getting this green
+
+Each cost a CI round and is worth not rediscovering.
+
+1. **Signup could not create an organization.** Gitea answered `POST /orgs` with
+   a bare 403 and a nil body — `org.Create` refusing at
+   `CanCreateOrganization()`, the only 403 on that path that logs no message.
+   `AllowCreateOrganization` is stamped onto a user once, at creation, from
+   settings the admin API has no field for. Both compose files now state
+   `DEFAULT_ALLOW_CREATE_ORGANIZATION` and `DISABLE_REGULAR_ORG_CREATION`
+   rather than inheriting them, so a Gitea default that moves cannot silently
+   un-provision every new account.
+
+2. **The second customer of the same name could not sign up.** Gitea answers
    `GET /orgs/{org}` for a private organization the caller cannot see with a
-   404, identical to a free name — so asking is not enough. Creation is now the
-   availability check: a 422 steps to the next candidate, and only a 422 does.
+   404 — identical to a free name. So asking is not enough: creation is the
+   availability check, and a 422 (and only a 422) steps to the next candidate.
 
-## The one open failure (historical — kept for the method)
+3. **A trialing organization could not subscribe.** `BillingPage` showed the
+   manage panel whenever `subscriptionStatus === "active"`, and a trial makes
+   that true with no Stripe subscription behind it — so the page offered a
+   portal for a customer that does not exist and hid "Subscribe now".
+   `hasManageableSubscription` (in `apps/app/components/billingAccess.ts`, kept
+   separate because `BillingPage` is module-mocked in `App.test.ts`) names the
+   distinction between having access and having a subscription.
 
-`tests/signup-provisioning.pw.ts:83` — after `POST /auth/signup`, Gitea answers
-`GET /user/orgs` with `[]` for the new user, so no organization was created.
-It fails identically on all three retries.
+4. **Two test-harness defects**, both the same shape — inner waits exceeding
+   the budget containing them. Setup hooks that seed and then poll for 30s ran
+   on the suite's 10s default, and `signup.pw.ts` ran a whole account lifecycle
+   on it too.
 
-`provisionSignupBestEffort` swallows the cause by design (a Gitea hiccup must
-not strand someone at a login form for an account that exists) and logs it at
-error level. That log now survives the run — see below — so **the next step is
-to read it, not to re-derive it.**
+Also added: `tests/global-teardown.ts` saves the API container log to
+`test-results/api.log` before the stack goes down and prints its error lines
+into the job output. Defect 1 was invisible without it, because provisioning is
+best-effort and swallowed the cause.
 
-### The cause, found
+## Verified against Gitea 1.27.3
 
-The api.log capture answered it on its first run
-([job 99855912222](https://github.com/davidgraymi/bindersnap-editor-demo/actions/runs/33507742009/job/99855912222)):
-
-```json
-{
-  "level": "error",
-  "message": "Failed to provision organization at signup",
-  "username": "signup-…",
-  "status": 403,
-  "error": "%!s(<nil>)"
-}
-```
-
-**403, with a nil error body.** Gitea emits exactly two `403`s that log a nil
-error, and only one is on this path — `routers/api/v1/org/org.go:248`:
-
-```go
-if !ctx.Doer.CanCreateOrganization() {
-    ctx.APIError(http.StatusForbidden, nil)   // formats as %!s(<nil>)
-    return
-}
-```
-
-So Gitea is refusing at `CanCreateOrganization()`, which is
-
-```go
-u.IsAdmin || (u.AllowCreateOrganization && !setting.Admin.DisableRegularOrgCreation)
-```
-
-Every signup fails this way, not just the one the test asserts on — the same
-error line appears for each `stripe-*` user in the run.
-
-`AllowCreateOrganization` is set once, at user creation, from
-`setting.Service.DefaultAllowCreateOrganization && !setting.Admin.DisableRegularOrgCreation`
-(`models/user/user.go`, `createUser`). Gitea's admin `CreateUserOption` has **no
-field for it**, so `createGiteaUser` cannot ask for it in the payload — the
-stack's Gitea settings decide, and this stack sets neither, so both should be
-at their permissive defaults. Resolve that contradiction before choosing a fix;
-the two candidate fixes are:
-
-1. Set `GITEA__service__DEFAULT_ALLOW_CREATE_ORGANIZATION=true` explicitly in
-   `docker-compose.yml` and `deploy/files/docker-compose.prod.yml`, so the
-   behaviour does not depend on a Gitea default that can move under us. Cheap,
-   and it makes the requirement legible next to the other `GITEA__` settings.
-2. Have `createGiteaUser` follow the create with
-   `PATCH /api/v1/admin/users/{username}` carrying
-   `allow_create_organization: true` (`EditUserOption` _does_ have the field).
-   Independent of server configuration, at the cost of one more round trip on
-   the signup path.
-
-Prefer (1) if it reproduces, and add an integration assertion that a fresh user
-can create an org, so a Gitea upgrade that flips the default fails loudly
-instead of silently un-provisioning every new account.
-
-### How to read the cause (for the next one)
-
-`tests/global-teardown.ts` saves the whole API container log to
-`test-results/api.log` before `docker compose down`, and the CI job uploads it
-in `playwright-artifacts-*`. Download that artifact and:
-
-```bash
-grep '"level":"error"' api.log
-grep 'Failed to provision organization at signup' api.log   # the line that matters
-```
-
-That line carries the HTTP `status` and Gitea's own `error` message from
-whichever call failed.
-
-### Already ruled out — do not spend time re-checking
-
-- **Not visibility.** The org is created private, but `GET /user/orgs` calls
-  `DoerViewOtherVisibility(doer, doer)`, which returns `VisibleTypePrivate`
-  when the doer is the subject. Private orgs _are_ listed to their own members.
-  So the empty list means provisioning genuinely failed.
-- **Not token scope.** `REQUIRED_GITEA_TOKEN_SCOPES` is unioned into whatever
-  is configured, so every session token carries `write:organization`, which is
-  what Gitea's `POST /orgs` route requires.
-- **Not the request shapes.** Every call the client emits was probed against a
-  stub: correct method, URL, `token` auth header, `Content-Type` and body.
-  `POST /api/v1/orgs` sends
-  `{"username","full_name","visibility":"private","repo_admin_change_team_access":false}`.
-- **Not the account flags.** Signup creates the user with
-  `must_change_password: false` and `restricted: false`; a restricted user
-  could not create an organization, and a must-change-password user is refused
-  by Gitea's API middleware.
-
-### Most likely remaining causes, in order
-
-1. Something in `provisionWorkspace` after the org — but that would leave the
-   org behind, and the list is empty, so the failure is at or before
-   `POST /orgs`. Read the log before assuming otherwise.
-2. `resolveAvailableOrganizationName` mis-reading a name as free. Note the real
-   collision hazard it does have: `findOrganization` is a `GET /orgs/{org}`,
-   and Gitea answers **404** for a private org the caller cannot see. So a
-   second customer asking for the same display name is told the name is free
-   and then gets a 422 from `POST /orgs`. `createOrganization` should treat 422
-   as "taken" and step to the next candidate — the second test in
-   `signup-provisioning.pw.ts` is exactly that case and has never run, because
-   the file is `mode: "serial"` and the first test fails first.
-
-## Known follow-on work once provisioning passes
-
-- **Branch 3 gets trials but nothing reads them.** `requireSubscription` on
-  branches 3 and 4 still calls `hasActiveSubscription(username)`; the trial only
-  becomes an access source on branch 5. So the moment provisioning works, the
-  Stripe suite's "new user is blocked by the paywall" assertion has to become
-  trial-aware on the branch where trials start mattering. `POST /api/dev/end-trial`
-  (dev-only) exists on branch 5 and probably belongs on branch 3.
-- **`tests/document-collaborators.pw.ts:174`** failed once on #393 and was never
-  diagnosed; a timing fix was applied on spec. Confirm it against a real run.
+The 1.26 → 1.27.3 upgrade (#387) landed mid-series. Provisioning passes on it
+unchanged. #389's CODEOWNERS finding was a reading of 1.26 source and is being
+re-checked separately on `claude/reverify-codeowners-gitea-1273`.
 
 ## Three product decisions still unanswered
 
-Raised in the PR bodies, none answered. They change the work, so they are worth
-settling before the next PR in the series:
+Raised in the PR bodies, none answered. They change the work.
 
 1. **Signup funnel.** #369 says no card during the 14-day trial, which
-   contradicts today's signup → `/billing` redirect. #393 changes the funnel to
-   land in the workspace. Keep the card-up-front funnel instead, and the trial
-   becomes opt-in.
-2. **Read-only mode for delinquent orgs.** The API rule ("reads are never
-   gated") is enforced as of #392, but the SPA still redirects every unpaid
-   session to `/billing`, so a customer cannot yet exercise it. Building the
-   real read-only mode — mutating controls disabled, a banner saying why — is
-   its own piece of work.
+   contradicts the old signup → `/billing` redirect. #393 lands a new account in
+   its workspace instead. Keeping the card-up-front funnel would mean making
+   the trial opt-in.
+2. **Read-only mode for delinquent orgs.** The API rule is enforced as of #392,
+   but the SPA still redirects an unpaid session to `/billing`, so no customer
+   can yet exercise it. A real read-only mode — mutating controls disabled, a
+   banner saying why — is its own piece of work.
 3. **Do org owners cost a billable seat?** `listBillableSeats` counts any team
    with write or better on `repo.code` that is granted onto a repository, which
-   includes Gitea's built-in Owners team. That is a pricing decision, not a
-   naming accident — see #390's description.
+   includes Gitea's built-in Owners team. A pricing decision, not a naming
+   accident — see #390's description.
 
 ## ADR scope not yet started
 

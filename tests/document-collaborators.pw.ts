@@ -12,10 +12,6 @@
 
 import { expect, test, type Page } from "@playwright/test";
 
-const API_BASE_URL =
-  process.env.BUN_PUBLIC_API_BASE_URL ??
-  `http://localhost:${process.env.API_PROXY_PORT ?? "8788"}`;
-
 function buildUniqueCollaboratorTestData() {
   const suffix = `${Date.now().toString(36)}-${Math.random()
     .toString(36)
@@ -59,29 +55,29 @@ async function signUp(
     .fill(credentials.password);
   await page.getByRole("button", { name: "Create account" }).click();
 
-  await expect(page).toHaveURL(/\/billing$/);
+  // Signup no longer creates an organization behind the person's back, so this
+  // is where a new account lands: naming the thing that will own its binders.
+  await expect(page).toHaveURL(/\/organizations\/new$/, { timeout: 30_000 });
   await expect(
-    page.getByRole("heading", { name: "Start your subscription" }),
-  ).toBeVisible();
+    page.getByRole("heading", { name: /organization/i }),
+  ).toBeVisible({ timeout: 15_000 });
+
+  // Authoring needs an organization, so create one the way a person would.
+  await page.getByLabel("Organization name").fill("Mercy Health");
+  await page.getByRole("button", { name: "Create organization" }).click();
+
+  // Provisioning creates the organization, its first binder, three role teams
+  // and a protected branch before it answers, so the workspace takes longer to
+  // appear than the 5 s default allows.
+  await expect(
+    page.locator(
+      `.app-topnav-avatar[aria-label="User: ${credentials.username}"]`,
+    ),
+  ).toBeVisible({ timeout: 60_000 });
+  await expect(page).not.toHaveURL(/\/billing$/);
 }
 
-async function grantDevSubscription(
-  page: Page,
-  username: string,
-): Promise<void> {
-  await page.evaluate(async (apiUrl) => {
-    const resp = await fetch(`${apiUrl}/api/dev/grant-subscription`, {
-      method: "POST",
-      credentials: "include",
-    });
-    if (!resp.ok) {
-      const body = await resp.json().catch(() => ({ error: resp.status }));
-      throw new Error(
-        `Grant subscription failed: ${(body as { error: unknown }).error}`,
-      );
-    }
-  }, API_BASE_URL);
-
+async function openWorkspace(page: Page, username: string): Promise<void> {
   await page.goto("/");
   await expect(
     page.locator(`.app-topnav-avatar[aria-label="User: ${username}"]`),
@@ -198,7 +194,7 @@ test.describe("document collaborator management", () => {
     const credentials = buildUniqueCollaboratorTestData();
 
     await signUp(page, credentials);
-    await grantDevSubscription(page, credentials.username);
+    await openWorkspace(page, credentials.username);
     await createDocument(page, credentials.fileName);
     await openCollaboratorsTab(page);
 

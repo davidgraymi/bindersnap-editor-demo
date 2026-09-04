@@ -1,3 +1,8 @@
+import {
+  MAX_ORGANIZATION_NAME_LENGTH as MAX_NAME_LENGTH,
+  slugifyOrganizationName,
+} from "../../packages/utils/organizationName";
+
 import { GiteaApiError, type GiteaClient } from "./gitea-client/client";
 import { findOrganization } from "./gitea-client/orgs";
 import {
@@ -12,22 +17,17 @@ import {
 } from "./organizations";
 
 /**
- * What signup does beyond creating an account, per ADR 0004: the organization,
- * its first binder, that binder's rules and role teams.
+ * What signup does beyond creating an account, per ADR 0004: the organization.
  *
  * "Signup creates the org — there is no personal mode that has to be upgraded
- * later, because that upgrade is the migration being paid for now." So there is
- * no path here that leaves a person owning documents.
+ * later, because that upgrade is the migration being paid for now."
+ *
+ * It no longer creates a binder along with it. ADR 0004's migration step 1 said
+ * to, but a binder is the container a customer's records live in, and its name
+ * is the owner's to choose — "policies" was a guess nobody made and nobody
+ * could act on, since documents are still their own repositories and nothing
+ * was ever written into it. Members create workspaces themselves.
  */
-
-/** The first binder every organization gets. Renameable; not special. */
-export const DEFAULT_WORKSPACE_NAME = "policies";
-
-const DEFAULT_WORKSPACE_DESCRIPTION =
-  "Your first binder: one set of rules, one set of people.";
-
-/** Gitea usernames and organization names share one namespace. */
-const MAX_NAME_LENGTH = 40;
 
 /**
  * How many `-2`, `-3` … suffixes to try before giving up. Collisions are rare
@@ -35,24 +35,7 @@ const MAX_NAME_LENGTH = 40;
  */
 const MAX_NAME_ATTEMPTS = 20;
 
-/**
- * Reduce a display name to something Gitea will accept as an org username:
- * alphanumerics, dash, underscore and dot, not starting or ending with a
- * separator.
- */
-export function slugifyOrganizationName(input: string): string {
-  const slug = input
-    .normalize("NFKD")
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, "-")
-    .replace(/^[-._]+/, "")
-    .replace(/[-._]+$/, "")
-    .replace(/-{2,}/g, "-")
-    .slice(0, MAX_NAME_LENGTH)
-    .replace(/[-._]+$/, "");
-
-  return slug;
-}
+export { slugifyOrganizationName };
 
 /**
  * The organization's Gitea name.
@@ -94,7 +77,6 @@ export interface ProvisionSignupParams {
   username: string;
   /** Optional display name for the organization, from the signup form. */
   organizationName?: string;
-  workspaceName?: string;
   store?: OrganizationBackend;
   now?: number;
 }
@@ -119,8 +101,6 @@ export async function provisionSignup(
     client,
     base: deriveOrganizationName(username, params.organizationName),
     orgFullName: params.organizationName?.trim() || undefined,
-    workspaceName: params.workspaceName ?? DEFAULT_WORKSPACE_NAME,
-    workspaceDescription: DEFAULT_WORKSPACE_DESCRIPTION,
   });
 
   const organization = await recordProvisionedOrganization({
@@ -138,8 +118,6 @@ interface ProvisionUnderAvailableNameParams {
   client: GiteaClient;
   base: string;
   orgFullName?: string;
-  workspaceName: string;
-  workspaceDescription?: string;
 }
 
 /**
@@ -157,9 +135,8 @@ interface ProvisionUnderAvailableNameParams {
  * the only status that means "try the next one" — anything else is a real
  * failure and is raised rather than walked past twenty times.
  *
- * A 422 leaves nothing behind: the organization is the first thing
- * `provisionOrganization` creates, so a failure there is a failure before any
- * workspace, team or rule exists.
+ * A 422 leaves nothing behind: the organization is the only thing
+ * `provisionOrganization` creates, so a failure there leaves no partial state.
  */
 async function provisionOrganizationUnderAvailableName(
   params: ProvisionUnderAvailableNameParams,
@@ -209,11 +186,10 @@ export async function provisionSignupBestEffort(
 ): Promise<SignupProvisionResult | null> {
   try {
     const result = await provisionSignup(params);
-    logger.info("Provisioned organization and first workspace at signup", {
+    logger.info("Provisioned organization at signup", {
       username: params.username,
       organization: result.organization.name,
       giteaOrgId: result.organization.giteaOrgId,
-      workspace: result.provisioned.workspace.workspace.name,
     });
     return result;
   } catch (err) {

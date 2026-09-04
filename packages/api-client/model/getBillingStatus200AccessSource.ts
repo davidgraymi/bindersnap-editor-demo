@@ -14,7 +14,9 @@ export type GetBillingStatus200AccessSource = typeof GetBillingStatus200AccessSo
 export const GetBillingStatus200AccessSource = {
   config_bypass: 'config_bypass',
   stripe: 'stripe',
+  trial: 'trial',
   admin_grant: 'admin_grant',
   admin_revoke: 'admin_revoke',
+  no_organization: 'no_organization',
   none: 'none',
 } as const;

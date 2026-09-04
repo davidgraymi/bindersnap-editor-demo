@@ -11,10 +11,6 @@ import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
 import { signOutCurrentUser } from "./helpers";
 
-const API_BASE_URL =
-  process.env.BUN_PUBLIC_API_BASE_URL ??
-  `http://localhost:${process.env.API_PROXY_PORT ?? "8788"}`;
-
 function buildUniqueSignupCredentials() {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   return {
@@ -82,36 +78,41 @@ async function attachScreenshot(
   });
 }
 
-async function expectBillingPage(page: Page): Promise<void> {
-  await expect(page).toHaveURL(/\/billing$/);
-  await expect(
-    page.getByRole("heading", { name: "Start your subscription" }),
-  ).toBeVisible();
-}
-
-async function grantDevSubscriptionAndOpenWorkspace(
+/**
+ * A new account is asked to name its organization, then lands in its
+ * workspace — not at a card form.
+ *
+ * ADR 0004 gives every new organization a 14-day local trial, and #369 is
+ * explicit that there is no card during it — representing that in Stripe would
+ * create a customer and a subscription for every tire-kicker. So the billing
+ * page is somewhere a new user can go, not somewhere they are sent.
+ *
+ * Naming comes first because signup no longer guesses: an organization owns
+ * the binders, and the person who owns it is the one who should say what it is
+ * called.
+ */
+async function signUpThroughOrganizationSetup(
   page: Page,
   username: string,
 ): Promise<void> {
-  await page.evaluate(async (apiUrl) => {
-    const response = await fetch(`${apiUrl}/api/dev/grant-subscription`, {
-      method: "POST",
-      credentials: "include",
-    });
-    if (!response.ok) {
-      const payload = await response
-        .json()
-        .catch(() => ({ error: response.status }));
-      throw new Error(
-        `Grant subscription failed: ${(payload as { error?: unknown }).error ?? response.status}`,
-      );
-    }
-  }, API_BASE_URL);
+  // Signup no longer creates an organization behind the person's back, so this
+  // is where a new account lands: naming the thing that will own its binders.
+  await expect(page).toHaveURL(/\/organizations\/new$/, { timeout: 30_000 });
+  await expect(
+    page.getByRole("heading", { name: /organization/i }),
+  ).toBeVisible({ timeout: 15_000 });
 
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  // Authoring needs an organization, so create one the way a person would.
+  await page.getByLabel("Organization name").fill("Mercy Health");
+  await page.getByRole("button", { name: "Create organization" }).click();
+
+  // Provisioning creates the organization, its first binder, three role teams
+  // and a protected branch before it answers, so the workspace takes longer to
+  // appear than the 5 s default allows.
   await expect(
     page.locator(`.app-topnav-avatar[aria-label="User: ${username}"]`),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 60_000 });
+  await expect(page).not.toHaveURL(/\/billing$/);
 }
 
 async function signUpAndReturnToLogin(
@@ -142,14 +143,13 @@ async function signUpAndReturnToLogin(
     password: credentials.password,
   });
 
-  await expectBillingPage(page);
+  await signUpThroughOrganizationSetup(page, credentials.username);
   await attachScreenshot(
     page,
     testInfo,
-    `${screenshotPrefix}-billing-after-signup`,
+    `${screenshotPrefix}-workspace-after-signup`,
   );
 
-  await grantDevSubscriptionAndOpenWorkspace(page, credentials.username);
   await signOutCurrentUser(page);
   await page.goto("/login", { waitUntil: "domcontentloaded" });
   await expect(page).toHaveURL(/\/login$/);
@@ -304,8 +304,7 @@ test.describe("signup flow", () => {
     await fillSignupForm(page, firstAccount);
     await submitSignupForm(page);
 
-    await expectBillingPage(page);
-    await grantDevSubscriptionAndOpenWorkspace(page, firstAccount.username);
+    await signUpThroughOrganizationSetup(page, firstAccount.username);
     await signOutCurrentUser(page);
     await page.goto("/login");
     await expect(page).toHaveURL(/\/login$/);

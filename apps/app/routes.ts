@@ -8,6 +8,7 @@ export type AppRoute =
   | { kind: "activity" }
   | { kind: "adminSubscriptions" }
   | { kind: "billing" }
+  | { kind: "createOrganization" }
   | {
       kind: "document";
       owner: string;
@@ -134,6 +135,9 @@ export function getRoute(pathname: string): AppRoute {
     return { kind: "adminSubscriptions" };
   }
 
+  if (normalizedPath === "/organizations/new") {
+    return { kind: "createOrganization" };
+  }
   if (normalizedPath === "/billing") {
     return { kind: "billing" };
   }
@@ -232,6 +236,8 @@ export function routeToPath(route: AppRoute): string {
       return "/admin/subscriptions";
     case "billing":
       return "/billing";
+    case "createOrganization":
+      return "/organizations/new";
     case "home":
     case "workspace":
     default:

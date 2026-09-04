@@ -298,6 +298,28 @@ supersedes ADR 0001's "one document equals one repository". The routes and BFF
 endpoints documented above describe the **shipped** one-repo-per-document code,
 which is still what runs.
 
+### We bill the organization, never a person.
+
+`subscriptions` and `subscription_access_overrides` key on `gitea_org_id`, not
+on a username: Gitea renames organizations, and a person who signs up can
+leave without taking their company's subscription with them. Stripe carries
+`bindersnap_gitea_org_id` on the customer and the subscription;
+`bindersnap_username` rides along as support metadata and is never a key.
+
+`resolveAccess` is one precedence list, highest first — `admin_revoke`,
+`admin_grant`, Stripe `active`/`trialing` with a 3-day grace, the local
+`organizations.trial_ends_at`, then nothing. The 14-day trial is a local column
+rather than a Stripe trialing subscription because #369 wants no card at all
+during it, and keeping the whole thing in one function is what makes two
+sources of access truth affordable.
+
+Seats are derived from Gitea team membership on every call
+(`listBillableSeats`), so there is no seat table to drift.
+
+`scripts/backfill-org-billing.ts` maps the pre-re-key username rows, which
+migration `0002` parked in `legacy_username_*` tables rather than dropping.
+Those tables are deleted by hand, later, once the mapping has been checked.
+
 ### The paywall gates authoring, never reading.
 
 `requireSubscription` guards mutation and nothing else. Reads and exports stay

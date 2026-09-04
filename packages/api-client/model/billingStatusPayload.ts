@@ -5,10 +5,15 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { BillingStatusPayloadAccessSource } from './billingStatusPayloadAccessSource.ts';
+import type { BillingStatusPayloadOrganization } from './billingStatusPayloadOrganization.ts';
 import type { BillingStatusPayloadOverride } from './billingStatusPayloadOverride.ts';
 import type { BillingStatusPayloadPlan } from './billingStatusPayloadPlan.ts';
 
 export interface BillingStatusPayload {
+  /** @nullable */
+  organization: BillingStatusPayloadOrganization;
+  /** @nullable */
+  trialEndsAt: number | null;
   /** @nullable */
   status: string | null;
   /** @nullable */
