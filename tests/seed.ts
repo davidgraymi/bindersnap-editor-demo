@@ -13,6 +13,7 @@
 
 import { pathToFileURL } from "node:url";
 
+import { ROLE_TEAM_OPTIONS } from "../services/api/gitea-client/orgs";
 import { renderSeedDocumentFile } from "./seed-documents";
 import {
   loadSeedScenario,
@@ -406,14 +407,6 @@ async function ensureBinderTeams(
   binder: SeedBinder,
   log: (message: string) => void,
 ): Promise<void> {
-  const permissionFor: Record<string, string> = {
-    admins: "admin",
-    authors: "write",
-    // Read access is deliberate: a reviewer approves without being able to
-    // push, which the approvals whitelist on `main` is what makes count.
-    reviewers: "read",
-  };
-
   const existing = (await giteaRequest(
     baseUrl,
     `/api/v1/orgs/${encodeURIComponent(owner)}/teams`,
@@ -427,20 +420,32 @@ async function ensureBinderTeams(
     const teamName = `${repo}-${role}`;
     let team = existing.find((candidate) => candidate.name === teamName);
 
-    if (!team) {
+    // The app's own definition, not a copy of it. `units_map` is what Gitea
+    // actually reads — a bare `permission` alongside `units` silently produces
+    // a team with no access at all.
+    const options = {
+      ...ROLE_TEAM_OPTIONS[role],
+      name: teamName,
+    };
+
+    if (team) {
+      // Repair rather than skip: a team created by an older seed may carry the
+      // wrong permission, and re-seeding is supposed to fix the stack, not
+      // preserve its mistakes.
+      await giteaRequest(baseUrl, `/api/v1/teams/${team.id}`, {
+        method: "PATCH",
+        auth: adminAuth,
+        body: JSON.stringify(options),
+        expectedStatuses: [200, 404],
+      });
+    } else {
       const created = await giteaRequest(
         baseUrl,
         `/api/v1/orgs/${encodeURIComponent(owner)}/teams`,
         {
           method: "POST",
           auth: adminAuth,
-          body: JSON.stringify({
-            name: teamName,
-            permission: permissionFor[role],
-            units: ["repo.code", "repo.pulls", "repo.issues"],
-            can_create_org_repo: false,
-            includes_all_repositories: false,
-          }),
+          body: JSON.stringify(options),
           expectedStatuses: [201, 422],
         },
       );

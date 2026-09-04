@@ -46,9 +46,13 @@ users:
     fullName: Dan Whitfield
     email: dan@example.com
     role: External auditor — read-only access, sees but cannot change
+# Named so it does not collide with the integration tests, several of which
+# create an organization called "Mercy Health" on purpose — including one that
+# asserts what happens when two customers of the same name sign up. The seed
+# taking that name would make those tests fight the fixture.
 organization:
-  name: mercy-health
-  displayName: Mercy Health
+  name: riverside-health
+  displayName: Riverside Health
   owner: alice
 binders:
   - name: clinical
