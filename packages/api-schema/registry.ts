@@ -741,12 +741,13 @@ registry.registerPath({
 // Workspace routes
 registry.registerPath({
   method: "get",
-  path: "/api/app/workspaces",
-  operationId: "listWorkspaces",
+  path: "/api/app/binders",
+  operationId: "listBinders",
   tags: ["workspaces"],
   responses: {
     200: {
-      description: "The binders owned by this session's organization",
+      description:
+        "Every binder this session can act in, each naming its organization",
       content: {
         "application/json": { schema: WorkspaceListPayloadSchema },
       },
@@ -756,10 +757,11 @@ registry.registerPath({
 
 registry.registerPath({
   method: "post",
-  path: "/api/app/workspaces",
-  operationId: "createWorkspace",
+  path: "/api/app/orgs/{org}/binders",
+  operationId: "createBinder",
   tags: ["workspaces"],
   request: {
+    params: z.object({ org: z.string() }),
     body: {
       required: true,
       content: {
@@ -779,10 +781,10 @@ registry.registerPath({
 
 registry.registerPath({
   method: "get",
-  path: "/api/app/workspaces/{workspace}/documents",
-  operationId: "listWorkspaceDocuments",
+  path: "/api/app/binders/{org}/{binder}/documents",
+  operationId: "listBinderDocuments",
   tags: ["workspaces"],
-  request: { params: z.object({ workspace: z.string() }) },
+  request: { params: z.object({ org: z.string(), binder: z.string() }) },
   responses: {
     200: {
       description: "The binder's documents",
@@ -795,12 +797,13 @@ registry.registerPath({
 
 registry.registerPath({
   method: "get",
-  path: "/api/app/workspaces/{workspace}/documents/{documentPath}",
-  operationId: "getWorkspaceDocument",
+  path: "/api/app/binders/{org}/{binder}/documents/{documentPath}",
+  operationId: "getBinderDocument",
   tags: ["workspaces"],
   request: {
     params: z.object({
-      workspace: z.string(),
+      org: z.string(),
+      binder: z.string(),
       /** File path or identity — a URL may carry either. */
       documentPath: z.string(),
     }),
@@ -817,11 +820,11 @@ registry.registerPath({
 
 registry.registerPath({
   method: "post",
-  path: "/api/app/workspaces/{workspace}/documents",
-  operationId: "createWorkspaceDocument",
+  path: "/api/app/binders/{org}/{binder}/documents",
+  operationId: "createBinderDocument",
   tags: ["workspaces"],
   request: {
-    params: z.object({ workspace: z.string() }),
+    params: z.object({ org: z.string(), binder: z.string() }),
     body: {
       required: true,
       content: {

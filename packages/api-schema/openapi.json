@@ -8319,15 +8319,15 @@
         }
       }
     },
-    "/api/app/workspaces": {
+    "/api/app/binders": {
       "get": {
-        "operationId": "listWorkspaces",
+        "operationId": "listBinders",
         "tags": [
           "workspaces"
         ],
         "responses": {
           "200": {
-            "description": "The binders owned by this session's organization",
+            "description": "Every binder this session can act in, each naming its organization",
             "content": {
               "application/json": {
                 "schema": {
@@ -8372,11 +8372,23 @@
             }
           }
         }
-      },
+      }
+    },
+    "/api/app/orgs/{org}/binders": {
       "post": {
-        "operationId": "createWorkspace",
+        "operationId": "createBinder",
         "tags": [
           "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          }
         ],
         "requestBody": {
           "required": true,
@@ -8446,9 +8458,9 @@
         }
       }
     },
-    "/api/app/workspaces/{workspace}/documents": {
+    "/api/app/binders/{org}/{binder}/documents": {
       "get": {
-        "operationId": "listWorkspaceDocuments",
+        "operationId": "listBinderDocuments",
         "tags": [
           "workspaces"
         ],
@@ -8458,7 +8470,15 @@
               "type": "string"
             },
             "required": true,
-            "name": "workspace",
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
             "in": "path"
           }
         ],
@@ -8526,7 +8546,7 @@
         }
       },
       "post": {
-        "operationId": "createWorkspaceDocument",
+        "operationId": "createBinderDocument",
         "tags": [
           "workspaces"
         ],
@@ -8536,7 +8556,15 @@
               "type": "string"
             },
             "required": true,
-            "name": "workspace",
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
             "in": "path"
           }
         ],
@@ -8610,9 +8638,9 @@
         }
       }
     },
-    "/api/app/workspaces/{workspace}/documents/{documentPath}": {
+    "/api/app/binders/{org}/{binder}/documents/{documentPath}": {
       "get": {
-        "operationId": "getWorkspaceDocument",
+        "operationId": "getBinderDocument",
         "tags": [
           "workspaces"
         ],
@@ -8622,7 +8650,15 @@
               "type": "string"
             },
             "required": true,
-            "name": "workspace",
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
             "in": "path"
           },
           {
