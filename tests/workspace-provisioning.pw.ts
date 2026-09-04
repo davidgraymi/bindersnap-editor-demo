@@ -834,8 +834,11 @@ test("a second change to the same document publishes v2, not another v1", async 
       }),
     },
   );
-  expect(secondPull.status, await secondPull.text()).toBe(201);
-  const secondNumber = ((await secondPull.json()) as { number: number }).number;
+  // Read the body once: `expect`'s message argument is evaluated eagerly, so
+  // awaiting `.text()` inside it consumes the body before `.json()` can.
+  const secondPullBody = await secondPull.text();
+  expect(secondPull.status, secondPullBody).toBe(201);
+  const secondNumber = (JSON.parse(secondPullBody) as { number: number }).number;
 
   await approveChange(approver.token, org.name, "clinical", secondNumber);
   const republished = await publishChange(
