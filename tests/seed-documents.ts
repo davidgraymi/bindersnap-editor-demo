@@ -225,11 +225,20 @@ async function renderSeedPdf(document: SeedDocument): Promise<Uint8Array> {
 }
 
 /** The bytes for one version of a document, ready for the contents API. */
+/**
+ * Render a document, at its path inside the binder.
+ *
+ * The path used to be `document.<ext>` at the root of a repository that held
+ * one document. A binder holds many, so the document's own slug path is what
+ * distinguishes them — `nursing/infection-control.docx`.
+ */
 export async function renderSeedDocumentFile(
   document: SeedDocument,
   format: SeedDocumentFormat,
+  slugPath: string,
 ): Promise<SeedDocumentFile> {
-  const path = canonicalFileNameFor(format);
+  const extension = canonicalFileNameFor(format).replace(/^document/, "");
+  const path = `${slugPath}${extension}`;
 
   switch (format) {
     case "prosemirror":

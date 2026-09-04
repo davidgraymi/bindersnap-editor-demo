@@ -57,20 +57,21 @@ test("Markdown keeps the document's structure as headings", () => {
 });
 
 test("a seeded Word file is a real .docx", async () => {
-  const file = await renderSeedDocumentFile(policy, "docx");
+  const file = await renderSeedDocumentFile(policy, "docx", "nursing/handover");
   const bytes = Buffer.from(file.content, "base64");
 
-  expect(file.path).toBe("document.docx");
+  // The document is a file inside a binder, so its path is its identity.
+  expect(file.path).toBe("nursing/handover.docx");
   // "PK" — a .docx is an Office Open XML package in a ZIP.
   expect([...bytes.subarray(0, 4)]).toEqual([0x50, 0x4b, 0x03, 0x04]);
   expect(bytes.toString("latin1")).toContain("word/document.xml");
 });
 
 test("a seeded PDF is a real PDF carrying the policy's words", async () => {
-  const file = await renderSeedDocumentFile(policy, "pdf");
+  const file = await renderSeedDocumentFile(policy, "pdf", "nursing/handover");
   const bytes = Buffer.from(file.content, "base64");
 
-  expect(file.path).toBe("document.pdf");
+  expect(file.path).toBe("nursing/handover.pdf");
   expect(bytes.subarray(0, 5).toString("latin1")).toBe("%PDF-");
 
   // The text layer is the point: the comparison screen reads the words back
@@ -88,9 +89,17 @@ test("re-rendering an unchanged policy produces the same bytes", async () => {
   // A live clock in the Word file's ZIP entries, or in either format's
   // metadata, would add a silent update to every open change on every run.
   for (const format of ["prosemirror", "markdown", "pdf", "docx"] as const) {
-    const first = await renderSeedDocumentFile(policy, format);
+    const first = await renderSeedDocumentFile(
+      policy,
+      format,
+      "nursing/handover",
+    );
     await new Promise((resolve) => setTimeout(resolve, 1_100));
-    const second = await renderSeedDocumentFile(policy, format);
+    const second = await renderSeedDocumentFile(
+      policy,
+      format,
+      "nursing/handover",
+    );
     expect(second.content).toBe(first.content);
   }
 });
@@ -111,8 +120,16 @@ test("editing the prose changes the bytes for every format", async () => {
   };
 
   for (const format of ["prosemirror", "markdown", "pdf", "docx"] as const) {
-    const before = await renderSeedDocumentFile(policy, format);
-    const after = await renderSeedDocumentFile(edited, format);
+    const before = await renderSeedDocumentFile(
+      policy,
+      format,
+      "nursing/handover",
+    );
+    const after = await renderSeedDocumentFile(
+      edited,
+      format,
+      "nursing/handover",
+    );
     expect(after.content).not.toBe(before.content);
   }
 });

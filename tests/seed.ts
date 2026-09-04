@@ -17,7 +17,9 @@ import { renderSeedDocumentFile } from "./seed-documents";
 import {
   loadSeedScenario,
   type SeedChange,
-  type SeedDocumentRepo,
+  type SeedBinder,
+  type SeedBinderDocument,
+  type SeedOrganization,
   type SeedScenario,
   type SeedThread,
 } from "./seed-scenario";
@@ -304,7 +306,60 @@ async function ensureUser(
   log(`User already exists, refreshed: ${username}`);
 }
 
-async function ensureRepo(
+/**
+ * The organization that owns every binder.
+ *
+ * ADR 0004's first level. It is created by its owner's account rather than by
+ * the admin, because Gitea puts the creating user in the Owners team — and the
+ * person who owns the organization is the one who can change its billing.
+ */
+async function ensureOrganization(
+  baseUrl: string,
+  adminAuth: BasicAuth,
+  scenario: SeedScenario,
+  log: (message: string) => void,
+): Promise<void> {
+  const { name, displayName, owner } = scenario.organization;
+
+  const response = await giteaRequest(
+    baseUrl,
+    `/api/v1/admin/users/${encodeURIComponent(owner)}/orgs`,
+    {
+      method: "POST",
+      auth: adminAuth,
+      body: JSON.stringify({
+        username: name,
+        full_name: displayName,
+        visibility: "private",
+      }),
+      expectedStatuses: [201, 409, 422],
+    },
+  );
+
+  log(
+    response.status === 201
+      ? `Created organization: ${name}`
+      : `Organization already exists: ${name}`,
+  );
+
+  // Everybody in the scenario is a member of the one organization — ADR 0004
+  // is explicit that a second binder should cost no new membership list.
+  for (const user of scenario.users) {
+    if (user.username === owner) continue;
+    await giteaRequest(
+      baseUrl,
+      `/api/v1/orgs/${encodeURIComponent(name)}/members/${encodeURIComponent(user.username)}`,
+      {
+        method: "PUT",
+        auth: adminAuth,
+        expectedStatuses: [204, 403, 404, 405],
+      },
+    );
+  }
+}
+
+/** The binder: one repository, owned by the organization rather than a person. */
+async function ensureOrgRepo(
   baseUrl: string,
   adminAuth: BasicAuth,
   owner: string,
@@ -314,7 +369,7 @@ async function ensureRepo(
 ): Promise<void> {
   const response = await giteaRequest(
     baseUrl,
-    `/api/v1/admin/users/${encodeURIComponent(owner)}/repos`,
+    `/api/v1/orgs/${encodeURIComponent(owner)}/repos`,
     {
       method: "POST",
       auth: adminAuth,
@@ -331,9 +386,86 @@ async function ensureRepo(
 
   log(
     response.status === 201
-      ? `Created repo: ${owner}/${repo}`
-      : `Repo already exists: ${owner}/${repo}`,
+      ? `Created binder: ${owner}/${repo}`
+      : `Binder already exists: ${owner}/${repo}`,
   );
+}
+
+/**
+ * The binder's three role teams, and who is in them.
+ *
+ * Membership is the binder's, not a document's. A compliance officer joining
+ * 200 policies used to be 200 calls; here it is one, which is the argument the
+ * whole level rests on.
+ */
+async function ensureBinderTeams(
+  baseUrl: string,
+  adminAuth: BasicAuth,
+  owner: string,
+  repo: string,
+  binder: SeedBinder,
+  log: (message: string) => void,
+): Promise<void> {
+  const permissionFor: Record<string, string> = {
+    admins: "admin",
+    authors: "write",
+    // Read access is deliberate: a reviewer approves without being able to
+    // push, which the approvals whitelist on `main` is what makes count.
+    reviewers: "read",
+  };
+
+  const existing = (await giteaRequest(
+    baseUrl,
+    `/api/v1/orgs/${encodeURIComponent(owner)}/teams`,
+    { auth: adminAuth, expectedStatuses: [200] },
+  ).then((response) => response.json())) as Array<{
+    id: number;
+    name: string;
+  }>;
+
+  for (const role of ["admins", "authors", "reviewers"] as const) {
+    const teamName = `${repo}-${role}`;
+    let team = existing.find((candidate) => candidate.name === teamName);
+
+    if (!team) {
+      const created = await giteaRequest(
+        baseUrl,
+        `/api/v1/orgs/${encodeURIComponent(owner)}/teams`,
+        {
+          method: "POST",
+          auth: adminAuth,
+          body: JSON.stringify({
+            name: teamName,
+            permission: permissionFor[role],
+            units: ["repo.code", "repo.pulls", "repo.issues"],
+            can_create_org_repo: false,
+            includes_all_repositories: false,
+          }),
+          expectedStatuses: [201, 422],
+        },
+      );
+      team = (await created.json()) as { id: number; name: string };
+      existing.push(team);
+    }
+
+    await giteaRequest(
+      baseUrl,
+      `/api/v1/teams/${team.id}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
+      { method: "PUT", auth: adminAuth, expectedStatuses: [204, 404, 405] },
+    );
+
+    for (const member of binder.members.filter(
+      (candidate) => candidate.role === role,
+    )) {
+      await giteaRequest(
+        baseUrl,
+        `/api/v1/teams/${team.id}/members/${encodeURIComponent(member.user)}`,
+        { method: "PUT", auth: adminAuth, expectedStatuses: [204, 404, 405] },
+      );
+    }
+  }
+
+  log(`Ensured binder teams: ${owner}/${repo}`);
 }
 
 /**
@@ -807,6 +939,7 @@ async function publishChange(
   repo: string,
   pull: GiteaPull,
   title: string,
+  slugPath: string,
   version: number,
   refreshReviews: () => Promise<void>,
   log: (message: string) => void,
@@ -849,7 +982,9 @@ async function publishChange(
     log(`Pull request already merged: #${pull.number}`);
   }
 
-  const tagName = `doc/v${version.toString().padStart(4, "0")}`;
+  // A binder's tags are repository-global and many documents share them, so
+  // the version has to carry the document with it.
+  const tagName = `${slugPath}/v${version}`;
   const response = await giteaRequest(
     baseUrl,
     `${repoPath(owner, repo)}/tags`,
@@ -965,14 +1100,20 @@ async function applyChange(
   baseUrl: string,
   adminAuth: BasicAuth,
   authFor: (username: string) => BasicAuth,
-  document: SeedDocumentRepo,
+  context: BinderContext,
+  document: SeedBinderDocument,
   change: SeedChange,
   version: number,
   log: (message: string) => void,
 ): Promise<number> {
-  const { owner, repo } = document;
-  const authorAuth = authFor(change.author ?? owner);
-  const file = await renderSeedDocumentFile(change.document, document.format);
+  const { owner, repo, slugPathFor } = context;
+  const slugPath = slugPathFor(document);
+  const authorAuth = authFor(change.author ?? context.organizationOwner);
+  const file = await renderSeedDocumentFile(
+    change.document,
+    document.format,
+    slugPath,
+  );
 
   await ensureBranch(
     baseUrl,
@@ -1041,6 +1182,7 @@ async function applyChange(
       repo,
       pull,
       change.title,
+      slugPath,
       version,
       refreshReviews,
       log,
@@ -1050,48 +1192,86 @@ async function applyChange(
   return pull.number;
 }
 
-async function applyDocument(
+/**
+ * What every step below needs to know about the binder it is working in.
+ *
+ * A document no longer carries an owner — the organization owns it, and the
+ * binder decides who may act on it — so the pieces that used to read
+ * `document.owner` read this instead.
+ */
+interface BinderContext {
+  /** The organization: the binder's Gitea owner. */
+  owner: string;
+  /** The binder's repository name. */
+  repo: string;
+  /** Who created the organization, and so authors by default. */
+  organizationOwner: string;
+  slugPathFor: (document: SeedBinderDocument) => string;
+}
+
+/** `nursing/infection-control` — folder and name, which is the identity. */
+function slugPathOf(document: SeedBinderDocument): string {
+  return document.folder
+    ? `${document.folder}/${document.name}`
+    : document.name;
+}
+
+/**
+ * The binder itself: one repository owned by the organization, with `main`
+ * protected and the three role teams granted onto it.
+ *
+ * Members are added to those teams rather than as per-repository
+ * collaborators, because access is uniform within a workspace — that is the
+ * whole reason the level exists.
+ */
+async function applyBinder(
   baseUrl: string,
   adminAuth: BasicAuth,
   authFor: (username: string) => BasicAuth,
-  document: SeedDocumentRepo,
+  organization: SeedOrganization,
+  binder: SeedBinder,
   log: (message: string) => void,
 ): Promise<Record<string, number>> {
-  const { owner, repo } = document;
+  const owner = organization.name;
+  const repo = binder.name;
 
-  await ensureRepo(baseUrl, adminAuth, owner, repo, document.description, log);
+  await ensureOrgRepo(baseUrl, adminAuth, owner, repo, binder.description, log);
   await bootstrapEmptyMainBranch(baseUrl, adminAuth, owner, repo, log);
+  await ensureBinderTeams(baseUrl, adminAuth, owner, repo, binder, log);
   await ensureMainBranchProtection(baseUrl, adminAuth, owner, repo, log);
 
-  for (const collaborator of document.collaborators) {
-    await ensureCollaborator(
-      baseUrl,
-      adminAuth,
-      owner,
-      repo,
-      collaborator.user,
-      collaborator.permission,
-      log,
-    );
-  }
+  const context: BinderContext = {
+    owner,
+    repo,
+    organizationOwner: organization.owner,
+    slugPathFor: slugPathOf,
+  };
 
   const pullRequests: Record<string, number> = {};
-  let publishedVersions = 0;
-  for (const change of document.changes) {
-    if (change.publish) {
-      publishedVersions += 1;
+
+  for (const document of binder.documents) {
+    // Versions are per-document: a binder's documents do not advance in
+    // lockstep, so each counts its own published changes.
+    let publishedVersions = 0;
+
+    for (const change of document.changes) {
+      if (change.publish) {
+        publishedVersions += 1;
+      }
+      const number = await applyChange(
+        baseUrl,
+        adminAuth,
+        authFor,
+        context,
+        document,
+        change,
+        publishedVersions,
+        log,
+      );
+      pullRequests[`${owner}/${repo}#${change.branch}`] = number;
     }
-    const number = await applyChange(
-      baseUrl,
-      adminAuth,
-      authFor,
-      document,
-      change,
-      publishedVersions,
-      log,
-    );
-    pullRequests[`${owner}/${repo}#${change.branch}`] = number;
   }
+
   return pullRequests;
 }
 
@@ -1145,11 +1325,20 @@ export async function seedDevStack(
     );
   }
 
+  await ensureOrganization(baseUrl, adminAuth, scenario, log);
+
   const pullRequests: Record<string, number> = {};
-  for (const document of scenario.documents) {
+  for (const binder of scenario.binders) {
     Object.assign(
       pullRequests,
-      await applyDocument(baseUrl, adminAuth, authFor, document, log),
+      await applyBinder(
+        baseUrl,
+        adminAuth,
+        authFor,
+        scenario.organization,
+        binder,
+        log,
+      ),
     );
   }
 
@@ -1197,7 +1386,13 @@ async function runCli(): Promise<void> {
     console.log(`  ${user.username} / ${password}${role}`);
   }
   console.log("");
-  console.log(`Seeded ${scenario.documents.length} documents.`);
+  const documentCount = scenario.binders.reduce(
+    (total, binder) => total + binder.documents.length,
+    0,
+  );
+  console.log(
+    `Seeded ${documentCount} documents across ${scenario.binders.length} binders in ${scenario.organization.name}.`,
+  );
   if (result.oauthClientId) {
     console.log(`OAUTH_CLIENT_ID=${result.oauthClientId}`);
     console.log("Add to .env:");
