@@ -18,6 +18,15 @@
  * the whitelist as redundant.
  *
  * Requires the full Docker Compose stack — run via `bun run test:integration`.
+ *
+ * Everything this file provisions is torn down again — see `deleteOrg` and the
+ * `afterAll` below. That is not tidiness. These organizations put the seeded
+ * accounts (`bob`, `carol`, `dan`) into a second organization, and
+ * `resolveSessionOrganization` answers with the *oldest* one a session belongs
+ * to. Leave them behind and, once a run predates the org a developer created
+ * in the dev stack, every seeded binder disappears from the app — the data is
+ * intact, the wrong organization is being read. On a `SKIP_STACK=1` run
+ * against `bun run up` this accumulates in a volume nobody rebuilds.
  */
 
 import { randomUUID } from "node:crypto";
@@ -40,10 +49,21 @@ const REVIEWER = "carol"; // seeded, reviews it without write access
 // code owner — which is the only way to observe the CODEOWNERS gate on its own.
 const SECOND_REVIEWER = "dan";
 
+/**
+ * The prefix every organization this file creates carries.
+ *
+ * It is what makes the cleanup below safe to point at a live dev stack: only
+ * a name starting with this is ever deleted.
+ */
+const ORG_PREFIX = "bs-adr4-";
+
 /** Unique per run so repeated runs never collide inside one Gitea volume. */
 function uniqueOrgName(): string {
-  return `bs-adr4-${randomUUID().slice(0, 8)}`;
+  return `${ORG_PREFIX}${randomUUID().slice(0, 8)}`;
 }
+
+/** Every organization provisioned in this run, for `afterAll` to remove. */
+const provisionedOrgs: string[] = [];
 
 interface Workspace {
   org: string;
@@ -83,6 +103,20 @@ async function put(client: GiteaClient, path: string): Promise<void> {
   };
   const { error, response } = await untyped.PUT(path, {});
   if (error !== undefined || !response.ok) {
+    throw new GiteaApiError(response.status, JSON.stringify(error ?? {}));
+  }
+}
+
+async function del(client: GiteaClient, path: string): Promise<void> {
+  const untyped = client as unknown as {
+    DELETE: (
+      p: string,
+      init: Record<string, never>,
+    ) => Promise<{ error?: unknown; response: Response }>;
+  };
+  const { error, response } = await untyped.DELETE(path, {});
+  // 404 is success for a cleanup: the thing is gone, which is the goal.
+  if ((error !== undefined || !response.ok) && response.status !== 404) {
     throw new GiteaApiError(response.status, JSON.stringify(error ?? {}));
   }
 }
@@ -130,6 +164,69 @@ async function waitForMergeCheck(
 }
 
 /**
+ * Remove an organization this file created, repositories first.
+ *
+ * Gitea refuses to delete an organization that still owns repositories, so the
+ * order is not optional. Cleanup never fails the run: a leftover org is a
+ * nuisance to be reported, not a reason to turn a passing permission test red.
+ */
+async function deleteOrg(admin: GiteaClient, org: string): Promise<void> {
+  if (!org.startsWith(ORG_PREFIX)) {
+    // A guard, not a formality: everything below deletes, and the prefix is
+    // the only thing separating this file's fixtures from a real workspace.
+    throw new Error(
+      `Refusing to delete an organization outside ${ORG_PREFIX}*: ${org}`,
+    );
+  }
+
+  try {
+    const repos = await get<Array<{ name?: string }>>(
+      admin,
+      `/orgs/${org}/repos?limit=50`,
+    );
+    for (const repo of repos ?? []) {
+      if (repo.name) await del(admin, `/repos/${org}/${repo.name}`);
+    }
+    await del(admin, `/orgs/${org}`);
+  } catch (err) {
+    process.stderr.write(
+      `[gitea-permission-model] could not remove ${org}: ${String(err)}\n`,
+    );
+  }
+}
+
+/**
+ * Remove `bs-adr4-*` organizations left behind by earlier runs.
+ *
+ * A run that crashed, or any run from before this cleanup existed, leaves orgs
+ * in a dev stack's Gitea volume that shadow the seeded one. Sweeping at the
+ * start means a developer gets that fixed by running the suite, rather than by
+ * destroying their stack's data with `bun run down`.
+ */
+async function sweepLeftoverOrgs(admin: GiteaClient): Promise<void> {
+  let leftovers: string[] = [];
+  try {
+    // The fixture orgs are private, so only the site-admin listing sees them.
+    const rows = await get<Array<{ username?: string }>>(
+      admin,
+      "/admin/orgs?limit=200",
+    );
+    leftovers = (rows ?? [])
+      .map((row) => row.username ?? "")
+      .filter((name) => name.startsWith(ORG_PREFIX));
+  } catch (err) {
+    process.stderr.write(
+      `[gitea-permission-model] could not list organizations to sweep: ${String(err)}\n`,
+    );
+    return;
+  }
+
+  for (const org of leftovers) {
+    await deleteOrg(admin, org);
+  }
+}
+
+/**
  * Provision an organization, a workspace repository owned by it, and the three
  * role teams granted onto that repository — the shape ADR 0004 §2 describes.
  */
@@ -143,6 +240,9 @@ async function provisionWorkspace(
   const org = uniqueOrgName();
   const repo = "binder";
 
+  // Recorded before the first call that can fail, so a half-provisioned
+  // organization is still cleaned up.
+  provisionedOrgs.push(org);
   await post(admin, "/orgs", { username: org, visibility: "private" });
   await post(admin, `/orgs/${org}/repos`, {
     name: repo,
@@ -390,6 +490,14 @@ test.describe("ADR 0004: the Gitea permission model the workspace rests on", () 
     author = await createUserClient(AUTHOR);
     reviewer = await createUserClient(REVIEWER);
     secondReviewer = await createUserClient(SECOND_REVIEWER);
+
+    await sweepLeftoverOrgs(admin);
+  });
+
+  test.afterAll(async () => {
+    for (const org of provisionedOrgs.splice(0)) {
+      await deleteOrg(admin, org);
+    }
   });
 
   test("a reviewer without write access can approve, and the approval counts", async () => {

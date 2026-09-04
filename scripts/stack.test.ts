@@ -233,9 +233,7 @@ describe("ensureStackEnv", () => {
 
 describe("concurrent agents", () => {
   /** Allocate from a separate OS process, as a second agent session would. */
-  function allocateInChildProcess(
-    root: string,
-  ): Promise<{
+  function allocateInChildProcess(root: string): Promise<{
     slot: number;
     stackName: string;
     ports: Record<string, number>;

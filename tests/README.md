@@ -39,6 +39,31 @@ SKIP_STACK=1 bun run test:integration
 If you want proxy-path webhook coverage in that mode, make sure the existing
 stack includes the local Caddy service on `http://localhost:${API_PROXY_PORT:-8788}`.
 
+### Testing an API you built from source
+
+By default the run goes through the stack's Caddy proxy, which means the API
+under test is the one baked into the container image — an API change is only
+exercisable after a rebuild, and CI becomes the only loop. Set
+`BUN_PUBLIC_API_BASE_URL` and the test workers call your API instead:
+
+```bash
+bun run up                                   # terminal 1: the stack
+PORT=8790 bun run dev:api                    # terminal 2: your API, from source
+SKIP_STACK=1 BUN_PUBLIC_API_BASE_URL=http://localhost:8790 bun run test:integration
+```
+
+The value has to come from the environment, not from `.env` — `.env` supplies
+defaults, and only what you type is treated as an override. `globalSetup` waits
+for `/auth/me` on that URL and fails with one clear message if nothing answers,
+rather than letting every suite fail on its own.
+
+What this does and does not cover: every suite that talks to the API over
+`fetch` exercises your build, which is most of the API-level coverage. The app
+container's SPA has its own base URL baked in at image build and still calls
+the proxy, so browser-driven assertions stay about the containerised API. Your
+API needs `BINDERSNAP_ALLOWED_ORIGINS` to include the app origin, and needs to
+point at the same Gitea the stack is running.
+
 ### Overriding ports
 
 Every published port is an environment variable, so nothing in the stack is
