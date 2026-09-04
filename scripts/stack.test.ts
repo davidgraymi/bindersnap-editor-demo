@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import {
   LEGACY_PORTS,
+  canonicalPath,
   PORT_KEYS,
   type Registry,
   ensureStackEnv,
@@ -306,24 +307,63 @@ describe("concurrent agents", () => {
 });
 
 describe("the CLI never touches another worktree's stack", () => {
-  test("`down` resolves the compose project from the worktree, not the default", () => {
-    // `status --json` reports exactly the project name every compose command
-    // in this script is given, so asserting on it asserts on the blast radius.
-    const result = spawnSync("bun", [STACK_SCRIPT, "status", "--json"], {
-      cwd: resolve(import.meta.dir, ".."),
-      encoding: "utf8",
-      env: { ...process.env, BINDERSNAP_STACK_HOME: stackHome },
-    });
+  test("`status` reports the worktree's own project, not the shared default", () => {
+    // Run the CLI against a throwaway worktree rather than this checkout: the
+    // script resolves its root from its own location, and pointing it at the
+    // real repo would rewrite a developer's .env as a side effect of running
+    // the tests. It imports nothing but builtins, so a copy runs anywhere.
+    const { worktrees } = makeRepoWithWorktrees(1);
+    const worktree = worktrees[0]!;
+    spawnSync("mkdir", ["-p", join(worktree, "scripts")]);
+    spawnSync("cp", [STACK_SCRIPT, join(worktree, "scripts", "stack.ts")]);
+
+    const result = spawnSync(
+      "bun",
+      [join(worktree, "scripts", "stack.ts"), "status", "--json"],
+      {
+        cwd: worktree,
+        encoding: "utf8",
+        env: { ...process.env, BINDERSNAP_STACK_HOME: stackHome },
+      },
+    );
+
     expect(result.status).toBe(0);
     const status = JSON.parse(result.stdout) as {
       stackName: string;
+      slot: number;
       path: string;
       ports: Record<string, number>;
     };
-    expect(status.path).toBe(resolve(import.meta.dir, ".."));
-    // This worktree is not the main checkout, so it must not answer with the
-    // shared defaults.
+
+    // `status --json` reports exactly the project name every compose command
+    // in this script is given, so asserting on it asserts on the blast radius.
+    expect(status.path).toBe(canonicalPath(worktree));
+    expect(status.slot).toBeGreaterThan(0);
     expect(status.stackName).not.toBe("bindersnap");
     expect(status.ports.APP_PORT).not.toBe(LEGACY_PORTS.APP_PORT);
+  });
+
+  test("`status` leaves the main checkout on the historical ports", () => {
+    const { main } = makeRepoWithWorktrees(0);
+    spawnSync("mkdir", ["-p", join(main, "scripts")]);
+    spawnSync("cp", [STACK_SCRIPT, join(main, "scripts", "stack.ts")]);
+
+    const result = spawnSync(
+      "bun",
+      [join(main, "scripts", "stack.ts"), "status", "--json"],
+      {
+        cwd: main,
+        encoding: "utf8",
+        env: { ...process.env, BINDERSNAP_STACK_HOME: stackHome },
+      },
+    );
+
+    expect(result.status).toBe(0);
+    const status = JSON.parse(result.stdout) as {
+      stackName: string;
+      ports: Record<string, number>;
+    };
+    expect(status.stackName).toBe("bindersnap");
+    expect(status.ports.APP_PORT).toBe(LEGACY_PORTS.APP_PORT);
   });
 });
