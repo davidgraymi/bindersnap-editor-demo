@@ -345,3 +345,48 @@ export async function findPendingDocumentBranch(params: {
     throw err;
   }
 }
+
+/**
+ * Every document's versions, from one read of the binder's tags.
+ *
+ * `listDocumentVersions` asks per document, which is one call each; a binder's
+ * tags are repository-global, so asking once and grouping is the same answer
+ * for the cost of a single call. That difference is the whole reason ADR 0004
+ * expects the documents list to get cheaper rather than dearer.
+ */
+export async function listVersionsByDocument(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+}): Promise<Map<string, DocumentVersion[]>> {
+  const { client, org, workspace } = params;
+
+  const tags = (await unwrap(
+    client.GET("/repos/{owner}/{repo}/tags", {
+      params: { path: { owner: org, repo: workspace } },
+    }),
+  )) as GitTag[];
+
+  const byDocument = new Map<string, DocumentVersion[]>();
+
+  for (const tag of tags ?? []) {
+    const name = tag.name ?? "";
+    const slugPath = documentSlugPathFromVersionTag(name);
+    const version = versionFromTag(name);
+    if (slugPath === null || version === null) continue;
+
+    const entry = { tag: name, version, commitSha: tag.commit?.sha ?? "" };
+    const existing = byDocument.get(slugPath);
+    if (existing) {
+      existing.push(entry);
+    } else {
+      byDocument.set(slugPath, [entry]);
+    }
+  }
+
+  for (const versions of byDocument.values()) {
+    versions.sort((a, b) => b.version - a.version);
+  }
+
+  return byDocument;
+}

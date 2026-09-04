@@ -95,15 +95,29 @@ export const DocumentVersionSchema = z.object({
 });
 export type DocumentVersion = z.infer<typeof DocumentVersionSchema>;
 
+/**
+ * A document as the binder's list shows it.
+ *
+ * The published version is here because a list of policies that does not say
+ * which version each one is at answers none of the questions a list is opened
+ * to answer. It costs one tags call for the whole binder — the tags are
+ * repository-global — rather than one per document.
+ */
+export const WorkspaceDocumentListEntrySchema =
+  WorkspaceDocumentEntrySchema.extend({
+    /** Open changes touching this document. Decides a badge, nothing more. */
+    openChangeCount: z.number(),
+    /** The version on record, or null for a document nobody has published. */
+    latestVersion: DocumentVersionSchema.nullable(),
+  });
+export type WorkspaceDocumentListEntry = z.infer<
+  typeof WorkspaceDocumentListEntrySchema
+>;
+
 export const WorkspaceDocumentListPayloadSchema = z.object({
   organization: z.string().optional(),
   workspace: z.string(),
-  documents: z.array(
-    WorkspaceDocumentEntrySchema.extend({
-      /** Open changes touching this document. Decides a badge, nothing more. */
-      openChangeCount: z.number(),
-    }),
-  ),
+  documents: z.array(WorkspaceDocumentListEntrySchema),
 });
 export type WorkspaceDocumentListPayload = z.infer<
   typeof WorkspaceDocumentListPayloadSchema

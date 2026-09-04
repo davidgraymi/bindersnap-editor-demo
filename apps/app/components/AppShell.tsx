@@ -4,6 +4,9 @@ import type { SessionUser } from "../api";
 import { buildDocumentsUrl, parseDocumentsViewState } from "../documentsView";
 import type { AppRoute } from "../routes";
 import { ActivityLogPage } from "./ActivityLogPage";
+import { BinderPage } from "./BinderPage";
+import { OrganizationPage } from "./OrganizationPage";
+import { OrganizationSwitcher } from "./OrganizationSwitcher";
 import { AdminSubscriptionManagementPage } from "./AdminSubscriptionManagementPage";
 import { AppIcon } from "./AppIcon";
 import { BindersnapLogoMark } from "./BindersnapLogoMark";
@@ -145,6 +148,20 @@ export function AppShell({
           >
             Documents
           </button>
+
+          {/* Which organization you are looking at, and how to look at
+              another. Absent for somebody in one, because a switcher offering
+              a single choice is furniture. */}
+          <OrganizationSwitcher
+            currentOrg={
+              route.kind === "organization" ||
+              route.kind === "binder" ||
+              route.kind === "binderDocument"
+                ? route.org
+                : undefined
+            }
+            onSelect={(org) => onNavigate({ kind: "organization", org })}
+          />
         </nav>
 
         <div className="app-topnav-spacer" />
@@ -352,6 +369,26 @@ export function AppShell({
                     owner,
                     repo,
                     tab: "overview",
+                  })
+                }
+              />
+            ) : route.kind === "organization" ? (
+              <OrganizationPage
+                org={route.org}
+                onOpenBinder={(binder) =>
+                  onNavigate({ kind: "binder", org: route.org, binder })
+                }
+              />
+            ) : route.kind === "binder" ? (
+              <BinderPage
+                org={route.org}
+                binder={route.binder}
+                onOpenDocument={(documentPath) =>
+                  onNavigate({
+                    kind: "binderDocument",
+                    org: route.org,
+                    binder: route.binder,
+                    documentPath,
                   })
                 }
               />

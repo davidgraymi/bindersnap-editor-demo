@@ -36,6 +36,7 @@ import {
   findWorkspaceDocument,
   listChangedDocuments,
   listDocumentVersions,
+  listVersionsByDocument,
   listWorkspaceDocuments,
   nextVersionFrom,
 } from "./gitea-client/workspaceDocuments";
@@ -4961,15 +4962,23 @@ async function handleListWorkspaceDocuments(
       workspace: workspaceName,
     });
 
-    // One call for the whole binder, then matched to documents by the upload
-    // branch convention — rather than one pull request query per document,
-    // which is the cost the binder exists to remove.
-    const openChanges = await listPullRequests({
-      client: auth.client,
-      owner: orgName,
-      repo: workspaceName,
-      state: "open",
-    });
+    // Two calls for the whole binder, then matched per document — rather than
+    // a pull request query and a tags query each, which is the cost the binder
+    // exists to remove. Both are repository-wide, so a binder of two hundred
+    // policies costs the same as one of two.
+    const [openChanges, versionsByDocument] = await Promise.all([
+      listPullRequests({
+        client: auth.client,
+        owner: orgName,
+        repo: workspaceName,
+        state: "open",
+      }),
+      listVersionsByDocument({
+        client: auth.client,
+        org: orgName,
+        workspace: workspaceName,
+      }),
+    ]);
 
     return json(
       200,
@@ -4981,6 +4990,9 @@ async function handleListWorkspaceDocuments(
           openChangeCount: openChanges.filter((pull) =>
             changeTouchesDocument(pull, document.slugPath),
           ).length,
+          // A list of policies that does not say which version each one is at
+          // answers none of the questions a list is opened to answer.
+          latestVersion: versionsByDocument.get(document.slugPath)?.[0] ?? null,
         })),
       },
       baseHeaders,
@@ -5344,6 +5356,39 @@ async function handleListWorkspaces(
  * reason: "Clinical Policies" is not a name Gitea will take, and the person
  * choosing it should be told the address they are choosing.
  */
+/**
+ * The binders one organization owns.
+ *
+ * Distinct from `GET /api/app/binders`, and deliberately so. That one answers
+ * a question about a person — everything I can act in, wherever it lives — and
+ * is what the personal views are built on. This one answers a question about
+ * an organization, which is what you are asking when you are looking at the
+ * organization rather than at your day.
+ */
+async function handleListOrganizationWorkspaces(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  try {
+    const workspaces = await listOrganizationWorkspaces({
+      client: auth.client,
+      org: orgName,
+    });
+    return json(200, { workspaces }, baseHeaders);
+  } catch (err) {
+    logger.error("Failed to list an organization's binders", {
+      username: auth.session.username,
+      organization: orgName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to list the binders.");
+  }
+}
+
 async function handleCreateWorkspace(
   req: Request,
   baseHeaders: Headers,
@@ -6190,7 +6235,13 @@ export function createApiServer() {
           /^\/api\/app\/orgs\/([^/]+)\/binders$/,
         );
 
-        if (createBinderMatch && method === "POST") {
+        if (createBinderMatch && method === "GET") {
+          response = await handleListOrganizationWorkspaces(
+            req,
+            baseHeaders,
+            createBinderMatch[1]!,
+          );
+        } else if (createBinderMatch && method === "POST") {
           response = await handleCreateWorkspace(
             req,
             baseHeaders,

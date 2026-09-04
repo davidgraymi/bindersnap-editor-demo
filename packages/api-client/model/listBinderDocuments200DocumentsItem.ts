@@ -4,6 +4,7 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
+import type { ListBinderDocuments200DocumentsItemLatestVersion } from './listBinderDocuments200DocumentsItemLatestVersion.ts';
 
 export type ListBinderDocuments200DocumentsItem = {
   path: string;
@@ -13,4 +14,6 @@ export type ListBinderDocuments200DocumentsItem = {
   size: number;
   sha: string;
   openChangeCount: number;
+  /** @nullable */
+  latestVersion: ListBinderDocuments200DocumentsItemLatestVersion;
 };
