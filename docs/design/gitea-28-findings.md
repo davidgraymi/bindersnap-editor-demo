@@ -115,6 +115,13 @@ failure ADR 0004 already caught once. The two changes are one change.
 It should gain a third case: a team code owner under `block_on_codeowner_reviews`
 blocks the merge, and a member's approval releases it.
 
+**This bug is also the best upstream contribution available to us**, and it is two
+lines: `AddReviewRequest` clears the flag _before_ inserting, `AddTeamReviewRequest`
+inserts and then clears — same intent, one ordering. Fixing it would make per-folder
+sign-off work on the 1.27.3 we run in production today, rather than putting a hard
+floor of 28.0.0 under it.
+[`org-access-architecture.md` §11.1](./org-access-architecture.md) is the proposal.
+
 ## 4. There is no organization invitation API
 
 Not a 28.0.0 change — a standing fact, and it is the gap under "how do we add
@@ -208,6 +215,15 @@ the upgrade task still owes a read of the release notes when they appear.
 That asymmetry is the whole argument for taking 28.0.0 in dev first, on a stack
 whose database is disposable (`bun run down` deletes the volumes anyway), and for
 production waiting on a released tag rather than a nightly.
+
+**Decided 2026-09-04: dev takes a nightly, digest-pinned; production waits for a
+released tag.** Digest-pinned matters as much as the decision — `main-nightly` is a
+moving tag, so pinning the tag pins nothing, and two developers on "the same"
+nightly would be on different Gitea builds with different migration state. Pin
+`gitea/gitea@sha256:…` in `docker-compose.yml`, leave
+`deploy/files/docker-compose.prod.yml` on `1.27.3`, and note in the compose file
+why the two disagree — an unexplained version skew between dev and production is a
+thing somebody eventually "fixes".
 
 ## Sources
 

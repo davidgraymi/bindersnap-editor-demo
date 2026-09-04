@@ -23,85 +23,86 @@ word goes on screen; §4.1 lists the translations.
 
 ---
 
-## 1. Yes, a sidebar — but only inside an organization
+## 1. No sidebar. A breadcrumb that switches, and tabs inside a scope
 
-The owner asked directly, so here is the argument rather than a preference.
+This section previously recommended a sidebar on organization-scoped routes. The
+owner pushed back on it — "don't do it just because I suggested it" — and the
+push-back is right. The reversal, and the reason, because a reversed
+recommendation is worth more than a quiet deletion.
 
-**Against a sidebar:** the approved redesign pins a top nav on every page and
-deliberately made Home task-first — every row is a change waiting on you, never a
-document link. A permanent list of binders down the left competes with that: it
-invites browsing on a page whose whole thesis is that you should not have to
-browse. It also costs the full width that the change-review timeline was designed
-against, and on a phone it becomes a drawer nobody opens.
+**What killed it is a fact about the pages, not a matter of taste.** The binder
+page in §3 has a tab bar — Documents, Changes, People, Sign-off rules, Settings —
+and the document workspace already has one from the approved redesign. Add a
+sidebar and an organization route carries **three** levels of navigation chrome
+stacked on one screen: top nav, sidebar, tabs. Every one of them is a list of
+places to go, and the user has to learn which list owns which kind of destination.
+That is the cost, and no amount of good sidebar design pays it off.
 
-**For a sidebar:** the model now has four levels and the top nav can address two of
-them. Today the organization page is reachable only through a menu in the avatar
-area — a customer's own organization is a hidden route in their own product. And
-the binder is where the work now lives: a compliance manager moving between
-Clinical Policies and HR twenty times a day should not go through a menu each time.
+Three more, in descending order of how much they should have mattered the first
+time:
 
-**The decision, and the reason it is not a compromise:** the sidebar appears on
-organization-scoped routes and nowhere else.
+- **The binder count is small.** A customer has two to six binders, not sixty. A
+  permanent 248px column is a lot of screen to spend saving one click on a list of
+  four things — and the organization page _is_ that list, better presented.
+- **Chrome that appears and disappears is not a lesson, it is a jump.** The
+  original argument was that the sidebar's presence teaches the personal-versus-
+  organization scoping rule. Nobody learns a data model from a panel that comes and
+  goes; they notice the page moved sideways. That argument was a rationalization.
+- **It contradicts the approved redesign's own thesis.** Home is task-first on
+  purpose: every row is a change waiting on you, never a document link. A permanent
+  list of binders down the left is an invitation to browse, on a product whose
+  claim is that you should not have to.
 
-| Route                                  | Chrome                   |
-| -------------------------------------- | ------------------------ |
-| `/` Home                               | Top nav only, full width |
-| `/documents`, search                   | Top nav only, full width |
-| `/{org}`                               | Top nav **+ sidebar**    |
-| `/{org}/{binder}`                      | Top nav **+ sidebar**    |
-| `/{org}/{binder}/{path}`               | Top nav **+ sidebar**    |
-| `/billing`, `/organizations/new`, auth | Top nav only             |
+**What replaces it, and what the sidebar was actually solving.** Two real
+problems, both solvable without a panel:
 
-ADR 0004 already decided that personal views span every organization and
-organization views are scoped to one. That is currently an invisible rule people
-have to be told. The sidebar makes it a thing you can see: **when the sidebar is
-there, you are inside one organization; when it is gone, you are looking across all
-of them.** The chrome teaches the model, which is the only kind of navigation
-argument worth winning.
-
-It also costs the approved redesign nothing, because none of the screens the
-redesign specifies — Home, Documents, the document workspace, change review — is an
-organization-scoped route. The document workspace is reached today at
-`/docs/:owner/:repo` and keeps its full width; when it moves under
-`/{org}/{binder}/{path}` it gains the sidebar, and the four-tab layout inside it is
-untouched.
-
-### The sidebar itself
+_Problem one: the organization is a hidden route in the customer's own product._
+It is reachable today only through a menu in the avatar area. **Fix: a breadcrumb
+in the top nav, and every segment is a switcher.**
 
 ```
-┌──────────────────────────┐
-│ Riverside Health      ⌄  │  ← org switcher; ⌄ lists other orgs + "New organization"
-├──────────────────────────┤
-│ BINDERS                  │  mono 11px label, --bs-text-faint
-│   Clinical Policies      │
-│ ▸ HR                  2  │  ← count = changes waiting on YOU in that binder
-│   Infection Control      │
-│   + New binder           │  ← dashed affordance, admins only
-├──────────────────────────┤
-│   People              12 │
-│   Sign-off rules         │
-│   Settings               │
-│   Billing                │  ← owners only; absent entirely otherwise
-└──────────────────────────┘
+ [logo]  Riverside Health ⌄ › Clinical Policies ⌄ › Nursing        [search]  [+ New]  🔔  (MO)
 ```
 
-- **248px**, `--bs-surface-2` against the page's `--bs-page-bg`, hairline
-  `--bs-rule-warm` on the right edge. No shadow — it is part of the paper, not
-  floating on it.
-- **Under 1100px** it collapses to a 56px icon rail; the binder list becomes
-  initials with the name on hover. **Under 768px** it is gone, and a breadcrumb
-  under the top nav takes over: `Riverside Health › Clinical Policies`, each
-  segment tappable.
-- The count beside a binder is **changes waiting on you there**, not total changes.
-  A number that is not about you is noise, and this is the one place a badge earns
-  its coral.
-- **Billing is absent, not disabled,** for a non-owner. A disabled row is an
-  invitation to ask why; an absent row is a product that does not concern them.
+- The **org segment** opens the organization switcher — other organizations, and
+  "New organization". This is where the switcher moves from the avatar menu.
+- The **binder segment** opens the binder list for this organization, plus "New
+  binder" for anyone who may create one. This is the twenty-times-a-day switch the
+  sidebar existed for, and it costs a click on a menu that is already under the
+  pointer instead of 248px on every page.
+- The **folder segments** are plain navigation, no menu.
+- Clicking a segment's _text_ goes there; clicking its `⌄` opens the menu. Two
+  affordances, one row.
+- **Below 768px** the breadcrumb keeps only the last two segments and the org
+  segment collapses to its initials. Nothing else changes, which is the point — a
+  breadcrumb degrades, a sidebar has to be reinvented as a drawer.
 
-The top nav is unchanged from the approved spec, sitting above the sidebar at full
-width: logo, Home, Documents, spacer, search, coral **New document**, bell, avatar.
-The org switcher moves out of the avatar menu and into the sidebar's head, where it
-belongs.
+_Problem two: People, Sign-off rules, Settings and Billing have nowhere to live._
+**Fix: they are tabs on the scope that owns them**, which is where a customer will
+look for them anyway.
+
+| Scope        | Route                    | Tabs                                                     |
+| ------------ | ------------------------ | -------------------------------------------------------- |
+| Organization | `/{org}`                 | Binders · People · Settings · Billing _(owners only)_    |
+| Binder       | `/{org}/{binder}`        | Documents · Changes · People · Sign-off rules · Settings |
+| Document     | `/{org}/{binder}/{path}` | Overview · Changes · History · Access _(unchanged)_      |
+
+Three scopes, one pattern: **the breadcrumb moves you between scopes, the tabs move
+you within one.** That is a rule a person can hold, and it is the rule the document
+workspace already taught them.
+
+**Billing is absent, not disabled,** for a non-owner — a disabled tab is an
+invitation to ask why, an absent one is a product that does not concern them. The
+same holds for every owner-only control in this document.
+
+The top nav is otherwise unchanged from the approved spec: logo, breadcrumb,
+spacer, search, coral **New document**, bell, avatar. Home and Documents move into
+the logo's left group; they are still one click from everywhere.
+
+**What is genuinely lost:** the per-binder "waiting on you" count the sidebar
+carried. It moves to the binder switcher menu, where the number sits beside the
+binder it belongs to — visible on the switch you were already making, rather than
+permanently on a page you were not.
 
 ---
 
@@ -115,6 +116,8 @@ organization in good shape" — not a form. Three sections, in this order.
 
 ```
 Riverside Health                                       [ New binder ]
+
+  Binders   People 12   Settings   Billing
 
   ── Binders ─────────────────────────────────────────────────────
   Clinical Policies      48 policies · 3 changes open · Everyone
@@ -141,6 +144,23 @@ Riverside Health                                       [ New binder ]
 - The seat line — `12 people · 4 seats · 8 free` — is on the page's most-read
   section on purpose. §6 explains why it lives here rather than only in billing.
 - **One coral element:** `New binder`. Everything else is a ghost button or a link.
+- The tab bar is §1's second half: **Binders · People · Settings · Billing**, the
+  last owners-only and absent otherwise. The sections above live on the Binders
+  tab, which is what `/{org}` opens.
+
+**Creating a binder asks two things, not one.** The name, and who can see it:
+
+> **New binder**
+> Name `Clinical Policies`
+> Who can see it? ● Everyone at Riverside Health ○ Only people I add
+> `[ Create binder ]`
+
+Everyone is preselected, because the common case is a policy manual the whole
+organization must be able to read. The second field exists because the moment
+somebody is naming a binder is the moment they know whether it is the staff
+handbook or HR investigations, and it is far cheaper to ask then than to discover
+the wrong answer a week later. It is one radio pair and it never needs to be
+touched again.
 
 **Empty state**, an organization with no binders yet:
 
@@ -185,7 +205,8 @@ Clinical Policies                                  [ Add a policy ]
 - **"Waiting on me in this binder" is not a section here.** Home already answers
   "what is waiting on me", across every organization, and duplicating it per binder
   gives a person two inboxes that disagree. The binder surfaces it exactly once, as
-  a status pill on the row (`Needs your review`) and as the count in the sidebar.
+  a status pill on the row (`Needs your review`) and as the count beside the binder
+  in the breadcrumb's switcher menu.
 
 ---
 
@@ -199,21 +220,32 @@ vocabulary we happen to have in the code.
 The teams are `<binder>-admins`, `<binder>-authors`, `<binder>-reviewers` in Gitea
 and stay that way. On screen they are:
 
-| Gitea team  | On screen    | The one line under it                                |
-| ----------- | ------------ | ---------------------------------------------------- |
-| `admins`    | **Manager**  | Runs this binder: its rules, its people, its folders |
-| `authors`   | **Editor**   | Writes policies and publishes approved versions      |
-| `reviewers` | **Reviewer** | Reads, comments, approves or asks for changes. Free  |
+| Access level | On screen    | The one line under it                                |
+| ------------ | ------------ | ---------------------------------------------------- |
+| `admin`      | **Admin**    | Runs this binder: its rules, its people, its folders |
+| `write`      | **Editor**   | Writes policies and publishes approved versions      |
+| `read`       | **Reviewer** | Reads, comments, approves or asks for changes. Free  |
 
-**Why not "Admin".** In a hospital, "admin" is a job title in the front office and,
-to everyone else, the person who resets passwords. It names IT, not authority over
-a policy manual. "Manager" is what this person already is.
+**Admin, not "Manager".** An earlier draft proposed "Manager" on the grounds that
+"admin" reads as IT in a hospital. The owner rejected it, and the rejection is
+right: "admin" is already the word in Gitea, in the API and in the code, and
+inventing a second word for the same thing means every conversation between a
+customer, a support reply and a log line has to be translated. A word that is
+merely imperfect beats a word that is unique to us. **Invent vocabulary only where
+the underlying word is actively misleading**, which is the whole test, and the next
+paragraph is the one case that passes it.
 
-**Why not "Author".** An author is the person who _wrote_ something — a claim about
-history. This role is about who may write _next_, which is a different fact, and a
-compliance manager reading "Author: Priya" would reasonably conclude Priya drafted
-the policy. "Editor" carries no such claim and is the exact word Word and Google
-Docs already taught this customer.
+**Editor, not "Author" — the one invented word, and why it earns it.** An author is
+the person who _wrote_ something: a claim about history. This role is about who may
+write _next_, which is a different fact, and a compliance manager reading
+"Author: Priya" on a policy Priya never touched would reasonably conclude she
+drafted it. On a product whose output is evidence, a role label that reads as a
+false attribution is the one place the cost of inventing a word is lower than the
+cost of keeping ours. "Editor" carries no such claim and is the exact word Word and
+Google Docs already taught this customer.
+
+If the owner would rather have zero invented words than one, `Author` is a
+one-string change and nothing else in this document moves.
 
 **Reviewer survives** because it is right and because the free tier depends on it
 being understood without a footnote.
@@ -230,10 +262,14 @@ People in Clinical Policies                     [ Add someone ]
 
 Who can see this binder?   ● Everyone at Riverside Health   ○ Only people I add
 
-MO   Maya Okonkwo      Nursing        Manager  ⌄     Seat
+MO   Maya Okonkwo      Nursing        Admin    ⌄     Seat
 JT   Jack Truong       Quality        Editor   ⌄     Seat
 PR   Priya Raman       Nursing        Reviewer ⌄     Free
 DL   Dan Levitt        Pharmacy       Reviewer ⌄     Free    ⋯
+
+     ── through a group ──────────────────────────────────────
+AK   Aisha Kone        Quality        Reviewer · Quality Committee
+RS   Ray Santos        Quality        Reviewer · Quality Committee
 ```
 
 **A matrix loses** because it implies the roles are independent capabilities you
@@ -251,6 +287,33 @@ per person answers it by looking at one line.
 reversible, and putting it behind a dialog implies a weight it does not have. The
 destructive action — removing someone — is behind the `⋯` and gets its confirmation
 (§5).
+
+**People who are here through a group get a label, not a dropdown.** This is the
+visible face of a real constraint rather than a design choice: a group is one
+object across every binder it is granted onto, so changing Aisha's role on this
+row would change it in three binders at once. The row therefore names the group
+instead of offering a control that would have to refuse, and the `⋯` menu offers
+the two things that _are_ true here — "Open Quality Committee" and "Add Aisha
+individually as well", the second being the escape hatch when one person in a
+group needs more in this one binder.
+
+The consolation is that the answer to "why can Aisha approve here" is on the row
+that raised the question, which a dropdown would never have told her manager.
+
+**Groups are managed on the organization, not here.** The binder's People tab has
+a second, short section under the list —
+
+```
+  Groups with access
+  Quality Committee · Reviewer     6 people          Remove from this binder
+  Nursing Leads · Editor           4 people          Remove from this binder
+  + Add a group
+```
+
+— and "Add a group" is a picker of groups that already exist plus a link to create
+one on the organization's People tab. Creating a group asks for **a name and a
+level in one step**, because a group's level is fixed across every binder it is
+granted onto and a form that asked for them separately would imply otherwise.
 
 **The visibility switch sits above the list**, because it changes what the list
 means. When it is "Everyone at Riverside Health", the list stops being the whole
@@ -419,7 +482,8 @@ the same sentence.
 
 ### Who sees it
 
-Owners see `Billing` in the sidebar and the subscription section on the org page.
+Owners see the `Billing` tab on the organization page and the subscription section
+on its Binders tab.
 **Members see neither** — absent, not disabled. If a member reaches `/billing`
 directly:
 
@@ -446,7 +510,8 @@ as an accounting fact.
 
 ### The trial
 
-A quiet strip in the sidebar's foot, coral only in its last three days:
+A quiet strip under the top nav on organization routes, coral only in its last
+three days:
 
 > 9 days left in your trial · `Add a payment method`
 
@@ -487,14 +552,14 @@ keep.
 
 One branch and one PR each, in dependency order. Only piece 5 needs Gitea 28.0.0.
 
-| #   | PR                        | Screens                                                                                                                                                                | Needs 28.0.0 |
-| --- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| 1   | **Shell: the sidebar**    | Sidebar on org-scoped routes only; org switcher moves into it; the responsive rail and the phone breadcrumb. No new data                                               | no           |
-| 2   | **The organization page** | Binders / People preview / Subscription; the empty state; the seat line                                                                                                | no           |
-| 3   | **The binder page**       | Folder rows with their sign-off group; the header's plain-words rules line; the tab bar                                                                                | no           |
-| 4   | **People**                | Org and binder people pages; role dropdowns; the visibility switch; seat and free chips; the inline seat-change line; invite, remove, promote, and the last-owner rule | no           |
-| 5   | **Sign-off rules**        | The rules page; folder rule sentences; group picker; the "this change needs approval" hand-off into the Changes tab                                                    | **yes**      |
-| 6   | **Read-only mode**        | The banner, the disabled controls, the never-disabled reads; replaces the `/billing` redirect                                                                          | no           |
+| #   | PR                        | Screens                                                                                                                                                                                                                               | Needs 28.0.0 |
+| --- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| 1   | **Shell: the breadcrumb** | Breadcrumb with switchers in the top nav; org switcher moves out of the avatar menu; scope tab bars; the sub-768px collapse. No new data                                                                                              | no           |
+| 2   | **The organization page** | Binders / People preview / Subscription; the empty state; the seat line                                                                                                                                                               | no           |
+| 3   | **The binder page**       | Folder rows with their sign-off group; the header's plain-words rules line; the tab bar                                                                                                                                               | no           |
+| 4   | **People and groups**     | Org and binder people pages; the groups section and its picker; role dropdowns and the group-derived label; the visibility switch; seat and free chips; the inline seat-change line; invite, remove, promote, and the last-owner rule | no           |
+| 5   | **Sign-off rules**        | The rules page; folder rule sentences; group picker; the "this change needs approval" hand-off into the Changes tab                                                                                                                   | **yes**      |
+| 6   | **Read-only mode**        | The banner, the disabled controls, the never-disabled reads; replaces the `/billing` redirect                                                                                                                                         | no           |
 
 Pieces 1–3 are presentation over endpoints that already exist or are trivial. Piece
 4 is the largest and may split — invite and pending state is a clean seam. Piece 6
@@ -507,9 +572,10 @@ gets urgent.
 
 Every user-visible string specified above, collected for review on its own.
 
-**Sidebar**
+**Breadcrumb and tabs**
 
-- `BINDERS` · `+ New binder` · `People` · `Sign-off rules` · `Settings` · `Billing`
+- `New binder` · `New organization`
+- Org tabs: `Binders` `People` `Settings` `Billing`
 - `9 days left in your trial` · `Add a payment method`
 
 **Organization page**
@@ -528,7 +594,7 @@ Every user-visible string specified above, collected for review on its own.
 
 **Roles**
 
-- `Manager` — Runs this binder: its rules, its people, its folders
+- `Admin` — Runs this binder: its rules, its people, its folders
 - `Editor` — Writes policies and publishes approved versions
 - `Reviewer` — Reads, comments, approves or asks for changes. Free
 - `Owner` — can manage people, binders and billing

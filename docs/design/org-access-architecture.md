@@ -94,6 +94,16 @@ product gets a switch instead of a law:
 
 > **Who can see this binder?** Everyone at Riverside Health · Only people I add
 
+**Decided 2026-09-04: open is the default, and creating a binder asks.** The
+default is open because the common case is an internal policy manual that everyone
+must be able to read in order to attest to it, and a product that makes the common
+case a configuration step teaches customers that access is fiddly. Asking at
+creation is the other half of that: the one moment when somebody is already
+thinking about what this binder is _for_ is the cheapest moment to answer who may
+see it, and it is far cheaper than discovering an HR investigations binder was
+world-readable for a week. So the create form carries the same two options, with
+"Everyone at Riverside Health" preselected — a default, not an assumption.
+
 An **open** binder grants `staff`. A **restricted** binder does not, and its
 `<ws>-reviewers` team carries the named readers instead. Both are the same
 primitive — a team granted onto a repository — so there is one code path, and the
@@ -216,23 +226,99 @@ them is the one that lies. A binder's access is its teams, entirely, and
 binder's collaborator list is empty — a drift test for a rule that is otherwise
 only a habit.
 
-### Team sprawl, and why it is accepted
+### Teams belong to the organization, and a binder adopts them
 
-Three role teams per binder means an organization with twenty binders has sixty
-teams plus `Owners` and `staff`. That is a long list in Gitea's own UI.
+An earlier draft of this section accepted three role teams per binder —
+`<binder>-admins`, `<binder>-authors`, `<binder>-reviewers`, created at
+provisioning, sixty teams for twenty binders — on the grounds that org-wide role
+teams would collapse the roles. The owner rejected the premise, and correctly:
+**in Gitea a team is an organization object and a repository adopts it.** Creating
+three teams per repository inverts that, and it is wrong in two ways that the
+sprawl argument obscured.
 
-**Accepted, because the alternative is worse and ADR 0004 already rejected it once.**
-The alternative is org-wide role teams (`authors`, `reviewers`) granted onto
-binders individually — which collapses the team count but also collapses the
-roles: everyone in `authors` would have write on every binder they are granted,
-and "Jane writes in Clinical Policies but only reviews in HR" becomes
-inexpressible. The whole point of a binder is that it is _different people_.
+**It creates objects nobody asked for.** A binder that is open to the organization
+and has one admin needs `staff` and `Owners` and nothing else. Provisioning it
+manufactures three teams, two of which will stay empty forever, and every one of
+them shows up in the customer's team list as a thing that looks like it needs
+managing.
 
-The costs are real and bounded: a long team list in Gitea's admin UI, which no
-customer sees because they never open Gitea; and team creation on the binder
-provisioning path, which already happens. The mitigations that matter are naming
-(`<binder>-authors` sorts together) and the read model above, which never
-enumerates the org's teams to answer a binder question.
+**It makes a group un-reusable, which is the expensive half.** A Quality Committee
+that reviews three binders is, under per-binder teams, three separate membership
+lists that a human keeps in step by hand. That is the same failure ADR 0004
+rejected when it refused a team↔repo reconciler — moved from our code into the
+customer's hands, where it is worse.
+
+**Decision: binder provisioning creates no teams.**
+
+| Object                | Created                               | Role is                  | Reusable |
+| --------------------- | ------------------------------------- | ------------------------ | -------- |
+| `Owners`              | By Gitea, once per org                | Admin on everything      | n/a      |
+| `staff`               | Once, at org provisioning             | Read                     | Yes      |
+| Customer-named groups | By the customer, when they want one   | Chosen at creation       | Yes      |
+| `<binder>-{role}`     | **Lazily**, on first individual grant | The role it is named for | No       |
+
+A binder's access is then exactly what has been granted onto it, and a new binder
+starts with two grants at most: `Owners` implicitly, and `staff` if it is open.
+
+#### The constraint that shapes the whole UI
+
+**A Gitea team carries one unit map, so a team's role is a property of the team,
+not of the grant.** `PUT /teams/{id}/repos/{org}/{repo}` grants a team onto a
+repository at whatever permission the team already has. There is no per-grant
+level.
+
+The consequence is not negotiable and must be designed for rather than hidden:
+"Quality Committee" cannot be Editor in Clinical Policies and Reviewer in HR. If a
+customer needs that, it is two groups. So a group is created as **a name and a
+level together** — "Quality Committee · Reviewer" — and that is how it is labelled
+everywhere it appears. A UI that offers a level per binder is a UI that will have
+to refuse.
+
+#### Individuals, and the lazy fallback
+
+"Add Priya to this binder as a Reviewer" must stay a one-step action, and Priya is
+not a group. Two mechanisms were available:
+
+- **Repository collaborators.** Rejected, and this is the second reason on top of
+  §3's read-model reason: with `enable_approvals_whitelist` on, an approval counts
+  only from a whitelisted team or user, so every direct collaborator would also
+  need adding to `approvals_whitelist_username` — a second bookkeeping surface
+  whose failure mode is silent decorative approvals.
+- **A per-binder team, created on first use.** Taken. The first individual granted
+  as a Reviewer in a binder creates `<binder>-reviewers`; the second joins it.
+  Binders that only ever adopt groups never create one.
+
+So per-binder teams survive as an implementation detail with a bounded ceiling of
+three, instead of a provisioning step with a floor of three. An organization with
+twenty binders and three recurring groups holds five to eight teams rather than
+sixty-two, and each one exists because somebody's action created it.
+
+#### What this costs, stated
+
+**A person's role in a binder is not always editable in place.** If Priya is a
+Reviewer there because she is in Quality Committee, changing her row means changing
+the group — which would change three binders. The API must refuse it and say why,
+and the UX document's people list must show the reason on the row rather than
+offering a dropdown that fails. This is exactly how GitHub behaves for the same
+reason, and it is the honest surface of a real constraint.
+
+**Every grant change must recompute `approvals_whitelist_teams`.** The whitelist
+has to list every team granted onto the binder, or that team's members approve
+decoratively — the failure ADR 0004 caught once already. It is one `PATCH` after
+every grant or revoke, derived from `GET /repos/{owner}/{repo}/teams`, and it
+belongs in the same handler rather than in a follow-up job. §4.5 restates it as a
+rule, and it needs a test that grants a team and asserts an approval from its
+member counts.
+
+**Migration.** `provisionWorkspace` currently calls `createWorkspaceTeams` and
+grants all three. It stops. `ROLE_TEAM_OPTIONS` stays exactly as it is — it becomes
+the definition used by the lazy creator, and the dev seed keeps using it, which is
+what stopped the two definitions drifting after defect 8. Binders provisioned
+before this lands keep their three teams and work unchanged; nothing has to be
+cleaned up, and an empty role team is indistinguishable from one the lazy path
+would have made.
+
+---
 
 ---
 
@@ -277,14 +363,22 @@ that does not.
 
 **CODEOWNERS is generated, never hand-edited, and it names teams.**
 
-An approver group is an org team with no repository grants at all — a _committee_.
-It grants nothing (ADR 0004: "a team granted onto no repository grants access to
-nothing and costs nothing"), it costs no seats, and it exists purely to be named
-in CODEOWNERS. Committees are reusable across binders and folders, which is what
-keeps this from re-creating the sprawl of §3.
+An approver group is **the same object §3 already introduced** — an org team,
+named by the customer, reusable across binders. There is no separate "committee"
+concept and there should not be one: the group that signs off on Nursing is
+usually the group that reviews Clinical Policies, and making them two objects
+means maintaining one list twice.
+
+A group that should sign off without gaining access is simply a team granted onto
+no repository. ADR 0004 already covers it — "a team granted onto no repository
+grants access to nothing and costs nothing" — so it grants nothing, costs no seat,
+and can still be named in CODEOWNERS. Whether a group is also granted onto the
+binder is a separate question from whether it signs off on a folder in it, and
+keeping those two questions independent is what makes "outside reviewers sign off
+on this folder" expressible without inventing anything.
 
 A rule may still name individuals where a customer wants one named person, because
-28.0.0 enforces both. The default is a committee, and the reason to prefer it is
+28.0.0 enforces both. The default is a group, and the reason to prefer it is
 §4.1.
 
 The generated file:
@@ -348,18 +442,18 @@ block_on_outdated_branch: true, dismiss_stale_approvals: true, enable_push: fals
 
 On 28.0.0 it becomes:
 
-| Field                               | Value                                      | Why                                                                                                                                                                                      |
-| ----------------------------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `enable_push`                       | `false`                                    | The product's core claim: `main` changes only by approved merge                                                                                                                          |
-| `required_approvals`                | binder's setting                           | How many, uniform per binder — that is what a binder means                                                                                                                               |
-| `enable_approvals_whitelist`        | `true`                                     | Still required. `required_approvals` resolves officialness the old way, so without it a free reviewer's approval counts for nothing                                                      |
-| `approvals_whitelist_teams`         | the binder's teams, plus `staff` when open | Whoever may approve must be listed, or their approval is decorative                                                                                                                      |
-| `block_on_codeowner_reviews`        | **`true`** (new)                           | Per-folder sign-off becomes enforcement rather than assignment                                                                                                                           |
-| `block_on_official_review_requests` | **`false`** (was `true`)                   | It was only ever on to make CODEOWNERS block, which it never did for teams. Left on it now blocks on _manually_ requested reviews, so any member could stall a publish by requesting one |
-| `block_on_rejected_reviews`         | `true`                                     | A rejection should stop a publish                                                                                                                                                        |
-| `block_on_outdated_branch`          | `true`                                     | A version approved against a stale base is not the version published                                                                                                                     |
-| `dismiss_stale_approvals`           | `true`                                     | A new version resets approvals. Note it also removes those approvals from the code-owner gate, which filters dismissed reviews — the two gates agree, deliberately                       |
-| `ignore_stale_approvals`            | `false`                                    | `dismiss_stale_approvals` already handles staleness; setting both is two mechanisms for one rule                                                                                         |
+| Field                               | Value                                  | Why                                                                                                                                                                                      |
+| ----------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enable_push`                       | `false`                                | The product's core claim: `main` changes only by approved merge                                                                                                                          |
+| `required_approvals`                | binder's setting                       | How many, uniform per binder — that is what a binder means                                                                                                                               |
+| `enable_approvals_whitelist`        | `true`                                 | Still required. `required_approvals` resolves officialness the old way, so without it a free reviewer's approval counts for nothing                                                      |
+| `approvals_whitelist_teams`         | **every team granted onto the binder** | Recomputed from `GET /repos/{owner}/{repo}/teams` after every grant or revoke. Whoever may approve must be listed, or their approval is decorative — see §3                              |
+| `block_on_codeowner_reviews`        | **`true`** (new)                       | Per-folder sign-off becomes enforcement rather than assignment                                                                                                                           |
+| `block_on_official_review_requests` | **`false`** (was `true`)               | It was only ever on to make CODEOWNERS block, which it never did for teams. Left on it now blocks on _manually_ requested reviews, so any member could stall a publish by requesting one |
+| `block_on_rejected_reviews`         | `true`                                 | A rejection should stop a publish                                                                                                                                                        |
+| `block_on_outdated_branch`          | `true`                                 | A version approved against a stale base is not the version published                                                                                                                     |
+| `dismiss_stale_approvals`           | `true`                                 | A new version resets approvals. Note it also removes those approvals from the code-owner gate, which filters dismissed reviews — the two gates agree, deliberately                       |
+| `ignore_stale_approvals`            | `false`                                | `dismiss_stale_approvals` already handles staleness; setting both is two mechanisms for one rule                                                                                         |
 
 The two whitelist rows are the ones to read twice. **The gates resolve officialness
 differently**: `required_approvals` counts only official reviews, so it needs the
@@ -421,7 +515,7 @@ a read when they appear.
 
 **If 28.0.0 slips**, nothing in sections 1–3 or 5–7 is blocked. Only §4 is, and
 its fallback is the shipped behaviour: name individuals, accept that a personnel
-change is an approved change, and do not build the committee UI. That fallback is
+change is an approved change, and do not point CODEOWNERS at groups. That fallback is
 bad enough to be worth waiting for — which is the honest reason to say the feature
 justifies the upgrade rather than the other way round.
 
@@ -435,12 +529,13 @@ Gitea org owners, read from `GET /users/{username}/orgs/{org}/permissions`
 (`is_owner`), enforced in the BFF on every billing mutation — checkout, portal,
 and any future plan change. Not read from a team name, and not stored.
 
-### The three unanswered product decisions
+### The three product decisions — all now answered
 
-These are the product owner's to make. Here is a position on each, with the
-reasoning, so they can be disagreed with concretely.
+Answered by the product owner on 2026-09-04, each the way this section
+recommended. The reasoning is kept because it is what the implementation has to
+preserve, not because the question is still open.
 
-**1. Signup funnel — no card, 14-day trial, land in the binder.**
+**1. Signup funnel — no card, 14-day trial, land in the binder. Decided: yes.**
 
 Take the trial. The card-up-front funnel exists because the old app had nowhere
 else to put a new account; #393 gives it somewhere. Asking a compliance manager for
@@ -450,7 +545,7 @@ possible path in exactly this market. The cost is tire-kicker organizations in t
 database, which is a row, and ADR 0004 already chose a local `trial_ends_at`
 column precisely so a trial creates no Stripe object.
 
-**2. Read-only mode — build it, and make it visible.**
+**2. Read-only mode — build it, and make it visible. Decided: build it.**
 
 The API rule has been enforced since #392 but no customer can exercise it, because
 the SPA redirects an unpaid session to `/billing`. That redirect is worse than a
@@ -473,7 +568,7 @@ an owner and a member, and the SPA should not have to make a second call to find
 out which it is. `GET /api/app/billing/status` carries the same fields so the shell
 can render the banner before anything is refused.
 
-**3. Do org owners cost a seat — yes.**
+**3. Do org owners cost a seat? Decided: yes.**
 
 `listBillableSeats` already counts them, via the Owners team, and it should keep
 doing so. ADR 0004 identified the avoidance path itself: exclude owners and an
@@ -497,29 +592,32 @@ All of these follow the conventions step 2 settled: the organization is in the
 path, handlers act with the caller's own Gitea token, and something the caller
 cannot see answers 404 rather than 403.
 
-| Method   | Path                                                     | Who                   | Does                                                                                 |
-| -------- | -------------------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------ |
-| `GET`    | `/api/app/orgs/{org}`                                    | any member            | Name, display name, the caller's own org role, counts                                |
-| `GET`    | `/api/app/orgs/{org}/people`                             | any member            | The membership read model: person, org role, department, seat or free                |
-| `DELETE` | `/api/app/orgs/{org}/people/{username}`                  | owner                 | `DELETE /orgs/{org}/members/{username}`. Refused for the last owner                  |
-| `POST`   | `/api/app/orgs/{org}/people/{username}/role`             | owner                 | Promote or demote: add to or remove from `Owners`. Refused for the last owner        |
-| `GET`    | `/api/app/orgs/{org}/invitations`                        | owner                 | Pending rows from `organization_invitations`                                         |
-| `POST`   | `/api/app/orgs/{org}/invitations`                        | owner                 | Create a row and send the email. Grants nothing yet                                  |
-| `DELETE` | `/api/app/orgs/{org}/invitations/{id}`                   | owner                 | Revoke                                                                               |
-| `POST`   | `/api/app/invitations/{id}/accept`                       | the invited person    | Verify the address, then `addTeamMember` into `staff` and any named binder team      |
-| `GET`    | `/api/app/orgs/{org}/departments`                        | any member            | SQLite                                                                               |
-| `POST`   | `/api/app/orgs/{org}/departments`                        | owner                 | SQLite                                                                               |
-| `GET`    | `/api/app/binders/{org}/{binder}/people`                 | anyone who can see it | Teams-first read model of §3, plus whether `staff` is granted                        |
-| `POST`   | `/api/app/binders/{org}/{binder}/people`                 | binder admin          | `addTeamMember` into the role's team                                                 |
-| `DELETE` | `/api/app/binders/{org}/{binder}/people/{username}`      | binder admin          | `removeTeamMember` from every role team here                                         |
-| `POST`   | `/api/app/binders/{org}/{binder}/people/{username}/role` | binder admin          | Move between role teams — add then remove, in that order                             |
-| `POST`   | `/api/app/binders/{org}/{binder}/visibility`             | binder admin          | Grant or revoke `staff`, and rewrite `approvals_whitelist_teams` to match            |
-| `GET`    | `/api/app/binders/{org}/{binder}/rules`                  | anyone who can see it | Branch protection plus the parsed CODEOWNERS                                         |
-| `PATCH`  | `/api/app/binders/{org}/{binder}/rules`                  | binder admin          | Required approvals and thread policy. Immediate — these are settings, not evidence   |
-| `POST`   | `/api/app/binders/{org}/{binder}/rules/sign-off`         | binder admin          | Regenerate CODEOWNERS onto a branch and **open a change**. Returns the change number |
-| `GET`    | `/api/app/orgs/{org}/committees`                         | any member            | Org teams with no repository grants                                                  |
-| `POST`   | `/api/app/orgs/{org}/committees`                         | owner                 | Create one                                                                           |
-| `POST`   | `/api/app/orgs/{org}/committees/{team}/members`          | owner                 | `addTeamMember`. **No commit, no approval** — this is §4.2's payoff                  |
+| Method   | Path                                                     | Who                   | Does                                                                                  |
+| -------- | -------------------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------- |
+| `GET`    | `/api/app/orgs/{org}`                                    | any member            | Name, display name, the caller's own org role, counts                                 |
+| `GET`    | `/api/app/orgs/{org}/people`                             | any member            | The membership read model: person, org role, department, seat or free                 |
+| `DELETE` | `/api/app/orgs/{org}/people/{username}`                  | owner                 | `DELETE /orgs/{org}/members/{username}`. Refused for the last owner                   |
+| `POST`   | `/api/app/orgs/{org}/people/{username}/role`             | owner                 | Promote or demote: add to or remove from `Owners`. Refused for the last owner         |
+| `GET`    | `/api/app/orgs/{org}/invitations`                        | owner                 | Pending rows from `organization_invitations`                                          |
+| `POST`   | `/api/app/orgs/{org}/invitations`                        | owner                 | Create a row and send the email. Grants nothing yet                                   |
+| `DELETE` | `/api/app/orgs/{org}/invitations/{id}`                   | owner                 | Revoke                                                                                |
+| `POST`   | `/api/app/invitations/{id}/accept`                       | the invited person    | Verify the address, then `addTeamMember` into `staff` and any named binder team       |
+| `GET`    | `/api/app/orgs/{org}/departments`                        | any member            | SQLite                                                                                |
+| `POST`   | `/api/app/orgs/{org}/departments`                        | owner                 | SQLite                                                                                |
+| `GET`    | `/api/app/binders/{org}/{binder}/people`                 | anyone who can see it | Teams-first read model of §3, plus whether `staff` is granted                         |
+| `POST`   | `/api/app/binders/{org}/{binder}/people`                 | binder admin          | `addTeamMember` into the role's team                                                  |
+| `DELETE` | `/api/app/binders/{org}/{binder}/people/{username}`      | binder admin          | `removeTeamMember` from every role team here                                          |
+| `POST`   | `/api/app/binders/{org}/{binder}/people/{username}/role` | binder admin          | Move between role teams. **Refused** when their access comes from a shared group — §3 |
+| `POST`   | `/api/app/binders/{org}/{binder}/visibility`             | binder admin          | Grant or revoke `staff`, and rewrite `approvals_whitelist_teams` to match             |
+| `GET`    | `/api/app/binders/{org}/{binder}/rules`                  | anyone who can see it | Branch protection plus the parsed CODEOWNERS                                          |
+| `PATCH`  | `/api/app/binders/{org}/{binder}/rules`                  | binder admin          | Required approvals and thread policy. Immediate — these are settings, not evidence    |
+| `POST`   | `/api/app/binders/{org}/{binder}/rules/sign-off`         | binder admin          | Regenerate CODEOWNERS onto a branch and **open a change**. Returns the change number  |
+| `GET`    | `/api/app/orgs/{org}/groups`                             | any member            | The org's teams: name, level, member count, which binders each is granted onto        |
+| `POST`   | `/api/app/orgs/{org}/groups`                             | owner                 | Create one. Name **and level** together — §3's constraint                             |
+| `POST`   | `/api/app/orgs/{org}/groups/{team}/members`              | owner                 | `addTeamMember`. **No commit, no approval** — this is §4.2's payoff                   |
+| `DELETE` | `/api/app/orgs/{org}/groups/{team}/members/{username}`   | owner                 | `removeTeamMember`                                                                    |
+| `POST`   | `/api/app/binders/{org}/{binder}/groups`                 | binder admin          | Grant a group onto this binder, then recompute `approvals_whitelist_teams`            |
+| `DELETE` | `/api/app/binders/{org}/{binder}/groups/{team}`          | binder admin          | Revoke it, then recompute the whitelist                                               |
 
 Two rows deserve a second look. `visibility` rewrites the approvals whitelist in
 the same handler, because granting `staff` read without whitelisting it produces
@@ -559,21 +657,22 @@ Everything new is configuration. No evidence moves.
 
 ## 9. Build order
 
-Seven pieces, each its own branch and pull request, each shippable alone. Only
-piece 5 is blocked on Gitea 28.0.0, and it is placed late on purpose so the upgrade
+Eight pieces, each its own branch and pull request, each shippable alone. Only
+piece 6 is blocked on Gitea 28.0.0, and it is placed late on purpose so the upgrade
 can slip without stalling anything.
 
-| #   | Piece                             | Ships                                                                                                  | Proven by                                                                                                                      | Needs 28.0.0 |
-| --- | --------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ | ------------ |
-| 1   | **The membership read model**     | `GET .../people` for org and binder, teams-first; the `staff` team created at org provisioning         | A binder with a member in each role reports all three roles correctly, in a bounded number of Gitea calls                      | no           |
-| 2   | **Managing binder people**        | Add, remove, change role; the `visibility` switch and its whitelist rewrite                            | A reviewer promoted to author can push; demoted, cannot. Granting `staff` puts it in `approvals_whitelist_teams`               | no           |
-| 3   | **Managing org people**           | Promote and demote owners, remove from org, the last-owner refusal                                     | The last owner cannot be removed or demoted, by either route                                                                   | no           |
-| 4   | **Invitations**                   | The table, the four routes, the email, address-bound acceptance                                        | An invitation grants nothing until accepted; an expired one grants nothing ever; a forwarded link fails on a different address | no           |
-| 5   | **Committees and sign-off rules** | Committee CRUD; the CODEOWNERS generator with its three validations; `rules/sign-off` opening a change | Per-rule enforcement across two folders; regex-escaped folder names; a malformed file refused before commit rather than after  | **yes**      |
-| 6   | **Binder settings and events**    | `binder_settings`, `settings_events`, `blockOnUnresolvedThreads` off the config branch                 | The publish gate reads the row; every change writes an event                                                                   | no           |
-| 7   | **Read-only mode**                | The typed 402 body, `canManageBilling` on billing status                                               | A delinquent org's `GET`s all succeed; its mutations all answer 402 with a reason; `paywall-scope.test.ts` still passes        | no           |
+| #   | Piece                          | Ships                                                                                                                                 | Proven by                                                                                                                                                           | Needs 28.0.0 |
+| --- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| 1   | **The membership read model**  | `GET .../people` for org and binder, teams-first; `staff` created at org provisioning; `provisionWorkspace` stops creating role teams | A binder with a member in each role reports all three roles correctly, in a bounded number of Gitea calls; a new binder has no role teams                           | no           |
+| 2   | **Groups**                     | Create a group (name and level together), grant and revoke it onto a binder, recompute the approvals whitelist                        | A member of a granted group can approve, and their approval counts; revoking removes them from the whitelist in the same call                                       | no           |
+| 3   | **Managing binder people**     | Add, remove, change role, the lazy role team; the `visibility` switch and its whitelist rewrite                                       | A reviewer promoted to author can push; demoted, cannot. Granting `staff` puts it in `approvals_whitelist_teams`. A role change is refused for group-derived access | no           |
+| 4   | **Managing org people**        | Promote and demote owners, remove from org, the last-owner refusal                                                                    | The last owner cannot be removed or demoted, by either route                                                                                                        | no           |
+| 5   | **Invitations**                | The table, the four routes, the email, address-bound acceptance                                                                       | An invitation grants nothing until accepted; an expired one grants nothing ever; a forwarded link fails on a different address                                      | no           |
+| 6   | **The CODEOWNERS generator**   | The CODEOWNERS generator with its three validations; `rules/sign-off` opening a change                                                | Per-rule enforcement across two folders; regex-escaped folder names; a malformed file refused before commit rather than after                                       | **yes**      |
+| 7   | **Binder settings and events** | `binder_settings`, `settings_events`, `blockOnUnresolvedThreads` off the config branch                                                | The publish gate reads the row; every change writes an event                                                                                                        | no           |
+| 8   | **Read-only mode**             | The typed 402 body, `canManageBilling` on billing status                                                                              | A delinquent org's `GET`s all succeed; its mutations all answer 402 with a reason; `paywall-scope.test.ts` still passes                                             | no           |
 
-The Gitea upgrade is its own PR, sequenced between 4 and 5, carrying no feature.
+The Gitea upgrade is its own PR, sequenced between 5 and 6, carrying no feature.
 
 ---
 
@@ -585,9 +684,118 @@ and assert, and none of §4 should be depended on until it passes.
 
 Beyond that, four claims here are reasoned rather than tested:
 
-| Claim                                                                                                                                      | What would settle it                                                                                                                                            |
-| ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A `staff` team granted read on `repo.code`/`repo.pulls`/`repo.issues` lets its members approve, and their approval counts once whitelisted | Extend `tests/gitea-permission-model.pw.ts` with a staff-team case — the same assertion it already makes for `<ws>-reviewers`                                   |
-| The teams-first read model returns the same answer as asking the repository as each member                                                 | A test that builds a binder with all four teams and compares the two answers member by member                                                                   |
-| `GET /users/{username}/orgs/{org}/permissions` reports `is_owner` for an Owners-team member and not for a `staff` member                   | One integration assertion; it is the guard on every owner-only route, so it should not be assumed                                                               |
-| A committee — an org team granted onto no repository — costs no seat                                                                       | `listBillableSeats` already encodes the rule ("granted onto at least one repository"); a test that creates a committee and asserts the seat count does not move |
+| Claim                                                                                                                                      | What would settle it                                                                                                                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A `staff` team granted read on `repo.code`/`repo.pulls`/`repo.issues` lets its members approve, and their approval counts once whitelisted | Extend `tests/gitea-permission-model.pw.ts` with a staff-team case — the same assertion it already makes for `<ws>-reviewers`                                    |
+| The teams-first read model returns the same answer as asking the repository as each member                                                 | A test that builds a binder with all four teams and compares the two answers member by member                                                                    |
+| `GET /users/{username}/orgs/{org}/permissions` reports `is_owner` for an Owners-team member and not for a `staff` member                   | One integration assertion; it is the guard on every owner-only route, so it should not be assumed                                                                |
+| A sign-off group granted onto no repository costs no seat                                                                                  | `listBillableSeats` already encodes the rule ("granted onto at least one repository"); a test that creates such a group and asserts the seat count does not move |
+
+---
+
+## 11. What we should contribute upstream to Gitea
+
+The owner asked whether there is a contribution that would make Gitea handle
+CODEOWNERS in a way that fully satisfies this design. There is, and it is small.
+There are also two larger ones worth naming, because the deciding question is not
+"can we patch Gitea" but "which patches make us stop carrying something".
+
+**The standing rule this sits under: we do not fork.** Every gate this product
+depends on is enforced inside Gitea at merge time, on purpose (ADR 0004's tripwire:
+permissions stay where the merge happens). A fork would move that enforcement onto
+a branch we maintain, which is the same class of mistake as an app-side ACL, one
+layer down. Upstream or nothing.
+
+### 11.1 The one that closes the CODEOWNERS gap — small, surgical, ours
+
+**The bug: a team review request is created official, then immediately un-officialed
+by its own function.** Read on `main` today, the two paths disagree with each other:
+
+| Function               | Order                                                                               |
+| ---------------------- | ----------------------------------------------------------------------------------- |
+| `AddReviewRequest`     | `UPDATE review SET official=false WHERE issue_id=? AND reviewer_id=?` → insert      |
+| `AddTeamReviewRequest` | insert → `UPDATE review SET official=false WHERE issue_id=? AND reviewer_team_id=?` |
+
+The user path clears the flag on _previous_ requests and then writes the new one.
+The team path writes the new one and then runs an `UPDATE` whose `WHERE` clause
+matches the row it has just written. The intent is identical in both — demote the
+superseded request — and only one of them achieves it.
+
+**The consequence for anyone, not just us:** `MergeBlockedByOfficialReviewRequests`
+only blocks on official requests, so a `@org/team` code owner blocks nothing. That
+is [#32602](https://github.com/go-gitea/gitea/issues/32602) — "Code Owners feature
+not enforceable" — reachable by a two-line fix, in the specific case where the code
+owner is a team.
+
+**The patch:** clear before inserting, mirroring `AddReviewRequest`; or keep the
+order and exclude the new row (`AND id != ?`). Reordering is better because it makes
+the two functions read the same, which is what stops this regressing.
+
+**Why it is worth doing even though 28.0.0's `block_on_codeowner_reviews` already
+unblocks us:** the new gate passes `OfficialOnly: false`, so it routes _around_ the
+bug rather than fixing it. That leaves us with a hard floor of Gitea ≥ 28.0.0 for
+per-folder sign-off, and it leaves the older gate quietly broken for teams on every
+1.27 install. Fixed, per-folder sign-off works on the version we run in production
+today, and the upgrade becomes something we do on its own schedule instead of
+something a feature is waiting on.
+
+**What the contribution has to carry.** A test asserting a team review request is
+official, and a note in the PR that this changes merge behaviour for existing
+installs — a repository whose CODEOWNERS names teams starts blocking merges it did
+not block before. That is the correct behaviour and it is still a surprise, so it
+is the maintainers' call whether it needs a release note; saying so up front is
+what gets a two-line PR merged instead of parked. `tests/gitea-permission-model.pw.ts`
+already asserts the broken behaviour deliberately, which makes it an executable bug
+report we can point at.
+
+### 11.2 The one that would delete an app-side gate — medium, and the most strategic
+
+**`block_on_unresolved_conversations` on branch protection.** ADR 0004 records that
+"block on unresolved threads has no Gitea equivalent, so it stays enforced by the
+BFF at publish time". That is the _only_ publish gate this product enforces itself,
+and it is therefore the only one a client that talks to Gitea directly could walk
+past. Everything else — approvals, rejections, stale dismissal, code owners, push
+protection — Gitea enforces at merge.
+
+Upstream it and we delete an app-side check and move a control back to where the
+merge happens, which is the tripwire's own preference. It is a real feature rather
+than a two-line fix: a model field and migration, an API field, a web UI checkbox,
+and a check inside `CheckPullBranchProtections`. GitHub has had the equivalent for
+years, so it is not a novel argument to make.
+
+Worth proposing to the maintainers before writing it. It is the contribution most
+likely to be wanted by people other than us, which is also what makes it most
+likely to be accepted.
+
+### 11.3 The big one — organization invitations, and why not to block on it
+
+§2's whole `organization_invitations` table exists because Gitea cannot hold a
+pending invitation or invite anyone by email. Upstreaming that would delete the
+table, the four routes and the acceptance flow.
+
+**Do not block on it, and probably do not start with it.** It is a feature with an
+email surface, a token security surface, and product opinions the maintainers will
+rightly have, and our table ships either way. Raise it as an issue describing the
+gap; write it later if the first two land well and we have credibility in the tracker.
+
+### 11.4 Optional, small, and it removes a defect class
+
+CODEOWNERS patterns are anchored regexes rather than gitignore globs
+(`ParseCodeOwnersLine` compiles `^<pattern>$`). §4.3 spends three bullets on the
+consequences and §4.4 makes the generator escape regex metacharacters, because a
+folder called `Q1 (2026)` otherwise matches nothing — silently, which is the worst
+direction for an approval control.
+
+A glob syntax (or even a documented `glob:` prefix) would remove that whole class
+of failure for everybody, including the many users who arrive with GitHub habits and
+write `policies/nursing/` expecting it to work. Small-to-medium, uncontroversial, and
+a good second PR after 11.1 establishes that we send tests with our patches.
+
+### Sequencing
+
+11.1 first, alone, because it is two lines, it is provably a bug rather than a
+preference, and merging it is what makes the next one land faster. 11.4 second.
+11.2 as a proposal issue in parallel with either. 11.3 as an issue only.
+
+None of them is on the critical path: the build order in §9 assumes we contribute
+nothing and get everything from 28.0.0 as released.
