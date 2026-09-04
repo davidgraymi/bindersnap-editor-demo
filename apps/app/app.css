@@ -6671,12 +6671,15 @@ input {
 }
 
 /* Organization switcher — the same surface as the version menu, because it is
-   the same gesture: a small list of things you might be looking at instead. */
+   the same gesture: a small list of things you might be looking at instead.
+
+   Fixed, not absolute, and for the same reason as `.app-profile-menu`:
+   `.app-topnav` clips its overflow, so a menu positioned inside it is cut off
+   at the bottom of the nav and never seen. Fixed positioning escapes the clip;
+   the button's own rect, measured on open, supplies `top` and `left`. */
 .app-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: var(--brand-z-raised);
+  position: fixed;
+  z-index: var(--brand-z-nav);
   min-width: 200px;
   max-height: 320px;
   overflow-y: auto;
