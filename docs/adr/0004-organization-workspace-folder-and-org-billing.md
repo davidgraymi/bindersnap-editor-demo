@@ -412,15 +412,38 @@ Production data is minimal today. This is the cheapest this migration will ever 
    one-repo-per-document upload path with a commit to a path inside the workspace repo.
    ADR 0001's branch → pull request → review → merge → tag contract is unchanged; only
    the target repository and the path are new.
-3. **Backfill.** For each existing user holding document repos: create an org and one
+
+   **Built 2026-09-04**, in six stacked pull requests — see
+   [the implementation status notes](./0004-implementation-status.md). The API is
+   complete: a member creates a binder, uploads a document to a path inside it,
+   reads the binder's documents from one tree walk, and publishes a change that
+   versions every document it touched. The SPA browses all of that at
+   `/{org}/{binder}/{path}`; writing through those screens, and deleting the
+   old one-repo-per-document routes, is what remains.
+
+   Two things this step settled that the design did not anticipate. **The
+   organization belongs in the path**, not inferred from the session: inferring
+   it means picking one for a person who belongs to several, and the pick was by
+   age. And **a document's identity must be exclusive** — the identity drops the
+   file extension so that re-uploading a policy as a PDF keeps its history,
+   which only works if nothing else can claim the same address. Both are
+   recorded in the status notes.
+
+3. ~~**Backfill.** For each existing user holding document repos: create an org and one
    workspace repo, then for each old document repo replay its history into a path in
-   the new repo. **Replay, not transfer** — `POST /repos/{owner}/{repo}/transfer` moves
-   a repository whole, which is the wrong shape now. Preserve, per document: every
-   published version as a commit with its original author and date, the version tags
-   (re-namespaced under the document's path), and the approval record. Where fidelity
-   is impossible, write the original pull request's reviews into the migration commit's
-   message rather than dropping them, and keep the source repositories archived and
-   read-only until the migrated record has been verified against them.
+   the new repo.~~ **Dropped 2026-09-04.** There are no real customers, so there is
+   nothing whose evidence is at risk and nothing to replay: existing user-owned
+   document repositories are abandoned and the dev seed builds the new shape
+   directly. The replay was written and verified against a live Gitea before the
+   decision — original authors and dates preserved, version tags re-namespaced,
+   approvals written into the replayed commit messages — and is preserved on
+   `feat/adr4-5-backfill-documents` should a customer ever exist before this
+   lands. It is not merged.
+
+   The consequence worth stating: with no compatibility window to honour, the
+   old one-repo-per-document endpoints are deleted outright rather than
+   deprecated.
+
 4. **Re-key billing.** Map each `subscriptions.username` to its new org id; carry
    `subscription_access_overrides` across the same way.
 5. **Retire the config-branch policy file.** Stamp the effective policy into the
@@ -433,6 +456,10 @@ pre-migration document is reachable at its new path, every published version has
 every approval is either preserved as a review or recorded in a commit message, and an
 integration test covers a migrated document through a full change-and-publish cycle.
 Deleting the source repositories is a separate, later, deliberate act.
+
+**That paragraph is retained deliberately even though step 3 is dropped.** It
+stops applying only while there is no customer record to lose. The first
+customer who arrives before the old model is deleted brings it back.
 
 ## Consequences
 
