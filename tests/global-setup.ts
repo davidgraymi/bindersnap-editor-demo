@@ -16,6 +16,9 @@
  *   HOCUSPOCUS_PORT  Collaboration websocket port (default: 1234)
  *   SKIP_STACK       Set to "1" to skip docker compose entirely (use an
  *                    already-running stack, e.g. from `bun run up`)
+ *   BUN_PUBLIC_API_BASE_URL
+ *                    Point the test workers at an API of your own instead of
+ *                    the stack's Caddy proxy — see EXPLICIT_API_BASE_URL below
  */
 
 import { spawnSync } from "node:child_process";
@@ -67,7 +70,34 @@ const APP_BASE_URL = `http://localhost:${APP_PORT}`;
 const API_READY_URL = `http://localhost:${API_PORT}/auth/me`;
 const API_PROXY_BASE_URL = `http://localhost:${API_PROXY_PORT}`;
 const CADDY_READY_URL = `${API_PROXY_BASE_URL}/auth/me`;
-const STRIPE_WEBHOOK_FORWARD_URL = `${API_PROXY_BASE_URL}/stripe/webhook`;
+
+/**
+ * An API base URL the caller asked for, or "".
+ *
+ * Read at import time on purpose: `loadEnvFile()` below back-fills
+ * process.env from `.env`, so anything read after it can no longer tell a
+ * deliberate override from a repo default. Only what was already in the
+ * environment when Playwright loaded this file counts as an override.
+ *
+ * Without this the setup forced every run onto the container's proxy, which
+ * made an API change unexercisable until the image was rebuilt — CI was the
+ * only loop. With it:
+ *
+ *   bun run up                                     # in one terminal
+ *   PORT=8790 bun run dev:api                      # your API, from source
+ *   SKIP_STACK=1 BUN_PUBLIC_API_BASE_URL=http://localhost:8790 \
+ *     bun run test:integration
+ *
+ * Scope: the test workers call the override, so every suite that talks to the
+ * API over `fetch` exercises your build. The app container's SPA has its own
+ * base URL baked in at image build and still calls the proxy, so a
+ * browser-driven assertion is still about the containerised API. Your API
+ * needs to allow the app origin (`BINDERSNAP_ALLOWED_ORIGINS`) and to point at
+ * the same Gitea the stack is running.
+ */
+const EXPLICIT_API_BASE_URL = (process.env.BUN_PUBLIC_API_BASE_URL ?? "")
+  .trim()
+  .replace(/\/+$/, "");
 const DEFAULT_STRIPE_SECRET_KEY = "sk_test_bindersnap_playwright";
 const DEFAULT_STRIPE_PRICE_ID = "price_bindersnap_playwright";
 
@@ -161,12 +191,28 @@ export default async function globalSetup(): Promise<void> {
     throw new Error(`docker-compose.yml not found at: ${COMPOSE_FILE}`);
   }
 
-  // Force the integration run through the local proxy so test workers and the
-  // app container share the same ingress path.
-  process.env.BUN_PUBLIC_API_BASE_URL = API_PROXY_BASE_URL;
-  process.env.BUN_PUBLIC_API_URL = API_PROXY_BASE_URL;
-  process.env.VITE_API_URL = API_PROXY_BASE_URL;
-  process.env.WEBHOOK_PROXY_BASE_URL = API_PROXY_BASE_URL;
+  // Default the run through the local proxy, so test workers and the app
+  // container share the same ingress path — but never override a base URL the
+  // caller typed, which is the only way to test an API built from source
+  // without rebuilding the image first.
+  const apiBaseUrl = EXPLICIT_API_BASE_URL || API_PROXY_BASE_URL;
+  const usingExplicitApi = apiBaseUrl !== API_PROXY_BASE_URL;
+
+  if (usingExplicitApi) {
+    log(
+      `BUN_PUBLIC_API_BASE_URL=${apiBaseUrl} — test workers will call that API ` +
+        `instead of the stack proxy at ${API_PROXY_BASE_URL}. The app ` +
+        `container still calls the proxy, so browser-driven assertions remain ` +
+        `about the containerised API.`,
+    );
+  }
+
+  process.env.BUN_PUBLIC_API_BASE_URL = apiBaseUrl;
+  process.env.BUN_PUBLIC_API_URL = apiBaseUrl;
+  process.env.VITE_API_URL = apiBaseUrl;
+  process.env.WEBHOOK_PROXY_BASE_URL = apiBaseUrl;
+
+  const stripeWebhookForwardUrl = `${apiBaseUrl}/stripe/webhook`;
 
   const hasConfiguredWebhookSecret =
     (process.env.STRIPE_WEBHOOK_SECRET ?? "").trim() !== "";
@@ -204,14 +250,25 @@ export default async function globalSetup(): Promise<void> {
   await ensureStripeWebhookSecret({
     allowFallbackSecret: process.env.SKIP_STACK !== "1",
     env: process.env,
-    // Forward webhooks through the local Caddy proxy so integration runs
-    // exercise the same forwarded-header contract as production.
-    forwardTo: STRIPE_WEBHOOK_FORWARD_URL,
+    // Forward webhooks through the same base URL the workers use — the local
+    // Caddy proxy by default, so integration runs exercise the same
+    // forwarded-header contract as production.
+    forwardTo: stripeWebhookForwardUrl,
     log,
   });
 
   if (process.env.SKIP_STACK === "1") {
     log("SKIP_STACK=1 — assuming stack is already running.");
+    if (usingExplicitApi) {
+      // Fail here with one clear message rather than as every suite in turn.
+      log(`Waiting for the API you pointed at: ${apiBaseUrl}/auth/me ...`);
+      await waitForUrl(
+        `${apiBaseUrl}/auth/me`,
+        30,
+        1000,
+        (response) => response.status < 500,
+      );
+    }
     if (process.env.STRIPE_WEBHOOK_SECRET) {
       log(
         "Stripe listener started. Note: the running API must have been started with the same " +
@@ -266,6 +323,16 @@ export default async function globalSetup(): Promise<void> {
       2000,
       (response) => response.status < 500,
     );
+
+    if (usingExplicitApi) {
+      log(`Waiting for the API you pointed at: ${apiBaseUrl}/auth/me ...`);
+      await waitForUrl(
+        `${apiBaseUrl}/auth/me`,
+        30,
+        1000,
+        (response) => response.status < 500,
+      );
+    }
 
     log(`Waiting for app at ${APP_BASE_URL} ...`);
     await waitForUrl(APP_BASE_URL, 60, 2000);
