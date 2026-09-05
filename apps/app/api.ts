@@ -820,6 +820,27 @@ export async function fetchBinderDocument(
   return response.data;
 }
 
+/**
+ * The bytes of one document in a binder, at a ref.
+ *
+ * `ref` is a version tag for a published version, or a change's branch for one
+ * still under review. Unstated means `main` — the version on record.
+ */
+export async function downloadBinderDocument(
+  org: string,
+  binder: string,
+  documentPath: string,
+  ref?: string,
+): Promise<Blob> {
+  const response = await BindersClient.downloadBinderDocument(
+    org,
+    binder,
+    documentPath,
+    ref ? { ref } : undefined,
+  );
+  return response.data;
+}
+
 // Billing functions
 
 export async function fetchBillingStatus(): Promise<BillingStatusPayload> {

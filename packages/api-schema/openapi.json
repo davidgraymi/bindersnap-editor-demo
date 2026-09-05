@@ -8844,7 +8844,210 @@
                     "openChanges": {
                       "type": "array",
                       "items": {
-                        "nullable": true
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "number"
+                          },
+                          "number": {
+                            "type": "number"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string"
+                          },
+                          "created": {
+                            "type": "string"
+                          },
+                          "created_at": {
+                            "type": "string"
+                          },
+                          "updated_at": {
+                            "type": "string"
+                          },
+                          "branchName": {
+                            "type": "string"
+                          },
+                          "approvalCount": {
+                            "type": "number"
+                          },
+                          "requiredApprovals": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "isApproved": {
+                            "type": "boolean"
+                          },
+                          "isRejected": {
+                            "type": "boolean"
+                          },
+                          "reviewers": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "login": {
+                                  "type": "string"
+                                },
+                                "fullName": {
+                                  "type": "string"
+                                },
+                                "avatarUrl": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "type": "string",
+                                  "enum": [
+                                    "approved",
+                                    "changes_requested",
+                                    "commented",
+                                    "awaiting"
+                                  ]
+                                },
+                                "reviewedAt": {
+                                  "type": "string"
+                                },
+                                "stale": {
+                                  "type": "boolean"
+                                },
+                                "requested": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "login",
+                                "fullName",
+                                "avatarUrl",
+                                "status",
+                                "reviewedAt",
+                                "stale",
+                                "requested"
+                              ]
+                            }
+                          },
+                          "assignee": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "login": {
+                                "type": "string"
+                              },
+                              "fullName": {
+                                "type": "string"
+                              },
+                              "avatarUrl": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "login",
+                              "fullName",
+                              "avatarUrl"
+                            ]
+                          },
+                          "body": {
+                            "type": "string"
+                          },
+                          "approvalState": {
+                            "type": "string",
+                            "enum": [
+                              "working",
+                              "in_review",
+                              "changes_requested",
+                              "approved",
+                              "published"
+                            ]
+                          },
+                          "user": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "login": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "login"
+                            ]
+                          },
+                          "reviews": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "number"
+                                },
+                                "author": {
+                                  "type": "object",
+                                  "properties": {
+                                    "login": {
+                                      "type": "string"
+                                    },
+                                    "fullName": {
+                                      "type": "string"
+                                    },
+                                    "avatarUrl": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "login",
+                                    "fullName",
+                                    "avatarUrl"
+                                  ]
+                                },
+                                "state": {
+                                  "type": "string",
+                                  "enum": [
+                                    "approved",
+                                    "changes_requested",
+                                    "commented",
+                                    "other"
+                                  ]
+                                },
+                                "body": {
+                                  "type": "string"
+                                },
+                                "submittedAt": {
+                                  "type": "string"
+                                },
+                                "stale": {
+                                  "type": "boolean"
+                                },
+                                "dismissed": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "author",
+                                "state",
+                                "body",
+                                "submittedAt",
+                                "stale",
+                                "dismissed"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "number",
+                          "title",
+                          "state",
+                          "created",
+                          "branchName",
+                          "approvalCount",
+                          "requiredApprovals",
+                          "isApproved",
+                          "isRejected",
+                          "reviewers",
+                          "assignee",
+                          "approvalState"
+                        ]
                       }
                     }
                   },
@@ -8856,6 +9059,60 @@
                     "latestVersion",
                     "openChanges"
                   ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/raw/{documentPath}": {
+      "get": {
+        "operationId": "downloadBinderDocument",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "documentPath",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "ref",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The document's bytes, at that ref",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }

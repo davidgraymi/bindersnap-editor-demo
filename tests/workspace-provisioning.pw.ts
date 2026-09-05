@@ -460,6 +460,22 @@ async function getDocument(
   return { status: response.status, body: await response.text() };
 }
 
+/** The document's bytes, at a ref. `raw/` rather than a `download` suffix. */
+async function downloadDocument(
+  sessionCookie: string,
+  org: string,
+  workspace: string,
+  documentPath: string,
+  ref?: string,
+): Promise<{ status: number; body: string }> {
+  const query = ref ? `?ref=${encodeURIComponent(ref)}` : "";
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${workspace}/raw/${documentPath}${query}`,
+    { headers: { Cookie: `bindersnap_session=${sessionCookie}` } },
+  );
+  return { status: response.status, body: await response.text() };
+}
+
 test("a binder with nothing in it lists no documents, and is not an error", async () => {
   const credentials = buildCredentials();
   const sessionCookie = await signUp(credentials);
@@ -728,6 +744,85 @@ test("publishing a change versions the document and puts it on main", async () =
     `/repos/${org.name}/clinical/contents/${slugPath}.md?ref=main`,
   );
   expect(onMain.path).toBe(`${slugPath}.md`);
+});
+
+test("a published document hands back its bytes, by identity or by path", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const added = await addDocument(sessionCookie, org.name, "clinical", {
+    name: "Infection Control",
+    folder: "Nursing",
+    body: "wash your hands",
+  });
+  const { pullRequestNumber, slugPath, documentPath } = JSON.parse(
+    added.body,
+  ) as {
+    pullRequestNumber: number;
+    slugPath: string;
+    documentPath: string;
+  };
+
+  const token = await createUserToken(
+    credentials.username,
+    credentials.password,
+  );
+  const approver = await addApprover(token, org.name, "clinical");
+  await approveChange(approver.token, org.name, "clinical", pullRequestNumber);
+  expect(
+    (
+      await publishChange(
+        sessionCookie,
+        org.name,
+        "clinical",
+        pullRequestNumber,
+      )
+    ).status,
+  ).toBe(200);
+
+  // The identity, which is what a link carries.
+  const byIdentity = await downloadDocument(
+    sessionCookie,
+    org.name,
+    "clinical",
+    slugPath,
+  );
+  expect(byIdentity.status, byIdentity.body).toBe(200);
+  expect(byIdentity.body).toBe("wash your hands");
+
+  // The file path, which is what a person who copied it out of git carries.
+  const byPath = await downloadDocument(
+    sessionCookie,
+    org.name,
+    "clinical",
+    documentPath,
+  );
+  expect(byPath.status, byPath.body).toBe(200);
+  expect(byPath.body).toBe("wash your hands");
+
+  // And at the version tag, which is the point: a version is readable as the
+  // evidence it is, not only as whatever main happens to say today.
+  const atVersion = await downloadDocument(
+    sessionCookie,
+    org.name,
+    "clinical",
+    slugPath,
+    `${slugPath}/v1`,
+  );
+  expect(atVersion.status, atVersion.body).toBe(200);
+  expect(atVersion.body).toBe("wash your hands");
+
+  const missing = await downloadDocument(
+    sessionCookie,
+    org.name,
+    "clinical",
+    "nursing/no-such-policy",
+  );
+  expect(missing.status).toBe(404);
 });
 
 test("one change across two documents publishes two versions on one commit", async () => {

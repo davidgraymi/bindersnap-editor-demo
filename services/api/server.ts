@@ -5102,6 +5102,96 @@ async function handleWorkspaceDocumentDetail(
   }
 }
 
+/**
+ * The bytes of one document in a binder, at whatever ref is asked for.
+ *
+ * Addressed under `raw/` rather than as a `download` suffix on the document
+ * itself, because a document's path is the rest of the URL — a policy filed at
+ * `nursing/download` would otherwise be indistinguishable from a request to
+ * download `nursing`. Gitea addresses raw content the same way, for the same
+ * reason.
+ *
+ * Never gated: reading the record is open forever, whatever the organization
+ * owes us (ADR 0004).
+ */
+async function handleWorkspaceDocumentRaw(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+  documentPath: string,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const ref = new URL(req.url).searchParams.get("ref")?.trim() || "main";
+
+  try {
+    // Resolved rather than trusted: the URL may carry the document's identity
+    // (`nursing/hand-hygiene`) instead of its file path, and only the tree
+    // knows which extension that identity currently wears.
+    const document = await findWorkspaceDocument({
+      client: auth.client,
+      org: orgName,
+      workspace: workspaceName,
+      documentPath,
+      ref,
+    });
+    if (!document) {
+      return json(404, { error: "No such document." }, baseHeaders);
+    }
+
+    const response = await giteaFetch(
+      `/api/v1/repos/${encodeURIComponent(orgName)}/${encodeURIComponent(workspaceName)}/raw/${document.path
+        .split("/")
+        .map(encodeURIComponent)
+        .join("/")}?ref=${encodeURIComponent(ref)}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: buildTokenAuthHeader(auth.session.giteaToken),
+          Accept: "*/*",
+        },
+      },
+    );
+
+    if (!response.ok) {
+      const errorMessage = await readGiteaErrorMessage(
+        response,
+        "Unable to download the document.",
+      );
+      logger.error("Gitea fetch failure on a binder document download", {
+        status: response.status,
+        organization: orgName,
+        workspace: workspaceName,
+        documentPath: document.path,
+        ref,
+        message: errorMessage,
+      });
+      return json(response.status, { error: errorMessage }, baseHeaders);
+    }
+
+    return new Response(response.body, {
+      status: response.status,
+      headers: downloadHeaders(baseHeaders, response),
+    });
+  } catch (err) {
+    logger.error("Failed to download a binder document", {
+      username: auth.session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      documentPath,
+      ref,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to download the document.",
+    );
+  }
+}
+
 async function handleCreateWorkspaceDocument(
   req: Request,
   baseHeaders: Headers,
@@ -6231,6 +6321,11 @@ export function createApiServer() {
         const workspacePublishMatch = pathname.match(
           /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/publish$/,
         );
+        // Raw content sits under its own segment rather than as a suffix on
+        // the document, because the document's path is the rest of the URL.
+        const workspaceDocumentRawMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/raw\/(.+)$/,
+        );
         const createBinderMatch = pathname.match(
           /^\/api\/app\/orgs\/([^/]+)\/binders$/,
         );
@@ -6261,6 +6356,14 @@ export function createApiServer() {
             baseHeaders,
             workspaceDocumentsMatch[1]!,
             workspaceDocumentsMatch[2]!,
+          );
+        } else if (workspaceDocumentRawMatch && method === "GET") {
+          response = await handleWorkspaceDocumentRaw(
+            req,
+            baseHeaders,
+            workspaceDocumentRawMatch[1]!,
+            workspaceDocumentRawMatch[2]!,
+            decodeURIComponent(workspaceDocumentRawMatch[3]!),
           );
         } else if (workspaceDocumentMatch && method === "GET") {
           response = await handleWorkspaceDocumentDetail(

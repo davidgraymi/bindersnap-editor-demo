@@ -649,6 +649,25 @@ input {
   align-content: start;
 }
 
+/* Where a document in a binder lives: organization, binder, folders. It sits
+   above the title rather than in the top nav because the top nav switches
+   scope and this names a path — reusing the topbar's own type so the two read
+   as one trail once the shell breadcrumb lands. */
+.doc-crumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--brand-space-2);
+  min-width: 0;
+}
+
+.doc-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  min-width: 0;
+}
+
 .doc-header {
   display: grid;
   gap: var(--brand-space-6);
@@ -1398,6 +1417,11 @@ input {
 .doc-rail-row-note {
   font-size: var(--brand-text-ui-sm);
   color: var(--bs-text-muted);
+}
+
+/* A rail row that states a fact rather than going somewhere. */
+.doc-rail-row--static {
+  cursor: default;
 }
 
 /* Team: faces, then the way to the page that lists them properly. */

@@ -20,20 +20,61 @@ Six PRs, **all CI-green, none merged**, each stacked on the one above it. They
 must merge bottom-up; #398 has been green longest and landing it makes every
 rebase after it cheaper.
 
-| PR                                                                     | Branch                             | What it did                                                 |
-| ---------------------------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------- |
-| [#398](https://github.com/davidgraymi/bindersnap-editor-demo/pull/398) | `feat/adr4-1-workspace-api`        | A member creates a binder; the auto-created one is gone     |
-| [#399](https://github.com/davidgraymi/bindersnap-editor-demo/pull/399) | `feat/adr4-2-document-write-path`  | A document is a file inside the binder                      |
-| [#400](https://github.com/davidgraymi/bindersnap-editor-demo/pull/400) | `feat/adr4-3-document-read-paths`  | Reading documents out of the binder                         |
-| [#401](https://github.com/davidgraymi/bindersnap-editor-demo/pull/401) | `feat/adr4-4-publish-version-tags` | Publishing versions every document a change touched         |
-| [#403](https://github.com/davidgraymi/bindersnap-editor-demo/pull/403) | `feat/adr4-6-seed-binders`         | The dev seed builds an org with binders                     |
-| [#404](https://github.com/davidgraymi/bindersnap-editor-demo/pull/404) | `feat/adr4-7-binder-ui`            | `/{org}`, `/{org}/{binder}`, `/{org}/{binder}/{path}` pages |
+| PR                                                                     | Branch                             | What it did                                             |
+| ---------------------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------- |
+| [#398](https://github.com/davidgraymi/bindersnap-editor-demo/pull/398) | `feat/adr4-1-workspace-api`        | A member creates a binder; the auto-created one is gone |
+| [#399](https://github.com/davidgraymi/bindersnap-editor-demo/pull/399) | `feat/adr4-2-document-write-path`  | A document is a file inside the binder                  |
+| [#400](https://github.com/davidgraymi/bindersnap-editor-demo/pull/400) | `feat/adr4-3-document-read-paths`  | Reading documents out of the binder                     |
+| [#401](https://github.com/davidgraymi/bindersnap-editor-demo/pull/401) | `feat/adr4-4-publish-version-tags` | Publishing versions every document a change touched     |
+| [#403](https://github.com/davidgraymi/bindersnap-editor-demo/pull/403) | `feat/adr4-6-seed-binders`         | The dev seed builds an org with binders                 |
+| [#404](https://github.com/davidgraymi/bindersnap-editor-demo/pull/404) | `feat/adr4-7-binder-ui`            | `/{org}` and `/{org}/{binder}` pages                    |
 
 [#402](https://github.com/davidgraymi/bindersnap-editor-demo/pull/402) (the
 document backfill, `feat/adr4-5-backfill-documents`) is **closed, deliberately**
 — see "Decisions taken" below. The branch survives on the remote if it is ever
 wanted. `feat/adr4-documents-as-files` is an earlier name for #398's commit and
 holds nothing extra.
+
+### Step 3 — the document page (2026-09-05)
+
+| PR   | Branch                             | What it did                                  |
+| ---- | ---------------------------------- | -------------------------------------------- |
+| #408 | `feat/adr4-8-binder-document-page` | `/{org}/{binder}/{path}` is a page, not Home |
+
+#404's row above used to claim the document page too. It did not ship one:
+`binderDocument` was in the route table and in the nav's highlight rule, but
+`AppShell` had no branch for it, so clicking a document in a binder fell
+through the chain and rendered Home at the document's URL. This is that page —
+the record as published, every version behind it, and what is waiting on a
+decision.
+
+Two things it needed that were not there:
+
+- **Raw content had no route.** `GET /api/app/binders/{org}/{binder}/raw/{path}`
+  serves the bytes at any ref. It is under `raw/` rather than a `/download`
+  suffix because the document's path is the rest of the URL: a policy filed at
+  `nursing/download` would otherwise be indistinguishable from a request to
+  download `nursing`. Gitea addresses raw content the same way.
+- **`DocumentPreview` was bound to `owner`/`repo`.** It now takes a
+  `loadFile(ref)` callback, so the same preview serves a document that is a
+  repository and one that is a file in a binder. Callers must `useCallback` it
+  and keep it above their early returns — the hook order caught that in tests
+  rather than in review.
+
+The version rides in the query (`?version=2`) rather than in the path, for the
+same reason `raw/` does: a `/version/2` suffix cannot be told apart from a
+policy filed in a folder called `version`.
+
+`paywall-scope.test.ts` now covers `/api/app/binders` as well as
+`/api/app/documents`, and asserts both prefixes actually match routes — a
+prefix that matched nothing would let half the rule go unenforced in silence.
+
+What the page does not do yet, deliberately: a binder's open changes are listed
+as facts rather than links, because a binder change has no page of its own. And
+an uploaded-but-unpublished document is still unreachable — `main` is the
+record, so the binder's list and its document endpoint both answer from `main`.
+That is the next piece, and it is what "writing from the binder UI" runs into
+first.
 
 ## Why #393 carries the organization-creation flow too
 
@@ -214,9 +255,16 @@ In rough dependency order.
    the next thing wanted. The binder's three role teams already carry
    membership (`createWorkspaceTeams`, `grantTeamOnRepo`); the organization page
    at `/{org}` needs to surface and edit it. Nothing new in Gitea is required.
-2. **Writing from the binder UI.** #404 is read-only: it browses binders and
-   documents and creates a binder. Upload and publish still go through the old
-   per-document screens. The API for both is done and tested — this is screens.
+2. **Writing from the binder UI.** The binder pages are read-only: they browse
+   binders and documents and create a binder. Upload and publish still go
+   through the old per-document screens. The API for both is done and tested,
+   so this is mostly screens — with one thing that is not. **An
+   uploaded-but-unpublished document is unreachable:** `listWorkspaceDocuments`
+   and `findWorkspaceDocument` both read `main`, which by design holds only
+   published documents, so a person who has just uploaded a policy is shown a
+   binder that does not contain it. Surfacing proposed documents — from the
+   open changes the list already fetches, whose `upload/<slugPath>/…` branch
+   names carry the identity — is part of this piece rather than a follow-up.
 3. **Delete the old model.** `POST /api/app/documents`,
    `createPrivateCurrentUserRepo`, the 16 `documents/:owner/:repo` routes in
    `services/api/server.ts`, and roughly a dozen SPA files that address a
@@ -229,8 +277,9 @@ In rough dependency order.
    `blockOnUnresolvedThreads` still lives in the config branch.
 6. **CODEOWNERS generation**, naming **people, not teams**, per #389's finding.
    Not started.
-7. **Screenshots of the binder UI.** Blocked on a rebuilt API container — see
-   below.
+7. **A binder change needs a page.** The document page lists what is waiting on
+   a decision but cannot open it: `/docs/:owner/:repo/changes/:n` is the old
+   model's address and its handlers do not fit a binder. Needed before (3).
 
 ## Working on this locally — two traps
 

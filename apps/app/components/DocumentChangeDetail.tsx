@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Download, FileText, GitCompare } from "lucide-react";
 
 import type { ChangeUpdate, RepoBranchProtection } from "../api";
 import {
+  downloadDocument,
   listChangeUpdates,
   publishDocument,
   submitDocumentReview,
@@ -217,6 +218,12 @@ export function DocumentChangeDetail({
   const prNum = change.number;
   const isSubmitting = actionState.status === "submitting";
 
+  // Stable so the preview loads the file once per ref rather than per render.
+  const loadFile = useCallback(
+    (gitRef: string) => downloadDocument(owner, repo, gitRef),
+    [owner, repo],
+  );
+
   // The updates are their own call: the Changes tab lists changes, and a list
   // has no use for the history inside each one. A failure costs the update
   // count and the update events, not the review.
@@ -410,8 +417,7 @@ export function DocumentChangeDetail({
                 {proposed.updateLabel ? `, ${proposed.updateLabel}` : ""}.
               </p>
               <DocumentPreview
-                owner={owner}
-                repo={repo}
+                loadFile={loadFile}
                 gitRef={proposed.ref}
                 fileName={fileName}
                 downloading={downloading}
