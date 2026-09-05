@@ -293,6 +293,60 @@ three, instead of a provisioning step with a floor of three. An organization wit
 twenty binders and three recurring groups holds five to eight teams rather than
 sixty-two, and each one exists because somebody's action created it.
 
+#### Who is the binder's admin, and where the first one comes from
+
+**Binder admin is not a role we define — it is membership of an admin-level team
+granted onto that binder.** Gitea resolves repository admin exactly that way, so
+"binder admin" is the same object as every other group on this page, at
+`permission: admin`. There is no separate concept, and an org owner is a binder
+admin everywhere by virtue of `Owners` rather than by being granted anything.
+
+**Who may grant a team onto a binder: an org owner, or an existing admin of that
+binder.** `PUT /repos/{owner}/{repo}/teams/{team}` is guarded by `reqAdmin()`,
+which resolves to repository admin — so both, and nobody else. That gives the
+division the UX document is built on:
+
+> **The organization owner controls the vocabulary of groups. The binder admin
+> composes them onto their binder.** A binder admin cannot create a group, change
+> its level, or change who is in it, so the worst they can do is grant an existing
+> group onto a binder they already run. Delegation without escalation, enforced by
+> Gitea rather than checked by us.
+
+**The bootstrap, and a correction.** The lazy-team decision above left a hole:
+if provisioning creates no teams, who administers a binder created by somebody who
+is not an org owner? Reading Gitea's own answer settles it, and it is not the one
+this design assumed — `services/repository/create.go` ends repository creation with
+
+```
+if !access_model.IsUserRepoAdmin(ctx, repo, doer) {
+    AddOrUpdateCollaborator(ctx, repo, doer, perm.AccessModeAdmin)
+}
+```
+
+so **Gitea makes the creator a direct repository collaborator at admin**, silently,
+whenever they are not already a repo admin. An org owner creating a binder is
+already one through `Owners`, so nothing happens. A non-owner with
+`can_create_org_repo` creating one gets a collaborator row we never asked for.
+
+That breaks two rules at once. It violates "a binder's access is its teams,
+entirely", and it defeats the drift test proposed above, which asserts a
+provisioned binder's collaborator list is empty. Worse, it is the whitelist failure
+again in a new costume: a direct collaborator is in no whitelisted team, so under
+`enable_approvals_whitelist: true` **the creator's own approval does not count** in
+the binder they just made and administer.
+
+**Decision: provisioning converts it.** After creating the repository, and only
+when the creator is not an org owner: create `<binder>-admins` lazily, add the
+creator, grant it onto the binder, then remove the direct collaborator Gitea added
+— in that order, so a failure anywhere leaves the creator with access rather than
+locked out of their own binder. Teams stay the single mechanism, the whitelist
+stays team-shaped, and the drift test keeps its meaning.
+
+This is the fourth defect of one shape: **Gitea did something on our behalf that
+the model did not account for.** It cannot bite today, because every binder is
+currently created by an org owner — it arrives the day `can_create_org_repo` is
+granted to anyone, which is the same day the group-creation UI ships.
+
 #### What this costs, stated
 
 **A person's role in a binder is not always editable in place.** If Priya is a
