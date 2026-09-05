@@ -21,11 +21,12 @@
  *                    the stack's Caddy proxy — see EXPLICIT_API_BASE_URL below
  */
 
-import { spawnSync } from "node:child_process";
+import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { ensureStackEnv } from "../scripts/stack";
 import {
   DEFAULT_WEBHOOK_TEST_SECRET,
   ensureStripeWebhookSecret,
@@ -60,17 +61,6 @@ function loadEnvFile(): void {
   }
 }
 
-const STACK_NAME = process.env.STACK_NAME ?? "bindersnap";
-const APP_PORT = process.env.APP_PORT ?? "5173";
-const API_PORT = process.env.API_PORT ?? "8787";
-const API_PROXY_PORT = process.env.API_PROXY_PORT ?? "8788";
-const GITEA_PORT = process.env.GITEA_PORT ?? "3000";
-const HOCUSPOCUS_PORT = process.env.HOCUSPOCUS_PORT ?? "1234";
-const APP_BASE_URL = `http://localhost:${APP_PORT}`;
-const API_READY_URL = `http://localhost:${API_PORT}/auth/me`;
-const API_PROXY_BASE_URL = `http://localhost:${API_PROXY_PORT}`;
-const CADDY_READY_URL = `${API_PROXY_BASE_URL}/auth/me`;
-
 /**
  * An API base URL the caller asked for, or "".
  *
@@ -101,6 +91,56 @@ const EXPLICIT_API_BASE_URL = (process.env.BUN_PUBLIC_API_BASE_URL ?? "")
 const DEFAULT_STRIPE_SECRET_KEY = "sk_test_bindersnap_playwright";
 const DEFAULT_STRIPE_PRICE_ID = "price_bindersnap_playwright";
 
+// Filled in by resolveStack() before anything reads them. They are not
+// constants because the port block belongs to the worktree, not to the file:
+// hard-coded defaults here are exactly what used to point a worktree's test
+// run at the main checkout's running stack and tear it down on the way out.
+let STACK_NAME: string;
+let APP_PORT: string;
+let API_PORT: string;
+let API_PROXY_PORT: string;
+let GITEA_PORT: string;
+let HOCUSPOCUS_PORT: string;
+let APP_BASE_URL: string;
+let API_READY_URL: string;
+let API_PROXY_BASE_URL: string;
+let CADDY_READY_URL: string;
+
+/**
+ * Claim this worktree's stack slot and adopt its ports.
+ *
+ * Idempotent and shared with `bun run up`, so `SKIP_STACK=1` attaches to the
+ * very stack this worktree started rather than to whatever happens to own the
+ * default ports.
+ */
+async function resolveStack(): Promise<void> {
+  const stack = await ensureStackEnv(ROOT);
+  STACK_NAME = stack.stackName;
+  APP_PORT = String(stack.ports.APP_PORT);
+  API_PORT = String(stack.ports.API_PORT);
+  API_PROXY_PORT = String(stack.ports.API_PROXY_PORT);
+  GITEA_PORT = String(stack.ports.GITEA_PORT);
+  HOCUSPOCUS_PORT = String(stack.ports.HOCUSPOCUS_PORT);
+
+  // Playwright's baseURL and the test helpers read these from the
+  // environment, and playwright.config.ts has already been evaluated by now.
+  process.env.STACK_NAME = STACK_NAME;
+  process.env.APP_PORT = APP_PORT;
+  process.env.API_PORT = API_PORT;
+  process.env.API_PROXY_PORT = API_PROXY_PORT;
+  process.env.GITEA_PORT = GITEA_PORT;
+  process.env.HOCUSPOCUS_PORT = HOCUSPOCUS_PORT;
+
+  APP_BASE_URL = `http://localhost:${APP_PORT}`;
+  API_READY_URL = `http://localhost:${API_PORT}/auth/me`;
+  API_PROXY_BASE_URL = `http://localhost:${API_PROXY_PORT}`;
+  CADDY_READY_URL = `${API_PROXY_BASE_URL}/auth/me`;
+
+  log(
+    `stack ${STACK_NAME} (slot ${stack.slot}) — app :${APP_PORT}, api :${API_PORT}, gitea :${GITEA_PORT}`,
+  );
+}
+
 function log(message: string): void {
   process.stdout.write(`[global-setup] ${message}\n`);
 }
@@ -115,12 +155,12 @@ function composeDown(env: NodeJS.ProcessEnv): void {
 function runComposeCommand(
   args: string[],
   env: NodeJS.ProcessEnv,
-): ReturnType<typeof spawnSync> {
+): SpawnSyncReturns<string> {
   return spawnSync("docker", [...COMPOSE_ARGS, ...args], {
     stdio: "pipe",
     encoding: "utf8",
     env,
-  });
+  }) as SpawnSyncReturns<string>;
 }
 
 function printComposeOutput(label: string, output?: string | null): void {
@@ -186,6 +226,9 @@ export default async function globalSetup(): Promise<void> {
   // Load .env before anything else — safety net for direct `bunx playwright
   // test` invocations that bypass `bun run` and its automatic .env loading.
   loadEnvFile();
+
+  // Before any URL is derived: claim this worktree's own port block.
+  await resolveStack();
 
   if (process.env.SKIP_STACK !== "1" && !existsSync(COMPOSE_FILE)) {
     throw new Error(`docker-compose.yml not found at: ${COMPOSE_FILE}`);

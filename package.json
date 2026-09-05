@@ -1,6 +1,6 @@
 {
   "name": "bindersnap-editor-demo",
-  "version": "0.4.72",
+  "version": "0.4.73",
   "private": true,
   "type": "module",
   "packageManager": "bun@1.3.14",
@@ -16,7 +16,7 @@
     "dev": "bun run dev:app",
     "dev:app": "bun --hot server.ts",
     "dev:api": "bun --hot services/api/server.ts",
-    "down": "docker compose down -v --remove-orphans",
+    "down": "bun scripts/stack.ts down",
     "format": "bunx prettier --write \"**/*.{js,ts,jsx,tsx,html,css,json,yml,yaml,md}\" --ignore-path .gitignore --ignore-path .prettierignore",
     "format:check": "bunx prettier --check \"**/*.{js,ts,jsx,tsx,html,css,json,yml,yaml,md}\" --ignore-path .gitignore --ignore-path .prettierignore",
     "generate:gitea-client": "bun run scripts/generate-gitea-api.ts",
@@ -39,7 +39,10 @@
     "test:integration": "bunx playwright test --config=playwright.config.ts",
     "test:seed": "bun test tests/seed-scenario.test.ts tests/seed-documents.test.ts",
     "test:unit": "bun test",
-    "up": "docker compose up --build",
+    "up": "bun scripts/stack.ts up",
+    "up:fg": "bun scripts/stack.ts up --fg",
+    "up:fresh": "bun scripts/stack.ts up --fresh",
+    "stack": "bun scripts/stack.ts",
     "tf:apply": "bash infra/apply-all.sh",
     "tf:bootstrap": "bash infra/bootstrap.sh",
     "tf:plan": "bash infra/apply-all.sh plan"
