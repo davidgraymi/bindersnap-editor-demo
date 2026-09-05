@@ -11,6 +11,7 @@ import * as AdminClient from "../../packages/api-client/admin/admin";
 import * as OrganizationsClient from "../../packages/api-client/organizations/organizations";
 import * as BindersClient from "../../packages/api-client/workspaces/workspaces";
 import type {
+  CreatedWorkspaceDocumentPayload,
   WorkspaceDocumentDetailPayload,
   WorkspaceDocumentListPayload,
   WorkspaceSummary,
@@ -818,6 +819,32 @@ export async function fetchBinderDocument(
     documentPath,
   );
   return response.data;
+}
+
+/**
+ * Add a document to a binder — the ADR 0004 upload path.
+ *
+ * A mutation, so it is behind the paywall; the 402 is intercepted here so a
+ * delinquent organization gets the banner rather than a raw error under the
+ * file picker.
+ */
+export async function createBinderDocument(
+  org: string,
+  binder: string,
+  file: File,
+  name: string,
+  folder?: string,
+): Promise<CreatedWorkspaceDocumentPayload> {
+  try {
+    const response = await BindersClient.createBinderDocument(org, binder, {
+      file,
+      name,
+      ...(folder ? { folder } : {}),
+    });
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(`/api/app/binders/${org}/${binder}/documents`, error);
+  }
 }
 
 /**

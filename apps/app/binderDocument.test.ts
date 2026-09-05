@@ -183,3 +183,37 @@ test("an earlier version's URL names it, so it can be linked to", () => {
     }),
   ).toBe("/riverside-health/clinical-policies/nursing/hand-hygiene?version=2");
 });
+
+// ── a document that only exists inside a change ────────────────────
+
+test("with nothing published the file is read from the change's branch", () => {
+  // `main` has nothing to give a proposed document, so the page would render
+  // "not found" over a file that is right there in the change.
+  expect(
+    resolveDocumentRef({
+      versions: [],
+      requestedVersion: null,
+      recordRef: "upload/nursing/hand-hygiene/20260905/120000Z-alice-abc12345",
+    }),
+  ).toEqual({
+    ref: "upload/nursing/hand-hygiene/20260905/120000Z-alice-abc12345",
+    version: null,
+    missing: false,
+  });
+});
+
+test("a proposed document is in review, not missing a version", () => {
+  expect(describeVersionState(null, "proposed")).toBe("In review");
+  expect(describeVersionState(null, "published")).toBe(
+    "No published version yet",
+  );
+});
+
+test("a published version still wins over the proposed wording", () => {
+  expect(
+    describeVersionState(
+      { tag: "nursing/hand-hygiene/v2", version: 2, commitSha: "b" },
+      "proposed",
+    ),
+  ).toBe("Version 2 on record");
+});

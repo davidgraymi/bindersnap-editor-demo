@@ -11,6 +11,7 @@
 import type {
   DocumentVersion,
   WorkspaceDocumentEntry,
+  WorkspaceDocumentState,
 } from "../../packages/api-schema/schemas/workspaces";
 import { formatDocumentName } from "./documentDisplay";
 
@@ -58,17 +59,24 @@ export function resolveDocumentRef(params: {
   versions: DocumentVersion[];
   /** The version the URL asks for, or null for the one on record. */
   requestedVersion: number | null;
+  /**
+   * Where the document's file is when nothing is published: the change's own
+   * branch, from the server. `main` has nothing to give a proposed document,
+   * so without this the page would render "not found" over a file that is
+   * right there in the change somebody just opened.
+   */
+  recordRef?: string;
 }): { ref: string; version: DocumentVersion | null; missing: boolean } {
-  const { versions, requestedVersion } = params;
+  const { versions, requestedVersion, recordRef = "main" } = params;
   const latest = versions[0] ?? null;
 
   if (requestedVersion === null || requestedVersion === latest?.version) {
-    return { ref: "main", version: latest, missing: false };
+    return { ref: recordRef, version: latest, missing: false };
   }
 
   const asked = versions.find((entry) => entry.version === requestedVersion);
   if (!asked) {
-    return { ref: "main", version: latest, missing: true };
+    return { ref: recordRef, version: latest, missing: true };
   }
 
   return { ref: asked.tag, version: asked, missing: false };
@@ -83,10 +91,12 @@ export function resolveDocumentRef(params: {
  */
 export function describeVersionState(
   latestVersion: DocumentVersion | null,
+  state: WorkspaceDocumentState = "published",
 ): string {
-  return latestVersion
-    ? `Version ${latestVersion.version} on record`
-    : "No published version yet";
+  if (latestVersion) return `Version ${latestVersion.version} on record`;
+  // A document that has never reached `main` is waiting on a decision, not
+  // missing one. "No published version" reads like a fault; this does not.
+  return state === "proposed" ? "In review" : "No published version yet";
 }
 
 /** The file name a download should land under: `hand-hygiene.pdf`. */

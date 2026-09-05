@@ -139,6 +139,26 @@ export function buildUploadBranchName(
   return `upload/${docSlug}/${date}/${time}-${uploaderSlug}-${contentHash8}`;
 }
 
+/**
+ * The document an upload branch is about, or null if it is not one of ours.
+ *
+ * The inverse of `buildUploadBranchName`. A binder's document identity carries
+ * slashes — `nursing/hand-hygiene` — so this strips the `upload/` prefix and
+ * the two trailing segments the builder appends rather than splitting on the
+ * separator, which would stop at the folder.
+ *
+ * This is what lets a binder's document list include what is proposed but not
+ * yet published without asking Gitea which files each open change touches:
+ * the branch name already carries the answer, and the list exists to stop
+ * paying per document.
+ */
+export function documentSlugPathFromUploadBranch(
+  branch: string,
+): string | null {
+  const match = branch.match(/^upload\/(.+)\/\d{8}\/\d{6}Z-[^/]+$/);
+  return match ? match[1]! : null;
+}
+
 export function buildUploadCommitMessage(
   params: UploadCommitMessageParams,
 ): string {

@@ -12,6 +12,7 @@ function entry(
     name: overrides.slugPath.split("/").pop() ?? "",
     size: 0,
     sha: "",
+    state: "published",
     openChangeCount: 0,
     latestVersion: null,
     ...overrides,
@@ -78,4 +79,23 @@ test("open changes are counted alongside the version", () => {
       }),
     ),
   ).toBe("Version 1 · 2 open changes");
+});
+
+test("a document that is only proposed is waiting, not faulty", () => {
+  // "No published version" reads like something is wrong with it. It is
+  // waiting on a decision, which is the ordinary state of a policy somebody
+  // uploaded an hour ago.
+  expect(
+    describeDocument(
+      entry({
+        slugPath: "nursing/hand-hygiene",
+        folder: "nursing",
+        path: null,
+        size: null,
+        sha: null,
+        state: "proposed",
+        openChangeCount: 1,
+      }),
+    ),
+  ).toBe("Not published yet · 1 open change");
 });

@@ -485,6 +485,22 @@ export function parseSeedScenario(source: string): SeedScenario {
         }
         seenBranches.add(change.branch);
 
+        // The branch name is how the app knows which document a change is
+        // about — `upload/<slugPath>/…`, written by the upload path and read
+        // back by the binder's list. A branch that omits the document's folder
+        // still seeds and still looks right in Gitea, but the app reads it as
+        // a change about a different document at the binder's root: the real
+        // document loses its open-change count, and a policy that does not
+        // exist appears beside it.
+        if (!change.branch.startsWith(`upload/${slugPath}/`)) {
+          fail(
+            `${changePath}.branch`,
+            `"${change.branch}" must start with "upload/${slugPath}/" — the ` +
+              "app reads the document's identity out of the branch name, so a " +
+              "branch naming anything else describes a different document",
+          );
+        }
+
         if (change.author) requireKnown(change.author, `${changePath}.author`);
         change.reviews.forEach((review, rIndex) =>
           requireKnown(review.by, `${changePath}.reviews[${rIndex}].by`),

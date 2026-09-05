@@ -3,6 +3,7 @@ import {
   buildCanonicalDocumentFileName,
   buildUploadBranchName,
   buildUploadCommitMessage,
+  documentSlugPathFromUploadBranch,
   createInitialDocumentUpload,
   getFileExtension,
   validateUploadFile,
@@ -436,5 +437,42 @@ test("createInitialDocumentUpload creates the repo, bootstraps main, and opens a
     });
   } finally {
     globalThis.FileReader = originalFileReader;
+  }
+});
+
+// ────────────────────────────────────────────────────────────────
+// documentSlugPathFromUploadBranch tests
+// ────────────────────────────────────────────────────────────────
+
+test("documentSlugPathFromUploadBranch is the inverse of the builder", () => {
+  const branch = buildUploadBranchName(
+    "nursing/hand-hygiene",
+    "alice",
+    "abc12345",
+    new Date("2026-04-02T14:35:22Z"),
+  );
+
+  expect(documentSlugPathFromUploadBranch(branch)).toBe("nursing/hand-hygiene");
+});
+
+test("documentSlugPathFromUploadBranch keeps every folder", () => {
+  // The identity carries slashes, so splitting on the separator would stop at
+  // the first folder and call the document "clinical".
+  expect(
+    documentSlugPathFromUploadBranch(
+      "upload/clinical/nursing/infection/policy/20260402/143522Z-alice-abc12345",
+    ),
+  ).toBe("clinical/nursing/infection/policy");
+});
+
+test("documentSlugPathFromUploadBranch ignores a branch that is not ours", () => {
+  for (const branch of [
+    "main",
+    "upload/policy",
+    "feature/upload/policy/20260402/143522Z-alice-abc12345",
+    "upload/policy/2026040/143522Z-alice-abc12345",
+    "upload/policy/20260402/1435Z-alice-abc12345",
+  ]) {
+    expect(documentSlugPathFromUploadBranch(branch)).toBeNull();
   }
 });

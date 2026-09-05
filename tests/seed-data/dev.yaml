@@ -71,7 +71,7 @@ binders:
         folder: training
         description: Annual HIPAA training policy
         changes:
-          - branch: upload/hipaa-training-policy/20251103/151020Z-bob-08fa62d1
+          - branch: upload/training/hipaa-training-policy/20251103/151020Z-bob-08fa62d1
             title: HIPAA training policy — first issue
             summary: Annual training requirement and the record we keep of it.
             author: bob
@@ -88,7 +88,7 @@ binders:
               - by: alice
                 state: approved
                 body: Matches the training schedule we already run. Approved.
-          - branch: upload/hipaa-training-policy/20260226/104455Z-bob-b6c31f4a
+          - branch: upload/training/hipaa-training-policy/20260226/104455Z-bob-b6c31f4a
             title: Extend training to contractors with system access
             summary: Contractors with production access now sit the same annual training.
             author: bob
@@ -112,7 +112,7 @@ binders:
         description: Infection prevention and control — clinical policy
         format: docx
         changes:
-          - branch: upload/infection-control-policy/20251006/091200Z-alice-2c7f41ab
+          - branch: upload/nursing/infection-control-policy/20251006/091200Z-alice-2c7f41ab
             title: Infection Control Policy — annual review issue
             summary: The 2025 annual review, reissued after the October survey.
             author: alice
@@ -152,7 +152,7 @@ binders:
               - by: bob
                 state: approved
                 body: Matches what we told the surveyor in October. Approved.
-          - branch: upload/infection-control-policy/20260304/104500Z-alice-9be20d15
+          - branch: upload/nursing/infection-control-policy/20260304/104500Z-alice-9be20d15
             title: Tighten hand hygiene auditing and new-hire training
             summary: Monthly audits, fourteen-day training, and point-of-care rub placement.
             author: alice
@@ -206,7 +206,7 @@ binders:
         description: Medication administration and error reporting — clinical policy
         format: pdf
         changes:
-          - branch: upload/medication-administration-policy/20251014/143000Z-alice-51ab90c4
+          - branch: upload/nursing/medication-administration-policy/20251014/143000Z-alice-51ab90c4
             title: Medication Administration Policy — annual review issue
             summary: The 2025 annual review, exported for the survey binder.
             author: alice
@@ -245,7 +245,7 @@ binders:
               - by: bob
                 state: approved
                 body: Consistent with the pharmacy agreement. Approved.
-          - branch: upload/medication-administration-policy/20260312/091500Z-alice-7d4c22fe
+          - branch: upload/nursing/medication-administration-policy/20260312/091500Z-alice-7d4c22fe
             title: Same-hour error reporting and high-alert storage
             summary: One-hour reporting, opioids added to double-check, and a look-alike clause.
             author: alice
@@ -300,7 +300,7 @@ binders:
         description: Patient complaints and grievances — administrative policy
         format: markdown
         changes:
-          - branch: upload/patient-grievance-policy/20251020/111500Z-alice-6f83a2d1
+          - branch: upload/administrative/patient-grievance-policy/20251020/111500Z-alice-6f83a2d1
             title: Patient Grievance Policy — annual review issue
             summary: The 2025 annual review, published to the intranet.
             author: alice
@@ -336,7 +336,7 @@ binders:
               - by: bob
                 state: approved
                 body: Tracks the conditions of participation. Approved.
-          - branch: upload/patient-grievance-policy/20260318/153000Z-alice-b81f30c7
+          - branch: upload/administrative/patient-grievance-policy/20260318/153000Z-alice-b81f30c7
             title: Faster acknowledgement and the state agency notice
             summary: Five-day acknowledgement, and the patient is told they can go elsewhere.
             author: alice
@@ -438,7 +438,7 @@ binders:
         folder: vendors
         description: Vendor master agreements and renewals
         changes:
-          - branch: upload/vendor-contracts/20260218/143012Z-alice-7f0ab331
+          - branch: upload/vendors/vendor-contracts/20260218/143012Z-alice-7f0ab331
             title: Acme Corp contract renewal — 2025 terms
             summary: Annual renewal at the 2025 rate card, with the new DPA attached.
             author: alice
@@ -458,7 +458,7 @@ binders:
         folder: security
         description: Security incident response runbook
         changes:
-          - branch: upload/incident-response-plan/20260305/101144Z-alice-2c94ef05
+          - branch: upload/security/incident-response-plan/20260305/101144Z-alice-2c94ef05
             title: Add the 72-hour regulator notification window
             summary: Brings the escalation path in line with the breach notification rule.
             author: alice
@@ -483,7 +483,7 @@ binders:
         folder: vendors
         description: Standard data processing agreement
         changes:
-          - branch: upload/data-processing-agreement/20260112/084530Z-alice-91de3b77
+          - branch: upload/vendors/data-processing-agreement/20260112/084530Z-alice-91de3b77
             title: Standard data processing agreement — first issue
             summary: The template every vendor DPA is cut from.
             author: alice
@@ -509,7 +509,7 @@ binders:
         folder: vendors
         description: Security review questionnaire for new vendors
         changes:
-          - branch: upload/vendor-security-review/20260120/112205Z-carol-5ad0c418
+          - branch: upload/vendors/vendor-security-review/20260120/112205Z-carol-5ad0c418
             title: Vendor security questionnaire — first issue
             summary: Twenty questions every new vendor answers before we sign.
             author: carol
@@ -529,7 +529,7 @@ binders:
               - by: alice
                 state: approved
                 body: Good baseline. Approved.
-          - branch: upload/vendor-security-review/20260401/093310Z-carol-e37b1206
+          - branch: upload/vendors/vendor-security-review/20260401/093310Z-carol-e37b1206
             title: Add subprocessor disclosure questions
             summary: Four new questions covering the vendor's own supply chain.
             author: carol
