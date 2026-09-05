@@ -341,7 +341,12 @@ describe("the CLI never touches another worktree's stack", () => {
     expect(status.slot).toBeGreaterThan(0);
     expect(status.stackName).not.toBe("bindersnap");
     expect(status.ports.APP_PORT).not.toBe(LEGACY_PORTS.APP_PORT);
-  });
+
+    // Builds a git repo and a worktree, then starts a whole `bun` process:
+    // 6.3s on a cold CI runner against the 5s default, which is how this
+    // arrived red. The races below take 60s because they spawn six of these;
+    // one process gets a fifth of that, still ~5x the observed cost.
+  }, 30_000);
 
   test("`status` leaves the main checkout on the historical ports", () => {
     const { main } = makeRepoWithWorktrees(0);
@@ -365,5 +370,9 @@ describe("the CLI never touches another worktree's stack", () => {
     };
     expect(status.stackName).toBe("bindersnap");
     expect(status.ports.APP_PORT).toBe(LEGACY_PORTS.APP_PORT);
-  });
+
+    // Same shape as its neighbour, and it only passed by doing slightly less
+    // work — one fewer worktree. Left on the default it is a flake waiting
+    // for a slower runner.
+  }, 30_000);
 });
