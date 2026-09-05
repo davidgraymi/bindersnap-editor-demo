@@ -13,18 +13,13 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { ensureStackEnv } from "../scripts/stack";
 import { stopStripeWebhookSecretRuntime } from "./stripe-runtime";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
 const COMPOSE_FILE = resolve(ROOT, "docker-compose.yml");
 const COMPOSE_ARGS = ["compose", "-f", COMPOSE_FILE] as const;
-const STACK_NAME = process.env.STACK_NAME ?? "bindersnap";
-const APP_PORT = process.env.APP_PORT ?? "5173";
-const API_PORT = process.env.API_PORT ?? "8787";
-const API_PROXY_PORT = process.env.API_PROXY_PORT ?? "8788";
-const GITEA_PORT = process.env.GITEA_PORT ?? "3000";
-const HOCUSPOCUS_PORT = process.env.HOCUSPOCUS_PORT ?? "1234";
 const RESULTS_DIR = resolve(ROOT, "test-results");
 const API_LOG_PATH = resolve(RESULTS_DIR, "api.log");
 const MAX_PRINTED_ERROR_LINES = 100;
@@ -109,15 +104,21 @@ export default async function globalTeardown(): Promise<void> {
     return;
   }
 
+  // Resolve the stack the same way globalSetup did, from the worktree's own
+  // registered slot. Never from defaults: a teardown that guesses `bindersnap`
+  // would `down -v` whatever is running on the shared ports — in practice, the
+  // developer's own stack in the main checkout.
+  const stack = await ensureStackEnv(ROOT);
   const env: NodeJS.ProcessEnv = {
     ...process.env,
-    STACK_NAME,
-    APP_PORT,
-    API_PORT,
-    API_PROXY_PORT,
-    GITEA_PORT,
-    HOCUSPOCUS_PORT,
+    STACK_NAME: stack.stackName,
+    APP_PORT: String(stack.ports.APP_PORT),
+    API_PORT: String(stack.ports.API_PORT),
+    API_PROXY_PORT: String(stack.ports.API_PROXY_PORT),
+    GITEA_PORT: String(stack.ports.GITEA_PORT),
+    HOCUSPOCUS_PORT: String(stack.ports.HOCUSPOCUS_PORT),
   };
+  log(`tearing down ${stack.stackName} (slot ${stack.slot})`);
 
   // Before the containers go: the API's own account of what it did.
   captureApiLogs(env);

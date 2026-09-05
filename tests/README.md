@@ -39,10 +39,63 @@ SKIP_STACK=1 bun run test:integration
 If you want proxy-path webhook coverage in that mode, make sure the existing
 stack includes the local Caddy service on `http://localhost:${API_PROXY_PORT:-8788}`.
 
+### Testing an API you built from source
+
+By default the run goes through the stack's Caddy proxy, which means the API
+under test is the one baked into the container image — an API change is only
+exercisable after a rebuild, and CI becomes the only loop. Set
+`BUN_PUBLIC_API_BASE_URL` and the test workers call your API instead:
+
+```bash
+bun run up                                   # terminal 1: the stack
+PORT=8790 bun run dev:api                    # terminal 2: your API, from source
+SKIP_STACK=1 BUN_PUBLIC_API_BASE_URL=http://localhost:8790 bun run test:integration
+```
+
+The value has to come from the environment, not from `.env` — `.env` supplies
+defaults, and only what you type is treated as an override. `globalSetup` waits
+for `/auth/me` on that URL and fails with one clear message if nothing answers,
+rather than letting every suite fail on its own.
+
+What this does and does not cover: every suite that talks to the API over
+`fetch` exercises your build, which is most of the API-level coverage. The app
+container's SPA has its own base URL baked in at image build and still calls
+the proxy, so browser-driven assertions stay about the containerised API. Your
+API needs `BINDERSNAP_ALLOWED_ORIGINS` to include the app origin, and needs to
+point at the same Gitea the stack is running.
+
+### Which ports am I on?
+
+You do not choose. The first `bun run up`, `bun run down`, `bun run stack
+status` or `bun run test:integration` in a checkout claims a free block of five
+ports for it, writes them into that checkout's `.env` under a managed block,
+and records the claim in `~/.bindersnap/stacks.json`. The claim is sticky, so
+the ports survive restarts, and the allocation is taken under a lock, so
+several worktrees starting at the same moment cannot claim the same block.
+
+The main checkout keeps the historical ports (5173, 8787, 8788, 3000, 1234).
+Every other worktree gets a block from 21010 upwards. Ask for yours:
+
+```bash
+bun run stack status          # human-readable, including the seed password
+bun run stack status --json   # { stackName, slot, ports, urls, running }
+bun run stack status --all    # every stack registered on this machine
+```
+
+Because the compose project name is derived from the same claim, `bun run down`
+can only ever remove the containers, network and volumes belonging to the
+worktree you ran it in.
+
+If a worktree is deleted while its stack is up, `bun run stack prune` tears the
+orphan down and frees its ports. Run `bun run down` before deleting a worktree
+and you will not need it — a running stack holds files under `data/`, which is
+what makes `git worktree remove` fail.
+
 ### Overriding ports
 
-Every published port is an environment variable, so nothing in the stack is
-pinned to a fixed number:
+The values are still plain environment variables, so a one-off override works —
+but the managed `.env` block is the supported path, and a hand-edited port that
+another stack already owns will simply fail to bind:
 
 | Variable          | Default | What it moves                       |
 | ----------------- | ------- | ----------------------------------- |
@@ -56,27 +109,21 @@ pinned to a fixed number:
 APP_PORT=4000 bun run test:integration
 ```
 
-### Running two stacks side by side (one per worktree)
+### Running several stacks side by side (one per worktree)
 
-Ports are only half the problem — container names, the network name and the
-volume prefix all have to differ too. `STACK_NAME` moves all of them at once:
-it is the Compose project name, so it prefixes every container, the network
-`${STACK_NAME}-dev`, and every volume.
+Nothing to set up: this is what the automatic allocation above buys. Ports are
+only half the problem — container names, the network name and the volume prefix
+all have to differ too, and `STACK_NAME` moves all of them at once. It is the
+Compose project name, so it prefixes every container, the network
+`${STACK_NAME}-dev`, and every volume, and it is derived from the worktree's
+directory name and slot.
 
-Give each worktree a `.env` with its own name and its own port block:
+So in each worktree, `bun run up`, `bun run down` and `bun run test:integration`
+operate on that worktree's stack alone. Gitea's data lives in the worktree's own
+`./data/gitea`, so the instances never share state.
 
-```bash
-STACK_NAME=bindersnap-wt2
-APP_PORT=5273
-API_PORT=8887
-API_PROXY_PORT=8888
-GITEA_PORT=3100
-HOCUSPOCUS_PORT=1334
-```
-
-Then `bun run up`, `bun run down` and `bun run test:integration` all operate on
-that worktree's stack alone. Gitea's data lives in the worktree's own
-`./data/gitea`, so the two instances never share state.
+Verified with six worktrees allocating at once and four full stacks running
+side by side; see `scripts/stack.test.ts`.
 
 ## Stripe billing flow
 
