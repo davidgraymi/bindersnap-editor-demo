@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { PullRequestWithApprovalStateSchema } from "./documents";
+
 /**
  * ADR 0004's second level: the binder.
  *
@@ -130,7 +132,14 @@ export const WorkspaceDocumentDetailPayloadSchema = z.object({
   /** Newest first. */
   versions: z.array(DocumentVersionSchema),
   latestVersion: DocumentVersionSchema.nullable(),
-  openChanges: z.array(z.unknown()),
+  /**
+   * The open changes touching this document, newest first.
+   *
+   * The same shape the per-document workspace uses, deliberately: a change is
+   * a change wherever it is shown, and a second type for it would mean a
+   * second set of status wording to keep in step.
+   */
+  openChanges: z.array(PullRequestWithApprovalStateSchema),
 });
 export type WorkspaceDocumentDetailPayload = z.infer<
   typeof WorkspaceDocumentDetailPayloadSchema

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Download, FileText } from "lucide-react";
 
 import { sanitizeHtml } from "../../../packages/utils/sanitizer";
-import { downloadDocument } from "../api";
 import {
   classifyDocumentFile,
   describeFileKind,
@@ -13,8 +12,17 @@ import { markdownToHtml } from "../markdown";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
 interface DocumentPreviewProps {
-  owner: string;
-  repo: string;
+  /**
+   * Fetch the file at a ref.
+   *
+   * A callback rather than an owner and a repo because the same preview now
+   * serves two shapes of document — one that is a repository of its own, and
+   * one that is a file inside a binder — and where the bytes come from is the
+   * only thing that differs. Callers must keep it stable (`useCallback`): it
+   * is a dependency of the load, so a new function each render would refetch
+   * the file on every render.
+   */
+  loadFile: (gitRef: string) => Promise<Blob>;
   /** Git ref to read: "main" for the current version, or a version tag. */
   gitRef: string;
   /** File name as stored in the repo, or null when it could not be resolved. */
@@ -60,8 +68,7 @@ function describePreviewFailure(message: string): string {
  * offers the file.
  */
 export function DocumentPreview({
-  owner,
-  repo,
+  loadFile,
   gitRef,
   fileName,
   onDownload,
@@ -91,7 +98,7 @@ export function DocumentPreview({
     async function load() {
       setState({ status: "loading" });
       try {
-        const blob = await downloadDocument(owner, repo, gitRef);
+        const blob = await loadFile(gitRef);
         if (cancelled) return;
         setLoadedBlob(blob);
 
@@ -147,7 +154,7 @@ export function DocumentPreview({
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [owner, repo, gitRef, fileName, kind]);
+  }, [loadFile, gitRef, fileName, kind]);
 
   const markdownHtml = useMemo(() => {
     if (state.status !== "text" || !state.markdown) return null;

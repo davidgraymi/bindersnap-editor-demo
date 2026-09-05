@@ -283,6 +283,13 @@ export function DocumentDetail({
     }
   }
 
+  // Stable so the preview loads the file once per ref rather than per render,
+  // and above the early returns below so it runs on every render.
+  const loadFile = useCallback(
+    (gitRef: string) => downloadDocument(owner, repo, gitRef),
+    [owner, repo],
+  );
+
   const handleUploadSuccess = (_result: UploadResult) => {
     setShowUploadModal(false);
     onTabChange("changes");
@@ -586,8 +593,7 @@ export function DocumentDetail({
               </div>
             ) : (
               <DocumentPreview
-                owner={owner}
-                repo={repo}
+                loadFile={loadFile}
                 gitRef={viewingRef}
                 fileName={canonicalFileInfo?.downloadFileName ?? null}
                 downloading={downloadState.ref === viewingRef}
