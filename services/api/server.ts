@@ -39,6 +39,7 @@ import {
   listVersionsByDocument,
   listWorkspaceDocuments,
   nextVersionFrom,
+  toDocumentEntry,
 } from "./gitea-client/workspaceDocuments";
 import { listOrganizationOwners } from "./gitea-client/orgs";
 import { createPrivilegedGiteaClient } from "./privileged-client";
@@ -103,6 +104,7 @@ import {
   buildUploadCommitMessage,
   commitBinaryFile,
   createUploadBranch,
+  documentSlugPathFromUploadBranch,
   validateUploadFile,
 } from "./gitea-client/uploads";
 import {
@@ -4980,20 +4982,26 @@ async function handleListWorkspaceDocuments(
       }),
     ]);
 
+    const published = documents.map((document) => ({
+      ...document,
+      state: "published" as const,
+      openChangeCount: openChanges.filter((pull) =>
+        changeTouchesDocument(pull, document.slugPath),
+      ).length,
+      // A list of policies that does not say which version each one is at
+      // answers none of the questions a list is opened to answer.
+      latestVersion: versionsByDocument.get(document.slugPath)?.[0] ?? null,
+    }));
+
     return json(
       200,
       {
         organization: orgName,
         workspace: workspaceName,
-        documents: documents.map((document) => ({
-          ...document,
-          openChangeCount: openChanges.filter((pull) =>
-            changeTouchesDocument(pull, document.slugPath),
-          ).length,
-          // A list of policies that does not say which version each one is at
-          // answers none of the questions a list is opened to answer.
-          latestVersion: versionsByDocument.get(document.slugPath)?.[0] ?? null,
-        })),
+        documents: [
+          ...published,
+          ...proposedDocuments(openChanges, published),
+        ].sort((a, b) => a.slugPath.localeCompare(b.slugPath)),
       },
       baseHeaders,
     );
@@ -5006,6 +5014,60 @@ async function handleListWorkspaceDocuments(
     });
     return responseFromError(err, baseHeaders, "Unable to list the documents.");
   }
+}
+
+/**
+ * The documents a binder is being asked to hold but does not hold yet.
+ *
+ * `main` is the record, so a policy uploaded an hour ago is not in the tree —
+ * and a binder that silently omits what somebody just added looks broken in
+ * the one moment they are watching it. These rows come out of the open changes
+ * this list has already fetched, read through the `upload/<slugPath>/…` branch
+ * convention, so they cost nothing: asking Gitea which files each change
+ * touches would be a call per change, which is the cost the binder exists to
+ * remove.
+ *
+ * The extension is not knowable this cheaply, so `path`, `size` and `sha` are
+ * null. A row is addressed by its identity, and the document's own page pays
+ * for the exact file once.
+ */
+function proposedDocuments(
+  openChanges: Array<{ head?: { ref?: string } | null }>,
+  published: Array<{ slugPath: string }>,
+): Array<{
+  path: null;
+  slugPath: string;
+  name: string;
+  folder: string;
+  size: null;
+  sha: null;
+  state: "proposed";
+  openChangeCount: number;
+  latestVersion: null;
+}> {
+  const onRecord = new Set(published.map((document) => document.slugPath));
+  const counts = new Map<string, number>();
+
+  for (const pull of openChanges) {
+    const slugPath = documentSlugPathFromUploadBranch(pull.head?.ref ?? "");
+    if (slugPath === null || onRecord.has(slugPath)) continue;
+    counts.set(slugPath, (counts.get(slugPath) ?? 0) + 1);
+  }
+
+  return [...counts.entries()].map(([slugPath, openChangeCount]) => {
+    const lastSlash = slugPath.lastIndexOf("/");
+    return {
+      path: null,
+      slugPath,
+      name: lastSlash === -1 ? slugPath : slugPath.slice(lastSlash + 1),
+      folder: lastSlash === -1 ? "" : slugPath.slice(0, lastSlash),
+      size: null,
+      sha: null,
+      state: "proposed" as const,
+      openChangeCount,
+      latestVersion: null,
+    };
+  });
 }
 
 /**
@@ -5051,22 +5113,58 @@ async function handleWorkspaceDocumentDetail(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
-    const document = await findWorkspaceDocument({
+    let ref = "main";
+    let state: "published" | "proposed" = "published";
+    let document = await findWorkspaceDocument({
       client: auth.client,
       org: orgName,
       workspace: workspaceName,
       documentPath,
     });
+
+    // Not on the record, so it is either a document that was never uploaded or
+    // one whose first change nobody has approved yet. The binder's list shows
+    // the second as proposed, so its page has to open — a row that leads to a
+    // 404 is worse than no row at all.
+    if (!document) {
+      // The branch carries the identity, and the URL may carry the file path,
+      // so the extension comes off first — by the same rule the tree walk
+      // uses, rather than a second copy of it.
+      const branch = await findPendingDocumentBranch({
+        client: auth.client,
+        org: orgName,
+        workspace: workspaceName,
+        slugPath:
+          toDocumentEntry({ path: documentPath, type: "blob" })?.slugPath ??
+          documentPath,
+      });
+
+      if (branch) {
+        document = await findWorkspaceDocument({
+          client: auth.client,
+          org: orgName,
+          workspace: workspaceName,
+          documentPath,
+          ref: branch,
+        });
+        if (document) {
+          ref = branch;
+          state = "proposed";
+        }
+      }
+    }
+
     if (!document) {
       return json(404, { error: "No such document." }, baseHeaders);
     }
 
+    const resolved = document;
     const [versions, openChanges] = await Promise.all([
       listDocumentVersions({
         client: auth.client,
         org: orgName,
         workspace: workspaceName,
-        slugPath: document.slugPath,
+        slugPath: resolved.slugPath,
       }),
       listPullRequests({
         client: auth.client,
@@ -5081,11 +5179,13 @@ async function handleWorkspaceDocumentDetail(
       {
         organization: orgName,
         workspace: workspaceName,
-        document,
+        document: resolved,
+        state,
+        ref,
         versions,
         latestVersion: versions[0] ?? null,
         openChanges: openChanges.filter((pull) =>
-          changeTouchesDocument(pull, document.slugPath),
+          changeTouchesDocument(pull, resolved.slugPath),
         ),
       },
       baseHeaders,

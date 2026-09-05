@@ -5,14 +5,19 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { ListBinderDocuments200DocumentsItemLatestVersion } from './listBinderDocuments200DocumentsItemLatestVersion.ts';
+import type { ListBinderDocuments200DocumentsItemState } from './listBinderDocuments200DocumentsItemState.ts';
 
 export type ListBinderDocuments200DocumentsItem = {
-  path: string;
+  /** @nullable */
+  path: string | null;
   slugPath: string;
   name: string;
   folder: string;
-  size: number;
-  sha: string;
+  /** @nullable */
+  size: number | null;
+  /** @nullable */
+  sha: string | null;
+  state: ListBinderDocuments200DocumentsItemState;
   openChangeCount: number;
   /** @nullable */
   latestVersion: ListBinderDocuments200DocumentsItemLatestVersion;

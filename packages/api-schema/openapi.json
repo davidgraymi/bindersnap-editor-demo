@@ -8565,7 +8565,8 @@
                         "type": "object",
                         "properties": {
                           "path": {
-                            "type": "string"
+                            "type": "string",
+                            "nullable": true
                           },
                           "slugPath": {
                             "type": "string"
@@ -8577,10 +8578,19 @@
                             "type": "string"
                           },
                           "size": {
-                            "type": "number"
+                            "type": "number",
+                            "nullable": true
                           },
                           "sha": {
-                            "type": "string"
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "published",
+                              "proposed"
+                            ]
                           },
                           "openChangeCount": {
                             "type": "number"
@@ -8613,6 +8623,7 @@
                           "folder",
                           "size",
                           "sha",
+                          "state",
                           "openChangeCount",
                           "latestVersion"
                         ]
@@ -8798,6 +8809,16 @@
                         "size",
                         "sha"
                       ]
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "published",
+                        "proposed"
+                      ]
+                    },
+                    "ref": {
+                      "type": "string"
                     },
                     "versions": {
                       "type": "array",
@@ -9055,6 +9076,8 @@
                     "organization",
                     "workspace",
                     "document",
+                    "state",
+                    "ref",
                     "versions",
                     "latestVersion",
                     "openChanges"

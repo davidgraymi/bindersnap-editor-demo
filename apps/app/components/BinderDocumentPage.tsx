@@ -104,6 +104,7 @@ export function BinderDocumentPage({
       resolveDocumentRef({
         versions: detail?.versions ?? [],
         requestedVersion,
+        recordRef: detail?.ref ?? "main",
       }),
     [detail, requestedVersion],
   );
@@ -175,10 +176,13 @@ export function BinderDocumentPage({
     );
   }
 
-  const { document, versions, latestVersion, openChanges } = detail;
+  const { document, versions, latestVersion, openChanges, state } = detail;
   const crumbs = buildDocumentCrumbs({ org, binder, document });
-  const isViewingRecord = viewing.ref === "main";
-  const nothingPublished = latestVersion === null;
+  const isViewingRecord = viewing.ref === detail.ref;
+  // A proposed document has no published version, but it does have a file —
+  // the one in the change. Showing the "nothing published" panel over it would
+  // hide the very thing somebody came to look at.
+  const nothingToShow = latestVersion === null && state === "published";
 
   return (
     <section className="docw-page">
@@ -218,7 +222,7 @@ export function BinderDocumentPage({
             <div className="doc-header-facts">
               <span
                 className={`doc-version-pill ${
-                  nothingPublished
+                  latestVersion === null
                     ? "doc-version-pill--none"
                     : isViewingRecord
                       ? "doc-version-pill--current"
@@ -226,7 +230,7 @@ export function BinderDocumentPage({
                 }`}
               >
                 {isViewingRecord
-                  ? describeVersionState(latestVersion)
+                  ? describeVersionState(latestVersion, state)
                   : `Version ${viewing.version?.version} — an earlier version`}
               </span>
 
@@ -248,6 +252,13 @@ export function BinderDocumentPage({
         </div>
       </header>
 
+      {state === "proposed" ? (
+        <p className="vault-pr-notice" role="status">
+          This policy is not in the binder yet. What you are reading is the file
+          as submitted, waiting on a decision.
+        </p>
+      ) : null}
+
       {viewing.missing ? (
         <p className="vault-pr-notice" role="status">
           This document has no v{requestedVersion}. Showing the version on
@@ -267,7 +278,7 @@ export function BinderDocumentPage({
               read. Fetching one anyway just to render "not found" in an empty
               frame is the page failing at a question it already knows the
               answer to. */}
-          {nothingPublished && isViewingRecord ? (
+          {nothingToShow && isViewingRecord ? (
             <div className="doc-nothing-published">
               <h2 className="doc-nothing-published-title">
                 No official version yet

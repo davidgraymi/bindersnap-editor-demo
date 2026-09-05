@@ -35,11 +35,12 @@ document backfill, `feat/adr4-5-backfill-documents`) is **closed, deliberately**
 wanted. `feat/adr4-documents-as-files` is an earlier name for #398's commit and
 holds nothing extra.
 
-### Step 3 — the document page (2026-09-05)
+### Step 3 — the document page, and adding one (2026-09-05)
 
-| PR   | Branch                             | What it did                                  |
-| ---- | ---------------------------------- | -------------------------------------------- |
-| #408 | `feat/adr4-8-binder-document-page` | `/{org}/{binder}/{path}` is a page, not Home |
+| PR                                                                     | Branch                             | What it did                                  |
+| ---------------------------------------------------------------------- | ---------------------------------- | -------------------------------------------- |
+| [#409](https://github.com/davidgraymi/bindersnap-editor-demo/pull/409) | `feat/adr4-8-binder-document-page` | `/{org}/{binder}/{path}` is a page, not Home |
+| [#410](https://github.com/davidgraymi/bindersnap-editor-demo/pull/410) | `feat/adr4-9-add-a-policy`         | A member adds a policy to a binder           |
 
 #404's row above used to claim the document page too. It did not ship one:
 `binderDocument` was in the route table and in the nav's highlight rule, but
@@ -75,6 +76,44 @@ an uploaded-but-unpublished document is still unreachable — `main` is the
 record, so the binder's list and its document endpoint both answer from `main`.
 That is the next piece, and it is what "writing from the binder UI" runs into
 first.
+
+### A binder shows what is proposed, not only what is filed
+
+`main` is the record, so a policy uploaded an hour ago is not in the tree —
+and the binder's list read only `main`. A member who added a policy was shown
+a binder that did not contain it, in the one moment they are watching.
+
+The list now carries those documents too, as `state: "proposed"`. They are
+derived from the open changes the list already fetches, through the
+`upload/<slugPath>/…` branch convention (`documentSlugPathFromUploadBranch`),
+so they cost no extra Gitea call — asking which files each change touches
+would be a call per change, which is the cost the binder exists to remove.
+
+The price is that the extension is not knowable that cheaply, so `path`, `size`
+and `sha` are **null** for a proposed document. `WorkspaceDocumentListEntry` is
+therefore no longer an extension of `WorkspaceDocumentEntry`: that type
+describes a file that exists, and this list also carries documents that do not
+exist on `main` yet. A row is addressed by `slugPath`, which is known either
+way, and the document's own page pays for the exact path once — it falls back
+to the pending upload branch and returns `ref`, so the page reads the file out
+of the change.
+
+**The seed did not follow the convention, and nothing was checking.** Every
+branch in `dev.yaml` omitted the document's folder —
+`upload/infection-control-policy/…` for a document at
+`nursing/infection-control-policy`. That seeded fine and looked right in
+Gitea, but the app read it as a change about a different document at the
+binder's root: the real policy lost its open-change badge (already wrong
+before this piece, through `changeTouchesDocument`), and once proposed
+documents were listed, three policies that do not exist appeared beside the
+real ones. `parseSeedScenario` now refuses a branch that does not start with
+`upload/<slugPath>/`, and the thirteen branches are fixed.
+
+Worth knowing when this bites you: `bun run down` does **not** clear Gitea,
+whose data is a bind mount under `data/` rather than a volume. Changing branch
+names left the old ones behind, and the re-seed then opened a pull request
+with nothing in it, which Gitea refuses to merge with "Please try again
+later". `bun run up --fresh` is the fix, and that message is not about timing.
 
 ## Why #393 carries the organization-creation flow too
 
@@ -255,16 +294,11 @@ In rough dependency order.
    the next thing wanted. The binder's three role teams already carry
    membership (`createWorkspaceTeams`, `grantTeamOnRepo`); the organization page
    at `/{org}` needs to surface and edit it. Nothing new in Gitea is required.
-2. **Writing from the binder UI.** The binder pages are read-only: they browse
-   binders and documents and create a binder. Upload and publish still go
-   through the old per-document screens. The API for both is done and tested,
-   so this is mostly screens — with one thing that is not. **An
-   uploaded-but-unpublished document is unreachable:** `listWorkspaceDocuments`
-   and `findWorkspaceDocument` both read `main`, which by design holds only
-   published documents, so a person who has just uploaded a policy is shown a
-   binder that does not contain it. Surfacing proposed documents — from the
-   open changes the list already fetches, whose `upload/<slugPath>/…` branch
-   names carry the identity — is part of this piece rather than a follow-up.
+2. **Publishing from the binder UI.** Adding a policy is done — "Add a policy"
+   on the binder page, and the document is reachable and readable while it
+   waits. What is left is the other half: reviewing, approving and publishing a
+   binder change without going through the old per-document screens. It needs
+   (7).
 3. **Delete the old model.** `POST /api/app/documents`,
    `createPrivateCurrentUserRepo`, the 16 `documents/:owner/:repo` routes in
    `services/api/server.ts`, and roughly a dozen SPA files that address a
@@ -279,7 +313,8 @@ In rough dependency order.
    Not started.
 7. **A binder change needs a page.** The document page lists what is waiting on
    a decision but cannot open it: `/docs/:owner/:repo/changes/:n` is the old
-   model's address and its handlers do not fit a binder. Needed before (3).
+   model's address and its handlers do not fit a binder. This is the gate on
+   both (2) and (3) — review, approval and publish all live on it.
 
 ## Working on this locally — two traps
 
