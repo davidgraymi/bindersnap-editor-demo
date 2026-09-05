@@ -274,7 +274,7 @@ A change is a pull request and may touch several documents; each document it
 publishes gets its own tag on the shared merge commit. Retiring a document is
 `git rm` in an approved change — the history stays.
 
-Role teams, verified against Gitea 1.26 by
+Role teams, verified against Gitea 1.27.3 by
 `tests/gitea-permission-model.pw.ts`: `<ws>-admins` is `permission: admin`,
 `<ws>-authors` is write on `repo.code`/`repo.pulls`/`repo.issues`/`repo.releases`,
 `<ws>-reviewers` is **read** on `repo.code`/`repo.pulls`/`repo.issues`. Read on
@@ -289,7 +289,7 @@ free reviewers real. `.gitea/CODEOWNERS` patterns are anchored regexes, not
 gitignore globs — a folder rule is `policies/nursing/.*` — and the file is read
 from the base branch, so a CODEOWNERS change never governs its own change.
 
-**A CODEOWNERS entry names people, not teams.** Gitea 1.26 writes a team review
+**A CODEOWNERS entry names people, not teams.** Gitea 1.27.3 writes a team review
 request and then clears its own `official` flag (`AddTeamReviewRequest`,
 `models/issues/review.go`), so a team code owner is assignment only and blocks
 no merge; a user code owner blocks it. `tests/gitea-permission-model.pw.ts`

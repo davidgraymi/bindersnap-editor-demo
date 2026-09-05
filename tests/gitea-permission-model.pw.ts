@@ -608,7 +608,7 @@ test.describe("ADR 0004: the Gitea permission model the workspace rests on", () 
     );
   });
 
-  test("a CODEOWNERS team is assigned but blocks nothing — Gitea 1.26 bug", async () => {
+  test("a CODEOWNERS team is assigned but blocks nothing — Gitea bug", async () => {
     const workspace = await provisionWorkspace(admin, {
       enableApprovalsWhitelist: true,
       codeowners: (org, repo) =>
@@ -643,7 +643,9 @@ test.describe("ADR 0004: the Gitea permission model the workspace rests on", () 
     // This is a Gitea bug, not a design choice, and it decides how ADR 0004's
     // per-folder rules have to be written: name people, not teams. If a later
     // Gitea fixes the ordering, this test fails — which is the signal to go
-    // back to teams.
+    // back to teams. Still unfixed as of 1.27.3: the ordering in
+    // AddTeamReviewRequest is byte-identical to the 1.26 this was first
+    // written against.
     expect(request?.official).toBe(false);
 
     // Same shape as the user case: the count is met by somebody who is not a
