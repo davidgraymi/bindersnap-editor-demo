@@ -303,12 +303,28 @@ offering a dropdown that fails. This is exactly how GitHub behaves for the same
 reason, and it is the honest surface of a real constraint.
 
 **Every grant change must recompute `approvals_whitelist_teams`.** The whitelist
-has to list every team granted onto the binder, or that team's members approve
-decoratively — the failure ADR 0004 caught once already. It is one `PATCH` after
-every grant or revoke, derived from `GET /repos/{owner}/{repo}/teams`, and it
-belongs in the same handler rather than in a follow-up job. §4.5 restates it as a
-rule, and it needs a test that grants a team and asserts an approval from its
-member counts.
+has to list every team whose members may approve, or their approvals are recorded
+and count nothing — the failure ADR 0004 caught once already. It is one `PATCH`
+after every grant or revoke, and it belongs in the same handler rather than in a
+follow-up job.
+
+**And the list is every granted team _plus_ `Owners`, unconditionally.** This is a
+correction, found by drawing the model rather than reading it: `Owners` is never
+granted onto a binder, because Gitea gives it admin over the whole organization
+implicitly — it covers every repository, including ones created later. So a
+whitelist derived from `GET /repos/{owner}/{repo}/teams` alone would omit it, and
+an **owner's** approval would silently stop counting. Whether that endpoint happens
+to report `Owners` is not the point and must not be relied on; append it
+unconditionally and let the duplicate be harmless.
+
+The seat path already gets this right by a different route and is worth reading as
+the precedent: `listSeatBearingTeams` enumerates the org's teams and keeps any with
+`includes_all_repositories`, which is how `Owners` is caught there. The two paths
+should agree that org-wide teams exist, rather than one of them discovering it in
+production.
+
+Both need a test: grant a team and assert an approval from its member counts;
+assert the same for an owner who is in no other team.
 
 **Migration.** `provisionWorkspace` currently calls `createWorkspaceTeams` and
 grants all three. It stops. `ROLE_TEAM_OPTIONS` stays exactly as it is — it becomes
@@ -442,18 +458,18 @@ block_on_outdated_branch: true, dismiss_stale_approvals: true, enable_push: fals
 
 On 28.0.0 it becomes:
 
-| Field                               | Value                                  | Why                                                                                                                                                                                      |
-| ----------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `enable_push`                       | `false`                                | The product's core claim: `main` changes only by approved merge                                                                                                                          |
-| `required_approvals`                | binder's setting                       | How many, uniform per binder — that is what a binder means                                                                                                                               |
-| `enable_approvals_whitelist`        | `true`                                 | Still required. `required_approvals` resolves officialness the old way, so without it a free reviewer's approval counts for nothing                                                      |
-| `approvals_whitelist_teams`         | **every team granted onto the binder** | Recomputed from `GET /repos/{owner}/{repo}/teams` after every grant or revoke. Whoever may approve must be listed, or their approval is decorative — see §3                              |
-| `block_on_codeowner_reviews`        | **`true`** (new)                       | Per-folder sign-off becomes enforcement rather than assignment                                                                                                                           |
-| `block_on_official_review_requests` | **`false`** (was `true`)               | It was only ever on to make CODEOWNERS block, which it never did for teams. Left on it now blocks on _manually_ requested reviews, so any member could stall a publish by requesting one |
-| `block_on_rejected_reviews`         | `true`                                 | A rejection should stop a publish                                                                                                                                                        |
-| `block_on_outdated_branch`          | `true`                                 | A version approved against a stale base is not the version published                                                                                                                     |
-| `dismiss_stale_approvals`           | `true`                                 | A new version resets approvals. Note it also removes those approvals from the code-owner gate, which filters dismissed reviews — the two gates agree, deliberately                       |
-| `ignore_stale_approvals`            | `false`                                | `dismiss_stale_approvals` already handles staleness; setting both is two mechanisms for one rule                                                                                         |
+| Field                               | Value                                 | Why                                                                                                                                                                                                                                                 |
+| ----------------------------------- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enable_push`                       | `false`                               | The product's core claim: `main` changes only by approved merge                                                                                                                                                                                     |
+| `required_approvals`                | binder's setting                      | How many, uniform per binder — that is what a binder means                                                                                                                                                                                          |
+| `enable_approvals_whitelist`        | `true`                                | Still required. `required_approvals` resolves officialness the old way, so without it a free reviewer's approval counts for nothing                                                                                                                 |
+| `approvals_whitelist_teams`         | **every granted team, plus `Owners`** | Recomputed after every grant or revoke. `Owners` is appended unconditionally: it is never granted onto a binder — its admin is org-wide and implicit — so a list derived from the repo's teams omits it and owners' approvals stop counting. See §3 |
+| `block_on_codeowner_reviews`        | **`true`** (new)                      | Per-folder sign-off becomes enforcement rather than assignment                                                                                                                                                                                      |
+| `block_on_official_review_requests` | **`false`** (was `true`)              | It was only ever on to make CODEOWNERS block, which it never did for teams. Left on it now blocks on _manually_ requested reviews, so any member could stall a publish by requesting one                                                            |
+| `block_on_rejected_reviews`         | `true`                                | A rejection should stop a publish                                                                                                                                                                                                                   |
+| `block_on_outdated_branch`          | `true`                                | A version approved against a stale base is not the version published                                                                                                                                                                                |
+| `dismiss_stale_approvals`           | `true`                                | A new version resets approvals. Note it also removes those approvals from the code-owner gate, which filters dismissed reviews — the two gates agree, deliberately                                                                                  |
+| `ignore_stale_approvals`            | `false`                               | `dismiss_stale_approvals` already handles staleness; setting both is two mechanisms for one rule                                                                                                                                                    |
 
 The two whitelist rows are the ones to read twice. **The gates resolve officialness
 differently**: `required_approvals` counts only official reviews, so it needs the
@@ -684,12 +700,13 @@ and assert, and none of §4 should be depended on until it passes.
 
 Beyond that, four claims here are reasoned rather than tested:
 
-| Claim                                                                                                                                      | What would settle it                                                                                                                                             |
-| ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A `staff` team granted read on `repo.code`/`repo.pulls`/`repo.issues` lets its members approve, and their approval counts once whitelisted | Extend `tests/gitea-permission-model.pw.ts` with a staff-team case — the same assertion it already makes for `<ws>-reviewers`                                    |
-| The teams-first read model returns the same answer as asking the repository as each member                                                 | A test that builds a binder with all four teams and compares the two answers member by member                                                                    |
-| `GET /users/{username}/orgs/{org}/permissions` reports `is_owner` for an Owners-team member and not for a `staff` member                   | One integration assertion; it is the guard on every owner-only route, so it should not be assumed                                                                |
-| A sign-off group granted onto no repository costs no seat                                                                                  | `listBillableSeats` already encodes the rule ("granted onto at least one repository"); a test that creates such a group and asserts the seat count does not move |
+| Claim                                                                                                                                                                                             | What would settle it                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A `staff` team granted read on `repo.code`/`repo.pulls`/`repo.issues` lets its members approve, and their approval counts once whitelisted                                                        | Extend `tests/gitea-permission-model.pw.ts` with a staff-team case — the same assertion it already makes for `<ws>-reviewers`                                                    |
+| An **owner** who is in no other team has their approval counted — that is, `Owners` really must be in `approvals_whitelist_teams`, and `GET /repos/{owner}/{repo}/teams` may or may not report it | One assertion, and the sharpest one on this list: it fails silently and presents as "publishing is mysteriously blocked". Assert the whitelist contents and the counted approval |
+| The teams-first read model returns the same answer as asking the repository as each member                                                                                                        | A test that builds a binder with all four teams and compares the two answers member by member                                                                                    |
+| `GET /users/{username}/orgs/{org}/permissions` reports `is_owner` for an Owners-team member and not for a `staff` member                                                                          | One integration assertion; it is the guard on every owner-only route, so it should not be assumed                                                                                |
+| A sign-off group granted onto no repository costs no seat                                                                                                                                         | `listBillableSeats` already encodes the rule ("granted onto at least one repository"); a test that creates such a group and asserts the seat count does not move                 |
 
 ---
 
