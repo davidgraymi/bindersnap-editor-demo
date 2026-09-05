@@ -20,6 +20,26 @@ import {
 } from "./session-organization";
 import { claimLegacyBillingForOrganization } from "./legacy-billing-claim";
 import { provisionSignup } from "./signup-provisioning";
+import { slugifyOrganizationName } from "../../packages/utils/organizationName";
+import {
+  buildDocumentFilePath,
+  buildDocumentSlugPath,
+} from "../../packages/utils/documentPath";
+import {
+  findWorkspaceRepo,
+  listOrganizationWorkspaces,
+  provisionWorkspace,
+} from "./gitea-client/workspaces";
+import {
+  createDocumentVersionTag,
+  findPendingDocumentBranch,
+  findWorkspaceDocument,
+  listChangedDocuments,
+  listDocumentVersions,
+  listVersionsByDocument,
+  listWorkspaceDocuments,
+  nextVersionFrom,
+} from "./gitea-client/workspaceDocuments";
 import { listOrganizationOwners } from "./gitea-client/orgs";
 import { createPrivilegedGiteaClient } from "./privileged-client";
 import type Stripe from "stripe";
@@ -94,6 +114,7 @@ import {
   searchInvolvedChanges,
   type InvolvedChangeRef,
   mergeOrResolveConflicts,
+  mergeWorkspaceChange,
   removePullReviewers,
   requestPullReviewers,
   setPullRequestAssignees,
@@ -4728,6 +4749,716 @@ async function handleStripeWebhook(
  * organization has to be able to ask, and gating it behind having one is a
  * loop with no way out.
  */
+/**
+ * The binders this session's organization owns.
+ *
+ * A read, so it is never gated (ADR 0004). A session with no organization has
+ * no binders rather than an error — that is an ordinary state now that an
+ * organization is something a person creates.
+ */
+/**
+ * Add a document to a binder, as a file at a path.
+ *
+ * ADR 0004's step 2. The document is no longer a repository of its own: it is
+ * a file inside the workspace that governs it, which is what makes one set of
+ * rules and one set of people cover every policy in the binder.
+ *
+ * ADR 0001's contract is unchanged — upload lands on a branch and opens a pull
+ * request, and nothing reaches `main` except a merged, approved change. Only
+ * the target repository and the path are new.
+ */
+/**
+ * The binder's documents.
+ *
+ * One recursive tree read instead of a repository search — the binder model's
+ * whole cost argument, per ADR 0004: "the documents list drops from roughly
+ * three Gitea calls per document to a handful per workspace".
+ *
+ * A read, so it is never gated.
+ */
+/**
+ * Publish a change, and version every document it touched.
+ *
+ * ADR 0004 §4: the unit of approval is the change, not the document. One
+ * approved change that revised three cross-referencing policies publishes three
+ * versions — `infection-control/v4`, `handover/v2`, `medication/v7` — all
+ * pointing at the same merge commit. Several tags on one commit is ordinary
+ * git, and it is what keeps "who approved v4" answerable as tag → commit →
+ * pull request → reviews.
+ *
+ * The unresolved-thread gate is unchanged from the per-repository publish and
+ * still lives here: Gitea has no equivalent of GitHub's required conversation
+ * resolution, and the BFF is the only path to a merge, so it cannot be
+ * bypassed from the browser. Checked before the merge, never after.
+ */
+async function handlePublishWorkspaceChange(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+  pullNumber: number,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { client, session } = auth;
+  const payload = (await readJsonBody(req)) ?? null;
+  const form = payload ? null : await readMultipartBody(req);
+  const mergeStyleRaw = readInputString(
+    payload,
+    form,
+    "mergeStyle",
+  ).toLowerCase();
+  const mergeStyle =
+    mergeStyleRaw === "squash" || mergeStyleRaw === "rebase"
+      ? (mergeStyleRaw as "squash" | "rebase")
+      : "merge";
+
+  // Authorization comes from the token, not from a membership lookup: a binder
+  // this session cannot see answers 404 from Gitea, which is the same answer a
+  // binder that does not exist gives — and the right one either way.
+  const owner = orgName;
+
+  try {
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: owner,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    // Which documents this change covers has to be known before the merge:
+    // afterwards the branch is gone, and with it the question's cheapest
+    // answer.
+    const documents = await listChangedDocuments({
+      client,
+      org: owner,
+      workspace: workspaceName,
+      pullNumber,
+    });
+
+    if (documents.length === 0) {
+      return json(
+        409,
+        { error: "This change does not touch any document." },
+        baseHeaders,
+      );
+    }
+
+    const reviewSettings = await getReviewSettings({
+      client,
+      owner,
+      repo: workspaceName,
+    });
+    if (reviewSettings.blockOnUnresolvedThreads) {
+      const discussions = await listDiscussions({
+        client,
+        owner,
+        repo: workspaceName,
+        pullNumber,
+      });
+
+      if (discussions.unresolvedCount > 0) {
+        return json(
+          409,
+          {
+            error:
+              discussions.unresolvedCount === 1
+                ? "This change has 1 unresolved discussion thread. Resolve it before publishing."
+                : `This change has ${discussions.unresolvedCount} unresolved discussion threads. Resolve them before publishing.`,
+            unresolvedCount: discussions.unresolvedCount,
+          },
+          baseHeaders,
+        );
+      }
+    }
+
+    // Each document's next version is its own: they are versioned separately
+    // and a binder's documents do not advance in lockstep. Read before the
+    // merge so a failure here changes nothing.
+    const nextVersions = await Promise.all(
+      documents.map(async (document) => ({
+        document,
+        version: nextVersionFrom(
+          await listDocumentVersions({
+            client,
+            org: owner,
+            workspace: workspaceName,
+            slugPath: document.slugPath,
+          }),
+        ),
+      })),
+    );
+
+    await mergeWorkspaceChange({
+      client,
+      owner,
+      repo: workspaceName,
+      pullNumber,
+      mergeStyle,
+    });
+
+    // Sequential: Gitea serializes repository writes, and a partial failure
+    // here is easier to read in order than interleaved.
+    const tags = [];
+    for (const { document, version } of nextVersions) {
+      tags.push(
+        await createDocumentVersionTag({
+          client,
+          org: owner,
+          workspace: workspaceName,
+          slugPath: document.slugPath,
+          version,
+          target: "main",
+        }),
+      );
+    }
+
+    logger.info("Workspace change published", {
+      username: session.username,
+      organization: owner,
+      workspace: workspaceName,
+      pullNumber,
+      tags: tags.map((tag) => tag.tag),
+    });
+
+    return json(200, { ok: true, tags }, baseHeaders);
+  } catch (err) {
+    logger.error("Failed to publish a workspace change", {
+      username: session.username,
+      organization: owner,
+      workspace: workspaceName,
+      pullNumber,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to publish the change.");
+  }
+}
+
+async function handleListWorkspaceDocuments(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  try {
+    const workspace = await findWorkspaceRepo({
+      client: auth.client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    const documents = await listWorkspaceDocuments({
+      client: auth.client,
+      org: orgName,
+      workspace: workspaceName,
+    });
+
+    // Two calls for the whole binder, then matched per document — rather than
+    // a pull request query and a tags query each, which is the cost the binder
+    // exists to remove. Both are repository-wide, so a binder of two hundred
+    // policies costs the same as one of two.
+    const [openChanges, versionsByDocument] = await Promise.all([
+      listPullRequests({
+        client: auth.client,
+        owner: orgName,
+        repo: workspaceName,
+        state: "open",
+      }),
+      listVersionsByDocument({
+        client: auth.client,
+        org: orgName,
+        workspace: workspaceName,
+      }),
+    ]);
+
+    return json(
+      200,
+      {
+        organization: orgName,
+        workspace: workspaceName,
+        documents: documents.map((document) => ({
+          ...document,
+          openChangeCount: openChanges.filter((pull) =>
+            changeTouchesDocument(pull, document.slugPath),
+          ).length,
+          // A list of policies that does not say which version each one is at
+          // answers none of the questions a list is opened to answer.
+          latestVersion: versionsByDocument.get(document.slugPath)?.[0] ?? null,
+        })),
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to list workspace documents", {
+      username: auth.session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to list the documents.");
+  }
+}
+
+/**
+ * Whether an open change is about this document.
+ *
+ * Matched on the upload branch convention — `upload/<slugPath>/…` — because
+ * asking Gitea which files a pull request touches is a call per change, and
+ * this list exists to stop paying per document. The answer only decides a
+ * badge; nothing gates on it, so a convention is the right price.
+ */
+function changeTouchesDocument(
+  pull: { head?: { ref?: string } | null },
+  slugPath: string,
+): boolean {
+  const ref = pull.head?.ref ?? "";
+  return ref.startsWith(`upload/${slugPath}/`);
+}
+
+/**
+ * One document in a binder, with its published versions.
+ *
+ * Addressable by file path or by identity: a URL may carry
+ * `clinical/infection-control` or `clinical/infection-control.pdf`, and the
+ * extension is how we render a document rather than how a person refers to it.
+ */
+async function handleWorkspaceDocumentDetail(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+  documentPath: string,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  try {
+    const workspace = await findWorkspaceRepo({
+      client: auth.client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    const document = await findWorkspaceDocument({
+      client: auth.client,
+      org: orgName,
+      workspace: workspaceName,
+      documentPath,
+    });
+    if (!document) {
+      return json(404, { error: "No such document." }, baseHeaders);
+    }
+
+    const [versions, openChanges] = await Promise.all([
+      listDocumentVersions({
+        client: auth.client,
+        org: orgName,
+        workspace: workspaceName,
+        slugPath: document.slugPath,
+      }),
+      listPullRequests({
+        client: auth.client,
+        owner: orgName,
+        repo: workspaceName,
+        state: "open",
+      }),
+    ]);
+
+    return json(
+      200,
+      {
+        organization: orgName,
+        workspace: workspaceName,
+        document,
+        versions,
+        latestVersion: versions[0] ?? null,
+        openChanges: openChanges.filter((pull) =>
+          changeTouchesDocument(pull, document.slugPath),
+        ),
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to read a workspace document", {
+      username: auth.session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      documentPath,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to read the document.");
+  }
+}
+
+async function handleCreateWorkspaceDocument(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { session, client } = auth;
+  const form = await readMultipartBody(req);
+  if (!form) {
+    return json(
+      400,
+      { error: "Multipart form data is required." },
+      baseHeaders,
+    );
+  }
+
+  const file = parseOptionalFile(form.get("file"));
+  const name = parseOptionalString(form.get("name"));
+  const folder = parseOptionalString(form.get("folder")) || null;
+
+  if (!file || !name) {
+    return json(400, { error: "file and name are required." }, baseHeaders);
+  }
+
+  const validation = validateUploadFile(file);
+  if (!validation.valid) {
+    return json(
+      400,
+      { error: validation.reason ?? "Invalid file." },
+      baseHeaders,
+    );
+  }
+
+  const slugPath = buildDocumentSlugPath(name, folder);
+  if (slugPath === "") {
+    return json(
+      400,
+      { error: "That name has no letters or numbers to make a path from." },
+      baseHeaders,
+    );
+  }
+
+  const extension = getFileExtension(file.name);
+  const filePath = buildDocumentFilePath(name, extension, folder);
+
+  const organization = await resolveSessionOrganization(client, session);
+  if (!organization) {
+    return json(
+      409,
+      { error: "Create an organization before adding a document." },
+      baseHeaders,
+    );
+  }
+
+  try {
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    // Refuse anything that would land on an address already taken — including
+    // the same name with a different extension. A URL has to name one thing:
+    // `policy.md` and `policy.pdf` would both be `nursing/policy`, so a link to
+    // that address would resolve to whichever came first alphabetically, and
+    // publishing one would write the other's version tag.
+    //
+    // The identity deliberately excludes the extension so that re-uploading a
+    // policy as a PDF keeps its history. That only works if nothing else can
+    // claim the same identity, which is what this enforces.
+    const collision = await findWorkspaceDocument({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      documentPath: slugPath,
+    });
+
+    if (collision) {
+      return json(
+        409,
+        {
+          error:
+            collision.path === filePath
+              ? `A document already lives at "${filePath}".`
+              : `"${collision.path}" already answers to "${slugPath}". Two documents cannot share one address.`,
+        },
+        baseHeaders,
+      );
+    }
+
+    // And one that is proposed but not yet published. `main` shows only
+    // published documents, so without this two uploads race for the same
+    // address, both succeed, and the collision appears later as two files
+    // answering to one URL.
+    const pending = await findPendingDocumentBranch({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      slugPath,
+    });
+
+    if (pending) {
+      return json(
+        409,
+        {
+          error: `An unpublished change already claims "${slugPath}" (${pending}).`,
+        },
+        baseHeaders,
+      );
+    }
+
+    const buffer = await file.arrayBuffer();
+    const [fullHash, base64Content] = await Promise.all([
+      computeFileHashFromBuffer(buffer),
+      Buffer.from(buffer).toString("base64"),
+    ]);
+    const contentHash8 = fullHash.slice(0, 8);
+    const branchName = buildUploadBranchName(
+      slugPath,
+      session.username,
+      contentHash8,
+    );
+
+    // No repository to create and no rules to install: the binder already has
+    // a protected `main` and its role teams. That is the point of the level.
+    await createUploadBranch({
+      client,
+      owner: orgName,
+      repo: workspaceName,
+      branchName,
+      from: "main",
+    });
+
+    const commitMessage = buildUploadCommitMessage({
+      docSlug: slugPath,
+      canonicalFile: filePath,
+      sourceFilename: file.name,
+      uploadBranch: branchName,
+      uploaderSlug: session.username,
+      fileHashSha256: fullHash,
+    });
+
+    await commitBinaryFile({
+      client,
+      owner: orgName,
+      repo: workspaceName,
+      branch: branchName,
+      filePath,
+      base64Content,
+      message: commitMessage,
+      isNewFile: true,
+    });
+
+    const pr = await createPullRequest({
+      client,
+      owner: orgName,
+      repo: workspaceName,
+      title: `Add ${slugPath}`,
+      head: branchName,
+      base: "main",
+      body: [
+        "Automated upload from Bindersnap.",
+        "",
+        `Source file: ${file.name}`,
+        `Document: ${slugPath}`,
+        `Binder: ${organization.name}/${workspaceName}`,
+        `Uploaded by: ${session.username}`,
+        `File hash (SHA-256): ${fullHash}`,
+      ].join("\n"),
+    });
+
+    logger.info("Workspace document created", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      documentPath: filePath,
+    });
+
+    return json(
+      201,
+      {
+        organization: orgName,
+        workspace: workspaceName,
+        documentPath: filePath,
+        slugPath,
+        branch: branchName,
+        pullRequestNumber: pr.number ?? null,
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to add a document to a workspace", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      documentPath: filePath,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to add the document.");
+  }
+}
+
+async function handleListWorkspaces(
+  req: Request,
+  baseHeaders: Headers,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  try {
+    // Every organization this session belongs to, not the oldest one. Picking
+    // for them was always a guess, and a person in two organizations was shown
+    // whichever came first — including, in a dev stack, whichever test made one
+    // first. Each binder names its owner, so the caller can address it.
+    const organizations = await listSessionOrganizations(auth.client);
+
+    const workspaces = (
+      await Promise.all(
+        organizations.map((organization) =>
+          listOrganizationWorkspaces({
+            client: auth.client,
+            org: organization.name,
+          }).catch(() => []),
+        ),
+      )
+    ).flat();
+
+    return json(200, { workspaces }, baseHeaders);
+  } catch (err) {
+    logger.error("Failed to list workspaces", {
+      username: auth.session.username,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to list the binders.");
+  }
+}
+
+/**
+ * Create a binder, owned by the organization.
+ *
+ * A write, so it needs a subscription — and the 402 is what sends a session
+ * with no organization to name one first, since there is nothing to own a
+ * binder until then.
+ *
+ * The name is slugified the same way an organization's is, and for the same
+ * reason: "Clinical Policies" is not a name Gitea will take, and the person
+ * choosing it should be told the address they are choosing.
+ */
+/**
+ * The binders one organization owns.
+ *
+ * Distinct from `GET /api/app/binders`, and deliberately so. That one answers
+ * a question about a person — everything I can act in, wherever it lives — and
+ * is what the personal views are built on. This one answers a question about
+ * an organization, which is what you are asking when you are looking at the
+ * organization rather than at your day.
+ */
+async function handleListOrganizationWorkspaces(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  try {
+    const workspaces = await listOrganizationWorkspaces({
+      client: auth.client,
+      org: orgName,
+    });
+    return json(200, { workspaces }, baseHeaders);
+  } catch (err) {
+    logger.error("Failed to list an organization's binders", {
+      username: auth.session.username,
+      organization: orgName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to list the binders.");
+  }
+}
+
+async function handleCreateWorkspace(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const payload = await readJson<{ name?: unknown; description?: unknown }>(
+    req,
+  );
+  const requested =
+    typeof payload?.name === "string" ? payload.name.trim() : "";
+  if (!requested) {
+    return json(400, { error: "A binder name is required." }, baseHeaders);
+  }
+
+  const name = slugifyOrganizationName(requested);
+  if (!name) {
+    return json(
+      400,
+      { error: "That name has no letters or numbers Gitea can use." },
+      baseHeaders,
+    );
+  }
+
+  const description =
+    typeof payload?.description === "string"
+      ? payload.description.trim()
+      : undefined;
+
+  try {
+    const existing = await findWorkspaceRepo({
+      client: auth.client,
+      org: orgName,
+      name,
+    });
+    if (existing) {
+      return json(
+        409,
+        { error: `A binder named "${name}" already exists.` },
+        baseHeaders,
+      );
+    }
+
+    const provisioned = await provisionWorkspace({
+      client: auth.client,
+      org: orgName,
+      name,
+      description,
+    });
+
+    logger.info("Workspace created", {
+      username: auth.session.username,
+      organization: orgName,
+      workspace: provisioned.workspace.name,
+    });
+
+    return json(201, { workspace: provisioned.workspace }, baseHeaders);
+  } catch (err) {
+    logger.error("Failed to create a workspace", {
+      username: auth.session.username,
+      organization: orgName,
+      workspace: name,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to create the binder.");
+  }
+}
+
 async function handleListOrganizations(
   req: Request,
   baseHeaders: Headers,
@@ -5406,6 +6137,8 @@ export function createApiServer() {
         method === "GET"
       ) {
         response = await handleAdminSubscriptionAccessList(req, baseHeaders);
+      } else if (pathname === "/api/app/binders" && method === "GET") {
+        response = await handleListWorkspaces(req, baseHeaders);
       } else if (pathname === "/api/app/organizations" && method === "GET") {
         response = await handleListOrganizations(req, baseHeaders);
       } else if (pathname === "/api/app/organizations" && method === "POST") {
@@ -5487,8 +6220,64 @@ export function createApiServer() {
         const documentMatch = pathname.match(
           /^\/api\/app\/documents\/([^/]+)\/([^/]+)$/,
         );
+        const workspaceDocumentsMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/documents$/,
+        );
+        // The document's path carries slashes — it is a path inside the binder,
+        // not one segment — so this captures the rest of the URL.
+        const workspaceDocumentMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/documents\/(.+)$/,
+        );
+        const workspacePublishMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/publish$/,
+        );
+        const createBinderMatch = pathname.match(
+          /^\/api\/app\/orgs\/([^/]+)\/binders$/,
+        );
 
-        if (reviewMatch && method === "POST") {
+        if (createBinderMatch && method === "GET") {
+          response = await handleListOrganizationWorkspaces(
+            req,
+            baseHeaders,
+            createBinderMatch[1]!,
+          );
+        } else if (createBinderMatch && method === "POST") {
+          response = await handleCreateWorkspace(
+            req,
+            baseHeaders,
+            createBinderMatch[1]!,
+          );
+        } else if (workspacePublishMatch && method === "POST") {
+          response = await handlePublishWorkspaceChange(
+            req,
+            baseHeaders,
+            workspacePublishMatch[1]!,
+            workspacePublishMatch[2]!,
+            Number.parseInt(workspacePublishMatch[3] ?? "", 10),
+          );
+        } else if (workspaceDocumentsMatch && method === "GET") {
+          response = await handleListWorkspaceDocuments(
+            req,
+            baseHeaders,
+            workspaceDocumentsMatch[1]!,
+            workspaceDocumentsMatch[2]!,
+          );
+        } else if (workspaceDocumentMatch && method === "GET") {
+          response = await handleWorkspaceDocumentDetail(
+            req,
+            baseHeaders,
+            workspaceDocumentMatch[1]!,
+            workspaceDocumentMatch[2]!,
+            decodeURIComponent(workspaceDocumentMatch[3]!),
+          );
+        } else if (workspaceDocumentsMatch && method === "POST") {
+          response = await handleCreateWorkspaceDocument(
+            req,
+            baseHeaders,
+            workspaceDocumentsMatch[1]!,
+            workspaceDocumentsMatch[2]!,
+          );
+        } else if (reviewMatch && method === "POST") {
           response = await handleDocumentReview(
             req,
             baseHeaders,

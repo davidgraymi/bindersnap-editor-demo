@@ -1,6 +1,7 @@
 import type { components } from "./spec/gitea";
 
 import { GiteaApiError, unwrap, type GiteaClient } from "./client";
+import { bootstrapEmptyMainBranch } from "./repos";
 import {
   createOrganization,
   createWorkspaceTeams,
@@ -93,6 +94,68 @@ export async function createWorkspaceRepo(
   );
 
   return normalizeWorkspace(repo);
+}
+
+export interface ListOrganizationWorkspacesParams {
+  client: GiteaClient;
+  org: string;
+}
+
+/**
+ * The organization's binders.
+ *
+ * Gitea answers with the repositories this token can see, which is the right
+ * answer rather than a convenient one: a member who cannot see a workspace has
+ * no business being told it exists.
+ */
+export async function listOrganizationWorkspaces(
+  params: ListOrganizationWorkspacesParams,
+): Promise<WorkspaceSummary[]> {
+  const { client, org } = params;
+
+  const repos = await unwrap(
+    client.GET("/orgs/{org}/repos", { params: { path: { org } } }),
+  );
+
+  return (repos ?? []).map(normalizeWorkspace);
+}
+
+export interface WorkspacePathExistsParams {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  path: string;
+  ref?: string;
+}
+
+/**
+ * Whether something already sits at this path in the binder.
+ *
+ * A binder holds many documents now, so "is this name taken?" is a question
+ * about a path rather than about a repository. Committing over an existing
+ * document would rewrite somebody else's policy while looking like a new one.
+ */
+export async function workspacePathExists(
+  params: WorkspacePathExistsParams,
+): Promise<boolean> {
+  const { client, org, workspace, path, ref = "main" } = params;
+
+  try {
+    await unwrap(
+      client.GET("/repos/{owner}/{repo}/contents/{filepath}", {
+        params: {
+          path: { owner: org, repo: workspace, filepath: path },
+          query: { ref },
+        },
+      }),
+    );
+    return true;
+  } catch (err) {
+    if (err instanceof GiteaApiError && err.status === 404) {
+      return false;
+    }
+    throw err;
+  }
 }
 
 export interface FindWorkspaceRepoParams {
@@ -246,6 +309,15 @@ export async function provisionWorkspace(
     name,
     description,
   });
+
+  // Gitea's `auto_init` writes a README, which is the only way to get a `main`
+  // to protect — but a binder holds policies, and a generated README is not
+  // one. Left in place it lists as a document called "README", which is a file
+  // nobody wrote showing up in front of a surveyor. Removing it leaves `main`
+  // with a commit and no files, which is what an empty binder is.
+  //
+  // Before protection, necessarily: afterwards nothing may push to `main`.
+  await bootstrapEmptyMainBranch({ client, owner: org, repo: name });
 
   const teams = await createWorkspaceTeams({ client, org, workspace: name });
 

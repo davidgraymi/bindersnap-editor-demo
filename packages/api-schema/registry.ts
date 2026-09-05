@@ -40,6 +40,16 @@ import {
   OrganizationSummarySchema,
 } from "./schemas/organizations";
 import {
+  WorkspaceDocumentDetailPayloadSchema,
+  WorkspaceDocumentEntrySchema,
+  WorkspaceDocumentListPayloadSchema,
+  CreatedWorkspaceDocumentPayloadSchema,
+  CreatedWorkspacePayloadSchema,
+  NewWorkspaceBodySchema,
+  WorkspaceListPayloadSchema,
+  WorkspaceSummarySchema,
+} from "./schemas/workspaces";
+import {
   BillingActionBodySchema,
   BillingStatusPayloadSchema,
   BillingUrlResultSchema,
@@ -76,6 +86,10 @@ registry.register("SearchUsersPayload", SearchUsersPayloadSchema);
 registry.register("OrganizationSummary", OrganizationSummarySchema);
 registry.register("OrganizationListPayload", OrganizationListPayloadSchema);
 registry.register("NewOrganizationBody", NewOrganizationBodySchema);
+registry.register("WorkspaceSummary", WorkspaceSummarySchema);
+registry.register("WorkspaceListPayload", WorkspaceListPayloadSchema);
+registry.register("NewWorkspaceBody", NewWorkspaceBodySchema);
+registry.register("WorkspaceDocumentEntry", WorkspaceDocumentEntrySchema);
 registry.register(
   "CreatedOrganizationPayload",
   CreatedOrganizationPayloadSchema,
@@ -716,9 +730,143 @@ registry.registerPath({
   },
   responses: {
     201: {
-      description: "The organization, its first binder and its trial",
+      description: "The organization and its trial",
       content: {
         "application/json": { schema: CreatedOrganizationPayloadSchema },
+      },
+    },
+  },
+});
+
+// Workspace routes
+registry.registerPath({
+  method: "get",
+  path: "/api/app/binders",
+  operationId: "listBinders",
+  tags: ["workspaces"],
+  responses: {
+    200: {
+      description:
+        "Every binder this session can act in, each naming its organization",
+      content: {
+        "application/json": { schema: WorkspaceListPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/orgs/{org}/binders",
+  operationId: "listOrganizationBinders",
+  tags: ["workspaces"],
+  request: { params: z.object({ org: z.string() }) },
+  responses: {
+    200: {
+      description: "The binders this organization owns",
+      content: {
+        "application/json": { schema: WorkspaceListPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/orgs/{org}/binders",
+  operationId: "createBinder",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({ org: z.string() }),
+    body: {
+      required: true,
+      content: {
+        "application/json": { schema: NewWorkspaceBodySchema },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "The binder, its role teams and its protected main",
+      content: {
+        "application/json": { schema: CreatedWorkspacePayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/binders/{org}/{binder}/documents",
+  operationId: "listBinderDocuments",
+  tags: ["workspaces"],
+  request: { params: z.object({ org: z.string(), binder: z.string() }) },
+  responses: {
+    200: {
+      description: "The binder's documents",
+      content: {
+        "application/json": { schema: WorkspaceDocumentListPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/binders/{org}/{binder}/documents/{documentPath}",
+  operationId: "getBinderDocument",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({
+      org: z.string(),
+      binder: z.string(),
+      /** File path or identity — a URL may carry either. */
+      documentPath: z.string(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "One document, with its published versions",
+      content: {
+        "application/json": { schema: WorkspaceDocumentDetailPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/binders/{org}/{binder}/documents",
+  operationId: "createBinderDocument",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({ org: z.string(), binder: z.string() }),
+    body: {
+      required: true,
+      content: {
+        "multipart/form-data": {
+          schema: z.object({
+            file: z.string().openapi({
+              type: "string",
+              format: "binary",
+              description: "File upload",
+            }),
+            /** The title. Slugified into the path segment. */
+            name: z.string(),
+            /** Optional directory inside the binder. Nests as deep as wanted. */
+            folder: z.string().optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "The document's path, and the change that will publish it",
+      content: {
+        "application/json": {
+          schema: CreatedWorkspaceDocumentPayloadSchema,
+        },
       },
     },
   },

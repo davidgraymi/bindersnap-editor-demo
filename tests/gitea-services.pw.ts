@@ -42,6 +42,7 @@ import {
 } from "../services/api/gitea-client/uploads";
 
 import {
+  GITEA_ADMIN_USER,
   GITEA_URL,
   installMemorySessionStorage,
   makeClient,
@@ -53,6 +54,13 @@ import {
   SEEDED_BRANCH,
   SEEDED_DOC_PATH,
 } from "./helpers";
+
+/**
+ * The lifecycle block builds its own throwaway repository with
+ * `POST /user/repos`, so it is owned by the token's user. `OWNER` names the
+ * organization that owns the seeded binders, which is a different thing.
+ */
+const LIFECYCLE_OWNER = GITEA_ADMIN_USER;
 
 // ---------------------------------------------------------------------------
 // Suite setup
@@ -295,13 +303,15 @@ test.describe("pull request workflow", () => {
 
       // Add bob as a collaborator with write access
       await client.PUT("/repos/{owner}/{repo}/collaborators/{collaborator}", {
-        params: { path: { owner: OWNER, repo: repoName, collaborator: "bob" } },
+        params: {
+          path: { owner: LIFECYCLE_OWNER, repo: repoName, collaborator: "bob" },
+        },
         body: { permission: "write" },
       });
 
       // Set up branch protection requiring 1 approval
       await client.POST("/repos/{owner}/{repo}/branch_protections", {
-        params: { path: { owner: OWNER, repo: repoName } },
+        params: { path: { owner: LIFECYCLE_OWNER, repo: repoName } },
         body: {
           rule_name: "main",
           required_approvals: 1,
@@ -314,7 +324,7 @@ test.describe("pull request workflow", () => {
 
       await createUploadBranch({
         client,
-        owner: OWNER,
+        owner: LIFECYCLE_OWNER,
         repo: lifecycleRepo,
         branchName: testBranch,
         from: "main",
@@ -322,7 +332,7 @@ test.describe("pull request workflow", () => {
 
       await commitDocument({
         client,
-        owner: OWNER,
+        owner: LIFECYCLE_OWNER,
         repo: lifecycleRepo,
         filePath: testFilePath,
         branch: testBranch,
@@ -340,7 +350,7 @@ test.describe("pull request workflow", () => {
 
       await createPullRequest({
         client,
-        owner: OWNER,
+        owner: LIFECYCLE_OWNER,
         repo: lifecycleRepo,
         title: "Test: PR workflow",
         head: testBranch,
@@ -354,7 +364,7 @@ test.describe("pull request workflow", () => {
 
       const found = await getPullRequestForBranch({
         client,
-        owner: OWNER,
+        owner: LIFECYCLE_OWNER,
         repo: lifecycleRepo,
         branch: testBranch,
       });
@@ -369,7 +379,7 @@ test.describe("pull request workflow", () => {
 
       const before = await getPullRequestForBranch({
         client,
-        owner: OWNER,
+        owner: LIFECYCLE_OWNER,
         repo: lifecycleRepo,
         branch: testBranch,
       });
@@ -378,7 +388,7 @@ test.describe("pull request workflow", () => {
 
       await submitReview({
         client: bobClient,
-        owner: OWNER,
+        owner: LIFECYCLE_OWNER,
         repo: lifecycleRepo,
         pullNumber,
         event: "APPROVE",
@@ -388,7 +398,7 @@ test.describe("pull request workflow", () => {
       await pollUntil(async () => {
         const pr = await getPullRequestForBranch({
           client,
-          owner: OWNER,
+          owner: LIFECYCLE_OWNER,
           repo: lifecycleRepo,
           branch: testBranch,
         });
@@ -397,7 +407,7 @@ test.describe("pull request workflow", () => {
 
       const after = await getPullRequestForBranch({
         client,
-        owner: OWNER,
+        owner: LIFECYCLE_OWNER,
         repo: lifecycleRepo,
         branch: testBranch,
       });
@@ -409,7 +419,7 @@ test.describe("pull request workflow", () => {
 
       const before = await getPullRequestForBranch({
         client,
-        owner: OWNER,
+        owner: LIFECYCLE_OWNER,
         repo: lifecycleRepo,
         branch: testBranch,
       });
@@ -418,7 +428,7 @@ test.describe("pull request workflow", () => {
 
       await mergePullRequest({
         client,
-        owner: OWNER,
+        owner: LIFECYCLE_OWNER,
         repo: lifecycleRepo,
         pullNumber,
         mergeStyle: "merge",
@@ -428,7 +438,7 @@ test.describe("pull request workflow", () => {
       await pollUntil(async () => {
         const pr = await getPullRequestForBranch({
           client,
-          owner: OWNER,
+          owner: LIFECYCLE_OWNER,
           repo: lifecycleRepo,
           branch: testBranch,
         });
@@ -437,7 +447,7 @@ test.describe("pull request workflow", () => {
 
       const after = await getPullRequestForBranch({
         client,
-        owner: OWNER,
+        owner: LIFECYCLE_OWNER,
         repo: lifecycleRepo,
         branch: testBranch,
       });
@@ -561,7 +571,9 @@ test.describe("uploads", () => {
     const { data } = await client.GET(
       "/repos/{owner}/{repo}/branches/{branch}",
       {
-        params: { path: { owner: OWNER, repo: REPO, branch: branchName } },
+        params: {
+          path: { owner: OWNER, repo: REPO, branch: branchName },
+        },
       },
     );
     expect(data?.name).toBe(branchName);

@@ -6669,3 +6669,46 @@ input {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Organization switcher — the same surface as the version menu, because it is
+   the same gesture: a small list of things you might be looking at instead.
+
+   Fixed, not absolute, and for the same reason as `.app-profile-menu`:
+   `.app-topnav` clips its overflow, so a menu positioned inside it is cut off
+   at the bottom of the nav and never seen. Fixed positioning escapes the clip;
+   the button's own rect, measured on open, supplies `top` and `left`. */
+.app-menu {
+  position: fixed;
+  z-index: var(--brand-z-nav);
+  min-width: 200px;
+  max-height: 320px;
+  overflow-y: auto;
+  display: grid;
+  gap: var(--brand-space-0-5);
+  padding: var(--brand-space-1);
+  background: var(--bs-surface-1);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+  box-shadow: var(--bs-shadow-lg);
+}
+
+.app-menu-item {
+  appearance: none;
+  width: 100%;
+  padding: var(--brand-space-1-5) 8px;
+  border: none;
+  border-radius: var(--brand-radius-sm);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  color: var(--bs-text-secondary);
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-sm);
+  transition: background var(--brand-transition-base);
+}
+
+.app-menu-item:hover,
+.app-menu-item:focus-visible {
+  background: var(--bs-surface-2);
+  outline: none;
+}

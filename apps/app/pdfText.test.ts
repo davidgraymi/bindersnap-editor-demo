@@ -32,7 +32,11 @@ const policy = {
 };
 
 async function blocksOf(document: typeof policy) {
-  const file = await renderSeedDocumentFile(document, "pdf");
+  const file = await renderSeedDocumentFile(
+    document,
+    "pdf",
+    "nursing/handover",
+  );
   const bytes = Buffer.from(file.content, "base64");
   return extractPdfBlocks(new Blob([new Uint8Array(bytes)]));
 }

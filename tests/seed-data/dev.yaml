@@ -4,13 +4,20 @@
 # you. Edit it — not tests/seed.ts — when you need another account, another
 # document, or another review state to work against.
 #
-# How it maps onto the product:
-#   users      → Bindersnap accounts (all share the password below)
-#   documents  → one document repository each
-#   changes    → a proposed new version: a branch, a pull request, its reviews
-#   publish    → merge the change and tag it as the next published version
+# How it maps onto the product, which is ADR 0004's four levels:
+#   organization → the Gitea org that owns everything and is who we bill
+#   binders      → one Gitea repository each: a set of policies governed
+#                  together, by the same people, under the same rules
+#   folder       → a directory inside that binder, purely a finding aid
+#   documents    → a file inside that directory — the record itself
+#   changes      → a proposed new version: a branch, a pull request, its reviews
+#   publish      → merge the change and tag it as that document's next version
 #
-# A document's status in the workspace list is derived, not declared:
+# A binder's members are the binder's, not a document's: access is uniform
+# within a workspace, which is the whole reason the level exists. `role` maps
+# onto the binder's three Gitea teams — admins, authors, reviewers.
+#
+# A document's status in the list is derived, not declared:
 #   no changes                        → Draft
 #   an open change, no reviews        → In review
 #   an open change asking for work    → Changes requested
@@ -22,625 +29,531 @@
 # Every seeded account uses this password. Short on purpose — this stack is
 # local-only and never deployed.
 password: dev
-
 users:
   - username: alice
     fullName: Alice Nguyen
     email: alice@example.com
     role: Compliance manager — owns most documents, site admin
-
   - username: bob
     fullName: Bob Okafor
     email: bob@example.com
     role: Legal counsel — the reviewer who blocks and approves
-
   - username: carol
     fullName: Carol Mendes
     email: carol@example.com
     role: Operations lead — owns documents of her own
-
   - username: dan
     fullName: Dan Whitfield
     email: dan@example.com
     role: External auditor — read-only access, sees but cannot change
-
-documents:
-  # -------------------------------------------------------------------------
-  # Changes requested — a reviewer has blocked the open change.
-  # -------------------------------------------------------------------------
-  - owner: alice
-    repo: quarterly-report
-    description: Quarterly compliance report
-    collaborators:
-      - user: bob
-        permission: write
-      - user: dan
-        permission: read
-    changes:
-      - branch: upload/quarterly-report/20260210/091500Z-alice-4b1c9de2
-        title: Q2 amendments — GDPR section update
-        summary: Section 4.2 rewritten against the January data protection memo.
-        author: alice
-        publish: false
-        document:
-          title: Q2 Compliance Report
-          sections:
-            - paragraphs:
-                - Section 4.2 now reflects the updated GDPR guidance from the January memo.
-            - heading: Executive Summary
-              paragraphs:
-                - All compliance controls are operating within acceptable thresholds. The Q2 audit identified three minor findings, all of which have been remediated.
-            - heading: 4.2 Data Retention
-              paragraphs:
-                - Personal data may be retained for no longer than 24 months unless a longer period is required by law.
-                - Retention clocks start at the end of the contractual relationship, not at the date of collection.
-        reviews:
-          - by: bob
-            state: changes_requested
-            body: Section 4.2 needs to reference the updated GDPR guidance from the January memo.
-        threads:
-          - id: retention-clock
-            by: bob
-            body: Does the 24-month clock start at collection or at the end of the contract? The current wording reads both ways.
-            replies:
-              - by: alice
-                body: End of the contract. I have added a second sentence saying so explicitly.
-            resolved: true
-            resolvedBy: bob
-          - id: legal-hold-exception
-            by: bob
-            body: We still owe this section a sentence on legal hold. Litigation freezes the retention clock and nothing here says that.
-            replies:
-              - by: alice
-                body: Agreed. Drafting it with outside counsel this week.
-            resolved: false
-
-  # -------------------------------------------------------------------------
-  # In review — submitted, nobody has weighed in yet.
-  # -------------------------------------------------------------------------
-  - owner: alice
-    repo: vendor-contracts
-    description: Vendor master agreements and renewals
-    collaborators:
-      - user: bob
-        permission: write
-      - user: carol
-        permission: write
-    changes:
-      - branch: upload/vendor-contracts/20260218/143012Z-alice-7f0ab331
-        title: Acme Corp contract renewal — 2025 terms
-        summary: Annual renewal at the 2025 rate card, with the new DPA attached.
-        author: alice
-        publish: false
-        document:
-          title: Vendor Contract — Acme Corp
-          sections:
-            - paragraphs:
-                - This contract has been submitted for renewal under the 2025 terms. Awaiting sign-off from the legal team.
-            - heading: Term and Renewal
-              paragraphs:
-                - The agreement renews for twelve months from 1 March 2025 and may be terminated by either party on sixty days written notice.
-            - heading: Data Processing
-              paragraphs:
-                - Acme Corp will provide data processing services in accordance with our data handling addendum dated 2024-01-15.
-
-  # -------------------------------------------------------------------------
-  # Ready to publish — approved, waiting for someone to press the button.
-  # -------------------------------------------------------------------------
-  - owner: alice
-    repo: incident-response-plan
-    description: Security incident response runbook
-    collaborators:
-      - user: bob
-        permission: write
-      - user: carol
-        permission: write
-    changes:
-      - branch: upload/incident-response-plan/20260305/101144Z-alice-2c94ef05
-        title: Add the 72-hour regulator notification window
-        summary: Brings the escalation path in line with the breach notification rule.
-        author: alice
-        publish: false
-        document:
-          title: Incident Response Plan
-          sections:
-            - paragraphs:
-                - This plan covers detection, containment, notification, and post-incident review for any confirmed security incident.
-            - heading: Notification
-              paragraphs:
-                - A confirmed personal data breach must be reported to the supervisory authority within 72 hours of discovery.
-                - If the 72-hour window cannot be met, the delay and its reasons are recorded in the incident log.
-            - heading: Escalation Path
-              paragraphs:
-                - On-call engineer, then the security lead, then the compliance manager. Legal counsel joins at containment.
-        reviews:
-          - by: bob
-            state: approved
-            body: Notification window and escalation path both match the rule. Approved.
-
-  # -------------------------------------------------------------------------
-  # Published — one approved change, merged and tagged.
-  # -------------------------------------------------------------------------
-  - owner: alice
-    repo: data-processing-agreement
-    description: Standard data processing agreement
-    collaborators:
-      - user: bob
-        permission: write
-      - user: dan
-        permission: read
-    changes:
-      - branch: upload/data-processing-agreement/20260112/084530Z-alice-91de3b77
-        title: Standard data processing agreement — first issue
-        summary: The template every vendor DPA is cut from.
-        author: alice
-        publish: true
-        document:
-          title: Data Processing Agreement
-          sections:
-            - paragraphs:
-                - This agreement governs the processing of personal data by a processor acting on our documented instructions.
-            - heading: Subprocessors
-              paragraphs:
-                - The processor may not engage a subprocessor without prior written authorisation, and remains liable for the subprocessor's performance.
-            - heading: Security Measures
-              paragraphs:
-                - Encryption in transit and at rest, least-privilege access control, and annual penetration testing are minimum requirements.
-        reviews:
-          - by: bob
-            state: approved
-            body: Subprocessor and security clauses are both fine. Approved for issue.
-
-  # -------------------------------------------------------------------------
-  # Draft — created, nothing submitted yet.
-  # -------------------------------------------------------------------------
-  - owner: alice
-    repo: employee-handbook
-    description: Employee handbook — working draft
-    collaborators:
-      - user: carol
-        permission: write
-
-  # -------------------------------------------------------------------------
-  # Owned by someone other than alice: published once, with a change in review.
-  # -------------------------------------------------------------------------
-  - owner: carol
-    repo: vendor-security-review
-    description: Security review questionnaire for new vendors
-    collaborators:
+# Named so it does not collide with the integration tests, several of which
+# create an organization called "Mercy Health" on purpose — including one that
+# asserts what happens when two customers of the same name sign up. The seed
+# taking that name would make those tests fight the fixture.
+organization:
+  name: riverside-health
+  displayName: Riverside Health
+  owner: alice
+binders:
+  - name: clinical
+    description: Clinical and administrative policies — one set of rules, one set of people.
+    members:
       - user: alice
-        permission: write
-      - user: bob
-        permission: write
-    changes:
-      - branch: upload/vendor-security-review/20260120/112205Z-carol-5ad0c418
-        title: Vendor security questionnaire — first issue
-        summary: Twenty questions every new vendor answers before we sign.
-        author: carol
-        publish: true
-        document:
-          title: Vendor Security Review
-          sections:
-            - paragraphs:
-                - Every prospective vendor completes this questionnaire before contract signature. Answers are retained for the life of the relationship.
-            - heading: Access Control
-              paragraphs:
-                - Does the vendor enforce multi-factor authentication for all administrative access to systems holding our data?
-            - heading: Incident History
-              paragraphs:
-                - Has the vendor experienced a reportable security incident in the last thirty-six months?
-        reviews:
-          - by: alice
-            state: approved
-            body: Good baseline. Approved.
-
-      - branch: upload/vendor-security-review/20260401/093310Z-carol-e37b1206
-        title: Add subprocessor disclosure questions
-        summary: Four new questions covering the vendor's own supply chain.
-        author: carol
-        publish: false
-        document:
-          title: Vendor Security Review
-          sections:
-            - paragraphs:
-                - Every prospective vendor completes this questionnaire before contract signature. Answers are retained for the life of the relationship.
-            - heading: Access Control
-              paragraphs:
-                - Does the vendor enforce multi-factor authentication for all administrative access to systems holding our data?
-            - heading: Incident History
-              paragraphs:
-                - Has the vendor experienced a reportable security incident in the last thirty-six months?
-            - heading: Subprocessors
-              paragraphs:
-                - Which subprocessors will have access to our data, and in which countries do they operate?
-                - How much notice does the vendor give before adding or replacing a subprocessor?
-        threads:
-          - id: notice-period
-            by: alice
-            body: Thirty days notice is the number we have used everywhere else. Worth saying so in the question itself?
-            replies:
-              - by: carol
-                body: Deliberately open — I would rather hear their number than lead them to ours.
-            resolved: false
-
-  # -------------------------------------------------------------------------
-  # Two published versions and nothing open: the history view with something
-  # in it.
-  # -------------------------------------------------------------------------
-  - owner: bob
-    repo: hipaa-training-policy
-    description: Annual HIPAA training policy
-    collaborators:
-      - user: alice
-        permission: write
+        role: authors
       - user: dan
-        permission: read
-    changes:
-      - branch: upload/hipaa-training-policy/20251103/151020Z-bob-08fa62d1
-        title: HIPAA training policy — first issue
-        summary: Annual training requirement and the record we keep of it.
-        author: bob
-        publish: true
-        document:
-          title: HIPAA Training Policy
-          sections:
-            - paragraphs:
-                - All workforce members complete HIPAA privacy and security training within thirty days of hire and annually thereafter.
-            - heading: Records
-              paragraphs:
-                - Completion records are retained for six years from the date of training.
-        reviews:
-          - by: alice
-            state: approved
-            body: Matches the training schedule we already run. Approved.
-
-      - branch: upload/hipaa-training-policy/20260226/104455Z-bob-b6c31f4a
-        title: Extend training to contractors with system access
-        summary: Contractors with production access now sit the same annual training.
-        author: bob
-        publish: true
-        document:
-          title: HIPAA Training Policy
-          sections:
-            - paragraphs:
-                - All workforce members complete HIPAA privacy and security training within thirty days of hire and annually thereafter.
-                - Contractors with access to production systems complete the same training on the same schedule.
-            - heading: Records
-              paragraphs:
-                - Completion records are retained for six years from the date of training.
-                - Contractor records are held by the engaging manager and produced on request during an audit.
-        reviews:
-          - by: alice
-            state: approved
-            body: Closes the gap the last audit flagged. Approved.
-
-  # ===========================================================================
-  # The policy manual, one policy per file type.
-  #
-  # A regulated team's manual is never one format. Some policies are Word
-  # files somebody has been editing since 2019, some are PDFs exported for a
-  # surveyor, and some live in Markdown on an intranet. These three are the
-  # same kind of document — a small clinic's policy, in the house structure of
-  # Purpose, Scope, the policy itself, Responsibilities, Records, Review — so
-  # the preview and the comparison screens can be looked at side by side and
-  # judged on the file type alone rather than on the prose.
-  #
-  # Each is published once and then has a second version open for review, and
-  # each second version makes the same three kinds of edit: a deadline
-  # shortened, a clause reworded, and a paragraph added. That is what a
-  # reviewer opening the comparison should see marked.
-  # ===========================================================================
-
-  # -------------------------------------------------------------------------
-  # Word — the file a browser cannot read inside. Preview and comparison both
-  # have to say so honestly and hand over both versions.
-  # -------------------------------------------------------------------------
-  - owner: alice
-    repo: infection-control-policy
-    description: Infection prevention and control — clinical policy
-    format: docx
-    collaborators:
+        role: reviewers
       - user: bob
-        permission: write
+        role: authors
       - user: carol
-        permission: write
-      - user: dan
-        permission: read
-    changes:
-      - branch: upload/infection-control-policy/20251006/091200Z-alice-2c7f41ab
-        title: Infection Control Policy — annual review issue
-        summary: The 2025 annual review, reissued after the October survey.
-        author: alice
-        publish: true
-        document:
-          title: Infection Control Policy
-          sections:
-            - heading: Purpose
-              paragraphs:
-                - This policy sets out how the clinic prevents and controls the transmission of infection between patients, workforce members, and visitors. It reflects current CDC guidance and the conditions of participation the clinic is surveyed against.
-            - heading: Scope
-              paragraphs:
-                - This policy applies to every workforce member, contractor, and student who provides care, handles specimens, or enters a clinical area. It applies at all sites, including the mobile unit.
-            - heading: Hand Hygiene
-              paragraphs:
-                - Workforce members perform hand hygiene before and after every patient contact, before any aseptic procedure, and after contact with blood, body fluids, or contaminated surfaces.
-                - Alcohol-based hand rub is the default. Soap and water are used when hands are visibly soiled and after caring for a patient with a spore-forming organism.
-                - The infection preventionist audits hand hygiene compliance quarterly against a minimum of fifty observed opportunities per site.
-            - heading: Personal Protective Equipment
-              paragraphs:
-                - Gloves, gowns, masks, and eye protection are worn according to the transmission-based precautions posted for each patient and are removed and discarded inside the patient room before exit.
-                - Respirators are fit-tested on hire and annually thereafter. A workforce member who has not passed a current fit test does not enter an airborne precautions room.
-            - heading: Responsibilities
-              paragraphs:
-                - The infection preventionist owns this policy, runs the audit programme, and reports compliance to the Quality Committee each quarter.
-                - Clinical managers correct practice at the point of care and are accountable for their unit's audit results.
-            - heading: Training and Competency
-              paragraphs:
-                - Workforce members complete infection control training within thirty days of hire and annually thereafter. Training records are held by the clinical education lead.
-            - heading: Records and Retention
-              paragraphs:
-                - Audit results, training records, and exposure reports are retained for six years from the date of the record.
-            - heading: Review
-              paragraphs:
-                - This policy is reviewed annually, and sooner if guidance changes or an incident indicates the policy did not hold.
-        reviews:
-          - by: bob
-            state: approved
-            body: Matches what we told the surveyor in October. Approved.
-
-      - branch: upload/infection-control-policy/20260304/104500Z-alice-9be20d15
-        title: Tighten hand hygiene auditing and new-hire training
-        summary: Monthly audits, fourteen-day training, and point-of-care rub placement.
-        author: alice
-        publish: false
-        document:
-          title: Infection Control Policy
-          sections:
-            - heading: Purpose
-              paragraphs:
-                - This policy sets out how the clinic prevents and controls the transmission of infection between patients, workforce members, and visitors. It reflects current CDC guidance and the conditions of participation the clinic is surveyed against.
-            - heading: Scope
-              paragraphs:
-                - This policy applies to every workforce member, contractor, and student who provides care, handles specimens, or enters a clinical area. It applies at all sites, including the mobile unit.
-            - heading: Hand Hygiene
-              paragraphs:
-                - Workforce members perform hand hygiene before and after every patient contact, before any aseptic procedure, and after contact with blood, body fluids, or contaminated surfaces.
-                - Alcohol-based hand rub is the default. Soap and water are used when hands are visibly soiled and after caring for a patient with a spore-forming organism.
-                - The infection preventionist audits hand hygiene compliance monthly against a minimum of fifty observed opportunities per site.
-                - Alcohol-based hand rub is mounted at the entrance to every examination room and at every point of care. Refilling is a daily task on the environmental services checklist.
-            - heading: Personal Protective Equipment
-              paragraphs:
-                - Gloves, gowns, masks, and eye protection are worn according to the transmission-based precautions posted for each patient and are removed and discarded inside the patient room before exit.
-                - Respirators are fit-tested on hire and annually thereafter. A workforce member who has not passed a current fit test does not enter an airborne precautions room.
-            - heading: Responsibilities
-              paragraphs:
-                - The infection preventionist owns this policy, runs the audit programme, and reports compliance to the Quality Committee each month.
-                - Clinical managers correct practice at the point of care and are accountable for their unit's audit results.
-            - heading: Training and Competency
-              paragraphs:
-                - Workforce members complete infection control training within fourteen days of hire and annually thereafter. Training records are held by the clinical education lead.
-            - heading: Records and Retention
-              paragraphs:
-                - Audit results, training records, and exposure reports are retained for six years from the date of the record.
-            - heading: Review
-              paragraphs:
-                - This policy is reviewed annually, and sooner if guidance changes or an incident indicates the policy did not hold.
-        reviews:
-          - by: bob
-            state: commented
-            body: No objection to the substance. One question on the training window before I sign.
-        threads:
-          - id: fourteen-day-training
-            by: bob
-            body: Fourteen days is tighter than the staffing agency's own onboarding. Can we actually hold agency nurses to it, or are we writing a rule we will fail our own audit on?
-            replies:
+        role: authors
+    documents:
+      - name: hipaa-training-policy
+        folder: training
+        description: Annual HIPAA training policy
+        changes:
+          - branch: upload/hipaa-training-policy/20251103/151020Z-bob-08fa62d1
+            title: HIPAA training policy — first issue
+            summary: Annual training requirement and the record we keep of it.
+            author: bob
+            publish: true
+            document:
+              title: HIPAA Training Policy
+              sections:
+                - paragraphs:
+                    - All workforce members complete HIPAA privacy and security training within thirty days of hire and annually thereafter.
+                - heading: Records
+                  paragraphs:
+                    - Completion records are retained for six years from the date of training.
+            reviews:
               - by: alice
-                body: Agency contracts already require it before first shift. This brings our policy in line with the contract rather than the other way round.
-            resolved: false
-
-  # -------------------------------------------------------------------------
-  # PDF — previews in the browser, and the comparison reads its text layer
-  # back with pdf.js. The same policy shape as the Word one above.
-  # -------------------------------------------------------------------------
-  - owner: alice
-    repo: medication-administration-policy
-    description: Medication administration and error reporting — clinical policy
-    format: pdf
-    collaborators:
-      - user: bob
-        permission: write
-      - user: carol
-        permission: write
-      - user: dan
-        permission: read
-    changes:
-      - branch: upload/medication-administration-policy/20251014/143000Z-alice-51ab90c4
-        title: Medication Administration Policy — annual review issue
-        summary: The 2025 annual review, exported for the survey binder.
-        author: alice
-        publish: true
-        document:
-          title: Medication Administration Policy
-          sections:
-            - heading: Purpose
-              paragraphs:
-                - This policy sets out how medication is prescribed, verified, administered, and documented, and how an error or near miss is reported. It exists so that a patient receives the right medication and so that the clinic learns from every occasion one nearly did not.
-            - heading: Scope
-              paragraphs:
-                - This policy applies to every licensed clinician who administers medication and to every workforce member who transcribes, stocks, or wastes it. It applies at all sites, including the mobile unit.
-            - heading: Verification Before Administration
-              paragraphs:
-                - The administering clinician confirms the patient identity using two identifiers, then confirms the medication, dose, route, and time against the order before administration.
-                - A second licensed clinician independently verifies insulin, anticoagulants, and chemotherapy before administration. The verification is recorded in the medication record.
-            - heading: Storage and Labelling
-              paragraphs:
-                - Medication is stored in a locked cabinet or a locked refrigerator, at the temperature stated on the label, in the original manufacturer's container until the point of administration.
-                - Controlled substances are counted at the start and end of every shift by two licensed clinicians, and any discrepancy is reported to the pharmacy lead the same day.
-            - heading: Responsibilities
-              paragraphs:
-                - The pharmacy lead owns this policy, reviews every reported error, and reports themes to the Quality Committee each quarter.
-                - Clinical managers make sure their staff are competent to administer the medication they are assigned and remove from the schedule anyone who is not.
-            - heading: Error and Near Miss Reporting
-              paragraphs:
-                - A medication error or near miss is reported in the safety reporting system within twenty-four hours of discovery. Reports are used to improve the process and are not used for discipline unless the conduct was wilful.
-            - heading: Records and Retention
-              paragraphs:
-                - Medication records, controlled substance counts, and error reports are retained for six years from the date of the record.
-            - heading: Review
-              paragraphs:
-                - This policy is reviewed annually, and sooner if a reported error indicates the policy did not hold.
-        reviews:
-          - by: bob
-            state: approved
-            body: Consistent with the pharmacy agreement. Approved.
-
-      - branch: upload/medication-administration-policy/20260312/091500Z-alice-7d4c22fe
-        title: Same-hour error reporting and high-alert storage
-        summary: One-hour reporting, opioids added to double-check, and a look-alike clause.
-        author: alice
-        publish: false
-        document:
-          title: Medication Administration Policy
-          sections:
-            - heading: Purpose
-              paragraphs:
-                - This policy sets out how medication is prescribed, verified, administered, and documented, and how an error or near miss is reported. It exists so that a patient receives the right medication and so that the clinic learns from every occasion one nearly did not.
-            - heading: Scope
-              paragraphs:
-                - This policy applies to every licensed clinician who administers medication and to every workforce member who transcribes, stocks, or wastes it. It applies at all sites, including the mobile unit.
-            - heading: Verification Before Administration
-              paragraphs:
-                - The administering clinician confirms the patient identity using two identifiers, then confirms the medication, dose, route, and time against the order before administration.
-                - A second licensed clinician independently verifies insulin, anticoagulants, opioids, and chemotherapy before administration. The verification is recorded in the medication record.
-            - heading: Storage and Labelling
-              paragraphs:
-                - Medication is stored in a locked cabinet or a locked refrigerator, at the temperature stated on the label, in the original manufacturer's container until the point of administration.
-                - Controlled substances are counted at the start and end of every shift by two licensed clinicians, and any discrepancy is reported to the pharmacy lead the same day.
-                - Look-alike and sound-alike medications are separated on the shelf and labelled with tall man lettering. The pharmacy lead maintains the list and reviews it twice a year.
-            - heading: Responsibilities
-              paragraphs:
-                - The pharmacy lead owns this policy, reviews every reported error, and reports themes to the Quality Committee each month.
-                - Clinical managers make sure their staff are competent to administer the medication they are assigned and remove from the schedule anyone who is not.
-            - heading: Error and Near Miss Reporting
-              paragraphs:
-                - A medication error or near miss is reported in the safety reporting system within one hour of discovery. Reports are used to improve the process and are not used for discipline unless the conduct was wilful.
-            - heading: Records and Retention
-              paragraphs:
-                - Medication records, controlled substance counts, and error reports are retained for six years from the date of the record.
-            - heading: Review
-              paragraphs:
-                - This policy is reviewed annually, and sooner if a reported error indicates the policy did not hold.
-        reviews:
-          - by: carol
-            state: changes_requested
-            body: One hour is right for a wrong-patient event. For a near miss caught before administration it will bury the reporting queue and people will stop filing them.
-        threads:
-          - id: one-hour-near-miss
-            by: carol
-            body: Can we split the deadline? One hour when the patient received the medication, end of shift for a near miss that never reached them.
-            replies:
+                state: approved
+                body: Matches the training schedule we already run. Approved.
+          - branch: upload/hipaa-training-policy/20260226/104455Z-bob-b6c31f4a
+            title: Extend training to contractors with system access
+            summary: Contractors with production access now sit the same annual training.
+            author: bob
+            publish: true
+            document:
+              title: HIPAA Training Policy
+              sections:
+                - paragraphs:
+                    - All workforce members complete HIPAA privacy and security training within thirty days of hire and annually thereafter.
+                    - Contractors with access to production systems complete the same training on the same schedule.
+                - heading: Records
+                  paragraphs:
+                    - Completion records are retained for six years from the date of training.
+                    - Contractor records are held by the engaging manager and produced on request during an audit.
+            reviews:
               - by: alice
-                body: The pharmacy lead asked for one number precisely because the old policy had two and nobody could remember which applied.
+                state: approved
+                body: Closes the gap the last audit flagged. Approved.
+      - name: infection-control-policy
+        folder: nursing
+        description: Infection prevention and control — clinical policy
+        format: docx
+        changes:
+          - branch: upload/infection-control-policy/20251006/091200Z-alice-2c7f41ab
+            title: Infection Control Policy — annual review issue
+            summary: The 2025 annual review, reissued after the October survey.
+            author: alice
+            publish: true
+            document:
+              title: Infection Control Policy
+              sections:
+                - heading: Purpose
+                  paragraphs:
+                    - This policy sets out how the clinic prevents and controls the transmission of infection between patients, workforce members, and visitors. It reflects current CDC guidance and the conditions of participation the clinic is surveyed against.
+                - heading: Scope
+                  paragraphs:
+                    - This policy applies to every workforce member, contractor, and student who provides care, handles specimens, or enters a clinical area. It applies at all sites, including the mobile unit.
+                - heading: Hand Hygiene
+                  paragraphs:
+                    - Workforce members perform hand hygiene before and after every patient contact, before any aseptic procedure, and after contact with blood, body fluids, or contaminated surfaces.
+                    - Alcohol-based hand rub is the default. Soap and water are used when hands are visibly soiled and after caring for a patient with a spore-forming organism.
+                    - The infection preventionist audits hand hygiene compliance quarterly against a minimum of fifty observed opportunities per site.
+                - heading: Personal Protective Equipment
+                  paragraphs:
+                    - Gloves, gowns, masks, and eye protection are worn according to the transmission-based precautions posted for each patient and are removed and discarded inside the patient room before exit.
+                    - Respirators are fit-tested on hire and annually thereafter. A workforce member who has not passed a current fit test does not enter an airborne precautions room.
+                - heading: Responsibilities
+                  paragraphs:
+                    - The infection preventionist owns this policy, runs the audit programme, and reports compliance to the Quality Committee each quarter.
+                    - Clinical managers correct practice at the point of care and are accountable for their unit's audit results.
+                - heading: Training and Competency
+                  paragraphs:
+                    - Workforce members complete infection control training within thirty days of hire and annually thereafter. Training records are held by the clinical education lead.
+                - heading: Records and Retention
+                  paragraphs:
+                    - Audit results, training records, and exposure reports are retained for six years from the date of the record.
+                - heading: Review
+                  paragraphs:
+                    - This policy is reviewed annually, and sooner if guidance changes or an incident indicates the policy did not hold.
+            reviews:
               - by: bob
-                body: Two numbers is defensible to a surveyor if the trigger for each is written down. Worth another look before this goes up.
-            resolved: false
-
-  # -------------------------------------------------------------------------
-  # Markdown — the one that renders as a document in both the preview and the
-  # comparison, with the change marked inside the rendered policy.
-  # -------------------------------------------------------------------------
-  - owner: alice
-    repo: patient-grievance-policy
-    description: Patient complaints and grievances — administrative policy
-    format: markdown
-    collaborators:
+                state: approved
+                body: Matches what we told the surveyor in October. Approved.
+          - branch: upload/infection-control-policy/20260304/104500Z-alice-9be20d15
+            title: Tighten hand hygiene auditing and new-hire training
+            summary: Monthly audits, fourteen-day training, and point-of-care rub placement.
+            author: alice
+            publish: false
+            document:
+              title: Infection Control Policy
+              sections:
+                - heading: Purpose
+                  paragraphs:
+                    - This policy sets out how the clinic prevents and controls the transmission of infection between patients, workforce members, and visitors. It reflects current CDC guidance and the conditions of participation the clinic is surveyed against.
+                - heading: Scope
+                  paragraphs:
+                    - This policy applies to every workforce member, contractor, and student who provides care, handles specimens, or enters a clinical area. It applies at all sites, including the mobile unit.
+                - heading: Hand Hygiene
+                  paragraphs:
+                    - Workforce members perform hand hygiene before and after every patient contact, before any aseptic procedure, and after contact with blood, body fluids, or contaminated surfaces.
+                    - Alcohol-based hand rub is the default. Soap and water are used when hands are visibly soiled and after caring for a patient with a spore-forming organism.
+                    - The infection preventionist audits hand hygiene compliance monthly against a minimum of fifty observed opportunities per site.
+                    - Alcohol-based hand rub is mounted at the entrance to every examination room and at every point of care. Refilling is a daily task on the environmental services checklist.
+                - heading: Personal Protective Equipment
+                  paragraphs:
+                    - Gloves, gowns, masks, and eye protection are worn according to the transmission-based precautions posted for each patient and are removed and discarded inside the patient room before exit.
+                    - Respirators are fit-tested on hire and annually thereafter. A workforce member who has not passed a current fit test does not enter an airborne precautions room.
+                - heading: Responsibilities
+                  paragraphs:
+                    - The infection preventionist owns this policy, runs the audit programme, and reports compliance to the Quality Committee each month.
+                    - Clinical managers correct practice at the point of care and are accountable for their unit's audit results.
+                - heading: Training and Competency
+                  paragraphs:
+                    - Workforce members complete infection control training within fourteen days of hire and annually thereafter. Training records are held by the clinical education lead.
+                - heading: Records and Retention
+                  paragraphs:
+                    - Audit results, training records, and exposure reports are retained for six years from the date of the record.
+                - heading: Review
+                  paragraphs:
+                    - This policy is reviewed annually, and sooner if guidance changes or an incident indicates the policy did not hold.
+            reviews:
+              - by: bob
+                state: commented
+                body: No objection to the substance. One question on the training window before I sign.
+            threads:
+              - id: fourteen-day-training
+                by: bob
+                body: Fourteen days is tighter than the staffing agency's own onboarding. Can we actually hold agency nurses to it, or are we writing a rule we will fail our own audit on?
+                replies:
+                  - by: alice
+                    body: Agency contracts already require it before first shift. This brings our policy in line with the contract rather than the other way round.
+                resolved: false
+      - name: medication-administration-policy
+        folder: nursing
+        description: Medication administration and error reporting — clinical policy
+        format: pdf
+        changes:
+          - branch: upload/medication-administration-policy/20251014/143000Z-alice-51ab90c4
+            title: Medication Administration Policy — annual review issue
+            summary: The 2025 annual review, exported for the survey binder.
+            author: alice
+            publish: true
+            document:
+              title: Medication Administration Policy
+              sections:
+                - heading: Purpose
+                  paragraphs:
+                    - This policy sets out how medication is prescribed, verified, administered, and documented, and how an error or near miss is reported. It exists so that a patient receives the right medication and so that the clinic learns from every occasion one nearly did not.
+                - heading: Scope
+                  paragraphs:
+                    - This policy applies to every licensed clinician who administers medication and to every workforce member who transcribes, stocks, or wastes it. It applies at all sites, including the mobile unit.
+                - heading: Verification Before Administration
+                  paragraphs:
+                    - The administering clinician confirms the patient identity using two identifiers, then confirms the medication, dose, route, and time against the order before administration.
+                    - A second licensed clinician independently verifies insulin, anticoagulants, and chemotherapy before administration. The verification is recorded in the medication record.
+                - heading: Storage and Labelling
+                  paragraphs:
+                    - Medication is stored in a locked cabinet or a locked refrigerator, at the temperature stated on the label, in the original manufacturer's container until the point of administration.
+                    - Controlled substances are counted at the start and end of every shift by two licensed clinicians, and any discrepancy is reported to the pharmacy lead the same day.
+                - heading: Responsibilities
+                  paragraphs:
+                    - The pharmacy lead owns this policy, reviews every reported error, and reports themes to the Quality Committee each quarter.
+                    - Clinical managers make sure their staff are competent to administer the medication they are assigned and remove from the schedule anyone who is not.
+                - heading: Error and Near Miss Reporting
+                  paragraphs:
+                    - A medication error or near miss is reported in the safety reporting system within twenty-four hours of discovery. Reports are used to improve the process and are not used for discipline unless the conduct was wilful.
+                - heading: Records and Retention
+                  paragraphs:
+                    - Medication records, controlled substance counts, and error reports are retained for six years from the date of the record.
+                - heading: Review
+                  paragraphs:
+                    - This policy is reviewed annually, and sooner if a reported error indicates the policy did not hold.
+            reviews:
+              - by: bob
+                state: approved
+                body: Consistent with the pharmacy agreement. Approved.
+          - branch: upload/medication-administration-policy/20260312/091500Z-alice-7d4c22fe
+            title: Same-hour error reporting and high-alert storage
+            summary: One-hour reporting, opioids added to double-check, and a look-alike clause.
+            author: alice
+            publish: false
+            document:
+              title: Medication Administration Policy
+              sections:
+                - heading: Purpose
+                  paragraphs:
+                    - This policy sets out how medication is prescribed, verified, administered, and documented, and how an error or near miss is reported. It exists so that a patient receives the right medication and so that the clinic learns from every occasion one nearly did not.
+                - heading: Scope
+                  paragraphs:
+                    - This policy applies to every licensed clinician who administers medication and to every workforce member who transcribes, stocks, or wastes it. It applies at all sites, including the mobile unit.
+                - heading: Verification Before Administration
+                  paragraphs:
+                    - The administering clinician confirms the patient identity using two identifiers, then confirms the medication, dose, route, and time against the order before administration.
+                    - A second licensed clinician independently verifies insulin, anticoagulants, opioids, and chemotherapy before administration. The verification is recorded in the medication record.
+                - heading: Storage and Labelling
+                  paragraphs:
+                    - Medication is stored in a locked cabinet or a locked refrigerator, at the temperature stated on the label, in the original manufacturer's container until the point of administration.
+                    - Controlled substances are counted at the start and end of every shift by two licensed clinicians, and any discrepancy is reported to the pharmacy lead the same day.
+                    - Look-alike and sound-alike medications are separated on the shelf and labelled with tall man lettering. The pharmacy lead maintains the list and reviews it twice a year.
+                - heading: Responsibilities
+                  paragraphs:
+                    - The pharmacy lead owns this policy, reviews every reported error, and reports themes to the Quality Committee each month.
+                    - Clinical managers make sure their staff are competent to administer the medication they are assigned and remove from the schedule anyone who is not.
+                - heading: Error and Near Miss Reporting
+                  paragraphs:
+                    - A medication error or near miss is reported in the safety reporting system within one hour of discovery. Reports are used to improve the process and are not used for discipline unless the conduct was wilful.
+                - heading: Records and Retention
+                  paragraphs:
+                    - Medication records, controlled substance counts, and error reports are retained for six years from the date of the record.
+                - heading: Review
+                  paragraphs:
+                    - This policy is reviewed annually, and sooner if a reported error indicates the policy did not hold.
+            reviews:
+              - by: carol
+                state: changes_requested
+                body: One hour is right for a wrong-patient event. For a near miss caught before administration it will bury the reporting queue and people will stop filing them.
+            threads:
+              - id: one-hour-near-miss
+                by: carol
+                body: Can we split the deadline? One hour when the patient received the medication, end of shift for a near miss that never reached them.
+                replies:
+                  - by: alice
+                    body: The pharmacy lead asked for one number precisely because the old policy had two and nobody could remember which applied.
+                  - by: bob
+                    body: Two numbers is defensible to a surveyor if the trigger for each is written down. Worth another look before this goes up.
+                resolved: false
+      - name: patient-grievance-policy
+        folder: administrative
+        description: Patient complaints and grievances — administrative policy
+        format: markdown
+        changes:
+          - branch: upload/patient-grievance-policy/20251020/111500Z-alice-6f83a2d1
+            title: Patient Grievance Policy — annual review issue
+            summary: The 2025 annual review, published to the intranet.
+            author: alice
+            publish: true
+            document:
+              title: Patient Grievance Policy
+              sections:
+                - heading: Purpose
+                  paragraphs:
+                    - This policy sets out how a patient or their representative raises a concern, how the clinic resolves it, and what the patient is told at each step. A patient who complains is telling us something we would otherwise have to find out from a surveyor.
+                - heading: Scope
+                  paragraphs:
+                    - This policy applies to every concern raised about care, conduct, privacy, or billing, whether it arrives in person, by telephone, by letter, or through the patient portal.
+                - heading: Complaint or Grievance
+                  paragraphs:
+                    - A concern resolved at the point of care by the staff present, to the patient's satisfaction, is a complaint and is logged but not investigated further.
+                    - A concern that is not resolved at the point of care, or that alleges harm, abuse, or a privacy breach, is a grievance and enters the process below regardless of how it was raised.
+                - heading: Handling a Grievance
+                  paragraphs:
+                    - The patient experience lead acknowledges a grievance in writing within ten business days of receipt, naming the person who will investigate it.
+                    - The investigation is completed and a written response sent within thirty days. The response states the conclusion, any action taken, and the date the grievance was closed.
+                - heading: Responsibilities
+                  paragraphs:
+                    - The patient experience lead owns this policy, maintains the grievance log, and reports themes to the Governing Body each quarter.
+                    - Clinical managers investigate grievances about their own service and provide a written account within five business days of being asked.
+                - heading: Records and Retention
+                  paragraphs:
+                    - The grievance log, the investigation file, and the written response are retained for six years from the date the grievance was closed.
+                - heading: Review
+                  paragraphs:
+                    - This policy is reviewed annually, and sooner if a pattern in the log indicates the process did not serve the patient.
+            reviews:
+              - by: bob
+                state: approved
+                body: Tracks the conditions of participation. Approved.
+          - branch: upload/patient-grievance-policy/20260318/153000Z-alice-b81f30c7
+            title: Faster acknowledgement and the state agency notice
+            summary: Five-day acknowledgement, and the patient is told they can go elsewhere.
+            author: alice
+            publish: false
+            document:
+              title: Patient Grievance Policy
+              sections:
+                - heading: Purpose
+                  paragraphs:
+                    - This policy sets out how a patient or their representative raises a concern, how the clinic resolves it, and what the patient is told at each step. A patient who complains is telling us something we would otherwise have to find out from a surveyor.
+                - heading: Scope
+                  paragraphs:
+                    - This policy applies to every concern raised about care, conduct, privacy, or billing, whether it arrives in person, by telephone, by letter, or through the patient portal.
+                - heading: Complaint or Grievance
+                  paragraphs:
+                    - A concern resolved at the point of care by the staff present, to the patient's satisfaction, is a complaint and is logged but not investigated further.
+                    - A concern that is not resolved at the point of care, or that alleges harm, abuse, or a privacy breach, is a grievance and enters the process below regardless of how it was raised.
+                - heading: Handling a Grievance
+                  paragraphs:
+                    - The patient experience lead acknowledges a grievance in writing within five business days of receipt, naming the person who will investigate it.
+                    - The investigation is completed and a written response sent within thirty days. The response states the conclusion, any action taken, and the date the grievance was closed.
+                    - The acknowledgement tells the patient that they may raise the same concern with the state survey agency at any time, and that doing so will not affect their care. The agency's current address and telephone number are held by the patient experience lead.
+                - heading: Responsibilities
+                  paragraphs:
+                    - The patient experience lead owns this policy, maintains the grievance log, and reports themes to the Governing Body each quarter.
+                    - Clinical managers investigate grievances about their own service and provide a written account within three business days of being asked.
+                - heading: Records and Retention
+                  paragraphs:
+                    - The grievance log, the investigation file, and the written response are retained for six years from the date the grievance was closed.
+                - heading: Review
+                  paragraphs:
+                    - This policy is reviewed annually, and sooner if a pattern in the log indicates the process did not serve the patient.
+            reviews:
+              - by: bob
+                state: approved
+                body: The state agency sentence is the one the last survey asked for in writing. Approved.
+            threads:
+              - id: three-day-manager-account
+                by: carol
+                body: Three business days for a manager's written account is tight when the clinician involved is on annual leave. What happens then?
+                replies:
+                  - by: alice
+                    body: The manager writes what they have by day three and says who is still to be spoken to. The clock on the patient's response has not moved.
+                resolved: true
+                resolvedBy: carol
+  - name: corporate
+    description: Contracts, reports and internal records.
+    members:
       - user: bob
-        permission: write
-      - user: carol
-        permission: write
+        role: authors
       - user: dan
-        permission: read
-    changes:
-      - branch: upload/patient-grievance-policy/20251020/111500Z-alice-6f83a2d1
-        title: Patient Grievance Policy — annual review issue
-        summary: The 2025 annual review, published to the intranet.
-        author: alice
-        publish: true
-        document:
-          title: Patient Grievance Policy
-          sections:
-            - heading: Purpose
-              paragraphs:
-                - This policy sets out how a patient or their representative raises a concern, how the clinic resolves it, and what the patient is told at each step. A patient who complains is telling us something we would otherwise have to find out from a surveyor.
-            - heading: Scope
-              paragraphs:
-                - This policy applies to every concern raised about care, conduct, privacy, or billing, whether it arrives in person, by telephone, by letter, or through the patient portal.
-            - heading: Complaint or Grievance
-              paragraphs:
-                - A concern resolved at the point of care by the staff present, to the patient's satisfaction, is a complaint and is logged but not investigated further.
-                - A concern that is not resolved at the point of care, or that alleges harm, abuse, or a privacy breach, is a grievance and enters the process below regardless of how it was raised.
-            - heading: Handling a Grievance
-              paragraphs:
-                - The patient experience lead acknowledges a grievance in writing within ten business days of receipt, naming the person who will investigate it.
-                - The investigation is completed and a written response sent within thirty days. The response states the conclusion, any action taken, and the date the grievance was closed.
-            - heading: Responsibilities
-              paragraphs:
-                - The patient experience lead owns this policy, maintains the grievance log, and reports themes to the Governing Body each quarter.
-                - Clinical managers investigate grievances about their own service and provide a written account within five business days of being asked.
-            - heading: Records and Retention
-              paragraphs:
-                - The grievance log, the investigation file, and the written response are retained for six years from the date the grievance was closed.
-            - heading: Review
-              paragraphs:
-                - This policy is reviewed annually, and sooner if a pattern in the log indicates the process did not serve the patient.
-        reviews:
-          - by: bob
-            state: approved
-            body: Tracks the conditions of participation. Approved.
-
-      - branch: upload/patient-grievance-policy/20260318/153000Z-alice-b81f30c7
-        title: Faster acknowledgement and the state agency notice
-        summary: Five-day acknowledgement, and the patient is told they can go elsewhere.
-        author: alice
-        publish: false
-        document:
-          title: Patient Grievance Policy
-          sections:
-            - heading: Purpose
-              paragraphs:
-                - This policy sets out how a patient or their representative raises a concern, how the clinic resolves it, and what the patient is told at each step. A patient who complains is telling us something we would otherwise have to find out from a surveyor.
-            - heading: Scope
-              paragraphs:
-                - This policy applies to every concern raised about care, conduct, privacy, or billing, whether it arrives in person, by telephone, by letter, or through the patient portal.
-            - heading: Complaint or Grievance
-              paragraphs:
-                - A concern resolved at the point of care by the staff present, to the patient's satisfaction, is a complaint and is logged but not investigated further.
-                - A concern that is not resolved at the point of care, or that alleges harm, abuse, or a privacy breach, is a grievance and enters the process below regardless of how it was raised.
-            - heading: Handling a Grievance
-              paragraphs:
-                - The patient experience lead acknowledges a grievance in writing within five business days of receipt, naming the person who will investigate it.
-                - The investigation is completed and a written response sent within thirty days. The response states the conclusion, any action taken, and the date the grievance was closed.
-                - The acknowledgement tells the patient that they may raise the same concern with the state survey agency at any time, and that doing so will not affect their care. The agency's current address and telephone number are held by the patient experience lead.
-            - heading: Responsibilities
-              paragraphs:
-                - The patient experience lead owns this policy, maintains the grievance log, and reports themes to the Governing Body each quarter.
-                - Clinical managers investigate grievances about their own service and provide a written account within three business days of being asked.
-            - heading: Records and Retention
-              paragraphs:
-                - The grievance log, the investigation file, and the written response are retained for six years from the date the grievance was closed.
-            - heading: Review
-              paragraphs:
-                - This policy is reviewed annually, and sooner if a pattern in the log indicates the process did not serve the patient.
-        reviews:
-          - by: bob
-            state: approved
-            body: The state agency sentence is the one the last survey asked for in writing. Approved.
-        threads:
-          - id: three-day-manager-account
-            by: carol
-            body: Three business days for a manager's written account is tight when the clinician involved is on annual leave. What happens then?
-            replies:
+        role: reviewers
+      - user: carol
+        role: authors
+      - user: alice
+        role: authors
+    documents:
+      - name: quarterly-report
+        description: Quarterly compliance report
+        changes:
+          - branch: upload/quarterly-report/20260210/091500Z-alice-4b1c9de2
+            title: Q2 amendments — GDPR section update
+            summary: Section 4.2 rewritten against the January data protection memo.
+            author: alice
+            publish: false
+            document:
+              title: Q2 Compliance Report
+              sections:
+                - paragraphs:
+                    - Section 4.2 now reflects the updated GDPR guidance from the January memo.
+                - heading: Executive Summary
+                  paragraphs:
+                    - All compliance controls are operating within acceptable thresholds. The Q2 audit identified three minor findings, all of which have been remediated.
+                - heading: 4.2 Data Retention
+                  paragraphs:
+                    - Personal data may be retained for no longer than 24 months unless a longer period is required by law.
+                    - Retention clocks start at the end of the contractual relationship, not at the date of collection.
+            reviews:
+              - by: bob
+                state: changes_requested
+                body: Section 4.2 needs to reference the updated GDPR guidance from the January memo.
+            threads:
+              - id: retention-clock
+                by: bob
+                body: Does the 24-month clock start at collection or at the end of the contract? The current wording reads both ways.
+                replies:
+                  - by: alice
+                    body: End of the contract. I have added a second sentence saying so explicitly.
+                resolved: true
+                resolvedBy: bob
+              - id: legal-hold-exception
+                by: bob
+                body: We still owe this section a sentence on legal hold. Litigation freezes the retention clock and nothing here says that.
+                replies:
+                  - by: alice
+                    body: Agreed. Drafting it with outside counsel this week.
+                resolved: false
+      - name: vendor-contracts
+        folder: vendors
+        description: Vendor master agreements and renewals
+        changes:
+          - branch: upload/vendor-contracts/20260218/143012Z-alice-7f0ab331
+            title: Acme Corp contract renewal — 2025 terms
+            summary: Annual renewal at the 2025 rate card, with the new DPA attached.
+            author: alice
+            publish: false
+            document:
+              title: Vendor Contract — Acme Corp
+              sections:
+                - paragraphs:
+                    - This contract has been submitted for renewal under the 2025 terms. Awaiting sign-off from the legal team.
+                - heading: Term and Renewal
+                  paragraphs:
+                    - The agreement renews for twelve months from 1 March 2025 and may be terminated by either party on sixty days written notice.
+                - heading: Data Processing
+                  paragraphs:
+                    - Acme Corp will provide data processing services in accordance with our data handling addendum dated 2024-01-15.
+      - name: incident-response-plan
+        folder: security
+        description: Security incident response runbook
+        changes:
+          - branch: upload/incident-response-plan/20260305/101144Z-alice-2c94ef05
+            title: Add the 72-hour regulator notification window
+            summary: Brings the escalation path in line with the breach notification rule.
+            author: alice
+            publish: false
+            document:
+              title: Incident Response Plan
+              sections:
+                - paragraphs:
+                    - This plan covers detection, containment, notification, and post-incident review for any confirmed security incident.
+                - heading: Notification
+                  paragraphs:
+                    - A confirmed personal data breach must be reported to the supervisory authority within 72 hours of discovery.
+                    - If the 72-hour window cannot be met, the delay and its reasons are recorded in the incident log.
+                - heading: Escalation Path
+                  paragraphs:
+                    - On-call engineer, then the security lead, then the compliance manager. Legal counsel joins at containment.
+            reviews:
+              - by: bob
+                state: approved
+                body: Notification window and escalation path both match the rule. Approved.
+      - name: data-processing-agreement
+        folder: vendors
+        description: Standard data processing agreement
+        changes:
+          - branch: upload/data-processing-agreement/20260112/084530Z-alice-91de3b77
+            title: Standard data processing agreement — first issue
+            summary: The template every vendor DPA is cut from.
+            author: alice
+            publish: true
+            document:
+              title: Data Processing Agreement
+              sections:
+                - paragraphs:
+                    - This agreement governs the processing of personal data by a processor acting on our documented instructions.
+                - heading: Subprocessors
+                  paragraphs:
+                    - The processor may not engage a subprocessor without prior written authorisation, and remains liable for the subprocessor's performance.
+                - heading: Security Measures
+                  paragraphs:
+                    - Encryption in transit and at rest, least-privilege access control, and annual penetration testing are minimum requirements.
+            reviews:
+              - by: bob
+                state: approved
+                body: Subprocessor and security clauses are both fine. Approved for issue.
+      - name: employee-handbook
+        description: Employee handbook — working draft
+      - name: vendor-security-review
+        folder: vendors
+        description: Security review questionnaire for new vendors
+        changes:
+          - branch: upload/vendor-security-review/20260120/112205Z-carol-5ad0c418
+            title: Vendor security questionnaire — first issue
+            summary: Twenty questions every new vendor answers before we sign.
+            author: carol
+            publish: true
+            document:
+              title: Vendor Security Review
+              sections:
+                - paragraphs:
+                    - Every prospective vendor completes this questionnaire before contract signature. Answers are retained for the life of the relationship.
+                - heading: Access Control
+                  paragraphs:
+                    - Does the vendor enforce multi-factor authentication for all administrative access to systems holding our data?
+                - heading: Incident History
+                  paragraphs:
+                    - Has the vendor experienced a reportable security incident in the last thirty-six months?
+            reviews:
               - by: alice
-                body: The manager writes what they have by day three and says who is still to be spoken to. The clock on the patient's response has not moved.
-            resolved: true
-            resolvedBy: carol
+                state: approved
+                body: Good baseline. Approved.
+          - branch: upload/vendor-security-review/20260401/093310Z-carol-e37b1206
+            title: Add subprocessor disclosure questions
+            summary: Four new questions covering the vendor's own supply chain.
+            author: carol
+            publish: false
+            document:
+              title: Vendor Security Review
+              sections:
+                - paragraphs:
+                    - Every prospective vendor completes this questionnaire before contract signature. Answers are retained for the life of the relationship.
+                - heading: Access Control
+                  paragraphs:
+                    - Does the vendor enforce multi-factor authentication for all administrative access to systems holding our data?
+                - heading: Incident History
+                  paragraphs:
+                    - Has the vendor experienced a reportable security incident in the last thirty-six months?
+                - heading: Subprocessors
+                  paragraphs:
+                    - Which subprocessors will have access to our data, and in which countries do they operate?
+                    - How much notice does the vendor give before adding or replacing a subprocessor?
+            threads:
+              - id: notice-period
+                by: alice
+                body: Thirty days notice is the number we have used everywhere else. Worth saying so in the question itself?
+                replies:
+                  - by: carol
+                    body: Deliberately open — I would rather hear their number than lead them to ours.
+                resolved: false

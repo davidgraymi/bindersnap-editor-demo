@@ -11,7 +11,15 @@ import {
 
 test("getRoute maps the SPA home route to the landing/app home kind", () => {
   expect(getRoute("/")).toEqual({ kind: "home" });
-  expect(getRoute("/trailing///")).toEqual({ kind: "home" });
+  // Trailing slashes normalize away. This used to assert `/trailing///` was
+  // home, which only held because nothing matched a single segment — now
+  // `/trailing` is an organization's address, so the normalization is tested
+  // without leaning on a path that fell through.
+  expect(getRoute("///")).toEqual({ kind: "home" });
+  expect(getRoute("/trailing///")).toEqual({
+    kind: "organization",
+    org: "trailing",
+  });
   expect(getRoute("/login")).toEqual({ kind: "login" });
   expect(getRoute("/signup")).toEqual({ kind: "signup" });
   expect(getRoute("/admin/subscriptions")).toEqual({
@@ -268,4 +276,62 @@ test("asShellRoute converts home to workspace for the authenticated shell", () =
     repo: "quarterly-report",
     tab: "overview",
   });
+});
+
+test("a bare /{org}/{binder} addresses a binder", () => {
+  expect(getRoute("/riverside-health/clinical")).toEqual({
+    kind: "binder",
+    org: "riverside-health",
+    binder: "clinical",
+  });
+});
+
+test("everything after the binder is the document's path, folders and all", () => {
+  expect(getRoute("/riverside-health/clinical/nursing/handover.md")).toEqual({
+    kind: "binderDocument",
+    org: "riverside-health",
+    binder: "clinical",
+    documentPath: "nursing/handover.md",
+  });
+});
+
+test("the app's own routes are not organizations", () => {
+  // A bare /{org}/{binder} would swallow every one of these. Anything added to
+  // RESERVED_FIRST_SEGMENTS has to be refused as an organization name too, or
+  // somebody's binder becomes unreachable.
+  expect(getRoute("/organizations/new").kind).toBe("createOrganization");
+  expect(getRoute("/admin/subscriptions").kind).toBe("adminSubscriptions");
+  expect(getRoute("/auth/callback").kind).toBe("callback");
+  expect(getRoute("/docs/alice/handbook").kind).toBe("document");
+});
+
+test("a binder route round-trips through routeToPath", () => {
+  const binder = {
+    kind: "binder" as const,
+    org: "riverside-health",
+    binder: "clinical",
+  };
+  expect(getRoute(routeToPath(binder))).toEqual(binder);
+
+  const document = {
+    kind: "binderDocument" as const,
+    org: "riverside-health",
+    binder: "clinical",
+    documentPath: "nursing/handover.md",
+  };
+  expect(getRoute(routeToPath(document))).toEqual(document);
+});
+
+test("a bare /{org} addresses the organization itself", () => {
+  expect(getRoute("/riverside-health")).toEqual({
+    kind: "organization",
+    org: "riverside-health",
+  });
+});
+
+test("the app's own single-segment routes are still not organizations", () => {
+  expect(getRoute("/documents").kind).toBe("documents");
+  expect(getRoute("/activity").kind).toBe("activity");
+  expect(getRoute("/login").kind).toBe("login");
+  expect(getRoute("/billing").kind).toBe("billing");
 });

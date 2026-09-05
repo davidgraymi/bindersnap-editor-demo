@@ -49,11 +49,15 @@ export const API_BASE_URL =
 // These must stay in sync with the values hard-coded inside seed.ts.
 // ---------------------------------------------------------------------------
 
-export const OWNER = "alice";
-export const REPO = "quarterly-report";
+// The seeded fixture, at its address in ADR 0004's model: the organization
+// owns the binder, and the document is a file inside it. It used to be
+// `alice/quarterly-report` with the document at `document.json`, back when a
+// document was a repository of its own.
+export const OWNER = "riverside-health";
+export const REPO = "corporate";
 export const SEEDED_BRANCH =
   "upload/quarterly-report/20260210/091500Z-alice-4b1c9de2";
-export const SEEDED_DOC_PATH = "document.json";
+export const SEEDED_DOC_PATH = "quarterly-report.json";
 
 // ---------------------------------------------------------------------------
 // In-memory Storage
