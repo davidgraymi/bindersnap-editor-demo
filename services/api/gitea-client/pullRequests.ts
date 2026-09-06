@@ -121,14 +121,26 @@ function resolveApprovalState(
   // list, so the page showed a red badge beside a full approval count and the
   // publish button never came back. Gitea merges on the latest review per
   // person, and this now agrees with it.
-  const reviewStates = [...latestReviewByUser(reviews).values()].map(
-    toApprovalStateFromReview,
-  );
-  if (reviewStates.includes("changes_requested")) {
+  const latest = [...latestReviewByUser(reviews).values()];
+
+  if (latest.map(toApprovalStateFromReview).includes("changes_requested")) {
     return "changes_requested";
   }
 
-  if (reviewStates.includes("approved")) {
+  // **A stale approval is not an approval**, and this is the second rule in
+  // the codebase for the same question — `countApprovals` has always skipped
+  // stale ones, because Gitea does at merge time. This did not, so a change
+  // whose approval had been overtaken by a new upload read as `isApproved`
+  // beside an approval count of zero, and the page offered a publish that
+  // Gitea answers with "does not have enough approvals". Same shape as the
+  // `isRejected` defect: two rules, one of them wrong.
+  if (
+    latest.some(
+      (review) =>
+        toApprovalStateFromReview(review) === "approved" &&
+        review.stale !== true,
+    )
+  ) {
     return "approved";
   }
 

@@ -17,6 +17,8 @@ import type {
   GetBinderDocument200,
   GetBinderHistory200,
   GetBinderSettings200,
+  GrantBinderGroup200,
+  GrantBinderGroupBody,
   ListBinderChangeDiscussions200,
   ListBinderChangeUpdates200,
   ListBinderChanges200,
@@ -33,6 +35,7 @@ import type {
   ResolveBinderChangeDiscussionBody,
   ReviewBinderChange200,
   ReviewBinderChangeBody,
+  RevokeBinderGroup200,
   SetBinderDiscussionCommentReaction200,
   SetBinderDiscussionCommentReactionBody,
   UpdateBinderChange200,
@@ -210,6 +213,77 @@ export const listBinderChanges = async (org: string,
   {
     ...options,
     method: 'GET'
+
+
+  }
+);}
+
+
+export type grantBinderGroupResponse200 = {
+  data: GrantBinderGroup200
+  status: 200
+}
+
+export type grantBinderGroupResponseSuccess = (grantBinderGroupResponse200) & {
+  headers: Headers;
+};
+;
+
+export type grantBinderGroupResponse = (grantBinderGroupResponseSuccess)
+
+export const getGrantBinderGroupUrl = (org: string,
+    binder: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/groups`
+}
+
+export const grantBinderGroup = async (org: string,
+    binder: string,
+    grantBinderGroupBody: GrantBinderGroupBody, options?: Parameters<typeof customFetch>[1]): Promise<grantBinderGroupResponse> => {
+
+  return customFetch<grantBinderGroupResponse>(getGrantBinderGroupUrl(org,binder),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(grantBinderGroupBody)
+  }
+);}
+
+
+export type revokeBinderGroupResponse200 = {
+  data: RevokeBinderGroup200
+  status: 200
+}
+
+export type revokeBinderGroupResponseSuccess = (revokeBinderGroupResponse200) & {
+  headers: Headers;
+};
+;
+
+export type revokeBinderGroupResponse = (revokeBinderGroupResponseSuccess)
+
+export const getRevokeBinderGroupUrl = (org: string,
+    binder: string,
+    group: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/groups/${group}`
+}
+
+export const revokeBinderGroup = async (org: string,
+    binder: string,
+    group: string, options?: Parameters<typeof customFetch>[1]): Promise<revokeBinderGroupResponse> => {
+
+  return customFetch<revokeBinderGroupResponse>(getRevokeBinderGroupUrl(org,binder,group),
+  {
+    ...options,
+    method: 'DELETE'
 
 
   }

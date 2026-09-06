@@ -12,6 +12,8 @@ import * as OrganizationsClient from "../../packages/api-client/organizations/or
 import * as BindersClient from "../../packages/api-client/workspaces/workspaces";
 import type {
   CreatedWorkspaceDocumentPayload,
+  BinderGroupsPayload,
+  CreatedOrganizationGroupPayload,
   OrganizationPeoplePayload,
   PublishedWorkspaceChangePayload,
   WorkspaceChangeDetailPayload,
@@ -922,6 +924,78 @@ export async function fetchOrganizationPeople(
   org: string,
 ): Promise<OrganizationPeoplePayload> {
   const response = await OrganizationsClient.getOrganizationPeople(org);
+  return response.data;
+}
+
+/**
+ * Name a group and level it, which is one act.
+ *
+ * A Gitea team carries one unit map, so the level belongs to the group rather
+ * than to the grant — a group cannot be an editor in one binder and a reviewer
+ * in another. Asking for the two together is how that constraint is shown
+ * rather than discovered.
+ */
+export async function createOrganizationGroup(
+  org: string,
+  name: string,
+  level: string,
+): Promise<CreatedOrganizationGroupPayload> {
+  const response = await OrganizationsClient.createOrganizationGroup(org, {
+    name,
+    level,
+  });
+  return response.data;
+}
+
+/** Put somebody in a group. Immediate: no commit, no approval. */
+export async function addOrganizationGroupMember(
+  org: string,
+  group: string,
+  username: string,
+): Promise<OrganizationPeoplePayload> {
+  const response = await OrganizationsClient.addOrganizationGroupMember(
+    org,
+    group,
+    { username },
+  );
+  return response.data;
+}
+
+export async function removeOrganizationGroupMember(
+  org: string,
+  group: string,
+  username: string,
+): Promise<OrganizationPeoplePayload> {
+  const response = await OrganizationsClient.removeOrganizationGroupMember(
+    org,
+    group,
+    username,
+  );
+  return response.data;
+}
+
+/**
+ * Compose a group onto this binder, and rewrite the approvals whitelist.
+ *
+ * Both halves are one call because the second fails silently on its own: a
+ * granted team missing from the whitelist has its members' approvals recorded,
+ * displayed, and satisfying nothing.
+ */
+export async function grantBinderGroup(
+  org: string,
+  binder: string,
+  group: string,
+): Promise<BinderGroupsPayload> {
+  const response = await BindersClient.grantBinderGroup(org, binder, { group });
+  return response.data;
+}
+
+export async function revokeBinderGroup(
+  org: string,
+  binder: string,
+  group: string,
+): Promise<BinderGroupsPayload> {
+  const response = await BindersClient.revokeBinderGroup(org, binder, group);
   return response.data;
 }
 

@@ -377,6 +377,112 @@ export async function createWorkspaceTeams(
   return teams;
 }
 
+/**
+ * The levels a group can be created at, said the way the product says them.
+ *
+ * **A Gitea team carries one unit map, so a level is a property of the group
+ * rather than of the grant.** `PUT /teams/{id}/repos/{org}/{repo}` adopts a team
+ * at whatever permission it already has, and there is no per-grant level. The
+ * consequence is not negotiable and is designed for rather than hidden: a
+ * "Quality Committee" cannot be an editor in one binder and a reviewer in
+ * another. If a customer needs that, it is two groups — so a group is created
+ * as a name and a level together, and the level travels with the name
+ * everywhere it appears.
+ */
+export const GROUP_LEVELS = ["admin", "editor", "reviewer"] as const;
+
+export type GroupLevel = (typeof GROUP_LEVELS)[number];
+
+export function isGroupLevel(value: unknown): value is GroupLevel {
+  return (
+    typeof value === "string" &&
+    (GROUP_LEVELS as readonly string[]).includes(value)
+  );
+}
+
+/**
+ * Each level is one of the role unit maps, reused rather than restated.
+ *
+ * `ROLE_TEAM_OPTIONS` is already the verified definition of what admin, write
+ * and read mean in a binder — `tests/gitea-permission-model.pw.ts` pins it —
+ * and a second definition here would drift the way the seed's once did. The
+ * screen words differ from the Gitea words on purpose: "Editor" is a claim
+ * about who may write *next*, where "author" reads as a claim about who wrote
+ * something, which on a product whose output is evidence is a false attribution.
+ */
+const GROUP_LEVEL_ROLES: Record<GroupLevel, WorkspaceRole> = {
+  admin: "admins",
+  editor: "authors",
+  reviewer: "reviewers",
+};
+
+/** What level a group holds, read back from the access Gitea reports. */
+export function groupLevelFromAccess(access: string): GroupLevel | null {
+  switch (access) {
+    // `owner` is what Gitea reports for the built-in Owners team on every
+    // repository the org holds. It is above admin, and it is not a level
+    // anybody creates a group at — but it is one a group can be shown at.
+    case "owner":
+    case "admin":
+      return "admin";
+    case "write":
+      return "editor";
+    case "read":
+      return "reviewer";
+    default:
+      return null;
+  }
+}
+
+export interface CreateOrganizationGroupParams extends OrganizationParams {
+  /** The handle, already slugified by the caller. */
+  name: string;
+  level: GroupLevel;
+  description?: string;
+}
+
+/**
+ * Create one of the customer's own groups.
+ *
+ * The whole point of it is reuse: a Quality Committee that reviews three
+ * binders is one membership list adopted three times, rather than three lists a
+ * human keeps in step by hand — which is the failure ADR 0004 rejected when it
+ * refused a team-to-repository reconciler, moved into the customer's hands
+ * where it is worse.
+ *
+ * It is granted onto nothing when it is created. ADR 0004: "a team granted onto
+ * no repository grants access to nothing and costs nothing" — so naming a group
+ * is free, and composing it onto a binder is a separate, deliberate act by
+ * whoever runs that binder.
+ */
+export async function createOrganizationGroup(
+  params: CreateOrganizationGroupParams,
+): Promise<GiteaTeam> {
+  const { client, org, name, level, description } = params;
+
+  const existing = await findOrganizationTeam({ client, org, name });
+  if (existing) {
+    throw new GiteaApiError(409, `${org} already has a group called ${name}.`);
+  }
+
+  const team = await unwrap(
+    client.POST("/orgs/{org}/teams", {
+      params: { path: { org } },
+      body: {
+        ...ROLE_TEAM_OPTIONS[GROUP_LEVEL_ROLES[level]],
+        name,
+        // No default description. The level is already on the row twice — as
+        // the chip beside the name and as what it costs — and a third copy of
+        // the same sentence is noise. The field is here for a customer who
+        // wants to say what the group is *for*.
+        description: description ?? "",
+      } satisfies CreateTeamOption,
+    }),
+  );
+
+  return normalizeTeam(team);
+}
+
 export interface TeamRepoParams {
   client: GiteaClient;
   teamId: number;
