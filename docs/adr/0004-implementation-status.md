@@ -37,14 +37,15 @@ holds nothing extra.
 
 ### Step 3 — the document page, and adding one (2026-09-05)
 
-| PR                                                                     | Branch                                 | What it did                                     |
-| ---------------------------------------------------------------------- | -------------------------------------- | ----------------------------------------------- |
-| [#409](https://github.com/davidgraymi/bindersnap-editor-demo/pull/409) | `feat/adr4-8-binder-document-page`     | `/{org}/{binder}/{path}` is a page, not Home    |
-| [#410](https://github.com/davidgraymi/bindersnap-editor-demo/pull/410) | `feat/adr4-9-add-a-policy`             | A member adds a policy to a binder              |
-| [#412](https://github.com/davidgraymi/bindersnap-editor-demo/pull/412) | `feat/adr4-10-binder-change-page`      | A change has a page, and is decided on it       |
-| [#413](https://github.com/davidgraymi/bindersnap-editor-demo/pull/413) | `feat/adr4-11-binder-repo-shell`       | The binder is laid out like a repository        |
-| [#414](https://github.com/davidgraymi/bindersnap-editor-demo/pull/414) | `feat/adr4-12-binder-change-detail`    | The change view is the one that already existed |
-| [#415](https://github.com/davidgraymi/bindersnap-editor-demo/pull/415) | `feat/adr4-13-binder-history-settings` | History and Settings, the last two tabs         |
+| PR                                                                     | Branch                                 | What it did                                            |
+| ---------------------------------------------------------------------- | -------------------------------------- | ------------------------------------------------------ |
+| [#409](https://github.com/davidgraymi/bindersnap-editor-demo/pull/409) | `feat/adr4-8-binder-document-page`     | `/{org}/{binder}/{path}` is a page, not Home           |
+| [#410](https://github.com/davidgraymi/bindersnap-editor-demo/pull/410) | `feat/adr4-9-add-a-policy`             | A member adds a policy to a binder                     |
+| [#412](https://github.com/davidgraymi/bindersnap-editor-demo/pull/412) | `feat/adr4-10-binder-change-page`      | A change has a page, and is decided on it              |
+| [#413](https://github.com/davidgraymi/bindersnap-editor-demo/pull/413) | `feat/adr4-11-binder-repo-shell`       | The binder is laid out like a repository               |
+| [#414](https://github.com/davidgraymi/bindersnap-editor-demo/pull/414) | `feat/adr4-12-binder-change-detail`    | The change view is the one that already existed        |
+| [#415](https://github.com/davidgraymi/bindersnap-editor-demo/pull/415) | `feat/adr4-13-binder-history-settings` | History and Settings, the last two tabs                |
+| [#416](https://github.com/davidgraymi/bindersnap-editor-demo/pull/416) | `feat/adr4-14-org-people-and-staff`    | The organization has people; binders stop making teams |
 
 #404's row above used to claim the document page too. It did not ship one:
 `binderDocument` was in the route table and in the nav's highlight rule, but
@@ -325,6 +326,66 @@ unit test and an integration test.
 Editing is not built. The page says so in a sentence rather than by drawing
 controls that do nothing.
 
+### The organization has people, and a binder stops manufacturing teams
+
+Piece 1 of the org-access design, and it changes provisioning in two ways.
+
+**A binder creates no teams.** In Gitea a team is an _organization_ object that
+a repository adopts, so three per binder inverted the model: it manufactured
+objects nobody asked for — two of which stay empty forever — and it made a
+recurring group un-reusable, because a Quality Committee reviewing three
+binders became three membership lists a human keeps in step by hand. A binder's
+access is now exactly what has been granted onto it, and the per-binder team
+survives only as a lazy fallback for the first _individual_ grant.
+
+**The organization has a `staff` team**, created with it, holding the reviewer
+unit map — read on `repo.code`, `repo.pulls` and `repo.issues`. That is not a
+coincidence: it _is_ the reviewer permission, held once for the organization
+instead of once per binder, which is what makes "four hundred nurses can read
+the manual" one call rather than four hundred per binder. It costs no seats,
+because a seat is write or better on `repo.code`.
+
+`includes_all_repositories` is deliberately **false**. With it true every binder
+is readable by everyone forever with no way back, an HR-investigation binder
+becomes impossible, and the only remedy is a second organization — which breaks
+billing. False makes granting `staff` a per-binder act, so the product gets a
+switch instead of a law. A new binder grants it, because open is the decided
+default.
+
+**The approvals whitelist is the part that fails silently, and it now has
+tests.** `enable_approvals_whitelist` is what makes a free reviewer's approval
+count; the cost is that the list must name every team whose members may
+approve, or their approvals are recorded, displayed, and satisfy nothing.
+`recomputeApprovalsWhitelist` derives it from `GET /repos/{owner}/{repo}/teams`
+— and appends **`Owners` unconditionally**, because Gitea gives that team admin
+over the whole organization implicitly and never grants it onto a repository.
+A list derived from the granted teams alone omits it and an **owner's** approval
+stops counting, presenting as "publishing is mysteriously blocked".
+
+Two integration tests pin exactly that: an owner in no other team approves and
+the change publishes, and a member of `staff` does the same. They are the two
+claims the design flagged as reasoned rather than tested.
+
+**The organization page has tabs now** — Binders and People — laid out like the
+binder for the same reason. People reads teams-first: the members, the teams,
+and each team's membership, a bounded number of calls. The per-user permission
+endpoint is not used and must not be: team access granted per unit lands in a
+field it never reads, so it answers `none` for a member who can push. That is
+defect 8 one layer down, and it has bitten twice.
+
+`staff` is left off each person's group list, because a group everybody is in
+says nothing and crowds out the ones that do.
+
+**Two things this broke, both correctly.** `addApprover` in the integration
+tests joined `<binder>-reviewers`, which no longer exists — it joins `staff`,
+which is where a binder's reviewers now come from. And the dev seed still
+creates its own role teams, so it now rewrites the approvals whitelist after
+granting them; without that its own publishes would fail with "does not have
+enough approvals" beside a green tick.
+
+Editing is still not built. Both pages say so in a sentence rather than drawing
+controls that do nothing.
+
 ## Why #393 carries the organization-creation flow too
 
 They cannot ship apart. The migration parks every username-keyed billing row
@@ -500,14 +561,19 @@ asking.
 
 In rough dependency order.
 
-1. **Editing a binder's people and rules.** Settings reads them; changing them
-   is still done in Gitea. This is the organization-access design work —
-   granting a team onto a binder, creating one, and the approval count — and
-   the product owner named team management as the next thing wanted.
-2. **Team management on the organization page.** The organization page at
-   `/{org}` needs the same treatment: surface its teams and their membership.
-   Nothing new in Gitea is required.
-3. **Delete the old model.** `POST /api/app/documents`,
+1. **Groups: create, grant, revoke.** The vocabulary an organization owner
+   controls, and the composing a binder admin does. Every grant change calls
+   `recomputeApprovalsWhitelist`, which exists and is tested. Note the
+   constraint that shapes the UI: a Gitea team carries one unit map, so a
+   group's level belongs to the group and not to the grant — "Quality
+   Committee" cannot be an editor in one binder and a reviewer in another.
+2. **The binder visibility switch.** `staff` granted or not, asked on the
+   create form with "Everyone at Riverside Health" preselected. The grant is
+   already how provisioning opens a binder; what is missing is the choice and
+   the way back.
+3. **Managing org people.** Promote and demote owners, remove from the
+   organization, and the last-owner refusal.
+4. **Delete the old model.** `POST /api/app/documents`,
    `createPrivateCurrentUserRepo`, the 16 `documents/:owner/:repo` routes in
    `services/api/server.ts`, and roughly a dozen SPA files that address a
    document as `owner/repo`. The review screens no longer stand in the way —
@@ -515,15 +581,15 @@ In rough dependency order.
    per-document workspace itself. Note that Home and the library still read
    `/api/app/documents`, so they have to move to the binder listings in the
    same change or they go blank.
-4. **The `document_versions` derived index.** Not started. The ADR's "Derived
+5. **The `document_versions` derived index.** Not started. The ADR's "Derived
    indexes" section is the specification. Note the binder model already made the
    list cheap — `listVersionsByDocument` reads a binder's tags once rather than
    once per document — so this is now an optimization rather than a rescue.
-5. **Per-workspace settings and `settings_events`.** Not started.
+6. **Per-workspace settings and `settings_events`.** Not started.
    `blockOnUnresolvedThreads` still lives in the config branch.
-6. **CODEOWNERS generation**, naming **people, not teams**, per #389's finding.
+7. **CODEOWNERS generation**, naming **people, not teams**, per #389's finding.
    Not started.
-7. **The approvals whitelist on a binder change.** `branchProtection` is
+8. **The approvals whitelist on a binder change.** `branchProtection` is
    passed as null, so the page never says "your account is not authorized to
    approve this". Gitea still refuses, and the required count is shown — but
    the reason is the admin-only half of the rule and the binder page does not

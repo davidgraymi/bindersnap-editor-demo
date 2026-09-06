@@ -194,16 +194,16 @@ test("a member creates the binder, and it belongs to the organization", async ()
   expect(contents.status).toBe(200);
   expect(await contents.json()).toEqual([]);
 
+  // The organization's own teams, and only those: a binder manufactures none.
+  // In Gitea a team is an organization object that a repository adopts, so
+  // three per binder inverts the model and makes a recurring group
+  // un-reusable — a Quality Committee reviewing three binders would be three
+  // membership lists kept in step by hand.
   const teams = await giteaGet<Array<{ name: string }>>(
     token,
     `/orgs/${org.name}/teams`,
   );
-  expect(teams.map((team) => team.name).sort()).toEqual([
-    "Owners",
-    "clinical-policies-admins",
-    "clinical-policies-authors",
-    "clinical-policies-reviewers",
-  ]);
+  expect(teams.map((team) => team.name).sort()).toEqual(["Owners", "staff"]);
 
   const protection = await giteaGet<{
     enable_push: boolean;
@@ -221,10 +221,14 @@ test("a member creates the binder, and it belongs to the organization", async ()
   // resolves "official reviewer" as "has write access", which would make every
   // reviewer's approval count for nothing.
   expect(protection.enable_approvals_whitelist).toBe(true);
+  // `staff`, because the binder is open to the organization — and `Owners`,
+  // which is never granted onto a repository at all. Gitea gives it admin over
+  // the whole organization implicitly, so a whitelist derived from the granted
+  // teams alone would omit it and an owner's approval would silently stop
+  // counting.
   expect(protection.approvals_whitelist_teams.sort()).toEqual([
-    "clinical-policies-admins",
-    "clinical-policies-authors",
-    "clinical-policies-reviewers",
+    "Owners",
+    "staff",
   ]);
   expect(protection.block_on_official_review_requests).toBe(true);
 });
@@ -736,14 +740,15 @@ test("a binder in an organization you cannot see is simply not there", async () 
  * tag → commit → pull request → reviews.
  */
 /**
- * Put a second person on the binder's reviewers team, and have them approve.
+ * Put a second person in the organization's `staff` team, so they can approve.
  *
  * Nothing reaches `main` except a merged, approved change — that is the
  * product's core claim, and the binder's protected `main` enforces it. A
  * publish test that skipped this would be testing a wall that was not there.
  *
- * It also exercises the free-reviewer tier: the approvals whitelist is what
- * makes a reviewer's approval count without giving them write access.
+ * It also exercises the free-reviewer tier twice over: `staff` holds read on
+ * `repo.code` and `repo.pulls`, which is the whole cost of reviewing, and the
+ * approvals whitelist is what makes that approval count.
  */
 async function addApprover(
   ownerToken: string,
@@ -757,17 +762,19 @@ async function addApprover(
   const credentials = buildCredentials();
   const sessionCookie = await signUp(credentials);
 
+  // Through `staff`, the organization's own read team, which a new binder is
+  // granted because it is open to the organization. There is no
+  // `<binder>-reviewers` to join: a binder manufactures no teams, and the
+  // per-binder one is created lazily on the first *individual* grant.
   const teams = await giteaGet<Array<{ id: number; name: string }>>(
     ownerToken,
     `/orgs/${org}/teams`,
   );
-  const reviewers = teams.find(
-    (team) => team.name === `${workspace}-reviewers`,
-  );
-  expect(reviewers, `no ${workspace}-reviewers team`).toBeTruthy();
+  const staff = teams.find((team) => team.name === "staff");
+  expect(staff, `no staff team in ${org}`).toBeTruthy();
 
   const added = await fetch(
-    `${GITEA_URL}/api/v1/teams/${reviewers!.id}/members/${credentials.username}`,
+    `${GITEA_URL}/api/v1/teams/${staff!.id}/members/${credentials.username}`,
     { method: "PUT", headers: { Authorization: `token ${ownerToken}` } },
   );
   expect([200, 204]).toContain(added.status);
@@ -1696,14 +1703,13 @@ test("the binder says who can act in it, and the rules it is under", async () =>
 
   // The teams granted onto the repository, asked of the repository — a binder's
   // people reach it through org teams, which no name convention can be trusted
-  // to enumerate.
-  const reviewers = payload.teams.find((team) =>
-    team.name.endsWith("-reviewers"),
-  );
-  expect(reviewers, JSON.stringify(payload.teams)).toBeTruthy();
+  // to enumerate. A new binder is granted exactly one: the organization's own
+  // `staff`, because it is open to the organization.
+  const staff = payload.teams.find((team) => team.name === "staff");
+  expect(staff, JSON.stringify(payload.teams)).toBeTruthy();
   // Read on repo.code is what ADR 0004 promises is free forever.
-  expect(reviewers!.access).toBe("read");
-  expect(reviewers!.members.map((member) => member.login)).toContain(
+  expect(staff!.access).toBe("read");
+  expect(staff!.members.map((member) => member.login)).toContain(
     approver.credentials.username,
   );
 
@@ -1734,6 +1740,186 @@ test("history and settings on a binder that is not there are 404s", async () => 
     );
     expect(response.status, path).toBe(404);
   }
+});
+
+test("a new binder makes no role teams, and opens to the whole staff", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org.name}/clinical/settings`,
+    { headers: { Cookie: `bindersnap_session=${sessionCookie}` } },
+  );
+  const payload = (await response.json()) as {
+    teams: Array<{ name: string; access: string }>;
+  };
+  const names = payload.teams.map((team) => team.name).sort();
+
+  // In Gitea a team is an organization object that a repository adopts, so
+  // three teams per binder inverts the model — two stay empty forever, and a
+  // group reviewing three binders becomes three lists kept in step by hand.
+  expect(names).not.toContain("clinical-admins");
+  expect(names).not.toContain("clinical-authors");
+  expect(names).not.toContain("clinical-reviewers");
+
+  // A new binder is open to the organization, which is the decided default:
+  // the common case is a manual everybody must read in order to attest to it.
+  const staff = payload.teams.find((team) => team.name === "staff");
+  expect(staff, JSON.stringify(payload.teams)).toBeTruthy();
+  // Read, so it costs no seats — a seat is write or better on `repo.code`.
+  expect(staff!.access).toBe("read");
+});
+
+test("an owner's approval counts, although Owners is never granted", async () => {
+  // The sharpest failure in this design and a silent one. `Owners` is never
+  // granted onto a repository — Gitea gives it admin over the whole
+  // organization implicitly — so a whitelist derived from the granted teams
+  // alone omits it, and an owner's approval is recorded, displayed, and
+  // satisfies nothing. It presents as "publishing is mysteriously blocked".
+  const author = buildCredentials();
+  const authorCookie = await signUp(author);
+  const org = await createOrganization(authorCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(authorCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const ownerToken = await createUserToken(author.username, author.password);
+
+  // A second owner, so somebody other than the submitter can approve. They are
+  // in no other team — which is the point of the test.
+  const owner = buildCredentials();
+  await signUp(owner);
+  const teams = await giteaGet<Array<{ id: number; name: string }>>(
+    ownerToken,
+    `/orgs/${org.name}/teams`,
+  );
+  const owners = teams.find((team) => team.name === "Owners");
+  expect(owners, JSON.stringify(teams)).toBeTruthy();
+  const added = await fetch(
+    `${GITEA_URL}/api/v1/teams/${owners!.id}/members/${owner.username}`,
+    { method: "PUT", headers: { Authorization: `token ${ownerToken}` } },
+  );
+  expect([200, 204]).toContain(added.status);
+
+  const ownerApproverToken = await createUserToken(
+    owner.username,
+    owner.password,
+  );
+
+  const addedDoc = await addDocument(authorCookie, org.name, "clinical", {
+    name: "Infection Control",
+  });
+  const { pullRequestNumber, slugPath } = JSON.parse(addedDoc.body) as {
+    pullRequestNumber: number;
+    slugPath: string;
+  };
+
+  await approveChange(
+    ownerApproverToken,
+    org.name,
+    "clinical",
+    pullRequestNumber,
+  );
+
+  // If `Owners` were missing from `approvals_whitelist_teams`, this is where it
+  // would fail — with "does not have enough approvals" beside a green approval.
+  const published = await publishChange(
+    authorCookie,
+    org.name,
+    "clinical",
+    pullRequestNumber,
+  );
+  expect(published.status, published.body).toBe(200);
+  expect(
+    (JSON.parse(published.body) as { tags: Array<{ tag: string }> }).tags.map(
+      (tag) => tag.tag,
+    ),
+  ).toEqual([`${slugPath}/v1`]);
+});
+
+test("a member of staff can approve, and the approval counts", async () => {
+  // ADR 0004 promises reviewers are free forever, and `staff` is how the whole
+  // organization holds that permission once instead of once per binder. It is
+  // only true if `staff` is whitelisted — read on `repo.code` and `repo.pulls`
+  // is what approving costs, and the whitelist is what makes it count.
+  const author = buildCredentials();
+  const authorCookie = await signUp(author);
+  const org = await createOrganization(authorCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(authorCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const ownerToken = await createUserToken(author.username, author.password);
+
+  const staffMember = buildCredentials();
+  await signUp(staffMember);
+  const teams = await giteaGet<Array<{ id: number; name: string }>>(
+    ownerToken,
+    `/orgs/${org.name}/teams`,
+  );
+  const staff = teams.find((team) => team.name === "staff");
+  expect(staff, JSON.stringify(teams)).toBeTruthy();
+  const joined = await fetch(
+    `${GITEA_URL}/api/v1/teams/${staff!.id}/members/${staffMember.username}`,
+    { method: "PUT", headers: { Authorization: `token ${ownerToken}` } },
+  );
+  expect([200, 204]).toContain(joined.status);
+
+  const addedDoc = await addDocument(authorCookie, org.name, "clinical", {
+    name: "Infection Control",
+  });
+  const { pullRequestNumber } = JSON.parse(addedDoc.body) as {
+    pullRequestNumber: number;
+  };
+
+  await approveChange(
+    await createUserToken(staffMember.username, staffMember.password),
+    org.name,
+    "clinical",
+    pullRequestNumber,
+  );
+
+  expect(
+    (await publishChange(authorCookie, org.name, "clinical", pullRequestNumber))
+      .status,
+  ).toBe(200);
+});
+
+test("the organization says who is in it, and which groups they are in", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/orgs/${org.name}/people`,
+    { headers: { Cookie: `bindersnap_session=${sessionCookie}` } },
+  );
+  expect(response.status, await response.clone().text()).toBe(200);
+  const payload = (await response.json()) as {
+    people: Array<{ login: string; isOwner: boolean; teams: string[] }>;
+    groups: Array<{ name: string; access: string; memberCount: number }>;
+    canManage: boolean;
+  };
+
+  // Two rungs and only two. The creator is the owner Gitea made them.
+  expect(payload.people).toHaveLength(1);
+  expect(payload.people[0]).toMatchObject({
+    login: credentials.username,
+    isOwner: true,
+  });
+  // `staff` is everybody by definition, so listing it against every name says
+  // nothing and crowds out the groups that do.
+  expect(payload.people[0]?.teams).toEqual(["Owners"]);
+
+  expect(payload.groups.map((group) => group.name).sort()).toEqual([
+    "Owners",
+    "staff",
+  ]);
+  expect(payload.canManage).toBe(true);
 });
 
 test("a change in a binder that is not there is a 404", async () => {

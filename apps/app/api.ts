@@ -12,6 +12,7 @@ import * as OrganizationsClient from "../../packages/api-client/organizations/or
 import * as BindersClient from "../../packages/api-client/workspaces/workspaces";
 import type {
   CreatedWorkspaceDocumentPayload,
+  OrganizationPeoplePayload,
   PublishedWorkspaceChangePayload,
   WorkspaceChangeDetailPayload,
   WorkspaceChangeListPayload,
@@ -913,6 +914,14 @@ export async function fetchBinderChanges(
   const response = await BindersClient.listBinderChanges(org, binder, {
     state,
   });
+  return response.data;
+}
+
+/** Who is in this organization, and the groups it has. */
+export async function fetchOrganizationPeople(
+  org: string,
+): Promise<OrganizationPeoplePayload> {
+  const response = await OrganizationsClient.getOrganizationPeople(org);
   return response.data;
 }
 

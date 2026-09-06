@@ -43,9 +43,15 @@ import {
   toDocumentEntry,
 } from "./gitea-client/workspaceDocuments";
 import {
+  findOrganization,
+  isOrganizationOwnerDirect,
+  listOrganizationMembers,
   listOrganizationOwners,
+  listOrganizationTeams,
   listRepoTeams,
   listTeamMembers,
+  OWNERS_TEAM_NAME,
+  STAFF_TEAM_NAME,
 } from "./gitea-client/orgs";
 import { createPrivilegedGiteaClient } from "./privileged-client";
 import type Stripe from "stripe";
@@ -5708,6 +5714,112 @@ async function readWorkspaceProtection(
   }
 }
 
+/**
+ * Who is in the organization, and what groups it has.
+ *
+ * Teams-first, and a bounded number of calls: the members, the teams, and the
+ * membership of each team. The obvious alternative —
+ * `GET /repos/{owner}/{repo}/collaborators/{user}/permission` per person —
+ * answers `none` for a member who can push, because team access granted per
+ * unit lands in a field that endpoint never reads. It has bitten twice.
+ *
+ * A read, so it is never gated.
+ */
+async function handleOrganizationPeople(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { client, session } = auth;
+
+  try {
+    const organization = await findOrganization({ client, org: orgName });
+    if (!organization) {
+      return json(404, { error: "No such organization." }, baseHeaders);
+    }
+
+    const [members, teams, canManage] = await Promise.all([
+      listOrganizationMembers({ client, org: orgName }),
+      // A member who is not an owner cannot list the organization's teams.
+      // That costs them the groups, not the page.
+      listOrganizationTeams({ client, org: orgName }).catch(() => []),
+      isOrganizationOwnerDirect({
+        client,
+        org: orgName,
+        username: session.username,
+      }),
+    ]);
+
+    const membershipByTeam = await Promise.all(
+      teams.map(async (team) => ({
+        team,
+        members: await listTeamMembers({ client, teamId: team.id }).catch(
+          () => [],
+        ),
+      })),
+    );
+
+    const teamsByLogin = new Map<string, string[]>();
+    const owners = new Set<string>();
+    for (const { team, members: teamMembers } of membershipByTeam) {
+      for (const member of teamMembers) {
+        const login = member.login.toLowerCase();
+        if (team.name === OWNERS_TEAM_NAME) owners.add(login);
+        // `staff` is everybody by definition, so listing it against every name
+        // says nothing and crowds out the groups that do.
+        if (team.name === STAFF_TEAM_NAME) continue;
+        const existing = teamsByLogin.get(login);
+        if (existing) {
+          existing.push(team.name);
+        } else {
+          teamsByLogin.set(login, [team.name]);
+        }
+      }
+    }
+
+    return json(
+      200,
+      {
+        organization: orgName,
+        people: members
+          .map((member) => ({
+            login: member.login,
+            fullName: member.fullName,
+            isOwner: owners.has(member.login.toLowerCase()),
+            teams: teamsByLogin.get(member.login.toLowerCase()) ?? [],
+          }))
+          // Owners first, then by name: the list answers "who runs this" before
+          // it answers "who is here".
+          .sort((left, right) => {
+            if (left.isOwner !== right.isOwner) return left.isOwner ? -1 : 1;
+            return left.login.localeCompare(right.login);
+          }),
+        groups: membershipByTeam
+          .map(({ team, members: teamMembers }) => ({
+            id: team.id,
+            name: team.name,
+            description: team.description,
+            access: team.codeAccess,
+            memberCount: teamMembers.length,
+          }))
+          .sort((left, right) => left.name.localeCompare(right.name)),
+        canManage,
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to read an organization's people", {
+      username: session.username,
+      organization: orgName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to read the people.");
+  }
+}
+
 async function handleListWorkspaceDocuments(
   req: Request,
   baseHeaders: Headers,
@@ -7232,6 +7344,9 @@ export function createApiServer() {
         const createBinderMatch = pathname.match(
           /^\/api\/app\/orgs\/([^/]+)\/binders$/,
         );
+        const organizationPeopleMatch = pathname.match(
+          /^\/api\/app\/orgs\/([^/]+)\/people$/,
+        );
         const workspaceChangesMatch = pathname.match(
           /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes$/,
         );
@@ -7247,7 +7362,13 @@ export function createApiServer() {
           /^\/api\/app\/binders\/([^/]+)\/([^/]+)$/,
         );
 
-        if (createBinderMatch && method === "GET") {
+        if (organizationPeopleMatch && method === "GET") {
+          response = await handleOrganizationPeople(
+            req,
+            baseHeaders,
+            organizationPeopleMatch[1]!,
+          );
+        } else if (createBinderMatch && method === "GET") {
           response = await handleListOrganizationWorkspaces(
             req,
             baseHeaders,

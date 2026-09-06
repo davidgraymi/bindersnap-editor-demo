@@ -481,3 +481,51 @@ export const WorkspaceSettingsPayloadSchema = z.object({
 export type WorkspaceSettingsPayload = z.infer<
   typeof WorkspaceSettingsPayloadSchema
 >;
+
+/**
+ * One person in the organization.
+ *
+ * Two rungs, and only two: owner and member. Every third org-level role anyone
+ * proposes turns out to be a binder role wearing a costume — "compliance lead"
+ * is a manager of the binders they run, "auditor" is a reviewer on everything —
+ * and a rung above the binder is the expensive kind, because Gitea will not
+ * enforce a distinction we invent.
+ */
+export const OrganizationPersonSchema = z.object({
+  login: z.string(),
+  fullName: z.string(),
+  isOwner: z.boolean(),
+  /** The groups they are in, which is where their binder access comes from. */
+  teams: z.array(z.string()),
+});
+export type OrganizationPerson = z.infer<typeof OrganizationPersonSchema>;
+
+/**
+ * A group the organization has, and what it grants wherever it is adopted.
+ *
+ * A Gitea team carries one unit map, so a group's level is a property of the
+ * group rather than of the grant: "Quality Committee" cannot be an editor in
+ * one binder and a reviewer in another. That is why a group is named and
+ * levelled together, and why the level travels with the name everywhere it
+ * appears.
+ */
+export const OrganizationGroupSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  description: z.string(),
+  /** `owner`, `admin`, `write`, `read` or `none` on `repo.code`. */
+  access: z.string(),
+  memberCount: z.number(),
+});
+export type OrganizationGroup = z.infer<typeof OrganizationGroupSchema>;
+
+export const OrganizationPeoplePayloadSchema = z.object({
+  organization: z.string(),
+  people: z.array(OrganizationPersonSchema),
+  groups: z.array(OrganizationGroupSchema),
+  /** Whether the caller owns the organization, and may change any of it. */
+  canManage: z.boolean(),
+});
+export type OrganizationPeoplePayload = z.infer<
+  typeof OrganizationPeoplePayloadSchema
+>;
