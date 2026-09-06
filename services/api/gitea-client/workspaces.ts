@@ -184,6 +184,43 @@ export async function findWorkspaceRepo(
   }
 }
 
+/**
+ * What this caller may do in a binder, asked of Gitea as them.
+ *
+ * Not the collaborator endpoint: a binder's people get their access through
+ * org teams, and Gitea answers `"none"` for team-derived access on both the
+ * team's own `permission` and the repository's collaborator list. The only
+ * honest answer is to ask for the repository as that member and read what
+ * comes back on it.
+ *
+ * It decides which buttons are drawn, never whether an act is allowed —
+ * Gitea's own check is still the one that refuses.
+ */
+export async function readWorkspaceAccess(params: {
+  client: GiteaClient;
+  org: string;
+  name: string;
+}): Promise<{ push: boolean; admin: boolean }> {
+  const { client, org, name } = params;
+
+  try {
+    const repo = (await unwrap(
+      client.GET("/repos/{owner}/{repo}", {
+        params: { path: { owner: org, repo: name } },
+      }),
+    )) as { permissions?: { push?: boolean; admin?: boolean } };
+
+    return {
+      push: repo.permissions?.push === true,
+      admin: repo.permissions?.admin === true,
+    };
+  } catch {
+    // A binder this caller cannot see has already answered 404 elsewhere; a
+    // failure here should cost them a button, not the page.
+    return { push: false, admin: false };
+  }
+}
+
 export interface ProtectWorkspaceMainParams {
   client: GiteaClient;
   org: string;

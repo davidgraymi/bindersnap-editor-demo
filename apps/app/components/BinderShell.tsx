@@ -5,8 +5,10 @@ import type { WorkspaceOverviewPayload } from "../../../packages/api-schema/sche
 import {
   binderTabFromSearch,
   buildBinderUrl,
+  changeViewFromSearch,
   type BinderTab,
 } from "../binderShell";
+import type { DocumentChangeView } from "../routes";
 import { parseRequestedChange } from "../binderChange";
 import { AddPolicyModal } from "./AddPolicyModal";
 import { BinderChangePage } from "./BinderChangePage";
@@ -61,11 +63,15 @@ export function BinderShell({
   const [openChange, setOpenChange] = useState<number | null>(() =>
     parseRequestedChange(window.location.search),
   );
+  const [changeView, setChangeView] = useState<DocumentChangeView>(() =>
+    changeViewFromSearch(window.location.search),
+  );
 
   useEffect(() => {
     const handler = () => {
       setTab(binderTabFromSearch(window.location.search));
       setOpenChange(parseRequestedChange(window.location.search));
+      setChangeView(changeViewFromSearch(window.location.search));
     };
     window.addEventListener("popstate", handler);
     return () => window.removeEventListener("popstate", handler);
@@ -101,14 +107,24 @@ export function BinderShell({
     setOpenChange(null);
   };
 
-  const openChangeNumber = (changeNumber: number) => {
+  const openChangeNumber = (
+    changeNumber: number,
+    view: DocumentChangeView = "discussion",
+  ) => {
     window.history.pushState(
       {},
       "",
-      buildBinderUrl({ org, binder, tab: "changes", change: changeNumber }),
+      buildBinderUrl({
+        org,
+        binder,
+        tab: "changes",
+        change: changeNumber,
+        view,
+      }),
     );
     setTab("changes");
     setOpenChange(changeNumber);
+    setChangeView(view);
   };
 
   // A document is a file in the binder, so Documents stays the tab you are on.
@@ -188,8 +204,11 @@ export function BinderShell({
           binder={binder}
           changeNumber={openChange}
           currentUser={currentUser}
-          onBackToBinder={() => goTo("changes")}
+          view={changeView}
+          onViewChange={(next) => openChangeNumber(openChange, next)}
+          onBackToChanges={() => goTo("changes")}
           onOpenDocument={onOpenDocument}
+          onChanged={loadOverview}
         />
       ) : documentPath ? (
         <BinderDocumentPage

@@ -1,5 +1,5 @@
 import { ChevronDown, Check } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   PullRequestWithApprovalState,
@@ -15,6 +15,7 @@ import {
   getDocumentDetail,
   listDocumentCollaborators,
 } from "../api";
+import type { ChangeScope } from "../changeScope";
 import type { DocumentChangeView, DocumentTab } from "../routes";
 import { describeFileKind } from "../documentFile";
 import type { ChangeRecord } from "../documentDisplay";
@@ -133,6 +134,13 @@ export function DocumentDetail({
     RepoCollaboratorPermissionSummary[]
   >([]);
 
+  // A document that is a repository of its own — the model ADR 0004 replaces.
+  // Built once so every child, and every effect keyed on it, sees one object.
+  const scope = useMemo<ChangeScope>(
+    () => ({ kind: "document", owner, repo }),
+    [owner, repo],
+  );
+
   const loadDocumentData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -190,7 +198,7 @@ export function DocumentDetail({
     if (uploaderSlug === null) return;
 
     let cancelled = false;
-    listDocumentCollaborators(owner, repo, 1, 12)
+    listDocumentCollaborators(scope, 1, 12)
       .then((payload) => {
         if (!cancelled) setCollaborators(payload.collaborators);
       })
@@ -271,7 +279,7 @@ export function DocumentDetail({
     setDownloadState({ ref: gitRef, error: null });
 
     try {
-      const blob = await downloadDocument(owner, repo, gitRef);
+      const blob = await downloadDocument(scope, gitRef);
       triggerBrowserDownload(blob, canonicalFileInfo.downloadFileName);
       setDownloadState({ ref: null, error: null });
     } catch (err) {
@@ -286,8 +294,8 @@ export function DocumentDetail({
   // Stable so the preview loads the file once per ref rather than per render,
   // and above the early returns below so it runs on every render.
   const loadFile = useCallback(
-    (gitRef: string) => downloadDocument(owner, repo, gitRef),
-    [owner, repo],
+    (gitRef: string) => downloadDocument(scope, gitRef),
+    [scope],
   );
 
   const handleUploadSuccess = (_result: UploadResult) => {
@@ -483,8 +491,7 @@ export function DocumentDetail({
       ) : activeView === "changes" && activeChange ? (
         <div className="document-detail-tab-panel">
           <DocumentChangeDetail
-            owner={owner}
-            repo={repo}
+            scope={scope}
             currentUser={currentUser}
             isAnonymous={isAnonymous}
             change={activeChange}

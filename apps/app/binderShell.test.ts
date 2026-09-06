@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
 
-import { binderTabFromSearch, buildBinderUrl } from "./binderShell";
+import {
+  binderTabFromSearch,
+  buildBinderUrl,
+  changeViewFromSearch,
+} from "./binderShell";
 
 // ── the tab in the address bar ─────────────────────────────────────
 
@@ -46,4 +50,40 @@ test("one change is addressed inside its tab", () => {
       change: 3,
     }),
   ).toBe("/riverside/clinical?tab=changes&change=3");
+});
+
+// ── which screen of a change ───────────────────────────────────────
+
+test("a bare change link opens the discussion, where the decision is made", () => {
+  expect(changeViewFromSearch("?change=3")).toBe("discussion");
+  expect(changeViewFromSearch("?change=3&view=nonsense")).toBe("discussion");
+});
+
+test("the file and the comparison each have their own address", () => {
+  expect(changeViewFromSearch("?view=preview")).toBe("preview");
+  expect(changeViewFromSearch("?view=compare")).toBe("compare");
+});
+
+test("the discussion carries no view, so a change's own link stays short", () => {
+  expect(
+    buildBinderUrl({
+      org: "riverside",
+      binder: "clinical",
+      tab: "changes",
+      change: 3,
+      view: "discussion",
+    }),
+  ).toBe("/riverside/clinical?tab=changes&change=3");
+});
+
+test("another screen names itself", () => {
+  expect(
+    buildBinderUrl({
+      org: "riverside",
+      binder: "clinical",
+      tab: "changes",
+      change: 3,
+      view: "compare",
+    }),
+  ).toBe("/riverside/clinical?tab=changes&change=3&view=compare");
 });

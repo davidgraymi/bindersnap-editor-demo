@@ -11,6 +11,8 @@
  * reads `?version=` and the change page `?change=` for the same reason.
  */
 
+import type { DocumentChangeView } from "./routes";
+
 /** The tabs a binder has. Documents is the one it opens on. */
 export const BINDER_TABS = ["documents", "changes"] as const;
 export type BinderTab = (typeof BINDER_TABS)[number];
@@ -32,13 +34,30 @@ export function buildBinderUrl(params: {
   binder: string;
   tab?: BinderTab;
   change?: number;
+  /** Which screen of that change: its discussion, the file, or the compare. */
+  view?: DocumentChangeView;
 }): string {
-  const { org, binder, tab = "documents", change } = params;
+  const { org, binder, tab = "documents", change, view } = params;
   const query = new URLSearchParams();
 
   if (tab !== "documents") query.set("tab", tab);
   if (change !== undefined) query.set("change", String(change));
+  // The discussion is where a decision is made, so it is the screen a bare
+  // change link opens and the one that needs no name.
+  if (view !== undefined && view !== "discussion") query.set("view", view);
 
   const search = query.toString();
   return search === "" ? `/${org}/${binder}` : `/${org}/${binder}?${search}`;
+}
+
+/**
+ * Which screen of a change the address bar is asking for.
+ *
+ * The discussion is where the decision is made, so it is what a bare change
+ * link opens; the proposed file and the comparison each get their own address
+ * so a reviewer can send "look at the diff" rather than "open it and click".
+ */
+export function changeViewFromSearch(search: string): DocumentChangeView {
+  const raw = new URLSearchParams(search).get("view");
+  return raw === "preview" || raw === "compare" ? raw : "discussion";
 }

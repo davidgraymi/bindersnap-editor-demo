@@ -37,12 +37,13 @@ holds nothing extra.
 
 ### Step 3 — the document page, and adding one (2026-09-05)
 
-| PR                                                                     | Branch                             | What it did                                  |
-| ---------------------------------------------------------------------- | ---------------------------------- | -------------------------------------------- |
-| [#409](https://github.com/davidgraymi/bindersnap-editor-demo/pull/409) | `feat/adr4-8-binder-document-page` | `/{org}/{binder}/{path}` is a page, not Home |
-| [#410](https://github.com/davidgraymi/bindersnap-editor-demo/pull/410) | `feat/adr4-9-add-a-policy`         | A member adds a policy to a binder           |
-| [#412](https://github.com/davidgraymi/bindersnap-editor-demo/pull/412) | `feat/adr4-10-binder-change-page`  | A change has a page, and is decided on it    |
-| [#413](https://github.com/davidgraymi/bindersnap-editor-demo/pull/413) | `feat/adr4-11-binder-repo-shell`   | The binder is laid out like a repository     |
+| PR                                                                     | Branch                              | What it did                                     |
+| ---------------------------------------------------------------------- | ----------------------------------- | ----------------------------------------------- |
+| [#409](https://github.com/davidgraymi/bindersnap-editor-demo/pull/409) | `feat/adr4-8-binder-document-page`  | `/{org}/{binder}/{path}` is a page, not Home    |
+| [#410](https://github.com/davidgraymi/bindersnap-editor-demo/pull/410) | `feat/adr4-9-add-a-policy`          | A member adds a policy to a binder              |
+| [#412](https://github.com/davidgraymi/bindersnap-editor-demo/pull/412) | `feat/adr4-10-binder-change-page`   | A change has a page, and is decided on it       |
+| [#413](https://github.com/davidgraymi/bindersnap-editor-demo/pull/413) | `feat/adr4-11-binder-repo-shell`    | The binder is laid out like a repository        |
+| [#414](https://github.com/davidgraymi/bindersnap-editor-demo/pull/414) | `feat/adr4-12-binder-change-detail` | The change view is the one that already existed |
 
 #404's row above used to claim the document page too. It did not ship one:
 `binderDocument` was in the route table and in the nav's highlight rule, but
@@ -216,6 +217,64 @@ whole binder rather than a `/pulls/{n}/files` call per change.
 `resolveClosedOutcome` is pulled out of `buildClosedChanges` so the binder's
 list reaches "declined" and "withdrawn" by the same rule rather than a second
 copy of it.
+
+### The change view is the one that already existed
+
+The thin review screen written for #412 is gone. A binder's change now renders
+`DocumentChangeDetail` — the same discussion, timeline, comparison, reviewer
+list, approval confirmation and publish gate the per-document workspace has,
+which is roughly 2,500 lines that were being duplicated badly rather than
+reused.
+
+**The seam is a `ChangeScope`**, not a bag of callbacks, because that is all
+that differs: a pair of names, plus — for a binder — which document inside it
+the change's file operations are about.
+
+```ts
+type ChangeScope =
+  | { kind: "document"; owner: string; repo: string }
+  | { kind: "binder"; org: string; binder: string; documentPath: string };
+```
+
+`api.ts` turns it into a URL and nothing else needs to know. Five components
+(`DocumentChangeDetail`, `ReviewTimeline`, `ChangeReviewers`,
+`DocumentComparison`, `DocumentDetail`) traded `owner`/`repo` props for one
+`scope`, and eleven functions in `api.ts` traded them for one argument.
+
+Six operations got a binder address, and **every one of them delegates to the
+document model's own handler**: discussions, replies, resolution, comment
+reactions, change updates, reviewer assignment, plus the binder's
+collaborators. A binder is a Gitea repository and a change on it is a Gitea
+pull request, so this is routing, not behaviour — one namespace per shape of
+thing rather than a second implementation.
+
+Two things the change detail needed that the payload did not carry:
+
+- **`canManage`**, from `readWorkspaceAccess`. Not the collaborator endpoint: a
+  binder's people get their access through org teams, and Gitea reports
+  `"none"` for team-derived access on both the team's `permission` and the
+  repository's collaborator list. The only honest answer is to ask for the
+  repository _as that member_ and read what comes back — which is what the
+  step-2 notes said and is now code.
+- **Every version per document**, not only the newest. The comparison reads a
+  published change against the version _below_ the one it became; against
+  today's record it would be comparing it with itself. `listDocumentVersions`
+  was already being called per document for `nextVersion`, so the whole list
+  costs nothing.
+
+`resolveComparisonBase` now takes `{ name, version }[]` rather than `DocTag[]`:
+named and numbered is all it reads, and a binder's per-document tags carry no
+common created date.
+
+`?view=preview` and `?view=compare` join `?tab=` and `?change=` in the query,
+for the same reason all of them are there. The discussion carries no `view`, so
+a change's own link stays short.
+
+**A test flake fixed rather than retried.** `approveChange` confirmed an
+approval was standing and the merge then failed with "does not have enough
+approvals" — because Gitea processes a push asynchronously and can dismiss an
+approval a moment after it reads as good. The helper now requires it to stand
+on two checks a beat apart, which is what makes the answer mean anything.
 
 ## Why #393 carries the organization-creation flow too
 
@@ -392,26 +451,23 @@ asking.
 
 In rough dependency order.
 
-1. **The change view should be `DocumentChangeDetail`, not a second one.**
-   The binder's change _list_ is now the shared component; its change _detail_
-   is still the thinner one written for #412, and it is the piece the product
-   owner objected to. Reusing the real one brings the discussion, the timeline
-   and the reviewer panel with it, and needs binder routes for six things that
-   today exist only under `/api/app/documents/:owner/:repo/…`: discussions,
-   replies, resolution, comment reactions, change updates, and reviewer
-   assignment. All six are generic Gitea pull-request operations, and a binder
-   is a Gitea repository, so this is routing rather than new behaviour.
-2. **History and permissions tabs on the binder.** The two the shell does not
+1. **History and permissions tabs on the binder.** The two the shell does not
    have yet. History is cheap — the binder's tags grouped by document, which
    `listVersionsByDocument` already returns in one call. Permissions is the
    organization-access design work: team membership on the binder, which the
-   product owner named as the next thing wanted after this.
+   product owner named as the next thing wanted.
+2. **Team management on the organization page.** The binder's three role teams
+   already carry membership (`createWorkspaceTeams`, `grantTeamOnRepo`); the
+   organization page at `/{org}` needs to surface and edit it. Nothing new in
+   Gitea is required.
 3. **Delete the old model.** `POST /api/app/documents`,
    `createPrivateCurrentUserRepo`, the 16 `documents/:owner/:repo` routes in
    `services/api/server.ts`, and roughly a dozen SPA files that address a
-   document as `owner/repo`. Safe once (2) lands, per decision 3. Note that
-   Home and the library still read `/api/app/documents`, so they have to move
-   to the binder listings in the same change or they go blank.
+   document as `owner/repo`. The review screens no longer stand in the way —
+   they take a `ChangeScope` and serve both models — so what is left is the
+   per-document workspace itself. Note that Home and the library still read
+   `/api/app/documents`, so they have to move to the binder listings in the
+   same change or they go blank.
 4. **The `document_versions` derived index.** Not started. The ADR's "Derived
    indexes" section is the specification. Note the binder model already made the
    list cheap — `listVersionsByDocument` reads a binder's tags once rather than
@@ -420,10 +476,11 @@ In rough dependency order.
    `blockOnUnresolvedThreads` still lives in the config branch.
 6. **CODEOWNERS generation**, naming **people, not teams**, per #389's finding.
    Not started.
-7. **Reviewer management on a binder change.** Who is asked to sign a change
-   off is still the old model's screen: `ChangeReviewers` calls
-   `listDocumentCollaborators` and `updateChangeAssignments`, both keyed on
-   `owner/repo`. The change page shows who has answered, read-only.
+7. **The approvals whitelist on a binder change.** `branchProtection` is
+   passed as null, so the page never says "your account is not authorized to
+   approve this". Gitea still refuses, and the required count is shown — but
+   the reason is the admin-only half of the rule and the binder page does not
+   ask for it yet.
 
 ## Working on this locally — two traps
 

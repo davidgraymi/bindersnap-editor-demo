@@ -1042,6 +1042,176 @@ registry.registerPath({
   },
 });
 
+/**
+ * The binder's own address for the same six operations.
+ *
+ * A binder is a Gitea repository and a change on it is a Gitea pull request,
+ * so every one of these is the document model's handler reached at the
+ * binder's address — same behaviour, one namespace per shape of thing, not a
+ * second implementation.
+ */
+const binderChangeParams = z.object({
+  org: z.string(),
+  binder: z.string(),
+  changeNumber: z.string(),
+});
+
+const binderThreadParams = binderChangeParams.extend({
+  threadId: z.string(),
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/binders/{org}/{binder}/changes/{changeNumber}/discussions",
+  operationId: "listBinderChangeDiscussions",
+  tags: ["workspaces"],
+  request: { params: binderChangeParams },
+  responses: {
+    200: {
+      description: "Review discussion threads",
+      content: { "application/json": { schema: DiscussionSummarySchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/binders/{org}/{binder}/changes/{changeNumber}/discussions",
+  operationId: "createBinderChangeDiscussion",
+  tags: ["workspaces"],
+  request: {
+    params: binderChangeParams,
+    body: {
+      required: true,
+      content: { "application/json": { schema: CreateDiscussionBodySchema } },
+    },
+  },
+  responses: {
+    201: {
+      description: "Thread started",
+      content: { "application/json": { schema: DiscussionSummarySchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/binders/{org}/{binder}/changes/{changeNumber}/discussions/{threadId}/comments",
+  operationId: "replyToBinderChangeDiscussion",
+  tags: ["workspaces"],
+  request: {
+    params: binderThreadParams,
+    body: {
+      required: true,
+      content: { "application/json": { schema: CreateDiscussionBodySchema } },
+    },
+  },
+  responses: {
+    201: {
+      description: "Reply posted",
+      content: { "application/json": { schema: DiscussionSummarySchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/binders/{org}/{binder}/changes/{changeNumber}/discussions/{threadId}/resolve",
+  operationId: "resolveBinderChangeDiscussion",
+  tags: ["workspaces"],
+  request: {
+    params: binderThreadParams,
+    body: {
+      required: true,
+      content: { "application/json": { schema: ResolveDiscussionBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Thread status updated",
+      content: { "application/json": { schema: DiscussionSummarySchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "put",
+  path: "/api/app/binders/{org}/{binder}/changes/{changeNumber}/discussions/{threadId}/comments/{commentId}/reactions",
+  operationId: "setBinderDiscussionCommentReaction",
+  tags: ["workspaces"],
+  request: {
+    params: binderThreadParams.extend({ commentId: z.string() }),
+    body: {
+      required: true,
+      content: { "application/json": { schema: SetCommentReactionBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Reaction added or taken back",
+      content: { "application/json": { schema: DiscussionSummarySchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/binders/{org}/{binder}/changes/{changeNumber}/updates",
+  operationId: "listBinderChangeUpdates",
+  tags: ["workspaces"],
+  request: { params: binderChangeParams },
+  responses: {
+    200: {
+      description: "Every update this change has proposed, oldest first",
+      content: { "application/json": { schema: ChangeUpdatesPayloadSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "put",
+  path: "/api/app/binders/{org}/{binder}/changes/{changeNumber}/assignments",
+  operationId: "updateBinderChangeAssignments",
+  tags: ["workspaces"],
+  request: {
+    params: binderChangeParams,
+    body: {
+      required: true,
+      content: {
+        "application/json": { schema: UpdateChangeAssignmentsBodySchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Who is on the hook for this change",
+      content: { "application/json": { schema: ChangeAssignmentsSchema } },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/binders/{org}/{binder}/collaborators",
+  operationId: "listBinderCollaborators",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({ org: z.string(), binder: z.string() }),
+    query: z.object({
+      page: z.string().optional(),
+      limit: z.string().optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Everyone who can act in this binder",
+      content: {
+        "application/json": { schema: CollaboratorListPayloadSchema },
+      },
+    },
+  },
+});
+
 // Billing routes
 registry.registerPath({
   method: "get",

@@ -29,6 +29,7 @@ import {
   findWorkspaceRepo,
   listOrganizationWorkspaces,
   provisionWorkspace,
+  readWorkspaceAccess,
 } from "./gitea-client/workspaces";
 import {
   createDocumentVersionTag,
@@ -5009,29 +5010,36 @@ async function handleWorkspaceChangeDetail(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
-    const [entry, documents, requiredApprovals, reviewSettings, discussions] =
-      await Promise.all([
-        getPullRequestWithReviews({
-          client,
-          owner: orgName,
-          repo: workspaceName,
-          pullNumber,
-        }),
-        listChangedDocuments({
-          client,
-          org: orgName,
-          workspace: workspaceName,
-          pullNumber,
-        }),
-        readRequiredApprovals(orgName, workspaceName),
-        getReviewSettings({ client, owner: orgName, repo: workspaceName }),
-        listDiscussions({
-          client,
-          owner: orgName,
-          repo: workspaceName,
-          pullNumber,
-        }),
-      ]);
+    const [
+      entry,
+      documents,
+      requiredApprovals,
+      reviewSettings,
+      discussions,
+      access,
+    ] = await Promise.all([
+      getPullRequestWithReviews({
+        client,
+        owner: orgName,
+        repo: workspaceName,
+        pullNumber,
+      }),
+      listChangedDocuments({
+        client,
+        org: orgName,
+        workspace: workspaceName,
+        pullNumber,
+      }),
+      readRequiredApprovals(orgName, workspaceName),
+      getReviewSettings({ client, owner: orgName, repo: workspaceName }),
+      listDiscussions({
+        client,
+        owner: orgName,
+        repo: workspaceName,
+        pullNumber,
+      }),
+      readWorkspaceAccess({ client, org: orgName, name: workspaceName }),
+    ]);
 
     // The version each document reaches if this is published. One call per
     // document the change touches — which is a handful, on a page about one
@@ -5048,6 +5056,7 @@ async function handleWorkspaceChangeDetail(
           ...document,
           nextVersion: nextVersionFrom(versions),
           currentVersion: versions[0] ?? null,
+          versions,
         };
       }),
     );
@@ -5065,6 +5074,7 @@ async function handleWorkspaceChangeDetail(
         isBehind: isChangeBehindBase(entry.pullRequest),
         blockOnUnresolvedThreads: reviewSettings.blockOnUnresolvedThreads,
         unresolvedThreadCount: discussions.unresolvedCount,
+        canManage: access.push,
       },
       baseHeaders,
     );
@@ -6939,6 +6949,31 @@ export function createApiServer() {
         const workspaceChangeUpdateMatch = pathname.match(
           /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/update$/,
         );
+        // A binder is a Gitea repository and a change on it is a Gitea pull
+        // request, so everything below is the document model's own handler
+        // reached at the binder's address. Same behaviour, one namespace per
+        // shape of thing — not a second implementation.
+        const workspaceChangeDiscussionsMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/discussions$/,
+        );
+        const workspaceChangeReplyMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/discussions\/([^/]+)\/comments$/,
+        );
+        const workspaceChangeResolveMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/discussions\/([^/]+)\/resolve$/,
+        );
+        const workspaceChangeReactionMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/discussions\/([^/]+)\/comments\/(\d+)\/reactions$/,
+        );
+        const workspaceChangeUpdatesMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/updates$/,
+        );
+        const workspaceChangeAssignmentsMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/assignments$/,
+        );
+        const workspaceCollaboratorsMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/collaborators$/,
+        );
         const workspaceChangeMatch = pathname.match(
           /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)$/,
         );
@@ -6993,6 +7028,73 @@ export function createApiServer() {
             workspaceChangeReviewMatch[1]!,
             workspaceChangeReviewMatch[2]!,
             Number.parseInt(workspaceChangeReviewMatch[3] ?? "", 10),
+          );
+        } else if (workspaceChangeDiscussionsMatch && method === "GET") {
+          response = await handleListDiscussions(
+            req,
+            baseHeaders,
+            workspaceChangeDiscussionsMatch[1]!,
+            workspaceChangeDiscussionsMatch[2]!,
+            Number.parseInt(workspaceChangeDiscussionsMatch[3] ?? "", 10),
+          );
+        } else if (workspaceChangeDiscussionsMatch && method === "POST") {
+          response = await handleCreateDiscussionThread(
+            req,
+            baseHeaders,
+            workspaceChangeDiscussionsMatch[1]!,
+            workspaceChangeDiscussionsMatch[2]!,
+            Number.parseInt(workspaceChangeDiscussionsMatch[3] ?? "", 10),
+          );
+        } else if (workspaceChangeReactionMatch && method === "PUT") {
+          response = await handleSetCommentReaction(
+            req,
+            baseHeaders,
+            workspaceChangeReactionMatch[1]!,
+            workspaceChangeReactionMatch[2]!,
+            Number.parseInt(workspaceChangeReactionMatch[3] ?? "", 10),
+            decodePathParam(workspaceChangeReactionMatch[4] ?? ""),
+            Number.parseInt(workspaceChangeReactionMatch[5] ?? "", 10),
+          );
+        } else if (workspaceChangeReplyMatch && method === "POST") {
+          response = await handleReplyToDiscussion(
+            req,
+            baseHeaders,
+            workspaceChangeReplyMatch[1]!,
+            workspaceChangeReplyMatch[2]!,
+            Number.parseInt(workspaceChangeReplyMatch[3] ?? "", 10),
+            decodePathParam(workspaceChangeReplyMatch[4] ?? ""),
+          );
+        } else if (workspaceChangeResolveMatch && method === "POST") {
+          response = await handleResolveDiscussion(
+            req,
+            baseHeaders,
+            workspaceChangeResolveMatch[1]!,
+            workspaceChangeResolveMatch[2]!,
+            Number.parseInt(workspaceChangeResolveMatch[3] ?? "", 10),
+            decodePathParam(workspaceChangeResolveMatch[4] ?? ""),
+          );
+        } else if (workspaceChangeUpdatesMatch && method === "GET") {
+          response = await handleChangeUpdates(
+            req,
+            baseHeaders,
+            workspaceChangeUpdatesMatch[1]!,
+            workspaceChangeUpdatesMatch[2]!,
+            Number.parseInt(workspaceChangeUpdatesMatch[3] ?? "", 10),
+          );
+        } else if (workspaceChangeAssignmentsMatch && method === "PUT") {
+          response = await handleUpdateChangeAssignments(
+            req,
+            baseHeaders,
+            workspaceChangeAssignmentsMatch[1]!,
+            workspaceChangeAssignmentsMatch[2]!,
+            Number.parseInt(workspaceChangeAssignmentsMatch[3] ?? "", 10),
+          );
+        } else if (workspaceCollaboratorsMatch && method === "GET") {
+          response = await handleDocumentCollaborators(
+            req,
+            baseHeaders,
+            workspaceCollaboratorsMatch[1]!,
+            workspaceCollaboratorsMatch[2]!,
           );
         } else if (workspaceChangesMatch && method === "GET") {
           response = await handleListWorkspaceChanges(
