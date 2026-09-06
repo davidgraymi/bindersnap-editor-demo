@@ -14,6 +14,7 @@ import {
   describeChangeOpening,
   resolveReviewDecision,
 } from "../changeReview";
+import type { ChangeScope } from "../changeScope";
 import type { ComparisonBase } from "../documentComparison";
 import type { ChangeRecord } from "../documentDisplay";
 import {
@@ -28,8 +29,14 @@ import { DocumentPreview } from "./DocumentPreview";
 import { ReviewTimeline } from "./ReviewTimeline";
 
 interface DocumentChangeDetailProps {
-  owner: string;
-  repo: string;
+  /**
+   * Which repository this change lives in.
+   *
+   * A change request is a Gitea pull request whether the thing it revises is a
+   * repository of its own or a file inside a binder, so this screen serves
+   * both and the scope is the only thing that differs.
+   */
+  scope: ChangeScope;
   currentUser: string;
   isAnonymous: boolean;
   change: ChangeRecord;
@@ -183,8 +190,7 @@ function ApprovalBars({ change }: { change: ChangeRecord }) {
  * to find it.
  */
 export function DocumentChangeDetail({
-  owner,
-  repo,
+  scope,
   currentUser,
   isAnonymous,
   change,
@@ -220,8 +226,8 @@ export function DocumentChangeDetail({
 
   // Stable so the preview loads the file once per ref rather than per render.
   const loadFile = useCallback(
-    (gitRef: string) => downloadDocument(owner, repo, gitRef),
-    [owner, repo],
+    (gitRef: string) => downloadDocument(scope, gitRef),
+    [scope],
   );
 
   // The updates are their own call: the Changes tab lists changes, and a list
@@ -232,7 +238,7 @@ export function DocumentChangeDetail({
 
     void (async () => {
       try {
-        const payload = await listChangeUpdates(owner, repo, prNum);
+        const payload = await listChangeUpdates(scope, prNum);
         if (cancelled) return;
         setUpdates(payload.updates);
         setResetsApprovals(payload.resetsApprovals);
@@ -246,7 +252,7 @@ export function DocumentChangeDetail({
     return () => {
       cancelled = true;
     };
-  }, [owner, repo, prNum]);
+  }, [scope, prNum]);
 
   function updateActionState(update: Partial<PRActionState>) {
     setActionState((prev) => ({ ...prev, ...update }));
@@ -258,7 +264,7 @@ export function DocumentChangeDetail({
       // No body: an approval with nothing to say should record nothing. The
       // page quotes review bodies on the timeline, and "APPROVED" quoted back
       // reads as something the approver actually typed.
-      await submitDocumentReview(owner, repo, prNum, "APPROVE");
+      await submitDocumentReview(scope, prNum, "APPROVE");
       updateActionState({ status: "idle" });
       await onChanged();
     } catch (err) {
@@ -279,13 +285,7 @@ export function DocumentChangeDetail({
     }
     updateActionState({ status: "submitting", error: null });
     try {
-      await submitDocumentReview(
-        owner,
-        repo,
-        prNum,
-        "REQUEST_CHANGES",
-        comment,
-      );
+      await submitDocumentReview(scope, prNum, "REQUEST_CHANGES", comment);
       updateActionState({
         status: "idle",
         showChangesForm: false,
@@ -303,7 +303,7 @@ export function DocumentChangeDetail({
   async function handlePublish() {
     updateActionState({ status: "submitting", error: null });
     try {
-      await publishDocument(owner, repo, prNum, nextVersion);
+      await publishDocument(scope, prNum, nextVersion);
       updateActionState({ status: "idle" });
       await onChanged();
       // Publishing ends the review, so the page it happened on is finished
@@ -371,8 +371,7 @@ export function DocumentChangeDetail({
                 removed, and rewritten.
               </p>
               <DocumentComparison
-                owner={owner}
-                repo={repo}
+                scope={scope}
                 base={comparisonBase}
                 headRef={proposed.ref}
                 headLabel={proposed.updateLabel ?? "This change"}
@@ -535,8 +534,7 @@ export function DocumentChangeDetail({
       </div>
 
       <ChangeReviewers
-        owner={owner}
-        repo={repo}
+        scope={scope}
         pullNumber={prNum}
         submittedBy={change.submittedBy}
         reviewers={change.reviewers}
@@ -547,8 +545,7 @@ export function DocumentChangeDetail({
       />
 
       <ReviewTimeline
-        owner={owner}
-        repo={repo}
+        scope={scope}
         change={change}
         updates={updates}
         resetsApprovals={resetsApprovals}

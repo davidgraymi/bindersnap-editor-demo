@@ -15,4 +15,5 @@ export type GetBinderChange200 = {
   isBehind: boolean;
   blockOnUnresolvedThreads: boolean;
   unresolvedThreadCount: number;
+  canManage: boolean;
 };

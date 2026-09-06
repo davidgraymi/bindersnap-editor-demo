@@ -316,7 +316,11 @@ async function fetchCollaboratorPage(
   page: number,
   limit: number,
 ): Promise<CollaboratorPageResult> {
-  const result = await listDocumentCollaborators(owner, repo, page, limit);
+  const result = await listDocumentCollaborators(
+    { kind: "document", owner, repo },
+    page,
+    limit,
+  );
 
   const rows = result.collaborators.map((collaborator) =>
     normalizeCollaborator(

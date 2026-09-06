@@ -209,6 +209,14 @@ export const WorkspaceChangedDocumentSchema =
     nextVersion: z.number(),
     /** The version on record now, or null for a document being added. */
     currentVersion: DocumentVersionSchema.nullable(),
+    /**
+     * Every published version, newest first.
+     *
+     * The comparison needs the one *below* the version a published change
+     * became — reading a published change against today's record would be
+     * comparing it with itself.
+     */
+    versions: z.array(DocumentVersionSchema),
   });
 export type WorkspaceChangedDocument = z.infer<
   typeof WorkspaceChangedDocumentSchema
@@ -248,6 +256,14 @@ export const WorkspaceChangeDetailPayloadSchema = z.object({
   blockOnUnresolvedThreads: z.boolean(),
   /** Open threads on this change right now. */
   unresolvedThreadCount: z.number(),
+  /**
+   * Whether this caller may write in the binder — which is what decides
+   * whether they are offered the reviewer list to edit.
+   *
+   * Gitea's own check still refuses the act; this only keeps the buttons
+   * honest.
+   */
+  canManage: z.boolean(),
 });
 export type WorkspaceChangeDetailPayload = z.infer<
   typeof WorkspaceChangeDetailPayloadSchema

@@ -801,7 +801,24 @@ async function approveChange(
 ): Promise<void> {
   const reviewsUrl = `${GITEA_URL}/api/v1/repos/${org}/${workspace}/pulls/${pullNumber}/reviews`;
 
-  for (let attempt = 1; attempt <= 5; attempt += 1) {
+  const approvalStands = async (): Promise<boolean> => {
+    const reviews = (await (
+      await fetch(reviewsUrl, {
+        headers: { Authorization: `token ${approverToken}` },
+      })
+    ).json()) as Array<{
+      state?: string;
+      stale?: boolean;
+      dismissed?: boolean;
+    }>;
+
+    return reviews.some(
+      (review) =>
+        review.state === "APPROVED" && !review.stale && !review.dismissed,
+    );
+  };
+
+  for (let attempt = 1; attempt <= 8; attempt += 1) {
     const response = await fetch(reviewsUrl, {
       method: "POST",
       headers: {
@@ -814,23 +831,15 @@ async function approveChange(
 
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
-    const reviews = (await (
-      await fetch(reviewsUrl, {
-        headers: { Authorization: `token ${approverToken}` },
-      })
-    ).json()) as Array<{
-      state?: string;
-      stale?: boolean;
-      dismissed?: boolean;
-    }>;
-
-    if (
-      reviews.some(
-        (review) =>
-          review.state === "APPROVED" && !review.stale && !review.dismissed,
-      )
-    ) {
-      return;
+    // Twice, a beat apart. Gitea processes a push asynchronously and dismisses
+    // approvals recorded against the old head, so an approval can read as
+    // standing and be gone a second later — which is how this test came to
+    // fail at the *merge* with "does not have enough approvals" after having
+    // just checked that it had one. Asking again is what makes the answer mean
+    // something.
+    if (await approvalStands()) {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      if (await approvalStands()) return;
     }
   }
 
@@ -1427,6 +1436,147 @@ test("a binder that is not there is a 404, not an empty binder", async () => {
   expect(
     (await listChanges(sessionCookie, org.name, "no-such-binder")).status,
   ).toBe(404);
+});
+
+test("a binder's change carries a discussion, its updates and its reviewers", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const added = await addDocument(sessionCookie, org.name, "clinical", {
+    name: "Infection Control",
+  });
+  const { pullRequestNumber } = JSON.parse(added.body) as {
+    pullRequestNumber: number;
+  };
+
+  const base = `${API_BASE_URL}/api/app/binders/${org.name}/clinical/changes/${pullRequestNumber}`;
+  const get = (path: string) =>
+    fetch(`${base}${path}`, {
+      headers: { Cookie: `bindersnap_session=${sessionCookie}` },
+    });
+  const post = (path: string, body: unknown) =>
+    fetch(`${base}${path}`, {
+      method: "POST",
+      headers: authHeaders(sessionCookie),
+      body: JSON.stringify(body),
+    });
+
+  // Every one of these is the document model's own handler reached at the
+  // binder's address. The point of the test is that the address resolves and
+  // the behaviour is unchanged — a binder is a Gitea repository, and a change
+  // on it is a Gitea pull request.
+  const empty = await get("/discussions");
+  expect(empty.status, await empty.clone().text()).toBe(200);
+  expect(
+    ((await empty.json()) as { threads: unknown[]; unresolvedCount: number })
+      .unresolvedCount,
+  ).toBe(0);
+
+  const started = await post("/discussions", {
+    body: "Does fourteen days match the staffing agency's onboarding?",
+  });
+  expect(started.status, await started.clone().text()).toBe(201);
+  const opened = (await started.json()) as {
+    threads: Array<{ id: string; resolved: boolean }>;
+    unresolvedCount: number;
+  };
+  expect(opened.threads).toHaveLength(1);
+  expect(opened.unresolvedCount).toBe(1);
+  const threadId = opened.threads[0]!.id;
+
+  const replied = await post(
+    `/discussions/${encodeURIComponent(threadId)}/comments`,
+    { body: "It does — their SLA is ten." },
+  );
+  expect(replied.status, await replied.clone().text()).toBe(201);
+
+  const resolved = await post(
+    `/discussions/${encodeURIComponent(threadId)}/resolve`,
+    { resolved: true },
+  );
+  expect(resolved.status, await resolved.clone().text()).toBe(200);
+  expect(
+    ((await resolved.json()) as { unresolvedCount: number }).unresolvedCount,
+  ).toBe(0);
+
+  // The change's own history: every version it has proposed.
+  const updates = await get("/updates");
+  expect(updates.status, await updates.clone().text()).toBe(200);
+  expect(
+    ((await updates.json()) as { updates: unknown[] }).updates.length,
+  ).toBeGreaterThan(0);
+
+  // And who has to sign it off.
+  const assigned = await fetch(`${base}/assignments`, {
+    method: "PUT",
+    headers: authHeaders(sessionCookie),
+    body: JSON.stringify({ reviewers: [] }),
+  });
+  expect(assigned.status, await assigned.clone().text()).toBe(200);
+
+  const people = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org.name}/clinical/collaborators`,
+    { headers: { Cookie: `bindersnap_session=${sessionCookie}` } },
+  );
+  expect(people.status, await people.clone().text()).toBe(200);
+});
+
+test("a change detail says whether this caller may set its reviewers", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const added = await addDocument(sessionCookie, org.name, "clinical", {
+    name: "Infection Control",
+  });
+  const { pullRequestNumber, slugPath } = JSON.parse(added.body) as {
+    pullRequestNumber: number;
+    slugPath: string;
+  };
+
+  const detail = await getChange(
+    sessionCookie,
+    org.name,
+    "clinical",
+    pullRequestNumber,
+  );
+  const payload = JSON.parse(detail.body) as {
+    canManage: boolean;
+    documents: Array<{ slugPath: string; versions: unknown[] }>;
+  };
+
+  // The org owner can write in the binder, so they are offered the reviewer
+  // list. Read from the repository as them — a binder's people get their
+  // access through org teams, which the collaborator endpoint reports as
+  // "none".
+  expect(payload.canManage).toBe(true);
+
+  // The comparison needs the version below the one a published change became,
+  // so the whole list travels rather than only the newest.
+  expect(payload.documents[0]).toMatchObject({ slugPath, versions: [] });
+
+  // A reviewer with read access is not offered it.
+  const ownerToken = await createUserToken(
+    credentials.username,
+    credentials.password,
+  );
+  const approver = await addApprover(ownerToken, org.name, "clinical");
+  const asReviewer = await getChange(
+    approver.sessionCookie,
+    org.name,
+    "clinical",
+    pullRequestNumber,
+  );
+  expect(
+    (JSON.parse(asReviewer.body) as { canManage: boolean }).canManage,
+  ).toBe(false);
 });
 
 test("a change in a binder that is not there is a 404", async () => {

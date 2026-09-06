@@ -5,6 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { GetBinderChange200DocumentsItemCurrentVersion } from './getBinderChange200DocumentsItemCurrentVersion.ts';
+import type { GetBinderChange200DocumentsItemVersionsItem } from './getBinderChange200DocumentsItemVersionsItem.ts';
 
 export type GetBinderChange200DocumentsItem = {
   path: string;
@@ -16,4 +17,5 @@ export type GetBinderChange200DocumentsItem = {
   nextVersion: number;
   /** @nullable */
   currentVersion: GetBinderChange200DocumentsItemCurrentVersion;
+  versions: GetBinderChange200DocumentsItemVersionsItem[];
 };

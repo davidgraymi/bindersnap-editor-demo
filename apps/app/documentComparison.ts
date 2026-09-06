@@ -11,8 +11,6 @@
 import { diffWordsWithSpace } from "diff";
 import htmldiff from "node-htmldiff";
 
-import type { DocTag } from "./api";
-
 /** One run of text, and whether this change put it there or took it away. */
 export type DiffSegmentKind = "same" | "added" | "removed";
 
@@ -39,7 +37,12 @@ export interface ComparisonBase {
 export function resolveComparisonBase(params: {
   open: boolean;
   publishedVersion: number | null;
-  tags: readonly DocTag[];
+  /**
+   * The published versions, in any order. Named and numbered is all this
+   * needs, which is what lets a binder's per-document tags satisfy it as
+   * readily as a document repository's — they carry no common date.
+   */
+  tags: readonly { name: string; version: number }[];
 }): ComparisonBase | null {
   const { open, publishedVersion, tags } = params;
   const newestFirst = [...tags].sort(

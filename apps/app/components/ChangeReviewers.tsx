@@ -14,6 +14,7 @@ import {
   getReviewerStatusLabel,
   resolveReviewerDisplayStatus,
 } from "../documentDisplay";
+import type { ChangeScope } from "../changeScope";
 import { PersonAvatar } from "./PersonAvatar";
 
 const SEARCH_DEBOUNCE_MS = 250;
@@ -22,8 +23,8 @@ const SEARCH_PAGE_SIZE = 6;
 const SUGGESTION_LIMIT = 8;
 
 interface ChangeReviewersProps {
-  owner: string;
-  repo: string;
+  /** Which repository this change lives in — a document's, or a binder. */
+  scope: ChangeScope;
   pullNumber: number;
   /** Who submitted the change. They can never be one of its reviewers. */
   submittedBy: string;
@@ -77,8 +78,7 @@ function readError(err: unknown, fallback: string): string {
  * is still waiting on.
  */
 export function ChangeReviewers({
-  owner,
-  repo,
+  scope,
   pullNumber,
   submittedBy,
   reviewers,
@@ -114,8 +114,7 @@ export function ChangeReviewers({
     void (async () => {
       try {
         const payload = await listDocumentCollaborators(
-          owner,
-          repo,
+          scope,
           1,
           SUGGESTION_LIMIT,
         );
@@ -139,7 +138,7 @@ export function ChangeReviewers({
     return () => {
       cancelled = true;
     };
-  }, [owner, repo, canManage]);
+  }, [scope, canManage]);
 
   useEffect(() => {
     const handle = window.setTimeout(() => {
@@ -223,7 +222,7 @@ export function ChangeReviewers({
     setBusy(true);
     setError(null);
     try {
-      await updateChangeAssignments(owner, repo, pullNumber, {
+      await updateChangeAssignments(scope, pullNumber, {
         reviewers: next,
       });
       closePicker();
