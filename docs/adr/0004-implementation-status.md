@@ -555,6 +555,50 @@ group leaves them in the organization, which is why removing a person from an
 open binder now correctly leaves them able to read it, through `staff`. Leaving
 the organization is its own act, with its own confirmation, and it is piece 4.
 
+### Who can see this binder is a question, asked once
+
+The switch ADR 0004 §1.2 asks for, and it is one primitive: `staff` granted onto
+the repository, or not. **Nothing is stored** — the answer is derived by asking
+Gitea which teams are granted here, because a stored copy could disagree with
+the grant Gitea is the one enforcing, and the one that matters is the one Gitea
+enforced.
+
+**It is asked at creation, with "Everyone at …" preselected.** The moment
+somebody is naming a binder is the moment they know whether it is the staff
+handbook or HR investigations, and that is far cheaper than discovering a week
+later that an investigations binder was readable by the whole company. Open is
+the default because the common case is a manual everybody must be able to read
+in order to attest to it — a default, not an assumption, which is why the
+question is on the form rather than in the code.
+
+**It is its own endpoint, not a group grant with a friendlier name.** The two
+are different acts to the person doing them: "everyone at Riverside Health can
+read this" is a decision about the binder, and "add the Quality Committee" is a
+decision about a group. Routing the first through the second puts a team called
+`staff` in a picker beside the customer's own committees — which is exactly what
+the first cut of this did, and it was visible immediately: opening a binder made
+a row called **Staff** appear under "Groups with access" with its own _Remove
+from this binder_ button, duplicating the switch six inches above it and making
+the most consequential access choice in the product look like housekeeping.
+
+So `staff` is now filtered out of every list that presents groups — the binder's
+and the organization's. It is the organization's membership, not a group
+somebody composes, and its only control is each binder's own switch. The
+whitelist recompute still reads the unfiltered set, so nothing about enforcement
+changed.
+
+The cost of opening is stated on the option rather than discovered afterwards:
+read on `repo.pulls` is what approving is, so everyone at the organization can
+also approve there. For an internal policy manual that is right — it is the same
+conclusion ADR 0004 reached for reviewers — and where it is wrong, the other
+option is the answer. It costs no seats either way.
+
+Three integration tests: closing and reopening a binder, with the whitelist
+narrowing and widening to match; a restricted binder created that way staying
+invisible to a member who was not added, while an open binder beside it stays
+readable by the same person; and the switch refusing a request that does not say
+which way.
+
 ## Why #393 carries the organization-creation flow too
 
 They cannot ship apart. The migration parks every username-keyed billing row
@@ -730,15 +774,9 @@ asking.
 
 In rough dependency order.
 
-1. **The binder visibility switch.** `staff` granted or not, asked on the
-   create form with "Everyone at Riverside Health" preselected. The grant is
-   already how provisioning opens a binder, the People tab already _reports_
-   which it is, and the revoke path already exists as a group revoke — what is
-   missing is the choice, the way back, and the wording that makes the switch
-   read as a decision rather than as removing a group called `staff`.
-2. **Managing org people.** Promote and demote owners, remove from the
+1. **Managing org people.** Promote and demote owners, remove from the
    organization, and the last-owner refusal.
-3. **Delete the old model.** `POST /api/app/documents`,
+2. **Delete the old model.** `POST /api/app/documents`,
    `createPrivateCurrentUserRepo`, the 16 `documents/:owner/:repo` routes in
    `services/api/server.ts`, and roughly a dozen SPA files that address a
    document as `owner/repo`. The review screens no longer stand in the way —
@@ -746,17 +784,17 @@ In rough dependency order.
    per-document workspace itself. Note that Home and the library still read
    `/api/app/documents`, so they have to move to the binder listings in the
    same change or they go blank.
-4. **The `document_versions` derived index.** Not started. The ADR's "Derived
+3. **The `document_versions` derived index.** Not started. The ADR's "Derived
    indexes" section is the specification. Note the binder model already made the
    list cheap — `listVersionsByDocument` reads a binder's tags once rather than
    once per document — so this is now an optimization rather than a rescue.
-5. **Per-workspace settings and `settings_events`.** Not started.
+4. **Per-workspace settings and `settings_events`.** Not started.
    `blockOnUnresolvedThreads` still lives in the config branch.
-6. **CODEOWNERS generation.** Not started, and blocked on the Gitea 28.0.0
+5. **CODEOWNERS generation.** Not started, and blocked on the Gitea 28.0.0
    upgrade — `block_on_codeowner_reviews` is what lets a rule name a **team**
    rather than the list of people #389's finding forced. Groups now exist to be
    named in one.
-7. **The approvals whitelist on a binder change.** `branchProtection` is
+6. **The approvals whitelist on a binder change.** `branchProtection` is
    passed as null, so the page never says "your account is not authorized to
    approve this". Gitea still refuses, and the required count is shown — but
    the reason is the admin-only half of the rule and the binder page does not

@@ -891,10 +891,13 @@ export async function createBinder(
   org: string,
   name: string,
   description?: string,
+  /** Whether the whole organization can read it. Asked on the form. */
+  openToOrganization = true,
 ): Promise<WorkspaceSummary> {
   const response = await BindersClient.createBinder(org, {
     name,
     description,
+    openToOrganization,
   });
   return response.data.workspace;
 }
@@ -1061,6 +1064,25 @@ export async function removeBinderPerson(
     binder,
     username,
   );
+  return response.data;
+}
+
+/**
+ * Open this binder to the whole organization, or close it again.
+ *
+ * One switch over one primitive — `staff` granted onto the repository, or not —
+ * and its own call rather than a group grant with a friendlier name, because
+ * "everyone at Riverside Health can read this" is a decision about the binder
+ * and not housekeeping about a team.
+ */
+export async function setBinderVisibility(
+  org: string,
+  binder: string,
+  openToOrganization: boolean,
+): Promise<BinderPeoplePayload> {
+  const response = await BindersClient.setBinderVisibility(org, binder, {
+    openToOrganization,
+  });
   return response.data;
 }
 

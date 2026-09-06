@@ -42,6 +42,11 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [newName, setNewName] = useState("");
+  // Open, because the common case is a policy manual everybody must be able to
+  // read in order to attest to it — and a product that makes the common case a
+  // configuration step teaches customers that access is fiddly. A default, not
+  // an assumption: the question is on the form.
+  const [openToOrganization, setOpenToOrganization] = useState(true);
   const [createError, setCreateError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -145,7 +150,12 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
           setIsCreating(true);
           setCreateError(null);
           try {
-            const created = await createBinder(org, name);
+            const created = await createBinder(
+              org,
+              name,
+              undefined,
+              openToOrganization,
+            );
             setBinders((rows) => [...(rows ?? []), created]);
             setNewName("");
           } catch (err) {
@@ -171,6 +181,45 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
             onChange={(event) => setNewName(event.target.value)}
           />
         </label>
+        {/* Two questions, not one — and the second is the one a customer only
+            knows the answer to right now. The moment somebody is naming a
+            binder is the moment they know whether it is the staff handbook or
+            HR investigations, and it is far cheaper to ask then than to
+            discover the wrong answer a week later. One radio pair, and it
+            never needs to be touched again. */}
+        <fieldset className="org-group-levels">
+          <legend className="bs-label">Who can see it?</legend>
+          <label className="org-group-level-option">
+            <input
+              type="radio"
+              name="binder-visibility"
+              checked={openToOrganization}
+              onChange={() => setOpenToOrganization(true)}
+            />
+            <span>
+              <span className="docs-list-item-name">Everyone at {org}</span>
+              <span className="docs-list-item-meta">
+                They can read it and comment on changes. Reading is free.
+              </span>
+            </span>
+          </label>
+          <label className="org-group-level-option">
+            <input
+              type="radio"
+              name="binder-visibility"
+              checked={!openToOrganization}
+              onChange={() => setOpenToOrganization(false)}
+            />
+            <span>
+              <span className="docs-list-item-name">Only people I add</span>
+              <span className="docs-list-item-meta">
+                For a binder not everybody should see — an investigation, or
+                board papers.
+              </span>
+            </span>
+          </label>
+        </fieldset>
+
         <button
           className="bs-btn bs-btn-primary app-submit"
           type="submit"

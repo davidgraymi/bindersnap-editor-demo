@@ -42,6 +42,20 @@ export const NewWorkspaceBodySchema = z.object({
   /** What to call it. Slugified server-side into the repository name. */
   name: z.string().min(1),
   description: z.string().optional(),
+  /**
+   * Whether the whole organization can read it. **Asked at creation, and
+   * preselected to open.**
+   *
+   * The moment somebody is naming a binder is the moment they know whether it
+   * is the staff handbook or HR investigations, and it is far cheaper to ask
+   * then than to discover the wrong answer a week later. Open is the default
+   * because the common case is a policy manual everybody must be able to read
+   * in order to attest to it — a default, not an assumption.
+   *
+   * Absent means open, so a client that does not ask gets the answer the
+   * product would have given anyway.
+   */
+  openToOrganization: z.boolean().optional(),
 });
 export type NewWorkspaceBody = z.infer<typeof NewWorkspaceBodySchema>;
 
@@ -638,6 +652,20 @@ export const BinderPeoplePayloadSchema = z.object({
   canManage: z.boolean(),
 });
 export type BinderPeoplePayload = z.infer<typeof BinderPeoplePayloadSchema>;
+
+/**
+ * Who can see this binder — one switch over one primitive.
+ *
+ * `staff` granted onto the repository, or not. Nothing is stored: the answer is
+ * derived by asking Gitea which teams are granted here, because a stored copy
+ * could disagree with the grant Gitea is the one enforcing.
+ */
+export const BinderVisibilityRequestSchema = z.object({
+  openToOrganization: z.boolean(),
+});
+export type BinderVisibilityRequest = z.infer<
+  typeof BinderVisibilityRequestSchema
+>;
 
 /** Adding somebody to this binder, or moving them between its roles. */
 export const BinderPersonRequestSchema = z.object({
