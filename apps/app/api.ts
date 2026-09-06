@@ -951,6 +951,44 @@ export async function createOrganizationGroup(
   return response.data;
 }
 
+/**
+ * Promote somebody to owner, or demote them back to member.
+ *
+ * Refused with a sentence when it would leave the organization with no owner —
+ * the same sentence removal is refused with, because they are two routes to one
+ * consequence.
+ */
+export async function setOrganizationPersonRole(
+  org: string,
+  username: string,
+  owner: boolean,
+): Promise<OrganizationPeoplePayload> {
+  const response = await OrganizationsClient.setOrganizationPersonRole(
+    org,
+    username,
+    { owner },
+  );
+  return response.data;
+}
+
+/**
+ * Take somebody out of the organization.
+ *
+ * They lose access immediately, everywhere — and everything they wrote,
+ * approved or commented on stays exactly where it is, because those are git
+ * objects and the record belongs to the organization.
+ */
+export async function removeOrganizationPerson(
+  org: string,
+  username: string,
+): Promise<OrganizationPeoplePayload> {
+  const response = await OrganizationsClient.removeOrganizationPerson(
+    org,
+    username,
+  );
+  return response.data;
+}
+
 /** Put somebody in a group. Immediate: no commit, no approval. */
 export async function addOrganizationGroupMember(
   org: string,

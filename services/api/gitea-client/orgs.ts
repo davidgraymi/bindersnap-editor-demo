@@ -709,6 +709,37 @@ export async function listOrganizationMembers(
 }
 
 /**
+ * Take somebody out of the organization entirely.
+ *
+ * Native, and it needs no table of ours: Gitea removes them from the
+ * organization and from every team in it, in one call. There is nothing to
+ * reconcile afterwards and nothing that can be left behind — which is the same
+ * reason ADR 0004 gives for keeping permissions in Gitea rather than shadowing
+ * them.
+ *
+ * **What stays is the point.** Their commits, versions, approvals, reviews and
+ * comments are git objects. Removing the person does not touch any of them, and
+ * that is the product's entire claim: the record is the organization's, not the
+ * author's. The screen has to say so at the moment of removal, because the fear
+ * behind "can I remove someone" in a regulated industry is that the record
+ * leaves with them.
+ */
+export async function removeOrganizationMember(
+  params: IsOrganizationOwnerParams,
+): Promise<void> {
+  const { client, org, username } = params;
+
+  const { error, response } = await client.DELETE(
+    "/orgs/{org}/members/{username}",
+    { params: { path: { org, username } } },
+  );
+
+  if (error !== undefined || !response.ok) {
+    throw toGiteaApiError(response.status, error);
+  }
+}
+
+/**
  * Whether this person owns the organization, asked of Gitea directly.
  *
  * One call, and `is_owner` comes back as a field — which is more reliable than

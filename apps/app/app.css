@@ -767,6 +767,36 @@ input {
   color: var(--bs-text-secondary);
 }
 
+/* A person's row plus whatever it has to say underneath — a reason a control
+   is disabled, or a confirmation. Grouped so the explanation stays attached to
+   the row that raised it rather than floating above the next person. */
+.org-person-block {
+  border-top: 1px solid var(--bs-rule-warm);
+}
+
+.org-person-block:first-child {
+  border-top: none;
+}
+
+.org-person-block > .org-person {
+  border-top: none;
+}
+
+.org-person-reason {
+  margin: 0;
+  padding: 0 var(--brand-space-4) var(--brand-space-3) 3.25rem;
+}
+
+.org-person-confirm {
+  display: grid;
+  gap: var(--brand-space-2);
+  margin: 0 var(--brand-space-4) var(--brand-space-4) 3.25rem;
+  padding: var(--brand-space-4);
+  background: var(--bs-surface-2);
+  border-radius: var(--brand-radius-md);
+  justify-items: start;
+}
+
 /* A group on the organization's People tab: a row that opens onto who is in
    it. Collapsed by default — the answer to "what groups are there" is the list,
    and the membership is the follow-up question. */
