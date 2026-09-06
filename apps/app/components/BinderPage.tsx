@@ -3,8 +3,10 @@ import { FileText, Folder } from "lucide-react";
 
 import { fetchBinderDocuments } from "../api";
 import type { WorkspaceDocumentListEntry } from "../../../packages/api-schema/schemas/workspaces";
+import { buildChangeUrl, parseRequestedChange } from "../binderChange";
 import { formatDocumentName } from "../documentDisplay";
 import { AddPolicyModal } from "./AddPolicyModal";
+import { BinderChangePage } from "./BinderChangePage";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 import { StatusChip } from "./StatusChip";
 
@@ -21,6 +23,8 @@ import { StatusChip } from "./StatusChip";
 interface BinderPageProps {
   org: string;
   binder: string;
+  /** The reader, for the change page's own reviewer row. */
+  currentUser: string;
   onOpenDocument: (documentPath: string) => void;
 }
 
@@ -87,7 +91,59 @@ export function describeDocument(document: WorkspaceDocumentListEntry): string {
   return parts.join(" · ");
 }
 
-export function BinderPage({ org, binder, onOpenDocument }: BinderPageProps) {
+/**
+ * The binder, and whatever inside it the address bar is pointing at.
+ *
+ * A change lives at `/{org}/{binder}?change=3` — on the binder rather than
+ * under one of the documents it touches, because ADR 0004 makes the change
+ * the unit of approval and one change can version several documents. In the
+ * query rather than the path for the reason `?version=` is: a policy could
+ * genuinely be filed at `changes/3`.
+ */
+export function BinderPage(props: BinderPageProps) {
+  const [openChange, setOpenChange] = useState<number | null>(() =>
+    parseRequestedChange(window.location.search),
+  );
+
+  // Back and forward are how a reviewer leaves a change, so the scope follows
+  // the address bar rather than its own memory of what was clicked.
+  useEffect(() => {
+    const handler = () =>
+      setOpenChange(parseRequestedChange(window.location.search));
+    window.addEventListener("popstate", handler);
+    return () => window.removeEventListener("popstate", handler);
+  }, []);
+
+  const goToBinder = () => {
+    window.history.pushState(
+      {},
+      "",
+      buildChangeUrl({
+        org: props.org,
+        binder: props.binder,
+        changeNumber: null,
+      }),
+    );
+    setOpenChange(null);
+  };
+
+  if (openChange !== null) {
+    return (
+      <BinderChangePage
+        org={props.org}
+        binder={props.binder}
+        changeNumber={openChange}
+        currentUser={props.currentUser}
+        onBackToBinder={goToBinder}
+        onOpenDocument={props.onOpenDocument}
+      />
+    );
+  }
+
+  return <BinderDocuments {...props} />;
+}
+
+function BinderDocuments({ org, binder, onOpenDocument }: BinderPageProps) {
   const [documents, setDocuments] = useState<
     WorkspaceDocumentListEntry[] | null
   >(null);

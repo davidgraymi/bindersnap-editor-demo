@@ -117,6 +117,7 @@ import {
   type InvolvedChangeRef,
   mergeOrResolveConflicts,
   mergeWorkspaceChange,
+  updateChangeBranch,
   removePullReviewers,
   requestPullReviewers,
   setPullRequestAssignees,
@@ -2253,6 +2254,17 @@ function buildPendingChangeRow(
   entry: PullRequestWithReviews,
   requiredApprovals: number | null,
 ) {
+  const approvalCount = countApprovals(entry.reviews);
+
+  // Declared in the response contract from the beginning and never populated,
+  // so `isRejected` read `undefined` everywhere — and `undefined` is falsy.
+  // A change one reviewer had asked for work on, but which had its approvals
+  // from others, was classed "ready to publish" on Home and in the library:
+  // the two places that check this were checking nothing. `approvalState`
+  // already folds each reviewer's latest answer, which is the same rule Gitea
+  // merges on, so both answers are here for free.
+  const isRejected = entry.pullRequest.approvalState === "changes_requested";
+
   return {
     ...entry.pullRequest,
     reviewers: buildChangeReviewers({
@@ -2261,8 +2273,14 @@ function buildPendingChangeRow(
       submittedBy: entry.pullRequest.user?.login ?? "",
     }),
     assignee: readAssignee(entry.pullRequest),
-    approvalCount: countApprovals(entry.reviews),
+    approvalCount,
     requiredApprovals,
+    isRejected,
+    isApproved:
+      !isRejected &&
+      requiredApprovals !== null &&
+      requiredApprovals > 0 &&
+      approvalCount >= requiredApprovals,
   };
 }
 
@@ -2740,19 +2758,16 @@ async function handleDocumentDetail(
     // The reviews come back with the pull requests anyway, and a change's page
     // reads as a log of what happened — an approval is part of that log, so it
     // travels with the change rather than costing a second round trip. The
-    // reviewer list is the same reviews read a different way: not what happened,
-    // but who the change is still waiting on.
+    // reviewer list is the same reviews read a different way: not what
+    // happened, but who the change is still waiting on.
+    //
+    // Built by `buildPendingChangeRow` rather than beside it. This was a second
+    // copy of that function, and the copies drifted: neither ever set
+    // `isRejected`, which the contract requires and which Home and the library
+    // both gate on. One row shape, one place.
     const openPullRequests = openWithReviews.map((entry) => ({
-      ...entry.pullRequest,
+      ...buildPendingChangeRow(entry, requiredApprovals),
       reviews: toVersionReviews(entry.reviews),
-      reviewers: buildChangeReviewers({
-        requested: readRequestedReviewers(entry.pullRequest),
-        reviews: entry.reviews,
-        submittedBy: entry.pullRequest.user?.login ?? "",
-      }),
-      assignee: readAssignee(entry.pullRequest),
-      approvalCount: countApprovals(entry.reviews),
-      requiredApprovals,
     }));
 
     const latestTag = tags[0] ?? null;
@@ -4939,6 +4954,275 @@ async function handlePublishWorkspaceChange(
   }
 }
 
+/**
+ * Whether `main` has moved on since this change branched off it.
+ *
+ * A binder protects `main` with `block_on_outdated_branch`, so a change that
+ * is behind is refused however many approvals it has. The merge base is the
+ * base branch's head exactly when the change is up to date, and Gitea returns
+ * both on the pull request — so this is free, and it is the difference between
+ * a Publish button that explains itself and one that just fails.
+ *
+ * Unknown either way is treated as up to date: a missing field should not
+ * invent a blocker, and the merge is still the authority.
+ */
+function isChangeBehindBase(pullRequest: {
+  merge_base?: string;
+  base?: { sha?: string } | null;
+}): boolean {
+  const mergeBase = pullRequest.merge_base ?? "";
+  const baseHead = pullRequest.base?.sha ?? "";
+  if (mergeBase === "" || baseHead === "") return false;
+  return mergeBase !== baseHead;
+}
+
+/**
+ * One change in a binder.
+ *
+ * ADR 0004: "the unit of approval is the change, not the document." So this is
+ * a question about the change — what it proposes, who has to sign it off, and
+ * which documents publishing it would version — rather than a question about
+ * any one of the documents it touches.
+ *
+ * A read, so it is never gated.
+ */
+async function handleWorkspaceChangeDetail(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+  pullNumber: number,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { client } = auth;
+
+  try {
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    const [entry, documents, requiredApprovals, reviewSettings, discussions] =
+      await Promise.all([
+        getPullRequestWithReviews({
+          client,
+          owner: orgName,
+          repo: workspaceName,
+          pullNumber,
+        }),
+        listChangedDocuments({
+          client,
+          org: orgName,
+          workspace: workspaceName,
+          pullNumber,
+        }),
+        readRequiredApprovals(orgName, workspaceName),
+        getReviewSettings({ client, owner: orgName, repo: workspaceName }),
+        listDiscussions({
+          client,
+          owner: orgName,
+          repo: workspaceName,
+          pullNumber,
+        }),
+      ]);
+
+    // The version each document reaches if this is published. One call per
+    // document the change touches — which is a handful, on a page about one
+    // change, and it is the difference between "Publish" and "Publish v4".
+    const withVersions = await Promise.all(
+      documents.map(async (document) => {
+        const versions = await listDocumentVersions({
+          client,
+          org: orgName,
+          workspace: workspaceName,
+          slugPath: document.slugPath,
+        });
+        return {
+          ...document,
+          nextVersion: nextVersionFrom(versions),
+          currentVersion: versions[0] ?? null,
+        };
+      }),
+    );
+
+    return json(
+      200,
+      {
+        organization: orgName,
+        workspace: workspaceName,
+        change: buildPendingChangeRow(entry, requiredApprovals),
+        documents: withVersions,
+        // `main` has moved on if the change's merge base is no longer the base
+        // branch's head. Both are on the pull request Gitea already returned,
+        // so knowing this costs nothing.
+        isBehind: isChangeBehindBase(entry.pullRequest),
+        blockOnUnresolvedThreads: reviewSettings.blockOnUnresolvedThreads,
+        unresolvedThreadCount: discussions.unresolvedCount,
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to read a binder change", {
+      username: auth.session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      pullNumber,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to read the change.");
+  }
+}
+
+/**
+ * Bring a change's branch up to date with the binder's `main`.
+ *
+ * A mutation, and a deliberate one: it moves the branch, so the approvals
+ * collected so far are dismissed as stale. The page says that before the
+ * button is pressed rather than after.
+ */
+async function handleWorkspaceChangeUpdate(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+  pullNumber: number,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { client } = auth;
+
+  try {
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    const caughtUp = await updateChangeBranch({
+      client,
+      owner: orgName,
+      repo: workspaceName,
+      pullNumber,
+    });
+
+    logger.info("Binder change brought up to date", {
+      username: auth.session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      pullNumber,
+      // The push went through either way; false means Gitea had not finished
+      // recomputing the merge base, so the page may still draw it as behind
+      // for a moment.
+      caughtUp,
+    });
+
+    return json(200, { ok: true, caughtUp }, baseHeaders);
+  } catch (err) {
+    logger.error("Failed to bring a binder change up to date", {
+      username: auth.session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      pullNumber,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to bring the change up to date.",
+    );
+  }
+}
+
+/**
+ * Approve a binder change, ask for work on it, or just say something.
+ *
+ * Whether the review counts is Gitea's to decide, not ours: officialness comes
+ * from the branch protection, which is where ADR 0004 insists the permission
+ * stays. This only carries the verdict across.
+ */
+async function handleWorkspaceChangeReview(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+  pullNumber: number,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { client } = auth;
+  const payload = (await readJsonBody(req)) ?? null;
+  const form = payload ? null : await readMultipartBody(req);
+  const eventRaw = readInputString(payload, form, "event").toUpperCase();
+  const bodyText = readInputString(payload, form, "body");
+  const event =
+    eventRaw === "APPROVE" ||
+    eventRaw === "REQUEST_CHANGES" ||
+    eventRaw === "COMMENT"
+      ? eventRaw
+      : "";
+
+  if (!event) {
+    return json(
+      400,
+      { error: "event must be APPROVE, REQUEST_CHANGES, or COMMENT." },
+      baseHeaders,
+    );
+  }
+
+  // An approval needs no words; asking for work, or saying something, does —
+  // a reviewer who blocks a change without saying why has not reviewed it.
+  const reviewBody = event === "APPROVE" ? bodyText || "APPROVED" : bodyText;
+  if ((event === "REQUEST_CHANGES" || event === "COMMENT") && !reviewBody) {
+    return json(
+      400,
+      { error: "body is required for REQUEST_CHANGES and COMMENT reviews." },
+      baseHeaders,
+    );
+  }
+
+  try {
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    const review = await submitReview({
+      client,
+      owner: orgName,
+      repo: workspaceName,
+      pullNumber,
+      event,
+      body: reviewBody,
+    });
+
+    return json(200, { review }, baseHeaders);
+  } catch (err) {
+    logger.error("Failed to review a binder change", {
+      username: auth.session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      pullNumber,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to submit the review.");
+  }
+}
+
 async function handleListWorkspaceDocuments(
   req: Request,
   baseHeaders: Headers,
@@ -6421,6 +6705,15 @@ export function createApiServer() {
         const workspacePublishMatch = pathname.match(
           /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/publish$/,
         );
+        const workspaceChangeReviewMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/reviews$/,
+        );
+        const workspaceChangeUpdateMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)\/update$/,
+        );
+        const workspaceChangeMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes\/(\d+)$/,
+        );
         // Raw content sits under its own segment rather than as a suffix on
         // the document, because the document's path is the rest of the URL.
         const workspaceDocumentRawMatch = pathname.match(
@@ -6456,6 +6749,30 @@ export function createApiServer() {
             baseHeaders,
             workspaceDocumentsMatch[1]!,
             workspaceDocumentsMatch[2]!,
+          );
+        } else if (workspaceChangeReviewMatch && method === "POST") {
+          response = await handleWorkspaceChangeReview(
+            req,
+            baseHeaders,
+            workspaceChangeReviewMatch[1]!,
+            workspaceChangeReviewMatch[2]!,
+            Number.parseInt(workspaceChangeReviewMatch[3] ?? "", 10),
+          );
+        } else if (workspaceChangeUpdateMatch && method === "POST") {
+          response = await handleWorkspaceChangeUpdate(
+            req,
+            baseHeaders,
+            workspaceChangeUpdateMatch[1]!,
+            workspaceChangeUpdateMatch[2]!,
+            Number.parseInt(workspaceChangeUpdateMatch[3] ?? "", 10),
+          );
+        } else if (workspaceChangeMatch && method === "GET") {
+          response = await handleWorkspaceChangeDetail(
+            req,
+            baseHeaders,
+            workspaceChangeMatch[1]!,
+            workspaceChangeMatch[2]!,
+            Number.parseInt(workspaceChangeMatch[3] ?? "", 10),
           );
         } else if (workspaceDocumentRawMatch && method === "GET") {
           response = await handleWorkspaceDocumentRaw(

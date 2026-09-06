@@ -10,10 +10,15 @@ import type {
   CreateBinderDocument201,
   CreateBinderDocumentBody,
   DownloadBinderDocumentParams,
+  GetBinderChange200,
   GetBinderDocument200,
   ListBinderDocuments200,
   ListBinders200,
-  ListOrganizationBinders200
+  ListOrganizationBinders200,
+  PublishBinderChange200,
+  ReviewBinderChange200,
+  ReviewBinderChangeBody,
+  UpdateBinderChange200
 } from '../model';
 
 import { customFetch } from '.././mutator.ts';
@@ -265,6 +270,151 @@ export const downloadBinderDocument = async (org: string,
   {
     ...options,
     method: 'GET'
+
+
+  }
+);}
+
+
+export type getBinderChangeResponse200 = {
+  data: GetBinderChange200
+  status: 200
+}
+
+export type getBinderChangeResponseSuccess = (getBinderChangeResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getBinderChangeResponse = (getBinderChangeResponseSuccess)
+
+export const getGetBinderChangeUrl = (org: string,
+    binder: string,
+    changeNumber: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/changes/${changeNumber}`
+}
+
+export const getBinderChange = async (org: string,
+    binder: string,
+    changeNumber: string, options?: Parameters<typeof customFetch>[1]): Promise<getBinderChangeResponse> => {
+
+  return customFetch<getBinderChangeResponse>(getGetBinderChangeUrl(org,binder,changeNumber),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type reviewBinderChangeResponse200 = {
+  data: ReviewBinderChange200
+  status: 200
+}
+
+export type reviewBinderChangeResponseSuccess = (reviewBinderChangeResponse200) & {
+  headers: Headers;
+};
+;
+
+export type reviewBinderChangeResponse = (reviewBinderChangeResponseSuccess)
+
+export const getReviewBinderChangeUrl = (org: string,
+    binder: string,
+    changeNumber: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/changes/${changeNumber}/reviews`
+}
+
+export const reviewBinderChange = async (org: string,
+    binder: string,
+    changeNumber: string,
+    reviewBinderChangeBody: ReviewBinderChangeBody, options?: Parameters<typeof customFetch>[1]): Promise<reviewBinderChangeResponse> => {
+
+  return customFetch<reviewBinderChangeResponse>(getReviewBinderChangeUrl(org,binder,changeNumber),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(reviewBinderChangeBody)
+  }
+);}
+
+
+export type updateBinderChangeResponse200 = {
+  data: UpdateBinderChange200
+  status: 200
+}
+
+export type updateBinderChangeResponseSuccess = (updateBinderChangeResponse200) & {
+  headers: Headers;
+};
+;
+
+export type updateBinderChangeResponse = (updateBinderChangeResponseSuccess)
+
+export const getUpdateBinderChangeUrl = (org: string,
+    binder: string,
+    changeNumber: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/changes/${changeNumber}/update`
+}
+
+export const updateBinderChange = async (org: string,
+    binder: string,
+    changeNumber: string, options?: Parameters<typeof customFetch>[1]): Promise<updateBinderChangeResponse> => {
+
+  return customFetch<updateBinderChangeResponse>(getUpdateBinderChangeUrl(org,binder,changeNumber),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+export type publishBinderChangeResponse200 = {
+  data: PublishBinderChange200
+  status: 200
+}
+
+export type publishBinderChangeResponseSuccess = (publishBinderChangeResponse200) & {
+  headers: Headers;
+};
+;
+
+export type publishBinderChangeResponse = (publishBinderChangeResponseSuccess)
+
+export const getPublishBinderChangeUrl = (org: string,
+    binder: string,
+    changeNumber: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/changes/${changeNumber}/publish`
+}
+
+export const publishBinderChange = async (org: string,
+    binder: string,
+    changeNumber: string, options?: Parameters<typeof customFetch>[1]): Promise<publishBinderChangeResponse> => {
+
+  return customFetch<publishBinderChangeResponse>(getPublishBinderChangeUrl(org,binder,changeNumber),
+  {
+    ...options,
+    method: 'POST'
 
 
   }

@@ -189,3 +189,77 @@ export const WorkspaceDocumentDetailPayloadSchema = z.object({
 export type WorkspaceDocumentDetailPayload = z.infer<
   typeof WorkspaceDocumentDetailPayloadSchema
 >;
+
+/**
+ * One document a change touches, and what publishing would make of it.
+ *
+ * The version is per document because a binder's documents do not advance in
+ * lockstep: one change publishing three documents writes `v4`, `v2` and `v7`
+ * onto the same commit, which is ordinary git and is what ADR 0004 means by
+ * "the unit of approval is the change, not the document".
+ */
+export const WorkspaceChangedDocumentSchema =
+  WorkspaceDocumentEntrySchema.extend({
+    /** The version this document reaches if the change is published. */
+    nextVersion: z.number(),
+    /** The version on record now, or null for a document being added. */
+    currentVersion: DocumentVersionSchema.nullable(),
+  });
+export type WorkspaceChangedDocument = z.infer<
+  typeof WorkspaceChangedDocumentSchema
+>;
+
+/**
+ * One change in a binder, as its page reads it.
+ *
+ * A change is the unit of approval, so this is a question about the change
+ * rather than about any one document — which is why it names the documents it
+ * touches rather than sitting under one of them.
+ */
+export const WorkspaceChangeDetailPayloadSchema = z.object({
+  organization: z.string(),
+  workspace: z.string(),
+  change: PullRequestWithApprovalStateSchema,
+  /** Every document this change would version, in path order. */
+  documents: z.array(WorkspaceChangedDocumentSchema),
+  /**
+   * Whether `main` has moved on since this change branched off it.
+   *
+   * A binder protects `main` with `block_on_outdated_branch`, so a change that
+   * is behind cannot be merged however many approvals it has — which is
+   * correct (approvals should be against the content that lands) but is a dead
+   * end unless the page says so and offers the way out.
+   *
+   * Read from the pull request Gitea already returned: its merge base is the
+   * base branch's head exactly when the change is up to date.
+   */
+  isBehind: z.boolean(),
+  /**
+   * Whether publishing is held while a discussion thread is open.
+   *
+   * Gitea has no equivalent, so the BFF enforces it at publish time — the page
+   * shows it so the refusal is not a surprise.
+   */
+  blockOnUnresolvedThreads: z.boolean(),
+  /** Open threads on this change right now. */
+  unresolvedThreadCount: z.number(),
+});
+export type WorkspaceChangeDetailPayload = z.infer<
+  typeof WorkspaceChangeDetailPayloadSchema
+>;
+
+/**
+ * What publishing a change wrote.
+ *
+ * One tag per document the change touched, all pointing at the same merge
+ * commit — several tags on one commit is ordinary git, and it is what makes
+ * "who approved v4 of infection control" answerable as tag → commit → pull
+ * request → reviews.
+ */
+export const PublishedWorkspaceChangePayloadSchema = z.object({
+  ok: z.boolean(),
+  tags: z.array(DocumentVersionSchema),
+});
+export type PublishedWorkspaceChangePayload = z.infer<
+  typeof PublishedWorkspaceChangePayloadSchema
+>;

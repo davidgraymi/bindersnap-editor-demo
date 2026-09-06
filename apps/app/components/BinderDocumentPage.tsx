@@ -35,6 +35,8 @@ interface BinderDocumentPageProps {
   documentPath: string;
   onOpenBinder: () => void;
   onOpenOrganization: () => void;
+  /** Open one of this document's open changes, on the binder. */
+  onOpenChange: (changeNumber: number) => void;
 }
 
 function triggerBrowserDownload(blob: Blob, fileName: string): void {
@@ -55,6 +57,7 @@ export function BinderDocumentPage({
   documentPath,
   onOpenBinder,
   onOpenOrganization,
+  onOpenChange,
 }: BinderDocumentPageProps) {
   const [detail, setDetail] = useState<WorkspaceDocumentDetailPayload | null>(
     null,
@@ -306,14 +309,13 @@ export function BinderDocumentPage({
             {openChanges.length === 0 ? (
               <p className="doc-rail-note">Nothing is in review.</p>
             ) : (
-              // Facts, not links: a binder change has no page of its own
-              // yet. Saying what is in flight is still the answer a reader
-              // opened the rail for.
               <div className="doc-rail-card doc-rail-card--rows">
                 {openChanges.map((change) => (
-                  <div
-                    className="doc-rail-row doc-rail-row--static"
+                  <button
+                    className="doc-rail-row"
+                    type="button"
                     key={change.number}
+                    onClick={() => onOpenChange(change.number)}
                   >
                     <span className="doc-rail-row-date">
                       {parseChangeTitle(change.body, change.user?.login ?? "")}
@@ -321,7 +323,7 @@ export function BinderDocumentPage({
                     <span className="doc-rail-row-note">
                       {getApprovalStateLabel(change.approvalState)}
                     </span>
-                  </div>
+                  </button>
                 ))}
               </div>
             )}

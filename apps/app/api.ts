@@ -12,6 +12,8 @@ import * as OrganizationsClient from "../../packages/api-client/organizations/or
 import * as BindersClient from "../../packages/api-client/workspaces/workspaces";
 import type {
   CreatedWorkspaceDocumentPayload,
+  PublishedWorkspaceChangePayload,
+  WorkspaceChangeDetailPayload,
   WorkspaceDocumentDetailPayload,
   WorkspaceDocumentListPayload,
   WorkspaceSummary,
@@ -819,6 +821,90 @@ export async function fetchBinderDocument(
     documentPath,
   );
   return response.data;
+}
+
+/**
+ * One change in a binder — what it proposes, and where it stands.
+ *
+ * A question about the change rather than about a document, because the change
+ * is the unit of approval: publishing one that touched three policies versions
+ * all three.
+ */
+export async function fetchBinderChange(
+  org: string,
+  binder: string,
+  changeNumber: number,
+): Promise<WorkspaceChangeDetailPayload> {
+  const response = await BindersClient.getBinderChange(
+    org,
+    binder,
+    String(changeNumber),
+  );
+  return response.data;
+}
+
+/** Approve a change, ask for work on it, or say something about it. */
+export async function reviewBinderChange(
+  org: string,
+  binder: string,
+  changeNumber: number,
+  event: "APPROVE" | "REQUEST_CHANGES" | "COMMENT",
+  body?: string,
+): Promise<void> {
+  try {
+    await BindersClient.reviewBinderChange(org, binder, String(changeNumber), {
+      event,
+      ...(body ? { body } : {}),
+    });
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/binders/${org}/${binder}/changes/${changeNumber}/reviews`,
+      error,
+    );
+  }
+}
+
+/**
+ * Bring a change's branch up to date with the binder's `main`.
+ *
+ * It moves the branch, so a binder that dismisses stale approvals will drop
+ * the ones already collected — which is why this is its own act rather than
+ * something publish does quietly.
+ */
+export async function updateBinderChange(
+  org: string,
+  binder: string,
+  changeNumber: number,
+): Promise<void> {
+  try {
+    await BindersClient.updateBinderChange(org, binder, String(changeNumber));
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/binders/${org}/${binder}/changes/${changeNumber}/update`,
+      error,
+    );
+  }
+}
+
+/** Merge the change and tag a version for every document it touched. */
+export async function publishBinderChange(
+  org: string,
+  binder: string,
+  changeNumber: number,
+): Promise<PublishedWorkspaceChangePayload> {
+  try {
+    const response = await BindersClient.publishBinderChange(
+      org,
+      binder,
+      String(changeNumber),
+    );
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/binders/${org}/${binder}/changes/${changeNumber}/publish`,
+      error,
+    );
+  }
 }
 
 /**

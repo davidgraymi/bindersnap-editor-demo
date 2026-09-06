@@ -115,11 +115,25 @@ export function downloadFileName(document: WorkspaceDocumentEntry): string {
  * a surveyor.
  */
 export function parseRequestedVersion(search: string): number | null {
-  const raw = new URLSearchParams(search).get("version");
+  return parsePositiveIntParam(search, "version");
+}
+
+/**
+ * One positive whole number out of the query string, or null.
+ *
+ * Shared with the change page, which reads `?change=` the same way and for the
+ * same reason. Anything that is not a counting number is treated as absent
+ * rather than as an error: a mangled link should show the page, not a fault.
+ */
+export function parsePositiveIntParam(
+  search: string,
+  key: string,
+): number | null {
+  const raw = new URLSearchParams(search).get(key);
   if (raw === null) return null;
 
-  const version = Number(raw);
-  return Number.isInteger(version) && version > 0 ? version : null;
+  const value = Number(raw);
+  return Number.isInteger(value) && value > 0 ? value : null;
 }
 
 /** `/{org}/{binder}/{path}`, with the version only when one is being read. */

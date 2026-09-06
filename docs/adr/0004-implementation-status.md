@@ -41,6 +41,7 @@ holds nothing extra.
 | ---------------------------------------------------------------------- | ---------------------------------- | -------------------------------------------- |
 | [#409](https://github.com/davidgraymi/bindersnap-editor-demo/pull/409) | `feat/adr4-8-binder-document-page` | `/{org}/{binder}/{path}` is a page, not Home |
 | [#410](https://github.com/davidgraymi/bindersnap-editor-demo/pull/410) | `feat/adr4-9-add-a-policy`         | A member adds a policy to a binder           |
+| [#412](https://github.com/davidgraymi/bindersnap-editor-demo/pull/412) | `feat/adr4-10-binder-change-page`  | A change has a page, and is decided on it    |
 
 #404's row above used to claim the document page too. It did not ship one:
 `binderDocument` was in the route table and in the nav's highlight rule, but
@@ -114,6 +115,58 @@ whose data is a bind mount under `data/` rather than a volume. Changing branch
 names left the old ones behind, and the re-seed then opened a pull request
 with nothing in it, which Gitea refuses to merge with "Please try again
 later". `bun run up --fresh` is the fix, and that message is not about timing.
+
+### A change is decided on its own page
+
+ADR 0004 makes the change the unit of approval, so it gets a page rather than
+a panel under one of the documents it touches: `/{org}/{binder}?change=3`. On
+the binder, because one change can version several documents and belongs to
+none of them; in the query, because `/{org}/{binder}/changes/3` cannot be told
+apart from a policy filed at `changes/3` — the same reason `?version=` is a
+query.
+
+`GET .../changes/{n}` answers what the page needs in one call: the change and
+its reviews, every document it would version with the version each would
+reach, whether threads are blocking, and whether it is behind. `POST
+.../changes/{n}/reviews` records an approval or a request for work. Publish
+already existed but had never been registered in the OpenAPI registry, so
+there was no generated client for it — the SPA could not have called it.
+
+**The publish button was a trap, and finding out cost a browser session.** A
+binder protects `main` with `block_on_outdated_branch`, so a change that
+branched off before another one merged is refused however many approvals it
+has — which is correct, approvals should be against the content that lands,
+but it was a dead end with no way out from the UI. Every seeded open change
+was in exactly that state. So:
+
+- `isBehind` comes off the pull request Gitea already returned — the merge
+  base is the base branch's head exactly when the change is up to date, so
+  knowing costs nothing.
+- `POST .../changes/{n}/update` merges `main` into the change. **A merge, not
+  a rebase**: a rebase replays the change's commit onto the new head, which
+  git cannot do for the binary files most policies are, and it fails with
+  "your local changes would be overwritten by merge". Verified against the
+  live Gitea — the rebase style errors on a `.docx`, the merge style does not.
+- It moves the branch, so `dismiss_stale_approvals` drops the approvals
+  collected so far. That is correct, and it is why this is an explicit act
+  with the cost stated rather than something publish does quietly.
+- Gitea recomputes the merge base **after** accepting the push, so the
+  endpoint polls until Gitea agrees before answering. Returning on the 200
+  made the page redraw the very state it had just fixed.
+
+Being behind outranks the approval count in the wording, because bringing a
+change up to date dismisses approvals — telling somebody to go collect them
+first sends them to do wasted work.
+
+**`isApproved` and `isRejected` were in the response contract from the
+beginning and nothing ever set them.** `isRejected` therefore read `undefined`,
+which is falsy, and both places that gate on it — `documentsView.isReady` and
+`homeChanges.classify` — were checking nothing: a change one reviewer had
+asked for work on, but which had its approvals from others, was shown as
+"ready to publish" on Home. The cause was two copies of the same row shape,
+`buildPendingChangeRow` and an inline block in the document detail handler,
+which drifted. There is one now, and it sets both from `approvalState`, which
+already folds each reviewer's latest answer the way Gitea merges on.
 
 ## Why #393 carries the organization-creation flow too
 
@@ -294,15 +347,20 @@ In rough dependency order.
    the next thing wanted. The binder's three role teams already carry
    membership (`createWorkspaceTeams`, `grantTeamOnRepo`); the organization page
    at `/{org}` needs to surface and edit it. Nothing new in Gitea is required.
-2. **Publishing from the binder UI.** Adding a policy is done — "Add a policy"
-   on the binder page, and the document is reachable and readable while it
-   waits. What is left is the other half: reviewing, approving and publishing a
-   binder change without going through the old per-document screens. It needs
-   (7).
+2. **Discussion threads on a binder change.** The change page carries the
+   decision — approve, ask for work, bring up to date, publish — but a review
+   body is the only place to say anything. Threads, replies, resolution and
+   reactions are all built for the old model
+   (`/api/app/documents/:owner/:repo/pull-requests/:n/discussions` and its
+   four siblings) and need binder routes. `blockOnUnresolvedThreads` is
+   already enforced at publish and already reported by the change endpoint, so
+   the gate works; there is just no way to open or close a thread yet.
 3. **Delete the old model.** `POST /api/app/documents`,
    `createPrivateCurrentUserRepo`, the 16 `documents/:owner/:repo` routes in
    `services/api/server.ts`, and roughly a dozen SPA files that address a
-   document as `owner/repo`. Safe once (2) lands, per decision 3.
+   document as `owner/repo`. Safe once (2) lands, per decision 3. Note that
+   Home and the library still read `/api/app/documents`, so they have to move
+   to the binder listings in the same change or they go blank.
 4. **The `document_versions` derived index.** Not started. The ADR's "Derived
    indexes" section is the specification. Note the binder model already made the
    list cheap — `listVersionsByDocument` reads a binder's tags once rather than
@@ -311,10 +369,10 @@ In rough dependency order.
    `blockOnUnresolvedThreads` still lives in the config branch.
 6. **CODEOWNERS generation**, naming **people, not teams**, per #389's finding.
    Not started.
-7. **A binder change needs a page.** The document page lists what is waiting on
-   a decision but cannot open it: `/docs/:owner/:repo/changes/:n` is the old
-   model's address and its handlers do not fit a binder. This is the gate on
-   both (2) and (3) — review, approval and publish all live on it.
+7. **Reviewer management on a binder change.** Who is asked to sign a change
+   off is still the old model's screen: `ChangeReviewers` calls
+   `listDocumentCollaborators` and `updateChangeAssignments`, both keyed on
+   `owner/repo`. The change page shows who has answered, read-only.
 
 ## Working on this locally — two traps
 

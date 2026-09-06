@@ -9143,6 +9143,555 @@
         }
       }
     },
+    "/api/app/binders/{org}/{binder}/changes/{changeNumber}": {
+      "get": {
+        "operationId": "getBinderChange",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "changeNumber",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One change, and the documents publishing it would version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "change": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "number"
+                        },
+                        "number": {
+                          "type": "number"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string"
+                        },
+                        "created": {
+                          "type": "string"
+                        },
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "updated_at": {
+                          "type": "string"
+                        },
+                        "branchName": {
+                          "type": "string"
+                        },
+                        "approvalCount": {
+                          "type": "number"
+                        },
+                        "requiredApprovals": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "isApproved": {
+                          "type": "boolean"
+                        },
+                        "isRejected": {
+                          "type": "boolean"
+                        },
+                        "reviewers": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "login": {
+                                "type": "string"
+                              },
+                              "fullName": {
+                                "type": "string"
+                              },
+                              "avatarUrl": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "approved",
+                                  "changes_requested",
+                                  "commented",
+                                  "awaiting"
+                                ]
+                              },
+                              "reviewedAt": {
+                                "type": "string"
+                              },
+                              "stale": {
+                                "type": "boolean"
+                              },
+                              "requested": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "login",
+                              "fullName",
+                              "avatarUrl",
+                              "status",
+                              "reviewedAt",
+                              "stale",
+                              "requested"
+                            ]
+                          }
+                        },
+                        "assignee": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "login": {
+                              "type": "string"
+                            },
+                            "fullName": {
+                              "type": "string"
+                            },
+                            "avatarUrl": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "login",
+                            "fullName",
+                            "avatarUrl"
+                          ]
+                        },
+                        "body": {
+                          "type": "string"
+                        },
+                        "approvalState": {
+                          "type": "string",
+                          "enum": [
+                            "working",
+                            "in_review",
+                            "changes_requested",
+                            "approved",
+                            "published"
+                          ]
+                        },
+                        "user": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "login": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "login"
+                          ]
+                        },
+                        "reviews": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "number"
+                              },
+                              "author": {
+                                "type": "object",
+                                "properties": {
+                                  "login": {
+                                    "type": "string"
+                                  },
+                                  "fullName": {
+                                    "type": "string"
+                                  },
+                                  "avatarUrl": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "login",
+                                  "fullName",
+                                  "avatarUrl"
+                                ]
+                              },
+                              "state": {
+                                "type": "string",
+                                "enum": [
+                                  "approved",
+                                  "changes_requested",
+                                  "commented",
+                                  "other"
+                                ]
+                              },
+                              "body": {
+                                "type": "string"
+                              },
+                              "submittedAt": {
+                                "type": "string"
+                              },
+                              "stale": {
+                                "type": "boolean"
+                              },
+                              "dismissed": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "author",
+                              "state",
+                              "body",
+                              "submittedAt",
+                              "stale",
+                              "dismissed"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "number",
+                        "title",
+                        "state",
+                        "created",
+                        "branchName",
+                        "approvalCount",
+                        "requiredApprovals",
+                        "isApproved",
+                        "isRejected",
+                        "reviewers",
+                        "assignee",
+                        "approvalState"
+                      ]
+                    },
+                    "documents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "slugPath": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "folder": {
+                            "type": "string"
+                          },
+                          "size": {
+                            "type": "number"
+                          },
+                          "sha": {
+                            "type": "string"
+                          },
+                          "nextVersion": {
+                            "type": "number"
+                          },
+                          "currentVersion": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "tag": {
+                                "type": "string"
+                              },
+                              "version": {
+                                "type": "number"
+                              },
+                              "commitSha": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "tag",
+                              "version",
+                              "commitSha"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "slugPath",
+                          "name",
+                          "folder",
+                          "size",
+                          "sha",
+                          "nextVersion",
+                          "currentVersion"
+                        ]
+                      }
+                    },
+                    "isBehind": {
+                      "type": "boolean"
+                    },
+                    "blockOnUnresolvedThreads": {
+                      "type": "boolean"
+                    },
+                    "unresolvedThreadCount": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "workspace",
+                    "change",
+                    "documents",
+                    "isBehind",
+                    "blockOnUnresolvedThreads",
+                    "unresolvedThreadCount"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/changes/{changeNumber}/reviews": {
+      "post": {
+        "operationId": "reviewBinderChange",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "changeNumber",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "event": {
+                    "type": "string",
+                    "enum": [
+                      "APPROVE",
+                      "REQUEST_CHANGES",
+                      "COMMENT"
+                    ]
+                  },
+                  "body": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "event"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The review, as Gitea recorded it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "review": {
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/changes/{changeNumber}/update": {
+      "post": {
+        "operationId": "updateBinderChange",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "changeNumber",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The change's branch now carries the binder's main",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "caughtUp": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "caughtUp"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/changes/{changeNumber}/publish": {
+      "post": {
+        "operationId": "publishBinderChange",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "changeNumber",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A version tag for every document the change touched",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "tags": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "tag": {
+                            "type": "string"
+                          },
+                          "version": {
+                            "type": "number"
+                          },
+                          "commitSha": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "tag",
+                          "version",
+                          "commitSha"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "tags"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/app/billing/status": {
       "get": {
         "operationId": "getBillingStatus",
