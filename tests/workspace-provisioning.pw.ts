@@ -1113,6 +1113,17 @@ test("approving through the binder counts, and then it publishes", async () => {
   // Gitea — which is the thing being tested, and is what the page does.
   // `dismiss_stale_approvals` makes an approval submitted moments after a push
   // land against the old head, so this retries until one actually stands.
+  const stillApproved = async (): Promise<boolean> => {
+    const change = await getChange(
+      sessionCookie,
+      org.name,
+      "clinical",
+      pullRequestNumber,
+    );
+    return (JSON.parse(change.body) as { change: { isApproved: boolean } })
+      .change.isApproved;
+  };
+
   let counted = false;
   for (let attempt = 0; attempt < 10 && !counted; attempt += 1) {
     const review = await reviewChange(
@@ -1124,14 +1135,15 @@ test("approving through the binder counts, and then it publishes", async () => {
     );
     expect(review.status, review.body).toBe(200);
 
-    const change = await getChange(
-      sessionCookie,
-      org.name,
-      "clinical",
-      pullRequestNumber,
-    );
-    counted = (JSON.parse(change.body) as { change: { isApproved: boolean } })
-      .change.isApproved;
+    // Twice, a beat apart, the same rule `approveChange` uses. Gitea processes
+    // a push asynchronously and marks approvals against the old head stale a
+    // moment later, so an approval can read as standing and be gone by the time
+    // the merge is attempted — which is how this test failed at the *publish*
+    // with "does not have enough approvals" after checking it had one.
+    if (await stillApproved()) {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      counted = await stillApproved();
+    }
     if (!counted) await new Promise((resolve) => setTimeout(resolve, 500));
   }
   expect(counted, "the approval never counted").toBe(true);
@@ -1920,6 +1932,322 @@ test("the organization says who is in it, and which groups they are in", async (
     "staff",
   ]);
   expect(payload.canManage).toBe(true);
+});
+
+async function createGroup(
+  sessionCookie: string,
+  org: string,
+  name: string,
+  level: string,
+): Promise<{ status: number; body: string }> {
+  const response = await fetch(`${API_BASE_URL}/api/app/orgs/${org}/groups`, {
+    method: "POST",
+    headers: authHeaders(sessionCookie),
+    body: JSON.stringify({ name, level }),
+  });
+  return { status: response.status, body: await response.text() };
+}
+
+async function addToGroup(
+  sessionCookie: string,
+  org: string,
+  group: string,
+  username: string,
+): Promise<{ status: number; body: string }> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/orgs/${org}/groups/${group}/members`,
+    {
+      method: "POST",
+      headers: authHeaders(sessionCookie),
+      body: JSON.stringify({ username }),
+    },
+  );
+  return { status: response.status, body: await response.text() };
+}
+
+async function grantGroup(
+  sessionCookie: string,
+  org: string,
+  workspace: string,
+  group: string,
+): Promise<{ status: number; body: string }> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${workspace}/groups`,
+    {
+      method: "POST",
+      headers: authHeaders(sessionCookie),
+      body: JSON.stringify({ group }),
+    },
+  );
+  return { status: response.status, body: await response.text() };
+}
+
+async function revokeGroup(
+  sessionCookie: string,
+  org: string,
+  workspace: string,
+  group: string,
+): Promise<{ status: number; body: string }> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${workspace}/groups/${group}`,
+    { method: "DELETE", headers: authHeaders(sessionCookie) },
+  );
+  return { status: response.status, body: await response.text() };
+}
+
+/** What Gitea is actually enforcing, asked of Gitea rather than of our reply. */
+async function readApprovalsWhitelist(
+  ownerToken: string,
+  org: string,
+  workspace: string,
+): Promise<string[]> {
+  const protection = await giteaGet<{
+    approvals_whitelist_teams?: string[];
+    enable_approvals_whitelist?: boolean;
+  }>(ownerToken, `/repos/${org}/${workspace}/branch_protections/main`);
+
+  expect(protection.enable_approvals_whitelist).toBe(true);
+  return (protection.approvals_whitelist_teams ?? []).slice().sort();
+}
+
+test("a group is named and levelled at once, and reaches no binder until it is added", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  // What a customer types, and the handle Gitea can carry. A group's name is
+  // written into `.gitea/CODEOWNERS` as `@org/group`, which Gitea parses by
+  // splitting on whitespace — so "Quality Committee" could never be named in a
+  // sign-off rule, and the handle is the name.
+  const created = await createGroup(
+    sessionCookie,
+    org.name,
+    "Quality Committee",
+    "reviewer",
+  );
+  expect(created.status, created.body).toBe(201);
+  expect(
+    (JSON.parse(created.body) as { group: { name: string } }).group,
+  ).toMatchObject({
+    name: "quality-committee",
+    access: "read",
+    memberCount: 0,
+  });
+
+  // ADR 0004: "a team granted onto no repository grants access to nothing and
+  // costs nothing". Naming a group is free; composing it is a separate act by
+  // whoever runs the binder.
+  const settings = (await (
+    await fetch(
+      `${API_BASE_URL}/api/app/binders/${org.name}/clinical/settings`,
+      { headers: { Cookie: `bindersnap_session=${sessionCookie}` } },
+    )
+  ).json()) as { teams: Array<{ name: string }> };
+  expect(settings.teams.map((team) => team.name)).not.toContain(
+    "quality-committee",
+  );
+
+  // A second group of the same name is refused rather than silently returning
+  // the first, which would hand somebody a group at a level they did not pick.
+  const again = await createGroup(
+    sessionCookie,
+    org.name,
+    "quality committee",
+    "admin",
+  );
+  expect(again.status, again.body).toBe(409);
+});
+
+test("a member of a granted group can approve, and the approval counts", async () => {
+  // The proof for groups, and it is one claim with two halves: the grant gives
+  // the access, and the whitelist recompute is what makes the approval mean
+  // anything. Without the second, the approval is recorded, displayed, and
+  // satisfies nothing — with no error message anywhere.
+  const author = buildCredentials();
+  const authorCookie = await signUp(author);
+  const org = await createOrganization(authorCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(authorCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const ownerToken = await createUserToken(author.username, author.password);
+
+  expect(
+    (await createGroup(authorCookie, org.name, "Quality Committee", "reviewer"))
+      .status,
+  ).toBe(201);
+
+  // Somebody who is in no other team: not an owner, and — because the grant is
+  // what this test is about — reachable only through the group.
+  const reviewer = buildCredentials();
+  await signUp(reviewer);
+  const joined = await addToGroup(
+    authorCookie,
+    org.name,
+    "quality-committee",
+    reviewer.username,
+  );
+  expect(joined.status, joined.body).toBe(200);
+  expect(
+    (
+      JSON.parse(joined.body) as {
+        groups: Array<{ name: string; memberCount: number }>;
+      }
+    ).groups.find((group) => group.name === "quality-committee")?.memberCount,
+  ).toBe(1);
+
+  const granted = await grantGroup(
+    authorCookie,
+    org.name,
+    "clinical",
+    "quality-committee",
+  );
+  expect(granted.status, granted.body).toBe(200);
+  const grantedPayload = JSON.parse(granted.body) as {
+    teams: Array<{ name: string }>;
+    approvalsWhitelist: string[];
+  };
+  expect(grantedPayload.teams.map((team) => team.name)).toContain(
+    "quality-committee",
+  );
+  // Recomputed in the same call, and containing `Owners` — which Gitea never
+  // grants onto a repository, so a list derived from the granted teams alone
+  // would omit it and stop counting an owner's approval.
+  expect(grantedPayload.approvalsWhitelist.slice().sort()).toEqual([
+    "Owners",
+    "quality-committee",
+    "staff",
+  ]);
+  expect(
+    await readApprovalsWhitelist(ownerToken, org.name, "clinical"),
+  ).toEqual(["Owners", "quality-committee", "staff"]);
+
+  const addedDoc = await addDocument(authorCookie, org.name, "clinical", {
+    name: "Infection Control",
+  });
+  const { pullRequestNumber } = JSON.parse(addedDoc.body) as {
+    pullRequestNumber: number;
+  };
+
+  await approveChange(
+    await createUserToken(reviewer.username, reviewer.password),
+    org.name,
+    "clinical",
+    pullRequestNumber,
+  );
+
+  expect(
+    (await publishChange(authorCookie, org.name, "clinical", pullRequestNumber))
+      .status,
+  ).toBe(200);
+});
+
+test("revoking a group narrows the approvals whitelist in the same call", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const ownerToken = await createUserToken(
+    credentials.username,
+    credentials.password,
+  );
+
+  expect(
+    (await createGroup(sessionCookie, org.name, "Nursing Leads", "editor"))
+      .status,
+  ).toBe(201);
+  expect(
+    (await grantGroup(sessionCookie, org.name, "clinical", "nursing-leads"))
+      .status,
+  ).toBe(200);
+  expect(
+    await readApprovalsWhitelist(ownerToken, org.name, "clinical"),
+  ).toEqual(["Owners", "nursing-leads", "staff"]);
+
+  const revoked = await revokeGroup(
+    sessionCookie,
+    org.name,
+    "clinical",
+    "nursing-leads",
+  );
+  expect(revoked.status, revoked.body).toBe(200);
+  const payload = JSON.parse(revoked.body) as {
+    teams: Array<{ name: string }>;
+    approvalsWhitelist: string[];
+  };
+  expect(payload.teams.map((team) => team.name)).not.toContain("nursing-leads");
+  // Narrowed by the same code path that widened it — a whitelist that only ever
+  // grew would leave a revoked group's approvals counting after the access that
+  // justified them was taken away.
+  expect(payload.approvalsWhitelist.slice().sort()).toEqual([
+    "Owners",
+    "staff",
+  ]);
+  expect(
+    await readApprovalsWhitelist(ownerToken, org.name, "clinical"),
+  ).toEqual(["Owners", "staff"]);
+});
+
+test("Owners cannot be added to or taken off a binder, because it is neither", async () => {
+  // Gitea gives Owners admin over the whole organization implicitly and never
+  // grants it onto a repository, so offering either act would be offering
+  // something that cannot happen — and a revoke that silently did nothing
+  // would read as an owner losing access when they had not.
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  expect(
+    (await grantGroup(sessionCookie, org.name, "clinical", "Owners")).status,
+  ).toBe(400);
+  expect(
+    (await revokeGroup(sessionCookie, org.name, "clinical", "Owners")).status,
+  ).toBe(400);
+});
+
+test("a group that is not there is a 404, on the organization and on a binder", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  expect(
+    (await addToGroup(sessionCookie, org.name, "no-such-group", "nobody"))
+      .status,
+  ).toBe(404);
+  expect(
+    (await grantGroup(sessionCookie, org.name, "clinical", "no-such-group"))
+      .status,
+  ).toBe(404);
+  expect(
+    (await grantGroup(sessionCookie, org.name, "no-such-binder", "staff"))
+      .status,
+  ).toBe(404);
+});
+
+test("a group needs a name Gitea can carry, and one of three levels", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+
+  expect(
+    (await createGroup(sessionCookie, org.name, "!!!", "reviewer")).status,
+  ).toBe(400);
+  expect(
+    (await createGroup(sessionCookie, org.name, "Quality", "supervisor"))
+      .status,
+  ).toBe(400);
 });
 
 test("a change in a binder that is not there is a 404", async () => {

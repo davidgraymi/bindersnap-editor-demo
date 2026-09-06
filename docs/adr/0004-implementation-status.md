@@ -46,6 +46,7 @@ holds nothing extra.
 | [#414](https://github.com/davidgraymi/bindersnap-editor-demo/pull/414) | `feat/adr4-12-binder-change-detail`    | The change view is the one that already existed        |
 | [#415](https://github.com/davidgraymi/bindersnap-editor-demo/pull/415) | `feat/adr4-13-binder-history-settings` | History and Settings, the last two tabs                |
 | [#416](https://github.com/davidgraymi/bindersnap-editor-demo/pull/416) | `feat/adr4-14-org-people-and-staff`    | The organization has people; binders stop making teams |
+| [#417](https://github.com/davidgraymi/bindersnap-editor-demo/pull/417) | `feat/adr4-15-groups`                  | Groups: named, levelled, composed onto a binder        |
 
 #404's row above used to claim the document page too. It did not ship one:
 `binderDocument` was in the route table and in the nav's highlight rule, but
@@ -386,6 +387,91 @@ enough approvals" beside a green tick.
 Editing is still not built. Both pages say so in a sentence rather than drawing
 controls that do nothing.
 
+### Groups are named once and composed everywhere
+
+Piece 2 of the org-access design, and the first piece that lets a customer
+change who can do what without opening Gitea.
+
+**A group is a name and a level together**, because a Gitea team carries one
+unit map: `PUT /teams/{id}/repos/{org}/{repo}` adopts a team at whatever
+permission it already has, and there is no per-grant level. So "Quality
+Committee" cannot be an editor in one binder and a reviewer in another — if a
+customer needs that, it is two groups. A form that asked for the two separately
+would imply otherwise, and a UI offering a level per binder is a UI that will
+have to refuse. The level therefore travels with the name everywhere it appears,
+and the constraint is stated on the page rather than discovered on a binder.
+
+The three levels are the three role unit maps, reused rather than restated:
+`ROLE_TEAM_OPTIONS` is the definition `tests/gitea-permission-model.pw.ts`
+already pins, and a second one here would drift the way the seed's once did.
+Only the words differ, and only where the Gitea word is actively misleading —
+**Admin** stays Admin, and **Editor** replaces "author" because an author is a
+claim about who _wrote_ something, and "Author: Priya" on a policy Priya never
+touched is a false attribution on a product whose output is evidence.
+
+**The stored name is a handle, and the name on screen is derived from it.**
+A group is written into `.gitea/CODEOWNERS` as `@org/group`, which Gitea parses
+by splitting on whitespace, so "Quality Committee" could never be named in a
+sign-off rule. `slugifyGroupName` makes it `quality-committee` and the create
+form shows that before the button is pressed; `describeGroupName` says it back
+as "Quality Committee" wherever it is shown. Derived rather than stored beside
+it, because a second copy is a table shadowing a Gitea object — the thing ADR
+0004 refuses — and it would disagree the first time somebody renamed the team.
+Gitea's own spelling is left alone, so `Owners` stays `Owners` rather than
+becoming a second team by a second name.
+
+**Every grant and revoke recomputes the approvals whitelist in the same
+handler**, because that half fails silently: `enable_approvals_whitelist` is
+what makes a free reviewer's approval count, and a granted team missing from the
+list has its members' approvals recorded, displayed, and satisfying nothing.
+Recomputed rather than appended to, so a revoke narrows the list by the same
+code path a grant widens it — a whitelist that only grew would leave a removed
+group's approvals counting after the access that justified them was taken away.
+Verified in both directions against the live Gitea, and pinned by two
+integration tests: a member of a granted group approves and the change
+publishes, and revoking takes the group off `approvals_whitelist_teams`.
+
+**`Owners` is in the list and in neither act.** `GET /repos/{owner}/{repo}/teams`
+does report it — checked on the running stack — but it is never granted onto a
+repository, so adding it is offering something already true and removing it is
+offering something that cannot happen. The API refuses both with a sentence, and
+the page draws no control, because a control that has to refuse is worse than no
+control.
+
+Who may do any of this is Gitea's answer rather than ours. Creating a group is
+`POST /orgs/{org}/teams`, guarded by organization ownership; granting one is
+guarded by admin on the repository. `canManage` decides which buttons are drawn
+and nothing else — an app-side check standing in for a permission question is
+the tripwire ADR 0004 names.
+
+Worth knowing for piece 3: Gitea's `/teams/{id}/repos/...` routes sit behind
+`reqTeamMembership()`, so a **binder admin who is neither an org owner nor a
+member of the group cannot grant it**, even though `AddTeamRepository` itself
+only asks for repository admin. It cannot bite today — every binder is created
+by an org owner — and it arrives the same day `can_create_org_repo` is handed
+out, which is the day the bootstrap correction in the design has to ship too.
+
+### A stale approval was being counted as an approval
+
+Found while chasing a test that had been intermittently failing at the _publish_
+after checking it had an approval, and it is a product defect rather than a test
+one. `countApprovals` has always skipped stale reviews, because Gitea does at
+merge time — an approval overtaken by a new upload is not a signature on the
+version being published. `resolveApprovalState` did not, so `approvalState` read
+`approved` beside an approval count of zero: the change page offered a publish
+that Gitea then refused with "does not have enough approvals", and Home
+classified the change as ready.
+
+That is the same shape as the `isRejected` defect above — two rules in the
+codebase answering one question, one of them wrong — and it is the shape to keep
+looking for.
+
+The fix is deliberately **not symmetrical**: a stale _approval_ stops counting,
+a stale _request for changes_ still blocks. `dismiss_stale_approvals` dismisses
+approvals on a push and leaves rejections standing, so Gitea blocks on a stale
+rejection too, and showing it as cleared would be the one error that lets
+something reach the record.
+
 ## Why #393 carries the organization-creation flow too
 
 They cannot ship apart. The migration parks every username-keyed billing row
@@ -561,12 +647,13 @@ asking.
 
 In rough dependency order.
 
-1. **Groups: create, grant, revoke.** The vocabulary an organization owner
-   controls, and the composing a binder admin does. Every grant change calls
-   `recomputeApprovalsWhitelist`, which exists and is tested. Note the
-   constraint that shapes the UI: a Gitea team carries one unit map, so a
-   group's level belongs to the group and not to the grant — "Quality
-   Committee" cannot be an editor in one binder and a reviewer in another.
+1. **Managing binder people, one at a time.** Groups are done; individuals are
+   not. Adding Priya as a reviewer of one binder needs the lazy `<binder>-role`
+   team of the design — created on the first individual grant, joined by the
+   second — plus the refusal that matters: a person whose access comes from a
+   group cannot have their role changed on that binder, because the group is one
+   object across every binder it reaches. The row has to say why rather than
+   offer a dropdown that fails.
 2. **The binder visibility switch.** `staff` granted or not, asked on the
    create form with "Everyone at Riverside Health" preselected. The grant is
    already how provisioning opens a binder; what is missing is the choice and
@@ -587,8 +674,10 @@ In rough dependency order.
    once per document — so this is now an optimization rather than a rescue.
 6. **Per-workspace settings and `settings_events`.** Not started.
    `blockOnUnresolvedThreads` still lives in the config branch.
-7. **CODEOWNERS generation**, naming **people, not teams**, per #389's finding.
-   Not started.
+7. **CODEOWNERS generation.** Not started, and blocked on the Gitea 28.0.0
+   upgrade — `block_on_codeowner_reviews` is what lets a rule name a **team**
+   rather than the list of people #389's finding forced. Groups now exist to be
+   named in one.
 8. **The approvals whitelist on a binder change.** `branchProtection` is
    passed as null, so the page never says "your account is not authorized to
    approve this". Gitea still refuses, and the required count is shown — but

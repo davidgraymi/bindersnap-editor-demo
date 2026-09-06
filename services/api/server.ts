@@ -21,6 +21,7 @@ import {
 import { claimLegacyBillingForOrganization } from "./legacy-billing-claim";
 import { provisionSignup } from "./signup-provisioning";
 import { slugifyOrganizationName } from "../../packages/utils/organizationName";
+import { slugifyGroupName } from "../../packages/utils/groupName";
 import {
   buildDocumentFilePath,
   buildDocumentSlugPath,
@@ -30,6 +31,7 @@ import {
   listOrganizationWorkspaces,
   provisionWorkspace,
   readWorkspaceAccess,
+  recomputeApprovalsWhitelist,
 } from "./gitea-client/workspaces";
 import {
   createDocumentVersionTag,
@@ -43,7 +45,12 @@ import {
   toDocumentEntry,
 } from "./gitea-client/workspaceDocuments";
 import {
+  addTeamMember,
+  createOrganizationGroup,
   findOrganization,
+  findOrganizationTeam,
+  grantTeamOnRepo,
+  isGroupLevel,
   isOrganizationOwnerDirect,
   listOrganizationMembers,
   listOrganizationOwners,
@@ -51,6 +58,8 @@ import {
   listRepoTeams,
   listTeamMembers,
   OWNERS_TEAM_NAME,
+  removeTeamMember,
+  revokeTeamFromRepo,
   STAFF_TEAM_NAME,
 } from "./gitea-client/orgs";
 import { createPrivilegedGiteaClient } from "./privileged-client";
@@ -87,6 +96,7 @@ import {
   toVersionReviews,
 } from "./document-history";
 import type { ClosedChange } from "../../packages/api-schema/schemas/documents";
+import type { OrganizationPeoplePayload } from "../../packages/api-schema/schemas/workspaces";
 import {
   addRepoCollaborator,
   bootstrapEmptyMainBranch,
@@ -5741,73 +5751,9 @@ async function handleOrganizationPeople(
       return json(404, { error: "No such organization." }, baseHeaders);
     }
 
-    const [members, teams, canManage] = await Promise.all([
-      listOrganizationMembers({ client, org: orgName }),
-      // A member who is not an owner cannot list the organization's teams.
-      // That costs them the groups, not the page.
-      listOrganizationTeams({ client, org: orgName }).catch(() => []),
-      isOrganizationOwnerDirect({
-        client,
-        org: orgName,
-        username: session.username,
-      }),
-    ]);
-
-    const membershipByTeam = await Promise.all(
-      teams.map(async (team) => ({
-        team,
-        members: await listTeamMembers({ client, teamId: team.id }).catch(
-          () => [],
-        ),
-      })),
-    );
-
-    const teamsByLogin = new Map<string, string[]>();
-    const owners = new Set<string>();
-    for (const { team, members: teamMembers } of membershipByTeam) {
-      for (const member of teamMembers) {
-        const login = member.login.toLowerCase();
-        if (team.name === OWNERS_TEAM_NAME) owners.add(login);
-        // `staff` is everybody by definition, so listing it against every name
-        // says nothing and crowds out the groups that do.
-        if (team.name === STAFF_TEAM_NAME) continue;
-        const existing = teamsByLogin.get(login);
-        if (existing) {
-          existing.push(team.name);
-        } else {
-          teamsByLogin.set(login, [team.name]);
-        }
-      }
-    }
-
     return json(
       200,
-      {
-        organization: orgName,
-        people: members
-          .map((member) => ({
-            login: member.login,
-            fullName: member.fullName,
-            isOwner: owners.has(member.login.toLowerCase()),
-            teams: teamsByLogin.get(member.login.toLowerCase()) ?? [],
-          }))
-          // Owners first, then by name: the list answers "who runs this" before
-          // it answers "who is here".
-          .sort((left, right) => {
-            if (left.isOwner !== right.isOwner) return left.isOwner ? -1 : 1;
-            return left.login.localeCompare(right.login);
-          }),
-        groups: membershipByTeam
-          .map(({ team, members: teamMembers }) => ({
-            id: team.id,
-            name: team.name,
-            description: team.description,
-            access: team.codeAccess,
-            memberCount: teamMembers.length,
-          }))
-          .sort((left, right) => left.name.localeCompare(right.name)),
-        canManage,
-      },
+      await readOrganizationPeople(client, orgName, session.username),
       baseHeaders,
     );
   } catch (err) {
@@ -5817,6 +5763,408 @@ async function handleOrganizationPeople(
       error: err instanceof Error ? err.message : String(err),
     });
     return responseFromError(err, baseHeaders, "Unable to read the people.");
+  }
+}
+
+/**
+ * The organization's people and groups, assembled once.
+ *
+ * Pulled out of the handler because every mutation on this page answers with
+ * the page again: adding somebody to a group changes two of the three lists on
+ * it, and returning the whole thing is what stops the browser reassembling a
+ * view of the world from a success message.
+ */
+async function readOrganizationPeople(
+  client: GiteaClient,
+  orgName: string,
+  viewer: string,
+): Promise<OrganizationPeoplePayload> {
+  const [members, teams, canManage] = await Promise.all([
+    listOrganizationMembers({ client, org: orgName }),
+    // A member who is not an owner cannot list the organization's teams.
+    // That costs them the groups, not the page.
+    listOrganizationTeams({ client, org: orgName }).catch(() => []),
+    isOrganizationOwnerDirect({
+      client,
+      org: orgName,
+      username: viewer,
+    }),
+  ]);
+
+  const membershipByTeam = await Promise.all(
+    teams.map(async (team) => ({
+      team,
+      members: await listTeamMembers({ client, teamId: team.id }).catch(
+        () => [],
+      ),
+    })),
+  );
+
+  const teamsByLogin = new Map<string, string[]>();
+  const owners = new Set<string>();
+  for (const { team, members: teamMembers } of membershipByTeam) {
+    for (const member of teamMembers) {
+      const login = member.login.toLowerCase();
+      if (team.name === OWNERS_TEAM_NAME) owners.add(login);
+      // `staff` is everybody by definition, so listing it against every name
+      // says nothing and crowds out the groups that do.
+      if (team.name === STAFF_TEAM_NAME) continue;
+      const existing = teamsByLogin.get(login);
+      if (existing) {
+        existing.push(team.name);
+      } else {
+        teamsByLogin.set(login, [team.name]);
+      }
+    }
+  }
+
+  return {
+    organization: orgName,
+    people: members
+      .map((member) => ({
+        login: member.login,
+        fullName: member.fullName,
+        isOwner: owners.has(member.login.toLowerCase()),
+        teams: teamsByLogin.get(member.login.toLowerCase()) ?? [],
+      }))
+      // Owners first, then by name: the list answers "who runs this" before
+      // it answers "who is here".
+      .sort((left, right) => {
+        if (left.isOwner !== right.isOwner) return left.isOwner ? -1 : 1;
+        return left.login.localeCompare(right.login);
+      }),
+    groups: membershipByTeam
+      .map(({ team, members: teamMembers }) => ({
+        id: team.id,
+        name: team.name,
+        description: team.description,
+        access: team.codeAccess,
+        memberCount: teamMembers.length,
+        members: teamMembers.map((member) => ({
+          login: member.login,
+          fullName: member.fullName,
+        })),
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name)),
+    canManage,
+  };
+}
+
+/**
+ * Name a group and level it, which is one act.
+ *
+ * A Gitea team carries one unit map, so a group's level is a property of the
+ * group and not of the grant: "Quality Committee" cannot be an editor in one
+ * binder and a reviewer in another. A form that asked for the two separately
+ * would imply otherwise, and a UI that offered a level per binder would have
+ * to refuse — so they are asked for together and the level travels with the
+ * name everywhere it appears.
+ *
+ * Who may do it is Gitea's answer, not ours: `POST /orgs/{org}/teams` is
+ * guarded by organization ownership. Checking it here as well would be an
+ * app-side ACL over a permission question, which is the tripwire ADR 0004
+ * names — `canManage` on the payload decides which buttons are drawn, and
+ * Gitea decides what happens.
+ */
+async function handleCreateOrganizationGroup(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { client, session } = auth;
+
+  try {
+    const body = (await req.json().catch(() => null)) as {
+      name?: unknown;
+      level?: unknown;
+    } | null;
+
+    const requested = typeof body?.name === "string" ? body.name : "";
+    const name = slugifyGroupName(requested);
+    if (name === "") {
+      return json(
+        400,
+        { error: "A group needs a name with a letter or a number in it." },
+        baseHeaders,
+      );
+    }
+
+    if (!isGroupLevel(body?.level)) {
+      return json(
+        400,
+        {
+          error: "A group is created at one level: admin, editor or reviewer.",
+        },
+        baseHeaders,
+      );
+    }
+
+    const organization = await findOrganization({ client, org: orgName });
+    if (!organization) {
+      return json(404, { error: "No such organization." }, baseHeaders);
+    }
+
+    const team = await createOrganizationGroup({
+      client,
+      org: orgName,
+      name,
+      level: body.level,
+    });
+
+    return json(
+      201,
+      {
+        organization: orgName,
+        group: {
+          id: team.id,
+          name: team.name,
+          description: team.description,
+          access: team.codeAccess,
+          // Granted onto nothing and holding nobody: naming a group is free,
+          // and both composing it onto a binder and filling it are separate,
+          // deliberate acts.
+          memberCount: 0,
+          members: [],
+        },
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to create a group", {
+      username: session.username,
+      organization: orgName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to create the group.");
+  }
+}
+
+/**
+ * Put somebody in a group, or take them out of it.
+ *
+ * **No commit, no approval, and that is the point.** Who is in a group is a
+ * personnel fact, not a policy decision, and the alternative — naming people in
+ * a file on a protected branch — makes every joiner and leaver a change that
+ * has to be approved by the very people the file is being edited to change.
+ * A departing employee stays a required approver until somebody approves their
+ * removal. Membership is one Gitea call and takes effect immediately.
+ *
+ * Adding somebody to a team is also how they join the organization: Gitea makes
+ * team membership imply org membership, so there is no second list to keep in
+ * step.
+ */
+async function handleOrganizationGroupMember(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  groupName: string,
+  removing: string | null,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { client, session } = auth;
+
+  try {
+    let username = removing;
+    if (username === null) {
+      const body = (await req.json().catch(() => null)) as {
+        username?: unknown;
+      } | null;
+      username = typeof body?.username === "string" ? body.username.trim() : "";
+    }
+
+    if (username === "") {
+      return json(400, { error: "Name somebody to add." }, baseHeaders);
+    }
+
+    const organization = await findOrganization({ client, org: orgName });
+    if (!organization) {
+      return json(404, { error: "No such organization." }, baseHeaders);
+    }
+
+    const team = await findOrganizationTeam({
+      client,
+      org: orgName,
+      name: groupName,
+    });
+    if (!team) {
+      return json(404, { error: "No such group." }, baseHeaders);
+    }
+
+    if (removing === null) {
+      await addTeamMember({ client, teamId: team.id, username });
+    } else {
+      await removeTeamMember({ client, teamId: team.id, username });
+    }
+
+    return json(
+      200,
+      await readOrganizationPeople(client, orgName, session.username),
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to change a group's membership", {
+      username: session.username,
+      organization: orgName,
+      group: groupName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to change who is in the group.",
+    );
+  }
+}
+
+/**
+ * Compose a group onto a binder, or take it off — and rewrite the approvals
+ * whitelist to match, in the same handler.
+ *
+ * The whitelist is not a follow-up job, because the failure it prevents has no
+ * error message: `enable_approvals_whitelist` is what makes a free reviewer's
+ * approval count, and a granted team missing from the list has its members'
+ * approvals recorded, displayed, and satisfying nothing. Recomputed rather than
+ * appended to, so a revoke narrows it by the same code path a grant widens it —
+ * and `Owners` goes on unconditionally, because Gitea never grants it onto a
+ * repository and a list derived from the granted teams alone would stop
+ * counting an owner's approval.
+ *
+ * Who may do it is Gitea's answer: `PUT /teams/{id}/repos/{org}/{repo}` refuses
+ * anyone without admin on the repository. An organization owner has that
+ * everywhere through `Owners`.
+ */
+async function handleBinderGroup(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+  revoking: string | null,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { client, session } = auth;
+  let groupName = revoking;
+
+  try {
+    if (groupName === null) {
+      const body = (await req.json().catch(() => null)) as {
+        group?: unknown;
+      } | null;
+      groupName = typeof body?.group === "string" ? body.group.trim() : "";
+    }
+
+    if (groupName === "") {
+      return json(400, { error: "Name a group to add." }, baseHeaders);
+    }
+
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    const team = await findOrganizationTeam({
+      client,
+      org: orgName,
+      name: groupName,
+    });
+    if (!team) {
+      return json(404, { error: "No such group." }, baseHeaders);
+    }
+
+    if (team.name === OWNERS_TEAM_NAME) {
+      // Gitea gives Owners admin over the whole organization implicitly and
+      // never grants it onto a repository. Offering to revoke it would be
+      // offering something that cannot happen.
+      return json(
+        400,
+        {
+          error:
+            "Owners administer every binder in the organization. That is not granted here and cannot be taken away here.",
+        },
+        baseHeaders,
+      );
+    }
+
+    if (revoking === null) {
+      await grantTeamOnRepo({
+        client,
+        teamId: team.id,
+        org: orgName,
+        repo: workspaceName,
+      });
+    } else {
+      await revokeTeamFromRepo({
+        client,
+        teamId: team.id,
+        org: orgName,
+        repo: workspaceName,
+      });
+    }
+
+    // After the grant, never before: the whitelist is derived from what Gitea
+    // says is granted, so reading it first would write the state we just left.
+    const approvalsWhitelist = await recomputeApprovalsWhitelist({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+    });
+
+    const teams = await listRepoTeams({
+      client,
+      owner: orgName,
+      repo: workspaceName,
+    });
+
+    const withMembers = await Promise.all(
+      teams.map(async (granted) => ({
+        id: granted.id,
+        name: granted.name,
+        description: granted.description,
+        access: granted.codeAccess,
+        members: (
+          await listTeamMembers({ client, teamId: granted.id }).catch(() => [])
+        ).map((member) => ({
+          login: member.login,
+          fullName: member.fullName,
+        })),
+      })),
+    );
+
+    return json(
+      200,
+      {
+        organization: orgName,
+        workspace: workspaceName,
+        teams: withMembers.sort((left, right) =>
+          left.name.localeCompare(right.name),
+        ),
+        approvalsWhitelist,
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to change a binder's groups", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      group: groupName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to change who can act in this binder.",
+    );
   }
 }
 
@@ -7347,6 +7695,21 @@ export function createApiServer() {
         const organizationPeopleMatch = pathname.match(
           /^\/api\/app\/orgs\/([^/]+)\/people$/,
         );
+        const organizationGroupsMatch = pathname.match(
+          /^\/api\/app\/orgs\/([^/]+)\/groups$/,
+        );
+        const organizationGroupMembersMatch = pathname.match(
+          /^\/api\/app\/orgs\/([^/]+)\/groups\/([^/]+)\/members$/,
+        );
+        const organizationGroupMemberMatch = pathname.match(
+          /^\/api\/app\/orgs\/([^/]+)\/groups\/([^/]+)\/members\/([^/]+)$/,
+        );
+        const workspaceGroupsMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/groups$/,
+        );
+        const workspaceGroupMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/groups\/([^/]+)$/,
+        );
         const workspaceChangesMatch = pathname.match(
           /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes$/,
         );
@@ -7367,6 +7730,44 @@ export function createApiServer() {
             req,
             baseHeaders,
             organizationPeopleMatch[1]!,
+          );
+        } else if (organizationGroupsMatch && method === "POST") {
+          response = await handleCreateOrganizationGroup(
+            req,
+            baseHeaders,
+            organizationGroupsMatch[1]!,
+          );
+        } else if (organizationGroupMembersMatch && method === "POST") {
+          response = await handleOrganizationGroupMember(
+            req,
+            baseHeaders,
+            organizationGroupMembersMatch[1]!,
+            organizationGroupMembersMatch[2]!,
+            null,
+          );
+        } else if (organizationGroupMemberMatch && method === "DELETE") {
+          response = await handleOrganizationGroupMember(
+            req,
+            baseHeaders,
+            organizationGroupMemberMatch[1]!,
+            organizationGroupMemberMatch[2]!,
+            organizationGroupMemberMatch[3]!,
+          );
+        } else if (workspaceGroupsMatch && method === "POST") {
+          response = await handleBinderGroup(
+            req,
+            baseHeaders,
+            workspaceGroupsMatch[1]!,
+            workspaceGroupsMatch[2]!,
+            null,
+          );
+        } else if (workspaceGroupMatch && method === "DELETE") {
+          response = await handleBinderGroup(
+            req,
+            baseHeaders,
+            workspaceGroupMatch[1]!,
+            workspaceGroupMatch[2]!,
+            workspaceGroupMatch[3]!,
           );
         } else if (createBinderMatch && method === "GET") {
           response = await handleListOrganizationWorkspaces(

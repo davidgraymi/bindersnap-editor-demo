@@ -88,3 +88,59 @@ export function describeTeamAccess(access: string): string {
       return "No access";
   }
 }
+
+/**
+ * The levels a group can be created at, in the product's words.
+ *
+ * **Admin, not "Manager".** "Admin" is already the word in Gitea, in the API
+ * and in the code, and inventing a second word for the same thing means every
+ * conversation between a customer, a support reply and a log line has to be
+ * translated. A word that is merely imperfect beats a word that is unique to
+ * us — invent vocabulary only where the underlying word is actively
+ * misleading, which exactly one of these three is.
+ *
+ * **Editor, not "Author" — the one invented word, and why it earns it.** An
+ * author is the person who *wrote* something: a claim about history. This role
+ * is about who may write *next*, and a compliance manager reading
+ * "Author: Priya" on a policy Priya never touched would reasonably conclude she
+ * drafted it. On a product whose output is evidence, a role label that reads as
+ * a false attribution is the one place inventing a word costs less than keeping
+ * ours.
+ */
+export const GROUP_LEVELS = [
+  {
+    value: "reviewer",
+    label: "Reviewer",
+    // Said on the form, because the free tier depends on it being understood
+    // without a footnote.
+    note: "Reads, comments, approves or asks for changes. Free.",
+  },
+  {
+    value: "editor",
+    label: "Editor",
+    note: "Writes policies and publishes approved versions. Uses a seat.",
+  },
+  {
+    value: "admin",
+    label: "Admin",
+    note: "Runs the binders it is added to: their rules, people and folders.",
+  },
+] as const;
+
+/** What level a group holds, read back from the access Gitea reports. */
+export function groupLevelLabel(access: string): string {
+  switch (access) {
+    // `owner` is what Gitea reports for the built-in Owners team on every
+    // repository the organization holds. It is a level above admin, and a
+    // switch that did not know it called the org's owner "No access".
+    case "owner":
+    case "admin":
+      return "Admin";
+    case "write":
+      return "Editor";
+    case "read":
+      return "Reviewer";
+    default:
+      return "No access";
+  }
+}

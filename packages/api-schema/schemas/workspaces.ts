@@ -516,8 +516,67 @@ export const OrganizationGroupSchema = z.object({
   /** `owner`, `admin`, `write`, `read` or `none` on `repo.code`. */
   access: z.string(),
   memberCount: z.number(),
+  /**
+   * Who is in it. Carried on the group rather than fetched per group when
+   * somebody opens one: the handler has already read every team's membership
+   * to answer "which groups is this person in", so sending it costs nothing and
+   * saves a call per group the moment anybody manages one.
+   */
+  members: z.array(WorkspacePersonSchema),
 });
 export type OrganizationGroup = z.infer<typeof OrganizationGroupSchema>;
+
+/** Naming a group and levelling it, which is one act. */
+export const CreateOrganizationGroupRequestSchema = z.object({
+  /** What the customer typed. Slugified into the handle Gitea stores. */
+  name: z.string(),
+  /** `admin`, `editor` or `reviewer`. Fixed at creation — see the group. */
+  level: z.string(),
+});
+export type CreateOrganizationGroupRequest = z.infer<
+  typeof CreateOrganizationGroupRequestSchema
+>;
+
+export const CreatedOrganizationGroupPayloadSchema = z.object({
+  organization: z.string(),
+  group: OrganizationGroupSchema,
+});
+export type CreatedOrganizationGroupPayload = z.infer<
+  typeof CreatedOrganizationGroupPayloadSchema
+>;
+
+export const OrganizationGroupMemberRequestSchema = z.object({
+  username: z.string(),
+});
+export type OrganizationGroupMemberRequest = z.infer<
+  typeof OrganizationGroupMemberRequestSchema
+>;
+
+/**
+ * Composing a group onto a binder, and what that did to the approvals
+ * whitelist.
+ *
+ * The whitelist comes back because it is the half of the act that fails
+ * silently: `enable_approvals_whitelist` is what makes a free reviewer's
+ * approval count, and a team missing from the list has its members' approvals
+ * recorded, displayed, and satisfying nothing. Returning it makes the recompute
+ * assertable rather than assumed.
+ */
+export const BinderGroupRequestSchema = z.object({
+  /** The group's handle, as Gitea holds it. */
+  group: z.string(),
+});
+export type BinderGroupRequest = z.infer<typeof BinderGroupRequestSchema>;
+
+export const BinderGroupsPayloadSchema = z.object({
+  organization: z.string(),
+  workspace: z.string(),
+  /** Every team granted onto this binder, after the change. */
+  teams: z.array(WorkspaceTeamSchema),
+  /** Every team whose members' approvals now count. */
+  approvalsWhitelist: z.array(z.string()),
+});
+export type BinderGroupsPayload = z.infer<typeof BinderGroupsPayloadSchema>;
 
 export const OrganizationPeoplePayloadSchema = z.object({
   organization: z.string(),

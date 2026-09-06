@@ -8991,6 +8991,24 @@
                           },
                           "memberCount": {
                             "type": "number"
+                          },
+                          "members": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "login": {
+                                  "type": "string"
+                                },
+                                "fullName": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "login",
+                                "fullName"
+                              ]
+                            }
                           }
                         },
                         "required": [
@@ -8998,7 +9016,8 @@
                           "name",
                           "description",
                           "access",
-                          "memberCount"
+                          "memberCount",
+                          "members"
                         ]
                       }
                     },
@@ -9011,6 +9030,631 @@
                     "people",
                     "groups",
                     "canManage"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/orgs/{org}/groups": {
+      "post": {
+        "operationId": "createOrganizationGroup",
+        "tags": [
+          "organizations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "level": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "level"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The group, granted onto nothing yet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "group": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "number"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "access": {
+                          "type": "string"
+                        },
+                        "memberCount": {
+                          "type": "number"
+                        },
+                        "members": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "login": {
+                                "type": "string"
+                              },
+                              "fullName": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "login",
+                              "fullName"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "description",
+                        "access",
+                        "memberCount",
+                        "members"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "group"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/orgs/{org}/groups/{group}/members": {
+      "post": {
+        "operationId": "addOrganizationGroupMember",
+        "tags": [
+          "organizations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "group",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "username"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The organization's people and groups, after the change",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "people": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "login": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "isOwner": {
+                            "type": "boolean"
+                          },
+                          "teams": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "login",
+                          "fullName",
+                          "isOwner",
+                          "teams"
+                        ]
+                      }
+                    },
+                    "groups": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "number"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "access": {
+                            "type": "string"
+                          },
+                          "memberCount": {
+                            "type": "number"
+                          },
+                          "members": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "login": {
+                                  "type": "string"
+                                },
+                                "fullName": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "login",
+                                "fullName"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "description",
+                          "access",
+                          "memberCount",
+                          "members"
+                        ]
+                      }
+                    },
+                    "canManage": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "people",
+                    "groups",
+                    "canManage"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/orgs/{org}/groups/{group}/members/{username}": {
+      "delete": {
+        "operationId": "removeOrganizationGroupMember",
+        "tags": [
+          "organizations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "group",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "username",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The organization's people and groups, after the change",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "people": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "login": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "isOwner": {
+                            "type": "boolean"
+                          },
+                          "teams": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "login",
+                          "fullName",
+                          "isOwner",
+                          "teams"
+                        ]
+                      }
+                    },
+                    "groups": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "number"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "access": {
+                            "type": "string"
+                          },
+                          "memberCount": {
+                            "type": "number"
+                          },
+                          "members": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "login": {
+                                  "type": "string"
+                                },
+                                "fullName": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "login",
+                                "fullName"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "description",
+                          "access",
+                          "memberCount",
+                          "members"
+                        ]
+                      }
+                    },
+                    "canManage": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "people",
+                    "groups",
+                    "canManage"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/groups": {
+      "post": {
+        "operationId": "grantBinderGroup",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "group": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "group"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The teams granted here, and the approvals whitelist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "teams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "number"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "access": {
+                            "type": "string"
+                          },
+                          "members": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "login": {
+                                  "type": "string"
+                                },
+                                "fullName": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "login",
+                                "fullName"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "description",
+                          "access",
+                          "members"
+                        ]
+                      }
+                    },
+                    "approvalsWhitelist": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "workspace",
+                    "teams",
+                    "approvalsWhitelist"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/groups/{group}": {
+      "delete": {
+        "operationId": "revokeBinderGroup",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "group",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The teams granted here, and the approvals whitelist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "teams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "number"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "access": {
+                            "type": "string"
+                          },
+                          "members": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "login": {
+                                  "type": "string"
+                                },
+                                "fullName": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "login",
+                                "fullName"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "description",
+                          "access",
+                          "members"
+                        ]
+                      }
+                    },
+                    "approvalsWhitelist": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "workspace",
+                    "teams",
+                    "approvalsWhitelist"
                   ]
                 }
               }

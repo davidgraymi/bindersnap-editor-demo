@@ -1070,3 +1070,89 @@ test("an approval withdrawn by a later request for changes still blocks", async 
 
   expect(pullRequest?.approvalState).toBe("changes_requested");
 });
+
+test("a stale approval does not make a change approved", async () => {
+  // The publish gate and the approval meter were answering the same question
+  // by two different rules. `countApprovals` has always skipped stale reviews,
+  // because Gitea does at merge time — an approval overtaken by a new upload is
+  // not a signature on the version being published. `approvalState` did not, so
+  // a change read as approved beside an approval count of zero, and offered a
+  // publish that Gitea refuses with "does not have enough approvals". That is
+  // the same shape as the `isRejected` defect: two rules for one question.
+  const handlers = buildDefaultHandlers(
+    [
+      {
+        number: 33,
+        title: "Approved, then a new version landed",
+        head: { ref: "feature/overtaken", label: "" },
+        state: "open",
+      },
+    ],
+    {},
+  );
+
+  handlers.GET["/repos/{owner}/{repo}/pulls/{index}/reviews"] = () => [
+    {
+      id: 1,
+      state: "APPROVED",
+      body: "Looks right.",
+      user: { login: "bob" },
+      submitted_at: "2026-08-21T07:38:00Z",
+      stale: true,
+    },
+  ];
+
+  const { client } = createMockClient(handlers);
+  const { getPullRequestForBranch } = await import("./pullRequests");
+
+  const pullRequest = await getPullRequestForBranch({
+    client,
+    owner: "alice",
+    repo: "quarterly-report",
+    branch: "feature/overtaken",
+  });
+
+  expect(pullRequest?.approvalState).toBe("in_review");
+});
+
+test("a stale request for changes still blocks the change", async () => {
+  // Deliberately not symmetrical with the case above, and the asymmetry is the
+  // safe direction. `dismiss_stale_approvals` dismisses approvals on a push and
+  // leaves rejections standing, so a rejection Gitea marks stale is still a
+  // rejection Gitea blocks on. Showing it as cleared would be the one error
+  // that lets something reach the record.
+  const handlers = buildDefaultHandlers(
+    [
+      {
+        number: 34,
+        title: "Rejected, then a new version landed",
+        head: { ref: "feature/still-rejected", label: "" },
+        state: "open",
+      },
+    ],
+    {},
+  );
+
+  handlers.GET["/repos/{owner}/{repo}/pulls/{index}/reviews"] = () => [
+    {
+      id: 1,
+      state: "REQUEST_CHANGES",
+      body: "Section 4.2 is still wrong.",
+      user: { login: "bob" },
+      submitted_at: "2026-08-21T07:38:00Z",
+      stale: true,
+    },
+  ];
+
+  const { client } = createMockClient(handlers);
+  const { getPullRequestForBranch } = await import("./pullRequests");
+
+  const pullRequest = await getPullRequestForBranch({
+    client,
+    owner: "alice",
+    repo: "quarterly-report",
+    branch: "feature/still-rejected",
+  });
+
+  expect(pullRequest?.approvalState).toBe("changes_requested");
+});

@@ -42,6 +42,11 @@ import {
 import {
   PublishedWorkspaceChangePayloadSchema,
   WorkspaceChangeListPayloadSchema,
+  BinderGroupRequestSchema,
+  BinderGroupsPayloadSchema,
+  CreateOrganizationGroupRequestSchema,
+  CreatedOrganizationGroupPayloadSchema,
+  OrganizationGroupMemberRequestSchema,
   OrganizationPeoplePayloadSchema,
   WorkspaceHistoryPayloadSchema,
   WorkspaceSettingsPayloadSchema,
@@ -848,6 +853,124 @@ registry.registerPath({
       description: "Who is in this organization, and the groups it has",
       content: {
         "application/json": { schema: OrganizationPeoplePayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/orgs/{org}/groups",
+  operationId: "createOrganizationGroup",
+  tags: ["organizations"],
+  request: {
+    params: z.object({ org: z.string() }),
+    body: {
+      required: true,
+      content: {
+        "application/json": { schema: CreateOrganizationGroupRequestSchema },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "The group, granted onto nothing yet",
+      content: {
+        "application/json": {
+          schema: CreatedOrganizationGroupPayloadSchema,
+        },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/orgs/{org}/groups/{group}/members",
+  operationId: "addOrganizationGroupMember",
+  tags: ["organizations"],
+  request: {
+    params: z.object({ org: z.string(), group: z.string() }),
+    body: {
+      required: true,
+      content: {
+        "application/json": { schema: OrganizationGroupMemberRequestSchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "The organization's people and groups, after the change",
+      content: {
+        "application/json": { schema: OrganizationPeoplePayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "delete",
+  path: "/api/app/orgs/{org}/groups/{group}/members/{username}",
+  operationId: "removeOrganizationGroupMember",
+  tags: ["organizations"],
+  request: {
+    params: z.object({
+      org: z.string(),
+      group: z.string(),
+      username: z.string(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "The organization's people and groups, after the change",
+      content: {
+        "application/json": { schema: OrganizationPeoplePayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/binders/{org}/{binder}/groups",
+  operationId: "grantBinderGroup",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({ org: z.string(), binder: z.string() }),
+    body: {
+      required: true,
+      content: {
+        "application/json": { schema: BinderGroupRequestSchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "The teams granted here, and the approvals whitelist",
+      content: {
+        "application/json": { schema: BinderGroupsPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "delete",
+  path: "/api/app/binders/{org}/{binder}/groups/{group}",
+  operationId: "revokeBinderGroup",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({
+      org: z.string(),
+      binder: z.string(),
+      group: z.string(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "The teams granted here, and the approvals whitelist",
+      content: {
+        "application/json": { schema: BinderGroupsPayloadSchema },
       },
     },
   },

@@ -4,6 +4,7 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
+import type { GetOrganizationPeople200GroupsItemMembersItem } from './getOrganizationPeople200GroupsItemMembersItem.ts';
 
 export type GetOrganizationPeople200GroupsItem = {
   id: number;
@@ -11,4 +12,5 @@ export type GetOrganizationPeople200GroupsItem = {
   description: string;
   access: string;
   memberCount: number;
+  members: GetOrganizationPeople200GroupsItemMembersItem[];
 };
