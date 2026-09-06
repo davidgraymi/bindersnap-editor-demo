@@ -45,12 +45,16 @@ import {
   toDocumentEntry,
 } from "./gitea-client/workspaceDocuments";
 import {
+  accessCostsSeat,
   addTeamMember,
   createOrganizationGroup,
+  createWorkspaceRoleTeam,
+  ensureStaffTeam,
   findOrganization,
   findOrganizationTeam,
   grantTeamOnRepo,
   isGroupLevel,
+  isHigherAccess,
   isOrganizationOwnerDirect,
   listOrganizationMembers,
   listOrganizationOwners,
@@ -62,6 +66,9 @@ import {
   removeTeamMember,
   revokeTeamFromRepo,
   STAFF_TEAM_NAME,
+  WORKSPACE_ROLES,
+  workspaceTeamName,
+  type WorkspaceRole,
 } from "./gitea-client/orgs";
 import { createPrivilegedGiteaClient } from "./privileged-client";
 import type Stripe from "stripe";
@@ -97,7 +104,10 @@ import {
   toVersionReviews,
 } from "./document-history";
 import type { ClosedChange } from "../../packages/api-schema/schemas/documents";
-import type { OrganizationPeoplePayload } from "../../packages/api-schema/schemas/workspaces";
+import type {
+  BinderPeoplePayload,
+  OrganizationPeoplePayload,
+} from "../../packages/api-schema/schemas/workspaces";
 import {
   addRepoCollaborator,
   bootstrapEmptyMainBranch,
@@ -6011,6 +6021,7 @@ async function handleOrganizationGroupMember(
     }
 
     if (removing === null) {
+      await ensureOrganizationMembership({ client, org: orgName, username });
       await addTeamMember({ client, teamId: team.id, username });
     } else {
       await removeTeamMember({ client, teamId: team.id, username });
@@ -6032,6 +6043,490 @@ async function handleOrganizationGroupMember(
       err,
       baseHeaders,
       "Unable to change who is in the group.",
+    );
+  }
+}
+
+/**
+ * Put somebody in the organization, which means putting them in `staff`.
+ *
+ * **`staff` is what "everyone at Riverside Health can read this binder" is made
+ * of**, and that promise is decoration unless the organization's members are
+ * actually in it. Gitea makes team membership imply org membership, so adding
+ * somebody to a binder's role team or to a group already lets them in — but it
+ * lets them in *around* `staff`, and the failure is silent and unfindable: a
+ * person added to Clinical as an editor cannot see HR, which is open to the
+ * whole organization, and no screen can say why.
+ *
+ * So every path that admits somebody goes through here first. Before the grant
+ * that prompted it, deliberately: if this fails the request fails having done
+ * nothing, and if the grant afterwards fails they are a member who can read the
+ * open binders — which is the Member rung, and a safe place to stop.
+ *
+ * Leaving is not the mirror of this. Taking somebody out of a binder or a group
+ * leaves them in the organization; leaving the organization is its own act,
+ * with its own confirmation.
+ */
+async function ensureOrganizationMembership(params: {
+  client: GiteaClient;
+  org: string;
+  username: string;
+}): Promise<void> {
+  const { client, org, username } = params;
+  const staff = await ensureStaffTeam({ client, org });
+  await addTeamMember({ client, teamId: staff.id, username });
+}
+
+/**
+ * The three levels, and the role team each one lives in.
+ *
+ * The same three a group is created at, deliberately: a person added directly
+ * and a group adopted onto the binder have to mean the same thing, or "Priya is
+ * an editor here" would depend on how she got here.
+ */
+const BINDER_LEVEL_ROLES: Record<string, WorkspaceRole> = {
+  admin: "admins",
+  editor: "authors",
+  reviewer: "reviewers",
+};
+
+/** Every team name that is this binder's own, rather than an adopted group. */
+function roleTeamNames(workspace: string): Set<string> {
+  return new Set(
+    WORKSPACE_ROLES.map((role) => workspaceTeamName(workspace, role)),
+  );
+}
+
+/**
+ * Who can act in this binder, one row per person.
+ *
+ * **Teams-first, and a bounded number of calls**: the teams granted here, then
+ * each team's membership. The obvious alternative —
+ * `GET /repos/{owner}/{repo}/collaborators/{user}/permission`, once per person —
+ * is both a call per member and *wrong*: team access granted per unit lands in a
+ * field that endpoint never reads, so it answers `none` for somebody who can
+ * push. That has bitten twice.
+ *
+ * Somebody in two teams is shown at the higher of the two, computed the way
+ * seats are ranked — `owner` is a level and it is above `admin`, which is the
+ * trap ADR 0004 warns about and which this page's ancestor fell into.
+ *
+ * A read, so it is never gated.
+ */
+async function handleBinderPeople(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { client, session } = auth;
+
+  try {
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    return json(
+      200,
+      await readBinderPeople(client, orgName, workspaceName),
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to read a binder's people", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to read the people.");
+  }
+}
+
+/**
+ * The binder's membership, assembled once.
+ *
+ * Pulled out because every mutation on this tab answers with the tab again:
+ * promoting somebody changes their row, the seat count above it, and possibly
+ * the groups list, and returning the whole thing is what stops the browser
+ * reassembling a view of the world from a success message.
+ */
+async function readBinderPeople(
+  client: GiteaClient,
+  orgName: string,
+  workspaceName: string,
+): Promise<BinderPeoplePayload> {
+  const [teams, access, organizationMembers] = await Promise.all([
+    // A member without admin on the binder cannot list its teams. That costs
+    // them the people, not the page.
+    listRepoTeams({ client, owner: orgName, repo: workspaceName }).catch(
+      () => [],
+    ),
+    readWorkspaceAccess({ client, org: orgName, name: workspaceName }),
+    listOrganizationMembers({ client, org: orgName }).catch(() => []),
+  ]);
+
+  const withMembers = await Promise.all(
+    teams.map(async (team) => ({
+      team,
+      members: await listTeamMembers({ client, teamId: team.id }).catch(
+        () => [],
+      ),
+    })),
+  );
+
+  const ownTeams = roleTeamNames(workspaceName);
+
+  interface Row {
+    login: string;
+    fullName: string;
+    access: string;
+    through: string;
+    individual: boolean;
+    /** Only the shared groups — this binder's own role teams are bookkeeping. */
+    groups: string[];
+  }
+
+  const byLogin = new Map<string, Row>();
+  for (const { team, members } of withMembers) {
+    for (const member of members) {
+      const key = member.login.toLowerCase();
+      const held = byLogin.get(key);
+
+      if (!held) {
+        byLogin.set(key, {
+          login: member.login,
+          fullName: member.fullName,
+          access: team.codeAccess,
+          through: team.name,
+          individual: ownTeams.has(team.name),
+          groups: ownTeams.has(team.name) ? [] : [team.name],
+        });
+        continue;
+      }
+
+      if (!ownTeams.has(team.name)) held.groups.push(team.name);
+      if (isHigherAccess(team.codeAccess, held.access)) {
+        held.access = team.codeAccess;
+        held.through = team.name;
+        held.individual = ownTeams.has(team.name);
+      }
+    }
+  }
+
+  const people = [...byLogin.values()]
+    .map((row) => ({
+      ...row,
+      groups: row.groups.sort((left, right) => left.localeCompare(right)),
+      seat: accessCostsSeat(row.access),
+    }))
+    // The people who can change things first, then by name — the list answers
+    // "who runs this" before it answers "who is here".
+    .sort((left, right) => {
+      if (left.access !== right.access) {
+        return isHigherAccess(left.access, right.access) ? -1 : 1;
+      }
+      return left.login.localeCompare(right.login);
+    });
+
+  return {
+    organization: orgName,
+    workspace: workspaceName,
+    people,
+    groups: withMembers
+      .map(({ team, members }) => ({
+        id: team.id,
+        name: team.name,
+        description: team.description,
+        access: team.codeAccess,
+        members: members.map((member) => ({
+          login: member.login,
+          fullName: member.fullName,
+        })),
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name)),
+    // Derived, never stored: a copy could disagree with the grant Gitea is the
+    // one enforcing.
+    openToOrganization: teams.some((team) => team.name === STAFF_TEAM_NAME),
+    organizationMembers: organizationMembers.map((member) => ({
+      login: member.login,
+      fullName: member.fullName,
+    })),
+    canManage: access.admin,
+  };
+}
+
+/**
+ * Add somebody to this binder at a level, or move them between its levels.
+ *
+ * **The role team is created on first use, not at provisioning.** A binder that
+ * only ever adopts groups never makes one, so an organization with twenty
+ * binders and three recurring groups holds five to eight teams rather than
+ * sixty-two — and each one exists because somebody's action created it. The
+ * lazy team is the same object `ROLE_TEAM_OPTIONS` has always described; only
+ * the moment it is made has changed.
+ *
+ * **A role that comes from a group is refused, and the refusal says why.** A
+ * group is one object across every binder it is granted onto, so changing
+ * Aisha's role on this row would change it everywhere the group reaches. That
+ * is a real constraint rather than a policy of ours, and the honest surface for
+ * it is a sentence naming the group — which is also the answer to "why can she
+ * approve here", on the row that raised the question.
+ */
+async function handleBinderPerson(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+  /** The person being moved, when the URL names one rather than the body. */
+  target: string | null,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { client, session } = auth;
+
+  try {
+    const body = (await req.json().catch(() => null)) as {
+      username?: unknown;
+      level?: unknown;
+    } | null;
+
+    const username =
+      target ??
+      (typeof body?.username === "string" ? body.username.trim() : "");
+    if (username === "") {
+      return json(400, { error: "Name somebody to add." }, baseHeaders);
+    }
+
+    const level = typeof body?.level === "string" ? body.level : "";
+    const role = BINDER_LEVEL_ROLES[level];
+    if (!role) {
+      return json(
+        400,
+        {
+          error: "Somebody is added at one level: admin, editor or reviewer.",
+        },
+        baseHeaders,
+      );
+    }
+
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    // Only a move needs the refusal. Adding somebody who is already here
+    // through a group is the escape hatch the UX calls for — one person in a
+    // group needing more in this one binder — and it is an *addition*, not a
+    // change to the group.
+    if (target !== null) {
+      const refusal = await refuseGroupDerivedRole({
+        client,
+        org: orgName,
+        workspace: workspaceName,
+        username,
+      });
+      if (refusal) return json(409, { error: refusal }, baseHeaders);
+    }
+
+    await ensureOrganizationMembership({
+      client,
+      org: orgName,
+      username,
+    });
+
+    // Leave whatever role they held here first, so a move cannot end with them
+    // in two of this binder's teams and their effective access decided by
+    // whichever ranks higher.
+    await removeFromRoleTeams({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      username,
+      except: role,
+    });
+
+    const team = await createWorkspaceRoleTeam({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      role,
+    });
+    // Idempotent, and needed on the first use of a team that already existed
+    // but had been revoked. Before the membership, so a failure leaves the
+    // person out rather than in a team that reaches nothing.
+    await grantTeamOnRepo({
+      client,
+      teamId: team.id,
+      org: orgName,
+      repo: workspaceName,
+    });
+    await addTeamMember({ client, teamId: team.id, username });
+
+    await recomputeApprovalsWhitelist({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+    });
+
+    return json(
+      200,
+      await readBinderPeople(client, orgName, workspaceName),
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to change who can act in a binder", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to change who can act in this binder.",
+    );
+  }
+}
+
+/**
+ * Take somebody out of this binder.
+ *
+ * Only out of *this binder's own* role teams. Removing them from a group would
+ * change every binder that group reaches, which is not what the button on this
+ * row says — so if that is the only thing holding them here, it is refused with
+ * the group named and the cost of the alternative stated.
+ */
+async function handleRemoveBinderPerson(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+  username: string,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { client, session } = auth;
+
+  try {
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    const refusal = await refuseGroupDerivedRole({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      username,
+    });
+    if (refusal) return json(409, { error: refusal }, baseHeaders);
+
+    await removeFromRoleTeams({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      username,
+      except: null,
+    });
+
+    return json(
+      200,
+      await readBinderPeople(client, orgName, workspaceName),
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to remove somebody from a binder", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to take them out of this binder.",
+    );
+  }
+}
+
+/**
+ * The sentence to refuse with when somebody's access here is not ours to move.
+ *
+ * `null` when they hold an individual role in this binder, which is the case
+ * that can be changed without touching another binder.
+ */
+async function refuseGroupDerivedRole(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  username: string;
+}): Promise<string | null> {
+  const { client, org, workspace, username } = params;
+  const ownTeams = roleTeamNames(workspace);
+  const login = username.toLowerCase();
+
+  const teams = await listRepoTeams({ client, owner: org, repo: workspace });
+  const holding: string[] = [];
+
+  for (const team of teams) {
+    const members = await listTeamMembers({ client, teamId: team.id }).catch(
+      () => [],
+    );
+    if (!members.some((member) => member.login.toLowerCase() === login)) {
+      continue;
+    }
+    if (ownTeams.has(team.name)) return null;
+    holding.push(team.name);
+  }
+
+  if (holding.length === 0) {
+    return `${username} is not in this binder.`;
+  }
+
+  const named = holding.join(", ");
+  const reach = holding.length === 1 ? "that group" : "those groups";
+  return `${username} is here through ${named}. A group carries one level across every binder it is added to, so changing it here would change it everywhere — change ${reach} on the organization, or add ${username} to this binder individually as well.`;
+}
+
+/** Out of this binder's own role teams, leaving groups exactly as they are. */
+async function removeFromRoleTeams(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  username: string;
+  /** A role to leave alone, so a move does not undo the half it just did. */
+  except: WorkspaceRole | null;
+}): Promise<void> {
+  const { client, org, workspace, username, except } = params;
+
+  const teams = await listOrganizationTeams({ client, org });
+  for (const role of WORKSPACE_ROLES) {
+    if (role === except) continue;
+    const name = workspaceTeamName(workspace, role);
+    const team = teams.find((candidate) => candidate.name === name);
+    if (!team) continue;
+    // They may well not be in it; Gitea answers 404 and that is not a failure
+    // of this request.
+    await removeTeamMember({ client, teamId: team.id, username }).catch(
+      () => undefined,
     );
   }
 }
@@ -7719,6 +8214,12 @@ export function createApiServer() {
         const organizationGroupMemberMatch = pathname.match(
           /^\/api\/app\/orgs\/([^/]+)\/groups\/([^/]+)\/members\/([^/]+)$/,
         );
+        const workspacePeopleMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/people$/,
+        );
+        const workspacePersonMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/people\/([^/]+)$/,
+        );
         const workspaceGroupsMatch = pathname.match(
           /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/groups$/,
         );
@@ -7767,6 +8268,37 @@ export function createApiServer() {
             organizationGroupMemberMatch[1]!,
             organizationGroupMemberMatch[2]!,
             organizationGroupMemberMatch[3]!,
+          );
+        } else if (workspacePeopleMatch && method === "GET") {
+          response = await handleBinderPeople(
+            req,
+            baseHeaders,
+            workspacePeopleMatch[1]!,
+            workspacePeopleMatch[2]!,
+          );
+        } else if (workspacePeopleMatch && method === "POST") {
+          response = await handleBinderPerson(
+            req,
+            baseHeaders,
+            workspacePeopleMatch[1]!,
+            workspacePeopleMatch[2]!,
+            null,
+          );
+        } else if (workspacePersonMatch && method === "POST") {
+          response = await handleBinderPerson(
+            req,
+            baseHeaders,
+            workspacePersonMatch[1]!,
+            workspacePersonMatch[2]!,
+            workspacePersonMatch[3]!,
+          );
+        } else if (workspacePersonMatch && method === "DELETE") {
+          response = await handleRemoveBinderPerson(
+            req,
+            baseHeaders,
+            workspacePersonMatch[1]!,
+            workspacePersonMatch[2]!,
+            workspacePersonMatch[3]!,
           );
         } else if (workspaceGroupsMatch && method === "POST") {
           response = await handleBinderGroup(

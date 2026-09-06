@@ -5,6 +5,8 @@
  * OpenAPI spec version: 1.0.0
  */
 import type {
+  AddBinderPerson200,
+  AddBinderPersonBody,
   CreateBinder201,
   CreateBinderBody,
   CreateBinderChangeDiscussion201,
@@ -16,6 +18,7 @@ import type {
   GetBinderChange200,
   GetBinderDocument200,
   GetBinderHistory200,
+  GetBinderPeople200,
   GetBinderSettings200,
   GrantBinderGroup200,
   GrantBinderGroupBody,
@@ -29,6 +32,7 @@ import type {
   ListBinders200,
   ListOrganizationBinders200,
   PublishBinderChange200,
+  RemoveBinderPerson200,
   ReplyToBinderChangeDiscussion201,
   ReplyToBinderChangeDiscussionBody,
   ResolveBinderChangeDiscussion200,
@@ -38,6 +42,8 @@ import type {
   RevokeBinderGroup200,
   SetBinderDiscussionCommentReaction200,
   SetBinderDiscussionCommentReactionBody,
+  SetBinderPersonLevel200,
+  SetBinderPersonLevelBody,
   UpdateBinderChange200,
   UpdateBinderChangeAssignments200,
   UpdateBinderChangeAssignmentsBody
@@ -213,6 +219,148 @@ export const listBinderChanges = async (org: string,
   {
     ...options,
     method: 'GET'
+
+
+  }
+);}
+
+
+export type getBinderPeopleResponse200 = {
+  data: GetBinderPeople200
+  status: 200
+}
+
+export type getBinderPeopleResponseSuccess = (getBinderPeopleResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getBinderPeopleResponse = (getBinderPeopleResponseSuccess)
+
+export const getGetBinderPeopleUrl = (org: string,
+    binder: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/people`
+}
+
+export const getBinderPeople = async (org: string,
+    binder: string, options?: Parameters<typeof customFetch>[1]): Promise<getBinderPeopleResponse> => {
+
+  return customFetch<getBinderPeopleResponse>(getGetBinderPeopleUrl(org,binder),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type addBinderPersonResponse200 = {
+  data: AddBinderPerson200
+  status: 200
+}
+
+export type addBinderPersonResponseSuccess = (addBinderPersonResponse200) & {
+  headers: Headers;
+};
+;
+
+export type addBinderPersonResponse = (addBinderPersonResponseSuccess)
+
+export const getAddBinderPersonUrl = (org: string,
+    binder: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/people`
+}
+
+export const addBinderPerson = async (org: string,
+    binder: string,
+    addBinderPersonBody: AddBinderPersonBody, options?: Parameters<typeof customFetch>[1]): Promise<addBinderPersonResponse> => {
+
+  return customFetch<addBinderPersonResponse>(getAddBinderPersonUrl(org,binder),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(addBinderPersonBody)
+  }
+);}
+
+
+export type setBinderPersonLevelResponse200 = {
+  data: SetBinderPersonLevel200
+  status: 200
+}
+
+export type setBinderPersonLevelResponseSuccess = (setBinderPersonLevelResponse200) & {
+  headers: Headers;
+};
+;
+
+export type setBinderPersonLevelResponse = (setBinderPersonLevelResponseSuccess)
+
+export const getSetBinderPersonLevelUrl = (org: string,
+    binder: string,
+    username: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/people/${username}`
+}
+
+export const setBinderPersonLevel = async (org: string,
+    binder: string,
+    username: string,
+    setBinderPersonLevelBody: SetBinderPersonLevelBody, options?: Parameters<typeof customFetch>[1]): Promise<setBinderPersonLevelResponse> => {
+
+  return customFetch<setBinderPersonLevelResponse>(getSetBinderPersonLevelUrl(org,binder,username),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(setBinderPersonLevelBody)
+  }
+);}
+
+
+export type removeBinderPersonResponse200 = {
+  data: RemoveBinderPerson200
+  status: 200
+}
+
+export type removeBinderPersonResponseSuccess = (removeBinderPersonResponse200) & {
+  headers: Headers;
+};
+;
+
+export type removeBinderPersonResponse = (removeBinderPersonResponseSuccess)
+
+export const getRemoveBinderPersonUrl = (org: string,
+    binder: string,
+    username: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/people/${username}`
+}
+
+export const removeBinderPerson = async (org: string,
+    binder: string,
+    username: string, options?: Parameters<typeof customFetch>[1]): Promise<removeBinderPersonResponse> => {
+
+  return customFetch<removeBinderPersonResponse>(getRemoveBinderPersonUrl(org,binder,username),
+  {
+    ...options,
+    method: 'DELETE'
 
 
   }

@@ -13,6 +13,7 @@ import * as BindersClient from "../../packages/api-client/workspaces/workspaces"
 import type {
   CreatedWorkspaceDocumentPayload,
   BinderGroupsPayload,
+  BinderPeoplePayload,
   CreatedOrganizationGroupPayload,
   OrganizationPeoplePayload,
   PublishedWorkspaceChangePayload,
@@ -996,6 +997,70 @@ export async function revokeBinderGroup(
   group: string,
 ): Promise<BinderGroupsPayload> {
   const response = await BindersClient.revokeBinderGroup(org, binder, group);
+  return response.data;
+}
+
+/** Who can act in this binder, one row per person. */
+export async function fetchBinderPeople(
+  org: string,
+  binder: string,
+): Promise<BinderPeoplePayload> {
+  const response = await BindersClient.getBinderPeople(org, binder);
+  return response.data;
+}
+
+/**
+ * Add somebody to this binder at a level.
+ *
+ * Also the escape hatch for one person in a group who needs more here: an
+ * individual grant sits alongside the group rather than changing it, so it
+ * touches this binder and no other.
+ */
+export async function addBinderPerson(
+  org: string,
+  binder: string,
+  username: string,
+  level: string,
+): Promise<BinderPeoplePayload> {
+  const response = await BindersClient.addBinderPerson(org, binder, {
+    username,
+    level,
+  });
+  return response.data;
+}
+
+/**
+ * Move somebody between this binder's levels.
+ *
+ * Refused with a sentence when their access comes from a shared group — that
+ * group is one object across every binder it reaches, so the change is not this
+ * binder's to make.
+ */
+export async function setBinderPersonLevel(
+  org: string,
+  binder: string,
+  username: string,
+  level: string,
+): Promise<BinderPeoplePayload> {
+  const response = await BindersClient.setBinderPersonLevel(
+    org,
+    binder,
+    username,
+    { username, level },
+  );
+  return response.data;
+}
+
+export async function removeBinderPerson(
+  org: string,
+  binder: string,
+  username: string,
+): Promise<BinderPeoplePayload> {
+  const response = await BindersClient.removeBinderPerson(
+    org,
+    binder,
+    username,
+  );
   return response.data;
 }
 

@@ -578,6 +578,75 @@ export const BinderGroupRequestSchema = z.object({
 });
 export type BinderGroupRequest = z.infer<typeof BinderGroupRequestSchema>;
 
+/**
+ * One person in a binder, and where their access comes from.
+ *
+ * **One row per person, not a matrix and not a list per role.** The roles are a
+ * ladder Gitea enforces as one, so a grid of checkboxes would let somebody try
+ * "can approve but cannot read", which is not a thing and the screen would have
+ * to refuse. And grouping by role answers "who are the editors" when the
+ * question a compliance manager actually asks is "what can Jane do" — which one
+ * row answers by being read.
+ *
+ * `through` is the whole reason this is not a simple list. A person here
+ * because they are in a shared group cannot have their role changed on this
+ * binder, because the group is one object across every binder it reaches. The
+ * row names the group instead of offering a control that would have to refuse
+ * — and the consolation is that "why can Aisha approve here" is answered on the
+ * row that raised the question.
+ */
+export const BinderPersonSchema = z.object({
+  login: z.string(),
+  fullName: z.string(),
+  /** Effective access on `repo.code`: `owner`, `admin`, `write` or `read`. */
+  access: z.string(),
+  /** The team that grants it — the highest-ranking one they are in here. */
+  through: z.string(),
+  /**
+   * Whether that team is this binder's own role team, and therefore whether
+   * their role here can be changed without changing another binder.
+   */
+  individual: z.boolean(),
+  /**
+   * The **groups** granted here that they are in — this binder's own role teams
+   * are left out, because naming them would tell the reader that "Priya is in
+   * clinical-authors", which is our bookkeeping rather than an answer to
+   * anything they asked. What is left is the part that explains the row and
+   * reaches other binders.
+   */
+  groups: z.array(z.string()),
+  /** Write or better on `repo.code`, which is what ADR 0004 bills for. */
+  seat: z.boolean(),
+});
+export type BinderPerson = z.infer<typeof BinderPersonSchema>;
+
+export const BinderPeoplePayloadSchema = z.object({
+  organization: z.string(),
+  workspace: z.string(),
+  people: z.array(BinderPersonSchema),
+  /** The teams granted here — the groups half of the same question. */
+  groups: z.array(WorkspaceTeamSchema),
+  /**
+   * Whether the whole organization can read this binder, derived by asking
+   * whether `staff` is granted. Nothing is stored: a copy could disagree with
+   * the grant Gitea is the one enforcing.
+   */
+  openToOrganization: z.boolean(),
+  /** Everyone in the organization, so somebody can be added from a picker. */
+  organizationMembers: z.array(WorkspacePersonSchema),
+  /** Whether this caller may change any of it. */
+  canManage: z.boolean(),
+});
+export type BinderPeoplePayload = z.infer<typeof BinderPeoplePayloadSchema>;
+
+/** Adding somebody to this binder, or moving them between its roles. */
+export const BinderPersonRequestSchema = z.object({
+  username: z.string(),
+  /** `admin`, `editor` or `reviewer` — the same three levels a group has. */
+  level: z.string(),
+});
+export type BinderPersonRequest = z.infer<typeof BinderPersonRequestSchema>;
+
 export const BinderGroupsPayloadSchema = z.object({
   organization: z.string(),
   workspace: z.string(),

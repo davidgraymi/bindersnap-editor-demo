@@ -902,6 +902,30 @@ input {
   gap: 2px;
 }
 
+/* The role control on a person's row. Narrower than the people picker beside
+   it: it holds one of three words, and a full-width select would read as the
+   more important of the two. */
+.org-person > .binder-role-select,
+.org-group-add > .binder-role-select {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 7.5rem;
+  padding: var(--brand-space-2) var(--brand-space-3);
+  font-size: var(--brand-text-ui-sm);
+}
+
+/* Seat or free, on every row. Quiet on purpose — it is a fact, not a status —
+   but present on every row, because "reviewers are free" is a promise somebody
+   comes to this page to check. */
+.binder-seat-chip {
+  padding: 2px var(--brand-space-2);
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-surface-2);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-label);
+  color: var(--bs-text-muted);
+}
+
 /* One tab's worth of a binder. The shell above it owns the page width and
    the header, so a pane only has to space its own contents. */
 .binder-pane {
