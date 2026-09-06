@@ -41,6 +41,10 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
   const [binders, setBinders] = useState<WorkspaceSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  // The form is behind the header's "New binder" rather than always open. It
+  // opens on its own for an organization with no binders, because there the
+  // form *is* the page.
+  const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   // Open, because the common case is a policy manual everybody must be able to
   // read in order to attest to it — and a product that makes the common case a
@@ -93,9 +97,23 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
     <header className="doc-header">
       <div className="doc-header-top">
         <div className="doc-header-identity">
-          <div className="bs-eyebrow">Organization</div>
           <h1 className="doc-header-title">{org}</h1>
         </div>
+
+        {/* The one coral element on this page, and the same place the binder
+            puts "Add a policy". The form it opens used to sit above the list
+            permanently, which made the page read as a settings screen for
+            something that has not started yet — the list is the answer to
+            "is my organization in good shape", so the list comes first. */}
+        {tab === "binders" ? (
+          <button
+            className={`doc-header-submit${creating ? " doc-header-submit--quiet" : ""}`}
+            type="button"
+            onClick={() => setCreating((open) => !open)}
+          >
+            {creating ? "Cancel" : "New binder"}
+          </button>
+        ) : null}
       </div>
 
       <nav className="doc-tabs" role="tablist" aria-label="Organization">
@@ -140,95 +158,103 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
     <section className="docw-page">
       {header}
 
-      <form
-        className="app-form"
-        onSubmit={async (event) => {
-          event.preventDefault();
-          const name = newName.trim();
-          if (name === "" || isCreating) return;
+      {creating ? (
+        <form
+          className="app-form org-new-binder"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            const name = newName.trim();
+            if (name === "" || isCreating) return;
 
-          setIsCreating(true);
-          setCreateError(null);
-          try {
-            const created = await createBinder(
-              org,
-              name,
-              undefined,
-              openToOrganization,
-            );
-            setBinders((rows) => [...(rows ?? []), created]);
-            setNewName("");
-          } catch (err) {
-            setCreateError(
-              err instanceof Error && err.message.trim() !== ""
-                ? err.message
-                : "Unable to create the binder.",
-            );
-          } finally {
-            setIsCreating(false);
-          }
-        }}
-      >
-        <label className="app-field">
-          <span className="bs-label">New binder</span>
-          <input
-            className="bs-input"
-            name="binder-name"
-            type="text"
-            placeholder="Clinical policies"
-            value={newName}
-            maxLength={100}
-            onChange={(event) => setNewName(event.target.value)}
-          />
-        </label>
-        {/* Two questions, not one — and the second is the one a customer only
+            setIsCreating(true);
+            setCreateError(null);
+            try {
+              const created = await createBinder(
+                org,
+                name,
+                undefined,
+                openToOrganization,
+              );
+              setBinders((rows) => [...(rows ?? []), created]);
+              setNewName("");
+              setOpenToOrganization(true);
+              setCreating(false);
+            } catch (err) {
+              setCreateError(
+                err instanceof Error && err.message.trim() !== ""
+                  ? err.message
+                  : "Unable to create the binder.",
+              );
+            } finally {
+              setIsCreating(false);
+            }
+          }}
+        >
+          <label className="app-field">
+            <span className="bs-label">New binder</span>
+            <input
+              className="bs-input"
+              name="binder-name"
+              type="text"
+              placeholder="Clinical policies"
+              value={newName}
+              maxLength={100}
+              onChange={(event) => setNewName(event.target.value)}
+            />
+          </label>
+          {/* Two questions, not one — and the second is the one a customer only
             knows the answer to right now. The moment somebody is naming a
             binder is the moment they know whether it is the staff handbook or
             HR investigations, and it is far cheaper to ask then than to
             discover the wrong answer a week later. One radio pair, and it
             never needs to be touched again. */}
-        <fieldset className="org-group-levels">
-          <legend className="bs-label">Who can see it?</legend>
-          <label className="org-group-level-option">
-            <input
-              type="radio"
-              name="binder-visibility"
-              checked={openToOrganization}
-              onChange={() => setOpenToOrganization(true)}
-            />
-            <span>
-              <span className="docs-list-item-name">Everyone at {org}</span>
-              <span className="docs-list-item-meta">
-                They can read it and comment on changes. Reading is free.
+          <fieldset className="org-visibility-choice">
+            <legend className="bs-label">Who can see it?</legend>
+            <label className="org-choice">
+              <input
+                type="radio"
+                name="binder-visibility"
+                checked={openToOrganization}
+                onChange={() => setOpenToOrganization(true)}
+              />
+              <span>
+                <span className="docs-list-item-name">Everyone at {org}</span>
+                <span className="docs-list-item-meta">
+                  They can read it and comment on changes. Reading is free.
+                </span>
               </span>
-            </span>
-          </label>
-          <label className="org-group-level-option">
-            <input
-              type="radio"
-              name="binder-visibility"
-              checked={!openToOrganization}
-              onChange={() => setOpenToOrganization(false)}
-            />
-            <span>
-              <span className="docs-list-item-name">Only people I add</span>
-              <span className="docs-list-item-meta">
-                For a binder not everybody should see — an investigation, or
-                board papers.
+            </label>
+            <label className="org-choice">
+              <input
+                type="radio"
+                name="binder-visibility"
+                checked={!openToOrganization}
+                onChange={() => setOpenToOrganization(false)}
+              />
+              <span>
+                <span className="docs-list-item-name">Only people I add</span>
+                <span className="docs-list-item-meta">
+                  For a binder not everybody should see — an investigation, or
+                  board papers.
+                </span>
               </span>
-            </span>
-          </label>
-        </fieldset>
+            </label>
+          </fieldset>
 
-        <button
-          className="bs-btn bs-btn-primary app-submit"
-          type="submit"
-          disabled={newName.trim() === "" || isCreating}
-        >
-          <Plus size={14} strokeWidth={1.6} aria-hidden="true" />
-          {isCreating ? "Creating…" : "Create binder"}
-        </button>
-      </form>
+          {/* Not full width. It is one action on a page whose subject is the
+            list below it, and a coral slab across the page said otherwise. */}
+          <div className="upload-modal-actions">
+            <button
+              className="bs-btn bs-btn-primary"
+              type="submit"
+              disabled={newName.trim() === "" || isCreating}
+            >
+              <Plus size={14} strokeWidth={1.6} aria-hidden="true" />
+              {isCreating ? "Creating…" : "Create binder"}
+            </button>
+          </div>
+        </form>
+      ) : null}
 
       {createError ? <p className="app-inline-error">{createError}</p> : null}
 

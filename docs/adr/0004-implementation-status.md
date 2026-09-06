@@ -599,6 +599,57 @@ invisible to a member who was not added, while an open binder beside it stays
 readable by the same person; and the switch refusing a request that does not say
 which way.
 
+### An organization's people can be promoted, demoted and removed
+
+Piece 4, and the last of the access model that does not need an invitation.
+
+**Two rungs, and only two.** An owner is a member of Gitea's built-in `Owners`
+team, so promoting is one `addTeamMember` and demoting is one
+`removeTeamMember`. Nothing is stored, and billing keeps reading the team it
+always read. Every third org-level role anyone proposes turns out to be a binder
+role wearing a costume — "compliance lead" is a manager of the binders they run,
+"auditor" is a reviewer on everything — and a rung above the binder is the
+expensive kind: org-wide, invisible from the binder it affects, and not
+something Gitea will enforce for us.
+
+**The last-owner rule is one check, not two.** Demoting the last owner and
+removing them are different requests with the same consequence — an organization
+nobody can administer and no way back that does not involve us — so
+`refuseLastOwner` serves both and they say the same sentence. Two checks would
+eventually disagree, and the half that drifted would be the one nobody tested.
+On screen the control is disabled with the reason _in place of_ a tooltip:
+nobody reads a tooltip and no keyboard reaches one.
+
+**Removal is native and leaves nothing to reconcile.** `DELETE
+/orgs/{org}/members/{username}` takes them out of the organization and every
+team in it in one call — there is no table of ours to clean up, which is the
+same reason ADR 0004 gives for keeping permissions in Gitea rather than
+shadowing them.
+
+**And what stays is the point.** The confirmation says it, and it is the most
+important string on the page:
+
+> They lose access immediately, everywhere. Everything they wrote, approved or
+> commented on stays exactly where it is — that record is yours, not theirs.
+
+The fear behind "can I remove someone" in a regulated industry is that the
+record leaves with them; it is the fifth thing ADR 0004 lists as broken about
+the old model, and removal is the moment to answer it. An integration test
+proves the sentence rather than trusting it: a reviewer approves a change, it
+publishes, they are removed, the binder answers **404** for them — and their
+approval is still named against v1 in the binder's history.
+
+Promoting gets a confirmation because it hands over the keys. Removing gets one
+because it cannot be undone by pressing the same control again. Demoting gets
+neither: it is one call and reversible, and a dialog would imply a weight it
+does not have.
+
+**No "remove" on your own row.** Leaving an organization is a different act from
+removing somebody else and deserves its own wording; offered here as "Remove
+Alice" it reads like an accident waiting to happen. The API stays permissive and
+Gitea stays the enforcer — this is a decision about what to draw, not a rule we
+invented.
+
 ## Why #393 carries the organization-creation flow too
 
 They cannot ship apart. The migration parks every username-keyed billing row
@@ -774,8 +825,11 @@ asking.
 
 In rough dependency order.
 
-1. **Managing org people.** Promote and demote owners, remove from the
-   organization, and the last-owner refusal.
+1. **Invitations.** The one piece of the access model Gitea cannot do at all:
+   there is no `POST /orgs/{org}/members` and no way to hold a pending
+   invitation, so it is a SQLite table, four routes, an email, and acceptance
+   bound to the invited address rather than to the link. Everything before it
+   assumes the person already has an account.
 2. **Delete the old model.** `POST /api/app/documents`,
    `createPrivateCurrentUserRepo`, the 16 `documents/:owner/:repo` routes in
    `services/api/server.ts`, and roughly a dozen SPA files that address a

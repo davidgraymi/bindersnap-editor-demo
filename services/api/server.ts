@@ -63,6 +63,7 @@ import {
   listTeamMembers,
   listTeamRepos,
   OWNERS_TEAM_NAME,
+  removeOrganizationMember,
   removeTeamMember,
   revokeTeamFromRepo,
   STAFF_TEAM_NAME,
@@ -5875,7 +5876,192 @@ async function readOrganizationPeople(
       .map((binder) => binder.name)
       .sort((left, right) => left.localeCompare(right)),
     canManage,
+    viewer,
   };
+}
+
+/**
+ * The sentence to refuse with when an act would leave the organization with no
+ * owner, or `null` when it would not.
+ *
+ * **Both routes hit this rule and say the same thing.** Demoting the last owner
+ * and removing them are different requests with the same consequence — an
+ * organization nobody can administer, with no way back that does not involve
+ * us — so they share one check rather than two that can drift apart.
+ *
+ * Counted from the Owners team, which is where ADR 0004 puts the answer: it is
+ * Gitea's own object, it is what billing already reads, and it cannot
+ * disagree with itself.
+ */
+async function refuseLastOwner(params: {
+  client: GiteaClient;
+  org: string;
+  username: string;
+}): Promise<string | null> {
+  const { client, org, username } = params;
+
+  const owners = await listOrganizationOwners({ client, org });
+  const login = username.toLowerCase();
+
+  if (!owners.some((owner) => owner.login.toLowerCase() === login)) {
+    // Not an owner, so this act cannot take the last one away.
+    return null;
+  }
+
+  if (owners.length > 1) return null;
+
+  return `${org} needs at least one owner. Make someone else an owner first.`;
+}
+
+/**
+ * Promote somebody to owner, or demote them back to member.
+ *
+ * Two rungs and only two, because every third org-level role anyone proposes
+ * turns out to be a binder role wearing a costume — and a rung above the binder
+ * is the expensive kind: org-wide, invisible from the binder it affects, and
+ * not something Gitea will enforce for us.
+ *
+ * An owner is a member of Gitea's built-in `Owners` team, so promoting is one
+ * `addTeamMember` and demoting is one `removeTeamMember`. Nothing is stored,
+ * and billing keeps reading the same team it always did.
+ */
+async function handleOrganizationPersonRole(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  username: string,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { client, session } = auth;
+
+  try {
+    const body = (await req.json().catch(() => null)) as {
+      owner?: unknown;
+    } | null;
+
+    if (typeof body?.owner !== "boolean") {
+      return json(
+        400,
+        { error: "Say whether they should be an owner." },
+        baseHeaders,
+      );
+    }
+
+    const organization = await findOrganization({ client, org: orgName });
+    if (!organization) {
+      return json(404, { error: "No such organization." }, baseHeaders);
+    }
+
+    const owners = await findOrganizationTeam({
+      client,
+      org: orgName,
+      name: OWNERS_TEAM_NAME,
+    });
+    if (!owners) {
+      return json(
+        404,
+        { error: "This organization has no owners team." },
+        baseHeaders,
+      );
+    }
+
+    if (body.owner) {
+      await addTeamMember({ client, teamId: owners.id, username });
+    } else {
+      const refusal = await refuseLastOwner({
+        client,
+        org: orgName,
+        username,
+      });
+      if (refusal) return json(409, { error: refusal }, baseHeaders);
+
+      await removeTeamMember({ client, teamId: owners.id, username });
+    }
+
+    logger.info("Organization role changed", {
+      username: session.username,
+      organization: orgName,
+      subject: username,
+      owner: body.owner,
+    });
+
+    return json(
+      200,
+      await readOrganizationPeople(client, orgName, session.username),
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to change somebody's organization role", {
+      username: session.username,
+      organization: orgName,
+      subject: username,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to change their role.");
+  }
+}
+
+/**
+ * Take somebody out of the organization.
+ *
+ * One Gitea call, and it reaches every team they were in — there is nothing of
+ * ours to reconcile afterwards. **Everything they wrote, approved or commented
+ * on stays exactly where it is**: those are git objects, and the record belongs
+ * to the organization rather than to the author. That is the product's whole
+ * claim, and removal is the moment somebody wants to hear it.
+ */
+async function handleRemoveOrganizationPerson(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  username: string,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { client, session } = auth;
+
+  try {
+    const organization = await findOrganization({ client, org: orgName });
+    if (!organization) {
+      return json(404, { error: "No such organization." }, baseHeaders);
+    }
+
+    const refusal = await refuseLastOwner({
+      client,
+      org: orgName,
+      username,
+    });
+    if (refusal) return json(409, { error: refusal }, baseHeaders);
+
+    await removeOrganizationMember({ client, org: orgName, username });
+
+    logger.info("Organization member removed", {
+      username: session.username,
+      organization: orgName,
+      subject: username,
+    });
+
+    return json(
+      200,
+      await readOrganizationPeople(client, orgName, session.username),
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to remove somebody from an organization", {
+      username: session.username,
+      organization: orgName,
+      subject: username,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to take them out of the organization.",
+    );
+  }
 }
 
 /**
@@ -8324,6 +8510,12 @@ export function createApiServer() {
         const organizationPeopleMatch = pathname.match(
           /^\/api\/app\/orgs\/([^/]+)\/people$/,
         );
+        const organizationPersonRoleMatch = pathname.match(
+          /^\/api\/app\/orgs\/([^/]+)\/people\/([^/]+)\/role$/,
+        );
+        const organizationPersonMatch = pathname.match(
+          /^\/api\/app\/orgs\/([^/]+)\/people\/([^/]+)$/,
+        );
         const organizationGroupsMatch = pathname.match(
           /^\/api\/app\/orgs\/([^/]+)\/groups$/,
         );
@@ -8368,6 +8560,20 @@ export function createApiServer() {
             req,
             baseHeaders,
             organizationPeopleMatch[1]!,
+          );
+        } else if (organizationPersonRoleMatch && method === "POST") {
+          response = await handleOrganizationPersonRole(
+            req,
+            baseHeaders,
+            organizationPersonRoleMatch[1]!,
+            organizationPersonRoleMatch[2]!,
+          );
+        } else if (organizationPersonMatch && method === "DELETE") {
+          response = await handleRemoveOrganizationPerson(
+            req,
+            baseHeaders,
+            organizationPersonMatch[1]!,
+            organizationPersonMatch[2]!,
           );
         } else if (organizationGroupsMatch && method === "POST") {
           response = await handleCreateOrganizationGroup(
