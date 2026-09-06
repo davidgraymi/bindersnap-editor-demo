@@ -523,6 +523,16 @@ export const OrganizationGroupSchema = z.object({
    * saves a call per group the moment anybody manages one.
    */
   members: z.array(WorkspacePersonSchema),
+  /**
+   * The binders this group reaches, which is the question an owner has while
+   * they are looking at the group rather than at a binder — and the one that
+   * decides whether changing it is safe, because a level or membership change
+   * lands on every binder in this list at once.
+   *
+   * For the built-in Owners team this is every binder in the organization, and
+   * always will be: Gitea gives it admin org-wide rather than by a grant.
+   */
+  binders: z.array(z.string()),
 });
 export type OrganizationGroup = z.infer<typeof OrganizationGroupSchema>;
 
@@ -582,6 +592,12 @@ export const OrganizationPeoplePayloadSchema = z.object({
   organization: z.string(),
   people: z.array(OrganizationPersonSchema),
   groups: z.array(OrganizationGroupSchema),
+  /**
+   * Every binder in the organization, so a group can be composed onto one from
+   * the group's own row. The names alone: this list exists to fill a picker,
+   * and the binder's own page is where anything else about it is answered.
+   */
+  binders: z.array(z.string()),
   /** Whether the caller owns the organization, and may change any of it. */
   canManage: z.boolean(),
 });

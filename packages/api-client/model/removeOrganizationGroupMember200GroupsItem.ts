@@ -13,4 +13,5 @@ export type RemoveOrganizationGroupMember200GroupsItem = {
   access: string;
   memberCount: number;
   members: RemoveOrganizationGroupMember200GroupsItemMembersItem[];
+  binders: string[];
 };

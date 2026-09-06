@@ -808,10 +808,37 @@ input {
   color: var(--bs-text-muted);
 }
 
+/* Indented under its own row and tied to it by a rule, so an open group does
+   not read as loose controls sitting above the next one. */
 .org-group-body {
   display: grid;
+  gap: var(--brand-space-5);
+  margin: 0 var(--brand-space-4) var(--brand-space-4);
+  padding-left: var(--brand-space-4);
+  border-left: 2px solid var(--bs-rule-warm);
+}
+
+/* The two ends a group matters at — who is in it, and which binders it
+   reaches — laid out as two labelled blocks rather than one run of controls,
+   because they answer different questions. */
+.org-group-part {
+  display: grid;
   gap: var(--brand-space-3);
-  padding: 0 var(--brand-space-4) var(--brand-space-4);
+  justify-items: start;
+}
+
+/* A binder the group reaches. Mono, because it is the binder's address — the
+   same treatment the breadcrumb gives it — not a person's name. */
+.org-group-binder {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  padding: var(--brand-space-1) var(--brand-space-3);
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-surface-2);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-ui-sm);
+  color: var(--bs-text-secondary);
 }
 
 .org-group-add {

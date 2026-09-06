@@ -13,4 +13,5 @@ export type GetOrganizationPeople200GroupsItem = {
   access: string;
   memberCount: number;
   members: GetOrganizationPeople200GroupsItemMembersItem[];
+  binders: string[];
 };

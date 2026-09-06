@@ -431,6 +431,20 @@ Verified in both directions against the live Gitea, and pinned by two
 integration tests: a member of a granted group approves and the change
 publishes, and revoking takes the group off `approvals_whitelist_teams`.
 
+**A grant is read and written from both ends**, which the design's API table
+asked for and the first cut of this missed. A binder's Settings tab answers "who
+can act here"; a group's own row answers "which binders does this reach" — the
+same grant seen from either side, and `GET /teams/{id}/repos` is the mirror of
+`GET /repos/{owner}/{repo}/teams`. The second is not a convenience: it is the
+question that decides whether changing a group is safe, because its level and
+its membership land on every binder in that list at once, and the row says so
+once the list has more than one entry. Both ends write through the same two
+endpoints, so there is one grant path rather than two.
+
+A group in no binder is called out rather than left blank — it grants nothing
+anywhere, and that is the difference between a group somebody set up and one
+somebody only named.
+
 **`Owners` is in the list and in neither act.** `GET /repos/{owner}/{repo}/teams`
 does report it — checked on the running stack — but it is never granted onto a
 repository, so adding it is offering something already true and removing it is
