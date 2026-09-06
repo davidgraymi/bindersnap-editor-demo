@@ -835,6 +835,29 @@ registry.registerPath({
 });
 
 registry.registerPath({
+  method: "get",
+  path: "/api/app/binders/{org}/{binder}/raw/{documentPath}",
+  operationId: "downloadBinderDocument",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({
+      org: z.string(),
+      binder: z.string(),
+      /** File path or identity — a URL may carry either. */
+      documentPath: z.string(),
+    }),
+    /** A version tag, a change's branch, or `main` when unstated. */
+    query: z.object({ ref: z.string().optional() }),
+  },
+  responses: {
+    200: {
+      description: "The document's bytes, at that ref",
+      content: { "application/octet-stream": { schema: z.string() } },
+    },
+  },
+});
+
+registry.registerPath({
   method: "post",
   path: "/api/app/binders/{org}/{binder}/documents",
   operationId: "createBinderDocument",

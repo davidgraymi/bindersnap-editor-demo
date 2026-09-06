@@ -11,6 +11,7 @@ import * as AdminClient from "../../packages/api-client/admin/admin";
 import * as OrganizationsClient from "../../packages/api-client/organizations/organizations";
 import * as BindersClient from "../../packages/api-client/workspaces/workspaces";
 import type {
+  CreatedWorkspaceDocumentPayload,
   WorkspaceDocumentDetailPayload,
   WorkspaceDocumentListPayload,
   WorkspaceSummary,
@@ -816,6 +817,53 @@ export async function fetchBinderDocument(
     org,
     binder,
     documentPath,
+  );
+  return response.data;
+}
+
+/**
+ * Add a document to a binder — the ADR 0004 upload path.
+ *
+ * A mutation, so it is behind the paywall; the 402 is intercepted here so a
+ * delinquent organization gets the banner rather than a raw error under the
+ * file picker.
+ */
+export async function createBinderDocument(
+  org: string,
+  binder: string,
+  file: File,
+  name: string,
+  folder?: string,
+): Promise<CreatedWorkspaceDocumentPayload> {
+  try {
+    const response = await BindersClient.createBinderDocument(org, binder, {
+      file,
+      name,
+      ...(folder ? { folder } : {}),
+    });
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(`/api/app/binders/${org}/${binder}/documents`, error);
+  }
+}
+
+/**
+ * The bytes of one document in a binder, at a ref.
+ *
+ * `ref` is a version tag for a published version, or a change's branch for one
+ * still under review. Unstated means `main` — the version on record.
+ */
+export async function downloadBinderDocument(
+  org: string,
+  binder: string,
+  documentPath: string,
+  ref?: string,
+): Promise<Blob> {
+  const response = await BindersClient.downloadBinderDocument(
+    org,
+    binder,
+    documentPath,
+    ref ? { ref } : undefined,
   );
   return response.data;
 }

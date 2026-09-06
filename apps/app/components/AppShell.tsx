@@ -4,6 +4,7 @@ import type { SessionUser } from "../api";
 import { buildDocumentsUrl, parseDocumentsViewState } from "../documentsView";
 import type { AppRoute } from "../routes";
 import { ActivityLogPage } from "./ActivityLogPage";
+import { BinderDocumentPage } from "./BinderDocumentPage";
 import { BinderPage } from "./BinderPage";
 import { OrganizationPage } from "./OrganizationPage";
 import { OrganizationSwitcher } from "./OrganizationSwitcher";
@@ -390,6 +391,22 @@ export function AppShell({
                     binder: route.binder,
                     documentPath,
                   })
+                }
+              />
+            ) : route.kind === "binderDocument" ? (
+              <BinderDocumentPage
+                org={route.org}
+                binder={route.binder}
+                documentPath={route.documentPath}
+                onOpenBinder={() =>
+                  onNavigate({
+                    kind: "binder",
+                    org: route.org,
+                    binder: route.binder,
+                  })
+                }
+                onOpenOrganization={() =>
+                  onNavigate({ kind: "organization", org: route.org })
                 }
               />
             ) : route.kind === "activity" ? (

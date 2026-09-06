@@ -266,6 +266,33 @@ ${A_CHANGE}`),
     ).toThrow(/must start with "upload/);
   });
 
+  test("rejects a branch that names a different document", () => {
+    // The branch omits the folder, so the app reads it as a change about a
+    // document at the binder's root: the real one loses its open-change count
+    // and a policy that does not exist appears beside it. It seeds fine and
+    // looks right in Gitea, which is exactly why it has to fail here.
+    expect(() =>
+      parseSeedScenario(
+        scenarioYaml(
+          `  - name: policies
+    description: Policies
+    members: []
+    documents:
+      - name: handbook
+        folder: hr
+        description: Handbook
+${A_CHANGE}`,
+        ),
+      ),
+    ).toThrow(/must start with "upload\/hr\/handbook\//);
+  });
+
+  test("a document at the binder's root needs no folder in its branch", () => {
+    expect(() =>
+      parseSeedScenario(scenarioYaml(oneDocument(A_CHANGE))),
+    ).not.toThrow();
+  });
+
   test("names the path of the offending field", () => {
     expect(() =>
       parseSeedScenario(`

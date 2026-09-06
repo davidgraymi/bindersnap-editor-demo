@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { PullRequestWithApprovalStateSchema } from "./documents";
+
 /**
  * ADR 0004's second level: the binder.
  *
@@ -96,20 +98,56 @@ export const DocumentVersionSchema = z.object({
 export type DocumentVersion = z.infer<typeof DocumentVersionSchema>;
 
 /**
+ * Whether the binder actually holds this document yet.
+ *
+ * `main` is the record, so a policy somebody uploaded an hour ago is not in
+ * it — and a binder that silently omits what you just added looks broken in
+ * the one moment you are watching. `proposed` is that document: real, filed
+ * at a real address, waiting on a decision.
+ */
+export const WorkspaceDocumentStateSchema = z.enum(["published", "proposed"]);
+export type WorkspaceDocumentState = z.infer<
+  typeof WorkspaceDocumentStateSchema
+>;
+
+/**
  * A document as the binder's list shows it.
  *
  * The published version is here because a list of policies that does not say
  * which version each one is at answers none of the questions a list is opened
  * to answer. It costs one tags call for the whole binder — the tags are
  * repository-global — rather than one per document.
+ *
+ * Not an extension of `WorkspaceDocumentEntrySchema`, because that describes a
+ * file that exists and this list also carries documents that do not exist on
+ * `main` yet. What a row needs is its identity, and it has that either way.
  */
-export const WorkspaceDocumentListEntrySchema =
-  WorkspaceDocumentEntrySchema.extend({
-    /** Open changes touching this document. Decides a badge, nothing more. */
-    openChangeCount: z.number(),
-    /** The version on record, or null for a document nobody has published. */
-    latestVersion: DocumentVersionSchema.nullable(),
-  });
+export const WorkspaceDocumentListEntrySchema = z.object({
+  /**
+   * `clinical/infection-control.pdf` — where the file is, or **null** for a
+   * document that so far exists only inside an open change.
+   *
+   * The extension lives in the file, so learning it for a proposed document
+   * means walking that change's tree — a call per document, which is the cost
+   * the binder model exists to remove. A row does not need it: it is addressed
+   * by `slugPath`, and the document's own page pays for the exact path once.
+   */
+  path: z.string().nullable(),
+  /** `clinical/infection-control` — the document's identity, always known. */
+  slugPath: z.string(),
+  name: z.string(),
+  /** `clinical`, or "" at the binder's root. */
+  folder: z.string(),
+  /** Null for a proposed document, for the same reason as `path`. */
+  size: z.number().nullable(),
+  /** Null for a proposed document, for the same reason as `path`. */
+  sha: z.string().nullable(),
+  state: WorkspaceDocumentStateSchema,
+  /** Open changes touching this document. Decides a badge, nothing more. */
+  openChangeCount: z.number(),
+  /** The version on record, or null for a document nobody has published. */
+  latestVersion: DocumentVersionSchema.nullable(),
+});
 export type WorkspaceDocumentListEntry = z.infer<
   typeof WorkspaceDocumentListEntrySchema
 >;
@@ -127,10 +165,26 @@ export const WorkspaceDocumentDetailPayloadSchema = z.object({
   organization: z.string(),
   workspace: z.string(),
   document: WorkspaceDocumentEntrySchema,
+  state: WorkspaceDocumentStateSchema,
+  /**
+   * The git ref the document's file is readable at.
+   *
+   * `main` for a published document. For one that is only proposed it is the
+   * change's own branch — which is the whole reason this field exists: without
+   * it the page would have to guess, and `main` has nothing to give it.
+   */
+  ref: z.string(),
   /** Newest first. */
   versions: z.array(DocumentVersionSchema),
   latestVersion: DocumentVersionSchema.nullable(),
-  openChanges: z.array(z.unknown()),
+  /**
+   * The open changes touching this document, newest first.
+   *
+   * The same shape the per-document workspace uses, deliberately: a change is
+   * a change wherever it is shown, and a second type for it would mean a
+   * second set of status wording to keep in step.
+   */
+  openChanges: z.array(PullRequestWithApprovalStateSchema),
 });
 export type WorkspaceDocumentDetailPayload = z.infer<
   typeof WorkspaceDocumentDetailPayloadSchema

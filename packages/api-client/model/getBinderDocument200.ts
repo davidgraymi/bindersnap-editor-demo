@@ -6,14 +6,18 @@
  */
 import type { GetBinderDocument200Document } from './getBinderDocument200Document.ts';
 import type { GetBinderDocument200LatestVersion } from './getBinderDocument200LatestVersion.ts';
+import type { GetBinderDocument200OpenChangesItem } from './getBinderDocument200OpenChangesItem.ts';
+import type { GetBinderDocument200State } from './getBinderDocument200State.ts';
 import type { GetBinderDocument200VersionsItem } from './getBinderDocument200VersionsItem.ts';
 
 export type GetBinderDocument200 = {
   organization: string;
   workspace: string;
   document: GetBinderDocument200Document;
+  state: GetBinderDocument200State;
+  ref: string;
   versions: GetBinderDocument200VersionsItem[];
   /** @nullable */
   latestVersion: GetBinderDocument200LatestVersion;
-  openChanges: (unknown | null)[];
+  openChanges: GetBinderDocument200OpenChangesItem[];
 };

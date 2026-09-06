@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { FileText, Folder } from "lucide-react";
 
 import { fetchBinderDocuments } from "../api";
 import type { WorkspaceDocumentListEntry } from "../../../packages/api-schema/schemas/workspaces";
+import { formatDocumentName } from "../documentDisplay";
+import { AddPolicyModal } from "./AddPolicyModal";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
+import { StatusChip } from "./StatusChip";
 
 /**
  * One binder's documents, at `/{org}/{binder}`.
@@ -56,15 +59,22 @@ export function groupByFolder(
     .map(([folder, group]) => ({ folder, documents: group }));
 }
 
-/** "3 versions · 1 open change", or what is true of it so far. */
+/** "Version 3 · 1 open change", or what is true of it so far. */
 export function describeDocument(document: WorkspaceDocumentListEntry): string {
   const parts: string[] = [];
 
-  parts.push(
-    document.latestVersion
-      ? `Version ${document.latestVersion.version}`
-      : "No published version",
-  );
+  // A document nobody has approved yet is not "no published version" — that
+  // reads like something is wrong with it. It is waiting, and saying so is
+  // both kinder and more accurate.
+  if (document.state === "proposed") {
+    parts.push("Not published yet");
+  } else {
+    parts.push(
+      document.latestVersion
+        ? `Version ${document.latestVersion.version}`
+        : "No published version",
+    );
+  }
 
   if (document.openChangeCount > 0) {
     parts.push(
@@ -82,10 +92,10 @@ export function BinderPage({ org, binder, onOpenDocument }: BinderPageProps) {
     WorkspaceDocumentListEntry[] | null
   >(null);
   const [error, setError] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     let cancelled = false;
-    setDocuments(null);
     setError(null);
 
     fetchBinderDocuments(org, binder)
@@ -105,6 +115,11 @@ export function BinderPage({ org, binder, onOpenDocument }: BinderPageProps) {
       cancelled = true;
     };
   }, [org, binder]);
+
+  useEffect(() => {
+    setDocuments(null);
+    return load();
+  }, [load]);
 
   const groups = useMemo(
     () => (documents ? groupByFolder(documents) : []),
@@ -144,15 +159,28 @@ export function BinderPage({ org, binder, onOpenDocument }: BinderPageProps) {
 
   return (
     <section className="docs-page">
-      <div className="bs-eyebrow">{org}</div>
-      <h1>{binder}</h1>
+      <div className="binder-page-head">
+        <div>
+          <div className="bs-eyebrow">{org}</div>
+          <h1>{binder}</h1>
+        </div>
+        {/* The binder is where the work is, so the way to add to it is on the
+            binder rather than in a menu somewhere else. */}
+        <button
+          className="bs-btn bs-btn-primary"
+          type="button"
+          onClick={() => setAdding(true)}
+        >
+          Add a policy
+        </button>
+      </div>
 
       {documents.length === 0 ? (
         // Not an error, and not a failure of theirs: a binder somebody just
         // made is empty, which is the ordinary first state.
         <p style={{ color: "var(--bs-text-muted)" }}>
-          Nothing filed here yet. A document reaches this binder by being
-          published.
+          Nothing filed here yet. Add a policy and it joins the binder once the
+          change is approved.
         </p>
       ) : (
         groups.map((group) => (
@@ -176,17 +204,39 @@ export function BinderPage({ org, binder, onOpenDocument }: BinderPageProps) {
                     <FileText size={16} strokeWidth={1.4} />
                   </span>
                   <span className="docs-list-item-body">
-                    <span className="docs-list-item-name">{document.name}</span>
+                    <span className="docs-list-item-name">
+                      {formatDocumentName(document.name)}
+                    </span>
                     <span className="docs-list-item-meta">
                       {describeDocument(document)}
                     </span>
                   </span>
+                  {document.state === "proposed" ? (
+                    <StatusChip tone="review" size="sm">
+                      In review
+                    </StatusChip>
+                  ) : null}
                 </button>
               ))}
             </div>
           </div>
         ))
       )}
+
+      {adding ? (
+        <AddPolicyModal
+          org={org}
+          binder={binder}
+          onClose={() => setAdding(false)}
+          onAdded={(slugPath) => {
+            setAdding(false);
+            // Straight to the policy they just added. It is not on `main` yet,
+            // so its page reads the change's own branch — which is the whole
+            // reason the binder shows proposed documents at all.
+            onOpenDocument(slugPath);
+          }}
+        />
+      ) : null}
     </section>
   );
 }

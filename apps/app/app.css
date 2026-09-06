@@ -649,6 +649,54 @@ input {
   align-content: start;
 }
 
+/* The binder's title and the one action that belongs on it. */
+.binder-page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--brand-space-5);
+  flex-wrap: wrap;
+}
+
+/* Adding a policy: where it will land, and what happens next. */
+.add-policy-path {
+  font-size: var(--brand-text-ui-sm);
+  color: var(--bs-text-muted);
+  margin: 0;
+}
+
+.add-policy-path code {
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-xs);
+  color: var(--bs-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.add-policy-note {
+  font-size: var(--brand-text-ui-sm);
+  color: var(--bs-text-muted);
+  margin: 0;
+}
+
+/* Where a document in a binder lives: organization, binder, folders. It sits
+   above the title rather than in the top nav because the top nav switches
+   scope and this names a path — reusing the topbar's own type so the two read
+   as one trail once the shell breadcrumb lands. */
+.doc-crumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--brand-space-2);
+  min-width: 0;
+}
+
+.doc-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  min-width: 0;
+}
+
 .doc-header {
   display: grid;
   gap: var(--brand-space-6);
@@ -1398,6 +1446,11 @@ input {
 .doc-rail-row-note {
   font-size: var(--brand-text-ui-sm);
   color: var(--bs-text-muted);
+}
+
+/* A rail row that states a fact rather than going somewhere. */
+.doc-rail-row--static {
+  cursor: default;
 }
 
 /* Team: faces, then the way to the page that lists them properly. */
