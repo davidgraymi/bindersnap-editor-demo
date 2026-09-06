@@ -3,6 +3,7 @@ import type { components } from "./spec/gitea";
 import { GiteaApiError, unwrap, type GiteaClient } from "./client";
 import { bootstrapEmptyMainBranch } from "./repos";
 import {
+  addTeamMember,
   createOrganization,
   ensureStaffTeam,
   findOrganization,
@@ -438,6 +439,8 @@ export interface ProvisionOrganizationParams {
   /** The org's Gitea username. */
   orgName: string;
   orgFullName?: string;
+  /** Who is creating it. Gitea makes them an owner; this puts them in `staff`. */
+  owner: string;
 }
 
 /**
@@ -457,7 +460,7 @@ export interface ProvisionOrganizationParams {
 export async function provisionOrganization(
   params: ProvisionOrganizationParams,
 ): Promise<ProvisionedOrganization> {
-  const { client, orgName, orgFullName } = params;
+  const { client, orgName, orgFullName, owner } = params;
 
   const organization =
     (await findOrganization({ client, org: orgName })) ??
@@ -469,9 +472,19 @@ export async function provisionOrganization(
 
   // Every member of the organization belongs to `staff`, so it exists from the
   // organization's first moment rather than being conjured by whichever binder
-  // happens to be created first. Best-effort: an organization without it is
-  // still an organization, and `provisionWorkspace` makes it if it has to.
-  await ensureStaffTeam({ client, org: organization.name }).catch(() => null);
+  // happens to be created first — **and the founder is put in it**, because a
+  // team that exists and holds nobody makes "everyone at Riverside Health can
+  // read this binder" a claim about an empty set. Gitea puts them in `Owners`,
+  // which reaches every binder by a different route, so nothing visibly broke
+  // while this was missing.
+  //
+  // Best-effort: an organization without `staff` is still an organization, and
+  // `provisionWorkspace` makes it if it has to.
+  await ensureStaffTeam({ client, org: organization.name })
+    .then((staff) =>
+      addTeamMember({ client, teamId: staff.id, username: owner }),
+    )
+    .catch(() => null);
 
   return { organization };
 }

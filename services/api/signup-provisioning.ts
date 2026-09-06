@@ -101,6 +101,7 @@ export async function provisionSignup(
     client,
     base: deriveOrganizationName(username, params.organizationName),
     orgFullName: params.organizationName?.trim() || undefined,
+    owner: username,
   });
 
   const organization = await recordProvisionedOrganization({
@@ -118,6 +119,7 @@ interface ProvisionUnderAvailableNameParams {
   client: GiteaClient;
   base: string;
   orgFullName?: string;
+  owner: string;
 }
 
 /**

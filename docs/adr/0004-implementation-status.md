@@ -486,6 +486,75 @@ approvals on a push and leaves rejections standing, so Gitea blocks on a stale
 rejection too, and showing it as cleared would be the one error that lets
 something reach the record.
 
+### A binder has a People tab, and one person at a time can be moved
+
+Piece 3 of the org-access design. Groups made the recurring case cheap; this is
+the one-off — "add Priya to this binder as a reviewer" — and the refusal that
+makes the group constraint honest.
+
+**One row per person.** A matrix loses because the roles are a ladder Gitea
+enforces as one: a grid of checkboxes would let somebody try "can approve but
+cannot read", which is not a thing and the screen would have to refuse it.
+Grouping by role loses because it answers "who are the editors" when the
+question a compliance manager asks is "what can Jane do" — which one row answers
+by being read. The read model is teams-first and bounded: the teams granted
+here, then each team's membership, folded to the highest access per person. The
+per-user permission endpoint is not used and must not be.
+
+**The role team is made on first use.** Provisioning creates none, so a binder
+that only ever adopts groups never manufactures one, and an organization with
+twenty binders and three recurring groups holds five to eight teams rather than
+sixty-two. `ROLE_TEAM_OPTIONS` is unchanged; only the moment it is used has
+moved.
+
+**A role that comes from a group is refused, and the refusal names the group.**
+That group is one object across every binder it is granted onto, so changing
+somebody's role on this row would change it everywhere the group reaches. The
+row shows the group instead of a dropdown that would have to refuse — and the
+consolation is that "why can she approve here" is answered on the row that
+raised the question. The escape hatch is an _addition_: one member of a group
+needing more in this one binder is granted individually, alongside the group
+rather than instead of it.
+
+Removal is the same rule. Taking somebody out only touches this binder's own
+role teams; if a group is the only thing holding them here, the button would
+have to reach into that group and change three other binders, so it is refused
+with the cost stated.
+
+**Who can act here moved off Settings.** The binder's tab bar is now Documents ·
+Change requests · People · History · Settings, which is where the UX document
+puts it — and a page that lists people is a page somebody expects to be able to
+edit. Settings keeps the rules, which are still read-only and say so.
+
+`Seat` or `Free` is on every row with a running count above the list, because
+"reviewers are free" is a promise somebody comes to this page to check. The
+price of a change is stated before it is made; the amount waits for billing.
+
+### `staff` was granted everywhere and empty
+
+The defect this piece turned up, and it is the quiet kind. `staff` is what
+"everyone at Riverside Health can read this binder" is made of — provisioning
+creates it, opens every new binder to it, and whitelists it. **Nothing ever put
+anybody in it.**
+
+Nothing looked broken, because everybody who was in an organization was also in
+`Owners` or in some role team, and reached binders that way. It would have
+surfaced the first time somebody was added to one binder and then could not see
+another that was open to the whole organization — with no screen able to say
+why.
+
+So every path that admits somebody to the organization now goes through
+`ensureOrganizationMembership`, which puts them in `staff` first: adding a
+person to a binder, adding one to a group, and creating the organization
+(its founder was not in it either). Before the grant that prompted it, so a
+failure leaves them a member who can read the open binders — the Member rung,
+and a safe place to stop.
+
+Leaving is deliberately not the mirror. Taking somebody out of a binder or a
+group leaves them in the organization, which is why removing a person from an
+open binder now correctly leaves them able to read it, through `staff`. Leaving
+the organization is its own act, with its own confirmation, and it is piece 4.
+
 ## Why #393 carries the organization-creation flow too
 
 They cannot ship apart. The migration parks every username-keyed billing row
@@ -661,20 +730,15 @@ asking.
 
 In rough dependency order.
 
-1. **Managing binder people, one at a time.** Groups are done; individuals are
-   not. Adding Priya as a reviewer of one binder needs the lazy `<binder>-role`
-   team of the design — created on the first individual grant, joined by the
-   second — plus the refusal that matters: a person whose access comes from a
-   group cannot have their role changed on that binder, because the group is one
-   object across every binder it reaches. The row has to say why rather than
-   offer a dropdown that fails.
-2. **The binder visibility switch.** `staff` granted or not, asked on the
+1. **The binder visibility switch.** `staff` granted or not, asked on the
    create form with "Everyone at Riverside Health" preselected. The grant is
-   already how provisioning opens a binder; what is missing is the choice and
-   the way back.
-3. **Managing org people.** Promote and demote owners, remove from the
+   already how provisioning opens a binder, the People tab already _reports_
+   which it is, and the revoke path already exists as a group revoke — what is
+   missing is the choice, the way back, and the wording that makes the switch
+   read as a decision rather than as removing a group called `staff`.
+2. **Managing org people.** Promote and demote owners, remove from the
    organization, and the last-owner refusal.
-4. **Delete the old model.** `POST /api/app/documents`,
+3. **Delete the old model.** `POST /api/app/documents`,
    `createPrivateCurrentUserRepo`, the 16 `documents/:owner/:repo` routes in
    `services/api/server.ts`, and roughly a dozen SPA files that address a
    document as `owner/repo`. The review screens no longer stand in the way —
@@ -682,17 +746,17 @@ In rough dependency order.
    per-document workspace itself. Note that Home and the library still read
    `/api/app/documents`, so they have to move to the binder listings in the
    same change or they go blank.
-5. **The `document_versions` derived index.** Not started. The ADR's "Derived
+4. **The `document_versions` derived index.** Not started. The ADR's "Derived
    indexes" section is the specification. Note the binder model already made the
    list cheap — `listVersionsByDocument` reads a binder's tags once rather than
    once per document — so this is now an optimization rather than a rescue.
-6. **Per-workspace settings and `settings_events`.** Not started.
+5. **Per-workspace settings and `settings_events`.** Not started.
    `blockOnUnresolvedThreads` still lives in the config branch.
-7. **CODEOWNERS generation.** Not started, and blocked on the Gitea 28.0.0
+6. **CODEOWNERS generation.** Not started, and blocked on the Gitea 28.0.0
    upgrade — `block_on_codeowner_reviews` is what lets a rule name a **team**
    rather than the list of people #389's finding forced. Groups now exist to be
    named in one.
-8. **The approvals whitelist on a binder change.** `branchProtection` is
+7. **The approvals whitelist on a binder change.** `branchProtection` is
    passed as null, so the page never says "your account is not authorized to
    approve this". Gitea still refuses, and the required count is shown — but
    the reason is the admin-only half of the rule and the binder page does not
