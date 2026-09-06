@@ -14,7 +14,12 @@
 import type { DocumentChangeView } from "./routes";
 
 /** The tabs a binder has. Documents is the one it opens on. */
-export const BINDER_TABS = ["documents", "changes"] as const;
+export const BINDER_TABS = [
+  "documents",
+  "changes",
+  "history",
+  "settings",
+] as const;
 export type BinderTab = (typeof BINDER_TABS)[number];
 
 /** The tab the query asks for, or Documents when it asks for nothing valid. */

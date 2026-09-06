@@ -17,9 +17,14 @@ test("a tab in the query is the tab", () => {
   expect(binderTabFromSearch("?tab=changes")).toBe("changes");
 });
 
+test("every tab the binder has is addressable", () => {
+  expect(binderTabFromSearch("?tab=history")).toBe("history");
+  expect(binderTabFromSearch("?tab=settings")).toBe("settings");
+});
+
 test("a tab nobody has opens the documents rather than nothing", () => {
   // A mangled or out-of-date link should show the binder, not a blank pane.
-  expect(binderTabFromSearch("?tab=settings")).toBe("documents");
+  expect(binderTabFromSearch("?tab=people")).toBe("documents");
   expect(binderTabFromSearch("?tab=")).toBe("documents");
 });
 

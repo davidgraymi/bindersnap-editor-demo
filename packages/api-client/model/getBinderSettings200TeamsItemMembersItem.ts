@@ -5,9 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type PublishBinderChange200TagsItem = {
-  tag: string;
-  version: number;
-  commitSha: string;
-  publishedAt: string;
+export type GetBinderSettings200TeamsItemMembersItem = {
+  login: string;
+  fullName: string;
 };

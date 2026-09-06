@@ -1579,6 +1579,163 @@ test("a change detail says whether this caller may set its reviewers", async () 
   ).toBe(false);
 });
 
+test("the binder's history answers who approved which version", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const history = (url: string) =>
+    fetch(url, { headers: { Cookie: `bindersnap_session=${sessionCookie}` } });
+  const historyUrl = `${API_BASE_URL}/api/app/binders/${org.name}/clinical/history`;
+
+  // A binder nobody has published in has no history, which is a state.
+  const empty = await history(historyUrl);
+  expect(empty.status, await empty.clone().text()).toBe(200);
+  expect(((await empty.json()) as { versions: unknown[] }).versions).toEqual(
+    [],
+  );
+
+  const added = await addDocument(sessionCookie, org.name, "clinical", {
+    name: "Infection Control",
+    folder: "Nursing",
+  });
+  const { pullRequestNumber, slugPath } = JSON.parse(added.body) as {
+    pullRequestNumber: number;
+    slugPath: string;
+  };
+
+  const ownerToken = await createUserToken(
+    credentials.username,
+    credentials.password,
+  );
+  const approver = await addApprover(ownerToken, org.name, "clinical");
+  await approveChange(approver.token, org.name, "clinical", pullRequestNumber);
+  expect(
+    (
+      await publishChange(
+        sessionCookie,
+        org.name,
+        "clinical",
+        pullRequestNumber,
+      )
+    ).status,
+  ).toBe(200);
+
+  const published = await history(historyUrl);
+  const payload = (await published.json()) as {
+    versions: Array<{
+      slugPath: string;
+      name: string;
+      folder: string;
+      version: number;
+      publishedAt: string;
+      changeNumber: number | null;
+      submittedBy: string;
+      approvers: string[];
+    }>;
+  };
+
+  expect(payload.versions).toHaveLength(1);
+  // ADR 0004: "who approved v4 of infection control" is tag → commit → pull
+  // request → reviews, and "the record is exact". This is that chain.
+  expect(payload.versions[0]).toMatchObject({
+    slugPath,
+    name: "infection-control",
+    folder: "nursing",
+    version: 1,
+    changeNumber: pullRequestNumber,
+    submittedBy: credentials.username,
+    approvers: [approver.credentials.username],
+  });
+  expect(payload.versions[0]?.publishedAt).not.toBe("");
+});
+
+test("the binder says who can act in it, and the rules it is under", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const ownerToken = await createUserToken(
+    credentials.username,
+    credentials.password,
+  );
+  const approver = await addApprover(ownerToken, org.name, "clinical");
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org.name}/clinical/settings`,
+    { headers: { Cookie: `bindersnap_session=${sessionCookie}` } },
+  );
+  expect(response.status, await response.clone().text()).toBe(200);
+  const payload = (await response.json()) as {
+    teams: Array<{
+      name: string;
+      access: string;
+      members: Array<{ login: string }>;
+    }>;
+    rules: {
+      requiredApprovals: number | null;
+      dismissStaleApprovals: boolean;
+      pushBlocked: boolean;
+      blockOnUnresolvedThreads: boolean;
+    };
+    canManage: boolean;
+  };
+
+  // The rule that is the product's whole claim, readable by a member rather
+  // than only by a repository admin — the count is policy everyone reviewing
+  // is entitled to, so it is read with the service account.
+  expect(payload.rules.pushBlocked).toBe(true);
+  expect(payload.rules.requiredApprovals).toBe(1);
+  expect(payload.rules.dismissStaleApprovals).toBe(true);
+
+  // The teams granted onto the repository, asked of the repository — a binder's
+  // people reach it through org teams, which no name convention can be trusted
+  // to enumerate.
+  const reviewers = payload.teams.find((team) =>
+    team.name.endsWith("-reviewers"),
+  );
+  expect(reviewers, JSON.stringify(payload.teams)).toBeTruthy();
+  // Read on repo.code is what ADR 0004 promises is free forever.
+  expect(reviewers!.access).toBe("read");
+  expect(reviewers!.members.map((member) => member.login)).toContain(
+    approver.credentials.username,
+  );
+
+  // ADR 0004 warns that the Owners team is easy to miss: its members have
+  // access to every repository the organization holds, and Gitea reports that
+  // as `repo.code: "owner"` rather than as write or admin. A binder's people
+  // page that did not know the level called it "no access", beside the person
+  // who owns the organization.
+  const owners = payload.teams.find((team) => team.name === "Owners");
+  expect(owners, JSON.stringify(payload.teams)).toBeTruthy();
+  expect(owners!.access).toBe("owner");
+  expect(owners!.members.map((member) => member.login)).toContain(
+    credentials.username,
+  );
+
+  expect(payload.canManage).toBe(true);
+});
+
+test("history and settings on a binder that is not there are 404s", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+
+  for (const path of ["history", "settings"]) {
+    const response = await fetch(
+      `${API_BASE_URL}/api/app/binders/${org.name}/no-such-binder/${path}`,
+      { headers: { Cookie: `bindersnap_session=${sessionCookie}` } },
+    );
+    expect(response.status, path).toBe(404);
+  }
+});
+
 test("a change in a binder that is not there is a 404", async () => {
   const credentials = buildCredentials();
   const sessionCookie = await signUp(credentials);

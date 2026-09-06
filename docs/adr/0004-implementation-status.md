@@ -37,13 +37,14 @@ holds nothing extra.
 
 ### Step 3 — the document page, and adding one (2026-09-05)
 
-| PR                                                                     | Branch                              | What it did                                     |
-| ---------------------------------------------------------------------- | ----------------------------------- | ----------------------------------------------- |
-| [#409](https://github.com/davidgraymi/bindersnap-editor-demo/pull/409) | `feat/adr4-8-binder-document-page`  | `/{org}/{binder}/{path}` is a page, not Home    |
-| [#410](https://github.com/davidgraymi/bindersnap-editor-demo/pull/410) | `feat/adr4-9-add-a-policy`          | A member adds a policy to a binder              |
-| [#412](https://github.com/davidgraymi/bindersnap-editor-demo/pull/412) | `feat/adr4-10-binder-change-page`   | A change has a page, and is decided on it       |
-| [#413](https://github.com/davidgraymi/bindersnap-editor-demo/pull/413) | `feat/adr4-11-binder-repo-shell`    | The binder is laid out like a repository        |
-| [#414](https://github.com/davidgraymi/bindersnap-editor-demo/pull/414) | `feat/adr4-12-binder-change-detail` | The change view is the one that already existed |
+| PR                                                                     | Branch                                 | What it did                                     |
+| ---------------------------------------------------------------------- | -------------------------------------- | ----------------------------------------------- |
+| [#409](https://github.com/davidgraymi/bindersnap-editor-demo/pull/409) | `feat/adr4-8-binder-document-page`     | `/{org}/{binder}/{path}` is a page, not Home    |
+| [#410](https://github.com/davidgraymi/bindersnap-editor-demo/pull/410) | `feat/adr4-9-add-a-policy`             | A member adds a policy to a binder              |
+| [#412](https://github.com/davidgraymi/bindersnap-editor-demo/pull/412) | `feat/adr4-10-binder-change-page`      | A change has a page, and is decided on it       |
+| [#413](https://github.com/davidgraymi/bindersnap-editor-demo/pull/413) | `feat/adr4-11-binder-repo-shell`       | The binder is laid out like a repository        |
+| [#414](https://github.com/davidgraymi/bindersnap-editor-demo/pull/414) | `feat/adr4-12-binder-change-detail`    | The change view is the one that already existed |
+| [#415](https://github.com/davidgraymi/bindersnap-editor-demo/pull/415) | `feat/adr4-13-binder-history-settings` | History and Settings, the last two tabs         |
 
 #404's row above used to claim the document page too. It did not ship one:
 `binderDocument` was in the route table and in the nav's highlight rule, but
@@ -276,6 +277,54 @@ approvals" — because Gitea processes a push asynchronously and can dismiss an
 approval a moment after it reads as good. The helper now requires it to stand
 on two checks a beat apart, which is what makes the answer mean anything.
 
+### History and Settings finish the binder's shape
+
+The two tabs the shell was missing.
+
+**History** is ADR 0004's own sentence made into a page: "who approved v4 of
+infection control is answered by tag → commit → pull request → reviews. The
+record is exact." Two calls for the whole binder — the tags, and the closed
+changes — joined on the merge commit each tag points at. Every row names the
+document, the version, when, the change that published it, who submitted it,
+and everyone whose approval **stood** at the time; a stale or dismissed review
+is not a sign-off and is not counted. A tag written outside Bindersnap says so
+rather than inventing a change to point at.
+
+`DocumentVersion` gained `publishedAt`, which was already on the tag Gitea
+returns and was being thrown away.
+
+**Settings** shows who can act in the binder and what has to be true before a
+policy changes. The people come from the teams _granted onto the repository_
+(`GET /repos/{owner}/{repo}/teams`), not from the organization's team list
+filtered by name: the ADR's direction is that teams belong to the organization
+and a binder adopts them, so a customer's own committee granted onto two
+binders is the shape to expect, and only the repository knows which teams reach
+it.
+
+The rules are said in sentences rather than as a settings form read backwards,
+with the product's core claim first — "nothing reaches the record except a
+change that has been approved and published" — and **both sides of every rule
+stated**, because a rule that is off is still a rule the customer chose. The
+approval count is read with the service account: how many approvals a change
+needs is policy every reviewer is entitled to, and Gitea shows the rule only to
+a repository admin. The whitelists are not sent to the browser.
+
+`RepoBranchProtection` gained `enablePush`, so the core claim can be shown
+rather than only asserted.
+
+**The Owners team is easy to get wrong, and this page got it wrong first.**
+Gitea reports the organization's built-in Owners team as `repo.code: "owner"`
+on every repository the org holds — a level above `admin` that
+`describeTeamAccess` did not know, so the page rendered **"No access" beside
+the person who owns the organization**. That is precisely what the ADR warns
+about: "Counting by name suffix would miss the Owners team, whose members have
+write access to every repository in the org." `ACCESS_ORDER` in `orgs.ts` had
+ranked `owner` highest all along; only the wording was short. Pinned in both a
+unit test and an integration test.
+
+Editing is not built. The page says so in a sentence rather than by drawing
+controls that do nothing.
+
 ## Why #393 carries the organization-creation flow too
 
 They cannot ship apart. The migration parks every username-keyed billing row
@@ -451,15 +500,13 @@ asking.
 
 In rough dependency order.
 
-1. **History and permissions tabs on the binder.** The two the shell does not
-   have yet. History is cheap — the binder's tags grouped by document, which
-   `listVersionsByDocument` already returns in one call. Permissions is the
-   organization-access design work: team membership on the binder, which the
-   product owner named as the next thing wanted.
-2. **Team management on the organization page.** The binder's three role teams
-   already carry membership (`createWorkspaceTeams`, `grantTeamOnRepo`); the
-   organization page at `/{org}` needs to surface and edit it. Nothing new in
-   Gitea is required.
+1. **Editing a binder's people and rules.** Settings reads them; changing them
+   is still done in Gitea. This is the organization-access design work —
+   granting a team onto a binder, creating one, and the approval count — and
+   the product owner named team management as the next thing wanted.
+2. **Team management on the organization page.** The organization page at
+   `/{org}` needs the same treatment: surface its teams and their membership.
+   Nothing new in Gitea is required.
 3. **Delete the old model.** `POST /api/app/documents`,
    `createPrivateCurrentUserRepo`, the 16 `documents/:owner/:repo` routes in
    `services/api/server.ts`, and roughly a dozen SPA files that address a

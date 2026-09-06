@@ -677,6 +677,73 @@ input {
   flex-wrap: wrap;
 }
 
+/* The binder's settings: the rules said in sentences, then the people. */
+.binder-settings-section {
+  display: grid;
+  gap: var(--brand-space-3);
+}
+
+.binder-rule-list {
+  display: grid;
+  gap: var(--brand-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.binder-rule {
+  padding-left: var(--brand-space-4);
+  position: relative;
+  font-size: var(--brand-text-ui-md);
+  color: var(--bs-text-secondary);
+}
+
+.binder-rule::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.6em;
+  width: 5px;
+  height: 5px;
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-rule);
+}
+
+.binder-team {
+  display: grid;
+  gap: var(--brand-space-2);
+  padding: var(--brand-space-4) 0;
+  border-top: 1px solid var(--bs-rule-warm);
+}
+
+.binder-team-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--brand-space-3);
+  flex-wrap: wrap;
+}
+
+.binder-team-name {
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-sm);
+  color: var(--bs-text-primary);
+}
+
+.binder-team-members {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--brand-space-3);
+}
+
+.binder-team-member {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  font-size: var(--brand-text-ui-sm);
+  color: var(--bs-text-secondary);
+}
+
 /* One tab's worth of a binder. The shell above it owns the page width and
    the header, so a pane only has to space its own contents. */
 .binder-pane {
@@ -2947,6 +3014,33 @@ input {
 .doc-spline-link:hover,
 .doc-spline-link:focus-visible {
   border-bottom-color: var(--brand-coral);
+}
+
+/* The binder's history reuses this rail, and adds the two things a
+   per-document version list does not need: when, and by whom. */
+.doc-spline-date {
+  flex-shrink: 0;
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-xs);
+  color: var(--bs-text-faint);
+  white-space: nowrap;
+}
+
+.doc-spline-note {
+  margin: 0;
+  font-size: var(--brand-text-ui-sm);
+  color: var(--bs-text-muted);
+}
+
+.doc-spline-note .doc-spline-link,
+.doc-spline-title .doc-spline-link {
+  appearance: none;
+  background: none;
+  border: none;
+  border-bottom: 1px solid transparent;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
 }
 
 .doc-spline-actions {

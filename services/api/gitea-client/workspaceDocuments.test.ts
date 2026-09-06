@@ -171,8 +171,18 @@ test("listDocumentVersions counts only this document's tags", async () => {
 
   // Newest first.
   expect(versions).toEqual([
-    { tag: "nursing/handover/v2", version: 2, commitSha: "bbb" },
-    { tag: "nursing/handover/v1", version: 1, commitSha: "aaa" },
+    {
+      tag: "nursing/handover/v2",
+      version: 2,
+      commitSha: "bbb",
+      publishedAt: "",
+    },
+    {
+      tag: "nursing/handover/v1",
+      version: 1,
+      commitSha: "aaa",
+      publishedAt: "",
+    },
   ]);
 });
 
@@ -180,8 +190,8 @@ test("the next version follows the highest published one", () => {
   expect(nextVersionFrom([])).toBe(1);
   expect(
     nextVersionFrom([
-      { tag: "handover/v1", version: 1, commitSha: "a" },
-      { tag: "handover/v4", version: 4, commitSha: "b" },
+      { tag: "handover/v1", version: 1, commitSha: "a", publishedAt: "" },
+      { tag: "handover/v4", version: 4, commitSha: "b", publishedAt: "" },
     ]),
   ).toBe(5);
 
@@ -266,6 +276,7 @@ test("createDocumentVersionTag names the document in the tag", async () => {
     tag: "nursing/handover/v2",
     version: 2,
     commitSha: "merge-sha",
+    publishedAt: "",
   });
 });
 

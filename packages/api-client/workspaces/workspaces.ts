@@ -15,6 +15,8 @@ import type {
   GetBinder200,
   GetBinderChange200,
   GetBinderDocument200,
+  GetBinderHistory200,
+  GetBinderSettings200,
   ListBinderChangeDiscussions200,
   ListBinderChangeUpdates200,
   ListBinderChanges200,
@@ -205,6 +207,74 @@ export const listBinderChanges = async (org: string,
     params?: ListBinderChangesParams, options?: Parameters<typeof customFetch>[1]): Promise<listBinderChangesResponse> => {
 
   return customFetch<listBinderChangesResponse>(getListBinderChangesUrl(org,binder,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type getBinderSettingsResponse200 = {
+  data: GetBinderSettings200
+  status: 200
+}
+
+export type getBinderSettingsResponseSuccess = (getBinderSettingsResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getBinderSettingsResponse = (getBinderSettingsResponseSuccess)
+
+export const getGetBinderSettingsUrl = (org: string,
+    binder: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/settings`
+}
+
+export const getBinderSettings = async (org: string,
+    binder: string, options?: Parameters<typeof customFetch>[1]): Promise<getBinderSettingsResponse> => {
+
+  return customFetch<getBinderSettingsResponse>(getGetBinderSettingsUrl(org,binder),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type getBinderHistoryResponse200 = {
+  data: GetBinderHistory200
+  status: 200
+}
+
+export type getBinderHistoryResponseSuccess = (getBinderHistoryResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getBinderHistoryResponse = (getBinderHistoryResponseSuccess)
+
+export const getGetBinderHistoryUrl = (org: string,
+    binder: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/history`
+}
+
+export const getBinderHistory = async (org: string,
+    binder: string, options?: Parameters<typeof customFetch>[1]): Promise<getBinderHistoryResponse> => {
+
+  return customFetch<getBinderHistoryResponse>(getGetBinderHistoryUrl(org,binder),
   {
     ...options,
     method: 'GET'
