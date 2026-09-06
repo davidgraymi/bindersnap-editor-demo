@@ -5852,6 +5852,10 @@ async function readOrganizationPeople(
         return left.login.localeCompare(right.login);
       }),
     groups: membershipByTeam
+      // `staff` is the organization's membership, not a group somebody composes
+      // — the People count above is already the same number, and its only
+      // control is each binder's own "who can see this" switch.
+      .filter(({ team }) => team.name !== STAFF_TEAM_NAME)
       .map(({ team, members: teamMembers, binders: teamBinders }) => ({
         id: team.id,
         name: team.name,
@@ -6241,6 +6245,12 @@ async function readBinderPeople(
     workspace: workspaceName,
     people,
     groups: withMembers
+      // **`staff` is not a group**, and listing it as one undoes the switch
+      // above. It is the organization's membership, its only control here is
+      // "who can see this binder", and a row beside the customer's own
+      // committees — with its own Remove button — would make the most
+      // consequential access choice in the product look like housekeeping.
+      .filter(({ team }) => team.name !== STAFF_TEAM_NAME)
       .map(({ team, members }) => ({
         id: team.id,
         name: team.name,
@@ -6252,8 +6262,8 @@ async function readBinderPeople(
         })),
       }))
       .sort((left, right) => left.name.localeCompare(right.name)),
-    // Derived, never stored: a copy could disagree with the grant Gitea is the
-    // one enforcing.
+    // Derived from the unfiltered set, never stored: a copy could disagree with
+    // the grant Gitea is the one enforcing.
     openToOrganization: teams.some((team) => team.name === STAFF_TEAM_NAME),
     organizationMembers: organizationMembers.map((member) => ({
       login: member.login,
@@ -6527,6 +6537,110 @@ async function removeFromRoleTeams(params: {
     // of this request.
     await removeTeamMember({ client, teamId: team.id, username }).catch(
       () => undefined,
+    );
+  }
+}
+
+/**
+ * Open this binder to the whole organization, or close it again.
+ *
+ * One switch over one primitive: `staff` granted onto the repository, or not.
+ * Nothing is stored — the answer is derived by asking Gitea which teams are
+ * granted here, because a stored copy could disagree with the grant Gitea is
+ * the one enforcing, and the one that matters is the one Gitea enforced.
+ *
+ * It is its own endpoint rather than a group grant with a friendlier name,
+ * because the two are different acts to the person doing them. "Everyone at
+ * Riverside Health can read this" is a decision about the binder; "add the
+ * Quality Committee" is a decision about a group. Routing the first through
+ * the second would put a team called `staff` in a picker beside the customer's
+ * own committees and make the most consequential access choice in the product
+ * look like housekeeping.
+ *
+ * The whitelist is rewritten in the same handler, for the reason every grant
+ * is: granting `staff` read without whitelisting it produces readers whose
+ * approvals are recorded, displayed, and satisfy nothing.
+ */
+async function handleBinderVisibility(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { client, session } = auth;
+
+  try {
+    const body = (await req.json().catch(() => null)) as {
+      openToOrganization?: unknown;
+    } | null;
+
+    if (typeof body?.openToOrganization !== "boolean") {
+      return json(
+        400,
+        { error: "Say whether the organization can read this binder." },
+        baseHeaders,
+      );
+    }
+
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    const staff = await ensureStaffTeam({ client, org: orgName });
+
+    if (body.openToOrganization) {
+      await grantTeamOnRepo({
+        client,
+        teamId: staff.id,
+        org: orgName,
+        repo: workspaceName,
+      });
+    } else {
+      await revokeTeamFromRepo({
+        client,
+        teamId: staff.id,
+        org: orgName,
+        repo: workspaceName,
+      });
+    }
+
+    await recomputeApprovalsWhitelist({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+    });
+
+    logger.info("Binder visibility changed", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      openToOrganization: body.openToOrganization,
+    });
+
+    return json(
+      200,
+      await readBinderPeople(client, orgName, workspaceName),
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to change a binder's visibility", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to change who can see this binder.",
     );
   }
 }
@@ -7326,9 +7440,11 @@ async function handleCreateWorkspace(
   const auth = await requireSubscription(req, baseHeaders);
   if (auth instanceof Response) return auth;
 
-  const payload = await readJson<{ name?: unknown; description?: unknown }>(
-    req,
-  );
+  const payload = await readJson<{
+    name?: unknown;
+    description?: unknown;
+    openToOrganization?: unknown;
+  }>(req);
   const requested =
     typeof payload?.name === "string" ? payload.name.trim() : "";
   if (!requested) {
@@ -7368,6 +7484,9 @@ async function handleCreateWorkspace(
       org: orgName,
       name,
       description,
+      // Absent means open, which is the decided default — an older client that
+      // does not ask gets the answer the product would have given anyway.
+      openToOrganization: payload?.openToOrganization !== false,
     });
 
     logger.info("Workspace created", {
@@ -8220,6 +8339,9 @@ export function createApiServer() {
         const workspacePersonMatch = pathname.match(
           /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/people\/([^/]+)$/,
         );
+        const workspaceVisibilityMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/visibility$/,
+        );
         const workspaceGroupsMatch = pathname.match(
           /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/groups$/,
         );
@@ -8268,6 +8390,13 @@ export function createApiServer() {
             organizationGroupMemberMatch[1]!,
             organizationGroupMemberMatch[2]!,
             organizationGroupMemberMatch[3]!,
+          );
+        } else if (workspaceVisibilityMatch && method === "POST") {
+          response = await handleBinderVisibility(
+            req,
+            baseHeaders,
+            workspaceVisibilityMatch[1]!,
+            workspaceVisibilityMatch[2]!,
           );
         } else if (workspacePeopleMatch && method === "GET") {
           response = await handleBinderPeople(
