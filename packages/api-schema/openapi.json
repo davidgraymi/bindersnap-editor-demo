@@ -923,6 +923,9 @@
               },
               "dismissStaleApprovals": {
                 "type": "boolean"
+              },
+              "enablePush": {
+                "type": "boolean"
               }
             },
             "required": [
@@ -934,7 +937,8 @@
               "mergeWhitelistUsernames",
               "mergeWhitelistTeams",
               "blockOnRejectedReviews",
-              "dismissStaleApprovals"
+              "dismissStaleApprovals",
+              "enablePush"
             ]
           },
           "reviewSettings": {
@@ -1469,6 +1473,9 @@
               },
               "dismissStaleApprovals": {
                 "type": "boolean"
+              },
+              "enablePush": {
+                "type": "boolean"
               }
             },
             "required": [
@@ -1480,7 +1487,8 @@
               "mergeWhitelistUsernames",
               "mergeWhitelistTeams",
               "blockOnRejectedReviews",
-              "dismissStaleApprovals"
+              "dismissStaleApprovals",
+              "enablePush"
             ]
           },
           "isPrivate": {
@@ -4815,6 +4823,9 @@
                         },
                         "dismissStaleApprovals": {
                           "type": "boolean"
+                        },
+                        "enablePush": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
@@ -4826,7 +4837,8 @@
                         "mergeWhitelistUsernames",
                         "mergeWhitelistTeams",
                         "blockOnRejectedReviews",
-                        "dismissStaleApprovals"
+                        "dismissStaleApprovals",
+                        "enablePush"
                       ]
                     },
                     "reviewSettings": {
@@ -5572,6 +5584,9 @@
                         },
                         "dismissStaleApprovals": {
                           "type": "boolean"
+                        },
+                        "enablePush": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
@@ -5583,7 +5598,8 @@
                         "mergeWhitelistUsernames",
                         "mergeWhitelistTeams",
                         "blockOnRejectedReviews",
-                        "dismissStaleApprovals"
+                        "dismissStaleApprovals",
+                        "enablePush"
                       ]
                     },
                     "isPrivate": {
@@ -5806,6 +5822,9 @@
                         },
                         "dismissStaleApprovals": {
                           "type": "boolean"
+                        },
+                        "enablePush": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
@@ -5817,7 +5836,8 @@
                         "mergeWhitelistUsernames",
                         "mergeWhitelistTeams",
                         "blockOnRejectedReviews",
-                        "dismissStaleApprovals"
+                        "dismissStaleApprovals",
+                        "enablePush"
                       ]
                     },
                     "isPrivate": {
@@ -8876,6 +8896,240 @@
         }
       }
     },
+    "/api/app/binders/{org}/{binder}/settings": {
+      "get": {
+        "operationId": "getBinderSettings",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Who can act in this binder, and the rules it is under",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "teams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "number"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "access": {
+                            "type": "string"
+                          },
+                          "members": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "login": {
+                                  "type": "string"
+                                },
+                                "fullName": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "login",
+                                "fullName"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "description",
+                          "access",
+                          "members"
+                        ]
+                      }
+                    },
+                    "rules": {
+                      "type": "object",
+                      "properties": {
+                        "requiredApprovals": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "dismissStaleApprovals": {
+                          "type": "boolean"
+                        },
+                        "pushBlocked": {
+                          "type": "boolean"
+                        },
+                        "blockOnUnresolvedThreads": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "requiredApprovals",
+                        "dismissStaleApprovals",
+                        "pushBlocked",
+                        "blockOnUnresolvedThreads"
+                      ]
+                    },
+                    "canManage": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "workspace",
+                    "teams",
+                    "rules",
+                    "canManage"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/history": {
+      "get": {
+        "operationId": "getBinderHistory",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Every version this binder has published, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "versions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "slugPath": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "folder": {
+                            "type": "string"
+                          },
+                          "version": {
+                            "type": "number"
+                          },
+                          "tag": {
+                            "type": "string"
+                          },
+                          "commitSha": {
+                            "type": "string"
+                          },
+                          "publishedAt": {
+                            "type": "string"
+                          },
+                          "changeNumber": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "changeTitle": {
+                            "type": "string"
+                          },
+                          "submittedBy": {
+                            "type": "string"
+                          },
+                          "approvers": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "slugPath",
+                          "name",
+                          "folder",
+                          "version",
+                          "tag",
+                          "commitSha",
+                          "publishedAt",
+                          "changeNumber",
+                          "changeTitle",
+                          "submittedBy",
+                          "approvers"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "workspace",
+                    "versions"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/app/binders/{org}/{binder}/documents": {
       "get": {
         "operationId": "listBinderDocuments",
@@ -8962,12 +9216,16 @@
                               },
                               "commitSha": {
                                 "type": "string"
+                              },
+                              "publishedAt": {
+                                "type": "string"
                               }
                             },
                             "required": [
                               "tag",
                               "version",
-                              "commitSha"
+                              "commitSha",
+                              "publishedAt"
                             ]
                           }
                         },
@@ -9188,12 +9446,16 @@
                           },
                           "commitSha": {
                             "type": "string"
+                          },
+                          "publishedAt": {
+                            "type": "string"
                           }
                         },
                         "required": [
                           "tag",
                           "version",
-                          "commitSha"
+                          "commitSha",
+                          "publishedAt"
                         ]
                       }
                     },
@@ -9209,12 +9471,16 @@
                         },
                         "commitSha": {
                           "type": "string"
+                        },
+                        "publishedAt": {
+                          "type": "string"
                         }
                       },
                       "required": [
                         "tag",
                         "version",
-                        "commitSha"
+                        "commitSha",
+                        "publishedAt"
                       ]
                     },
                     "openChanges": {
@@ -9788,12 +10054,16 @@
                               },
                               "commitSha": {
                                 "type": "string"
+                              },
+                              "publishedAt": {
+                                "type": "string"
                               }
                             },
                             "required": [
                               "tag",
                               "version",
-                              "commitSha"
+                              "commitSha",
+                              "publishedAt"
                             ]
                           },
                           "versions": {
@@ -9809,12 +10079,16 @@
                                 },
                                 "commitSha": {
                                   "type": "string"
+                                },
+                                "publishedAt": {
+                                  "type": "string"
                                 }
                               },
                               "required": [
                                 "tag",
                                 "version",
-                                "commitSha"
+                                "commitSha",
+                                "publishedAt"
                               ]
                             }
                           }
@@ -10053,12 +10327,16 @@
                           },
                           "commitSha": {
                             "type": "string"
+                          },
+                          "publishedAt": {
+                            "type": "string"
                           }
                         },
                         "required": [
                           "tag",
                           "version",
-                          "commitSha"
+                          "commitSha",
+                          "publishedAt"
                         ]
                       }
                     }

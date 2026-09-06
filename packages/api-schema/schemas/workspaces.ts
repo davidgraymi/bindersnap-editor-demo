@@ -99,6 +99,12 @@ export const DocumentVersionSchema = z.object({
   tag: z.string(),
   version: z.number(),
   commitSha: z.string(),
+  /**
+   * When the commit this tag points at was made — when the change that
+   * published it was merged. Empty when Gitea did not say, which a reader is
+   * told rather than shown a date we invented.
+   */
+  publishedAt: z.string(),
 });
 export type DocumentVersion = z.infer<typeof DocumentVersionSchema>;
 
@@ -374,4 +380,104 @@ export const WorkspaceChangeListPayloadSchema = z.object({
 });
 export type WorkspaceChangeListPayload = z.infer<
   typeof WorkspaceChangeListPayloadSchema
+>;
+
+/**
+ * One published version, as the binder's history reads it.
+ *
+ * ADR 0004: "who approved v4 of infection control is answered by tag → commit
+ * → pull request → reviews. The record is exact." This is that chain walked
+ * once for the whole binder and put on a page — the tags name the versions,
+ * and the merge commit each one points at names the change that published it
+ * and everyone who signed it off.
+ */
+export const WorkspaceHistoryEntrySchema = z.object({
+  /** `clinical/infection-control` — the document's identity. */
+  slugPath: z.string(),
+  name: z.string(),
+  /** `clinical`, or "" at the binder's root. */
+  folder: z.string(),
+  version: z.number(),
+  tag: z.string(),
+  commitSha: z.string(),
+  /** When the change was merged. Empty when Gitea did not say. */
+  publishedAt: z.string(),
+  /**
+   * The change that published it, or null for a tag written outside the app.
+   *
+   * Null is not a fault: a binder is a git repository and somebody may tag it
+   * themselves. The row simply cannot lead anywhere.
+   */
+  changeNumber: z.number().nullable(),
+  changeTitle: z.string(),
+  submittedBy: z.string(),
+  /** Everyone whose approval stood when it was published. */
+  approvers: z.array(z.string()),
+});
+export type WorkspaceHistoryEntry = z.infer<typeof WorkspaceHistoryEntrySchema>;
+
+export const WorkspaceHistoryPayloadSchema = z.object({
+  organization: z.string(),
+  workspace: z.string(),
+  /** Newest first. */
+  versions: z.array(WorkspaceHistoryEntrySchema),
+});
+export type WorkspaceHistoryPayload = z.infer<
+  typeof WorkspaceHistoryPayloadSchema
+>;
+
+/** One person who can act in a binder, through a team granted onto it. */
+export const WorkspacePersonSchema = z.object({
+  login: z.string(),
+  fullName: z.string(),
+});
+export type WorkspacePerson = z.infer<typeof WorkspacePersonSchema>;
+
+/**
+ * A team granted onto the binder, and who is in it.
+ *
+ * `access` is the effective permission on `repo.code`, which is what ADR 0004
+ * counts as a paid seat — write or better is an author, read is a reviewer and
+ * is free. Reported as Gitea has it rather than as a name we chose, because
+ * the permission is the thing that is enforced.
+ */
+export const WorkspaceTeamSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  description: z.string(),
+  /** `admin`, `write`, `read`, or `none`. */
+  access: z.string(),
+  members: z.array(WorkspacePersonSchema),
+});
+export type WorkspaceTeam = z.infer<typeof WorkspaceTeamSchema>;
+
+/**
+ * The rules a binder is governed by.
+ *
+ * Branch protection is Gitea's and is enforced at the merge;
+ * `blockOnUnresolvedThreads` has no Gitea equivalent and is enforced by the
+ * BFF at publish. Shown together because a customer does not care which of us
+ * enforces what — they care what has to be true before a policy changes.
+ */
+export const WorkspaceRulesSchema = z.object({
+  /** Null when the rule could not be read at all. */
+  requiredApprovals: z.number().nullable(),
+  /** A new version clears the approvals the last one collected. */
+  dismissStaleApprovals: z.boolean(),
+  /** Nothing but an approved change reaches the record. */
+  pushBlocked: z.boolean(),
+  blockOnUnresolvedThreads: z.boolean(),
+});
+export type WorkspaceRules = z.infer<typeof WorkspaceRulesSchema>;
+
+export const WorkspaceSettingsPayloadSchema = z.object({
+  organization: z.string(),
+  workspace: z.string(),
+  teams: z.array(WorkspaceTeamSchema),
+  rules: WorkspaceRulesSchema,
+  /** Whether this caller may change any of it. */
+  canManage: z.boolean(),
+});
+export type WorkspaceSettingsPayload = z.infer<
+  typeof WorkspaceSettingsPayloadSchema
 >;

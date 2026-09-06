@@ -15,7 +15,9 @@ import type {
   PublishedWorkspaceChangePayload,
   WorkspaceChangeDetailPayload,
   WorkspaceChangeListPayload,
+  WorkspaceHistoryPayload,
   WorkspaceOverviewPayload,
+  WorkspaceSettingsPayload,
   WorkspaceDocumentDetailPayload,
   WorkspaceDocumentListPayload,
   WorkspaceSummary,
@@ -911,6 +913,24 @@ export async function fetchBinderChanges(
   const response = await BindersClient.listBinderChanges(org, binder, {
     state,
   });
+  return response.data;
+}
+
+/** Every version this binder has published, newest first. */
+export async function fetchBinderHistory(
+  org: string,
+  binder: string,
+): Promise<WorkspaceHistoryPayload> {
+  const response = await BindersClient.getBinderHistory(org, binder);
+  return response.data;
+}
+
+/** Who can act in this binder, and the rules it is governed by. */
+export async function fetchBinderSettings(
+  org: string,
+  binder: string,
+): Promise<WorkspaceSettingsPayload> {
+  const response = await BindersClient.getBinderSettings(org, binder);
   return response.data;
 }
 

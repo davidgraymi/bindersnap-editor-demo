@@ -21,10 +21,21 @@ const revision = {
     tag: "nursing/hand-hygiene/v2",
     version: 2,
     commitSha: "bbb",
+    publishedAt: "",
   },
   versions: [
-    { tag: "nursing/hand-hygiene/v2", version: 2, commitSha: "bbb" },
-    { tag: "nursing/hand-hygiene/v1", version: 1, commitSha: "aaa" },
+    {
+      tag: "nursing/hand-hygiene/v2",
+      version: 2,
+      commitSha: "bbb",
+      publishedAt: "",
+    },
+    {
+      tag: "nursing/hand-hygiene/v1",
+      version: 1,
+      commitSha: "aaa",
+      publishedAt: "",
+    },
   ],
 };
 

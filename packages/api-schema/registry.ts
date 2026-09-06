@@ -42,6 +42,8 @@ import {
 import {
   PublishedWorkspaceChangePayloadSchema,
   WorkspaceChangeListPayloadSchema,
+  WorkspaceHistoryPayloadSchema,
+  WorkspaceSettingsPayloadSchema,
   WorkspaceOverviewPayloadSchema,
   WorkspaceChangeDetailPayloadSchema,
   WorkspaceDocumentDetailPayloadSchema,
@@ -829,6 +831,38 @@ registry.registerPath({
       description: "The binder's change requests, open or closed",
       content: {
         "application/json": { schema: WorkspaceChangeListPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/binders/{org}/{binder}/settings",
+  operationId: "getBinderSettings",
+  tags: ["workspaces"],
+  request: { params: z.object({ org: z.string(), binder: z.string() }) },
+  responses: {
+    200: {
+      description: "Who can act in this binder, and the rules it is under",
+      content: {
+        "application/json": { schema: WorkspaceSettingsPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/binders/{org}/{binder}/history",
+  operationId: "getBinderHistory",
+  tags: ["workspaces"],
+  request: { params: z.object({ org: z.string(), binder: z.string() }) },
+  responses: {
+    200: {
+      description: "Every version this binder has published, newest first",
+      content: {
+        "application/json": { schema: WorkspaceHistoryPayloadSchema },
       },
     },
   },

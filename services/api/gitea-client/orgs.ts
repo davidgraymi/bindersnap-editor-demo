@@ -393,6 +393,32 @@ export async function removeTeamMember(
   }
 }
 
+/**
+ * The teams granted onto one repository — who can act in this binder.
+ *
+ * Asked of the repository rather than assembled from the organization's team
+ * list by name. The role teams provisioning creates are named after the binder,
+ * but ADR 0004's direction is that teams belong to the organization and a
+ * binder *adopts* them, so a customer's own "Infection Control Committee"
+ * granted onto two binders is the shape to expect. Only the repository knows
+ * which teams reach it.
+ */
+export async function listRepoTeams(params: {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+}): Promise<GiteaTeam[]> {
+  const { client, owner, repo } = params;
+
+  const teams = await unwrap(
+    client.GET("/repos/{owner}/{repo}/teams", {
+      params: { path: { owner, repo } },
+    }),
+  );
+
+  return (teams ?? []).map(normalizeTeam);
+}
+
 export interface ListTeamMembersParams {
   client: GiteaClient;
   teamId: number;

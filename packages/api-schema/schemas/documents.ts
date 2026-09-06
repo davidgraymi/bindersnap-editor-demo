@@ -15,6 +15,14 @@ export const RepoBranchProtectionSchema = z.object({
   mergeWhitelistTeams: z.array(z.string()),
   blockOnRejectedReviews: z.boolean(),
   dismissStaleApprovals: z.boolean(),
+  /**
+   * Whether anybody may push straight to the protected branch.
+   *
+   * False is the product's core claim — nothing but a merged, approved change
+   * reaches the record — so it is worth being able to show a customer rather
+   * than only asserting it.
+   */
+  enablePush: z.boolean(),
 });
 export type RepoBranchProtection = z.infer<typeof RepoBranchProtectionSchema>;
 

@@ -162,11 +162,20 @@ export interface DocumentVersion {
   tag: string;
   version: number;
   commitSha: string;
+  /**
+   * When the commit this tag points at was made — which is when the change
+   * that published it was merged.
+   *
+   * On the tag Gitea already returns, so a binder's whole history is one call.
+   * Empty when Gitea did not say, which a reader is told rather than shown a
+   * date we invented.
+   */
+  publishedAt: string;
 }
 
 interface GitTag {
   name?: string;
-  commit?: { sha?: string };
+  commit?: { sha?: string; created?: string };
 }
 
 /**
@@ -203,7 +212,14 @@ export async function listDocumentVersions(params: {
       const version = versionFromTag(name);
       if (version === null) return [];
 
-      return [{ tag: name, version, commitSha: tag.commit?.sha ?? "" }];
+      return [
+        {
+          tag: name,
+          version,
+          commitSha: tag.commit?.sha ?? "",
+          publishedAt: tag.commit?.created ?? "",
+        },
+      ];
     })
     .sort((a, b) => b.version - a.version);
 }
@@ -298,6 +314,7 @@ export async function createDocumentVersionTag(params: {
     tag: tagName,
     version,
     commitSha: tag?.commit?.sha ?? "",
+    publishedAt: tag?.commit?.created ?? "",
   };
 }
 
@@ -375,7 +392,12 @@ export async function listVersionsByDocument(params: {
     const version = versionFromTag(name);
     if (slugPath === null || version === null) continue;
 
-    const entry = { tag: name, version, commitSha: tag.commit?.sha ?? "" };
+    const entry = {
+      tag: name,
+      version,
+      commitSha: tag.commit?.sha ?? "",
+      publishedAt: tag.commit?.created ?? "",
+    };
     const existing = byDocument.get(slugPath);
     if (existing) {
       existing.push(entry);

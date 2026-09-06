@@ -9,4 +9,5 @@ export type GetBinderChange200DocumentsItemVersionsItem = {
   tag: string;
   version: number;
   commitSha: string;
+  publishedAt: string;
 };

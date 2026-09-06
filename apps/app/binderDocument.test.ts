@@ -28,9 +28,24 @@ const rootDocument = {
 };
 
 const versions = [
-  { tag: "nursing/hand-hygiene/v3", version: 3, commitSha: "ccc" },
-  { tag: "nursing/hand-hygiene/v2", version: 2, commitSha: "bbb" },
-  { tag: "nursing/hand-hygiene/v1", version: 1, commitSha: "aaa" },
+  {
+    tag: "nursing/hand-hygiene/v3",
+    version: 3,
+    commitSha: "ccc",
+    publishedAt: "",
+  },
+  {
+    tag: "nursing/hand-hygiene/v2",
+    version: 2,
+    commitSha: "bbb",
+    publishedAt: "",
+  },
+  {
+    tag: "nursing/hand-hygiene/v1",
+    version: 1,
+    commitSha: "aaa",
+    publishedAt: "",
+  },
 ];
 
 // ── buildDocumentCrumbs ────────────────────────────────────────────
@@ -189,7 +204,12 @@ test("a proposed document is in review, not missing a version", () => {
 test("a published version still wins over the proposed wording", () => {
   expect(
     describeVersionState(
-      { tag: "nursing/hand-hygiene/v2", version: 2, commitSha: "b" },
+      {
+        tag: "nursing/hand-hygiene/v2",
+        version: 2,
+        commitSha: "b",
+        publishedAt: "",
+      },
       "proposed",
     ),
   ).toBe("Version 2 on record");

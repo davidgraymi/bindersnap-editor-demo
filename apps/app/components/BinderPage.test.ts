@@ -55,6 +55,7 @@ test("a document says which version it is at", () => {
           tag: "nursing/handover/v3",
           version: 3,
           commitSha: "a",
+          publishedAt: "",
         },
       }),
     ),
@@ -74,7 +75,12 @@ test("open changes are counted alongside the version", () => {
       entry({
         slugPath: "admissions",
         folder: "",
-        latestVersion: { tag: "admissions/v1", version: 1, commitSha: "a" },
+        latestVersion: {
+          tag: "admissions/v1",
+          version: 1,
+          commitSha: "a",
+          publishedAt: "",
+        },
         openChangeCount: 2,
       }),
     ),

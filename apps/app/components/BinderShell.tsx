@@ -13,6 +13,8 @@ import { parseRequestedChange } from "../binderChange";
 import { AddPolicyModal } from "./AddPolicyModal";
 import { BinderChangePage } from "./BinderChangePage";
 import { BinderChanges } from "./BinderChanges";
+import { BinderHistory } from "./BinderHistory";
+import { BinderSettings } from "./BinderSettings";
 import { BinderDocumentPage } from "./BinderDocumentPage";
 import { BinderDocuments } from "./BinderPage";
 import { SkeletonLine } from "./Skeleton";
@@ -137,6 +139,10 @@ export function BinderShell({
       label: "Change requests",
       count: overview?.openChangeCount,
     },
+    // No counts on these two. A number of published versions is not a number
+    // of things to deal with, and a number of rules is not either.
+    { id: "history", label: "History" },
+    { id: "settings", label: "Settings" },
   ];
 
   return (
@@ -225,6 +231,15 @@ export function BinderShell({
           onOpenChange={openChangeNumber}
           onAddPolicy={() => setAdding(true)}
         />
+      ) : activeTab === "history" ? (
+        <BinderHistory
+          org={org}
+          binder={binder}
+          onOpenDocument={onOpenDocument}
+          onOpenChange={openChangeNumber}
+        />
+      ) : activeTab === "settings" ? (
+        <BinderSettings org={org} binder={binder} />
       ) : (
         <BinderDocuments
           org={org}

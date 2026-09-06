@@ -12,4 +12,5 @@ export type ListBinderDocuments200DocumentsItemLatestVersion = {
   tag: string;
   version: number;
   commitSha: string;
+  publishedAt: string;
 } | null;
