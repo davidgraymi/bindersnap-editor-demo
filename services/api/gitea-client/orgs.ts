@@ -31,6 +31,22 @@ export type WorkspaceRole = (typeof WORKSPACE_ROLES)[number];
 export const OWNERS_TEAM_NAME = "Owners";
 
 /**
+ * The organization's read team: every member of the org, once.
+ *
+ * Issue #371 needs every employee to read the policy manual in order to attest
+ * to it, and ADR 0004 §6 makes read uniform within a binder — which together
+ * imply adding four hundred nurses to every binder, one call each. One org-wide
+ * team granted onto a binder is that same access for one call.
+ *
+ * It carries the reviewer unit map, which is not a coincidence: it *is* the
+ * reviewer permission, held once for the organization instead of once per
+ * binder. So the whole staff can read, comment, approve and reject in a binder
+ * that is open to them — and it costs no seats, because a seat is write or
+ * better on `repo.code` and this is read.
+ */
+export const STAFF_TEAM_NAME = "staff";
+
+/**
  * Access levels Gitea reports for a team, ordered. Anything at `write` or above
  * on `repo.code` can put a version into a workspace, which is what a seat is.
  */
@@ -297,6 +313,53 @@ export async function createWorkspaceRoleTeam(
   return normalizeTeam(team);
 }
 
+/**
+ * The organization's `staff` team, created if it is not there yet.
+ *
+ * **`includes_all_repositories` is false, and that single field is what keeps
+ * the design honest.** With it true, every binder is readable by everyone
+ * forever and there is no way back — an HR investigation binder becomes
+ * impossible, and the only remedy is a second organization, which breaks
+ * billing. With it false, granting `staff` is a per-binder act, and the product
+ * gets a switch instead of a law.
+ *
+ * Idempotent, because organizations created before this existed have no staff
+ * team and the first binder provisioned in one has to be able to make it.
+ */
+export async function ensureStaffTeam(
+  params: OrganizationParams,
+): Promise<GiteaTeam> {
+  const { client, org } = params;
+
+  const existing = await findOrganizationTeam({
+    client,
+    org,
+    name: STAFF_TEAM_NAME,
+  });
+  if (existing) return existing;
+
+  const team = await unwrap(
+    client.POST("/orgs/{org}/teams", {
+      params: { path: { org } },
+      body: {
+        name: STAFF_TEAM_NAME,
+        description:
+          "Everyone at this organization. Granted onto a binder to let the whole staff read it.",
+        permission: "read",
+        includes_all_repositories: false,
+        can_create_org_repo: false,
+        units_map: {
+          "repo.code": "read",
+          "repo.pulls": "read",
+          "repo.issues": "read",
+        },
+      },
+    }),
+  );
+
+  return normalizeTeam(team);
+}
+
 export interface CreateWorkspaceTeamsParams extends OrganizationParams {
   workspace: string;
 }
@@ -312,6 +375,112 @@ export async function createWorkspaceTeams(
   }
 
   return teams;
+}
+
+/**
+ * The levels a group can be created at, said the way the product says them.
+ *
+ * **A Gitea team carries one unit map, so a level is a property of the group
+ * rather than of the grant.** `PUT /teams/{id}/repos/{org}/{repo}` adopts a team
+ * at whatever permission it already has, and there is no per-grant level. The
+ * consequence is not negotiable and is designed for rather than hidden: a
+ * "Quality Committee" cannot be an editor in one binder and a reviewer in
+ * another. If a customer needs that, it is two groups — so a group is created
+ * as a name and a level together, and the level travels with the name
+ * everywhere it appears.
+ */
+export const GROUP_LEVELS = ["admin", "editor", "reviewer"] as const;
+
+export type GroupLevel = (typeof GROUP_LEVELS)[number];
+
+export function isGroupLevel(value: unknown): value is GroupLevel {
+  return (
+    typeof value === "string" &&
+    (GROUP_LEVELS as readonly string[]).includes(value)
+  );
+}
+
+/**
+ * Each level is one of the role unit maps, reused rather than restated.
+ *
+ * `ROLE_TEAM_OPTIONS` is already the verified definition of what admin, write
+ * and read mean in a binder — `tests/gitea-permission-model.pw.ts` pins it —
+ * and a second definition here would drift the way the seed's once did. The
+ * screen words differ from the Gitea words on purpose: "Editor" is a claim
+ * about who may write *next*, where "author" reads as a claim about who wrote
+ * something, which on a product whose output is evidence is a false attribution.
+ */
+const GROUP_LEVEL_ROLES: Record<GroupLevel, WorkspaceRole> = {
+  admin: "admins",
+  editor: "authors",
+  reviewer: "reviewers",
+};
+
+/** What level a group holds, read back from the access Gitea reports. */
+export function groupLevelFromAccess(access: string): GroupLevel | null {
+  switch (access) {
+    // `owner` is what Gitea reports for the built-in Owners team on every
+    // repository the org holds. It is above admin, and it is not a level
+    // anybody creates a group at — but it is one a group can be shown at.
+    case "owner":
+    case "admin":
+      return "admin";
+    case "write":
+      return "editor";
+    case "read":
+      return "reviewer";
+    default:
+      return null;
+  }
+}
+
+export interface CreateOrganizationGroupParams extends OrganizationParams {
+  /** The handle, already slugified by the caller. */
+  name: string;
+  level: GroupLevel;
+  description?: string;
+}
+
+/**
+ * Create one of the customer's own groups.
+ *
+ * The whole point of it is reuse: a Quality Committee that reviews three
+ * binders is one membership list adopted three times, rather than three lists a
+ * human keeps in step by hand — which is the failure ADR 0004 rejected when it
+ * refused a team-to-repository reconciler, moved into the customer's hands
+ * where it is worse.
+ *
+ * It is granted onto nothing when it is created. ADR 0004: "a team granted onto
+ * no repository grants access to nothing and costs nothing" — so naming a group
+ * is free, and composing it onto a binder is a separate, deliberate act by
+ * whoever runs that binder.
+ */
+export async function createOrganizationGroup(
+  params: CreateOrganizationGroupParams,
+): Promise<GiteaTeam> {
+  const { client, org, name, level, description } = params;
+
+  const existing = await findOrganizationTeam({ client, org, name });
+  if (existing) {
+    throw new GiteaApiError(409, `${org} already has a group called ${name}.`);
+  }
+
+  const team = await unwrap(
+    client.POST("/orgs/{org}/teams", {
+      params: { path: { org } },
+      body: {
+        ...ROLE_TEAM_OPTIONS[GROUP_LEVEL_ROLES[level]],
+        name,
+        // No default description. The level is already on the row twice — as
+        // the chip beside the name and as what it costs — and a third copy of
+        // the same sentence is noise. The field is here for a customer who
+        // wants to say what the group is *for*.
+        description: description ?? "",
+      } satisfies CreateTeamOption,
+    }),
+  );
+
+  return normalizeTeam(team);
 }
 
 export interface TeamRepoParams {
@@ -393,6 +562,32 @@ export async function removeTeamMember(
   }
 }
 
+/**
+ * The teams granted onto one repository — who can act in this binder.
+ *
+ * Asked of the repository rather than assembled from the organization's team
+ * list by name. The role teams provisioning creates are named after the binder,
+ * but ADR 0004's direction is that teams belong to the organization and a
+ * binder *adopts* them, so a customer's own "Infection Control Committee"
+ * granted onto two binders is the shape to expect. Only the repository knows
+ * which teams reach it.
+ */
+export async function listRepoTeams(params: {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+}): Promise<GiteaTeam[]> {
+  const { client, owner, repo } = params;
+
+  const teams = await unwrap(
+    client.GET("/repos/{owner}/{repo}/teams", {
+      params: { path: { owner, repo } },
+    }),
+  );
+
+  return (teams ?? []).map(normalizeTeam);
+}
+
 export interface ListTeamMembersParams {
   client: GiteaClient;
   teamId: number;
@@ -410,6 +605,36 @@ export async function listTeamMembers(
   );
 
   return (members ?? []).map(normalizeOrgUser);
+}
+
+/**
+ * The binders one group reaches — the other half of `listRepoTeams`.
+ *
+ * A binder's Settings tab asks "which groups can act here"; a group's own row
+ * asks "which binders does this reach", and both are the same grant read from
+ * opposite ends. Only the second answers the question an owner has when they
+ * are looking at a group rather than at a binder, and it is the question that
+ * decides whether changing the group is safe: a level or a membership change
+ * lands on every binder in this list at once.
+ *
+ * Gitea answers it directly, so it stays derived. A stored copy would be a
+ * second source of truth for a grant Gitea is the one enforcing.
+ */
+export async function listTeamRepos(params: {
+  client: GiteaClient;
+  teamId: number;
+}): Promise<string[]> {
+  const { client, teamId } = params;
+
+  const repos = await unwrap(
+    client.GET("/teams/{id}/repos", {
+      params: { path: { id: teamId }, query: { limit: 100 } },
+    }),
+  );
+
+  return (repos ?? [])
+    .map((repo) => repo.name ?? "")
+    .filter((name) => name !== "");
 }
 
 /**
@@ -442,6 +667,56 @@ export async function isOrganizationOwner(
   return owners.some(
     (owner) => owner.login.toLowerCase() === params.username.toLowerCase(),
   );
+}
+
+/**
+ * Everyone in the organization.
+ *
+ * The org-level role model is two rungs — owner and member — and every third
+ * role anyone proposes turns out to be a binder role wearing a costume. So this
+ * is the whole list, and who is an owner is the Owners team.
+ */
+export async function listOrganizationMembers(
+  params: OrganizationParams,
+): Promise<OrgUserSummary[]> {
+  const { client, org } = params;
+
+  const members = await unwrap(
+    client.GET("/orgs/{org}/members", {
+      params: { path: { org }, query: { limit: 100 } },
+    }),
+  );
+
+  return (members ?? []).map(normalizeOrgUser);
+}
+
+/**
+ * Whether this person owns the organization, asked of Gitea directly.
+ *
+ * One call, and `is_owner` comes back as a field — which is more reliable than
+ * anything derived from team names, and is the guard for every owner-only
+ * action.
+ */
+export async function isOrganizationOwnerDirect(params: {
+  client: GiteaClient;
+  org: string;
+  username: string;
+}): Promise<boolean> {
+  const { client, org, username } = params;
+
+  try {
+    const permission = (await unwrap(
+      client.GET("/users/{username}/orgs/{org}/permissions", {
+        params: { path: { username, org } },
+      }),
+    )) as { is_owner?: boolean };
+
+    return permission.is_owner === true;
+  } catch {
+    // Not a member, or Gitea would not say. Either way, not an owner — and a
+    // failure here should cost a button, not the page.
+    return false;
+  }
 }
 
 /**

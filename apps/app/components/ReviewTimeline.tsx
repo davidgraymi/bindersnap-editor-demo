@@ -10,11 +10,12 @@ import {
 } from "lucide-react";
 
 import type { ChangeUpdate, DiscussionSummary, ReactionKind } from "../api";
+import type { ChangeScope } from "../changeScope";
 import {
-  createDocumentDiscussion,
-  listDocumentDiscussions,
-  replyToDocumentDiscussion,
-  resolveDocumentDiscussion,
+  createChangeDiscussion,
+  listChangeDiscussions,
+  replyToChangeDiscussion,
+  resolveChangeDiscussion,
   setDiscussionCommentReaction,
 } from "../api";
 import { applyReactionLocally } from "../reactions";
@@ -25,8 +26,8 @@ import { ReviewThread } from "./ReviewThread";
 import { SkeletonGroup, SkeletonLine, SkeletonShape } from "./Skeleton";
 
 interface ReviewTimelineProps {
-  owner: string;
-  repo: string;
+  /** Which repository this change lives in — a document's, or a binder. */
+  scope: ChangeScope;
   change: ChangeRecord;
   /** Every version this change has proposed, for the update events. */
   updates: ChangeUpdate[];
@@ -111,8 +112,7 @@ function TimelineEvent({
  * them. The dots are fully opaque so the hairline never shows through one.
  */
 export function ReviewTimeline({
-  owner,
-  repo,
+  scope,
   change,
   updates,
   resetsApprovals,
@@ -150,7 +150,7 @@ export function ReviewTimeline({
     async function load() {
       setLoading(true);
       try {
-        const next = await listDocumentDiscussions(owner, repo, pullNumber);
+        const next = await listChangeDiscussions(scope, pullNumber);
         if (!cancelled) {
           apply(next);
           setError(null);
@@ -172,7 +172,7 @@ export function ReviewTimeline({
     return () => {
       cancelled = true;
     };
-  }, [owner, repo, pullNumber, apply]);
+  }, [scope, pullNumber, apply]);
 
   async function run(
     action: () => Promise<DiscussionSummary>,
@@ -214,8 +214,7 @@ export function ReviewTimeline({
     setError(null);
 
     void setDiscussionCommentReaction(
-      owner,
-      repo,
+      scope,
       pullNumber,
       threadId,
       commentId,
@@ -235,7 +234,7 @@ export function ReviewTimeline({
     const body = newThreadBody.trim();
     if (!body) return;
     const posted = await run(() =>
-      createDocumentDiscussion(owner, repo, pullNumber, body),
+      createChangeDiscussion(scope, pullNumber, body),
     );
     if (!posted) return;
     setNewThreadBody("");
@@ -280,9 +279,8 @@ export function ReviewTimeline({
                   onReact={react}
                   onReply={(threadId, body) =>
                     run(() =>
-                      replyToDocumentDiscussion(
-                        owner,
-                        repo,
+                      replyToChangeDiscussion(
+                        scope,
                         pullNumber,
                         threadId,
                         body,
@@ -291,9 +289,8 @@ export function ReviewTimeline({
                   }
                   onToggleResolved={async (threadId, resolved) => {
                     await run(() =>
-                      resolveDocumentDiscussion(
-                        owner,
-                        repo,
+                      resolveChangeDiscussion(
+                        scope,
                         pullNumber,
                         threadId,
                         resolved,

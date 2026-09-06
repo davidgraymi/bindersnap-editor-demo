@@ -121,14 +121,26 @@ function resolveApprovalState(
   // list, so the page showed a red badge beside a full approval count and the
   // publish button never came back. Gitea merges on the latest review per
   // person, and this now agrees with it.
-  const reviewStates = [...latestReviewByUser(reviews).values()].map(
-    toApprovalStateFromReview,
-  );
-  if (reviewStates.includes("changes_requested")) {
+  const latest = [...latestReviewByUser(reviews).values()];
+
+  if (latest.map(toApprovalStateFromReview).includes("changes_requested")) {
     return "changes_requested";
   }
 
-  if (reviewStates.includes("approved")) {
+  // **A stale approval is not an approval**, and this is the second rule in
+  // the codebase for the same question — `countApprovals` has always skipped
+  // stale ones, because Gitea does at merge time. This did not, so a change
+  // whose approval had been overtaken by a new upload read as `isApproved`
+  // beside an approval count of zero, and the page offered a publish that
+  // Gitea answers with "does not have enough approvals". Same shape as the
+  // `isRejected` defect: two rules, one of them wrong.
+  if (
+    latest.some(
+      (review) =>
+        toApprovalStateFromReview(review) === "approved" &&
+        review.stale !== true,
+    )
+  ) {
     return "approved";
   }
 
@@ -624,6 +636,84 @@ export async function mergeWorkspaceChange(params: {
     409,
     `This change could not be merged into the binder's main branch: ${lastError}`,
   );
+}
+
+/**
+ * Bring a change's branch up to date with the branch it would be merged into.
+ *
+ * A binder protects `main` with `block_on_outdated_branch`, so a change that
+ * branched off before another one merged is refused however many approvals it
+ * has. This is the way out, and it is a merge rather than a rebase on purpose:
+ * a rebase replays the change's commit onto the new head, which git cannot do
+ * for the binary files most policies are — Word documents and PDFs — and it
+ * fails with "your local changes would be overwritten by merge". A merge
+ * commit keeps both sides and always applies.
+ *
+ * It moves the branch, so a binder with `dismiss_stale_approvals` will drop
+ * the approvals collected so far. That is correct — the approvals were for
+ * different content — and it is why this is an explicit act rather than
+ * something publish does quietly on the caller's behalf.
+ */
+export async function updateChangeBranch(params: {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+  pullNumber: number;
+  maxAttempts?: number;
+  /**
+   * True once Gitea reports the change as up to date. False means the push
+   * went through and Gitea is still catching up — worth saying, never worth
+   * failing an operation that succeeded.
+   */
+}): Promise<boolean> {
+  const { client, owner, repo, pullNumber, maxAttempts = 10 } = params;
+  const POLL_DELAY_MS = 500;
+
+  const { response, error } = await client.POST(
+    "/repos/{owner}/{repo}/pulls/{index}/update",
+    {
+      params: {
+        path: { owner, repo, index: pullNumber },
+        query: { style: "merge" },
+      },
+    },
+  );
+
+  if (response.status < 200 || response.status >= 300) {
+    // Gitea's own words again: a conflict here is the author's to resolve and
+    // names the file, which an invented sentence would throw away.
+    throw toGiteaApiError(
+      response.status,
+      `This change could not be brought up to date: ${toGiteaApiError(response.status, error).message}`,
+    );
+  }
+
+  // Gitea accepts the push and recomputes the merge base afterwards, so for a
+  // second or two it still reports the change as behind. Returning on the 200
+  // makes the caller redraw the very state it just fixed — so this waits for
+  // the answer it is claiming, and the endpoint's success means "it is up to
+  // date" rather than "I asked".
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const pullRequest = await unwrap(
+      client.GET("/repos/{owner}/{repo}/pulls/{index}", {
+        params: { path: { owner, repo, index: pullNumber } },
+      }),
+    );
+
+    const mergeBase = pullRequest.merge_base ?? "";
+    const baseHead = pullRequest.base?.sha ?? "";
+    // Unknown either way is not worth waiting on: the merge is the authority,
+    // and a missing field should not turn into a hang.
+    if (mergeBase === "" || baseHead === "" || mergeBase === baseHead) {
+      return true;
+    }
+
+    if (attempt < maxAttempts) {
+      await new Promise<void>((resolve) => setTimeout(resolve, POLL_DELAY_MS));
+    }
+  }
+
+  return false;
 }
 
 export async function mergeOrResolveConflicts(

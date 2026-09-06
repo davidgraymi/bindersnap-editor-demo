@@ -12,4 +12,5 @@ export type GetBinderDocument200LatestVersion = {
   tag: string;
   version: number;
   commitSha: string;
+  publishedAt: string;
 } | null;

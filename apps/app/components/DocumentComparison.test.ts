@@ -19,7 +19,7 @@ const files: Record<string, string | Uint8Array> = {};
 
 mock.module("../api", () => ({
   ...api,
-  downloadDocument: async (_owner: string, _repo: string, ref: string) => {
+  downloadDocument: async (_scope: unknown, ref: string) => {
     const content = files[ref] ?? "";
     return typeof content === "string"
       ? new Blob([content])
@@ -108,8 +108,7 @@ async function render(element: ReactElement) {
 
 function comparison(overrides: Record<string, unknown> = {}) {
   return createElement(DocumentComparison, {
-    owner: "alice",
-    repo: "contract",
+    scope: { kind: "document", owner: "alice", repo: "contract" },
     base: { ref: "v3", label: "v3" },
     headRef: "change-4",
     headLabel: "This change",

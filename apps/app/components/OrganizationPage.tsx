@@ -3,7 +3,17 @@ import { BookOpen, Plus } from "lucide-react";
 
 import { createBinder, fetchOrganizationBinders } from "../api";
 import type { WorkspaceSummary } from "../../../packages/api-schema/schemas/workspaces";
+import { OrganizationPeople } from "./OrganizationPeople";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
+
+/** The organization's tabs. Binders is the one it opens on. */
+const ORG_TABS = ["binders", "people"] as const;
+type OrgTab = (typeof ORG_TABS)[number];
+
+function orgTabFromSearch(search: string): OrgTab {
+  const raw = new URLSearchParams(search).get("tab");
+  return ORG_TABS.find((tab) => tab === raw) ?? "binders";
+}
 
 /**
  * An organization, at `/{org}`: what it owns.
@@ -14,9 +24,9 @@ import { SkeletonGroup, SkeletonLine } from "./Skeleton";
  * is a different question and needs its own page — you cannot manage a
  * customer's binders from a list that is sorted by what you personally owe.
  *
- * Membership and teams belong here too. They are Gitea's, and the binder's
- * three role teams already carry them; surfacing them is the next step rather
- * than this one, so this page says so instead of pretending the tab is coming.
+ * Laid out like the binder, and for the same reason: an organization is a
+ * Gitea organization, its page is a name and a row of tabs, and following the
+ * shape people already know beats inventing one per screen.
  */
 
 interface OrganizationPageProps {
@@ -25,6 +35,9 @@ interface OrganizationPageProps {
 }
 
 export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
+  const [tab, setTab] = useState<OrgTab>(() =>
+    orgTabFromSearch(window.location.search),
+  );
   const [binders, setBinders] = useState<WorkspaceSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -54,19 +67,73 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
     };
   }, [org]);
 
+  // Back and forward are how somebody leaves a tab, so the page follows the
+  // address bar rather than its own memory of what was clicked.
+  useEffect(() => {
+    const handler = () => setTab(orgTabFromSearch(window.location.search));
+    window.addEventListener("popstate", handler);
+    return () => window.removeEventListener("popstate", handler);
+  }, []);
+
+  const goTo = (next: OrgTab) => {
+    window.history.pushState(
+      {},
+      "",
+      next === "binders" ? `/${org}` : `/${org}?tab=${next}`,
+    );
+    setTab(next);
+  };
+
+  const header = (
+    <header className="doc-header">
+      <div className="doc-header-top">
+        <div className="doc-header-identity">
+          <div className="bs-eyebrow">Organization</div>
+          <h1 className="doc-header-title">{org}</h1>
+        </div>
+      </div>
+
+      <nav className="doc-tabs" role="tablist" aria-label="Organization">
+        {ORG_TABS.map((entry) => (
+          <button
+            key={entry}
+            className={`doc-tab${tab === entry ? " doc-tab--active" : ""}`}
+            type="button"
+            role="tab"
+            aria-selected={tab === entry}
+            onClick={() => goTo(entry)}
+          >
+            {entry === "binders" ? "Binders" : "People"}
+            {entry === "binders" && binders !== null && binders.length > 0 ? (
+              <span className="doc-tab-count">{binders.length}</span>
+            ) : null}
+          </button>
+        ))}
+      </nav>
+    </header>
+  );
+
   if (error) {
     return (
-      <section className="docs-page">
-        <h1>{org}</h1>
+      <section className="docw-page">
+        {header}
         <p className="app-inline-error">{error}</p>
       </section>
     );
   }
 
+  if (tab === "people") {
+    return (
+      <section className="docw-page">
+        {header}
+        <OrganizationPeople org={org} />
+      </section>
+    );
+  }
+
   return (
-    <section className="docs-page">
-      <div className="bs-eyebrow">Organization</div>
-      <h1>{org}</h1>
+    <section className="docw-page">
+      {header}
 
       <form
         className="app-form"

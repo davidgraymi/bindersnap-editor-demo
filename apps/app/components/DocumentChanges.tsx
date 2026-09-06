@@ -22,7 +22,17 @@ interface DocumentChangesProps {
   closedChanges: ChangeRecord[] | null;
   closedLoading: boolean;
   closedError: string | null;
-  nextVersion: number;
+  /**
+   * The version an open change becomes when published — a fact only a list
+   * about one document can state. Omitted by a binder's list, where a change
+   * can touch three documents that do not advance in lockstep.
+   */
+  nextVersion?: number;
+  /**
+   * What the change is about, when the list cannot say it in a version
+   * number: "Hand Hygiene", or "Hand Hygiene v2" once it has published one.
+   */
+  describeSubject?: (changeNumber: number) => string | null;
   onFilterChange: (filter: ChangeFilter) => void;
   onOpenChange: (pullNumber: number) => void;
   onRetryClosed: () => void;
@@ -68,10 +78,12 @@ function ChangeIcon({ change }: { change: ChangeRecord }) {
 function ChangeRow({
   change,
   nextVersion,
+  describeSubject,
   onOpenChange,
 }: {
   change: ChangeRecord;
-  nextVersion: number;
+  nextVersion?: number;
+  describeSubject?: (changeNumber: number) => string | null;
   onOpenChange: (pullNumber: number) => void;
 }) {
   const submitter = capitalizeFirst(change.submittedBy || "someone");
@@ -83,6 +95,7 @@ function ChangeRow({
   // the badge is left with the one thing it does not cover: how a closed change
   // ended. The row's old "Waiting on …" line is inside the pill now.
   const showStateBadge = describeChangeStanding(change) === null;
+  const subject = describeSubject?.(change.number) ?? null;
 
   return (
     <li className="change-row" key={change.number}>
@@ -97,7 +110,11 @@ function ChangeRow({
           <span className="change-row-meta">
             #{change.number} submitted by {submitter}
             {submitted ? ` on ${submitted}` : ""}
-            {change.open ? ` · becomes v${nextVersion} when published` : ""}
+            {subject
+              ? ` · ${subject}`
+              : change.open && nextVersion !== undefined
+                ? ` · becomes v${nextVersion} when published`
+                : ""}
           </span>
           {outcome ? (
             <span className="change-row-outcome">{outcome}</span>
@@ -132,6 +149,7 @@ export function DocumentChanges({
   closedLoading,
   closedError,
   nextVersion,
+  describeSubject,
   onFilterChange,
   onOpenChange,
   onRetryClosed,
@@ -229,6 +247,7 @@ export function DocumentChanges({
               key={change.number}
               change={change}
               nextVersion={nextVersion}
+              describeSubject={describeSubject}
               onOpenChange={onOpenChange}
             />
           ))}

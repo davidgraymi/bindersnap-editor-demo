@@ -507,6 +507,7 @@ function normalizeBranchProtection(
     mergeWhitelistTeams: raw.merge_whitelist_teams ?? [],
     blockOnRejectedReviews: raw.block_on_rejected_reviews ?? false,
     dismissStaleApprovals: raw.dismiss_stale_approvals ?? false,
+    enablePush: raw.enable_push ?? false,
   };
 }
 
@@ -639,6 +640,14 @@ export interface RepoBranchProtection {
    * that actually gets published.
    */
   dismissStaleApprovals: boolean;
+  /**
+   * Whether anybody may push straight to the protected branch.
+   *
+   * False is the product's core claim — nothing but a merged, approved change
+   * reaches the record — so it is worth being able to show a customer rather
+   * than only asserting it.
+   */
+  enablePush: boolean;
 }
 
 export async function getRepoBranchProtection(

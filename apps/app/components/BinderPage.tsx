@@ -4,21 +4,15 @@ import { FileText, Folder } from "lucide-react";
 import { fetchBinderDocuments } from "../api";
 import type { WorkspaceDocumentListEntry } from "../../../packages/api-schema/schemas/workspaces";
 import { formatDocumentName } from "../documentDisplay";
-import { AddPolicyModal } from "./AddPolicyModal";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 import { StatusChip } from "./StatusChip";
 
 /**
- * One binder's documents, at `/{org}/{binder}`.
- *
  * ADR 0004's second and third levels made visible: a binder holds documents,
- * and folders are how you find them. The folder is a heading rather than a
- * tree you have to expand — a policy manual is read by looking, not by
- * navigating, and a surveyor asking for the infection control policy should
- * see it without opening anything.
+ * and folders are how you find them.
  */
 
-interface BinderPageProps {
+interface BinderDocumentsProps {
   org: string;
   binder: string;
   onOpenDocument: (documentPath: string) => void;
@@ -87,12 +81,22 @@ export function describeDocument(document: WorkspaceDocumentListEntry): string {
   return parts.join(" · ");
 }
 
-export function BinderPage({ org, binder, onOpenDocument }: BinderPageProps) {
+/**
+ * The binder's documents: the tab a binder opens on, and its reason to exist.
+ *
+ * The folder is a heading rather than a tree you have to expand — a policy
+ * manual is read by looking, not by navigating, and a surveyor asking for the
+ * infection control policy should see it without opening anything.
+ */
+export function BinderDocuments({
+  org,
+  binder,
+  onOpenDocument,
+}: BinderDocumentsProps) {
   const [documents, setDocuments] = useState<
     WorkspaceDocumentListEntry[] | null
   >(null);
   const [error, setError] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
 
   const load = useCallback(() => {
     let cancelled = false;
@@ -127,18 +131,12 @@ export function BinderPage({ org, binder, onOpenDocument }: BinderPageProps) {
   );
 
   if (error) {
-    return (
-      <section className="docs-page">
-        <h1>{binder}</h1>
-        <p className="app-inline-error">{error}</p>
-      </section>
-    );
+    return <p className="app-inline-error">{error}</p>;
   }
 
   if (documents === null) {
     return (
-      <section className="docs-page">
-        <h1>{binder}</h1>
+      <div className="binder-pane">
         <SkeletonGroup label="Opening this binder">
           {Array.from({ length: 4 }).map((_, index) => (
             <div
@@ -153,28 +151,12 @@ export function BinderPage({ org, binder, onOpenDocument }: BinderPageProps) {
             </div>
           ))}
         </SkeletonGroup>
-      </section>
+      </div>
     );
   }
 
   return (
-    <section className="docs-page">
-      <div className="binder-page-head">
-        <div>
-          <div className="bs-eyebrow">{org}</div>
-          <h1>{binder}</h1>
-        </div>
-        {/* The binder is where the work is, so the way to add to it is on the
-            binder rather than in a menu somewhere else. */}
-        <button
-          className="bs-btn bs-btn-primary"
-          type="button"
-          onClick={() => setAdding(true)}
-        >
-          Add a policy
-        </button>
-      </div>
-
+    <div className="binder-pane">
       {documents.length === 0 ? (
         // Not an error, and not a failure of theirs: a binder somebody just
         // made is empty, which is the ordinary first state.
@@ -222,21 +204,6 @@ export function BinderPage({ org, binder, onOpenDocument }: BinderPageProps) {
           </div>
         ))
       )}
-
-      {adding ? (
-        <AddPolicyModal
-          org={org}
-          binder={binder}
-          onClose={() => setAdding(false)}
-          onAdded={(slugPath) => {
-            setAdding(false);
-            // Straight to the policy they just added. It is not on `main` yet,
-            // so its page reads the change's own branch — which is the whole
-            // reason the binder shows proposed documents at all.
-            onOpenDocument(slugPath);
-          }}
-        />
-      ) : null}
-    </section>
+    </div>
   );
 }

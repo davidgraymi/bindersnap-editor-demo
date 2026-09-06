@@ -928,6 +928,9 @@
               },
               "dismissStaleApprovals": {
                 "type": "boolean"
+              },
+              "enablePush": {
+                "type": "boolean"
               }
             },
             "required": [
@@ -939,7 +942,8 @@
               "mergeWhitelistUsernames",
               "mergeWhitelistTeams",
               "blockOnRejectedReviews",
-              "dismissStaleApprovals"
+              "dismissStaleApprovals",
+              "enablePush"
             ]
           },
           "reviewSettings": {
@@ -1474,6 +1478,9 @@
               },
               "dismissStaleApprovals": {
                 "type": "boolean"
+              },
+              "enablePush": {
+                "type": "boolean"
               }
             },
             "required": [
@@ -1485,7 +1492,8 @@
               "mergeWhitelistUsernames",
               "mergeWhitelistTeams",
               "blockOnRejectedReviews",
-              "dismissStaleApprovals"
+              "dismissStaleApprovals",
+              "enablePush"
             ]
           },
           "isPrivate": {
@@ -4835,6 +4843,9 @@
                         },
                         "dismissStaleApprovals": {
                           "type": "boolean"
+                        },
+                        "enablePush": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
@@ -4846,7 +4857,8 @@
                         "mergeWhitelistUsernames",
                         "mergeWhitelistTeams",
                         "blockOnRejectedReviews",
-                        "dismissStaleApprovals"
+                        "dismissStaleApprovals",
+                        "enablePush"
                       ]
                     },
                     "reviewSettings": {
@@ -5592,6 +5604,9 @@
                         },
                         "dismissStaleApprovals": {
                           "type": "boolean"
+                        },
+                        "enablePush": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
@@ -5603,7 +5618,8 @@
                         "mergeWhitelistUsernames",
                         "mergeWhitelistTeams",
                         "blockOnRejectedReviews",
-                        "dismissStaleApprovals"
+                        "dismissStaleApprovals",
+                        "enablePush"
                       ]
                     },
                     "isPrivate": {
@@ -5826,6 +5842,9 @@
                         },
                         "dismissStaleApprovals": {
                           "type": "boolean"
+                        },
+                        "enablePush": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
@@ -5837,7 +5856,8 @@
                         "mergeWhitelistUsernames",
                         "mergeWhitelistTeams",
                         "blockOnRejectedReviews",
-                        "dismissStaleApprovals"
+                        "dismissStaleApprovals",
+                        "enablePush"
                       ]
                     },
                     "isPrivate": {
@@ -8521,6 +8541,1411 @@
         }
       }
     },
+    "/api/app/binders/{org}/{binder}": {
+      "get": {
+        "operationId": "getBinder",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The binder, and how much is in it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "workspace": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "number"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "owner": {
+                          "type": "string"
+                        },
+                        "fullName": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "owner",
+                        "fullName",
+                        "description"
+                      ]
+                    },
+                    "documentCount": {
+                      "type": "number"
+                    },
+                    "openChangeCount": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "workspace",
+                    "documentCount",
+                    "openChangeCount"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/changes": {
+      "get": {
+        "operationId": "listBinderChanges",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "open",
+                "closed"
+              ]
+            },
+            "required": false,
+            "name": "state",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The binder's change requests, open or closed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "open",
+                        "closed"
+                      ]
+                    },
+                    "changes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "number": {
+                            "type": "number"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "body": {
+                            "type": "string"
+                          },
+                          "branchName": {
+                            "type": "string"
+                          },
+                          "submittedBy": {
+                            "type": "string"
+                          },
+                          "submittedAt": {
+                            "type": "string"
+                          },
+                          "closedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "outcome": {
+                            "type": "string",
+                            "enum": [
+                              "open",
+                              "published",
+                              "declined",
+                              "withdrawn"
+                            ]
+                          },
+                          "decidedBy": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "approvalState": {
+                            "type": "string"
+                          },
+                          "approvalCount": {
+                            "type": "number"
+                          },
+                          "requiredApprovals": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "isApproved": {
+                            "type": "boolean"
+                          },
+                          "isRejected": {
+                            "type": "boolean"
+                          },
+                          "reviews": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "number"
+                                },
+                                "author": {
+                                  "type": "object",
+                                  "properties": {
+                                    "login": {
+                                      "type": "string"
+                                    },
+                                    "fullName": {
+                                      "type": "string"
+                                    },
+                                    "avatarUrl": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "login",
+                                    "fullName",
+                                    "avatarUrl"
+                                  ]
+                                },
+                                "state": {
+                                  "type": "string",
+                                  "enum": [
+                                    "approved",
+                                    "changes_requested",
+                                    "commented",
+                                    "other"
+                                  ]
+                                },
+                                "body": {
+                                  "type": "string"
+                                },
+                                "submittedAt": {
+                                  "type": "string"
+                                },
+                                "stale": {
+                                  "type": "boolean"
+                                },
+                                "dismissed": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "author",
+                                "state",
+                                "body",
+                                "submittedAt",
+                                "stale",
+                                "dismissed"
+                              ]
+                            }
+                          },
+                          "reviewers": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "login": {
+                                  "type": "string"
+                                },
+                                "fullName": {
+                                  "type": "string"
+                                },
+                                "avatarUrl": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "type": "string",
+                                  "enum": [
+                                    "approved",
+                                    "changes_requested",
+                                    "commented",
+                                    "awaiting"
+                                  ]
+                                },
+                                "reviewedAt": {
+                                  "type": "string"
+                                },
+                                "stale": {
+                                  "type": "boolean"
+                                },
+                                "requested": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "login",
+                                "fullName",
+                                "avatarUrl",
+                                "status",
+                                "reviewedAt",
+                                "stale",
+                                "requested"
+                              ]
+                            }
+                          },
+                          "assignee": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "login": {
+                                "type": "string"
+                              },
+                              "fullName": {
+                                "type": "string"
+                              },
+                              "avatarUrl": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "login",
+                              "fullName",
+                              "avatarUrl"
+                            ]
+                          },
+                          "documents": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "slugPath": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "version": {
+                                  "type": "number",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "slugPath",
+                                "name",
+                                "version"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "number",
+                          "title",
+                          "body",
+                          "branchName",
+                          "submittedBy",
+                          "submittedAt",
+                          "closedAt",
+                          "outcome",
+                          "decidedBy",
+                          "approvalState",
+                          "approvalCount",
+                          "requiredApprovals",
+                          "isApproved",
+                          "isRejected",
+                          "reviews",
+                          "reviewers",
+                          "assignee",
+                          "documents"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "workspace",
+                    "state",
+                    "changes"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/orgs/{org}/people": {
+      "get": {
+        "operationId": "getOrganizationPeople",
+        "tags": [
+          "organizations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Who is in this organization, and the groups it has",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "people": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "login": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "isOwner": {
+                            "type": "boolean"
+                          },
+                          "teams": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "login",
+                          "fullName",
+                          "isOwner",
+                          "teams"
+                        ]
+                      }
+                    },
+                    "groups": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "number"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "access": {
+                            "type": "string"
+                          },
+                          "memberCount": {
+                            "type": "number"
+                          },
+                          "members": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "login": {
+                                  "type": "string"
+                                },
+                                "fullName": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "login",
+                                "fullName"
+                              ]
+                            }
+                          },
+                          "binders": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "description",
+                          "access",
+                          "memberCount",
+                          "members",
+                          "binders"
+                        ]
+                      }
+                    },
+                    "binders": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "canManage": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "people",
+                    "groups",
+                    "binders",
+                    "canManage"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/orgs/{org}/groups": {
+      "post": {
+        "operationId": "createOrganizationGroup",
+        "tags": [
+          "organizations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "level": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "level"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The group, granted onto nothing yet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "group": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "number"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "access": {
+                          "type": "string"
+                        },
+                        "memberCount": {
+                          "type": "number"
+                        },
+                        "members": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "login": {
+                                "type": "string"
+                              },
+                              "fullName": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "login",
+                              "fullName"
+                            ]
+                          }
+                        },
+                        "binders": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "description",
+                        "access",
+                        "memberCount",
+                        "members",
+                        "binders"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "group"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/orgs/{org}/groups/{group}/members": {
+      "post": {
+        "operationId": "addOrganizationGroupMember",
+        "tags": [
+          "organizations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "group",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "username"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The organization's people and groups, after the change",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "people": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "login": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "isOwner": {
+                            "type": "boolean"
+                          },
+                          "teams": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "login",
+                          "fullName",
+                          "isOwner",
+                          "teams"
+                        ]
+                      }
+                    },
+                    "groups": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "number"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "access": {
+                            "type": "string"
+                          },
+                          "memberCount": {
+                            "type": "number"
+                          },
+                          "members": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "login": {
+                                  "type": "string"
+                                },
+                                "fullName": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "login",
+                                "fullName"
+                              ]
+                            }
+                          },
+                          "binders": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "description",
+                          "access",
+                          "memberCount",
+                          "members",
+                          "binders"
+                        ]
+                      }
+                    },
+                    "binders": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "canManage": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "people",
+                    "groups",
+                    "binders",
+                    "canManage"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/orgs/{org}/groups/{group}/members/{username}": {
+      "delete": {
+        "operationId": "removeOrganizationGroupMember",
+        "tags": [
+          "organizations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "group",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "username",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The organization's people and groups, after the change",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "people": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "login": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "isOwner": {
+                            "type": "boolean"
+                          },
+                          "teams": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "login",
+                          "fullName",
+                          "isOwner",
+                          "teams"
+                        ]
+                      }
+                    },
+                    "groups": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "number"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "access": {
+                            "type": "string"
+                          },
+                          "memberCount": {
+                            "type": "number"
+                          },
+                          "members": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "login": {
+                                  "type": "string"
+                                },
+                                "fullName": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "login",
+                                "fullName"
+                              ]
+                            }
+                          },
+                          "binders": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "description",
+                          "access",
+                          "memberCount",
+                          "members",
+                          "binders"
+                        ]
+                      }
+                    },
+                    "binders": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "canManage": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "people",
+                    "groups",
+                    "binders",
+                    "canManage"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/groups": {
+      "post": {
+        "operationId": "grantBinderGroup",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "group": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "group"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The teams granted here, and the approvals whitelist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "teams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "number"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "access": {
+                            "type": "string"
+                          },
+                          "members": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "login": {
+                                  "type": "string"
+                                },
+                                "fullName": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "login",
+                                "fullName"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "description",
+                          "access",
+                          "members"
+                        ]
+                      }
+                    },
+                    "approvalsWhitelist": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "workspace",
+                    "teams",
+                    "approvalsWhitelist"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/groups/{group}": {
+      "delete": {
+        "operationId": "revokeBinderGroup",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "group",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The teams granted here, and the approvals whitelist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "teams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "number"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "access": {
+                            "type": "string"
+                          },
+                          "members": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "login": {
+                                  "type": "string"
+                                },
+                                "fullName": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "login",
+                                "fullName"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "description",
+                          "access",
+                          "members"
+                        ]
+                      }
+                    },
+                    "approvalsWhitelist": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "workspace",
+                    "teams",
+                    "approvalsWhitelist"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/settings": {
+      "get": {
+        "operationId": "getBinderSettings",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Who can act in this binder, and the rules it is under",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "teams": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "number"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "access": {
+                            "type": "string"
+                          },
+                          "members": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "login": {
+                                  "type": "string"
+                                },
+                                "fullName": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "login",
+                                "fullName"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "description",
+                          "access",
+                          "members"
+                        ]
+                      }
+                    },
+                    "rules": {
+                      "type": "object",
+                      "properties": {
+                        "requiredApprovals": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "dismissStaleApprovals": {
+                          "type": "boolean"
+                        },
+                        "pushBlocked": {
+                          "type": "boolean"
+                        },
+                        "blockOnUnresolvedThreads": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "requiredApprovals",
+                        "dismissStaleApprovals",
+                        "pushBlocked",
+                        "blockOnUnresolvedThreads"
+                      ]
+                    },
+                    "canManage": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "workspace",
+                    "teams",
+                    "rules",
+                    "canManage"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/history": {
+      "get": {
+        "operationId": "getBinderHistory",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Every version this binder has published, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "versions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "slugPath": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "folder": {
+                            "type": "string"
+                          },
+                          "version": {
+                            "type": "number"
+                          },
+                          "tag": {
+                            "type": "string"
+                          },
+                          "commitSha": {
+                            "type": "string"
+                          },
+                          "publishedAt": {
+                            "type": "string"
+                          },
+                          "changeNumber": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "changeTitle": {
+                            "type": "string"
+                          },
+                          "submittedBy": {
+                            "type": "string"
+                          },
+                          "approvers": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "slugPath",
+                          "name",
+                          "folder",
+                          "version",
+                          "tag",
+                          "commitSha",
+                          "publishedAt",
+                          "changeNumber",
+                          "changeTitle",
+                          "submittedBy",
+                          "approvers"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "workspace",
+                    "versions"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/app/binders/{org}/{binder}/documents": {
       "get": {
         "operationId": "listBinderDocuments",
@@ -8607,12 +10032,16 @@
                               },
                               "commitSha": {
                                 "type": "string"
+                              },
+                              "publishedAt": {
+                                "type": "string"
                               }
                             },
                             "required": [
                               "tag",
                               "version",
-                              "commitSha"
+                              "commitSha",
+                              "publishedAt"
                             ]
                           }
                         },
@@ -8833,12 +10262,16 @@
                           },
                           "commitSha": {
                             "type": "string"
+                          },
+                          "publishedAt": {
+                            "type": "string"
                           }
                         },
                         "required": [
                           "tag",
                           "version",
-                          "commitSha"
+                          "commitSha",
+                          "publishedAt"
                         ]
                       }
                     },
@@ -8854,12 +10287,16 @@
                         },
                         "commitSha": {
                           "type": "string"
+                        },
+                        "publishedAt": {
+                          "type": "string"
                         }
                       },
                       "required": [
                         "tag",
                         "version",
-                        "commitSha"
+                        "commitSha",
+                        "publishedAt"
                       ]
                     },
                     "openChanges": {
@@ -9136,6 +10573,2453 @@
               "application/octet-stream": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/changes/{changeNumber}": {
+      "get": {
+        "operationId": "getBinderChange",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "changeNumber",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One change, and the documents publishing it would version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "change": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "number"
+                        },
+                        "number": {
+                          "type": "number"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string"
+                        },
+                        "created": {
+                          "type": "string"
+                        },
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "updated_at": {
+                          "type": "string"
+                        },
+                        "branchName": {
+                          "type": "string"
+                        },
+                        "approvalCount": {
+                          "type": "number"
+                        },
+                        "requiredApprovals": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "isApproved": {
+                          "type": "boolean"
+                        },
+                        "isRejected": {
+                          "type": "boolean"
+                        },
+                        "reviewers": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "login": {
+                                "type": "string"
+                              },
+                              "fullName": {
+                                "type": "string"
+                              },
+                              "avatarUrl": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "approved",
+                                  "changes_requested",
+                                  "commented",
+                                  "awaiting"
+                                ]
+                              },
+                              "reviewedAt": {
+                                "type": "string"
+                              },
+                              "stale": {
+                                "type": "boolean"
+                              },
+                              "requested": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "login",
+                              "fullName",
+                              "avatarUrl",
+                              "status",
+                              "reviewedAt",
+                              "stale",
+                              "requested"
+                            ]
+                          }
+                        },
+                        "assignee": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "login": {
+                              "type": "string"
+                            },
+                            "fullName": {
+                              "type": "string"
+                            },
+                            "avatarUrl": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "login",
+                            "fullName",
+                            "avatarUrl"
+                          ]
+                        },
+                        "body": {
+                          "type": "string"
+                        },
+                        "approvalState": {
+                          "type": "string",
+                          "enum": [
+                            "working",
+                            "in_review",
+                            "changes_requested",
+                            "approved",
+                            "published"
+                          ]
+                        },
+                        "user": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "login": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "login"
+                          ]
+                        },
+                        "reviews": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "number"
+                              },
+                              "author": {
+                                "type": "object",
+                                "properties": {
+                                  "login": {
+                                    "type": "string"
+                                  },
+                                  "fullName": {
+                                    "type": "string"
+                                  },
+                                  "avatarUrl": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "login",
+                                  "fullName",
+                                  "avatarUrl"
+                                ]
+                              },
+                              "state": {
+                                "type": "string",
+                                "enum": [
+                                  "approved",
+                                  "changes_requested",
+                                  "commented",
+                                  "other"
+                                ]
+                              },
+                              "body": {
+                                "type": "string"
+                              },
+                              "submittedAt": {
+                                "type": "string"
+                              },
+                              "stale": {
+                                "type": "boolean"
+                              },
+                              "dismissed": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "author",
+                              "state",
+                              "body",
+                              "submittedAt",
+                              "stale",
+                              "dismissed"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "number",
+                        "title",
+                        "state",
+                        "created",
+                        "branchName",
+                        "approvalCount",
+                        "requiredApprovals",
+                        "isApproved",
+                        "isRejected",
+                        "reviewers",
+                        "assignee",
+                        "approvalState"
+                      ]
+                    },
+                    "documents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "slugPath": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "folder": {
+                            "type": "string"
+                          },
+                          "size": {
+                            "type": "number"
+                          },
+                          "sha": {
+                            "type": "string"
+                          },
+                          "nextVersion": {
+                            "type": "number"
+                          },
+                          "currentVersion": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "tag": {
+                                "type": "string"
+                              },
+                              "version": {
+                                "type": "number"
+                              },
+                              "commitSha": {
+                                "type": "string"
+                              },
+                              "publishedAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "tag",
+                              "version",
+                              "commitSha",
+                              "publishedAt"
+                            ]
+                          },
+                          "versions": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "tag": {
+                                  "type": "string"
+                                },
+                                "version": {
+                                  "type": "number"
+                                },
+                                "commitSha": {
+                                  "type": "string"
+                                },
+                                "publishedAt": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "tag",
+                                "version",
+                                "commitSha",
+                                "publishedAt"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "slugPath",
+                          "name",
+                          "folder",
+                          "size",
+                          "sha",
+                          "nextVersion",
+                          "currentVersion",
+                          "versions"
+                        ]
+                      }
+                    },
+                    "isBehind": {
+                      "type": "boolean"
+                    },
+                    "blockOnUnresolvedThreads": {
+                      "type": "boolean"
+                    },
+                    "unresolvedThreadCount": {
+                      "type": "number"
+                    },
+                    "canManage": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "workspace",
+                    "change",
+                    "documents",
+                    "isBehind",
+                    "blockOnUnresolvedThreads",
+                    "unresolvedThreadCount",
+                    "canManage"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/changes/{changeNumber}/reviews": {
+      "post": {
+        "operationId": "reviewBinderChange",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "changeNumber",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "event": {
+                    "type": "string",
+                    "enum": [
+                      "APPROVE",
+                      "REQUEST_CHANGES",
+                      "COMMENT"
+                    ]
+                  },
+                  "body": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "event"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The review, as Gitea recorded it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "review": {
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/changes/{changeNumber}/update": {
+      "post": {
+        "operationId": "updateBinderChange",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "changeNumber",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The change's branch now carries the binder's main",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "caughtUp": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "caughtUp"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/changes/{changeNumber}/publish": {
+      "post": {
+        "operationId": "publishBinderChange",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "changeNumber",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A version tag for every document the change touched",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "tags": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "tag": {
+                            "type": "string"
+                          },
+                          "version": {
+                            "type": "number"
+                          },
+                          "commitSha": {
+                            "type": "string"
+                          },
+                          "publishedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "tag",
+                          "version",
+                          "commitSha",
+                          "publishedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "tags"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/changes/{changeNumber}/discussions": {
+      "get": {
+        "operationId": "listBinderChangeDiscussions",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "changeNumber",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Review discussion threads",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "threads": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "origin": {
+                            "type": "string",
+                            "enum": [
+                              "bindersnap",
+                              "external"
+                            ]
+                          },
+                          "comments": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "number"
+                                },
+                                "threadId": {
+                                  "type": "string"
+                                },
+                                "author": {
+                                  "type": "object",
+                                  "properties": {
+                                    "login": {
+                                      "type": "string"
+                                    },
+                                    "fullName": {
+                                      "type": "string"
+                                    },
+                                    "avatarUrl": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "login",
+                                    "fullName",
+                                    "avatarUrl"
+                                  ]
+                                },
+                                "body": {
+                                  "type": "string"
+                                },
+                                "createdAt": {
+                                  "type": "string"
+                                },
+                                "updatedAt": {
+                                  "type": "string"
+                                },
+                                "htmlUrl": {
+                                  "type": "string"
+                                },
+                                "reactions": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "content": {
+                                        "type": "string",
+                                        "enum": [
+                                          "+1",
+                                          "-1",
+                                          "confused",
+                                          "eyes",
+                                          "heart"
+                                        ]
+                                      },
+                                      "count": {
+                                        "type": "number"
+                                      },
+                                      "viewerReacted": {
+                                        "type": "boolean"
+                                      },
+                                      "users": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "login": {
+                                              "type": "string"
+                                            },
+                                            "fullName": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "login",
+                                            "fullName"
+                                          ]
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "content",
+                                      "count",
+                                      "viewerReacted",
+                                      "users"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "threadId",
+                                "author",
+                                "body",
+                                "createdAt",
+                                "updatedAt",
+                                "htmlUrl",
+                                "reactions"
+                              ]
+                            }
+                          },
+                          "events": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "number"
+                                },
+                                "actor": {
+                                  "type": "object",
+                                  "properties": {
+                                    "login": {
+                                      "type": "string"
+                                    },
+                                    "fullName": {
+                                      "type": "string"
+                                    },
+                                    "avatarUrl": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "login",
+                                    "fullName",
+                                    "avatarUrl"
+                                  ]
+                                },
+                                "resolved": {
+                                  "type": "boolean"
+                                },
+                                "at": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "actor",
+                                "resolved",
+                                "at"
+                              ]
+                            }
+                          },
+                          "resolved": {
+                            "type": "boolean"
+                          },
+                          "resolvedBy": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "login": {
+                                "type": "string"
+                              },
+                              "fullName": {
+                                "type": "string"
+                              },
+                              "avatarUrl": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "login",
+                              "fullName",
+                              "avatarUrl"
+                            ]
+                          },
+                          "resolvedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "origin",
+                          "comments",
+                          "events",
+                          "resolved",
+                          "resolvedBy",
+                          "resolvedAt",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    },
+                    "totalCount": {
+                      "type": "number"
+                    },
+                    "unresolvedCount": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "threads",
+                    "totalCount",
+                    "unresolvedCount"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createBinderChangeDiscussion",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "changeNumber",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "body": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "body"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Thread started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "threads": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "origin": {
+                            "type": "string",
+                            "enum": [
+                              "bindersnap",
+                              "external"
+                            ]
+                          },
+                          "comments": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "number"
+                                },
+                                "threadId": {
+                                  "type": "string"
+                                },
+                                "author": {
+                                  "type": "object",
+                                  "properties": {
+                                    "login": {
+                                      "type": "string"
+                                    },
+                                    "fullName": {
+                                      "type": "string"
+                                    },
+                                    "avatarUrl": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "login",
+                                    "fullName",
+                                    "avatarUrl"
+                                  ]
+                                },
+                                "body": {
+                                  "type": "string"
+                                },
+                                "createdAt": {
+                                  "type": "string"
+                                },
+                                "updatedAt": {
+                                  "type": "string"
+                                },
+                                "htmlUrl": {
+                                  "type": "string"
+                                },
+                                "reactions": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "content": {
+                                        "type": "string",
+                                        "enum": [
+                                          "+1",
+                                          "-1",
+                                          "confused",
+                                          "eyes",
+                                          "heart"
+                                        ]
+                                      },
+                                      "count": {
+                                        "type": "number"
+                                      },
+                                      "viewerReacted": {
+                                        "type": "boolean"
+                                      },
+                                      "users": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "login": {
+                                              "type": "string"
+                                            },
+                                            "fullName": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "login",
+                                            "fullName"
+                                          ]
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "content",
+                                      "count",
+                                      "viewerReacted",
+                                      "users"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "threadId",
+                                "author",
+                                "body",
+                                "createdAt",
+                                "updatedAt",
+                                "htmlUrl",
+                                "reactions"
+                              ]
+                            }
+                          },
+                          "events": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "number"
+                                },
+                                "actor": {
+                                  "type": "object",
+                                  "properties": {
+                                    "login": {
+                                      "type": "string"
+                                    },
+                                    "fullName": {
+                                      "type": "string"
+                                    },
+                                    "avatarUrl": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "login",
+                                    "fullName",
+                                    "avatarUrl"
+                                  ]
+                                },
+                                "resolved": {
+                                  "type": "boolean"
+                                },
+                                "at": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "actor",
+                                "resolved",
+                                "at"
+                              ]
+                            }
+                          },
+                          "resolved": {
+                            "type": "boolean"
+                          },
+                          "resolvedBy": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "login": {
+                                "type": "string"
+                              },
+                              "fullName": {
+                                "type": "string"
+                              },
+                              "avatarUrl": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "login",
+                              "fullName",
+                              "avatarUrl"
+                            ]
+                          },
+                          "resolvedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "origin",
+                          "comments",
+                          "events",
+                          "resolved",
+                          "resolvedBy",
+                          "resolvedAt",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    },
+                    "totalCount": {
+                      "type": "number"
+                    },
+                    "unresolvedCount": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "threads",
+                    "totalCount",
+                    "unresolvedCount"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/changes/{changeNumber}/discussions/{threadId}/comments": {
+      "post": {
+        "operationId": "replyToBinderChangeDiscussion",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "changeNumber",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "threadId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "body": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "body"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Reply posted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "threads": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "origin": {
+                            "type": "string",
+                            "enum": [
+                              "bindersnap",
+                              "external"
+                            ]
+                          },
+                          "comments": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "number"
+                                },
+                                "threadId": {
+                                  "type": "string"
+                                },
+                                "author": {
+                                  "type": "object",
+                                  "properties": {
+                                    "login": {
+                                      "type": "string"
+                                    },
+                                    "fullName": {
+                                      "type": "string"
+                                    },
+                                    "avatarUrl": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "login",
+                                    "fullName",
+                                    "avatarUrl"
+                                  ]
+                                },
+                                "body": {
+                                  "type": "string"
+                                },
+                                "createdAt": {
+                                  "type": "string"
+                                },
+                                "updatedAt": {
+                                  "type": "string"
+                                },
+                                "htmlUrl": {
+                                  "type": "string"
+                                },
+                                "reactions": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "content": {
+                                        "type": "string",
+                                        "enum": [
+                                          "+1",
+                                          "-1",
+                                          "confused",
+                                          "eyes",
+                                          "heart"
+                                        ]
+                                      },
+                                      "count": {
+                                        "type": "number"
+                                      },
+                                      "viewerReacted": {
+                                        "type": "boolean"
+                                      },
+                                      "users": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "login": {
+                                              "type": "string"
+                                            },
+                                            "fullName": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "login",
+                                            "fullName"
+                                          ]
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "content",
+                                      "count",
+                                      "viewerReacted",
+                                      "users"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "threadId",
+                                "author",
+                                "body",
+                                "createdAt",
+                                "updatedAt",
+                                "htmlUrl",
+                                "reactions"
+                              ]
+                            }
+                          },
+                          "events": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "number"
+                                },
+                                "actor": {
+                                  "type": "object",
+                                  "properties": {
+                                    "login": {
+                                      "type": "string"
+                                    },
+                                    "fullName": {
+                                      "type": "string"
+                                    },
+                                    "avatarUrl": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "login",
+                                    "fullName",
+                                    "avatarUrl"
+                                  ]
+                                },
+                                "resolved": {
+                                  "type": "boolean"
+                                },
+                                "at": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "actor",
+                                "resolved",
+                                "at"
+                              ]
+                            }
+                          },
+                          "resolved": {
+                            "type": "boolean"
+                          },
+                          "resolvedBy": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "login": {
+                                "type": "string"
+                              },
+                              "fullName": {
+                                "type": "string"
+                              },
+                              "avatarUrl": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "login",
+                              "fullName",
+                              "avatarUrl"
+                            ]
+                          },
+                          "resolvedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "origin",
+                          "comments",
+                          "events",
+                          "resolved",
+                          "resolvedBy",
+                          "resolvedAt",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    },
+                    "totalCount": {
+                      "type": "number"
+                    },
+                    "unresolvedCount": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "threads",
+                    "totalCount",
+                    "unresolvedCount"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/changes/{changeNumber}/discussions/{threadId}/resolve": {
+      "post": {
+        "operationId": "resolveBinderChangeDiscussion",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "changeNumber",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "threadId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "resolved": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "resolved"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Thread status updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "threads": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "origin": {
+                            "type": "string",
+                            "enum": [
+                              "bindersnap",
+                              "external"
+                            ]
+                          },
+                          "comments": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "number"
+                                },
+                                "threadId": {
+                                  "type": "string"
+                                },
+                                "author": {
+                                  "type": "object",
+                                  "properties": {
+                                    "login": {
+                                      "type": "string"
+                                    },
+                                    "fullName": {
+                                      "type": "string"
+                                    },
+                                    "avatarUrl": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "login",
+                                    "fullName",
+                                    "avatarUrl"
+                                  ]
+                                },
+                                "body": {
+                                  "type": "string"
+                                },
+                                "createdAt": {
+                                  "type": "string"
+                                },
+                                "updatedAt": {
+                                  "type": "string"
+                                },
+                                "htmlUrl": {
+                                  "type": "string"
+                                },
+                                "reactions": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "content": {
+                                        "type": "string",
+                                        "enum": [
+                                          "+1",
+                                          "-1",
+                                          "confused",
+                                          "eyes",
+                                          "heart"
+                                        ]
+                                      },
+                                      "count": {
+                                        "type": "number"
+                                      },
+                                      "viewerReacted": {
+                                        "type": "boolean"
+                                      },
+                                      "users": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "login": {
+                                              "type": "string"
+                                            },
+                                            "fullName": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "login",
+                                            "fullName"
+                                          ]
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "content",
+                                      "count",
+                                      "viewerReacted",
+                                      "users"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "threadId",
+                                "author",
+                                "body",
+                                "createdAt",
+                                "updatedAt",
+                                "htmlUrl",
+                                "reactions"
+                              ]
+                            }
+                          },
+                          "events": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "number"
+                                },
+                                "actor": {
+                                  "type": "object",
+                                  "properties": {
+                                    "login": {
+                                      "type": "string"
+                                    },
+                                    "fullName": {
+                                      "type": "string"
+                                    },
+                                    "avatarUrl": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "login",
+                                    "fullName",
+                                    "avatarUrl"
+                                  ]
+                                },
+                                "resolved": {
+                                  "type": "boolean"
+                                },
+                                "at": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "actor",
+                                "resolved",
+                                "at"
+                              ]
+                            }
+                          },
+                          "resolved": {
+                            "type": "boolean"
+                          },
+                          "resolvedBy": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "login": {
+                                "type": "string"
+                              },
+                              "fullName": {
+                                "type": "string"
+                              },
+                              "avatarUrl": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "login",
+                              "fullName",
+                              "avatarUrl"
+                            ]
+                          },
+                          "resolvedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "origin",
+                          "comments",
+                          "events",
+                          "resolved",
+                          "resolvedBy",
+                          "resolvedAt",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    },
+                    "totalCount": {
+                      "type": "number"
+                    },
+                    "unresolvedCount": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "threads",
+                    "totalCount",
+                    "unresolvedCount"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/changes/{changeNumber}/discussions/{threadId}/comments/{commentId}/reactions": {
+      "put": {
+        "operationId": "setBinderDiscussionCommentReaction",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "changeNumber",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "threadId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "commentId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "content": {
+                    "type": "string",
+                    "enum": [
+                      "+1",
+                      "-1",
+                      "confused",
+                      "eyes",
+                      "heart"
+                    ]
+                  },
+                  "on": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "content",
+                  "on"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reaction added or taken back",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "threads": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "origin": {
+                            "type": "string",
+                            "enum": [
+                              "bindersnap",
+                              "external"
+                            ]
+                          },
+                          "comments": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "number"
+                                },
+                                "threadId": {
+                                  "type": "string"
+                                },
+                                "author": {
+                                  "type": "object",
+                                  "properties": {
+                                    "login": {
+                                      "type": "string"
+                                    },
+                                    "fullName": {
+                                      "type": "string"
+                                    },
+                                    "avatarUrl": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "login",
+                                    "fullName",
+                                    "avatarUrl"
+                                  ]
+                                },
+                                "body": {
+                                  "type": "string"
+                                },
+                                "createdAt": {
+                                  "type": "string"
+                                },
+                                "updatedAt": {
+                                  "type": "string"
+                                },
+                                "htmlUrl": {
+                                  "type": "string"
+                                },
+                                "reactions": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "content": {
+                                        "type": "string",
+                                        "enum": [
+                                          "+1",
+                                          "-1",
+                                          "confused",
+                                          "eyes",
+                                          "heart"
+                                        ]
+                                      },
+                                      "count": {
+                                        "type": "number"
+                                      },
+                                      "viewerReacted": {
+                                        "type": "boolean"
+                                      },
+                                      "users": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "login": {
+                                              "type": "string"
+                                            },
+                                            "fullName": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "login",
+                                            "fullName"
+                                          ]
+                                        }
+                                      }
+                                    },
+                                    "required": [
+                                      "content",
+                                      "count",
+                                      "viewerReacted",
+                                      "users"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "threadId",
+                                "author",
+                                "body",
+                                "createdAt",
+                                "updatedAt",
+                                "htmlUrl",
+                                "reactions"
+                              ]
+                            }
+                          },
+                          "events": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "number"
+                                },
+                                "actor": {
+                                  "type": "object",
+                                  "properties": {
+                                    "login": {
+                                      "type": "string"
+                                    },
+                                    "fullName": {
+                                      "type": "string"
+                                    },
+                                    "avatarUrl": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "login",
+                                    "fullName",
+                                    "avatarUrl"
+                                  ]
+                                },
+                                "resolved": {
+                                  "type": "boolean"
+                                },
+                                "at": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "actor",
+                                "resolved",
+                                "at"
+                              ]
+                            }
+                          },
+                          "resolved": {
+                            "type": "boolean"
+                          },
+                          "resolvedBy": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "login": {
+                                "type": "string"
+                              },
+                              "fullName": {
+                                "type": "string"
+                              },
+                              "avatarUrl": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "login",
+                              "fullName",
+                              "avatarUrl"
+                            ]
+                          },
+                          "resolvedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "origin",
+                          "comments",
+                          "events",
+                          "resolved",
+                          "resolvedBy",
+                          "resolvedAt",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    },
+                    "totalCount": {
+                      "type": "number"
+                    },
+                    "unresolvedCount": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "threads",
+                    "totalCount",
+                    "unresolvedCount"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/changes/{changeNumber}/updates": {
+      "get": {
+        "operationId": "listBinderChangeUpdates",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "changeNumber",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Every update this change has proposed, oldest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "updates": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "index": {
+                            "type": "number"
+                          },
+                          "sha": {
+                            "type": "string"
+                          },
+                          "author": {
+                            "type": "string"
+                          },
+                          "at": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "index",
+                          "sha",
+                          "author",
+                          "at"
+                        ]
+                      }
+                    },
+                    "resetsApprovals": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "updates",
+                    "resetsApprovals"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/changes/{changeNumber}/assignments": {
+      "put": {
+        "operationId": "updateBinderChangeAssignments",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "changeNumber",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "assignee": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "reviewers": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Who is on the hook for this change",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "assignee": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "login": {
+                          "type": "string"
+                        },
+                        "fullName": {
+                          "type": "string"
+                        },
+                        "avatarUrl": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "login",
+                        "fullName",
+                        "avatarUrl"
+                      ]
+                    },
+                    "reviewers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "login": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "avatarUrl": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "approved",
+                              "changes_requested",
+                              "commented",
+                              "awaiting"
+                            ]
+                          },
+                          "reviewedAt": {
+                            "type": "string"
+                          },
+                          "stale": {
+                            "type": "boolean"
+                          },
+                          "requested": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "login",
+                          "fullName",
+                          "avatarUrl",
+                          "status",
+                          "reviewedAt",
+                          "stale",
+                          "requested"
+                        ]
+                      }
+                    },
+                    "approvalCount": {
+                      "type": "number"
+                    },
+                    "requiredApprovals": {
+                      "type": "number",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "assignee",
+                    "reviewers",
+                    "approvalCount",
+                    "requiredApprovals"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/collaborators": {
+      "get": {
+        "operationId": "listBinderCollaborators",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Everyone who can act in this binder",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "collaborators": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "permission": {
+                            "type": "string"
+                          },
+                          "access": {
+                            "type": "string",
+                            "enum": [
+                              "read",
+                              "write",
+                              "admin"
+                            ]
+                          },
+                          "permissionLabel": {
+                            "type": "string"
+                          },
+                          "roleName": {
+                            "type": "string"
+                          },
+                          "user": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "number"
+                              },
+                              "login": {
+                                "type": "string"
+                              },
+                              "full_name": {
+                                "type": "string"
+                              },
+                              "email": {
+                                "type": "string"
+                              },
+                              "avatar_url": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "login",
+                              "full_name",
+                              "email",
+                              "avatar_url"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "permission",
+                          "access",
+                          "permissionLabel",
+                          "roleName",
+                          "user"
+                        ]
+                      }
+                    },
+                    "page": {
+                      "type": "number"
+                    },
+                    "limit": {
+                      "type": "number"
+                    },
+                    "hasMore": {
+                      "type": "boolean"
+                    },
+                    "currentUserPermission": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "permission": {
+                          "type": "string"
+                        },
+                        "access": {
+                          "type": "string",
+                          "enum": [
+                            "read",
+                            "write",
+                            "admin"
+                          ]
+                        },
+                        "permissionLabel": {
+                          "type": "string"
+                        },
+                        "roleName": {
+                          "type": "string"
+                        },
+                        "user": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "number"
+                            },
+                            "login": {
+                              "type": "string"
+                            },
+                            "full_name": {
+                              "type": "string"
+                            },
+                            "email": {
+                              "type": "string"
+                            },
+                            "avatar_url": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "login",
+                            "full_name",
+                            "email",
+                            "avatar_url"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "permission",
+                        "access",
+                        "permissionLabel",
+                        "roleName",
+                        "user"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "collaborators",
+                    "page",
+                    "limit",
+                    "hasMore",
+                    "currentUserPermission"
+                  ]
                 }
               }
             }

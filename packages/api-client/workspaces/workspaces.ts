@@ -7,13 +7,40 @@
 import type {
   CreateBinder201,
   CreateBinderBody,
+  CreateBinderChangeDiscussion201,
+  CreateBinderChangeDiscussionBody,
   CreateBinderDocument201,
   CreateBinderDocumentBody,
   DownloadBinderDocumentParams,
+  GetBinder200,
+  GetBinderChange200,
   GetBinderDocument200,
+  GetBinderHistory200,
+  GetBinderSettings200,
+  GrantBinderGroup200,
+  GrantBinderGroupBody,
+  ListBinderChangeDiscussions200,
+  ListBinderChangeUpdates200,
+  ListBinderChanges200,
+  ListBinderChangesParams,
+  ListBinderCollaborators200,
+  ListBinderCollaboratorsParams,
   ListBinderDocuments200,
   ListBinders200,
-  ListOrganizationBinders200
+  ListOrganizationBinders200,
+  PublishBinderChange200,
+  ReplyToBinderChangeDiscussion201,
+  ReplyToBinderChangeDiscussionBody,
+  ResolveBinderChangeDiscussion200,
+  ResolveBinderChangeDiscussionBody,
+  ReviewBinderChange200,
+  ReviewBinderChangeBody,
+  RevokeBinderGroup200,
+  SetBinderDiscussionCommentReaction200,
+  SetBinderDiscussionCommentReactionBody,
+  UpdateBinderChange200,
+  UpdateBinderChangeAssignments200,
+  UpdateBinderChangeAssignmentsBody
 } from '../model';
 
 import { customFetch } from '.././mutator.ts';
@@ -111,6 +138,222 @@ export const createBinder = async (org: string,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(createBinderBody)
+  }
+);}
+
+
+export type getBinderResponse200 = {
+  data: GetBinder200
+  status: 200
+}
+
+export type getBinderResponseSuccess = (getBinderResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getBinderResponse = (getBinderResponseSuccess)
+
+export const getGetBinderUrl = (org: string,
+    binder: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}`
+}
+
+export const getBinder = async (org: string,
+    binder: string, options?: Parameters<typeof customFetch>[1]): Promise<getBinderResponse> => {
+
+  return customFetch<getBinderResponse>(getGetBinderUrl(org,binder),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type listBinderChangesResponse200 = {
+  data: ListBinderChanges200
+  status: 200
+}
+
+export type listBinderChangesResponseSuccess = (listBinderChangesResponse200) & {
+  headers: Headers;
+};
+;
+
+export type listBinderChangesResponse = (listBinderChangesResponseSuccess)
+
+export const getListBinderChangesUrl = (org: string,
+    binder: string,
+    params?: ListBinderChangesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/app/binders/${org}/${binder}/changes?${stringifiedParams}` : `/api/app/binders/${org}/${binder}/changes`
+}
+
+export const listBinderChanges = async (org: string,
+    binder: string,
+    params?: ListBinderChangesParams, options?: Parameters<typeof customFetch>[1]): Promise<listBinderChangesResponse> => {
+
+  return customFetch<listBinderChangesResponse>(getListBinderChangesUrl(org,binder,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type grantBinderGroupResponse200 = {
+  data: GrantBinderGroup200
+  status: 200
+}
+
+export type grantBinderGroupResponseSuccess = (grantBinderGroupResponse200) & {
+  headers: Headers;
+};
+;
+
+export type grantBinderGroupResponse = (grantBinderGroupResponseSuccess)
+
+export const getGrantBinderGroupUrl = (org: string,
+    binder: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/groups`
+}
+
+export const grantBinderGroup = async (org: string,
+    binder: string,
+    grantBinderGroupBody: GrantBinderGroupBody, options?: Parameters<typeof customFetch>[1]): Promise<grantBinderGroupResponse> => {
+
+  return customFetch<grantBinderGroupResponse>(getGrantBinderGroupUrl(org,binder),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(grantBinderGroupBody)
+  }
+);}
+
+
+export type revokeBinderGroupResponse200 = {
+  data: RevokeBinderGroup200
+  status: 200
+}
+
+export type revokeBinderGroupResponseSuccess = (revokeBinderGroupResponse200) & {
+  headers: Headers;
+};
+;
+
+export type revokeBinderGroupResponse = (revokeBinderGroupResponseSuccess)
+
+export const getRevokeBinderGroupUrl = (org: string,
+    binder: string,
+    group: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/groups/${group}`
+}
+
+export const revokeBinderGroup = async (org: string,
+    binder: string,
+    group: string, options?: Parameters<typeof customFetch>[1]): Promise<revokeBinderGroupResponse> => {
+
+  return customFetch<revokeBinderGroupResponse>(getRevokeBinderGroupUrl(org,binder,group),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+export type getBinderSettingsResponse200 = {
+  data: GetBinderSettings200
+  status: 200
+}
+
+export type getBinderSettingsResponseSuccess = (getBinderSettingsResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getBinderSettingsResponse = (getBinderSettingsResponseSuccess)
+
+export const getGetBinderSettingsUrl = (org: string,
+    binder: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/settings`
+}
+
+export const getBinderSettings = async (org: string,
+    binder: string, options?: Parameters<typeof customFetch>[1]): Promise<getBinderSettingsResponse> => {
+
+  return customFetch<getBinderSettingsResponse>(getGetBinderSettingsUrl(org,binder),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type getBinderHistoryResponse200 = {
+  data: GetBinderHistory200
+  status: 200
+}
+
+export type getBinderHistoryResponseSuccess = (getBinderHistoryResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getBinderHistoryResponse = (getBinderHistoryResponseSuccess)
+
+export const getGetBinderHistoryUrl = (org: string,
+    binder: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/history`
+}
+
+export const getBinderHistory = async (org: string,
+    binder: string, options?: Parameters<typeof customFetch>[1]): Promise<getBinderHistoryResponse> => {
+
+  return customFetch<getBinderHistoryResponse>(getGetBinderHistoryUrl(org,binder),
+  {
+    ...options,
+    method: 'GET'
+
+
   }
 );}
 
@@ -262,6 +505,459 @@ export const downloadBinderDocument = async (org: string,
     params?: DownloadBinderDocumentParams, options?: Parameters<typeof customFetch>[1]): Promise<downloadBinderDocumentResponse> => {
 
   return customFetch<downloadBinderDocumentResponse>(getDownloadBinderDocumentUrl(org,binder,documentPath,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type getBinderChangeResponse200 = {
+  data: GetBinderChange200
+  status: 200
+}
+
+export type getBinderChangeResponseSuccess = (getBinderChangeResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getBinderChangeResponse = (getBinderChangeResponseSuccess)
+
+export const getGetBinderChangeUrl = (org: string,
+    binder: string,
+    changeNumber: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/changes/${changeNumber}`
+}
+
+export const getBinderChange = async (org: string,
+    binder: string,
+    changeNumber: string, options?: Parameters<typeof customFetch>[1]): Promise<getBinderChangeResponse> => {
+
+  return customFetch<getBinderChangeResponse>(getGetBinderChangeUrl(org,binder,changeNumber),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type reviewBinderChangeResponse200 = {
+  data: ReviewBinderChange200
+  status: 200
+}
+
+export type reviewBinderChangeResponseSuccess = (reviewBinderChangeResponse200) & {
+  headers: Headers;
+};
+;
+
+export type reviewBinderChangeResponse = (reviewBinderChangeResponseSuccess)
+
+export const getReviewBinderChangeUrl = (org: string,
+    binder: string,
+    changeNumber: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/changes/${changeNumber}/reviews`
+}
+
+export const reviewBinderChange = async (org: string,
+    binder: string,
+    changeNumber: string,
+    reviewBinderChangeBody: ReviewBinderChangeBody, options?: Parameters<typeof customFetch>[1]): Promise<reviewBinderChangeResponse> => {
+
+  return customFetch<reviewBinderChangeResponse>(getReviewBinderChangeUrl(org,binder,changeNumber),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(reviewBinderChangeBody)
+  }
+);}
+
+
+export type updateBinderChangeResponse200 = {
+  data: UpdateBinderChange200
+  status: 200
+}
+
+export type updateBinderChangeResponseSuccess = (updateBinderChangeResponse200) & {
+  headers: Headers;
+};
+;
+
+export type updateBinderChangeResponse = (updateBinderChangeResponseSuccess)
+
+export const getUpdateBinderChangeUrl = (org: string,
+    binder: string,
+    changeNumber: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/changes/${changeNumber}/update`
+}
+
+export const updateBinderChange = async (org: string,
+    binder: string,
+    changeNumber: string, options?: Parameters<typeof customFetch>[1]): Promise<updateBinderChangeResponse> => {
+
+  return customFetch<updateBinderChangeResponse>(getUpdateBinderChangeUrl(org,binder,changeNumber),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+export type publishBinderChangeResponse200 = {
+  data: PublishBinderChange200
+  status: 200
+}
+
+export type publishBinderChangeResponseSuccess = (publishBinderChangeResponse200) & {
+  headers: Headers;
+};
+;
+
+export type publishBinderChangeResponse = (publishBinderChangeResponseSuccess)
+
+export const getPublishBinderChangeUrl = (org: string,
+    binder: string,
+    changeNumber: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/changes/${changeNumber}/publish`
+}
+
+export const publishBinderChange = async (org: string,
+    binder: string,
+    changeNumber: string, options?: Parameters<typeof customFetch>[1]): Promise<publishBinderChangeResponse> => {
+
+  return customFetch<publishBinderChangeResponse>(getPublishBinderChangeUrl(org,binder,changeNumber),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+export type listBinderChangeDiscussionsResponse200 = {
+  data: ListBinderChangeDiscussions200
+  status: 200
+}
+
+export type listBinderChangeDiscussionsResponseSuccess = (listBinderChangeDiscussionsResponse200) & {
+  headers: Headers;
+};
+;
+
+export type listBinderChangeDiscussionsResponse = (listBinderChangeDiscussionsResponseSuccess)
+
+export const getListBinderChangeDiscussionsUrl = (org: string,
+    binder: string,
+    changeNumber: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/changes/${changeNumber}/discussions`
+}
+
+export const listBinderChangeDiscussions = async (org: string,
+    binder: string,
+    changeNumber: string, options?: Parameters<typeof customFetch>[1]): Promise<listBinderChangeDiscussionsResponse> => {
+
+  return customFetch<listBinderChangeDiscussionsResponse>(getListBinderChangeDiscussionsUrl(org,binder,changeNumber),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type createBinderChangeDiscussionResponse201 = {
+  data: CreateBinderChangeDiscussion201
+  status: 201
+}
+
+export type createBinderChangeDiscussionResponseSuccess = (createBinderChangeDiscussionResponse201) & {
+  headers: Headers;
+};
+;
+
+export type createBinderChangeDiscussionResponse = (createBinderChangeDiscussionResponseSuccess)
+
+export const getCreateBinderChangeDiscussionUrl = (org: string,
+    binder: string,
+    changeNumber: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/changes/${changeNumber}/discussions`
+}
+
+export const createBinderChangeDiscussion = async (org: string,
+    binder: string,
+    changeNumber: string,
+    createBinderChangeDiscussionBody: CreateBinderChangeDiscussionBody, options?: Parameters<typeof customFetch>[1]): Promise<createBinderChangeDiscussionResponse> => {
+
+  return customFetch<createBinderChangeDiscussionResponse>(getCreateBinderChangeDiscussionUrl(org,binder,changeNumber),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createBinderChangeDiscussionBody)
+  }
+);}
+
+
+export type replyToBinderChangeDiscussionResponse201 = {
+  data: ReplyToBinderChangeDiscussion201
+  status: 201
+}
+
+export type replyToBinderChangeDiscussionResponseSuccess = (replyToBinderChangeDiscussionResponse201) & {
+  headers: Headers;
+};
+;
+
+export type replyToBinderChangeDiscussionResponse = (replyToBinderChangeDiscussionResponseSuccess)
+
+export const getReplyToBinderChangeDiscussionUrl = (org: string,
+    binder: string,
+    changeNumber: string,
+    threadId: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/changes/${changeNumber}/discussions/${threadId}/comments`
+}
+
+export const replyToBinderChangeDiscussion = async (org: string,
+    binder: string,
+    changeNumber: string,
+    threadId: string,
+    replyToBinderChangeDiscussionBody: ReplyToBinderChangeDiscussionBody, options?: Parameters<typeof customFetch>[1]): Promise<replyToBinderChangeDiscussionResponse> => {
+
+  return customFetch<replyToBinderChangeDiscussionResponse>(getReplyToBinderChangeDiscussionUrl(org,binder,changeNumber,threadId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(replyToBinderChangeDiscussionBody)
+  }
+);}
+
+
+export type resolveBinderChangeDiscussionResponse200 = {
+  data: ResolveBinderChangeDiscussion200
+  status: 200
+}
+
+export type resolveBinderChangeDiscussionResponseSuccess = (resolveBinderChangeDiscussionResponse200) & {
+  headers: Headers;
+};
+;
+
+export type resolveBinderChangeDiscussionResponse = (resolveBinderChangeDiscussionResponseSuccess)
+
+export const getResolveBinderChangeDiscussionUrl = (org: string,
+    binder: string,
+    changeNumber: string,
+    threadId: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/changes/${changeNumber}/discussions/${threadId}/resolve`
+}
+
+export const resolveBinderChangeDiscussion = async (org: string,
+    binder: string,
+    changeNumber: string,
+    threadId: string,
+    resolveBinderChangeDiscussionBody: ResolveBinderChangeDiscussionBody, options?: Parameters<typeof customFetch>[1]): Promise<resolveBinderChangeDiscussionResponse> => {
+
+  return customFetch<resolveBinderChangeDiscussionResponse>(getResolveBinderChangeDiscussionUrl(org,binder,changeNumber,threadId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(resolveBinderChangeDiscussionBody)
+  }
+);}
+
+
+export type setBinderDiscussionCommentReactionResponse200 = {
+  data: SetBinderDiscussionCommentReaction200
+  status: 200
+}
+
+export type setBinderDiscussionCommentReactionResponseSuccess = (setBinderDiscussionCommentReactionResponse200) & {
+  headers: Headers;
+};
+;
+
+export type setBinderDiscussionCommentReactionResponse = (setBinderDiscussionCommentReactionResponseSuccess)
+
+export const getSetBinderDiscussionCommentReactionUrl = (org: string,
+    binder: string,
+    changeNumber: string,
+    threadId: string,
+    commentId: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/changes/${changeNumber}/discussions/${threadId}/comments/${commentId}/reactions`
+}
+
+export const setBinderDiscussionCommentReaction = async (org: string,
+    binder: string,
+    changeNumber: string,
+    threadId: string,
+    commentId: string,
+    setBinderDiscussionCommentReactionBody: SetBinderDiscussionCommentReactionBody, options?: Parameters<typeof customFetch>[1]): Promise<setBinderDiscussionCommentReactionResponse> => {
+
+  return customFetch<setBinderDiscussionCommentReactionResponse>(getSetBinderDiscussionCommentReactionUrl(org,binder,changeNumber,threadId,commentId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(setBinderDiscussionCommentReactionBody)
+  }
+);}
+
+
+export type listBinderChangeUpdatesResponse200 = {
+  data: ListBinderChangeUpdates200
+  status: 200
+}
+
+export type listBinderChangeUpdatesResponseSuccess = (listBinderChangeUpdatesResponse200) & {
+  headers: Headers;
+};
+;
+
+export type listBinderChangeUpdatesResponse = (listBinderChangeUpdatesResponseSuccess)
+
+export const getListBinderChangeUpdatesUrl = (org: string,
+    binder: string,
+    changeNumber: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/changes/${changeNumber}/updates`
+}
+
+export const listBinderChangeUpdates = async (org: string,
+    binder: string,
+    changeNumber: string, options?: Parameters<typeof customFetch>[1]): Promise<listBinderChangeUpdatesResponse> => {
+
+  return customFetch<listBinderChangeUpdatesResponse>(getListBinderChangeUpdatesUrl(org,binder,changeNumber),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type updateBinderChangeAssignmentsResponse200 = {
+  data: UpdateBinderChangeAssignments200
+  status: 200
+}
+
+export type updateBinderChangeAssignmentsResponseSuccess = (updateBinderChangeAssignmentsResponse200) & {
+  headers: Headers;
+};
+;
+
+export type updateBinderChangeAssignmentsResponse = (updateBinderChangeAssignmentsResponseSuccess)
+
+export const getUpdateBinderChangeAssignmentsUrl = (org: string,
+    binder: string,
+    changeNumber: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/changes/${changeNumber}/assignments`
+}
+
+export const updateBinderChangeAssignments = async (org: string,
+    binder: string,
+    changeNumber: string,
+    updateBinderChangeAssignmentsBody: UpdateBinderChangeAssignmentsBody, options?: Parameters<typeof customFetch>[1]): Promise<updateBinderChangeAssignmentsResponse> => {
+
+  return customFetch<updateBinderChangeAssignmentsResponse>(getUpdateBinderChangeAssignmentsUrl(org,binder,changeNumber),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateBinderChangeAssignmentsBody)
+  }
+);}
+
+
+export type listBinderCollaboratorsResponse200 = {
+  data: ListBinderCollaborators200
+  status: 200
+}
+
+export type listBinderCollaboratorsResponseSuccess = (listBinderCollaboratorsResponse200) & {
+  headers: Headers;
+};
+;
+
+export type listBinderCollaboratorsResponse = (listBinderCollaboratorsResponseSuccess)
+
+export const getListBinderCollaboratorsUrl = (org: string,
+    binder: string,
+    params?: ListBinderCollaboratorsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/app/binders/${org}/${binder}/collaborators?${stringifiedParams}` : `/api/app/binders/${org}/${binder}/collaborators`
+}
+
+export const listBinderCollaborators = async (org: string,
+    binder: string,
+    params?: ListBinderCollaboratorsParams, options?: Parameters<typeof customFetch>[1]): Promise<listBinderCollaboratorsResponse> => {
+
+  return customFetch<listBinderCollaboratorsResponse>(getListBinderCollaboratorsUrl(org,binder,params),
   {
     ...options,
     method: 'GET'

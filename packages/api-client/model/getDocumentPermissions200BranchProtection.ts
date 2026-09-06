@@ -18,4 +18,5 @@ export type GetDocumentPermissions200BranchProtection = {
   mergeWhitelistTeams: string[];
   blockOnRejectedReviews: boolean;
   dismissStaleApprovals: boolean;
+  enablePush: boolean;
 } | null;

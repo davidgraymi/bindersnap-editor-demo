@@ -649,13 +649,275 @@ input {
   align-content: start;
 }
 
-/* The binder's title and the one action that belongs on it. */
-.binder-page-head {
+/* One change's page: the documents it would version, and the decision. */
+.change-documents {
+  display: grid;
+  gap: var(--brand-space-3);
+}
+
+/* The document whose file is on screen, when a change touches several. */
+.docs-list-item--active {
+  background: var(--bs-coral-dim);
+}
+
+.change-review-field {
+  display: grid;
+  gap: var(--brand-space-2);
+  margin-bottom: var(--brand-space-3);
+}
+
+.change-review-field textarea {
+  resize: vertical;
+  font-family: var(--brand-font-sans);
+}
+
+.change-review-actions {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--brand-space-5);
+  gap: var(--brand-space-2);
   flex-wrap: wrap;
+}
+
+/* A person or a group in the organization's people list. */
+.org-person {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-3);
+  padding: var(--brand-space-3) var(--brand-space-4);
+  border-top: 1px solid var(--bs-rule-warm);
+}
+
+.org-person:first-child {
+  border-top: none;
+}
+
+.org-person-body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+/* The binder's settings: the rules said in sentences, then the people. */
+.binder-settings-section {
+  display: grid;
+  gap: var(--brand-space-3);
+}
+
+.binder-rule-list {
+  display: grid;
+  gap: var(--brand-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.binder-rule {
+  padding-left: var(--brand-space-4);
+  position: relative;
+  font-size: var(--brand-text-ui-md);
+  color: var(--bs-text-secondary);
+}
+
+.binder-rule::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.6em;
+  width: 5px;
+  height: 5px;
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-rule);
+}
+
+.binder-team {
+  display: grid;
+  gap: var(--brand-space-2);
+  padding: var(--brand-space-4) 0;
+  border-top: 1px solid var(--bs-rule-warm);
+}
+
+.binder-team-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--brand-space-3);
+  flex-wrap: wrap;
+}
+
+/* A group's name, not a filename. It was mono while it was the raw Gitea team
+   handle; it is now the name a person would say, and mono is reserved for
+   filenames, timestamps and data labels. */
+.binder-team-name {
+  font-size: 14.5px;
+  font-weight: var(--brand-weight-medium);
+  color: var(--bs-text-primary);
+}
+
+.binder-team-members {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--brand-space-3);
+}
+
+.binder-team-member {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  font-size: var(--brand-text-ui-sm);
+  color: var(--bs-text-secondary);
+}
+
+/* A group on the organization's People tab: a row that opens onto who is in
+   it. Collapsed by default — the answer to "what groups are there" is the list,
+   and the membership is the follow-up question. */
+.org-group {
+  border-top: 1px solid var(--bs-rule-warm);
+}
+
+.org-group:first-child {
+  border-top: none;
+}
+
+.org-group-head {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-3);
+  width: 100%;
+  padding: var(--brand-space-3) var(--brand-space-4);
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.org-group-head:hover {
+  background: var(--bs-surface-2);
+}
+
+/* The level, beside the name, everywhere the group appears. A Gitea team
+   carries one unit map, so this travels with the name and is never a per-binder
+   choice. */
+.org-group-level {
+  margin-left: var(--brand-space-2);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-label);
+  letter-spacing: var(--brand-tracking-wide);
+  text-transform: uppercase;
+  color: var(--bs-text-muted);
+}
+
+/* Indented under its own row and tied to it by a rule, so an open group does
+   not read as loose controls sitting above the next one. */
+.org-group-body {
+  display: grid;
+  gap: var(--brand-space-5);
+  margin: 0 var(--brand-space-4) var(--brand-space-4);
+  padding-left: var(--brand-space-4);
+  border-left: 2px solid var(--bs-rule-warm);
+}
+
+/* The two ends a group matters at — who is in it, and which binders it
+   reaches — laid out as two labelled blocks rather than one run of controls,
+   because they answer different questions. */
+.org-group-part {
+  display: grid;
+  gap: var(--brand-space-3);
+  justify-items: start;
+}
+
+/* A binder the group reaches. Mono, because it is the binder's address — the
+   same treatment the breadcrumb gives it — not a person's name. */
+.org-group-binder {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  padding: var(--brand-space-1) var(--brand-space-3);
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-surface-2);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-ui-sm);
+  color: var(--bs-text-secondary);
+}
+
+.org-group-add {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-3);
+  flex-wrap: wrap;
+}
+
+.org-group-select {
+  flex: 1;
+  min-width: 12rem;
+}
+
+.org-group-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  border: none;
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-surface-2);
+  color: var(--bs-text-muted);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.org-group-remove:hover:not(:disabled) {
+  background: var(--bs-status-danger-bg);
+  color: var(--bs-status-danger-fg);
+}
+
+.org-group-form {
+  display: grid;
+  gap: var(--brand-space-4);
+  padding: var(--brand-space-4);
+  border: 1px solid var(--bs-rule-warm);
+  border-radius: var(--brand-radius-md);
+  justify-items: start;
+}
+
+.org-group-levels {
+  display: grid;
+  gap: var(--brand-space-3);
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.org-group-level-option {
+  display: flex;
+  align-items: start;
+  gap: var(--brand-space-3);
+  cursor: pointer;
+}
+
+.org-group-level-option > span {
+  display: grid;
+  gap: 2px;
+}
+
+/* One tab's worth of a binder. The shell above it owns the page width and
+   the header, so a pane only has to space its own contents. */
+.binder-pane {
+  display: grid;
+  gap: var(--brand-space-5);
+  align-content: start;
+  min-width: 0;
+}
+
+/* A header inside the binder's header: the change, or the document. It keeps
+   the type and the spacing but drops the rule, because the shell already drew
+   one under the tabs and two lines in a row is a box. */
+.doc-header--nested {
+  border-bottom: none;
+  margin-bottom: 0;
+  gap: var(--brand-space-3);
 }
 
 /* Adding a policy: where it will land, and what happens next. */
@@ -2910,6 +3172,33 @@ input {
 .doc-spline-link:hover,
 .doc-spline-link:focus-visible {
   border-bottom-color: var(--brand-coral);
+}
+
+/* The binder's history reuses this rail, and adds the two things a
+   per-document version list does not need: when, and by whom. */
+.doc-spline-date {
+  flex-shrink: 0;
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-xs);
+  color: var(--bs-text-faint);
+  white-space: nowrap;
+}
+
+.doc-spline-note {
+  margin: 0;
+  font-size: var(--brand-text-ui-sm);
+  color: var(--bs-text-muted);
+}
+
+.doc-spline-note .doc-spline-link,
+.doc-spline-title .doc-spline-link {
+  appearance: none;
+  background: none;
+  border: none;
+  border-bottom: 1px solid transparent;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
 }
 
 .doc-spline-actions {

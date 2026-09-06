@@ -12,6 +12,15 @@ import * as OrganizationsClient from "../../packages/api-client/organizations/or
 import * as BindersClient from "../../packages/api-client/workspaces/workspaces";
 import type {
   CreatedWorkspaceDocumentPayload,
+  BinderGroupsPayload,
+  CreatedOrganizationGroupPayload,
+  OrganizationPeoplePayload,
+  PublishedWorkspaceChangePayload,
+  WorkspaceChangeDetailPayload,
+  WorkspaceChangeListPayload,
+  WorkspaceHistoryPayload,
+  WorkspaceOverviewPayload,
+  WorkspaceSettingsPayload,
   WorkspaceDocumentDetailPayload,
   WorkspaceDocumentListPayload,
   WorkspaceSummary,
@@ -145,6 +154,8 @@ import {
   shouldInterceptPaymentRequired,
 } from "./paymentRequired";
 import type { DocumentSearchParams } from "./documentSearch";
+import type { ChangeScope } from "./changeScope";
+import { scopeChangeBase, scopeRepo } from "./changeScope";
 
 function handlePaymentRequired(path: string, error: unknown): never {
   if (
@@ -377,43 +388,61 @@ export async function uploadDocumentVersion(params: {
   }
 }
 
+/** The bytes of the document this change is about, at a ref. */
 export async function downloadDocument(
-  owner: string,
-  repo: string,
+  scope: ChangeScope,
   ref: string,
 ): Promise<Blob> {
-  try {
-    const response = await DocumentsClient.downloadDocument(owner, repo, {
+  if (scope.kind === "binder") {
+    return downloadBinderDocument(
+      scope.org,
+      scope.binder,
+      scope.documentPath,
       ref,
-    });
+    );
+  }
+
+  try {
+    const response = await DocumentsClient.downloadDocument(
+      scope.owner,
+      scope.repo,
+      { ref },
+    );
     return response.data;
   } catch (error) {
     handlePaymentRequired(
-      `/api/app/documents/${owner}/${repo}/download`,
+      `/api/app/documents/${scope.owner}/${scope.repo}/download`,
       error,
     );
   }
 }
 
 export async function listDocumentCollaborators(
-  owner: string,
-  repo: string,
+  scope: ChangeScope,
   page = 1,
   limit = 12,
 ): Promise<CollaboratorListPayload> {
+  const query = { page: String(page), limit: String(limit) };
   try {
-    const response = await DocumentsClient.listDocumentCollaborators(
-      owner,
-      repo,
-      {
-        page: String(page),
-        limit: String(limit),
-      },
-    );
+    const response =
+      scope.kind === "binder"
+        ? await BindersClient.listBinderCollaborators(
+            scope.org,
+            scope.binder,
+            query,
+          )
+        : await DocumentsClient.listDocumentCollaborators(
+            scope.owner,
+            scope.repo,
+            query,
+          );
     return response.data;
   } catch (error) {
+    const { owner, repo } = scopeRepo(scope);
     handlePaymentRequired(
-      `/api/app/documents/${owner}/${repo}/collaborators`,
+      scope.kind === "binder"
+        ? `/api/app/binders/${owner}/${repo}/collaborators`
+        : `/api/app/documents/${owner}/${repo}/collaborators`,
       error,
     );
   }
@@ -518,22 +547,30 @@ export async function updateDocumentPermissions(
 }
 
 export async function submitDocumentReview(
-  owner: string,
-  repo: string,
+  scope: ChangeScope,
   pullNumber: number,
   event: "APPROVE" | "REQUEST_CHANGES" | "COMMENT",
   body?: string,
 ): Promise<void> {
   try {
-    await DocumentsClient.submitDocumentReview(
-      owner,
-      repo,
-      String(pullNumber),
-      { event, body },
-    );
+    if (scope.kind === "binder") {
+      await BindersClient.reviewBinderChange(
+        scope.org,
+        scope.binder,
+        String(pullNumber),
+        { event, ...(body ? { body } : {}) },
+      );
+    } else {
+      await DocumentsClient.submitDocumentReview(
+        scope.owner,
+        scope.repo,
+        String(pullNumber),
+        { event, body },
+      );
+    }
   } catch (error) {
     handlePaymentRequired(
-      `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/reviews`,
+      `${scopeChangeBase(scope, pullNumber)}/reviews`,
       error,
     );
   }
@@ -546,22 +583,29 @@ export async function submitDocumentReview(
  * assignee, and pass `assignee: null` to clear the assignment.
  */
 export async function updateChangeAssignments(
-  owner: string,
-  repo: string,
+  scope: ChangeScope,
   pullNumber: number,
   updates: { assignee?: string | null; reviewers?: string[] },
 ): Promise<ChangeAssignments> {
   try {
-    const response = await DocumentsClient.updateChangeAssignments(
-      owner,
-      repo,
-      String(pullNumber),
-      updates,
-    );
+    const response =
+      scope.kind === "binder"
+        ? await BindersClient.updateBinderChangeAssignments(
+            scope.org,
+            scope.binder,
+            String(pullNumber),
+            updates,
+          )
+        : await DocumentsClient.updateChangeAssignments(
+            scope.owner,
+            scope.repo,
+            String(pullNumber),
+            updates,
+          );
     return response.data;
   } catch (error) {
     handlePaymentRequired(
-      `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/assignments`,
+      `${scopeChangeBase(scope, pullNumber)}/assignments`,
       error,
     );
   }
@@ -574,110 +618,145 @@ export async function updateChangeAssignments(
  * a list of changes does not need the history inside each one.
  */
 export async function listChangeUpdates(
-  owner: string,
-  repo: string,
+  scope: ChangeScope,
   pullNumber: number,
 ): Promise<ChangeUpdatesPayload> {
   try {
-    const response = await DocumentsClient.listChangeUpdates(
-      owner,
-      repo,
-      String(pullNumber),
-    );
+    const response =
+      scope.kind === "binder"
+        ? await BindersClient.listBinderChangeUpdates(
+            scope.org,
+            scope.binder,
+            String(pullNumber),
+          )
+        : await DocumentsClient.listChangeUpdates(
+            scope.owner,
+            scope.repo,
+            String(pullNumber),
+          );
     return response.data;
   } catch (error) {
     handlePaymentRequired(
-      `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/updates`,
+      `${scopeChangeBase(scope, pullNumber)}/updates`,
       error,
     );
   }
 }
 
-export async function listDocumentDiscussions(
-  owner: string,
-  repo: string,
+export async function listChangeDiscussions(
+  scope: ChangeScope,
   pullNumber: number,
 ): Promise<DiscussionSummary> {
   try {
-    const response = await DocumentsClient.listDocumentDiscussions(
-      owner,
-      repo,
-      String(pullNumber),
-    );
+    const response =
+      scope.kind === "binder"
+        ? await BindersClient.listBinderChangeDiscussions(
+            scope.org,
+            scope.binder,
+            String(pullNumber),
+          )
+        : await DocumentsClient.listDocumentDiscussions(
+            scope.owner,
+            scope.repo,
+            String(pullNumber),
+          );
     return response.data;
   } catch (error) {
     handlePaymentRequired(
-      `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/discussions`,
+      `${scopeChangeBase(scope, pullNumber)}/discussions`,
       error,
     );
   }
 }
 
-export async function createDocumentDiscussion(
-  owner: string,
-  repo: string,
+export async function createChangeDiscussion(
+  scope: ChangeScope,
   pullNumber: number,
   body: string,
 ): Promise<DiscussionSummary> {
   try {
-    const response = await DocumentsClient.createDocumentDiscussion(
-      owner,
-      repo,
-      String(pullNumber),
-      { body },
-    );
+    const response =
+      scope.kind === "binder"
+        ? await BindersClient.createBinderChangeDiscussion(
+            scope.org,
+            scope.binder,
+            String(pullNumber),
+            { body },
+          )
+        : await DocumentsClient.createDocumentDiscussion(
+            scope.owner,
+            scope.repo,
+            String(pullNumber),
+            { body },
+          );
     return response.data;
   } catch (error) {
     handlePaymentRequired(
-      `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/discussions`,
+      `${scopeChangeBase(scope, pullNumber)}/discussions`,
       error,
     );
   }
 }
 
-export async function replyToDocumentDiscussion(
-  owner: string,
-  repo: string,
+export async function replyToChangeDiscussion(
+  scope: ChangeScope,
   pullNumber: number,
   threadId: string,
   body: string,
 ): Promise<DiscussionSummary> {
   try {
-    const response = await DocumentsClient.replyToDocumentDiscussion(
-      owner,
-      repo,
-      String(pullNumber),
-      threadId,
-      { body },
-    );
+    const response =
+      scope.kind === "binder"
+        ? await BindersClient.replyToBinderChangeDiscussion(
+            scope.org,
+            scope.binder,
+            String(pullNumber),
+            threadId,
+            { body },
+          )
+        : await DocumentsClient.replyToDocumentDiscussion(
+            scope.owner,
+            scope.repo,
+            String(pullNumber),
+            threadId,
+            { body },
+          );
     return response.data;
   } catch (error) {
     handlePaymentRequired(
-      `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/discussions/${threadId}/comments`,
+      `${scopeChangeBase(scope, pullNumber)}/discussions/${threadId}/comments`,
       error,
     );
   }
 }
 
-export async function resolveDocumentDiscussion(
-  owner: string,
-  repo: string,
+export async function resolveChangeDiscussion(
+  scope: ChangeScope,
   pullNumber: number,
   threadId: string,
   resolved: boolean,
 ): Promise<DiscussionSummary> {
   try {
-    const response = await DocumentsClient.resolveDocumentDiscussion(
-      owner,
-      repo,
-      String(pullNumber),
-      threadId,
-      { resolved },
-    );
+    const response =
+      scope.kind === "binder"
+        ? await BindersClient.resolveBinderChangeDiscussion(
+            scope.org,
+            scope.binder,
+            String(pullNumber),
+            threadId,
+            { resolved },
+          )
+        : await DocumentsClient.resolveDocumentDiscussion(
+            scope.owner,
+            scope.repo,
+            String(pullNumber),
+            threadId,
+            { resolved },
+          );
     return response.data;
   } catch (error) {
     handlePaymentRequired(
-      `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/discussions/${threadId}/resolve`,
+      `${scopeChangeBase(scope, pullNumber)}/discussions/${threadId}/resolve`,
       error,
     );
   }
@@ -691,8 +770,7 @@ export async function resolveDocumentDiscussion(
  * together on the client.
  */
 export async function setDiscussionCommentReaction(
-  owner: string,
-  repo: string,
+  scope: ChangeScope,
   pullNumber: number,
   threadId: string,
   commentId: number,
@@ -700,43 +778,63 @@ export async function setDiscussionCommentReaction(
   on: boolean,
 ): Promise<DiscussionSummary> {
   try {
-    const response = await DocumentsClient.setDiscussionCommentReaction(
-      owner,
-      repo,
-      String(pullNumber),
-      threadId,
-      String(commentId),
-      { content, on },
-    );
+    const response =
+      scope.kind === "binder"
+        ? await BindersClient.setBinderDiscussionCommentReaction(
+            scope.org,
+            scope.binder,
+            String(pullNumber),
+            threadId,
+            String(commentId),
+            { content, on },
+          )
+        : await DocumentsClient.setDiscussionCommentReaction(
+            scope.owner,
+            scope.repo,
+            String(pullNumber),
+            threadId,
+            String(commentId),
+            { content, on },
+          );
     return response.data;
   } catch (error) {
     handlePaymentRequired(
-      `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/discussions/${threadId}/comments/${commentId}/reactions`,
+      `${scopeChangeBase(scope, pullNumber)}/discussions/${threadId}/comments/${commentId}/reactions`,
       error,
     );
   }
 }
 
+/**
+ * Publish a change: merge it, and write the version it becomes.
+ *
+ * `nextVersion` is only the document model's to state. A binder works out one
+ * version per document the change touched — three documents, three tags on one
+ * commit — so it is told nothing and answers with what it wrote.
+ */
 export async function publishDocument(
-  owner: string,
-  repo: string,
+  scope: ChangeScope,
   pullNumber: number,
   nextVersion: number,
-): Promise<{
-  ok: boolean;
-  tag: DocTag;
-}> {
+): Promise<void> {
   try {
-    const response = await DocumentsClient.publishDocument(
-      owner,
-      repo,
-      String(pullNumber),
-      { nextVersion },
-    );
-    return response.data;
+    if (scope.kind === "binder") {
+      await BindersClient.publishBinderChange(
+        scope.org,
+        scope.binder,
+        String(pullNumber),
+      );
+    } else {
+      await DocumentsClient.publishDocument(
+        scope.owner,
+        scope.repo,
+        String(pullNumber),
+        { nextVersion },
+      );
+    }
   } catch (error) {
     handlePaymentRequired(
-      `/api/app/documents/${owner}/${repo}/pull-requests/${pullNumber}/publish`,
+      `${scopeChangeBase(scope, pullNumber)}/publish`,
       error,
     );
   }
@@ -800,6 +898,125 @@ export async function createBinder(
   return response.data.workspace;
 }
 
+/** The binder itself: what it is called, what it is for, how much is in it. */
+export async function fetchBinder(
+  org: string,
+  binder: string,
+): Promise<WorkspaceOverviewPayload> {
+  const response = await BindersClient.getBinder(org, binder);
+  return response.data;
+}
+
+/** The binder's change requests, open or closed. */
+export async function fetchBinderChanges(
+  org: string,
+  binder: string,
+  state: "open" | "closed" = "open",
+): Promise<WorkspaceChangeListPayload> {
+  const response = await BindersClient.listBinderChanges(org, binder, {
+    state,
+  });
+  return response.data;
+}
+
+/** Who is in this organization, and the groups it has. */
+export async function fetchOrganizationPeople(
+  org: string,
+): Promise<OrganizationPeoplePayload> {
+  const response = await OrganizationsClient.getOrganizationPeople(org);
+  return response.data;
+}
+
+/**
+ * Name a group and level it, which is one act.
+ *
+ * A Gitea team carries one unit map, so the level belongs to the group rather
+ * than to the grant — a group cannot be an editor in one binder and a reviewer
+ * in another. Asking for the two together is how that constraint is shown
+ * rather than discovered.
+ */
+export async function createOrganizationGroup(
+  org: string,
+  name: string,
+  level: string,
+): Promise<CreatedOrganizationGroupPayload> {
+  const response = await OrganizationsClient.createOrganizationGroup(org, {
+    name,
+    level,
+  });
+  return response.data;
+}
+
+/** Put somebody in a group. Immediate: no commit, no approval. */
+export async function addOrganizationGroupMember(
+  org: string,
+  group: string,
+  username: string,
+): Promise<OrganizationPeoplePayload> {
+  const response = await OrganizationsClient.addOrganizationGroupMember(
+    org,
+    group,
+    { username },
+  );
+  return response.data;
+}
+
+export async function removeOrganizationGroupMember(
+  org: string,
+  group: string,
+  username: string,
+): Promise<OrganizationPeoplePayload> {
+  const response = await OrganizationsClient.removeOrganizationGroupMember(
+    org,
+    group,
+    username,
+  );
+  return response.data;
+}
+
+/**
+ * Compose a group onto this binder, and rewrite the approvals whitelist.
+ *
+ * Both halves are one call because the second fails silently on its own: a
+ * granted team missing from the whitelist has its members' approvals recorded,
+ * displayed, and satisfying nothing.
+ */
+export async function grantBinderGroup(
+  org: string,
+  binder: string,
+  group: string,
+): Promise<BinderGroupsPayload> {
+  const response = await BindersClient.grantBinderGroup(org, binder, { group });
+  return response.data;
+}
+
+export async function revokeBinderGroup(
+  org: string,
+  binder: string,
+  group: string,
+): Promise<BinderGroupsPayload> {
+  const response = await BindersClient.revokeBinderGroup(org, binder, group);
+  return response.data;
+}
+
+/** Every version this binder has published, newest first. */
+export async function fetchBinderHistory(
+  org: string,
+  binder: string,
+): Promise<WorkspaceHistoryPayload> {
+  const response = await BindersClient.getBinderHistory(org, binder);
+  return response.data;
+}
+
+/** Who can act in this binder, and the rules it is governed by. */
+export async function fetchBinderSettings(
+  org: string,
+  binder: string,
+): Promise<WorkspaceSettingsPayload> {
+  const response = await BindersClient.getBinderSettings(org, binder);
+  return response.data;
+}
+
 export async function fetchBinderDocuments(
   org: string,
   binder: string,
@@ -819,6 +1036,90 @@ export async function fetchBinderDocument(
     documentPath,
   );
   return response.data;
+}
+
+/**
+ * One change in a binder — what it proposes, and where it stands.
+ *
+ * A question about the change rather than about a document, because the change
+ * is the unit of approval: publishing one that touched three policies versions
+ * all three.
+ */
+export async function fetchBinderChange(
+  org: string,
+  binder: string,
+  changeNumber: number,
+): Promise<WorkspaceChangeDetailPayload> {
+  const response = await BindersClient.getBinderChange(
+    org,
+    binder,
+    String(changeNumber),
+  );
+  return response.data;
+}
+
+/** Approve a change, ask for work on it, or say something about it. */
+export async function reviewBinderChange(
+  org: string,
+  binder: string,
+  changeNumber: number,
+  event: "APPROVE" | "REQUEST_CHANGES" | "COMMENT",
+  body?: string,
+): Promise<void> {
+  try {
+    await BindersClient.reviewBinderChange(org, binder, String(changeNumber), {
+      event,
+      ...(body ? { body } : {}),
+    });
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/binders/${org}/${binder}/changes/${changeNumber}/reviews`,
+      error,
+    );
+  }
+}
+
+/**
+ * Bring a change's branch up to date with the binder's `main`.
+ *
+ * It moves the branch, so a binder that dismisses stale approvals will drop
+ * the ones already collected — which is why this is its own act rather than
+ * something publish does quietly.
+ */
+export async function updateBinderChange(
+  org: string,
+  binder: string,
+  changeNumber: number,
+): Promise<void> {
+  try {
+    await BindersClient.updateBinderChange(org, binder, String(changeNumber));
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/binders/${org}/${binder}/changes/${changeNumber}/update`,
+      error,
+    );
+  }
+}
+
+/** Merge the change and tag a version for every document it touched. */
+export async function publishBinderChange(
+  org: string,
+  binder: string,
+  changeNumber: number,
+): Promise<PublishedWorkspaceChangePayload> {
+  try {
+    const response = await BindersClient.publishBinderChange(
+      org,
+      binder,
+      String(changeNumber),
+    );
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/binders/${org}/${binder}/changes/${changeNumber}/publish`,
+      error,
+    );
+  }
 }
 
 /**

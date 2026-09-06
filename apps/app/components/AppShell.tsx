@@ -4,8 +4,7 @@ import type { SessionUser } from "../api";
 import { buildDocumentsUrl, parseDocumentsViewState } from "../documentsView";
 import type { AppRoute } from "../routes";
 import { ActivityLogPage } from "./ActivityLogPage";
-import { BinderDocumentPage } from "./BinderDocumentPage";
-import { BinderPage } from "./BinderPage";
+import { BinderShell } from "./BinderShell";
 import { OrganizationPage } from "./OrganizationPage";
 import { OrganizationSwitcher } from "./OrganizationSwitcher";
 import { AdminSubscriptionManagementPage } from "./AdminSubscriptionManagementPage";
@@ -380,10 +379,17 @@ export function AppShell({
                   onNavigate({ kind: "binder", org: route.org, binder })
                 }
               />
-            ) : route.kind === "binder" ? (
-              <BinderPage
+            ) : route.kind === "binder" || route.kind === "binderDocument" ? (
+              // One shell for both: a document is a file inside the binder,
+              // so it opens under the binder's own header and tabs rather
+              // than on a page of its own.
+              <BinderShell
                 org={route.org}
                 binder={route.binder}
+                {...(route.kind === "binderDocument"
+                  ? { documentPath: route.documentPath }
+                  : {})}
+                currentUser={currentUsername}
                 onOpenDocument={(documentPath) =>
                   onNavigate({
                     kind: "binderDocument",
@@ -392,12 +398,6 @@ export function AppShell({
                     documentPath,
                   })
                 }
-              />
-            ) : route.kind === "binderDocument" ? (
-              <BinderDocumentPage
-                org={route.org}
-                binder={route.binder}
-                documentPath={route.documentPath}
                 onOpenBinder={() =>
                   onNavigate({
                     kind: "binder",

@@ -4,6 +4,7 @@ import { Columns2, Download, FileText, Layers } from "lucide-react";
 import { sanitizeHtml } from "../../../packages/utils/sanitizer";
 import { downloadDocument } from "../api";
 import { blocksToHtml, blocksToText, htmlToText } from "../documentBlocks";
+import type { ChangeScope } from "../changeScope";
 import type { ComparisonBase, DiffSegment } from "../documentComparison";
 import {
   diffRenderedHtml,
@@ -17,8 +18,8 @@ import { extractPdfBlocks } from "../pdfText";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
 interface DocumentComparisonProps {
-  owner: string;
-  repo: string;
+  /** Which repository this change lives in — a document's, or a binder. */
+  scope: ChangeScope;
   /** The version being compared against — the one this change replaces. */
   base: ComparisonBase;
   /** The ref holding the proposed file. */
@@ -87,8 +88,7 @@ async function readText(blob: Blob): Promise<{ text: string; cut: boolean }> {
  * is the only thing lit.
  */
 export function DocumentComparison({
-  owner,
-  repo,
+  scope,
   base,
   headRef,
   headLabel,
@@ -112,8 +112,8 @@ export function DocumentComparison({
       setState({ status: "loading" });
       try {
         const [before, after] = await Promise.all([
-          downloadDocument(owner, repo, base.ref),
-          downloadDocument(owner, repo, headRef),
+          downloadDocument(scope, base.ref),
+          downloadDocument(scope, headRef),
         ]);
         if (cancelled) return;
 
@@ -217,7 +217,7 @@ export function DocumentComparison({
       cancelled = true;
       for (const url of objectUrls) URL.revokeObjectURL(url);
     };
-  }, [owner, repo, base.ref, headRef, kind]);
+  }, [scope, base.ref, headRef, kind]);
 
   // A scan has no words in it, so a word count would report "nothing changed"
   // about two files nobody has actually compared. It gets no summary and says
