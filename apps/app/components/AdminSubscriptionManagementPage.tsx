@@ -250,7 +250,6 @@ export function AdminSubscriptionManagementPage({
     <div className="admin-pro-page app-page-shell">
       <div className="admin-pro-header">
         <div className="admin-pro-header-copy">
-          <span className="bs-eyebrow">Admin Controls</span>
           <h1>Bindersnap Pro access</h1>
           <p>
             Check a teammate&apos;s current subscription access, then grant or

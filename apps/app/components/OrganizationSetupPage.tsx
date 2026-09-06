@@ -58,11 +58,6 @@ export function OrganizationSetupPage({
         </div>
 
         <div className="app-login-panel bs-card">
-          <div className="bs-eyebrow">
-            {reason === "blocked-write"
-              ? "One step first"
-              : "Your organization"}
-          </div>
           <h1>
             {reason === "blocked-write"
               ? "Name your organization to start writing"

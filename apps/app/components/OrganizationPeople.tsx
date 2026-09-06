@@ -799,10 +799,10 @@ function NewGroupForm({
         </p>
       )}
 
-      <fieldset className="org-group-levels">
+      <fieldset className="org-visibility-choice">
         <legend className="bs-label">Level</legend>
         {GROUP_LEVELS.map((option) => (
-          <label className="org-group-level-option" key={option.value}>
+          <label className="org-choice" key={option.value}>
             <input
               type="radio"
               name="group-level"
