@@ -677,13 +677,22 @@ input {
   flex-wrap: wrap;
 }
 
-/* The binder's title and the one action that belongs on it. */
-.binder-page-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+/* One tab's worth of a binder. The shell above it owns the page width and
+   the header, so a pane only has to space its own contents. */
+.binder-pane {
+  display: grid;
   gap: var(--brand-space-5);
-  flex-wrap: wrap;
+  align-content: start;
+  min-width: 0;
+}
+
+/* A header inside the binder's header: the change, or the document. It keeps
+   the type and the spacing but drops the rule, because the shell already drew
+   one under the tabs and two lines in a row is a box. */
+.doc-header--nested {
+  border-bottom: none;
+  margin-bottom: 0;
+  gap: var(--brand-space-3);
 }
 
 /* Adding a policy: where it will land, and what happens next. */

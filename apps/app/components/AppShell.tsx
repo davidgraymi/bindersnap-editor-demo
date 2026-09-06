@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { Bell, FileText, LogOut, Moon, Shield } from "lucide-react";
 import type { SessionUser } from "../api";
-import { buildChangeUrl } from "../binderChange";
 import { buildDocumentsUrl, parseDocumentsViewState } from "../documentsView";
 import type { AppRoute } from "../routes";
 import { ActivityLogPage } from "./ActivityLogPage";
-import { BinderDocumentPage } from "./BinderDocumentPage";
-import { BinderPage } from "./BinderPage";
+import { BinderShell } from "./BinderShell";
 import { OrganizationPage } from "./OrganizationPage";
 import { OrganizationSwitcher } from "./OrganizationSwitcher";
 import { AdminSubscriptionManagementPage } from "./AdminSubscriptionManagementPage";
@@ -381,10 +379,16 @@ export function AppShell({
                   onNavigate({ kind: "binder", org: route.org, binder })
                 }
               />
-            ) : route.kind === "binder" ? (
-              <BinderPage
+            ) : route.kind === "binder" || route.kind === "binderDocument" ? (
+              // One shell for both: a document is a file inside the binder,
+              // so it opens under the binder's own header and tabs rather
+              // than on a page of its own.
+              <BinderShell
                 org={route.org}
                 binder={route.binder}
+                {...(route.kind === "binderDocument"
+                  ? { documentPath: route.documentPath }
+                  : {})}
                 currentUser={currentUsername}
                 onOpenDocument={(documentPath) =>
                   onNavigate({
@@ -394,12 +398,6 @@ export function AppShell({
                     documentPath,
                   })
                 }
-              />
-            ) : route.kind === "binderDocument" ? (
-              <BinderDocumentPage
-                org={route.org}
-                binder={route.binder}
-                documentPath={route.documentPath}
                 onOpenBinder={() =>
                   onNavigate({
                     kind: "binder",
@@ -410,21 +408,6 @@ export function AppShell({
                 onOpenOrganization={() =>
                   onNavigate({ kind: "organization", org: route.org })
                 }
-                onOpenChange={(changeNumber) => {
-                  // A change lives on the binder, in the query — so this moves
-                  // the address bar directly rather than through the route
-                  // table, which is a page and this is a page plus a question.
-                  window.history.pushState(
-                    {},
-                    "",
-                    buildChangeUrl({
-                      org: route.org,
-                      binder: route.binder,
-                      changeNumber,
-                    }),
-                  );
-                  window.dispatchEvent(new PopStateEvent("popstate"));
-                }}
               />
             ) : route.kind === "activity" ? (
               <ActivityLogPage />

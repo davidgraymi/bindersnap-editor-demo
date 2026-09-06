@@ -15,35 +15,33 @@ import type {
 } from "../../packages/api-schema/schemas/workspaces";
 import { formatDocumentName } from "./documentDisplay";
 
-/** One step of the trail from the organization down to the document. */
+/** One step of the trail down to the document, inside its binder. */
 export interface BinderCrumb {
   label: string;
-  /** Where clicking it goes, or null for the step you are already on. */
-  href: string | null;
+  /** Whether this step is the document itself rather than a folder above it. */
+  isDocument: boolean;
 }
 
 /**
- * `Riverside Health / Clinical Policies / nursing / Hand Hygiene`.
+ * `nursing / Hand Hygiene` — where in the binder this document is filed.
  *
- * The folders are steps rather than a single joined label because a folder is
- * a directory a customer made to find things in, and the way you use it is by
- * going back to it. They have no page of their own yet, so they are shown
- * without a link rather than as a link that would go nowhere.
+ * The organization and the binder are not steps here: the binder's own header
+ * is above this, naming both, and repeating them would be the same two words
+ * twice on one screen. What the shell cannot say is which folder you are in.
+ *
+ * Folders are steps rather than one joined label because a folder is a real
+ * directory a customer made to find things in. They carry no link yet — they
+ * have no page of their own, and a link that goes nowhere is worse than plain
+ * text.
  */
-export function buildDocumentCrumbs(params: {
-  org: string;
-  binder: string;
-  document: Pick<WorkspaceDocumentEntry, "folder" | "name">;
-}): BinderCrumb[] {
-  const { org, binder, document } = params;
-
+export function buildDocumentCrumbs(
+  document: Pick<WorkspaceDocumentEntry, "folder" | "name">,
+): BinderCrumb[] {
   const folders = document.folder === "" ? [] : document.folder.split("/");
 
   return [
-    { label: org, href: `/${org}` },
-    { label: binder, href: `/${org}/${binder}` },
-    ...folders.map((segment) => ({ label: segment, href: null })),
-    { label: formatDocumentName(document.name), href: null },
+    ...folders.map((segment) => ({ label: segment, isDocument: false })),
+    { label: formatDocumentName(document.name), isDocument: true },
   ];
 }
 

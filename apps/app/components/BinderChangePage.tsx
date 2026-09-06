@@ -217,7 +217,7 @@ export function BinderChangePage({
 
   if (error) {
     return (
-      <section className="docw-page">
+      <div className="binder-pane">
         <h1 className="doc-header-title">Change #{changeNumber}</h1>
         <p className="app-inline-error">{error}</p>
         <p>
@@ -229,18 +229,18 @@ export function BinderChangePage({
             Back to {binder}
           </button>
         </p>
-      </section>
+      </div>
     );
   }
 
   if (!detail || !record) {
     return (
-      <section className="docw-page">
+      <div className="binder-pane">
         <SkeletonGroup label="Opening this change">
           <SkeletonLine width="medium" />
           <SkeletonLine width="short" />
         </SkeletonGroup>
-      </section>
+      </div>
     );
   }
 
@@ -254,25 +254,25 @@ export function BinderChangePage({
   const isDecided = change.state !== "open" || justPublished;
 
   return (
-    <section className="docw-page">
-      <header className="doc-header">
-        <nav className="doc-crumbs" aria-label="Where this change lives">
+    <div className="binder-pane">
+      <header className="doc-header doc-header--nested">
+        {/* The binder is named above this by the shell, so the trail says the
+            one thing it does not: which change you are reading. */}
+        <nav className="doc-crumbs" aria-label="Which change this is">
           <span className="doc-crumb">
             <button
               className="app-breadcrumb-back"
               type="button"
               onClick={onBackToBinder}
             >
-              {binder}
+              Change requests
             </button>
           </span>
           <span className="doc-crumb">
             <span className="app-breadcrumb-sep" aria-hidden="true">
               /
             </span>
-            <span className="app-breadcrumb-current">
-              Change #{change.number}
-            </span>
+            <span className="app-breadcrumb-current">#{change.number}</span>
           </span>
         </nav>
 
@@ -485,6 +485,6 @@ export function BinderChangePage({
           ) : null}
         </aside>
       </div>
-    </section>
+    </div>
   );
 }

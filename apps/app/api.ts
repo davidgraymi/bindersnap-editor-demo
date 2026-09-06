@@ -14,6 +14,8 @@ import type {
   CreatedWorkspaceDocumentPayload,
   PublishedWorkspaceChangePayload,
   WorkspaceChangeDetailPayload,
+  WorkspaceChangeListPayload,
+  WorkspaceOverviewPayload,
   WorkspaceDocumentDetailPayload,
   WorkspaceDocumentListPayload,
   WorkspaceSummary,
@@ -800,6 +802,27 @@ export async function createBinder(
     description,
   });
   return response.data.workspace;
+}
+
+/** The binder itself: what it is called, what it is for, how much is in it. */
+export async function fetchBinder(
+  org: string,
+  binder: string,
+): Promise<WorkspaceOverviewPayload> {
+  const response = await BindersClient.getBinder(org, binder);
+  return response.data;
+}
+
+/** The binder's change requests, open or closed. */
+export async function fetchBinderChanges(
+  org: string,
+  binder: string,
+  state: "open" | "closed" = "open",
+): Promise<WorkspaceChangeListPayload> {
+  const response = await BindersClient.listBinderChanges(org, binder, {
+    state,
+  });
+  return response.data;
 }
 
 export async function fetchBinderDocuments(
