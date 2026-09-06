@@ -45,6 +45,7 @@ import {
   BinderGroupRequestSchema,
   BinderPeoplePayloadSchema,
   BinderPersonRequestSchema,
+  BinderVisibilityRequestSchema,
   BinderGroupsPayloadSchema,
   CreateOrganizationGroupRequestSchema,
   CreatedOrganizationGroupPayloadSchema,
@@ -927,6 +928,30 @@ registry.registerPath({
       description: "The organization's people and groups, after the change",
       content: {
         "application/json": { schema: OrganizationPeoplePayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/binders/{org}/{binder}/visibility",
+  operationId: "setBinderVisibility",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({ org: z.string(), binder: z.string() }),
+    body: {
+      required: true,
+      content: {
+        "application/json": { schema: BinderVisibilityRequestSchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "The binder's people, after the change",
+      content: {
+        "application/json": { schema: BinderPeoplePayloadSchema },
       },
     },
   },

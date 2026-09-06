@@ -44,6 +44,8 @@ import type {
   SetBinderDiscussionCommentReactionBody,
   SetBinderPersonLevel200,
   SetBinderPersonLevelBody,
+  SetBinderVisibility200,
+  SetBinderVisibilityBody,
   UpdateBinderChange200,
   UpdateBinderChangeAssignments200,
   UpdateBinderChangeAssignmentsBody
@@ -221,6 +223,41 @@ export const listBinderChanges = async (org: string,
     method: 'GET'
 
 
+  }
+);}
+
+
+export type setBinderVisibilityResponse200 = {
+  data: SetBinderVisibility200
+  status: 200
+}
+
+export type setBinderVisibilityResponseSuccess = (setBinderVisibilityResponse200) & {
+  headers: Headers;
+};
+;
+
+export type setBinderVisibilityResponse = (setBinderVisibilityResponseSuccess)
+
+export const getSetBinderVisibilityUrl = (org: string,
+    binder: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/visibility`
+}
+
+export const setBinderVisibility = async (org: string,
+    binder: string,
+    setBinderVisibilityBody: SetBinderVisibilityBody, options?: Parameters<typeof customFetch>[1]): Promise<setBinderVisibilityResponse> => {
+
+  return customFetch<setBinderVisibilityResponse>(getSetBinderVisibilityUrl(org,binder),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(setBinderVisibilityBody)
   }
 );}
 

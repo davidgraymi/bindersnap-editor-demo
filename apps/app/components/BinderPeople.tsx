@@ -8,6 +8,7 @@ import {
   removeBinderPerson,
   revokeBinderGroup,
   setBinderPersonLevel,
+  setBinderVisibility,
 } from "../api";
 import type {
   BinderPeoplePayload,
@@ -125,19 +126,16 @@ export function BinderPeople({ org, binder }: BinderPeopleProps) {
           {` · ${seats === 1 ? "1 seat" : `${seats} seats`} · ${free} free`}
         </p>
 
-        {/* The visibility line sits above the list because it changes what the
-            list means: when the whole organization can read, the list below
-            stops being the whole answer. */}
-        {payload.openToOrganization ? (
-          <p className="doc-rail-note">
-            Everyone at {org} can read this binder and comment on changes. The
-            people below can do more.
-          </p>
-        ) : (
-          <p className="doc-rail-note">
-            Only the people below can see this binder.
-          </p>
-        )}
+        {/* The switch sits above the list because it changes what the list
+            means: when the whole organization can read, the list below stops
+            being the whole answer, and the sentence under it says so. */}
+        <VisibilitySwitch
+          org={org}
+          open={payload.openToOrganization}
+          canManage={payload.canManage}
+          busy={busy}
+          onChange={(next) => run(() => setBinderVisibility(org, binder, next))}
+        />
 
         {notice ? <p className="app-inline-error">{notice}</p> : null}
 
@@ -201,6 +199,87 @@ export function BinderPeople({ org, binder }: BinderPeopleProps) {
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * Who can see this binder — one question, two answers.
+ *
+ * It is a radio pair rather than a toggle because the two states are a choice
+ * somebody made, not an on and an off: "only people I add" is not the absence
+ * of a setting, it is the answer an HR investigation binder needs. Both are
+ * spelled out for the same reason the rules are — a state that is off is still
+ * a state the customer chose.
+ *
+ * The cost of opening it is stated on the option rather than discovered
+ * afterwards: read on a binder is what approving is, so everyone at the
+ * organization can also approve there. For a policy manual that is right, and
+ * where it is wrong the other option is the answer.
+ */
+function VisibilitySwitch({
+  org,
+  open,
+  canManage,
+  busy,
+  onChange,
+}: {
+  org: string;
+  open: boolean;
+  canManage: boolean;
+  busy: boolean;
+  onChange: (open: boolean) => void;
+}) {
+  if (!canManage) {
+    return (
+      <p className="doc-rail-note">
+        {open
+          ? `Everyone at ${org} can read this binder and comment on changes. The people below can do more.`
+          : "Only the people below can see this binder."}
+      </p>
+    );
+  }
+
+  return (
+    <fieldset className="binder-visibility">
+      <legend className="bs-label">Who can see this binder?</legend>
+
+      <label className="org-group-level-option">
+        <input
+          type="radio"
+          name="binder-visibility"
+          checked={open}
+          disabled={busy}
+          onChange={() => onChange(true)}
+        />
+        <span>
+          <span className="docs-list-item-name">Everyone at {org}</span>
+          <span className="docs-list-item-meta">
+            They can read it and comment on changes — and approve them, because
+            reading a change is what approving one costs. It uses no seats.
+          </span>
+        </span>
+      </label>
+
+      <label className="org-group-level-option">
+        <input
+          type="radio"
+          name="binder-visibility"
+          checked={!open}
+          disabled={busy}
+          onChange={() => onChange(false)}
+        />
+        <span>
+          <span className="docs-list-item-name">Only people I add</span>
+          <span className="docs-list-item-meta">
+            The people and groups below, and nobody else.
+          </span>
+        </span>
+      </label>
+
+      {open ? (
+        <p className="doc-rail-note">The people below can do more than read.</p>
+      ) : null}
+    </fieldset>
   );
 }
 

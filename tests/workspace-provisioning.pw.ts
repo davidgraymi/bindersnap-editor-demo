@@ -1928,10 +1928,9 @@ test("the organization says who is in it, and which groups they are in", async (
   // that do. It is left off deliberately.
   expect(payload.people[0]?.teams).toEqual(["Owners"]);
 
-  expect(payload.groups.map((group) => group.name).sort()).toEqual([
-    "Owners",
-    "staff",
-  ]);
+  // `staff` is left out: it is the organization's membership rather than a
+  // group, and the People count above is already the same number.
+  expect(payload.groups.map((group) => group.name).sort()).toEqual(["Owners"]);
   expect(payload.canManage).toBe(true);
 });
 
@@ -2257,9 +2256,11 @@ test("a group says which binders it reaches, from the group's own row", async ()
 
   const both = await readGroups();
   expect(named(both, "quality-committee")?.binders).toEqual(["clinical", "hr"]);
-  // Read from Gitea, not accumulated by us — `staff` is granted by
-  // provisioning and shows up the same way without anybody telling this list.
-  expect(named(both, "staff")?.binders).toEqual(["clinical", "hr"]);
+  // `staff` is not offered as a group: it is the organization's membership, and
+  // its only control is each binder's own "who can see this" switch. A row
+  // beside the customer's own committees would make the most consequential
+  // access choice in the product look like housekeeping.
+  expect(named(both, "staff")).toBeUndefined();
 
   expect(
     (await revokeGroup(sessionCookie, org.name, "hr", "quality-committee"))
@@ -2718,6 +2719,186 @@ test("people on a binder that is not there is a 404", async () => {
     { headers: { Cookie: `bindersnap_session=${sessionCookie}` } },
   );
   expect(response.status).toBe(404);
+});
+
+async function setVisibility(
+  sessionCookie: string,
+  org: string,
+  workspace: string,
+  openToOrganization: boolean,
+): Promise<{ status: number; body: string }> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${workspace}/visibility`,
+    {
+      method: "POST",
+      headers: authHeaders(sessionCookie),
+      body: JSON.stringify({ openToOrganization }),
+    },
+  );
+  return { status: response.status, body: await response.text() };
+}
+
+test("a binder can be closed to the organization and opened again", async () => {
+  // One switch over one primitive: `staff` granted, or not. Nothing is stored,
+  // so the answer cannot disagree with the grant Gitea is the one enforcing.
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const ownerToken = await createUserToken(
+    credentials.username,
+    credentials.password,
+  );
+
+  expect(
+    (await readBinderPeople(sessionCookie, org.name, "clinical"))
+      .openToOrganization,
+  ).toBe(true);
+
+  const closed = await setVisibility(
+    sessionCookie,
+    org.name,
+    "clinical",
+    false,
+  );
+  expect(closed.status, closed.body).toBe(200);
+  expect(
+    (JSON.parse(closed.body) as { openToOrganization: boolean })
+      .openToOrganization,
+  ).toBe(false);
+
+  // The whitelist narrows with it. Left behind, `staff` would be a team whose
+  // members' approvals still counted on a binder they can no longer read.
+  expect(
+    await readApprovalsWhitelist(ownerToken, org.name, "clinical"),
+  ).toEqual(["Owners"]);
+
+  const reopened = await setVisibility(
+    sessionCookie,
+    org.name,
+    "clinical",
+    true,
+  );
+  expect(reopened.status, reopened.body).toBe(200);
+  expect(
+    (JSON.parse(reopened.body) as { openToOrganization: boolean })
+      .openToOrganization,
+  ).toBe(true);
+  expect(
+    await readApprovalsWhitelist(ownerToken, org.name, "clinical"),
+  ).toEqual(["Owners", "staff"]);
+});
+
+test("a restricted binder is not readable by a member who was not added", async () => {
+  // The reason `includes_all_repositories` is false on `staff`, made concrete:
+  // with it true every binder would be readable by everyone forever with no way
+  // back, and an HR investigation binder would be impossible.
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+
+  const created = await fetch(
+    `${API_BASE_URL}/api/app/orgs/${org.name}/binders`,
+    {
+      method: "POST",
+      headers: authHeaders(sessionCookie),
+      body: JSON.stringify({
+        name: "Investigations",
+        openToOrganization: false,
+      }),
+    },
+  );
+  expect(created.status, await created.clone().text()).toBe(201);
+
+  // Asked at creation, so a restricted binder is a choice somebody made rather
+  // than a state it drifted into.
+  const people = await readBinderPeople(
+    sessionCookie,
+    org.name,
+    "investigations",
+  );
+  expect(people.openToOrganization).toBe(false);
+  expect(people.groups.map((group) => group.name)).not.toContain("staff");
+
+  const ownerToken = await createUserToken(
+    credentials.username,
+    credentials.password,
+  );
+  expect(
+    await readApprovalsWhitelist(ownerToken, org.name, "investigations"),
+  ).toEqual(["Owners"]);
+
+  // A member of the organization who was not added cannot see it. They are in
+  // `staff` — every member is — and `staff` is not granted here.
+  const member = buildCredentials();
+  const memberCookie = await signUp(member);
+  expect(
+    (
+      await addBinderPerson(
+        sessionCookie,
+        org.name,
+        "investigations",
+        member.username,
+        "reviewer",
+      )
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await removeBinderPerson(
+        sessionCookie,
+        org.name,
+        "investigations",
+        member.username,
+      )
+    ).status,
+  ).toBe(200);
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org.name}/investigations`,
+    { headers: { Cookie: `bindersnap_session=${memberCookie}` } },
+  );
+  expect(response.status).toBe(404);
+
+  // And the open binder beside it stays readable by the same person, which is
+  // the whole point of the switch being per binder rather than per organization.
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Handbook")).status,
+  ).toBe(201);
+  expect(
+    (
+      await fetch(`${API_BASE_URL}/api/app/binders/${org.name}/handbook`, {
+        headers: { Cookie: `bindersnap_session=${memberCookie}` },
+      })
+    ).status,
+  ).toBe(200);
+});
+
+test("the visibility switch needs an answer, and the binder has to exist", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org.name}/clinical/visibility`,
+    {
+      method: "POST",
+      headers: authHeaders(sessionCookie),
+      body: JSON.stringify({}),
+    },
+  );
+  expect(response.status).toBe(400);
+
+  expect(
+    (await setVisibility(sessionCookie, org.name, "no-such-binder", true))
+      .status,
+  ).toBe(404);
 });
 
 test("a change in a binder that is not there is a 404", async () => {
