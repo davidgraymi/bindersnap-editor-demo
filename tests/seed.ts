@@ -470,6 +470,37 @@ async function ensureBinderTeams(
     }
   }
 
+  // Whatever is granted here has to be on the approvals whitelist, or its
+  // members' approvals are recorded, displayed, and count nothing — and the
+  // seed's own publishes would fail with "does not have enough approvals"
+  // beside a green tick. Provisioning whitelists `staff` and `Owners`; these
+  // role teams are the seed's own addition, so it names them itself.
+  //
+  // `Owners` is on the list although it is never granted onto a repository:
+  // Gitea gives it admin over the organization implicitly, so a list derived
+  // from the granted teams alone would silently stop counting an owner.
+  const granted = (await giteaRequest(
+    baseUrl,
+    `${repoPath(owner, repo)}/teams`,
+    { auth: adminAuth, expectedStatuses: [200] },
+  ).then((response) => response.json())) as Array<{ name: string }>;
+
+  await giteaRequest(
+    baseUrl,
+    `${repoPath(owner, repo)}/branch_protections/main`,
+    {
+      method: "PATCH",
+      auth: adminAuth,
+      body: JSON.stringify({
+        enable_approvals_whitelist: true,
+        approvals_whitelist_teams: [
+          ...new Set([...granted.map((team) => team.name), "Owners"]),
+        ],
+      }),
+      expectedStatuses: [200, 404],
+    },
+  );
+
   log(`Ensured binder teams: ${owner}/${repo}`);
 }
 

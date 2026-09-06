@@ -7,6 +7,7 @@
 import type {
   CreateOrganization201,
   CreateOrganizationBody,
+  GetOrganizationPeople200,
   ListOrganizations200
 } from '../model';
 
@@ -72,6 +73,38 @@ export const createOrganization = async (createOrganizationBody: CreateOrganizat
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(createOrganizationBody)
+  }
+);}
+
+
+export type getOrganizationPeopleResponse200 = {
+  data: GetOrganizationPeople200
+  status: 200
+}
+
+export type getOrganizationPeopleResponseSuccess = (getOrganizationPeopleResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getOrganizationPeopleResponse = (getOrganizationPeopleResponseSuccess)
+
+export const getGetOrganizationPeopleUrl = (org: string,) => {
+
+
+
+
+  return `/api/app/orgs/${org}/people`
+}
+
+export const getOrganizationPeople = async (org: string, options?: Parameters<typeof customFetch>[1]): Promise<getOrganizationPeopleResponse> => {
+
+  return customFetch<getOrganizationPeopleResponse>(getGetOrganizationPeopleUrl(org),
+  {
+    ...options,
+    method: 'GET'
+
+
   }
 );}
 

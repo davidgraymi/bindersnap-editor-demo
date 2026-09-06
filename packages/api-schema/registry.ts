@@ -42,6 +42,7 @@ import {
 import {
   PublishedWorkspaceChangePayloadSchema,
   WorkspaceChangeListPayloadSchema,
+  OrganizationPeoplePayloadSchema,
   WorkspaceHistoryPayloadSchema,
   WorkspaceSettingsPayloadSchema,
   WorkspaceOverviewPayloadSchema,
@@ -831,6 +832,22 @@ registry.registerPath({
       description: "The binder's change requests, open or closed",
       content: {
         "application/json": { schema: WorkspaceChangeListPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/orgs/{org}/people",
+  operationId: "getOrganizationPeople",
+  tags: ["organizations"],
+  request: { params: z.object({ org: z.string() }) },
+  responses: {
+    200: {
+      description: "Who is in this organization, and the groups it has",
+      content: {
+        "application/json": { schema: OrganizationPeoplePayloadSchema },
       },
     },
   },

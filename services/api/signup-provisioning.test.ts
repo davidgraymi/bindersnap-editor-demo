@@ -202,7 +202,7 @@ test("nameAttempt suffixes only after the first try", () => {
   expect(nameAttempt("mercy-health", 3)).toBe("mercy-health-3");
 });
 
-test("provisionSignup creates the organization and nothing else", async () => {
+test("provisionSignup creates the organization and its staff team", async () => {
   const { client, created } = createProvisioningClient();
   const store = createMemoryStore();
 
@@ -215,11 +215,14 @@ test("provisionSignup creates the organization and nothing else", async () => {
   });
 
   expect(created.orgs).toEqual(["mercy-health"]);
-  // No binder, and so no teams granted onto one. Naming the container a
-  // customer's records live in is the owner's call, and the "policies" repo
-  // this used to create was a guess that no document was ever written into.
+  // No binder. Naming the container a customer's records live in is the
+  // owner's call, and the "policies" repo this used to create was a guess that
+  // no document was ever written into.
   expect(created.repos).toEqual([]);
-  expect(created.teams).toEqual([]);
+  // One team, and only one: `staff`, which every member of the organization
+  // belongs to. It exists from the organization's first moment rather than
+  // being conjured by whichever binder happens to be created first.
+  expect(created.teams).toEqual(["staff"]);
 
   expect(result.organization.giteaOrgId).toBe(77);
   expect(result.organization.createdBy).toBe("alice");

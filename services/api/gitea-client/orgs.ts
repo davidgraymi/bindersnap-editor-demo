@@ -31,6 +31,22 @@ export type WorkspaceRole = (typeof WORKSPACE_ROLES)[number];
 export const OWNERS_TEAM_NAME = "Owners";
 
 /**
+ * The organization's read team: every member of the org, once.
+ *
+ * Issue #371 needs every employee to read the policy manual in order to attest
+ * to it, and ADR 0004 §6 makes read uniform within a binder — which together
+ * imply adding four hundred nurses to every binder, one call each. One org-wide
+ * team granted onto a binder is that same access for one call.
+ *
+ * It carries the reviewer unit map, which is not a coincidence: it *is* the
+ * reviewer permission, held once for the organization instead of once per
+ * binder. So the whole staff can read, comment, approve and reject in a binder
+ * that is open to them — and it costs no seats, because a seat is write or
+ * better on `repo.code` and this is read.
+ */
+export const STAFF_TEAM_NAME = "staff";
+
+/**
  * Access levels Gitea reports for a team, ordered. Anything at `write` or above
  * on `repo.code` can put a version into a workspace, which is what a seat is.
  */
@@ -297,6 +313,53 @@ export async function createWorkspaceRoleTeam(
   return normalizeTeam(team);
 }
 
+/**
+ * The organization's `staff` team, created if it is not there yet.
+ *
+ * **`includes_all_repositories` is false, and that single field is what keeps
+ * the design honest.** With it true, every binder is readable by everyone
+ * forever and there is no way back — an HR investigation binder becomes
+ * impossible, and the only remedy is a second organization, which breaks
+ * billing. With it false, granting `staff` is a per-binder act, and the product
+ * gets a switch instead of a law.
+ *
+ * Idempotent, because organizations created before this existed have no staff
+ * team and the first binder provisioned in one has to be able to make it.
+ */
+export async function ensureStaffTeam(
+  params: OrganizationParams,
+): Promise<GiteaTeam> {
+  const { client, org } = params;
+
+  const existing = await findOrganizationTeam({
+    client,
+    org,
+    name: STAFF_TEAM_NAME,
+  });
+  if (existing) return existing;
+
+  const team = await unwrap(
+    client.POST("/orgs/{org}/teams", {
+      params: { path: { org } },
+      body: {
+        name: STAFF_TEAM_NAME,
+        description:
+          "Everyone at this organization. Granted onto a binder to let the whole staff read it.",
+        permission: "read",
+        includes_all_repositories: false,
+        can_create_org_repo: false,
+        units_map: {
+          "repo.code": "read",
+          "repo.pulls": "read",
+          "repo.issues": "read",
+        },
+      },
+    }),
+  );
+
+  return normalizeTeam(team);
+}
+
 export interface CreateWorkspaceTeamsParams extends OrganizationParams {
   workspace: string;
 }
@@ -468,6 +531,56 @@ export async function isOrganizationOwner(
   return owners.some(
     (owner) => owner.login.toLowerCase() === params.username.toLowerCase(),
   );
+}
+
+/**
+ * Everyone in the organization.
+ *
+ * The org-level role model is two rungs — owner and member — and every third
+ * role anyone proposes turns out to be a binder role wearing a costume. So this
+ * is the whole list, and who is an owner is the Owners team.
+ */
+export async function listOrganizationMembers(
+  params: OrganizationParams,
+): Promise<OrgUserSummary[]> {
+  const { client, org } = params;
+
+  const members = await unwrap(
+    client.GET("/orgs/{org}/members", {
+      params: { path: { org }, query: { limit: 100 } },
+    }),
+  );
+
+  return (members ?? []).map(normalizeOrgUser);
+}
+
+/**
+ * Whether this person owns the organization, asked of Gitea directly.
+ *
+ * One call, and `is_owner` comes back as a field — which is more reliable than
+ * anything derived from team names, and is the guard for every owner-only
+ * action.
+ */
+export async function isOrganizationOwnerDirect(params: {
+  client: GiteaClient;
+  org: string;
+  username: string;
+}): Promise<boolean> {
+  const { client, org, username } = params;
+
+  try {
+    const permission = (await unwrap(
+      client.GET("/users/{username}/orgs/{org}/permissions", {
+        params: { path: { username, org } },
+      }),
+    )) as { is_owner?: boolean };
+
+    return permission.is_owner === true;
+  } catch {
+    // Not a member, or Gitea would not say. Either way, not an owner — and a
+    // failure here should cost a button, not the page.
+    return false;
+  }
 }
 
 /**

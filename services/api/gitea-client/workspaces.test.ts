@@ -129,14 +129,20 @@ test("protectWorkspaceMain updates an existing rule instead of failing on it", a
   expect(bodyOf(mockPatch.mock.calls[0]).required_approvals).toBe(2);
 });
 
-test("provisionWorkspace creates the repo, grants all three teams, then protects main", async () => {
+test("provisionWorkspace makes no role teams, and opens the binder to staff", async () => {
   const order: string[] = [];
   let nextTeamId = 10;
+  const createdTeams: string[] = [];
+  let whitelist: string[] = [];
+  let protectedWith: string[] = [];
 
   const { client, mockPut } = createMockClient({
     GET: {
       "/repos/{owner}/{repo}": () => NOT_FOUND,
       "/orgs/{org}/teams": () => [],
+      "/repos/{owner}/{repo}/teams": () => [
+        { id: 10, name: "staff", permission: "read" },
+      ],
       "/repos/{owner}/{repo}/branch_protections/{name}": () => NOT_FOUND,
       "/repos/{owner}/{repo}/contents/{filepath}": () => NOT_FOUND,
     },
@@ -152,10 +158,23 @@ test("provisionWorkspace creates the repo, grants all three teams, then protects
       },
       "/orgs/{org}/teams": (init: { body: { name: string } }) => {
         order.push(`team:${init.body.name}`);
+        createdTeams.push(init.body.name);
         return { id: nextTeamId++, name: init.body.name };
       },
-      "/repos/{owner}/{repo}/branch_protections": () => {
+      "/repos/{owner}/{repo}/branch_protections": (init: {
+        body: { approvals_whitelist_teams?: string[] };
+      }) => {
         order.push("protect");
+        protectedWith = init.body.approvals_whitelist_teams ?? [];
+        return {};
+      },
+    },
+    PATCH: {
+      "/repos/{owner}/{repo}/branch_protections/{name}": (init: {
+        body: { approvals_whitelist_teams?: string[] };
+      }) => {
+        order.push("whitelist");
+        whitelist = init.body.approvals_whitelist_teams ?? [];
         return {};
       },
     },
@@ -175,16 +194,87 @@ test("provisionWorkspace creates the repo, grants all three teams, then protects
   });
 
   expect(result.workspace.name).toBe("clinical-policies");
-  expect(Object.keys(result.teams)).toEqual(["admins", "authors", "reviewers"]);
-  expect(mockPut.mock.calls).toHaveLength(3);
 
-  // Protection has to come last: the teams must exist before they can be
-  // whitelisted on the rule.
+  // In Gitea a team is an organization object that a repository adopts, so
+  // three teams per binder inverts the model: two of them stay empty forever,
+  // and a group that reviews three binders becomes three membership lists a
+  // human keeps in step by hand. The only team made here is the org's own.
+  expect(createdTeams).toEqual(["staff"]);
+  expect(mockPut.mock.calls).toHaveLength(1);
+
+  // A new binder is open to the organization, which is the decided default:
+  // the common case is a manual everybody must read in order to attest to it.
+  expect(result.staff.name).toBe("staff");
+
   expect(order[0]).toBe("repo");
+  // Protection last: the team has to exist before it can be whitelisted.
   expect(order.at(-1)).toBe("protect");
-  expect(order.indexOf("grant")).toBeGreaterThan(
-    order.indexOf("team:clinical-policies-admins"),
-  );
+  expect(order.indexOf("grant")).toBeGreaterThan(order.indexOf("team:staff"));
+
+  // And `Owners` is on the list although it is never granted — Gitea gives it
+  // admin over the whole organization implicitly, so a whitelist that omits it
+  // silently stops counting an owner's approval.
+  expect(whitelist).toEqual([]);
+  expect(protectedWith).toEqual(["staff", "Owners"]);
+});
+
+test("the approvals whitelist always names Owners, granted or not", async () => {
+  // The sharpest failure in this design, and a silent one. `Owners` is never
+  // granted onto a repository — Gitea gives it admin over the whole
+  // organization implicitly — so a whitelist derived from the granted teams
+  // alone omits it, and an owner's approval is recorded, displayed, and counts
+  // nothing. It presents as "publishing is mysteriously blocked".
+  let whitelist: string[] = [];
+
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/teams": () => [
+        { id: 10, name: "staff", permission: "read" },
+        { id: 11, name: "quality-committee", permission: "read" },
+      ],
+    },
+    PATCH: {
+      "/repos/{owner}/{repo}/branch_protections/{name}": (init: {
+        body: { approvals_whitelist_teams?: string[] };
+      }) => {
+        whitelist = init.body.approvals_whitelist_teams ?? [];
+        return {};
+      },
+    },
+  });
+
+  const { recomputeApprovalsWhitelist } = await import("./workspaces");
+  const names = await recomputeApprovalsWhitelist({
+    client,
+    org: "mercy-health",
+    workspace: "clinical-policies",
+  });
+
+  expect(names).toEqual(["staff", "quality-committee", "Owners"]);
+  expect(whitelist).toEqual(["staff", "quality-committee", "Owners"]);
+});
+
+test("a team already named Owners is not whitelisted twice", async () => {
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/teams": () => [
+        { id: 1, name: "Owners", permission: "owner" },
+        { id: 10, name: "staff", permission: "read" },
+      ],
+    },
+    PATCH: {
+      "/repos/{owner}/{repo}/branch_protections/{name}": () => ({}),
+    },
+  });
+
+  const { recomputeApprovalsWhitelist } = await import("./workspaces");
+  expect(
+    await recomputeApprovalsWhitelist({
+      client,
+      org: "mercy-health",
+      workspace: "clinical-policies",
+    }),
+  ).toEqual(["Owners", "staff"]);
 });
 
 test("provisionWorkspace reuses a repository that already exists", async () => {
@@ -197,9 +287,10 @@ test("provisionWorkspace reuses a repository that already exists", async () => {
         owner: { login: "mercy-health" },
       }),
       "/orgs/{org}/teams": () => [
-        { id: 10, name: "clinical-policies-admins", permission: "admin" },
-        { id: 11, name: "clinical-policies-authors", permission: "write" },
-        { id: 12, name: "clinical-policies-reviewers", permission: "read" },
+        { id: 10, name: "staff", permission: "read" },
+      ],
+      "/repos/{owner}/{repo}/teams": () => [
+        { id: 10, name: "staff", permission: "read" },
       ],
       "/repos/{owner}/{repo}/branch_protections/{name}": () => ({
         rule_name: "main",

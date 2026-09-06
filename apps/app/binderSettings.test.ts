@@ -57,9 +57,10 @@ test("both sides of a rule are stated, never only the on side", () => {
 });
 
 test("access says what it costs, because the ADR promises reviewers are free", () => {
-  expect(describeTeamAccess("admin")).toBe(
-    "Administers this binder · paid seat",
-  );
+  // Worded without naming where it is shown: the same sentence appears on a
+  // binder, beside a team granted onto it, and on the organization, beside a
+  // group that may be granted onto any binder.
+  expect(describeTeamAccess("admin")).toBe("Can administer · paid seat");
   expect(describeTeamAccess("write")).toBe("Can publish · paid seat");
   expect(describeTeamAccess("read")).toBe("Can review · free");
   expect(describeTeamAccess("none")).toBe("No access");

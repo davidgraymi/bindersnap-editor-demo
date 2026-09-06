@@ -147,14 +147,19 @@ test("creating an organization creates the organization, and no binder", async (
   );
   expect(repos).toEqual([]);
 
-  // And no per-binder role teams, because there is no binder to grant them
-  // onto. Owners is Gitea's own, and the creator is in it — that is what makes
-  // them the person who can change billing.
+  // Two teams and only two. `Owners` is Gitea's own, and the creator is in it —
+  // that is what makes them the person who can change billing. `staff` is the
+  // organization's read team, which every member belongs to; it exists from the
+  // organization's first moment rather than being conjured by whichever binder
+  // happens to be created first.
+  //
+  // No per-binder role teams: there is no binder, and a binder would not make
+  // any either.
   const teams = await giteaGet<Array<{ name: string }>>(
     token,
     `/orgs/${org}/teams`,
   );
-  expect(teams.map((team) => team.name)).toEqual(["Owners"]);
+  expect(teams.map((team) => team.name).sort()).toEqual(["Owners", "staff"]);
 });
 
 test("a second organization of the same name gets its own", async () => {

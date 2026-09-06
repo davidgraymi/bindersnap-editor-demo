@@ -56,7 +56,12 @@ export function describeBinderRules(rules: WorkspaceRules): string[] {
 }
 
 /**
- * What a team's access on the binder means, in the ADR's own terms.
+ * What a group's access means, in the ADR's own terms.
+ *
+ * Worded without naming where it is shown, because it is shown in two places:
+ * on a binder, beside a team granted onto it, and on the organization, beside
+ * a group that may be granted onto any binder. "Administers this binder" was
+ * true on the first and a lie on the second.
  *
  * `read` is deliberately named as free: ADR 0004 promises reviewers cost
  * nothing, and this is the screen where somebody would check that.
@@ -74,7 +79,7 @@ export function describeTeamAccess(access: string): string {
     case "owner":
       return "Owns the organization · paid seat";
     case "admin":
-      return "Administers this binder · paid seat";
+      return "Can administer · paid seat";
     case "write":
       return "Can publish · paid seat";
     case "read":
