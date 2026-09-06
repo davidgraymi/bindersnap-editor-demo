@@ -18,13 +18,16 @@ test("a tab in the query is the tab", () => {
 });
 
 test("every tab the binder has is addressable", () => {
+  expect(binderTabFromSearch("?tab=people")).toBe("people");
   expect(binderTabFromSearch("?tab=history")).toBe("history");
   expect(binderTabFromSearch("?tab=settings")).toBe("settings");
 });
 
 test("a tab nobody has opens the documents rather than nothing", () => {
   // A mangled or out-of-date link should show the binder, not a blank pane.
-  expect(binderTabFromSearch("?tab=people")).toBe("documents");
+  // `people` used to be the example here and is now a real tab — which is the
+  // whole point of the fallback: an old link keeps working.
+  expect(binderTabFromSearch("?tab=sign-off")).toBe("documents");
   expect(binderTabFromSearch("?tab=")).toBe("documents");
 });
 

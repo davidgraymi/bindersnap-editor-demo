@@ -17,6 +17,7 @@ import type { DocumentChangeView } from "./routes";
 export const BINDER_TABS = [
   "documents",
   "changes",
+  "people",
   "history",
   "settings",
 ] as const;

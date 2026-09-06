@@ -60,6 +60,24 @@ function accessRank(access: string | undefined): number {
 }
 
 /**
+ * Which of two access levels is higher, ranked the way seats are counted.
+ *
+ * Exported because a binder's membership list folds several teams into one row
+ * per person and has to say which team the person's access actually comes
+ * from. Ranking by a second, local copy of the order is how `describeTeamAccess`
+ * came to call the organization's owner "No access": `owner` is a level, and it
+ * is above `admin`.
+ */
+export function isHigherAccess(candidate: string, held: string): boolean {
+  return accessRank(candidate) > accessRank(held);
+}
+
+/** Write or better on `repo.code`, which is exactly what ADR 0004 bills for. */
+export function accessCostsSeat(access: string): boolean {
+  return accessRank(access) >= accessRank("write");
+}
+
+/**
  * The unit map each role gets, verified against Gitea 1.26 by
  * `tests/gitea-permission-model.pw.ts`.
  *
