@@ -42,6 +42,7 @@ holds nothing extra.
 | [#409](https://github.com/davidgraymi/bindersnap-editor-demo/pull/409) | `feat/adr4-8-binder-document-page` | `/{org}/{binder}/{path}` is a page, not Home |
 | [#410](https://github.com/davidgraymi/bindersnap-editor-demo/pull/410) | `feat/adr4-9-add-a-policy`         | A member adds a policy to a binder           |
 | [#412](https://github.com/davidgraymi/bindersnap-editor-demo/pull/412) | `feat/adr4-10-binder-change-page`  | A change has a page, and is decided on it    |
+| [#413](https://github.com/davidgraymi/bindersnap-editor-demo/pull/413) | `feat/adr4-11-binder-repo-shell`   | The binder is laid out like a repository     |
 
 #404's row above used to claim the document page too. It did not ship one:
 `binderDocument` was in the route table and in the nav's highlight rule, but
@@ -167,6 +168,54 @@ asked for work on, but which had its approvals from others, was shown as
 `buildPendingChangeRow` and an inline block in the document detail handler,
 which drifted. There is one now, and it sets both from `approvalState`, which
 already folds each reviewer's latest answer the way Gitea merges on.
+
+### The binder is laid out like a repository
+
+The product owner rejected the shape the binder pages were growing into, and
+was right to: each screen had been invented on its own, and the change view in
+particular was a thinner second version of a change-request UI the app already
+had. A binder **is** a Gitea repository, and the layout people already know for
+one — a name, a description, and a row of tabs — is a baseline a customer can
+read without being taught.
+
+So the binder now has a header and tabs, and each screen inside it is a pane
+rather than a page: **Documents** (what is in it) and **Change requests** (what
+is being changed), with History and permissions to follow. One document opens
+under the same header with Documents still marked, because a document is a file
+inside the binder — its own trail says `nursing / Infection Control Policy`,
+the part the header above it cannot say.
+
+Tabs ride in the query (`?tab=changes`) for the reason `?version=` and
+`?change=` do: `/{org}/{binder}/changes` cannot be told apart from a policy
+filed at `changes`, and neither can `history` or `settings`. The tab a binder
+opens on carries no query at all, so a binder's own address stays the short
+one.
+
+**`DocumentChanges` is reused whole** — the Open/Closed filter, the outcome
+icons, the approval meters, the "who is holding this up" wording. It needed one
+change: the row's "becomes v4 when published" is a fact only a list about one
+document can state, so it takes an optional `describeSubject` instead, and a
+binder's rows say "Infection Control Policy" while open and "Infection Control
+Policy v1" once published.
+
+Two endpoints back it:
+
+- `GET /api/app/binders/{org}/{binder}` — the header. The two counts live here
+  rather than in each tab's payload because the tab bar shows both at once:
+  somebody reading Documents still needs to see that three changes are waiting.
+- `GET /api/app/binders/{org}/{binder}/changes?state=open|closed` — one shape
+  for open and closed alike, because the list shows them in one place and a row
+  reads the same either way. Two shapes is what let `isRejected` go missing from
+  one of them.
+
+Naming what a change is about costs nothing either way: an open change carries
+its document in its `upload/<slugPath>/…` branch name, and a published one is
+named exactly by the version tags on its merge commit — one tags read for the
+whole binder rather than a `/pulls/{n}/files` call per change.
+
+`resolveClosedOutcome` is pulled out of `buildClosedChanges` so the binder's
+list reaches "declined" and "withdrawn" by the same rule rather than a second
+copy of it.
 
 ## Why #393 carries the organization-creation flow too
 
@@ -343,18 +392,20 @@ asking.
 
 In rough dependency order.
 
-1. **Team management on the organization page.** Named by the product owner as
-   the next thing wanted. The binder's three role teams already carry
-   membership (`createWorkspaceTeams`, `grantTeamOnRepo`); the organization page
-   at `/{org}` needs to surface and edit it. Nothing new in Gitea is required.
-2. **Discussion threads on a binder change.** The change page carries the
-   decision — approve, ask for work, bring up to date, publish — but a review
-   body is the only place to say anything. Threads, replies, resolution and
-   reactions are all built for the old model
-   (`/api/app/documents/:owner/:repo/pull-requests/:n/discussions` and its
-   four siblings) and need binder routes. `blockOnUnresolvedThreads` is
-   already enforced at publish and already reported by the change endpoint, so
-   the gate works; there is just no way to open or close a thread yet.
+1. **The change view should be `DocumentChangeDetail`, not a second one.**
+   The binder's change _list_ is now the shared component; its change _detail_
+   is still the thinner one written for #412, and it is the piece the product
+   owner objected to. Reusing the real one brings the discussion, the timeline
+   and the reviewer panel with it, and needs binder routes for six things that
+   today exist only under `/api/app/documents/:owner/:repo/…`: discussions,
+   replies, resolution, comment reactions, change updates, and reviewer
+   assignment. All six are generic Gitea pull-request operations, and a binder
+   is a Gitea repository, so this is routing rather than new behaviour.
+2. **History and permissions tabs on the binder.** The two the shell does not
+   have yet. History is cheap — the binder's tags grouped by document, which
+   `listVersionsByDocument` already returns in one call. Permissions is the
+   organization-access design work: team membership on the binder, which the
+   product owner named as the next thing wanted after this.
 3. **Delete the old model.** `POST /api/app/documents`,
    `createPrivateCurrentUserRepo`, the 16 `documents/:owner/:repo` routes in
    `services/api/server.ts`, and roughly a dozen SPA files that address a

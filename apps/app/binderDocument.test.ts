@@ -35,50 +35,27 @@ const versions = [
 
 // ── buildDocumentCrumbs ────────────────────────────────────────────
 
-test("the trail runs organization, binder, folders, document", () => {
-  expect(
-    buildDocumentCrumbs({
-      org: "riverside-health",
-      binder: "clinical-policies",
-      document: documentInFolder,
-    }),
-  ).toEqual([
-    { label: "riverside-health", href: "/riverside-health" },
-    {
-      label: "clinical-policies",
-      href: "/riverside-health/clinical-policies",
-    },
-    { label: "nursing", href: null },
-    { label: "Hand Hygiene", href: null },
+test("the trail is the folders and the document, not the binder above it", () => {
+  // The binder's own header names the organization and the binder already.
+  expect(buildDocumentCrumbs(documentInFolder)).toEqual([
+    { label: "nursing", isDocument: false },
+    { label: "Hand Hygiene", isDocument: true },
   ]);
 });
 
-test("a document at the binder's root has no folder step", () => {
-  const crumbs = buildDocumentCrumbs({
-    org: "riverside-health",
-    binder: "clinical-policies",
-    document: rootDocument,
-  });
-
-  expect(crumbs).toHaveLength(3);
-  expect(crumbs[2]).toEqual({ label: "Handover", href: null });
+test("a document at the binder's root is its own whole trail", () => {
+  expect(buildDocumentCrumbs(rootDocument)).toEqual([
+    { label: "Handover", isDocument: true },
+  ]);
 });
 
 test("nested folders each get their own step", () => {
-  const crumbs = buildDocumentCrumbs({
-    org: "org",
-    binder: "binder",
-    document: { folder: "clinical/nursing/infection", name: "policy" },
-  });
-
-  expect(crumbs.map((crumb) => crumb.label)).toEqual([
-    "org",
-    "binder",
-    "clinical",
-    "nursing",
-    "infection",
-    "Policy",
-  ]);
+  expect(
+    buildDocumentCrumbs({
+      folder: "clinical/nursing/infection",
+      name: "policy",
+    }).map((crumb) => crumb.label),
+  ).toEqual(["clinical", "nursing", "infection", "Policy"]);
 });
 
 // ── resolveDocumentRef ─────────────────────────────────────────────

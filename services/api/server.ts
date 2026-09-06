@@ -72,6 +72,7 @@ import {
 import {
   buildClosedChanges,
   buildVersionRecords,
+  resolveClosedOutcome,
   toVersionReviews,
 } from "./document-history";
 import type { ClosedChange } from "../../packages/api-schema/schemas/documents";
@@ -5223,6 +5224,233 @@ async function handleWorkspaceChangeReview(
   }
 }
 
+/**
+ * The binder itself: what it is called, what it is for, how much is in it.
+ *
+ * The header of a repository page. The two counts live here rather than in the
+ * tabs' own payloads because the tab bar shows both at once — somebody reading
+ * Documents still needs to see that three changes are waiting.
+ */
+async function handleWorkspaceOverview(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  try {
+    const workspace = await findWorkspaceRepo({
+      client: auth.client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    const [documents, openChanges] = await Promise.all([
+      listWorkspaceDocuments({
+        client: auth.client,
+        org: orgName,
+        workspace: workspaceName,
+      }),
+      listPullRequests({
+        client: auth.client,
+        owner: orgName,
+        repo: workspaceName,
+        state: "open",
+      }),
+    ]);
+
+    return json(
+      200,
+      {
+        workspace,
+        documentCount: documents.length,
+        openChangeCount: openChanges.length,
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to read a binder", {
+      username: auth.session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to open this binder.");
+  }
+}
+
+/**
+ * Which documents a change is about, without a call per change.
+ *
+ * Two sources, neither of which costs anything. An open change carries its
+ * document in its branch name — `upload/<slugPath>/…`, the convention the
+ * upload path writes. A published one is named exactly by the version tags on
+ * its merge commit, which is one tags read for the whole binder.
+ *
+ * A change made outside Bindersnap matches neither, and gets an empty list:
+ * the row then simply does not describe itself, which beats guessing.
+ */
+function describeChangeDocuments(params: {
+  branchName: string;
+  mergeCommitSha: string | null;
+  versionsByCommit: Map<string, Array<{ slugPath: string; version: number }>>;
+}): Array<{ slugPath: string; name: string; version: number | null }> {
+  const { branchName, mergeCommitSha, versionsByCommit } = params;
+
+  const published = mergeCommitSha
+    ? (versionsByCommit.get(mergeCommitSha) ?? [])
+    : [];
+  if (published.length > 0) {
+    return published.map((entry) => ({
+      slugPath: entry.slugPath,
+      name: entry.slugPath.slice(entry.slugPath.lastIndexOf("/") + 1),
+      version: entry.version,
+    }));
+  }
+
+  const slugPath = documentSlugPathFromUploadBranch(branchName);
+  if (slugPath === null) return [];
+
+  return [
+    {
+      slugPath,
+      name: slugPath.slice(slugPath.lastIndexOf("/") + 1),
+      version: null,
+    },
+  ];
+}
+
+/**
+ * The binder's change requests, open or closed.
+ *
+ * One shape for both, because the list shows them in one place and a row reads
+ * the same either way. `state` is a query rather than two routes for the same
+ * reason GitHub does it: it is one list with a filter on it.
+ */
+async function handleListWorkspaceChanges(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { client } = auth;
+  const state =
+    new URL(req.url).searchParams.get("state") === "closed" ? "closed" : "open";
+
+  try {
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    const [entries, requiredApprovals, versionsByDocument] = await Promise.all([
+      listPullRequestsWithReviews({
+        client,
+        owner: orgName,
+        repo: workspaceName,
+        state,
+      }),
+      readRequiredApprovals(orgName, workspaceName),
+      listVersionsByDocument({
+        client,
+        org: orgName,
+        workspace: workspaceName,
+      }),
+    ]);
+
+    // Tags keyed the other way round: a merge commit carries one tag per
+    // document the change published, which is what names a closed change.
+    const versionsByCommit = new Map<
+      string,
+      Array<{ slugPath: string; version: number }>
+    >();
+    for (const [slugPath, versions] of versionsByDocument) {
+      for (const version of versions) {
+        const existing = versionsByCommit.get(version.commitSha);
+        const entry = { slugPath, version: version.version };
+        if (existing) {
+          existing.push(entry);
+        } else {
+          versionsByCommit.set(version.commitSha, [entry]);
+        }
+      }
+    }
+
+    const changes = entries
+      .map(({ pullRequest, reviews }) => {
+        const row = buildPendingChangeRow(
+          { pullRequest, reviews },
+          requiredApprovals,
+        );
+        const isOpen = pullRequest.state === "open";
+        const decided = isOpen
+          ? null
+          : resolveClosedOutcome(pullRequest, reviews);
+        const mergeCommitSha =
+          (pullRequest as { merge_commit_sha?: string }).merge_commit_sha ??
+          null;
+
+        return {
+          number: row.number ?? 0,
+          title: pullRequest.title ?? "",
+          body: pullRequest.body ?? "",
+          branchName: row.branchName,
+          submittedBy: pullRequest.user?.login ?? "",
+          submittedAt: pullRequest.created_at ?? "",
+          closedAt: isOpen
+            ? null
+            : ((pullRequest as { merged_at?: string; closed_at?: string })
+                .merged_at ??
+              (pullRequest as { closed_at?: string }).closed_at ??
+              null),
+          outcome: decided ? decided.outcome : ("open" as const),
+          decidedBy: decided ? decided.decidedBy : null,
+          approvalState: row.approvalState,
+          approvalCount: row.approvalCount,
+          requiredApprovals: row.requiredApprovals,
+          isApproved: row.isApproved,
+          isRejected: row.isRejected,
+          reviews: toVersionReviews(reviews),
+          reviewers: row.reviewers,
+          assignee: row.assignee,
+          documents: describeChangeDocuments({
+            branchName: row.branchName,
+            mergeCommitSha,
+            versionsByCommit,
+          }),
+        };
+      })
+      .sort((left, right) => right.number - left.number);
+
+    return json(
+      200,
+      { organization: orgName, workspace: workspaceName, state, changes },
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to list a binder's changes", {
+      username: auth.session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      state,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to list the changes.");
+  }
+}
+
 async function handleListWorkspaceDocuments(
   req: Request,
   baseHeaders: Headers,
@@ -6722,6 +6950,14 @@ export function createApiServer() {
         const createBinderMatch = pathname.match(
           /^\/api\/app\/orgs\/([^/]+)\/binders$/,
         );
+        const workspaceChangesMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes$/,
+        );
+        // Last of the binder matchers, because every one above it is a longer
+        // path under the same two segments.
+        const workspaceOverviewMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)$/,
+        );
 
         if (createBinderMatch && method === "GET") {
           response = await handleListOrganizationWorkspaces(
@@ -6758,6 +6994,13 @@ export function createApiServer() {
             workspaceChangeReviewMatch[2]!,
             Number.parseInt(workspaceChangeReviewMatch[3] ?? "", 10),
           );
+        } else if (workspaceChangesMatch && method === "GET") {
+          response = await handleListWorkspaceChanges(
+            req,
+            baseHeaders,
+            workspaceChangesMatch[1]!,
+            workspaceChangesMatch[2]!,
+          );
         } else if (workspaceChangeUpdateMatch && method === "POST") {
           response = await handleWorkspaceChangeUpdate(
             req,
@@ -6789,6 +7032,13 @@ export function createApiServer() {
             workspaceDocumentMatch[1]!,
             workspaceDocumentMatch[2]!,
             decodeURIComponent(workspaceDocumentMatch[3]!),
+          );
+        } else if (workspaceOverviewMatch && method === "GET") {
+          response = await handleWorkspaceOverview(
+            req,
+            baseHeaders,
+            workspaceOverviewMatch[1]!,
+            workspaceOverviewMatch[2]!,
           );
         } else if (workspaceDocumentsMatch && method === "POST") {
           response = await handleCreateWorkspaceDocument(

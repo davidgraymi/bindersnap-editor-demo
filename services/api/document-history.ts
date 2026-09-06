@@ -159,6 +159,51 @@ export function buildVersionRecords(
  * change that was closed after somebody asked for work that never arrived was
  * declined; anything else was withdrawn.
  */
+export interface ClosedChangeOutcome {
+  outcome: ClosedChange["outcome"];
+  /** Who published it, or who asked for work it never came back from. */
+  decidedBy: string | null;
+}
+
+/**
+ * How one closed change ended, from the change and its reviews.
+ *
+ * Pulled out of `buildClosedChanges` so a binder's change list can reach the
+ * same answer without a second copy of the rule — the wording a reader sees
+ * for "declined" and "withdrawn" is decided once.
+ */
+export function resolveClosedOutcome(
+  pullRequest: PullRequestWithReviews["pullRequest"],
+  reviews: PullReview[],
+): ClosedChangeOutcome {
+  const published = pullRequest.approvalState === "published";
+
+  // The last person to ask for work is the one who blocked it; a stale or
+  // dismissed review no longer speaks for the change's fate.
+  const blockingReview = [...reviews]
+    .filter(
+      (review) =>
+        normalizeReviewState(review.state) === "changes_requested" &&
+        review.dismissed !== true,
+    )
+    .sort((left, right) =>
+      (left.submitted_at ?? "").localeCompare(right.submitted_at ?? ""),
+    )
+    .pop();
+
+  return {
+    outcome: published
+      ? "published"
+      : blockingReview
+        ? "declined"
+        : "withdrawn",
+    decidedBy: published
+      ? ((pullRequest as { merged_by?: { login?: string } }).merged_by?.login ??
+        null)
+      : (blockingReview?.user?.login ?? null),
+  };
+}
+
 export function buildClosedChanges(
   entries: PullRequestWithReviews[],
   tags: DocTag[],
@@ -175,25 +220,7 @@ export function buildClosedChanges(
       const mergeSha = (pullRequest as { merge_commit_sha?: string })
         .merge_commit_sha;
       const published = pullRequest.approvalState === "published";
-
-      // The last person to ask for work is the one who blocked it; a stale or
-      // dismissed review no longer speaks for the change's fate.
-      const blockingReview = [...reviews]
-        .filter(
-          (review) =>
-            normalizeReviewState(review.state) === "changes_requested" &&
-            review.dismissed !== true,
-        )
-        .sort((left, right) =>
-          (left.submitted_at ?? "").localeCompare(right.submitted_at ?? ""),
-        )
-        .pop();
-
-      const outcome: ClosedChange["outcome"] = published
-        ? "published"
-        : blockingReview
-          ? "declined"
-          : "withdrawn";
+      const { outcome, decidedBy } = resolveClosedOutcome(pullRequest, reviews);
 
       const submittedBy = pullRequest.user?.login ?? "";
 
@@ -215,9 +242,7 @@ export function buildClosedChanges(
         submittedAt: pullRequest.created_at ?? "",
         closedAt: pullRequest.merged_at ?? pullRequest.closed_at ?? null,
         outcome,
-        decidedBy: published
-          ? (pullRequest.merged_by?.login ?? null)
-          : (blockingReview?.user?.login ?? null),
+        decidedBy,
         publishedVersion:
           published && mergeSha
             ? (versionByMergeSha.get(mergeSha) ?? null)

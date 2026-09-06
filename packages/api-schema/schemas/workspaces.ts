@@ -1,6 +1,11 @@
 import { z } from "zod";
 
-import { PullRequestWithApprovalStateSchema } from "./documents";
+import {
+  ChangeReviewerSchema,
+  ChangeUserSchema,
+  PullRequestWithApprovalStateSchema,
+  VersionReviewSchema,
+} from "./documents";
 
 /**
  * ADR 0004's second level: the binder.
@@ -262,4 +267,95 @@ export const PublishedWorkspaceChangePayloadSchema = z.object({
 });
 export type PublishedWorkspaceChangePayload = z.infer<
   typeof PublishedWorkspaceChangePayloadSchema
+>;
+
+/**
+ * The binder as its own page reads it: what it is called, what it is for, and
+ * how much is in it.
+ *
+ * The header of a repository page, in GitHub's terms — the two counts are what
+ * the tab bar puts beside "Documents" and "Change requests", so they belong
+ * here rather than in each tab's own payload. Neither tab can be trusted for
+ * them: a person on Documents still needs to see that three changes are
+ * waiting.
+ */
+export const WorkspaceOverviewPayloadSchema = z.object({
+  workspace: WorkspaceSummarySchema,
+  documentCount: z.number(),
+  openChangeCount: z.number(),
+});
+export type WorkspaceOverviewPayload = z.infer<
+  typeof WorkspaceOverviewPayloadSchema
+>;
+
+/** Where a change stands, or how it ended. */
+export const WorkspaceChangeOutcomeSchema = z.enum([
+  "open",
+  "published",
+  "declined",
+  "withdrawn",
+]);
+export type WorkspaceChangeOutcome = z.infer<
+  typeof WorkspaceChangeOutcomeSchema
+>;
+
+/**
+ * A change as the binder's list shows it.
+ *
+ * One shape for open and closed alike, because the list shows them in one
+ * place and a row reads the same either way — `outcome: "open"` is just the
+ * outcome it has not reached yet. Two shapes meant two mappings into the same
+ * UI record, which is how `isRejected` came to be missing from one of them.
+ */
+export const WorkspaceChangeSummarySchema = z.object({
+  number: z.number(),
+  title: z.string(),
+  body: z.string(),
+  /** The branch the submitted file lives on. Empty once Gitea prunes it. */
+  branchName: z.string(),
+  submittedBy: z.string(),
+  submittedAt: z.string(),
+  /** Null while it is open. */
+  closedAt: z.string().nullable(),
+  outcome: WorkspaceChangeOutcomeSchema,
+  /** Who published it, or who asked for work it never came back from. */
+  decidedBy: z.string().nullable(),
+  approvalState: z.string(),
+  approvalCount: z.number(),
+  /** Null means the policy could not be read; 0 means none are required. */
+  requiredApprovals: z.number().nullable(),
+  isApproved: z.boolean(),
+  isRejected: z.boolean(),
+  reviews: z.array(VersionReviewSchema),
+  reviewers: z.array(ChangeReviewerSchema),
+  assignee: ChangeUserSchema.nullable(),
+  /**
+   * The documents this change is about.
+   *
+   * From the upload branch while it is open, and from the version tags on its
+   * merge commit once it is published — so neither costs a call per change.
+   * Empty for a change made outside Bindersnap, which the row simply does not
+   * describe rather than guessing at.
+   */
+  documents: z.array(
+    z.object({
+      slugPath: z.string(),
+      name: z.string(),
+      /** The version it published, or null while it is open. */
+      version: z.number().nullable(),
+    }),
+  ),
+});
+export type WorkspaceChangeSummary = z.infer<
+  typeof WorkspaceChangeSummarySchema
+>;
+
+export const WorkspaceChangeListPayloadSchema = z.object({
+  organization: z.string(),
+  workspace: z.string(),
+  state: z.enum(["open", "closed"]),
+  changes: z.array(WorkspaceChangeSummarySchema),
+});
+export type WorkspaceChangeListPayload = z.infer<
+  typeof WorkspaceChangeListPayloadSchema
 >;

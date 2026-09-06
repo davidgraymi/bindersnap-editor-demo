@@ -34,7 +34,6 @@ interface BinderDocumentPageProps {
   /** From the URL. May carry the extension, or the identity without it. */
   documentPath: string;
   onOpenBinder: () => void;
-  onOpenOrganization: () => void;
   /** Open one of this document's open changes, on the binder. */
   onOpenChange: (changeNumber: number) => void;
 }
@@ -56,7 +55,6 @@ export function BinderDocumentPage({
   binder,
   documentPath,
   onOpenBinder,
-  onOpenOrganization,
   onOpenChange,
 }: BinderDocumentPageProps) {
   const [detail, setDetail] = useState<WorkspaceDocumentDetailPayload | null>(
@@ -152,7 +150,7 @@ export function BinderDocumentPage({
 
   if (error) {
     return (
-      <section className="docw-page">
+      <div className="binder-pane">
         <h1 className="doc-header-title">{documentPath}</h1>
         <p className="app-inline-error">{error}</p>
         <p>
@@ -164,23 +162,23 @@ export function BinderDocumentPage({
             Back to {binder}
           </button>
         </p>
-      </section>
+      </div>
     );
   }
 
   if (!detail) {
     return (
-      <section className="docw-page">
+      <div className="binder-pane">
         <SkeletonGroup label="Opening this document">
           <SkeletonLine width="medium" />
           <SkeletonLine width="short" />
         </SkeletonGroup>
-      </section>
+      </div>
     );
   }
 
   const { document, versions, latestVersion, openChanges, state } = detail;
-  const crumbs = buildDocumentCrumbs({ org, binder, document });
+  const crumbs = buildDocumentCrumbs(document);
   const isViewingRecord = viewing.ref === detail.ref;
   // A proposed document has no published version, but it does have a file —
   // the one in the change. Showing the "nothing published" panel over it would
@@ -188,13 +186,14 @@ export function BinderDocumentPage({
   const nothingToShow = latestVersion === null && state === "published";
 
   return (
-    <section className="docw-page">
-      <header className="doc-header">
-        {/* Where this document lives, and the way back out of it. The
-            folders are steps without links: they are real directories, but
-            they have no page of their own yet, and a link that goes nowhere
-            is worse than plain text. */}
-        <nav className="doc-crumbs" aria-label="Where this document lives">
+    <div className="binder-pane">
+      <header className="doc-header doc-header--nested">
+        {/* Which folder this is filed in. The binder's own header, above
+            this, already names the organization and the binder — what it
+            cannot say is where inside the binder you are. The folders carry
+            no link: they are real directories, but they have no page of their
+            own yet, and a link that goes nowhere is worse than plain text. */}
+        <nav className="doc-crumbs" aria-label="Where this document is filed">
           {crumbs.map((crumb, index) => (
             <span className="doc-crumb" key={`${crumb.label}-${index}`}>
               {index > 0 ? (
@@ -202,17 +201,15 @@ export function BinderDocumentPage({
                   /
                 </span>
               ) : null}
-              {crumb.href === null ? (
-                <span className="app-breadcrumb-current">{crumb.label}</span>
-              ) : (
-                <button
-                  className="app-breadcrumb-back"
-                  type="button"
-                  onClick={index === 0 ? onOpenOrganization : onOpenBinder}
-                >
-                  {crumb.label}
-                </button>
-              )}
+              <span
+                className={
+                  crumb.isDocument
+                    ? "app-breadcrumb-current"
+                    : "app-breadcrumb-sep"
+                }
+              >
+                {crumb.label}
+              </span>
             </span>
           ))}
         </nav>
@@ -379,6 +376,6 @@ export function BinderDocumentPage({
           </section>
         </aside>
       </div>
-    </section>
+    </div>
   );
 }

@@ -10,8 +10,11 @@ import type {
   CreateBinderDocument201,
   CreateBinderDocumentBody,
   DownloadBinderDocumentParams,
+  GetBinder200,
   GetBinderChange200,
   GetBinderDocument200,
+  ListBinderChanges200,
+  ListBinderChangesParams,
   ListBinderDocuments200,
   ListBinders200,
   ListOrganizationBinders200,
@@ -116,6 +119,83 @@ export const createBinder = async (org: string,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(createBinderBody)
+  }
+);}
+
+
+export type getBinderResponse200 = {
+  data: GetBinder200
+  status: 200
+}
+
+export type getBinderResponseSuccess = (getBinderResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getBinderResponse = (getBinderResponseSuccess)
+
+export const getGetBinderUrl = (org: string,
+    binder: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}`
+}
+
+export const getBinder = async (org: string,
+    binder: string, options?: Parameters<typeof customFetch>[1]): Promise<getBinderResponse> => {
+
+  return customFetch<getBinderResponse>(getGetBinderUrl(org,binder),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+export type listBinderChangesResponse200 = {
+  data: ListBinderChanges200
+  status: 200
+}
+
+export type listBinderChangesResponseSuccess = (listBinderChangesResponse200) & {
+  headers: Headers;
+};
+;
+
+export type listBinderChangesResponse = (listBinderChangesResponseSuccess)
+
+export const getListBinderChangesUrl = (org: string,
+    binder: string,
+    params?: ListBinderChangesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/app/binders/${org}/${binder}/changes?${stringifiedParams}` : `/api/app/binders/${org}/${binder}/changes`
+}
+
+export const listBinderChanges = async (org: string,
+    binder: string,
+    params?: ListBinderChangesParams, options?: Parameters<typeof customFetch>[1]): Promise<listBinderChangesResponse> => {
+
+  return customFetch<listBinderChangesResponse>(getListBinderChangesUrl(org,binder,params),
+  {
+    ...options,
+    method: 'GET'
+
+
   }
 );}
 

@@ -460,6 +460,33 @@ async function getDocument(
   return { status: response.status, body: await response.text() };
 }
 
+/** The binder itself: what it is called, and how much is in it. */
+async function getBinder(
+  sessionCookie: string,
+  org: string,
+  workspace: string,
+): Promise<{ status: number; body: string }> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${workspace}`,
+    { headers: { Cookie: `bindersnap_session=${sessionCookie}` } },
+  );
+  return { status: response.status, body: await response.text() };
+}
+
+/** The binder's change requests, open or closed. */
+async function listChanges(
+  sessionCookie: string,
+  org: string,
+  workspace: string,
+  state: "open" | "closed" = "open",
+): Promise<{ status: number; body: string }> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${workspace}/changes?state=${state}`,
+    { headers: { Cookie: `bindersnap_session=${sessionCookie}` } },
+  );
+  return { status: response.status, body: await response.text() };
+}
+
 /** Bring a change's branch up to date with the binder's main. */
 async function updateChange(
   sessionCookie: string,
@@ -1242,6 +1269,164 @@ test("a change left behind by another says so, and can be caught up", async () =
       (tag) => tag.tag,
     ),
   ).toEqual([`${secondSlug}/v1`]);
+});
+
+test("the binder names itself, and counts what is in it", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (
+      await createWorkspace(
+        sessionCookie,
+        org.name,
+        "Clinical",
+        "Policies the clinical committee governs",
+      )
+    ).status,
+  ).toBe(201);
+
+  const empty = await getBinder(sessionCookie, org.name, "clinical");
+  expect(empty.status, empty.body).toBe(200);
+  expect(JSON.parse(empty.body)).toMatchObject({
+    workspace: {
+      name: "clinical",
+      owner: org.name,
+      description: "Policies the clinical committee governs",
+    },
+    documentCount: 0,
+    openChangeCount: 0,
+  });
+
+  // The counts are what the tab bar shows, so both have to move — a person
+  // reading Documents still needs to see that a change is waiting.
+  await addDocument(sessionCookie, org.name, "clinical", {
+    name: "Infection Control",
+  });
+  const withOne = await getBinder(sessionCookie, org.name, "clinical");
+  expect(JSON.parse(withOne.body)).toMatchObject({
+    documentCount: 0,
+    openChangeCount: 1,
+  });
+});
+
+test("a binder lists its change requests, open and then decided", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const added = await addDocument(sessionCookie, org.name, "clinical", {
+    name: "Infection Control",
+    folder: "Nursing",
+  });
+  const { pullRequestNumber, slugPath } = JSON.parse(added.body) as {
+    pullRequestNumber: number;
+    slugPath: string;
+  };
+
+  const open = await listChanges(sessionCookie, org.name, "clinical", "open");
+  expect(open.status, open.body).toBe(200);
+  const openPayload = JSON.parse(open.body) as {
+    state: string;
+    changes: Array<{
+      number: number;
+      outcome: string;
+      closedAt: string | null;
+      documents: Array<{ slugPath: string; version: number | null }>;
+    }>;
+  };
+  expect(openPayload.state).toBe("open");
+  expect(openPayload.changes).toHaveLength(1);
+  expect(openPayload.changes[0]).toMatchObject({
+    number: pullRequestNumber,
+    outcome: "open",
+    closedAt: null,
+  });
+  // Named from the upload branch, so the row says what it is about without a
+  // call per change.
+  expect(openPayload.changes[0]?.documents).toEqual([
+    { slugPath, name: "infection-control", version: null },
+  ]);
+
+  expect(
+    (
+      JSON.parse(
+        (await listChanges(sessionCookie, org.name, "clinical", "closed")).body,
+      ) as {
+        changes: unknown[];
+      }
+    ).changes,
+  ).toEqual([]);
+
+  const ownerToken = await createUserToken(
+    credentials.username,
+    credentials.password,
+  );
+  const approver = await addApprover(ownerToken, org.name, "clinical");
+  await approveChange(approver.token, org.name, "clinical", pullRequestNumber);
+  expect(
+    (
+      await publishChange(
+        sessionCookie,
+        org.name,
+        "clinical",
+        pullRequestNumber,
+      )
+    ).status,
+  ).toBe(200);
+
+  expect(
+    (
+      JSON.parse(
+        (await listChanges(sessionCookie, org.name, "clinical", "open")).body,
+      ) as {
+        changes: unknown[];
+      }
+    ).changes,
+  ).toEqual([]);
+
+  const closed = await listChanges(
+    sessionCookie,
+    org.name,
+    "clinical",
+    "closed",
+  );
+  const closedPayload = JSON.parse(closed.body) as {
+    changes: Array<{
+      number: number;
+      outcome: string;
+      closedAt: string | null;
+      decidedBy: string | null;
+      documents: Array<{ slugPath: string; version: number | null }>;
+    }>;
+  };
+  expect(closedPayload.changes).toHaveLength(1);
+  expect(closedPayload.changes[0]).toMatchObject({
+    number: pullRequestNumber,
+    outcome: "published",
+  });
+  expect(closedPayload.changes[0]?.closedAt).not.toBeNull();
+  // A published change is named exactly by the version tags on its merge
+  // commit — which is one tags read for the whole binder, not one per change.
+  expect(closedPayload.changes[0]?.documents).toEqual([
+    { slugPath, name: "infection-control", version: 1 },
+  ]);
+});
+
+test("a binder that is not there is a 404, not an empty binder", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+
+  expect(
+    (await getBinder(sessionCookie, org.name, "no-such-binder")).status,
+  ).toBe(404);
+  expect(
+    (await listChanges(sessionCookie, org.name, "no-such-binder")).status,
+  ).toBe(404);
 });
 
 test("a change in a binder that is not there is a 404", async () => {

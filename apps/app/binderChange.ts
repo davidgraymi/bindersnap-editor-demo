@@ -9,7 +9,12 @@
 import { parsePositiveIntParam } from "./binderDocument";
 import { formatDocumentName } from "./documentDisplay";
 import type { PullRequestWithApprovalState } from "../../packages/api-schema/schemas/documents";
-import type { WorkspaceChangedDocument } from "../../packages/api-schema/schemas/workspaces";
+import type {
+  WorkspaceChangeSummary,
+  WorkspaceChangedDocument,
+} from "../../packages/api-schema/schemas/workspaces";
+import type { ChangeRecord } from "./documentDisplay";
+import { describeSubmission, parseChangeTitle } from "./documentDisplay";
 
 /**
  * Which change the address bar is asking for, or null for the binder itself.
@@ -143,4 +148,62 @@ export function describePublished(
   });
 
   return `Published ${named.join(", ")}.`;
+}
+
+/**
+ * A binder's change, as the shared change list and change page read it.
+ *
+ * One mapping for open and closed alike. The old model needed two —
+ * `toChangeRecord` and `closedChangeToRecord` — because the server sent two
+ * shapes, and that is how a field came to be set in one of them and not the
+ * other.
+ */
+export function workspaceChangeToRecord(
+  change: WorkspaceChangeSummary,
+): ChangeRecord {
+  const open = change.outcome === "open";
+
+  return {
+    number: change.number,
+    summary: parseChangeTitle(change.body, change.submittedBy),
+    description: describeSubmission(change.body),
+    reviews: change.reviews,
+    branchName: change.branchName.trim() || null,
+    submittedBy: change.submittedBy,
+    submittedAt: change.submittedAt,
+    open,
+    approvalState: change.approvalState,
+    // `outcome` is how a change *ended*, so an open one has none — the wider
+    // enum on the wire carries "open" only so one shape serves both lists.
+    outcome: change.outcome === "open" ? null : change.outcome,
+    closedAt: change.closedAt,
+    decidedBy: change.decidedBy,
+    // Per document in a binder, so the row names them rather than claiming one
+    // number for a change that may have published three.
+    publishedVersion: null,
+    assignee: change.assignee,
+    reviewers: change.reviewers,
+    approvalCount: change.approvalCount,
+    requiredApprovals: change.requiredApprovals,
+  };
+}
+
+/**
+ * What a change row says it is about: "Hand Hygiene", or "Hand Hygiene v2"
+ * once it has published one.
+ *
+ * The old row said "becomes v4 when published", which a binder cannot: one
+ * change can touch three documents, and they do not advance in lockstep.
+ */
+export function describeChangeDocuments(
+  change: Pick<WorkspaceChangeSummary, "documents">,
+): string | null {
+  if (change.documents.length === 0) return null;
+
+  return change.documents
+    .map((document) => {
+      const name = formatDocumentName(document.name);
+      return document.version === null ? name : `${name} v${document.version}`;
+    })
+    .join(", ");
 }
