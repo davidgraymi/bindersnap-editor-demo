@@ -164,7 +164,6 @@ function LoginPage({
           <span className="app-login-logo-text">Bindersnap</span>
         </div>
         <div className="app-login-panel bs-card">
-          <div className="bs-eyebrow">Secure Access</div>
           <h1>
             {mode === "signin"
               ? "Step into the clean version."

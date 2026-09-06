@@ -132,13 +132,12 @@ export function UploadModal({
   return (
     <div className="upload-modal-backdrop" onClick={handleBackdropClick}>
       <div className="upload-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="bs-eyebrow">Upload New Version</div>
         <h2>Upload Document</h2>
 
         {status === "idle" && (
           <>
             <label htmlFor="file-upload" className="upload-file-input-label">
-              <span className="bs-eyebrow">Select File</span>
+              <span className="bs-label">Select File</span>
               <input
                 id="file-upload"
                 type="file"

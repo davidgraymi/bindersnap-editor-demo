@@ -132,7 +132,6 @@ export function BillingPage({
             <span className="app-login-logo-text">Bindersnap</span>
           </div>
           <div className="app-login-panel bs-card">
-            <div className="bs-eyebrow">Bindersnap Pro</div>
             <h1>Payment received — activating your workspace…</h1>
             <p
               style={{
@@ -159,7 +158,6 @@ export function BillingPage({
             <span className="app-login-logo-text">Bindersnap</span>
           </div>
           <div className="app-login-panel bs-card">
-            <div className="bs-eyebrow">Bindersnap Pro</div>
             <h1>Activation is taking longer than expected</h1>
             <p style={{ color: "var(--bs-text-muted)" }}>
               Your payment was received. Activation can occasionally take up to
@@ -195,7 +193,6 @@ export function BillingPage({
             <span className="app-login-logo-text">Bindersnap</span>
           </div>
           <div className="app-login-panel bs-card">
-            <div className="bs-eyebrow">Your subscription</div>
             <h1>Bindersnap Pro</h1>
             <p style={{ color: "var(--bs-text-muted)" }}>{renewalLabel}</p>
             <button
@@ -272,7 +269,6 @@ export function BillingPage({
           <span className="app-login-logo-text">Bindersnap</span>
         </div>
         <div className="app-login-panel bs-card">
-          <div className="bs-eyebrow">Bindersnap Pro</div>
           <h1>Start your subscription</h1>
           {hasBillingStatusError ? (
             <div

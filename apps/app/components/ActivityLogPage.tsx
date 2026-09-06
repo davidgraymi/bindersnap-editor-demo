@@ -4,7 +4,6 @@ export function ActivityLogPage() {
   return (
     <div className="activity-page app-page-shell">
       <div className="activity-header">
-        <div className="bs-eyebrow">Audit Trail</div>
         <h1 className="activity-heading">Activity</h1>
         <p className="activity-subtitle">
           Every submission, approval, change request, and publication will land
@@ -34,7 +33,6 @@ export function ActivityLogPage() {
       <div className="bs-card activity-placeholder">
         <div className="activity-placeholder-head">
           <div>
-            <div className="bs-eyebrow">Timeline</div>
             <h2 className="activity-placeholder-title">
               The audit trail is on deck
             </h2>

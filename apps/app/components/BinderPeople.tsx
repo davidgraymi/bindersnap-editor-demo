@@ -243,7 +243,7 @@ function VisibilitySwitch({
     <fieldset className="binder-visibility">
       <legend className="bs-label">Who can see this binder?</legend>
 
-      <label className="org-group-level-option">
+      <label className="org-choice">
         <input
           type="radio"
           name="binder-visibility"
@@ -260,7 +260,7 @@ function VisibilitySwitch({
         </span>
       </label>
 
-      <label className="org-group-level-option">
+      <label className="org-choice">
         <input
           type="radio"
           name="binder-visibility"
