@@ -2194,6 +2194,103 @@ test("revoking a group narrows the approvals whitelist in the same call", async 
   ).toEqual(["Owners", "staff"]);
 });
 
+test("a group says which binders it reaches, from the group's own row", async () => {
+  // The binder's Settings tab answers "who can act here". An owner looking at a
+  // group is asking the opposite question, and it is the one that decides
+  // whether changing the group is safe: its level and its people land on every
+  // binder in this list at once. Both are the same grant read from either end.
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+  expect((await createWorkspace(sessionCookie, org.name, "HR")).status).toBe(
+    201,
+  );
+
+  expect(
+    (
+      await createGroup(
+        sessionCookie,
+        org.name,
+        "Quality Committee",
+        "reviewer",
+      )
+    ).status,
+  ).toBe(201);
+
+  const readGroups = async (): Promise<
+    Array<{ name: string; binders: string[] }>
+  > => {
+    const response = await fetch(
+      `${API_BASE_URL}/api/app/orgs/${org.name}/people`,
+      { headers: { Cookie: `bindersnap_session=${sessionCookie}` } },
+    );
+    expect(response.status).toBe(200);
+    return (
+      (await response.json()) as {
+        groups: Array<{ name: string; binders: string[] }>;
+        binders: string[];
+      }
+    ).groups;
+  };
+
+  const named = (
+    groups: Array<{ name: string; binders: string[] }>,
+    name: string,
+  ) => groups.find((group) => group.name === name);
+
+  // Named and reaching nothing. ADR 0004: a team granted onto no repository
+  // grants access to nothing and costs nothing.
+  expect(named(await readGroups(), "quality-committee")?.binders).toEqual([]);
+
+  expect(
+    (await grantGroup(sessionCookie, org.name, "clinical", "quality-committee"))
+      .status,
+  ).toBe(200);
+  expect(
+    (await grantGroup(sessionCookie, org.name, "hr", "quality-committee"))
+      .status,
+  ).toBe(200);
+
+  const both = await readGroups();
+  expect(named(both, "quality-committee")?.binders).toEqual(["clinical", "hr"]);
+  // Read from Gitea, not accumulated by us — `staff` is granted by
+  // provisioning and shows up the same way without anybody telling this list.
+  expect(named(both, "staff")?.binders).toEqual(["clinical", "hr"]);
+
+  expect(
+    (await revokeGroup(sessionCookie, org.name, "hr", "quality-committee"))
+      .status,
+  ).toBe(200);
+  expect(named(await readGroups(), "quality-committee")?.binders).toEqual([
+    "clinical",
+  ]);
+});
+
+test("the organization lists its binders, so a group can be added to one", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+  expect((await createWorkspace(sessionCookie, org.name, "HR")).status).toBe(
+    201,
+  );
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/orgs/${org.name}/people`,
+    { headers: { Cookie: `bindersnap_session=${sessionCookie}` } },
+  );
+  expect(response.status).toBe(200);
+  expect(((await response.json()) as { binders: string[] }).binders).toEqual([
+    "clinical",
+    "hr",
+  ]);
+});
+
 test("Owners cannot be added to or taken off a binder, because it is neither", async () => {
   // Gitea gives Owners admin over the whole organization implicitly and never
   // grants it onto a repository, so offering either act would be offering

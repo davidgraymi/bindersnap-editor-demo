@@ -608,6 +608,36 @@ export async function listTeamMembers(
 }
 
 /**
+ * The binders one group reaches — the other half of `listRepoTeams`.
+ *
+ * A binder's Settings tab asks "which groups can act here"; a group's own row
+ * asks "which binders does this reach", and both are the same grant read from
+ * opposite ends. Only the second answers the question an owner has when they
+ * are looking at a group rather than at a binder, and it is the question that
+ * decides whether changing the group is safe: a level or a membership change
+ * lands on every binder in this list at once.
+ *
+ * Gitea answers it directly, so it stays derived. A stored copy would be a
+ * second source of truth for a grant Gitea is the one enforcing.
+ */
+export async function listTeamRepos(params: {
+  client: GiteaClient;
+  teamId: number;
+}): Promise<string[]> {
+  const { client, teamId } = params;
+
+  const repos = await unwrap(
+    client.GET("/teams/{id}/repos", {
+      params: { path: { id: teamId }, query: { limit: 100 } },
+    }),
+  );
+
+  return (repos ?? [])
+    .map((repo) => repo.name ?? "")
+    .filter((name) => name !== "");
+}
+
+/**
  * Who can change billing, per ADR 0004: the Owners team, read from Gitea
  * rather than an app-side role table.
  */

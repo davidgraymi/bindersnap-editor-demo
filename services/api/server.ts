@@ -57,6 +57,7 @@ import {
   listOrganizationTeams,
   listRepoTeams,
   listTeamMembers,
+  listTeamRepos,
   OWNERS_TEAM_NAME,
   removeTeamMember,
   revokeTeamFromRepo,
@@ -5779,11 +5780,12 @@ async function readOrganizationPeople(
   orgName: string,
   viewer: string,
 ): Promise<OrganizationPeoplePayload> {
-  const [members, teams, canManage] = await Promise.all([
+  const [members, teams, binders, canManage] = await Promise.all([
     listOrganizationMembers({ client, org: orgName }),
     // A member who is not an owner cannot list the organization's teams.
     // That costs them the groups, not the page.
     listOrganizationTeams({ client, org: orgName }).catch(() => []),
+    listOrganizationWorkspaces({ client, org: orgName }).catch(() => []),
     isOrganizationOwnerDirect({
       client,
       org: orgName,
@@ -5791,13 +5793,19 @@ async function readOrganizationPeople(
     }),
   ]);
 
+  // Two calls per team: who is in it, and which binders it reaches. Bounded by
+  // the number of groups rather than by the number of people or binders, which
+  // is the property that makes the teams-first read model worth having — the
+  // per-user permission endpoint would be a call per person *and* answer `none`
+  // for a member who can push.
   const membershipByTeam = await Promise.all(
-    teams.map(async (team) => ({
-      team,
-      members: await listTeamMembers({ client, teamId: team.id }).catch(
-        () => [],
-      ),
-    })),
+    teams.map(async (team) => {
+      const [teamMembers, teamRepos] = await Promise.all([
+        listTeamMembers({ client, teamId: team.id }).catch(() => []),
+        listTeamRepos({ client, teamId: team.id }).catch(() => []),
+      ]);
+      return { team, members: teamMembers, binders: teamRepos };
+    }),
   );
 
   const teamsByLogin = new Map<string, string[]>();
@@ -5834,7 +5842,7 @@ async function readOrganizationPeople(
         return left.login.localeCompare(right.login);
       }),
     groups: membershipByTeam
-      .map(({ team, members: teamMembers }) => ({
+      .map(({ team, members: teamMembers, binders: teamBinders }) => ({
         id: team.id,
         name: team.name,
         description: team.description,
@@ -5844,8 +5852,14 @@ async function readOrganizationPeople(
           login: member.login,
           fullName: member.fullName,
         })),
+        binders: [...teamBinders].sort((left, right) =>
+          left.localeCompare(right),
+        ),
       }))
       .sort((left, right) => left.name.localeCompare(right.name)),
+    binders: binders
+      .map((binder) => binder.name)
+      .sort((left, right) => left.localeCompare(right)),
     canManage,
   };
 }
@@ -5928,6 +5942,7 @@ async function handleCreateOrganizationGroup(
           // deliberate acts.
           memberCount: 0,
           members: [],
+          binders: [],
         },
       },
       baseHeaders,

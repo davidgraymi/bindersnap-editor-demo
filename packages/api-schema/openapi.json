@@ -9009,6 +9009,12 @@
                                 "fullName"
                               ]
                             }
+                          },
+                          "binders": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
                           }
                         },
                         "required": [
@@ -9017,8 +9023,15 @@
                           "description",
                           "access",
                           "memberCount",
-                          "members"
+                          "members",
+                          "binders"
                         ]
+                      }
+                    },
+                    "binders": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
                       }
                     },
                     "canManage": {
@@ -9029,6 +9042,7 @@
                     "organization",
                     "people",
                     "groups",
+                    "binders",
                     "canManage"
                   ]
                 }
@@ -9122,6 +9136,12 @@
                               "fullName"
                             ]
                           }
+                        },
+                        "binders": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
                         }
                       },
                       "required": [
@@ -9130,7 +9150,8 @@
                         "description",
                         "access",
                         "memberCount",
-                        "members"
+                        "members",
+                        "binders"
                       ]
                     }
                   },
@@ -9264,6 +9285,12 @@
                                 "fullName"
                               ]
                             }
+                          },
+                          "binders": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
                           }
                         },
                         "required": [
@@ -9272,8 +9299,15 @@
                           "description",
                           "access",
                           "memberCount",
-                          "members"
+                          "members",
+                          "binders"
                         ]
+                      }
+                    },
+                    "binders": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
                       }
                     },
                     "canManage": {
@@ -9284,6 +9318,7 @@
                     "organization",
                     "people",
                     "groups",
+                    "binders",
                     "canManage"
                   ]
                 }
@@ -9402,6 +9437,12 @@
                                 "fullName"
                               ]
                             }
+                          },
+                          "binders": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
                           }
                         },
                         "required": [
@@ -9410,8 +9451,15 @@
                           "description",
                           "access",
                           "memberCount",
-                          "members"
+                          "members",
+                          "binders"
                         ]
+                      }
+                    },
+                    "binders": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
                       }
                     },
                     "canManage": {
@@ -9422,6 +9470,7 @@
                     "organization",
                     "people",
                     "groups",
+                    "binders",
                     "canManage"
                   ]
                 }

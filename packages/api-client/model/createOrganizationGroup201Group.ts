@@ -13,4 +13,5 @@ export type CreateOrganizationGroup201Group = {
   access: string;
   memberCount: number;
   members: CreateOrganizationGroup201GroupMembersItem[];
+  binders: string[];
 };
