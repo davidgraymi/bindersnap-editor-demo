@@ -6,7 +6,9 @@ import {
   fetchOrganizationPeople,
   grantBinderGroup,
   removeOrganizationGroupMember,
+  removeOrganizationPerson,
   revokeBinderGroup,
+  setOrganizationPersonRole,
 } from "../api";
 import type { OrganizationPeoplePayload } from "../../../packages/api-schema/schemas/workspaces";
 import {
@@ -46,6 +48,8 @@ export function OrganizationPeople({ org }: OrganizationPeopleProps) {
     null,
   );
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,6 +89,8 @@ export function OrganizationPeople({ org }: OrganizationPeopleProps) {
     );
   }
 
+  const ownerCount = payload.people.filter((person) => person.isOwner).length;
+
   return (
     <div className="binder-pane">
       <section className="binder-settings-section">
@@ -93,27 +99,26 @@ export function OrganizationPeople({ org }: OrganizationPeopleProps) {
           <span className="doc-tab-count">{payload.people.length}</span>
         </h2>
 
+        {notice ? <p className="app-inline-error">{notice}</p> : null}
+
         <div className="docs-list">
           {payload.people.map((person) => (
-            <div className="org-person" key={person.login}>
-              <PersonAvatar person={person} size="md" />
-              <span className="org-person-body">
-                <span className="docs-list-item-name">
-                  {person.fullName || person.login}
-                </span>
-                <span className="docs-list-item-meta">
-                  {/* The groups are where their binder access comes from, so a
-                      person with none is worth saying rather than leaving
-                      blank — it is the answer to "why can they not see it". */}
-                  {person.teams.length > 0
-                    ? person.teams.map(describeGroupName).join(" · ")
-                    : "In no group yet"}
-                </span>
-              </span>
-              <span className="doc-rail-row-note">
-                {person.isOwner ? "Owner" : "Member"}
-              </span>
-            </div>
+            <OrgPersonRow
+              key={person.login}
+              org={org}
+              person={person}
+              // The last owner cannot be demoted or removed, and the control
+              // says so in place of a tooltip rather than failing when pressed.
+              lastOwner={person.isOwner && ownerCount === 1}
+              isViewer={
+                person.login.toLowerCase() === payload.viewer.toLowerCase()
+              }
+              canManage={payload.canManage}
+              busy={busy}
+              onChanged={setPayload}
+              onFailed={setNotice}
+              onBusy={setBusy}
+            />
           ))}
         </div>
       </section>
@@ -127,9 +132,200 @@ export function OrganizationPeople({ org }: OrganizationPeopleProps) {
 
       {payload.canManage ? null : (
         <p className="doc-rail-note">
-          Only an organization owner can create groups or change who is in them.
+          Only an organization owner can add and remove people, create groups,
+          or change who is in them.
         </p>
       )}
+    </div>
+  );
+}
+
+/**
+ * One person in the organization, and the two acts an owner has on them.
+ *
+ * The role is a dropdown; **promoting gets a confirmation** because it is the
+ * one change that hands over the keys, and removal gets one because it is the
+ * one that cannot be undone by pressing the same control again.
+ *
+ * The removal copy is the important string on this page. The fear behind "can I
+ * remove someone" in a regulated industry is that the record leaves with them —
+ * it is the fifth thing ADR 0004 lists as broken about the old model — and the
+ * moment of removal is the moment to answer it. Answering it turns an
+ * administrative chore into a demonstration of the thing they are paying for.
+ */
+function OrgPersonRow({
+  org,
+  person,
+  lastOwner,
+  isViewer,
+  canManage,
+  busy,
+  onChanged,
+  onFailed,
+  onBusy,
+}: {
+  org: string;
+  person: OrganizationPeoplePayload["people"][number];
+  lastOwner: boolean;
+  isViewer: boolean;
+  canManage: boolean;
+  busy: boolean;
+  onChanged: (next: OrganizationPeoplePayload) => void;
+  onFailed: (message: string | null) => void;
+  onBusy: (busy: boolean) => void;
+}) {
+  const [confirming, setConfirming] = useState<"promote" | "remove" | null>(
+    null,
+  );
+
+  const name = person.fullName || person.login;
+
+  async function run(act: () => Promise<OrganizationPeoplePayload>) {
+    onBusy(true);
+    onFailed(null);
+    try {
+      onChanged(await act());
+      setConfirming(null);
+    } catch (err: unknown) {
+      onFailed(
+        err instanceof Error && err.message.trim() !== ""
+          ? err.message
+          : "That did not work.",
+      );
+    } finally {
+      onBusy(false);
+    }
+  }
+
+  return (
+    <div className="org-person-block">
+      <div className="org-person">
+        <PersonAvatar person={person} size="md" />
+        <span className="org-person-body">
+          <span className="docs-list-item-name">{name}</span>
+          <span className="docs-list-item-meta">
+            {/* The groups are where their binder access comes from, so a person
+                with none is worth saying rather than leaving blank — it is the
+                answer to "why can they not see it". */}
+            {person.teams.length > 0
+              ? person.teams.map(describeGroupName).join(" · ")
+              : "In no group yet"}
+          </span>
+        </span>
+
+        {canManage ? (
+          <select
+            className="bs-input binder-role-select"
+            value={person.isOwner ? "owner" : "member"}
+            disabled={busy || lastOwner}
+            aria-label={`What ${name} can do in ${org}`}
+            onChange={(event) => {
+              if (event.target.value === "owner") {
+                setConfirming("promote");
+              } else {
+                void run(() =>
+                  setOrganizationPersonRole(org, person.login, false),
+                );
+              }
+            }}
+          >
+            <option value="member">Member</option>
+            <option value="owner">Owner</option>
+          </select>
+        ) : (
+          <span className="doc-rail-row-note">
+            {person.isOwner ? "Owner" : "Member"}
+          </span>
+        )}
+
+        {/* Not on your own row. Leaving an organization is a different act from
+            removing somebody else, and offering it here as "Remove Alice" reads
+            like an accident waiting to happen. */}
+        {canManage && !isViewer && !lastOwner ? (
+          <button
+            type="button"
+            className="org-group-remove"
+            disabled={busy}
+            aria-label={`Remove ${name} from ${org}`}
+            onClick={() => setConfirming("remove")}
+          >
+            ×
+          </button>
+        ) : null}
+      </div>
+
+      {/* In place of a tooltip, which nobody reads and no keyboard reaches. */}
+      {canManage && lastOwner ? (
+        <p className="doc-rail-note org-person-reason">
+          {org} needs at least one owner. Make someone else an owner first.
+        </p>
+      ) : null}
+
+      {confirming === "promote" ? (
+        <div className="org-person-confirm">
+          <p className="docs-list-item-name">Make {name} an owner?</p>
+          <p className="docs-list-item-meta">
+            Owners can add and remove anyone, create and delete binders, and
+            manage billing.
+          </p>
+          <div className="upload-modal-actions">
+            <button
+              type="button"
+              className="bs-btn bs-btn-primary bs-btn--sm"
+              disabled={busy}
+              onClick={() =>
+                run(() => setOrganizationPersonRole(org, person.login, true))
+              }
+            >
+              Make {name} an owner
+            </button>
+            <button
+              type="button"
+              className="bs-btn bs-btn-secondary bs-btn--sm"
+              disabled={busy}
+              onClick={() => setConfirming(null)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {confirming === "remove" ? (
+        <div className="org-person-confirm">
+          <p className="docs-list-item-name">
+            Remove {name} from {org}?
+          </p>
+          <p className="docs-list-item-meta">
+            They lose access immediately, everywhere.
+          </p>
+          {/* The sentence this page exists to be able to say. */}
+          <p className="docs-list-item-meta">
+            Everything they wrote, approved or commented on stays exactly where
+            it is — that record is yours, not theirs.
+          </p>
+          <div className="upload-modal-actions">
+            <button
+              type="button"
+              className="bs-btn bs-btn--danger bs-btn--sm"
+              disabled={busy}
+              onClick={() =>
+                run(() => removeOrganizationPerson(org, person.login))
+              }
+            >
+              Remove {name}
+            </button>
+            <button
+              type="button"
+              className="bs-btn bs-btn-secondary bs-btn--sm"
+              disabled={busy}
+              onClick={() => setConfirming(null)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

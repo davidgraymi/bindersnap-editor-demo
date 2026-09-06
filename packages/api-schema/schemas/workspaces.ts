@@ -569,6 +569,20 @@ export type CreatedOrganizationGroupPayload = z.infer<
   typeof CreatedOrganizationGroupPayloadSchema
 >;
 
+/**
+ * Promoting somebody to owner, or demoting them back to member.
+ *
+ * Two rungs and only two. An owner is a member of Gitea's built-in `Owners`
+ * team, so this is one team membership either way and nothing is stored —
+ * billing keeps reading the same team it always did.
+ */
+export const OrganizationPersonRoleRequestSchema = z.object({
+  owner: z.boolean(),
+});
+export type OrganizationPersonRoleRequest = z.infer<
+  typeof OrganizationPersonRoleRequestSchema
+>;
+
 export const OrganizationGroupMemberRequestSchema = z.object({
   username: z.string(),
 });
@@ -697,6 +711,12 @@ export const OrganizationPeoplePayloadSchema = z.object({
   binders: z.array(z.string()),
   /** Whether the caller owns the organization, and may change any of it. */
   canManage: z.boolean(),
+  /**
+   * Who is asking. Their own row offers no "remove", because leaving an
+   * organization is a different act from removing somebody else and deserves
+   * its own wording rather than a menu item that reads like an accident.
+   */
+  viewer: z.string(),
 });
 export type OrganizationPeoplePayload = z.infer<
   typeof OrganizationPeoplePayloadSchema

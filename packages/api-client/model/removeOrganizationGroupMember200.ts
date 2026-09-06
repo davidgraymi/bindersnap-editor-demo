@@ -13,4 +13,5 @@ export type RemoveOrganizationGroupMember200 = {
   groups: RemoveOrganizationGroupMember200GroupsItem[];
   binders: string[];
   canManage: boolean;
+  viewer: string;
 };

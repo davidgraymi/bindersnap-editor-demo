@@ -13,7 +13,10 @@ import type {
   CreateOrganizationGroupBody,
   GetOrganizationPeople200,
   ListOrganizations200,
-  RemoveOrganizationGroupMember200
+  RemoveOrganizationGroupMember200,
+  RemoveOrganizationPerson200,
+  SetOrganizationPersonRole200,
+  SetOrganizationPersonRoleBody
 } from '../model';
 
 import { customFetch } from '.././mutator.ts';
@@ -108,6 +111,75 @@ export const getOrganizationPeople = async (org: string, options?: Parameters<ty
   {
     ...options,
     method: 'GET'
+
+
+  }
+);}
+
+
+export type setOrganizationPersonRoleResponse200 = {
+  data: SetOrganizationPersonRole200
+  status: 200
+}
+
+export type setOrganizationPersonRoleResponseSuccess = (setOrganizationPersonRoleResponse200) & {
+  headers: Headers;
+};
+;
+
+export type setOrganizationPersonRoleResponse = (setOrganizationPersonRoleResponseSuccess)
+
+export const getSetOrganizationPersonRoleUrl = (org: string,
+    username: string,) => {
+
+
+
+
+  return `/api/app/orgs/${org}/people/${username}/role`
+}
+
+export const setOrganizationPersonRole = async (org: string,
+    username: string,
+    setOrganizationPersonRoleBody: SetOrganizationPersonRoleBody, options?: Parameters<typeof customFetch>[1]): Promise<setOrganizationPersonRoleResponse> => {
+
+  return customFetch<setOrganizationPersonRoleResponse>(getSetOrganizationPersonRoleUrl(org,username),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(setOrganizationPersonRoleBody)
+  }
+);}
+
+
+export type removeOrganizationPersonResponse200 = {
+  data: RemoveOrganizationPerson200
+  status: 200
+}
+
+export type removeOrganizationPersonResponseSuccess = (removeOrganizationPersonResponse200) & {
+  headers: Headers;
+};
+;
+
+export type removeOrganizationPersonResponse = (removeOrganizationPersonResponseSuccess)
+
+export const getRemoveOrganizationPersonUrl = (org: string,
+    username: string,) => {
+
+
+
+
+  return `/api/app/orgs/${org}/people/${username}`
+}
+
+export const removeOrganizationPerson = async (org: string,
+    username: string, options?: Parameters<typeof customFetch>[1]): Promise<removeOrganizationPersonResponse> => {
+
+  return customFetch<removeOrganizationPersonResponse>(getRemoveOrganizationPersonUrl(org,username),
+  {
+    ...options,
+    method: 'DELETE'
 
 
   }
