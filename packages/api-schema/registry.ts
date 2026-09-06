@@ -40,6 +40,8 @@ import {
   OrganizationSummarySchema,
 } from "./schemas/organizations";
 import {
+  PublishedWorkspaceChangePayloadSchema,
+  WorkspaceChangeDetailPayloadSchema,
   WorkspaceDocumentDetailPayloadSchema,
   WorkspaceDocumentEntrySchema,
   WorkspaceDocumentListPayloadSchema,
@@ -889,6 +891,114 @@ registry.registerPath({
       content: {
         "application/json": {
           schema: CreatedWorkspaceDocumentPayloadSchema,
+        },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/binders/{org}/{binder}/changes/{changeNumber}",
+  operationId: "getBinderChange",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({
+      org: z.string(),
+      binder: z.string(),
+      changeNumber: z.string(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "One change, and the documents publishing it would version",
+      content: {
+        "application/json": { schema: WorkspaceChangeDetailPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/binders/{org}/{binder}/changes/{changeNumber}/reviews",
+  operationId: "reviewBinderChange",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({
+      org: z.string(),
+      binder: z.string(),
+      changeNumber: z.string(),
+    }),
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z.object({
+            event: z.enum(["APPROVE", "REQUEST_CHANGES", "COMMENT"]),
+            /** Required for everything but an approval. */
+            body: z.string().optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "The review, as Gitea recorded it",
+      content: {
+        "application/json": { schema: z.object({ review: z.unknown() }) },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/binders/{org}/{binder}/changes/{changeNumber}/update",
+  operationId: "updateBinderChange",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({
+      org: z.string(),
+      binder: z.string(),
+      changeNumber: z.string(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "The change's branch now carries the binder's main",
+      content: {
+        "application/json": {
+          schema: z.object({
+            ok: z.boolean(),
+            /** False while Gitea is still recomputing the merge base. */
+            caughtUp: z.boolean(),
+          }),
+        },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/binders/{org}/{binder}/changes/{changeNumber}/publish",
+  operationId: "publishBinderChange",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({
+      org: z.string(),
+      binder: z.string(),
+      changeNumber: z.string(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "A version tag for every document the change touched",
+      content: {
+        "application/json": {
+          schema: PublishedWorkspaceChangePayloadSchema,
         },
       },
     },

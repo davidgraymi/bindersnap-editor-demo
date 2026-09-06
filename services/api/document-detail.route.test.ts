@@ -39,6 +39,8 @@ const WHITELISTED = "carol";
 
 let giteaLoginsByToken = new Map<string, string>();
 let requiredApprovals = 2;
+/** The one reviewer's verdict on the open change. */
+let reviewState = "APPROVED";
 /** What the caller's own token is allowed to do with the repo. */
 let callerIsAdmin = false;
 /** False when even the service account cannot read the rule. */
@@ -95,6 +97,7 @@ beforeEach(() => {
 
   giteaLoginsByToken = new Map();
   requiredApprovals = 2;
+  reviewState = "APPROVED";
   callerIsAdmin = false;
   protectionReadable = true;
 
@@ -170,7 +173,7 @@ beforeEach(() => {
       return json([
         {
           id: 11,
-          state: "APPROVED",
+          state: reviewState,
           body: "",
           submitted_at: "2026-02-02T00:00:00Z",
           user: person("dana"),
@@ -246,9 +249,64 @@ const DETAIL = "/api/app/documents/alice/quarterly-report";
 const CLOSED = "/api/app/documents/alice/quarterly-report/changes/closed";
 
 interface DetailPayload {
-  openPullRequests: { requiredApprovals: number | null }[];
+  openPullRequests: {
+    requiredApprovals: number | null;
+    approvalCount: number;
+    isApproved: boolean;
+    isRejected: boolean;
+  }[];
   branchProtection: { approvalsWhitelistUsernames: string[] } | null;
 }
+
+describe("a change says whether it is approved or refused", () => {
+  /**
+   * Both fields were in the response contract from the beginning and neither
+   * was ever populated, so `isRejected` read `undefined` — which is falsy.
+   * Home and the library both gate on it, so a change a reviewer had asked
+   * for work on was shown as ready to publish.
+   */
+  test("a standing request for changes is reported as a refusal", async () => {
+    reviewState = "REQUEST_CHANGES";
+    requiredApprovals = 1;
+    const server = createApiServer();
+    const session = await seedSession("bob");
+
+    const payload = (await (
+      await server.fetch(get(DETAIL, session))
+    ).json()) as DetailPayload;
+
+    expect(payload.openPullRequests[0]?.isRejected).toBe(true);
+    // And a refused change is not approved, whatever the count says.
+    expect(payload.openPullRequests[0]?.isApproved).toBe(false);
+  });
+
+  test("enough approvals and no refusal is approved", async () => {
+    requiredApprovals = 1;
+    const server = createApiServer();
+    const session = await seedSession("bob");
+
+    const payload = (await (
+      await server.fetch(get(DETAIL, session))
+    ).json()) as DetailPayload;
+
+    expect(payload.openPullRequests[0]?.approvalCount).toBe(1);
+    expect(payload.openPullRequests[0]?.isApproved).toBe(true);
+    expect(payload.openPullRequests[0]?.isRejected).toBe(false);
+  });
+
+  test("one approval short is not approved", async () => {
+    // requiredApprovals is 2 and the fixture has one reviewer.
+    const server = createApiServer();
+    const session = await seedSession("bob");
+
+    const payload = (await (
+      await server.fetch(get(DETAIL, session))
+    ).json()) as DetailPayload;
+
+    expect(payload.openPullRequests[0]?.isApproved).toBe(false);
+    expect(payload.openPullRequests[0]?.isRejected).toBe(false);
+  });
+});
 
 describe("document detail approval policy", () => {
   test("a write collaborator sees the count the owner sees", async () => {

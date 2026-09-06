@@ -460,6 +460,54 @@ async function getDocument(
   return { status: response.status, body: await response.text() };
 }
 
+/** Bring a change's branch up to date with the binder's main. */
+async function updateChange(
+  sessionCookie: string,
+  org: string,
+  workspace: string,
+  changeNumber: number,
+): Promise<{ status: number; body: string }> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${workspace}/changes/${changeNumber}/update`,
+    { method: "POST", headers: authHeaders(sessionCookie) },
+  );
+  return { status: response.status, body: await response.text() };
+}
+
+/** One change: what it proposes, and where it stands. */
+async function getChange(
+  sessionCookie: string,
+  org: string,
+  workspace: string,
+  changeNumber: number,
+): Promise<{ status: number; body: string }> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${workspace}/changes/${changeNumber}`,
+    { headers: { Cookie: `bindersnap_session=${sessionCookie}` } },
+  );
+  return { status: response.status, body: await response.text() };
+}
+
+/** Approve a change, ask for work on it, or say something about it. */
+async function reviewChange(
+  sessionCookie: string,
+  org: string,
+  workspace: string,
+  changeNumber: number,
+  event: string,
+  body?: string,
+): Promise<{ status: number; body: string }> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${workspace}/changes/${changeNumber}/reviews`,
+    {
+      method: "POST",
+      headers: authHeaders(sessionCookie),
+      body: JSON.stringify({ event, ...(body ? { body } : {}) }),
+    },
+  );
+  return { status: response.status, body: await response.text() };
+}
+
 /** The document's bytes, at a ref. `raw/` rather than a `download` suffix. */
 async function downloadDocument(
   sessionCookie: string,
@@ -674,9 +722,13 @@ async function addApprover(
   ownerToken: string,
   org: string,
   workspace: string,
-): Promise<{ credentials: Credentials; token: string }> {
+): Promise<{
+  credentials: Credentials;
+  token: string;
+  sessionCookie: string;
+}> {
   const credentials = buildCredentials();
-  await signUp(credentials);
+  const sessionCookie = await signUp(credentials);
 
   const teams = await giteaGet<Array<{ id: number; name: string }>>(
     ownerToken,
@@ -695,6 +747,7 @@ async function addApprover(
 
   return {
     credentials,
+    sessionCookie,
     token: await createUserToken(credentials.username, credentials.password),
   };
 }
@@ -921,6 +974,284 @@ test("a published document hands back its bytes, by identity or by path", async 
     "nursing/no-such-policy",
   );
   expect(missing.status).toBe(404);
+});
+
+test("a change says what it proposes, and what publishing it would write", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const added = await addDocument(sessionCookie, org.name, "clinical", {
+    name: "Infection Control",
+    folder: "Nursing",
+  });
+  const { pullRequestNumber, slugPath, documentPath } = JSON.parse(
+    added.body,
+  ) as {
+    pullRequestNumber: number;
+    slugPath: string;
+    documentPath: string;
+  };
+
+  const change = await getChange(
+    sessionCookie,
+    org.name,
+    "clinical",
+    pullRequestNumber,
+  );
+  expect(change.status, change.body).toBe(200);
+
+  const payload = JSON.parse(change.body) as {
+    change: {
+      number: number;
+      branchName: string;
+      approvalCount: number;
+      requiredApprovals: number | null;
+      isApproved: boolean;
+    };
+    documents: Array<{
+      slugPath: string;
+      path: string;
+      nextVersion: number;
+      currentVersion: unknown;
+    }>;
+    blockOnUnresolvedThreads: boolean;
+    unresolvedThreadCount: number;
+  };
+
+  expect(payload.change.number).toBe(pullRequestNumber);
+  // The branch is what the page reads the submitted file at, so a change
+  // without one cannot show what it proposes.
+  expect(payload.change.branchName.startsWith(`upload/${slugPath}/`)).toBe(
+    true,
+  );
+  expect(payload.change.approvalCount).toBe(0);
+  expect(payload.change.requiredApprovals).toBe(1);
+  expect(payload.change.isApproved).toBe(false);
+
+  // What publishing would write, per document — a document being added says
+  // v1 rather than showing no version at all.
+  expect(payload.documents).toHaveLength(1);
+  expect(payload.documents[0]).toMatchObject({
+    slugPath,
+    path: documentPath,
+    nextVersion: 1,
+    currentVersion: null,
+  });
+  expect(payload.unresolvedThreadCount).toBe(0);
+});
+
+test("approving through the binder counts, and then it publishes", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const added = await addDocument(sessionCookie, org.name, "clinical", {
+    name: "Infection Control",
+  });
+  const { pullRequestNumber, slugPath } = JSON.parse(added.body) as {
+    pullRequestNumber: number;
+    slugPath: string;
+  };
+
+  const ownerToken = await createUserToken(
+    credentials.username,
+    credentials.password,
+  );
+  const approver = await addApprover(ownerToken, org.name, "clinical");
+
+  // The approval goes through the binder's own route rather than straight to
+  // Gitea — which is the thing being tested, and is what the page does.
+  // `dismiss_stale_approvals` makes an approval submitted moments after a push
+  // land against the old head, so this retries until one actually stands.
+  let counted = false;
+  for (let attempt = 0; attempt < 10 && !counted; attempt += 1) {
+    const review = await reviewChange(
+      approver.sessionCookie,
+      org.name,
+      "clinical",
+      pullRequestNumber,
+      "APPROVE",
+    );
+    expect(review.status, review.body).toBe(200);
+
+    const change = await getChange(
+      sessionCookie,
+      org.name,
+      "clinical",
+      pullRequestNumber,
+    );
+    counted = (JSON.parse(change.body) as { change: { isApproved: boolean } })
+      .change.isApproved;
+    if (!counted) await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  expect(counted, "the approval never counted").toBe(true);
+
+  const published = await publishChange(
+    sessionCookie,
+    org.name,
+    "clinical",
+    pullRequestNumber,
+  );
+  expect(published.status, published.body).toBe(200);
+  expect(
+    (JSON.parse(published.body) as { tags: Array<{ tag: string }> }).tags.map(
+      (tag) => tag.tag,
+    ),
+  ).toEqual([`${slugPath}/v1`]);
+});
+
+test("asking for changes needs words, and an approval does not", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const added = await addDocument(sessionCookie, org.name, "clinical", {
+    name: "Infection Control",
+  });
+  const { pullRequestNumber } = JSON.parse(added.body) as {
+    pullRequestNumber: number;
+  };
+
+  const ownerToken = await createUserToken(
+    credentials.username,
+    credentials.password,
+  );
+  const approver = await addApprover(ownerToken, org.name, "clinical");
+
+  // A reviewer who blocks a change without saying why has not reviewed it.
+  const silent = await reviewChange(
+    approver.sessionCookie,
+    org.name,
+    "clinical",
+    pullRequestNumber,
+    "REQUEST_CHANGES",
+  );
+  expect(silent.status, silent.body).toBe(400);
+
+  const spoken = await reviewChange(
+    approver.sessionCookie,
+    org.name,
+    "clinical",
+    pullRequestNumber,
+    "REQUEST_CHANGES",
+    "The isolation section still cites the 2019 guidance.",
+  );
+  expect(spoken.status, spoken.body).toBe(200);
+
+  const nonsense = await reviewChange(
+    approver.sessionCookie,
+    org.name,
+    "clinical",
+    pullRequestNumber,
+    "RUBBER_STAMP",
+  );
+  expect(nonsense.status).toBe(400);
+});
+
+test("a change left behind by another says so, and can be caught up", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  // Two changes off the same main. Publishing the first moves main, which
+  // leaves the second behind — the ordinary consequence of two people working
+  // in one binder, and a dead end until now: a binder protects main with
+  // `block_on_outdated_branch`, so no number of approvals would merge it.
+  const first = await addDocument(sessionCookie, org.name, "clinical", {
+    name: "Infection Control",
+  });
+  const second = await addDocument(sessionCookie, org.name, "clinical", {
+    name: "Hand Hygiene",
+  });
+  const firstNumber = (JSON.parse(first.body) as { pullRequestNumber: number })
+    .pullRequestNumber;
+  const { pullRequestNumber: secondNumber, slugPath: secondSlug } = JSON.parse(
+    second.body,
+  ) as { pullRequestNumber: number; slugPath: string };
+
+  const ownerToken = await createUserToken(
+    credentials.username,
+    credentials.password,
+  );
+  const approver = await addApprover(ownerToken, org.name, "clinical");
+
+  await approveChange(approver.token, org.name, "clinical", firstNumber);
+  expect(
+    (await publishChange(sessionCookie, org.name, "clinical", firstNumber))
+      .status,
+  ).toBe(200);
+
+  const behind = await getChange(
+    sessionCookie,
+    org.name,
+    "clinical",
+    secondNumber,
+  );
+  expect(behind.status, behind.body).toBe(200);
+  expect((JSON.parse(behind.body) as { isBehind: boolean }).isBehind).toBe(
+    true,
+  );
+
+  const updated = await updateChange(
+    sessionCookie,
+    org.name,
+    "clinical",
+    secondNumber,
+  );
+  expect(updated.status, updated.body).toBe(200);
+
+  // Gitea recomputes the merge base after the push, so this is the state it
+  // settles into rather than the state it reports immediately.
+  let caughtUp = false;
+  for (let attempt = 0; attempt < 10 && !caughtUp; attempt += 1) {
+    const change = await getChange(
+      sessionCookie,
+      org.name,
+      "clinical",
+      secondNumber,
+    );
+    caughtUp = !(JSON.parse(change.body) as { isBehind: boolean }).isBehind;
+    if (!caughtUp) await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  expect(caughtUp, "the change never caught up with main").toBe(true);
+
+  // And now it publishes, which is the whole point of the way out.
+  await approveChange(approver.token, org.name, "clinical", secondNumber);
+  const published = await publishChange(
+    sessionCookie,
+    org.name,
+    "clinical",
+    secondNumber,
+  );
+  expect(published.status, published.body).toBe(200);
+  expect(
+    (JSON.parse(published.body) as { tags: Array<{ tag: string }> }).tags.map(
+      (tag) => tag.tag,
+    ),
+  ).toEqual([`${secondSlug}/v1`]);
+});
+
+test("a change in a binder that is not there is a 404", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+
+  expect(
+    (await getChange(sessionCookie, org.name, "no-such-binder", 1)).status,
+  ).toBe(404);
 });
 
 test("one change across two documents publishes two versions on one commit", async () => {

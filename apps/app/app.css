@@ -649,6 +649,34 @@ input {
   align-content: start;
 }
 
+/* One change's page: the documents it would version, and the decision. */
+.change-documents {
+  display: grid;
+  gap: var(--brand-space-3);
+}
+
+/* The document whose file is on screen, when a change touches several. */
+.docs-list-item--active {
+  background: var(--bs-coral-dim);
+}
+
+.change-review-field {
+  display: grid;
+  gap: var(--brand-space-2);
+  margin-bottom: var(--brand-space-3);
+}
+
+.change-review-field textarea {
+  resize: vertical;
+  font-family: var(--brand-font-sans);
+}
+
+.change-review-actions {
+  display: flex;
+  gap: var(--brand-space-2);
+  flex-wrap: wrap;
+}
+
 /* The binder's title and the one action that belongs on it. */
 .binder-page-head {
   display: flex;
