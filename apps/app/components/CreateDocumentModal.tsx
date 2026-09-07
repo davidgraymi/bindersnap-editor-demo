@@ -164,7 +164,6 @@ export function CreateDocumentModal({
         className="upload-modal create-document-modal"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="bs-eyebrow">New Document</div>
         <h2>Create workspace document</h2>
 
         {status === "idle" || status === "error" || status === "done" ? (
@@ -173,7 +172,7 @@ export function CreateDocumentModal({
               htmlFor="create-document-file"
               className="upload-file-input-label"
             >
-              <span className="bs-eyebrow">Choose File</span>
+              <span className="bs-label">Choose File</span>
               <input
                 id="create-document-file"
                 type="file"
@@ -193,7 +192,7 @@ export function CreateDocumentModal({
               htmlFor="create-document-name"
               className="create-document-field"
             >
-              <span className="bs-eyebrow">Document Name</span>
+              <span className="bs-label">Document Name</span>
               <input
                 id="create-document-name"
                 className="create-document-input"

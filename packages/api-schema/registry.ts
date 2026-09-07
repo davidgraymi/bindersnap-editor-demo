@@ -43,10 +43,14 @@ import {
   PublishedWorkspaceChangePayloadSchema,
   WorkspaceChangeListPayloadSchema,
   BinderGroupRequestSchema,
+  BinderPeoplePayloadSchema,
+  BinderPersonRequestSchema,
+  BinderVisibilityRequestSchema,
   BinderGroupsPayloadSchema,
   CreateOrganizationGroupRequestSchema,
   CreatedOrganizationGroupPayloadSchema,
   OrganizationGroupMemberRequestSchema,
+  OrganizationPersonRoleRequestSchema,
   OrganizationPeoplePayloadSchema,
   WorkspaceHistoryPayloadSchema,
   WorkspaceSettingsPayloadSchema,
@@ -860,6 +864,48 @@ registry.registerPath({
 
 registry.registerPath({
   method: "post",
+  path: "/api/app/orgs/{org}/people/{username}/role",
+  operationId: "setOrganizationPersonRole",
+  tags: ["organizations"],
+  request: {
+    params: z.object({ org: z.string(), username: z.string() }),
+    body: {
+      required: true,
+      content: {
+        "application/json": { schema: OrganizationPersonRoleRequestSchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "The organization's people and groups, after the change",
+      content: {
+        "application/json": { schema: OrganizationPeoplePayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "delete",
+  path: "/api/app/orgs/{org}/people/{username}",
+  operationId: "removeOrganizationPerson",
+  tags: ["organizations"],
+  request: {
+    params: z.object({ org: z.string(), username: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "The organization's people and groups, after the change",
+      content: {
+        "application/json": { schema: OrganizationPeoplePayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
   path: "/api/app/orgs/{org}/groups",
   operationId: "createOrganizationGroup",
   tags: ["organizations"],
@@ -925,6 +971,120 @@ registry.registerPath({
       description: "The organization's people and groups, after the change",
       content: {
         "application/json": { schema: OrganizationPeoplePayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/binders/{org}/{binder}/visibility",
+  operationId: "setBinderVisibility",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({ org: z.string(), binder: z.string() }),
+    body: {
+      required: true,
+      content: {
+        "application/json": { schema: BinderVisibilityRequestSchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "The binder's people, after the change",
+      content: {
+        "application/json": { schema: BinderPeoplePayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/binders/{org}/{binder}/people",
+  operationId: "getBinderPeople",
+  tags: ["workspaces"],
+  request: { params: z.object({ org: z.string(), binder: z.string() }) },
+  responses: {
+    200: {
+      description: "Who can act in this binder, one row per person",
+      content: {
+        "application/json": { schema: BinderPeoplePayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/binders/{org}/{binder}/people",
+  operationId: "addBinderPerson",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({ org: z.string(), binder: z.string() }),
+    body: {
+      required: true,
+      content: {
+        "application/json": { schema: BinderPersonRequestSchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "The binder's people, after the change",
+      content: {
+        "application/json": { schema: BinderPeoplePayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/binders/{org}/{binder}/people/{username}",
+  operationId: "setBinderPersonLevel",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({
+      org: z.string(),
+      binder: z.string(),
+      username: z.string(),
+    }),
+    body: {
+      required: true,
+      content: {
+        "application/json": { schema: BinderPersonRequestSchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "The binder's people, after the change",
+      content: {
+        "application/json": { schema: BinderPeoplePayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "delete",
+  path: "/api/app/binders/{org}/{binder}/people/{username}",
+  operationId: "removeBinderPerson",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({
+      org: z.string(),
+      binder: z.string(),
+      username: z.string(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "The binder's people, after the change",
+      content: {
+        "application/json": { schema: BinderPeoplePayloadSchema },
       },
     },
   },

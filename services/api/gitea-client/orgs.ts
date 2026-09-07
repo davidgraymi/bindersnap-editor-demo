@@ -60,6 +60,24 @@ function accessRank(access: string | undefined): number {
 }
 
 /**
+ * Which of two access levels is higher, ranked the way seats are counted.
+ *
+ * Exported because a binder's membership list folds several teams into one row
+ * per person and has to say which team the person's access actually comes
+ * from. Ranking by a second, local copy of the order is how `describeTeamAccess`
+ * came to call the organization's owner "No access": `owner` is a level, and it
+ * is above `admin`.
+ */
+export function isHigherAccess(candidate: string, held: string): boolean {
+  return accessRank(candidate) > accessRank(held);
+}
+
+/** Write or better on `repo.code`, which is exactly what ADR 0004 bills for. */
+export function accessCostsSeat(access: string): boolean {
+  return accessRank(access) >= accessRank("write");
+}
+
+/**
  * The unit map each role gets, verified against Gitea 1.26 by
  * `tests/gitea-permission-model.pw.ts`.
  *
@@ -688,6 +706,37 @@ export async function listOrganizationMembers(
   );
 
   return (members ?? []).map(normalizeOrgUser);
+}
+
+/**
+ * Take somebody out of the organization entirely.
+ *
+ * Native, and it needs no table of ours: Gitea removes them from the
+ * organization and from every team in it, in one call. There is nothing to
+ * reconcile afterwards and nothing that can be left behind — which is the same
+ * reason ADR 0004 gives for keeping permissions in Gitea rather than shadowing
+ * them.
+ *
+ * **What stays is the point.** Their commits, versions, approvals, reviews and
+ * comments are git objects. Removing the person does not touch any of them, and
+ * that is the product's entire claim: the record is the organization's, not the
+ * author's. The screen has to say so at the moment of removal, because the fear
+ * behind "can I remove someone" in a regulated industry is that the record
+ * leaves with them.
+ */
+export async function removeOrganizationMember(
+  params: IsOrganizationOwnerParams,
+): Promise<void> {
+  const { client, org, username } = params;
+
+  const { error, response } = await client.DELETE(
+    "/orgs/{org}/members/{username}",
+    { params: { path: { org, username } } },
+  );
+
+  if (error !== undefined || !response.ok) {
+    throw toGiteaApiError(response.status, error);
+  }
 }
 
 /**

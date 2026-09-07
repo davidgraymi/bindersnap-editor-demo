@@ -2024,6 +2024,9 @@
           },
           "description": {
             "type": "string"
+          },
+          "openToOrganization": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -8486,6 +8489,9 @@
                   },
                   "description": {
                     "type": "string"
+                  },
+                  "openToOrganization": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -9036,6 +9042,9 @@
                     },
                     "canManage": {
                       "type": "boolean"
+                    },
+                    "viewer": {
+                      "type": "string"
                     }
                   },
                   "required": [
@@ -9043,7 +9052,322 @@
                     "people",
                     "groups",
                     "binders",
-                    "canManage"
+                    "canManage",
+                    "viewer"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/orgs/{org}/people/{username}/role": {
+      "post": {
+        "operationId": "setOrganizationPersonRole",
+        "tags": [
+          "organizations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "username",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "owner": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "owner"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The organization's people and groups, after the change",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "people": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "login": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "isOwner": {
+                            "type": "boolean"
+                          },
+                          "teams": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "login",
+                          "fullName",
+                          "isOwner",
+                          "teams"
+                        ]
+                      }
+                    },
+                    "groups": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "number"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "access": {
+                            "type": "string"
+                          },
+                          "memberCount": {
+                            "type": "number"
+                          },
+                          "members": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "login": {
+                                  "type": "string"
+                                },
+                                "fullName": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "login",
+                                "fullName"
+                              ]
+                            }
+                          },
+                          "binders": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "description",
+                          "access",
+                          "memberCount",
+                          "members",
+                          "binders"
+                        ]
+                      }
+                    },
+                    "binders": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "canManage": {
+                      "type": "boolean"
+                    },
+                    "viewer": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "people",
+                    "groups",
+                    "binders",
+                    "canManage",
+                    "viewer"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/orgs/{org}/people/{username}": {
+      "delete": {
+        "operationId": "removeOrganizationPerson",
+        "tags": [
+          "organizations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "username",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The organization's people and groups, after the change",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "people": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "login": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "isOwner": {
+                            "type": "boolean"
+                          },
+                          "teams": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "login",
+                          "fullName",
+                          "isOwner",
+                          "teams"
+                        ]
+                      }
+                    },
+                    "groups": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "number"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "access": {
+                            "type": "string"
+                          },
+                          "memberCount": {
+                            "type": "number"
+                          },
+                          "members": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "login": {
+                                  "type": "string"
+                                },
+                                "fullName": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "login",
+                                "fullName"
+                              ]
+                            }
+                          },
+                          "binders": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "description",
+                          "access",
+                          "memberCount",
+                          "members",
+                          "binders"
+                        ]
+                      }
+                    },
+                    "binders": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "canManage": {
+                      "type": "boolean"
+                    },
+                    "viewer": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "people",
+                    "groups",
+                    "binders",
+                    "canManage",
+                    "viewer"
                   ]
                 }
               }
@@ -9312,6 +9636,9 @@
                     },
                     "canManage": {
                       "type": "boolean"
+                    },
+                    "viewer": {
+                      "type": "string"
                     }
                   },
                   "required": [
@@ -9319,7 +9646,8 @@
                     "people",
                     "groups",
                     "binders",
-                    "canManage"
+                    "canManage",
+                    "viewer"
                   ]
                 }
               }
@@ -9464,6 +9792,9 @@
                     },
                     "canManage": {
                       "type": "boolean"
+                    },
+                    "viewer": {
+                      "type": "string"
                     }
                   },
                   "required": [
@@ -9471,6 +9802,906 @@
                     "people",
                     "groups",
                     "binders",
+                    "canManage",
+                    "viewer"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/visibility": {
+      "post": {
+        "operationId": "setBinderVisibility",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "openToOrganization": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "openToOrganization"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The binder's people, after the change",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "people": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "login": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "access": {
+                            "type": "string"
+                          },
+                          "through": {
+                            "type": "string"
+                          },
+                          "individual": {
+                            "type": "boolean"
+                          },
+                          "groups": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "seat": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "login",
+                          "fullName",
+                          "access",
+                          "through",
+                          "individual",
+                          "groups",
+                          "seat"
+                        ]
+                      }
+                    },
+                    "groups": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "number"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "access": {
+                            "type": "string"
+                          },
+                          "members": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "login": {
+                                  "type": "string"
+                                },
+                                "fullName": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "login",
+                                "fullName"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "description",
+                          "access",
+                          "members"
+                        ]
+                      }
+                    },
+                    "openToOrganization": {
+                      "type": "boolean"
+                    },
+                    "organizationMembers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "login": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "login",
+                          "fullName"
+                        ]
+                      }
+                    },
+                    "canManage": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "workspace",
+                    "people",
+                    "groups",
+                    "openToOrganization",
+                    "organizationMembers",
+                    "canManage"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/people": {
+      "get": {
+        "operationId": "getBinderPeople",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Who can act in this binder, one row per person",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "people": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "login": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "access": {
+                            "type": "string"
+                          },
+                          "through": {
+                            "type": "string"
+                          },
+                          "individual": {
+                            "type": "boolean"
+                          },
+                          "groups": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "seat": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "login",
+                          "fullName",
+                          "access",
+                          "through",
+                          "individual",
+                          "groups",
+                          "seat"
+                        ]
+                      }
+                    },
+                    "groups": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "number"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "access": {
+                            "type": "string"
+                          },
+                          "members": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "login": {
+                                  "type": "string"
+                                },
+                                "fullName": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "login",
+                                "fullName"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "description",
+                          "access",
+                          "members"
+                        ]
+                      }
+                    },
+                    "openToOrganization": {
+                      "type": "boolean"
+                    },
+                    "organizationMembers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "login": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "login",
+                          "fullName"
+                        ]
+                      }
+                    },
+                    "canManage": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "workspace",
+                    "people",
+                    "groups",
+                    "openToOrganization",
+                    "organizationMembers",
+                    "canManage"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "addBinderPerson",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username": {
+                    "type": "string"
+                  },
+                  "level": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "username",
+                  "level"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The binder's people, after the change",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "people": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "login": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "access": {
+                            "type": "string"
+                          },
+                          "through": {
+                            "type": "string"
+                          },
+                          "individual": {
+                            "type": "boolean"
+                          },
+                          "groups": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "seat": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "login",
+                          "fullName",
+                          "access",
+                          "through",
+                          "individual",
+                          "groups",
+                          "seat"
+                        ]
+                      }
+                    },
+                    "groups": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "number"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "access": {
+                            "type": "string"
+                          },
+                          "members": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "login": {
+                                  "type": "string"
+                                },
+                                "fullName": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "login",
+                                "fullName"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "description",
+                          "access",
+                          "members"
+                        ]
+                      }
+                    },
+                    "openToOrganization": {
+                      "type": "boolean"
+                    },
+                    "organizationMembers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "login": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "login",
+                          "fullName"
+                        ]
+                      }
+                    },
+                    "canManage": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "workspace",
+                    "people",
+                    "groups",
+                    "openToOrganization",
+                    "organizationMembers",
+                    "canManage"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/people/{username}": {
+      "post": {
+        "operationId": "setBinderPersonLevel",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "username",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username": {
+                    "type": "string"
+                  },
+                  "level": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "username",
+                  "level"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The binder's people, after the change",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "people": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "login": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "access": {
+                            "type": "string"
+                          },
+                          "through": {
+                            "type": "string"
+                          },
+                          "individual": {
+                            "type": "boolean"
+                          },
+                          "groups": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "seat": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "login",
+                          "fullName",
+                          "access",
+                          "through",
+                          "individual",
+                          "groups",
+                          "seat"
+                        ]
+                      }
+                    },
+                    "groups": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "number"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "access": {
+                            "type": "string"
+                          },
+                          "members": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "login": {
+                                  "type": "string"
+                                },
+                                "fullName": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "login",
+                                "fullName"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "description",
+                          "access",
+                          "members"
+                        ]
+                      }
+                    },
+                    "openToOrganization": {
+                      "type": "boolean"
+                    },
+                    "organizationMembers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "login": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "login",
+                          "fullName"
+                        ]
+                      }
+                    },
+                    "canManage": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "workspace",
+                    "people",
+                    "groups",
+                    "openToOrganization",
+                    "organizationMembers",
+                    "canManage"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "removeBinderPerson",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "username",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The binder's people, after the change",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "people": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "login": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "access": {
+                            "type": "string"
+                          },
+                          "through": {
+                            "type": "string"
+                          },
+                          "individual": {
+                            "type": "boolean"
+                          },
+                          "groups": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "seat": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "login",
+                          "fullName",
+                          "access",
+                          "through",
+                          "individual",
+                          "groups",
+                          "seat"
+                        ]
+                      }
+                    },
+                    "groups": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "number"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "access": {
+                            "type": "string"
+                          },
+                          "members": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "login": {
+                                  "type": "string"
+                                },
+                                "fullName": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "login",
+                                "fullName"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "description",
+                          "access",
+                          "members"
+                        ]
+                      }
+                    },
+                    "openToOrganization": {
+                      "type": "boolean"
+                    },
+                    "organizationMembers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "login": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "login",
+                          "fullName"
+                        ]
+                      }
+                    },
+                    "canManage": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "workspace",
+                    "people",
+                    "groups",
+                    "openToOrganization",
+                    "organizationMembers",
                     "canManage"
                   ]
                 }

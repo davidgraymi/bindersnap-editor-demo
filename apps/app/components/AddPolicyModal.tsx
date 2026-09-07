@@ -128,12 +128,11 @@ export function AddPolicyModal({
         className="upload-modal create-document-modal"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="bs-eyebrow">{binder}</div>
         <h2>Add a policy</h2>
 
         <div className="create-document-form">
           <label htmlFor="add-policy-file" className="upload-file-input-label">
-            <span className="bs-eyebrow">Choose file</span>
+            <span className="bs-label">Choose file</span>
             <input
               id="add-policy-file"
               type="file"
@@ -151,7 +150,7 @@ export function AddPolicyModal({
           ) : null}
 
           <label htmlFor="add-policy-name" className="create-document-field">
-            <span className="bs-eyebrow">What it is called</span>
+            <span className="bs-label">What it is called</span>
             <input
               id="add-policy-name"
               className="create-document-input"
@@ -167,7 +166,7 @@ export function AddPolicyModal({
           </label>
 
           <label htmlFor="add-policy-folder" className="create-document-field">
-            <span className="bs-eyebrow">Folder — optional</span>
+            <span className="bs-label">Folder — optional</span>
             <input
               id="add-policy-folder"
               className="create-document-input"

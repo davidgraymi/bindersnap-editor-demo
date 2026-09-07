@@ -14,6 +14,7 @@ import { AddPolicyModal } from "./AddPolicyModal";
 import { BinderChangePage } from "./BinderChangePage";
 import { BinderChanges } from "./BinderChanges";
 import { BinderHistory } from "./BinderHistory";
+import { BinderPeople } from "./BinderPeople";
 import { BinderSettings } from "./BinderSettings";
 import { BinderDocumentPage } from "./BinderDocumentPage";
 import { BinderDocuments } from "./BinderPage";
@@ -139,8 +140,11 @@ export function BinderShell({
       label: "Change requests",
       count: overview?.openChangeCount,
     },
-    // No counts on these two. A number of published versions is not a number
-    // of things to deal with, and a number of rules is not either.
+    // No counts on these three. The two that carry one are counts of things to
+    // deal with; a number of people, of published versions, or of rules is not
+    // — and a people count would cost the header a walk of every team on every
+    // tab, to say a number nobody is waiting on.
+    { id: "people", label: "People" },
     { id: "history", label: "History" },
     { id: "settings", label: "Settings" },
   ];
@@ -231,6 +235,8 @@ export function BinderShell({
           onOpenChange={openChangeNumber}
           onAddPolicy={() => setAdding(true)}
         />
+      ) : activeTab === "people" ? (
+        <BinderPeople org={org} binder={binder} />
       ) : activeTab === "history" ? (
         <BinderHistory
           org={org}

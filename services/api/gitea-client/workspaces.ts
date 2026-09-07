@@ -3,6 +3,7 @@ import type { components } from "./spec/gitea";
 import { GiteaApiError, unwrap, type GiteaClient } from "./client";
 import { bootstrapEmptyMainBranch } from "./repos";
 import {
+  addTeamMember,
   createOrganization,
   ensureStaffTeam,
   findOrganization,
@@ -334,6 +335,15 @@ export interface ProvisionWorkspaceParams {
   name: string;
   description?: string;
   requiredApprovals?: number;
+  /**
+   * Whether the whole organization can read it. Open is the decided default:
+   * the common case is a policy manual everybody must be able to read in order
+   * to attest to it, and making the common case a configuration step teaches
+   * customers that access is fiddly. Asked at creation, because the moment
+   * somebody is naming a binder is the moment they know whether it is the staff
+   * handbook or HR investigations.
+   */
+  openToOrganization?: boolean;
 }
 
 /** The repository, its three role teams, and a protected `main`. */
@@ -385,7 +395,14 @@ export async function recomputeApprovalsWhitelist(params: {
 export async function provisionWorkspace(
   params: ProvisionWorkspaceParams,
 ): Promise<ProvisionedWorkspace> {
-  const { client, org, name, description, requiredApprovals } = params;
+  const {
+    client,
+    org,
+    name,
+    description,
+    requiredApprovals,
+    openToOrganization = true,
+  } = params;
 
   const workspace = await createWorkspaceRepo({
     client,
@@ -411,23 +428,28 @@ export async function provisionWorkspace(
   // step by hand. A binder's access is now exactly what has been granted onto
   // it, and a per-binder team is created lazily, on the first individual grant.
   //
-  // A new binder is open to the organization, which is the decided default: the
-  // common case is a policy manual everybody must be able to read in order to
-  // attest to it, and making the common case a configuration step teaches
-  // customers that access is fiddly.
+  // Open is the decided default and the creator was asked, so a restricted
+  // binder is a choice somebody made rather than a state it can drift into.
+  // `staff` is still ensured either way: it is the organization's membership
+  // list, and a restricted binder is a binder it is not granted onto — not a
+  // reason for it to be missing.
   const staff = await ensureStaffTeam({ client, org });
-  await grantTeamOnRepo({ client, teamId: staff.id, org, repo: name });
+  if (openToOrganization) {
+    await grantTeamOnRepo({ client, teamId: staff.id, org, repo: name });
+  }
 
   // Protection last, and its whitelist stated rather than recomputed: at this
-  // moment the granted set is exactly `staff`, and `Owners` is never granted
-  // but must always be on the list. `recomputeApprovalsWhitelist` is for
-  // afterwards, when a grant actually changes the set.
+  // moment the granted set is exactly what was just granted, and `Owners` is
+  // never granted but must always be on the list. `recomputeApprovalsWhitelist`
+  // is for afterwards, when a grant actually changes the set.
   await protectWorkspaceMain({
     client,
     org,
     workspace: name,
     requiredApprovals,
-    approvalsWhitelistTeams: [staff.name, OWNERS_TEAM_NAME],
+    approvalsWhitelistTeams: openToOrganization
+      ? [staff.name, OWNERS_TEAM_NAME]
+      : [OWNERS_TEAM_NAME],
   });
 
   return { workspace, staff };
@@ -438,6 +460,8 @@ export interface ProvisionOrganizationParams {
   /** The org's Gitea username. */
   orgName: string;
   orgFullName?: string;
+  /** Who is creating it. Gitea makes them an owner; this puts them in `staff`. */
+  owner: string;
 }
 
 /**
@@ -457,7 +481,7 @@ export interface ProvisionOrganizationParams {
 export async function provisionOrganization(
   params: ProvisionOrganizationParams,
 ): Promise<ProvisionedOrganization> {
-  const { client, orgName, orgFullName } = params;
+  const { client, orgName, orgFullName, owner } = params;
 
   const organization =
     (await findOrganization({ client, org: orgName })) ??
@@ -469,9 +493,19 @@ export async function provisionOrganization(
 
   // Every member of the organization belongs to `staff`, so it exists from the
   // organization's first moment rather than being conjured by whichever binder
-  // happens to be created first. Best-effort: an organization without it is
-  // still an organization, and `provisionWorkspace` makes it if it has to.
-  await ensureStaffTeam({ client, org: organization.name }).catch(() => null);
+  // happens to be created first — **and the founder is put in it**, because a
+  // team that exists and holds nobody makes "everyone at Riverside Health can
+  // read this binder" a claim about an empty set. Gitea puts them in `Owners`,
+  // which reaches every binder by a different route, so nothing visibly broke
+  // while this was missing.
+  //
+  // Best-effort: an organization without `staff` is still an organization, and
+  // `provisionWorkspace` makes it if it has to.
+  await ensureStaffTeam({ client, org: organization.name })
+    .then((staff) =>
+      addTeamMember({ client, teamId: staff.id, username: owner }),
+    )
+    .catch(() => null);
 
   return { organization };
 }

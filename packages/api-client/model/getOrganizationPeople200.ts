@@ -13,4 +13,5 @@ export type GetOrganizationPeople200 = {
   groups: GetOrganizationPeople200GroupsItem[];
   binders: string[];
   canManage: boolean;
+  viewer: string;
 };

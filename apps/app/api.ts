@@ -13,6 +13,7 @@ import * as BindersClient from "../../packages/api-client/workspaces/workspaces"
 import type {
   CreatedWorkspaceDocumentPayload,
   BinderGroupsPayload,
+  BinderPeoplePayload,
   CreatedOrganizationGroupPayload,
   OrganizationPeoplePayload,
   PublishedWorkspaceChangePayload,
@@ -890,10 +891,13 @@ export async function createBinder(
   org: string,
   name: string,
   description?: string,
+  /** Whether the whole organization can read it. Asked on the form. */
+  openToOrganization = true,
 ): Promise<WorkspaceSummary> {
   const response = await BindersClient.createBinder(org, {
     name,
     description,
+    openToOrganization,
   });
   return response.data.workspace;
 }
@@ -947,6 +951,44 @@ export async function createOrganizationGroup(
   return response.data;
 }
 
+/**
+ * Promote somebody to owner, or demote them back to member.
+ *
+ * Refused with a sentence when it would leave the organization with no owner —
+ * the same sentence removal is refused with, because they are two routes to one
+ * consequence.
+ */
+export async function setOrganizationPersonRole(
+  org: string,
+  username: string,
+  owner: boolean,
+): Promise<OrganizationPeoplePayload> {
+  const response = await OrganizationsClient.setOrganizationPersonRole(
+    org,
+    username,
+    { owner },
+  );
+  return response.data;
+}
+
+/**
+ * Take somebody out of the organization.
+ *
+ * They lose access immediately, everywhere — and everything they wrote,
+ * approved or commented on stays exactly where it is, because those are git
+ * objects and the record belongs to the organization.
+ */
+export async function removeOrganizationPerson(
+  org: string,
+  username: string,
+): Promise<OrganizationPeoplePayload> {
+  const response = await OrganizationsClient.removeOrganizationPerson(
+    org,
+    username,
+  );
+  return response.data;
+}
+
 /** Put somebody in a group. Immediate: no commit, no approval. */
 export async function addOrganizationGroupMember(
   org: string,
@@ -996,6 +1038,89 @@ export async function revokeBinderGroup(
   group: string,
 ): Promise<BinderGroupsPayload> {
   const response = await BindersClient.revokeBinderGroup(org, binder, group);
+  return response.data;
+}
+
+/** Who can act in this binder, one row per person. */
+export async function fetchBinderPeople(
+  org: string,
+  binder: string,
+): Promise<BinderPeoplePayload> {
+  const response = await BindersClient.getBinderPeople(org, binder);
+  return response.data;
+}
+
+/**
+ * Add somebody to this binder at a level.
+ *
+ * Also the escape hatch for one person in a group who needs more here: an
+ * individual grant sits alongside the group rather than changing it, so it
+ * touches this binder and no other.
+ */
+export async function addBinderPerson(
+  org: string,
+  binder: string,
+  username: string,
+  level: string,
+): Promise<BinderPeoplePayload> {
+  const response = await BindersClient.addBinderPerson(org, binder, {
+    username,
+    level,
+  });
+  return response.data;
+}
+
+/**
+ * Move somebody between this binder's levels.
+ *
+ * Refused with a sentence when their access comes from a shared group — that
+ * group is one object across every binder it reaches, so the change is not this
+ * binder's to make.
+ */
+export async function setBinderPersonLevel(
+  org: string,
+  binder: string,
+  username: string,
+  level: string,
+): Promise<BinderPeoplePayload> {
+  const response = await BindersClient.setBinderPersonLevel(
+    org,
+    binder,
+    username,
+    { username, level },
+  );
+  return response.data;
+}
+
+export async function removeBinderPerson(
+  org: string,
+  binder: string,
+  username: string,
+): Promise<BinderPeoplePayload> {
+  const response = await BindersClient.removeBinderPerson(
+    org,
+    binder,
+    username,
+  );
+  return response.data;
+}
+
+/**
+ * Open this binder to the whole organization, or close it again.
+ *
+ * One switch over one primitive — `staff` granted onto the repository, or not —
+ * and its own call rather than a group grant with a friendlier name, because
+ * "everyone at Riverside Health can read this" is a decision about the binder
+ * and not housekeeping about a team.
+ */
+export async function setBinderVisibility(
+  org: string,
+  binder: string,
+  openToOrganization: boolean,
+): Promise<BinderPeoplePayload> {
+  const response = await BindersClient.setBinderVisibility(org, binder, {
+    openToOrganization,
+  });
   return response.data;
 }
 

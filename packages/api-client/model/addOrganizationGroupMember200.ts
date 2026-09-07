@@ -13,4 +13,5 @@ export type AddOrganizationGroupMember200 = {
   groups: AddOrganizationGroupMember200GroupsItem[];
   binders: string[];
   canManage: boolean;
+  viewer: string;
 };
