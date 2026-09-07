@@ -12,13 +12,13 @@ file when the series lands.
 | [#390](https://github.com/davidgraymi/bindersnap-editor-demo/pull/390) | Organization and team client        | **merged** |
 | [#391](https://github.com/davidgraymi/bindersnap-editor-demo/pull/391) | Org + first binder at signup        | **merged** |
 | [#392](https://github.com/davidgraymi/bindersnap-editor-demo/pull/392) | Reads are never gated               | **merged** |
-| [#393](https://github.com/davidgraymi/bindersnap-editor-demo/pull/393) | Bill the organization               | open       |
+| [#393](https://github.com/davidgraymi/bindersnap-editor-demo/pull/393) | Bill the organization               | **merged** |
 
 ### Step 2 — documents as files (2026-09-04)
 
-Six PRs, **all CI-green, none merged**, each stacked on the one above it. They
-must merge bottom-up; #398 has been green longest and landing it makes every
-rebase after it cheaper.
+Six PRs, each stacked on the one above it, **all merged into
+`feat/adr4-documents-as-files`** rather than into `main`. That branch is the
+integration branch for steps 2 and 3, and landing it on `main` is its own act.
 
 | PR                                                                     | Branch                             | What it did                                             |
 | ---------------------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------- |
