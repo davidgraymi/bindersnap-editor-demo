@@ -339,7 +339,7 @@ test("resolveSubscriptionStatus treats missing or inactive billing records as un
   expect(resolveSubscriptionStatus("canceled")).toBe("none");
 });
 
-test("App redirects signed-in users to billing when the billing status fetch rejects", async () => {
+test("App keeps a signed-in user working when the billing status fetch rejects", async () => {
   mockFetchSessionUser.mockImplementation(async () => ({
     user: { username: "alice", fullName: "Alice Example" },
     token: "session-token",
@@ -352,22 +352,26 @@ test("App redirects signed-in users to billing when the billing status fetch rej
   const { container, unmount } = mountApp(App);
 
   try {
+    // Failing to reach billing is not evidence that anybody is delinquent, so
+    // it neither blanks the app nor draws the banner. The API is the gate: a
+    // write that should be refused still is, and its typed 402 is what turns
+    // read-only on for real.
     await waitFor(() => {
-      const billingPage = container.querySelector<HTMLElement>(
-        '[data-testid="billing-page"]',
-      );
-
-      expect(window.location.pathname).toBe("/billing");
-      expect(billingPage?.dataset.subscriptionStatus).toBe("none");
-      expect(billingPage?.dataset.hasBillingStatusError).toBe("true");
-      expect(container.querySelector('[data-testid="app-shell"]')).toBeNull();
+      expect(
+        container.querySelector('[data-testid="app-shell"]'),
+      ).not.toBeNull();
     });
+
+    expect(
+      container.querySelector('[data-testid="read-only-banner"]'),
+    ).toBeNull();
+    expect(window.location.pathname).not.toBe("/billing");
   } finally {
     unmount();
   }
 });
 
-test("App redirects signed-in users to billing when the payment required handler fires", async () => {
+test("App drops into read-only mode when the payment required handler fires", async () => {
   mockFetchSessionUser.mockImplementation(async () => ({
     user: { username: "alice", fullName: "Alice Example" },
     token: "session-token",
@@ -394,18 +398,22 @@ test("App redirects signed-in users to billing when the payment required handler
       ).not.toBeNull();
     });
 
-    notifyPaymentRequired();
+    notifyPaymentRequired({ organizationName: "riverside-health" });
 
+    // The refused write leaves them exactly where they were, reading what
+    // they were reading. ADR 0004 gates authoring and never gates reading, so
+    // the app stays up and the banner explains itself.
     await waitFor(() => {
-      const billingPage = container.querySelector<HTMLElement>(
-        '[data-testid="billing-page"]',
+      const banner = container.querySelector<HTMLElement>(
+        '[data-testid="read-only-banner"]',
       );
 
-      expect(window.location.pathname).toBe("/billing");
-      expect(billingPage?.dataset.subscriptionStatus).toBe("none");
-      expect(billingPage?.dataset.hasBillingStatusError).toBe("false");
-      expect(container.querySelector('[data-testid="app-shell"]')).toBeNull();
+      expect(banner).not.toBeNull();
+      expect(banner?.textContent).toContain("riverside-health");
     });
+
+    expect(container.querySelector('[data-testid="app-shell"]')).not.toBeNull();
+    expect(window.location.pathname).not.toBe("/billing");
   } finally {
     unmount();
   }
@@ -667,7 +675,7 @@ test("App asks a no-organization session to name one when a write is refused", a
       ).not.toBeNull();
     });
 
-    notifyPaymentRequired();
+    notifyPaymentRequired({ organizationName: null });
 
     await waitFor(() => {
       expect(window.location.pathname).toBe("/organizations/new");

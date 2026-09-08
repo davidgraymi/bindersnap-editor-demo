@@ -803,6 +803,31 @@ async function requireSession(
  * org's reviewers are blocked from mutating too, because the org is
  * delinquent, not them.
  */
+/**
+ * The paywall's answer, in one place and typed.
+ *
+ * The organization is named because the SPA's banner has to say whose bill it
+ * is: a person who belongs to two organizations learns nothing from "your
+ * subscription has lapsed". `code` is what lets the SPA tell this from the
+ * 402 that `GET /api/app/billing` returns with a billing status in it — a
+ * distinction it used to draw by matching the request path, which every new
+ * billing route had to remember to be added to.
+ */
+function paymentRequired(
+  baseHeaders: Headers,
+  organizationName: string | null,
+): Response {
+  return json(
+    402,
+    {
+      error: "Subscription required.",
+      code: "subscription_required" as const,
+      organization: organizationName,
+    },
+    baseHeaders,
+  );
+}
+
 async function requireSubscription(
   req: Request,
   baseHeaders: Headers,
@@ -825,7 +850,7 @@ async function requireSubscription(
     auth.session,
   );
   if (!organization || !(await organizationHasAccess(organization.id))) {
-    return json(402, { error: "Subscription required." }, baseHeaders);
+    return paymentRequired(baseHeaders, organization?.name ?? null);
   }
 
   return auth;
@@ -892,7 +917,7 @@ async function requireSubscriptionOrAdmin(
     return auth;
   }
 
-  return json(402, { error: "Subscription required." }, baseHeaders);
+  return paymentRequired(baseHeaders, organization?.name ?? null);
 }
 
 type SubscriptionAccessSource =

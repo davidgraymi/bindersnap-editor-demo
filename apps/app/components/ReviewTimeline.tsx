@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useIsReadOnly } from "../readOnlyContext";
 import {
   ArrowRightToLine,
   Check,
@@ -116,12 +117,19 @@ export function ReviewTimeline({
   change,
   updates,
   resetsApprovals,
-  canParticipate,
+  canParticipate: canParticipateProp,
   currentUsername,
   blockOnUnresolvedThreads,
   onSummaryChange,
   onOpenUpdate,
 }: ReviewTimelineProps) {
+  // Commenting is a mutation, and the API refuses it for a delinquent
+  // organization like any other — reviewers included, because the org is
+  // delinquent rather than the person. Folded into the flag that already
+  // decides whether the composer exists, so a comment cannot be typed and
+  // then lost to a 402.
+  const isReadOnly = useIsReadOnly();
+  const canParticipate = canParticipateProp && !isReadOnly;
   const [summary, setSummary] = useState<DiscussionSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);

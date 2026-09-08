@@ -28,7 +28,13 @@ import {
   signup,
 } from "./api";
 import type { OrganizationSummary } from "../../packages/api-schema/schemas/organizations";
-import { usePaymentRequiredHandler } from "./paymentRequired";
+import {
+  usePaymentRequiredHandler,
+  type PaymentRequiredEvent,
+} from "./paymentRequired";
+import { resolveReadOnly } from "./readOnly";
+import { ReadOnlyProvider } from "./readOnlyContext";
+import { ReadOnlyBanner } from "./components/ReadOnlyBanner";
 import {
   asShellRoute,
   getRoute,
@@ -308,6 +314,11 @@ export function App() {
   const [organizationSetupReason, setOrganizationSetupReason] = useState<
     "blocked-write" | null
   >(null);
+  // Whose bill it is. Only ever used to name the organization in the
+  // read-only banner, which is why it is a name rather than the whole record.
+  const [billingOrganizationName, setBillingOrganizationName] = useState<
+    string | null
+  >(null);
   const [currentPeriodEnd, setCurrentPeriodEnd] = useState<number | null>(null);
   const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(false);
   const [cancelAt, setCancelAt] = useState<number | null>(null);
@@ -317,30 +328,39 @@ export function App() {
     interval: string;
     formatted: string;
   } | null>(null);
-  const handlePaymentRequired = useCallback(() => {
-    if (!user) {
-      return;
-    }
+  const handlePaymentRequired = useCallback(
+    (event: PaymentRequiredEvent) => {
+      if (!user) {
+        return;
+      }
 
-    // A write refused because the session has no organization is not a refusal
-    // to serve someone who has not paid — there is nothing to buy yet. This is
-    // the moment ADR 0004 means when it says the question comes back:
-    // authoring is what needs an organization, so ask for one rather than for
-    // a card.
-    if (accessSource === "no_organization") {
-      setOrganizationSetupReason("blocked-write");
-      navigateTo({ kind: "createOrganization" }, true);
-      return;
-    }
+      // A write refused because the session has no organization is not a refusal
+      // to serve someone who has not paid — there is nothing to buy yet. This is
+      // the moment ADR 0004 means when it says the question comes back:
+      // authoring is what needs an organization, so ask for one rather than for
+      // a card.
+      if (accessSource === "no_organization") {
+        setOrganizationSetupReason("blocked-write");
+        navigateTo({ kind: "createOrganization" }, true);
+        return;
+      }
 
-    setSubscriptionStatus("none");
-    setAccessSource(null);
-    setHasBillingStatusError(false);
-    setCurrentPeriodEnd(null);
-    setCancelAtPeriodEnd(false);
-    setCancelAt(null);
-    navigateTo({ kind: "billing" }, true);
-  }, [accessSource, user]);
+      // Drop into read-only rather than navigating. The write is refused
+      // either way, but sending them to the card form loses the page they were
+      // on — and ADR 0004's promise is that the record stays in front of them.
+      // The banner appears where they are and says what happened.
+      setSubscriptionStatus("none");
+      setAccessSource(null);
+      setHasBillingStatusError(false);
+      setCurrentPeriodEnd(null);
+      setCancelAtPeriodEnd(false);
+      setCancelAt(null);
+      if (event.organizationName) {
+        setBillingOrganizationName(event.organizationName);
+      }
+    },
+    [accessSource, user],
+  );
 
   const refreshSession = useCallback(async () => {
     setIsCheckingSession(true);
@@ -360,6 +380,7 @@ export function App() {
             resolveSubscriptionStatus(billing.status, billing.hasAccess),
           );
           setAccessSource(billing.accessSource ?? null);
+          setBillingOrganizationName(billing.organization?.name ?? null);
           setHasBillingStatusError(false);
           setCurrentPeriodEnd(billing.currentPeriodEnd);
           setCancelAtPeriodEnd(billing.cancelAtPeriodEnd);
@@ -485,17 +506,12 @@ export function App() {
     // Signup sends them to the setup screen, and `handlePaymentRequired`
     // brings them back when a write actually needs an organization.
 
-    if (
-      user &&
-      subscriptionStatus === "none" &&
-      accessSource !== "no_organization" &&
-      route.kind !== "billing" &&
-      route.kind !== "createOrganization" &&
-      !isAdminSubscriptionRoute
-    ) {
-      navigateTo({ kind: "billing" }, true);
-      return;
-    }
+    // No redirect for a delinquent organization either. This used to bounce
+    // every route to /billing, which contradicted the rule the API enforces:
+    // ADR 0004 gates authoring and never gates reading or exporting, and an
+    // app that answers a lapsed subscription by hiding the record is holding
+    // the customer's approval history hostage. They land where they were
+    // going, read everything, and get the banner and no write controls.
 
     // Bounce back to the workspace only when there is genuinely nothing to do
     // on this page. A customer on a trial has access but no subscription, and
@@ -523,6 +539,24 @@ export function App() {
     navigateTo({ kind: "login" }, true);
   }, [route]);
 
+  const readOnly = useMemo(
+    () =>
+      resolveReadOnly({
+        isSignedIn: Boolean(user),
+        subscriptionStatus,
+        accessSource,
+        hasBillingStatusError,
+        organizationName: billingOrganizationName,
+      }),
+    [
+      user,
+      subscriptionStatus,
+      accessSource,
+      hasBillingStatusError,
+      billingOrganizationName,
+    ],
+  );
+
   const view: AuthView = useMemo(() => {
     if (route.kind === "callback") {
       return "callback";
@@ -534,15 +568,10 @@ export function App() {
     // matter where it was going, which is what made `/organizations/new`
     // render billing and left the setup screen reachable only by people who
     // already had an organization.
-    if (
-      user &&
-      subscriptionStatus === "none" &&
-      accessSource !== "no_organization" &&
-      route.kind !== "createOrganization" &&
-      !(route.kind === "adminSubscriptions" && user.isAdmin)
-    ) {
-      return "billing";
-    }
+    // A delinquent organization no longer replaces the app with the card
+    // form. /billing is still a route they can walk to — and the banner's
+    // "Restore access" takes them there — but it is a destination now rather
+    // than a wall.
 
     if (route.kind === "home") {
       return user ? "app" : "landing";
@@ -723,18 +752,23 @@ export function App() {
   }
 
   return (
-    <div className="app-root">
-      <AppShell
-        user={user}
-        route={asShellRoute(route)}
-        onNavigate={navigateTo}
-        onSignOut={async () => {
-          await logoutSession();
-          setUser(null);
-          setCallbackError(null);
-          navigateTo({ kind: "home" }, true);
-        }}
-      />
-    </div>
+    <ReadOnlyProvider value={readOnly}>
+      <div className="app-root">
+        <ReadOnlyBanner
+          onManageBilling={() => navigateTo({ kind: "billing" })}
+        />
+        <AppShell
+          user={user}
+          route={asShellRoute(route)}
+          onNavigate={navigateTo}
+          onSignOut={async () => {
+            await logoutSession();
+            setUser(null);
+            setCallbackError(null);
+            navigateTo({ kind: "home" }, true);
+          }}
+        />
+      </div>
+    </ReadOnlyProvider>
   );
 }

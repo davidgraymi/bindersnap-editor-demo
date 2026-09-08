@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useIsReadOnly } from "../readOnlyContext";
 import { Check, Clock, MessageSquare, Plus, X } from "lucide-react";
 
 import {
@@ -84,9 +85,13 @@ export function ChangeReviewers({
   reviewers,
   currentUser,
   openThreadAuthors,
-  canManage,
+  canManage: canManageProp,
   onChanged,
 }: ChangeReviewersProps) {
+  // Folded here rather than at each call site, so the binder's change page
+  // and the per-document workspace cannot disagree about it.
+  const isReadOnly = useIsReadOnly();
+  const canManage = canManageProp && !isReadOnly;
   const [picking, setPicking] = useState(false);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");

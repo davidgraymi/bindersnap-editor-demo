@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useIsReadOnly } from "../readOnlyContext";
 
 import {
   addOrganizationGroupMember,
@@ -44,6 +45,9 @@ interface OrganizationPeopleProps {
 }
 
 export function OrganizationPeople({ org }: OrganizationPeopleProps) {
+  // Same fold as the binder's People tab: a delinquent organization draws no
+  // controls, by the flag that already decides whether controls exist.
+  const isReadOnly = useIsReadOnly();
   const [payload, setPayload] = useState<OrganizationPeoplePayload | null>(
     null,
   );
@@ -113,7 +117,7 @@ export function OrganizationPeople({ org }: OrganizationPeopleProps) {
               isViewer={
                 person.login.toLowerCase() === payload.viewer.toLowerCase()
               }
-              canManage={payload.canManage}
+              canManage={payload.canManage && !isReadOnly}
               busy={busy}
               onChanged={setPayload}
               onFailed={setNotice}
@@ -371,6 +375,7 @@ function OrganizationGroups({
   onChanged: (next: OrganizationPeoplePayload) => void;
   onError: (message: string | null) => void;
 }) {
+  const isReadOnly = useIsReadOnly();
   const [open, setOpen] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -455,7 +460,7 @@ function OrganizationGroups({
                     group={group}
                     people={payload.people}
                     binders={payload.binders}
-                    canManage={payload.canManage}
+                    canManage={payload.canManage && !isReadOnly}
                     busy={busy}
                     onAdd={(username) =>
                       run(() =>

@@ -650,6 +650,101 @@ Alice" it reads like an accident waiting to happen. The API stays permissive and
 Gitea stays the enforcer — this is a decision about what to draw, not a rule we
 invented.
 
+### The paywall stops hiding the record
+
+Piece 10 of the org-access design. Independent of every other piece, which is
+why it went now rather than in order.
+
+ADR 0004 is structural about the paywall: it gates authoring and mutation and
+**never** gates reading or exporting, because holding a customer's approval
+history hostage is the one act that would poison a compliance reference
+permanently. #392 made that true of the API. It was not true of the app — a
+lapsed subscription replaced the whole SPA with the card form, so the record
+the rule exists to keep open was the one thing a delinquent customer could not
+reach, and nobody could exercise the rule end to end.
+
+**The 402 is typed now, and that is the part that was quietly fragile.**
+Whether a 402 was the paywall talking was decided by matching the request
+path, because `GET /api/app/billing` answers 402 with a whole billing status
+when an organization is delinquent — data, not a refusal. So every new billing
+route had to remember to add itself to a list in `paymentRequired.ts`, and one
+that forgot would put the app into read-only mode from the very page that
+exists to get out of it. `code: "subscription_required"` states the
+distinction instead of inferring it, and carries the organization's name,
+because a person who belongs to two of them learns nothing from "your
+subscription has lapsed".
+
+**Three cases are deliberately not read-only**, each with a test saying why:
+
+- **No organization.** Nothing has lapsed and there is nothing to buy.
+  Authoring asks for an organization, which `handlePaymentRequired` already
+  did and still does.
+- **A billing status we could not fetch.** This reverses the old behaviour,
+  which bounced them to `/billing`. Refusing a paying customer's controls
+  because Stripe was briefly unreachable is the worse failure, and it is not a
+  risk: the API is the gate, so a write that should be refused still is, and
+  its typed 402 turns read-only on for real.
+- **A trial.** It reads as `active` through `resolveSubscriptionStatus`.
+  Getting this wrong would put every new customer into read-only for their
+  first fortnight.
+
+**Read-only folds into the flag each surface already has** — `canManage` on the
+two People tabs, `decision` on the publish and approve bar — rather than
+sitting beside it. Every control on those surfaces is already conditional on
+that one flag, and a second condition threaded through the same call sites is
+a second thing to forget. They are different questions with the same
+consequence: draw nothing.
+
+Worth being explicit, because it looks like the thing the ADR forbids: this is
+**not** an app-side check standing in for a permission question. Permission is
+Gitea's answer and arrives on the payload. Read-only is a billing state, which
+is ours to know, and it applies to everyone in the organization including its
+owners — the org is delinquent, not the person.
+
+The banner is persistent and not dismissable, because the controls it explains
+are not drawn: somebody whose publish button has vanished has nowhere else to
+look. It leads with what still works and says nothing has been taken away. A
+customer who reads "account suspended" will assume their approval history is
+gone, which is the impression the ADR spends a paragraph forbidding.
+
+The same fold reaches the discussion composer (`canParticipate`) and the
+reviewer picker (`canManage`, folded inside `ChangeReviewers` so its two
+callers cannot disagree). Commenting is a mutation and the API refuses it for a
+delinquent org, so drawing the composer was an invitation to type a comment and
+lose it to a 402.
+
+Not folded in: mutating controls in the per-document workspace, which leaves
+with the old model. The API refuses them regardless, so the failure mode there
+is an error rather than a silent write.
+
+**Pinned against a real stack.** `tests/read-only-mode.pw.ts` signs a member
+up, gives them an organization and a binder, revokes the organization's access
+the way an administrator would, and asserts both halves of the promise: the
+binder still renders with its heading and its documents endpoint still answers
+200, while the banner appears, "Add a policy" is gone, and creating a binder is
+refused with a typed 402 naming the organization. It also asserts the URL did
+not move, because being sent to `/billing` is exactly the behaviour this
+replaced.
+
+`admin_revoke` is the route in rather than a lapsed Stripe subscription: it is
+the top of `resolveAccess`'s precedence list, so it reaches the same state, and
+it needs no Stripe credentials — which the integration environment does not
+always have. The test was checked by breaking `resolveReadOnly` and watching it
+fail, so it is known to be testing something.
+
+**Two controls were missed until somebody looked at the screen**, and both were
+outside every component the feature had touched — which is why reading the diff
+twice did not find them. The top nav's "New document" button sits on _every_
+page, so it was the one unusable affordance a delinquent customer met wherever
+they went. And the binder's empty state read "Nothing filed here yet. Add a
+policy and it joins the binder once the change is approved" — instructions for
+a button no longer on the page.
+
+The lesson generalises past this feature: a mode that removes controls cannot
+be verified by looking at the components that implement it, because its bugs
+are exactly the controls nobody remembered belong to it. Screenshot the running
+app.
+
 ## Why #393 carries the organization-creation flow too
 
 They cannot ship apart. The migration parks every username-keyed billing row
@@ -854,6 +949,25 @@ In rough dependency order.
    the reason is the admin-only half of the rule and the binder page does not
    ask for it yet.
 
+   **Not the one-line fix it looks like.** `canUserReview` tests
+   `approvalsWhitelistUsernames`, and a binder's whitelist is
+   `approvals_whitelist_teams` — the usernames list is empty, so passing the
+   protection through would answer "allowed" for everybody and say nothing.
+   The question is whether the caller belongs to a whitelisted team, which
+   only the server can answer, and the whitelists must not be sent to the
+   browser (Settings already declines to, deliberately). So this is a computed
+   boolean and reason on the change-detail payload, not a prop the page
+   forgot to pass.
+
+   Worth knowing before starting: it may be near-empty in practice.
+   `recomputeApprovalsWhitelist` derives the list from the teams granted onto
+   the repository plus `Owners`, and a member reaches a binder through exactly
+   those teams — so anyone who can see the binder is normally already
+   authorized. The case it would catch is a direct collaborator, or a grant
+   that skipped the recompute, which every grant path now does in the same
+   handler. Check whether a real customer can reach the state before building
+   the screen for it.
+
 ## Working on this locally — two traps
 
 **Integration tests cannot be pointed at a locally built API.**
@@ -879,19 +993,19 @@ test creating an organization called "Mercy Health" fails with a 502. A full
 `down && up` clears both. The seed deliberately uses `riverside-health` so it
 does not squat on the name several suites create on purpose.
 
-## Three product decisions still unanswered
+## Three product decisions, answered
 
-Raised in the PR bodies, none answered. They change the work.
+Raised in the PR bodies and answered by the product owner on 2026-09-04. The
+reasoning for each is in
+[the completion plan](../design/adr4-completion-plan.md), which is where the
+rest of the decisions live; they are repeated here because this file is what a
+reader of the series has open.
 
-1. **Signup funnel.** #369 says no card during the 14-day trial, which
-   contradicts the old signup → `/billing` redirect. #393 lands a new account in
-   its workspace instead. Keeping the card-up-front funnel would mean making
-   the trial opt-in.
-2. **Read-only mode for delinquent orgs.** The API rule is enforced as of #392,
-   but the SPA still redirects an unpaid session to `/billing`, so no customer
-   can yet exercise it. A real read-only mode — mutating controls disabled, a
-   banner saying why — is its own piece of work.
-3. **Do org owners cost a billable seat?** `listBillableSeats` counts any team
-   with write or better on `repo.code` that is granted onto a repository, which
-   includes Gitea's built-in Owners team. A pricing decision, not a naming
-   accident — see #390's description.
+1. **Signup funnel — no card, 14-day trial, land in the binder.** #369's
+   no-card trial won over the old signup → `/billing` redirect, which #393 had
+   already stopped doing.
+2. **Read-only mode for delinquent orgs — build it.** Built; see "The paywall
+   stops hiding the record" above.
+3. **Do org owners cost a billable seat — yes.** As `listBillableSeats`
+   already counts them. A pricing decision rather than a naming accident, so
+   the counting stays as it is.

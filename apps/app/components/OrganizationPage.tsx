@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useIsReadOnly } from "../readOnlyContext";
 import { BookOpen, Plus } from "lucide-react";
 
 import { createBinder, fetchOrganizationBinders } from "../api";
@@ -35,6 +36,7 @@ interface OrganizationPageProps {
 }
 
 export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
+  const isReadOnly = useIsReadOnly();
   const [tab, setTab] = useState<OrgTab>(() =>
     orgTabFromSearch(window.location.search),
   );
@@ -105,7 +107,7 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
             permanently, which made the page read as a settings screen for
             something that has not started yet — the list is the answer to
             "is my organization in good shape", so the list comes first. */}
-        {tab === "binders" ? (
+        {tab === "binders" && !isReadOnly ? (
           <button
             className={`doc-header-submit${creating ? " doc-header-submit--quiet" : ""}`}
             type="button"
