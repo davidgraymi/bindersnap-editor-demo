@@ -1,14 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
 
 import {
   addOrganizationGroupMember,
+  addOrganizationPerson,
   createOrganizationGroup,
   fetchOrganizationPeople,
   grantBinderGroup,
   removeOrganizationGroupMember,
   removeOrganizationPerson,
   revokeBinderGroup,
+  searchWorkspaceUsers,
   setOrganizationPersonRole,
 } from "../api";
 import type { OrganizationPeoplePayload } from "../../../packages/api-schema/schemas/workspaces";
@@ -125,6 +127,17 @@ export function OrganizationPeople({ org }: OrganizationPeopleProps) {
             />
           ))}
         </div>
+
+        {payload.canManage && !isReadOnly ? (
+          <AddOrgPersonForm
+            org={org}
+            busy={busy}
+            already={payload.people.map((person) => person.login)}
+            onAdded={setPayload}
+            onFailed={setNotice}
+            onBusy={setBusy}
+          />
+        ) : null}
       </section>
 
       <OrganizationGroups
@@ -732,6 +745,249 @@ function GroupDetail({
  * stores cannot hold a space. Showing the answer before the button is pressed
  * is cheaper than explaining it afterwards.
  */
+const SEARCH_DEBOUNCE_MS = 250;
+const SEARCH_RESULT_LIMIT = 6;
+
+/**
+ * Put somebody in the organization.
+ *
+ * **This is where an invitation would go, and there isn't one.** Gitea cannot
+ * hold a pending invitation, and this product has no way to send an email yet
+ * — so the person has to have signed up already, and the form says so rather
+ * than letting an owner type a colleague's address and watch nothing happen.
+ * The invitations issue, 426, is the rest of that story; until it lands, the
+ * honest surface is
+ * a search over accounts that exist.
+ *
+ * Search rather than a dropdown, because the candidates are every account on
+ * the instance: a `<select>` of all of them would be unusable at any real size
+ * and would let one customer enumerate every other customer's people. Typing a
+ * name you already know is also what the act actually is — you are adding a
+ * specific colleague, not browsing.
+ */
+function AddOrgPersonForm({
+  org,
+  busy,
+  already,
+  onAdded,
+  onFailed,
+  onBusy,
+}: {
+  org: string;
+  busy: boolean;
+  /** Who is in the organization already, so they are not offered twice. */
+  already: string[];
+  onAdded: (payload: OrganizationPeoplePayload) => void;
+  onFailed: (message: string) => void;
+  onBusy: (busy: boolean) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [debounced, setDebounced] = useState("");
+  const [results, setResults] = useState<
+    Array<{ login: string; fullName: string; avatarUrl: string }>
+  >([]);
+  const [picked, setPicked] = useState<{
+    login: string;
+    fullName: string;
+    avatarUrl: string;
+  } | null>(null);
+  const [owner, setOwner] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const searchId = useRef(0);
+
+  useEffect(() => {
+    const handle = window.setTimeout(
+      () => setDebounced(query.trim()),
+      SEARCH_DEBOUNCE_MS,
+    );
+    return () => window.clearTimeout(handle);
+  }, [query]);
+
+  useEffect(() => {
+    const requestId = ++searchId.current;
+
+    // One letter matches most of the instance and answers nothing useful.
+    if (debounced.length < 2 || picked !== null) {
+      setResults([]);
+      return;
+    }
+
+    void (async () => {
+      try {
+        const payload = await searchWorkspaceUsers(
+          debounced,
+          1,
+          SEARCH_RESULT_LIMIT,
+        );
+        if (requestId !== searchId.current) return;
+        setResults(
+          payload.users
+            .map((user) => ({
+              login: user.login ?? "",
+              fullName: user.full_name ?? "",
+              avatarUrl: user.avatar_url ?? "",
+            }))
+            .filter((user) => user.login !== ""),
+        );
+      } catch {
+        // A search that failed is an empty list, not an error banner: the
+        // owner can still type the exact username and press Add.
+        if (requestId !== searchId.current) return;
+        setResults([]);
+      }
+    })();
+  }, [debounced, picked]);
+
+  const here = new Set(already.map((login) => login.toLowerCase()));
+  const suggestions = results.filter(
+    (user) => !here.has(user.login.toLowerCase()),
+  );
+
+  const username = picked?.login ?? query.trim();
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (username === "") return;
+
+    setSaving(true);
+    onBusy(true);
+    try {
+      onAdded(await addOrganizationPerson(org, username, owner));
+      setQuery("");
+      setDebounced("");
+      setPicked(null);
+      setOwner(false);
+      setResults([]);
+    } catch (err: unknown) {
+      // On the section rather than the page. The refusal worth reading is
+      // "they have not signed up yet", and replacing the list with it would
+      // hide the people it is about.
+      onFailed(
+        err instanceof Error && err.message.trim() !== ""
+          ? err.message
+          : "Unable to add them to the organization.",
+      );
+    } finally {
+      setSaving(false);
+      onBusy(false);
+    }
+  }
+
+  const disabled = busy || saving;
+
+  return (
+    <form className="org-group-form" onSubmit={submit}>
+      <h3 className="doc-rail-title">Add someone</h3>
+
+      <label className="create-document-field">
+        <span className="bs-label">Who</span>
+        <input
+          className="bs-input org-group-select"
+          value={picked ? picked.fullName || picked.login : query}
+          placeholder="Their username"
+          disabled={disabled}
+          onChange={(event) => {
+            setPicked(null);
+            setQuery(event.target.value);
+          }}
+        />
+      </label>
+
+      {picked ? (
+        <p className="doc-rail-note">
+          Adding <code>{picked.login}</code>.{" "}
+          <button
+            type="button"
+            className="bs-btn bs-btn-ghost bs-btn--sm"
+            disabled={disabled}
+            onClick={() => {
+              setPicked(null);
+              setQuery("");
+            }}
+          >
+            Change
+          </button>
+        </p>
+      ) : suggestions.length > 0 ? (
+        <div className="docs-list">
+          {suggestions.map((user) => (
+            <button
+              key={user.login}
+              type="button"
+              className="docs-list-item org-person-suggestion"
+              disabled={disabled}
+              onClick={() => {
+                setPicked(user);
+                setResults([]);
+              }}
+            >
+              <PersonAvatar person={user} />
+              <span className="docs-list-item-name">
+                {user.fullName || user.login}
+              </span>
+              <span className="docs-list-item-meta">{user.login}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      <fieldset className="org-visibility-choice">
+        <legend className="bs-label">Role</legend>
+        <label className="org-choice">
+          <input
+            type="radio"
+            name="org-add-role"
+            checked={!owner}
+            disabled={disabled}
+            onChange={() => setOwner(false)}
+          />
+          <span>
+            <span className="docs-list-item-name">Member</span>
+            <span className="docs-list-item-meta">
+              Access is set per binder. Costs nothing until they are made an
+              admin or an editor somewhere.
+            </span>
+          </span>
+        </label>
+        <label className="org-choice">
+          <input
+            type="radio"
+            name="org-add-role"
+            checked={owner}
+            disabled={disabled}
+            onChange={() => setOwner(true)}
+          />
+          <span>
+            <span className="docs-list-item-name">Owner</span>
+            <span className="docs-list-item-meta">
+              Can add and remove anyone, create binders, and manage billing.
+              Uses a seat.
+            </span>
+          </span>
+        </label>
+      </fieldset>
+
+      <button
+        type="submit"
+        className="bs-btn bs-btn-primary"
+        disabled={disabled || username === ""}
+      >
+        {saving ? "Adding…" : `Add to ${org}`}
+      </button>
+
+      {/* The limitation stated on the form rather than met as a refusal. It is
+          the visible edge of having no invitation flow, and somebody reaching
+          for a colleague who has not signed up deserves to know before they
+          type the name. */}
+      <p className="doc-rail-note">
+        They need a Bindersnap account already — we cannot email an invitation
+        yet. Anyone you add joins straight away and can read every binder that
+        is open to the organization.
+      </p>
+    </form>
+  );
+}
+
 function NewGroupForm({
   org,
   busy,
