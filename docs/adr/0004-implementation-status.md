@@ -707,9 +707,15 @@ look. It leads with what still works and says nothing has been taken away. A
 customer who reads "account suspended" will assume their approval history is
 gone, which is the impression the ADR spends a paragraph forbidding.
 
-Not folded in yet: mutating controls outside those five surfaces, mostly the
-per-document workspace, which leaves with the old model. The API refuses them
-regardless, so the failure mode is an error rather than a silent write.
+The same fold reaches the discussion composer (`canParticipate`) and the
+reviewer picker (`canManage`, folded inside `ChangeReviewers` so its two
+callers cannot disagree). Commenting is a mutation and the API refuses it for a
+delinquent org, so drawing the composer was an invitation to type a comment and
+lose it to a 402.
+
+Not folded in: mutating controls in the per-document workspace, which leaves
+with the old model. The API refuses them regardless, so the failure mode there
+is an error rather than a silent write.
 
 ## Why #393 carries the organization-creation flow too
 
