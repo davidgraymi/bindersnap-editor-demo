@@ -11,11 +11,15 @@ This file is the sequencing and the decisions. It is short on purpose.
 
 ## Where ADR 0004 actually is
 
-Step 1 (organization and billing) is merged bar #393. Step 2 (documents as files)
-is six stacked pull requests, all green, none merged — the API is complete and the
-SPA browses it read-only. What is left, per the implementation status, is team
-management, writing from the binder UI, deleting the old one-repo-per-document
-model, and four smaller items.
+**Updated 2026-09-07.** Step 1 (organization and billing) is merged, #393
+included. Steps 2 and 3 are built and green but live on
+`feat/adr4-documents-as-files`, not on `main` — binders, the document page, the
+change page, History, Settings, org and binder people, groups, and read-only
+mode. What is left is invitations, deleting the old one-repo-per-document
+model, and the pieces behind the Gitea 28.0.0 upgrade.
+
+Originally, when this plan was written: step 1 was merged bar #393, and step 2
+was six stacked pull requests, all green, none merged.
 
 **This plan covers the first of those and the org half nobody has designed yet.** It
 does not cover "writing from the binder UI" or "delete the old model" — those are
@@ -72,25 +76,39 @@ reversal visible instead of quietly deleting it.
 Backend and screens interleave, because each screen needs its endpoint and neither
 is worth shipping alone.
 
-| Order | Piece                                                    | Half              | Needs 28.0.0 |
-| ----- | -------------------------------------------------------- | ----------------- | ------------ |
-| 0     | Land the step-2 stack (#398 → #404)                      | shipped           | no           |
-| 0     | Writing from the binder UI; delete the old model         | already specified | no           |
-| 1     | Membership read model; `staff`; stop provisioning teams  | backend           | no           |
-| 2     | Breadcrumb shell and scope tabs                          | screens           | no           |
-| 3     | Organization page                                        | screens           | no           |
-| 4     | Groups: create, grant onto a binder, whitelist recompute | backend           | no           |
-| 5     | Managing binder people; the visibility switch            | backend           | no           |
-| 6     | Managing org people; last-owner rule                     | backend           | no           |
-| 7     | People and groups screens                                | screens           | no           |
-| 8     | Invitations — table, routes, email                       | backend           | no           |
-| 9     | Invite screens and pending state                         | screens           | no           |
-| 10    | Read-only mode — typed 402 and the banner                | both              | no           |
-| —     | **Gitea 28.0.0 upgrade**, its own PR, no feature         | ops               | —            |
-| 11    | The CODEOWNERS generator                                 | backend           | **yes**      |
-| 12    | Sign-off rules page                                      | screens           | **yes**      |
+| Order | Piece                                                    | Half    | State                |
+| ----- | -------------------------------------------------------- | ------- | -------------------- |
+| 0     | Land the step-2 stack (#398 → #404)                      | shipped | **done**             |
+| 0     | Writing from the binder UI                               | screens | **done** (#409–#415) |
+| 0     | Delete the old model                                     | both    | not started          |
+| 1     | Membership read model; `staff`; stop provisioning teams  | backend | **done** (#416)      |
+| 2     | Breadcrumb shell and scope tabs                          | screens | **done**             |
+| 3     | Organization page                                        | screens | **done**             |
+| 4     | Groups: create, grant onto a binder, whitelist recompute | backend | **done** (#417)      |
+| 5     | Managing binder people; the visibility switch            | backend | **done** (#421)      |
+| 6     | Managing org people; last-owner rule                     | backend | **done** (#421)      |
+| 7     | People and groups screens                                | screens | **done**             |
+| 8     | Invitations — table, routes, email                       | backend | not started          |
+| 9     | Invite screens and pending state                         | screens | not started          |
+| 10    | Read-only mode — typed 402 and the banner                | both    | **done** (#424)      |
+| —     | **Gitea 28.0.0 upgrade**, its own PR, no feature         | ops     | not started          |
+| 11    | The CODEOWNERS generator                                 | backend | blocked on the above |
+| 12    | Sign-off rules page                                      | screens | blocked on the above |
 
-Eleven of the thirteen are unblocked. That is deliberate: the upgrade sits late so
+**Nine of the thirteen are done.** What is left is invitations (8 and 9),
+deleting the old model, and the two pieces behind the Gitea upgrade — plus the
+items in the implementation status notes that were never sequenced here: the
+`document_versions` index, per-workspace settings, and the approvals whitelist
+on a binder's change page.
+
+Piece 10 went early, out of order, exactly as the note below predicted it
+could.
+
+Everything up to and including piece 10 lives on `feat/adr4-documents-as-files`
+rather than on `main`. Landing that branch is its own act and is the largest
+open risk in the series.
+
+Originally: eleven of the thirteen were unblocked. That is deliberate: the upgrade sits late so
 it can slip without stalling anything, and if 28.0.0 lands early it can be pulled
 forward without reordering a thing.
 
