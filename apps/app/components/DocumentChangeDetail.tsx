@@ -51,6 +51,21 @@ interface DocumentChangeDetailProps {
   /** Whether this reader may set the reviewer list. */
   canManageAssignments: boolean;
   nextVersion: number;
+  /**
+   * What this change is about, when it is **not** a document.
+   *
+   * A binder's sign-off rules are changed through the same review as a policy
+   * — deliberately, because a product whose claim is that nothing changes
+   * without approval should not exempt the rules that decide who approves. But
+   * such a change versions nothing, so every word this page says about
+   * versions is false for it: "becomes v1 when published" on a change that
+   * publishes no version is exactly the kind of lie a compliance customer
+   * notices.
+   *
+   * Set it, and the version wording and the document chrome are replaced by a
+   * sentence saying what is actually being decided.
+   */
+  subject?: { title: string; description: string } | null;
   documentName: string;
   /** Canonical file name, so the proposed version can be previewed and saved. */
   fileName: string | null;
@@ -200,6 +215,7 @@ export function DocumentChangeDetail({
   blockOnUnresolvedThreads,
   canManageAssignments,
   nextVersion,
+  subject = null,
   documentName,
   fileName,
   comparisonBase,
@@ -332,7 +348,7 @@ export function DocumentChangeDetail({
   // round trip that ends in a 409.
   const threadsBlockPublish = blockOnUnresolvedThreads && unresolvedCount > 0;
   const ownSubmission = currentUser === change.submittedBy;
-  const opening = describeChangeOpening(change, nextVersion);
+  const opening = describeChangeOpening(change, subject ? null : nextVersion);
   const description = describeChangeBody(change.summary, change.description);
   const outcome = describeChangeOutcome(change);
   const proposed = buildProposedVersionFacts({
@@ -493,55 +509,69 @@ export function DocumentChangeDetail({
       ) : null}
 
       {/* Fixed chrome, same place on every change: the thing being approved,
-          which update of it, and one button to go and read it. */}
-      <div className="rev-proposed">
-        <span className="rev-proposed-icon" aria-hidden="true">
-          <FileText size={16} strokeWidth={1.5} />
-        </span>
-        <div className="rev-proposed-main">
-          <p className="rev-proposed-title">Proposed version</p>
-          <p className="rev-proposed-meta">
-            {[proposed.fileName, proposed.updateLabel, proposed.date]
-              .filter(Boolean)
-              .join(" · ")}
-          </p>
+          which update of it, and one button to go and read it — unless the
+          thing being approved is not a document, in which case saying so
+          plainly beats a file panel with every control disabled. */}
+      {subject ? (
+        <div className="rev-proposed">
+          <span className="rev-proposed-icon" aria-hidden="true">
+            <FileText size={16} strokeWidth={1.5} />
+          </span>
+          <div className="rev-proposed-main">
+            <p className="rev-proposed-title">{subject.title}</p>
+            <p className="rev-proposed-meta">{subject.description}</p>
+          </div>
         </div>
-        {proposed.ref ? (
+      ) : (
+        <div className="rev-proposed">
+          <span className="rev-proposed-icon" aria-hidden="true">
+            <FileText size={16} strokeWidth={1.5} />
+          </span>
+          <div className="rev-proposed-main">
+            <p className="rev-proposed-title">Proposed version</p>
+            <p className="rev-proposed-meta">
+              {[proposed.fileName, proposed.updateLabel, proposed.date]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+          </div>
+          {proposed.ref ? (
+            <button
+              className="rev-link"
+              type="button"
+              disabled={downloading || !fileName}
+              onClick={() => onDownload(proposed.ref!, null)}
+            >
+              <Download size={13} strokeWidth={1.75} aria-hidden="true" />
+              {downloading ? "Downloading…" : "Download"}
+            </button>
+          ) : null}
           <button
-            className="rev-link"
+            className="rev-btn rev-btn--ghost"
             type="button"
-            disabled={downloading || !fileName}
-            onClick={() => onDownload(proposed.ref!, null)}
+            disabled={!proposed.ref}
+            onClick={() => onViewChange("preview")}
           >
-            <Download size={13} strokeWidth={1.75} aria-hidden="true" />
-            {downloading ? "Downloading…" : "Download"}
+            Open
           </button>
-        ) : null}
-        <button
-          className="rev-btn rev-btn--ghost"
-          type="button"
-          disabled={!proposed.ref}
-          onClick={() => onViewChange("preview")}
-        >
-          Open
-        </button>
-        {/* The question a reviewer actually opens a change with is "what is
+          {/* The question a reviewer actually opens a change with is "what is
             different?", not "what does it say?". One click, no downloads. */}
-        <button
-          className="rev-btn rev-btn--ghost"
-          type="button"
-          disabled={!proposed.ref || comparisonBase === null}
-          title={
-            comparisonBase === null
-              ? "This document has no published version yet, so there is nothing to compare against."
-              : undefined
-          }
-          onClick={() => onViewChange("compare")}
-        >
-          <GitCompare size={13} strokeWidth={1.75} aria-hidden="true" />
-          Compare
-        </button>
-      </div>
+          <button
+            className="rev-btn rev-btn--ghost"
+            type="button"
+            disabled={!proposed.ref || comparisonBase === null}
+            title={
+              comparisonBase === null
+                ? "This document has no published version yet, so there is nothing to compare against."
+                : undefined
+            }
+            onClick={() => onViewChange("compare")}
+          >
+            <GitCompare size={13} strokeWidth={1.75} aria-hidden="true" />
+            Compare
+          </button>
+        </div>
+      )}
 
       <ChangeReviewers
         scope={scope}
@@ -616,8 +646,9 @@ export function DocumentChangeDetail({
           {actionState.showApproveConfirm ? (
             <div className="rev-decision-confirm">
               <p className="rev-decision-confirm-line">
-                Approve version {nextVersion} of {documentName}? Your name and
-                the time go on the record.
+                {subject
+                  ? `Approve this change to ${documentName}? Your name and the time go on the record.`
+                  : `Approve version ${nextVersion} of ${documentName}? Your name and the time go on the record.`}
               </p>
               <div className="rev-decision-row">
                 <button

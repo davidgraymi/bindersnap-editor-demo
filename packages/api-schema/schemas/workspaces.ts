@@ -484,11 +484,58 @@ export const WorkspaceRulesSchema = z.object({
 });
 export type WorkspaceRules = z.infer<typeof WorkspaceRulesSchema>;
 
+/** One folder, and who has to sign off on a change to it. */
+export const SignOffRuleSchema = z.object({
+  /** A folder in the binder. The empty string is the binder's root. */
+  folder: z.string(),
+  /** Group handles. The preferred form: a group's membership can change
+   * without touching the binder, which is the whole reason Gitea 28.0.0 is
+   * worth the upgrade. */
+  teams: z.array(z.string()),
+  /** Named individuals. Supported by Gitea, rarely the right answer. */
+  users: z.array(z.string()),
+});
+export type SignOffRuleView = z.infer<typeof SignOffRuleSchema>;
+
+/**
+ * A binder's per-folder sign-off, as the Settings tab needs it.
+ *
+ * `enforced` is the field to read first. The rules are a file in the binder;
+ * whether Gitea will actually hold a merge for them depends on
+ * `block_on_codeowner_reviews`, which exists from 28.0.0 and does not exist on
+ * the 1.27.3 production runs. Rules that are listed but not enforced are worse
+ * than no rules at all, so the page has to be able to say which it is.
+ */
+export const WorkspaceSignOffSchema = z.object({
+  enforced: z.boolean(),
+  /** Whether the binder has a sign-off file at all, as against an empty one. */
+  exists: z.boolean(),
+  rules: z.array(SignOffRuleSchema),
+  /**
+   * Lines Gitea would drop with nothing but a log warning — a hand-written
+   * pattern, or one that does not compile. Surfaced because a rule the screen
+   * omits is a rule somebody believes is not there.
+   */
+  unreadable: z.array(z.object({ line: z.number(), text: z.string() })),
+  /** The folders this binder actually has, for the picker. */
+  folders: z.array(z.string()),
+  /** The groups a rule may name. */
+  groups: z.array(z.string()),
+  /**
+   * An open sign-off change, if there is one. Two at once would leave
+   * competing versions of the rules in review, and whichever merged last would
+   * silently win.
+   */
+  pendingChange: z.number().nullable(),
+});
+export type WorkspaceSignOff = z.infer<typeof WorkspaceSignOffSchema>;
+
 export const WorkspaceSettingsPayloadSchema = z.object({
   organization: z.string(),
   workspace: z.string(),
   teams: z.array(WorkspaceTeamSchema),
   rules: WorkspaceRulesSchema,
+  signOff: WorkspaceSignOffSchema,
   /** Whether this caller may change any of it. */
   canManage: z.boolean(),
 });
@@ -505,6 +552,32 @@ export type WorkspaceSettingsPayload = z.infer<
  * and a rung above the binder is the expensive kind, because Gitea will not
  * enforce a distinction we invent.
  */
+/**
+ * Proposing new sign-off rules.
+ *
+ * The whole set, not a patch: the file is regenerated from what is sent, so a
+ * caller that omitted a rule would silently delete it. Sending everything makes
+ * that impossible to do by accident.
+ */
+export const SignOffRulesRequestSchema = z.object({
+  rules: z.array(SignOffRuleSchema),
+});
+export type SignOffRulesRequest = z.infer<typeof SignOffRulesRequestSchema>;
+
+/**
+ * What proposing them produced: **a change, not a change of the rules.**
+ *
+ * `main` is protected, so nothing has taken effect yet. Returning the number
+ * rather than a success is what stops a caller reporting otherwise.
+ */
+export const ProposedSignOffChangeSchema = z.object({
+  changeNumber: z.number(),
+  branch: z.string(),
+});
+export type ProposedSignOffChangeView = z.infer<
+  typeof ProposedSignOffChangeSchema
+>;
+
 export const OrganizationPersonSchema = z.object({
   login: z.string(),
   fullName: z.string(),

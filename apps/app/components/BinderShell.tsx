@@ -17,6 +17,7 @@ import { BinderChanges } from "./BinderChanges";
 import { BinderHistory } from "./BinderHistory";
 import { BinderPeople } from "./BinderPeople";
 import { BinderSettings } from "./BinderSettings";
+import { BinderSignOff } from "./BinderSignOff";
 import { BinderDocumentPage } from "./BinderDocumentPage";
 import { BinderDocuments } from "./BinderPage";
 import { SkeletonLine } from "./Skeleton";
@@ -147,6 +148,7 @@ export function BinderShell({
     // — and a people count would cost the header a walk of every team on every
     // tab, to say a number nobody is waiting on.
     { id: "people", label: "People" },
+    { id: "sign-off", label: "Sign-off rules" },
     { id: "history", label: "History" },
     { id: "settings", label: "Settings" },
   ];
@@ -243,6 +245,12 @@ export function BinderShell({
         />
       ) : activeTab === "people" ? (
         <BinderPeople org={org} binder={binder} />
+      ) : activeTab === "sign-off" ? (
+        <BinderSignOff
+          org={org}
+          binder={binder}
+          onOpenChange={openChangeNumber}
+        />
       ) : activeTab === "history" ? (
         <BinderHistory
           org={org}

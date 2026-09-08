@@ -25,9 +25,10 @@ test("every tab the binder has is addressable", () => {
 
 test("a tab nobody has opens the documents rather than nothing", () => {
   // A mangled or out-of-date link should show the binder, not a blank pane.
-  // `people` used to be the example here and is now a real tab — which is the
-  // whole point of the fallback: an old link keeps working.
-  expect(binderTabFromSearch("?tab=sign-off")).toBe("documents");
+  // `people` was the example here and became a real tab; `sign-off` replaced it
+  // and became one too. That is the fallback doing its job twice — an old link
+  // keeps working — so the example is deliberately something no tab will be.
+  expect(binderTabFromSearch("?tab=nonesuch")).toBe("documents");
   expect(binderTabFromSearch("?tab=")).toBe("documents");
 });
 

@@ -31,6 +31,8 @@ import type {
   ListBinderDocuments200,
   ListBinders200,
   ListOrganizationBinders200,
+  ProposeBinderSignOffRules201,
+  ProposeBinderSignOffRulesBody,
   PublishBinderChange200,
   RemoveBinderPerson200,
   ReplyToBinderChangeDiscussion201,
@@ -505,6 +507,41 @@ export const getBinderSettings = async (org: string,
     method: 'GET'
 
 
+  }
+);}
+
+
+export type proposeBinderSignOffRulesResponse201 = {
+  data: ProposeBinderSignOffRules201
+  status: 201
+}
+
+export type proposeBinderSignOffRulesResponseSuccess = (proposeBinderSignOffRulesResponse201) & {
+  headers: Headers;
+};
+;
+
+export type proposeBinderSignOffRulesResponse = (proposeBinderSignOffRulesResponseSuccess)
+
+export const getProposeBinderSignOffRulesUrl = (org: string,
+    binder: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/rules/sign-off`
+}
+
+export const proposeBinderSignOffRules = async (org: string,
+    binder: string,
+    proposeBinderSignOffRulesBody: ProposeBinderSignOffRulesBody, options?: Parameters<typeof customFetch>[1]): Promise<proposeBinderSignOffRulesResponse> => {
+
+  return customFetch<proposeBinderSignOffRulesResponse>(getProposeBinderSignOffRulesUrl(org,binder),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(proposeBinderSignOffRulesBody)
   }
 );}
 

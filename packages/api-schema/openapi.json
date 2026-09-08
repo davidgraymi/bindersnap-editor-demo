@@ -11050,6 +11050,88 @@
                         "blockOnUnresolvedThreads"
                       ]
                     },
+                    "signOff": {
+                      "type": "object",
+                      "properties": {
+                        "enforced": {
+                          "type": "boolean"
+                        },
+                        "exists": {
+                          "type": "boolean"
+                        },
+                        "rules": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "folder": {
+                                "type": "string"
+                              },
+                              "teams": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "users": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "folder",
+                              "teams",
+                              "users"
+                            ]
+                          }
+                        },
+                        "unreadable": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "line": {
+                                "type": "number"
+                              },
+                              "text": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "line",
+                              "text"
+                            ]
+                          }
+                        },
+                        "folders": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "groups": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "pendingChange": {
+                          "type": "number",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "enforced",
+                        "exists",
+                        "rules",
+                        "unreadable",
+                        "folders",
+                        "groups",
+                        "pendingChange"
+                      ]
+                    },
                     "canManage": {
                       "type": "boolean"
                     }
@@ -11059,7 +11141,101 @@
                     "workspace",
                     "teams",
                     "rules",
+                    "signOff",
                     "canManage"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/rules/sign-off": {
+      "post": {
+        "operationId": "proposeBinderSignOffRules",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "rules": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "folder": {
+                          "type": "string"
+                        },
+                        "teams": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "users": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "folder",
+                        "teams",
+                        "users"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "rules"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The change that would apply these rules. Nothing has taken effect yet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "changeNumber": {
+                      "type": "number"
+                    },
+                    "branch": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "changeNumber",
+                    "branch"
                   ]
                 }
               }

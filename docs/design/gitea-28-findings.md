@@ -87,6 +87,15 @@ Unchanged and still true: patterns are **anchored regexes**, not gitignore globs
 (`policies/nursing/.*`, never `policies/nursing/`), forks are skipped, and the
 notifier that _requests_ code-owner reviews still returns early for a draft.
 
+One mechanic this file did not have, found while building the generator and
+worth stating here because it is evidence rather than design:
+`TokenizeCodeOwnersLine` runs **before** `ParseCodeOwnersLine` and consumes
+backslashes — `\x` becomes a bare `x` — as well as splitting on spaces and
+truncating at an unescaped `#`. A regex escape written into the file is
+therefore eaten before the regex sees it, so escaping has to happen twice, in
+order. [`org-access-architecture.md` §4.3](./org-access-architecture.md) carries
+the consequence.
+
 ## 3. The team-review-request bug is NOT fixed, and that is the catch
 
 ADR 0004 records that Gitea writes a team review request and then clears its own

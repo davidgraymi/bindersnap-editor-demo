@@ -506,6 +506,13 @@ function normalizeBranchProtection(
     mergeWhitelistUsernames: raw.merge_whitelist_usernames ?? [],
     mergeWhitelistTeams: raw.merge_whitelist_teams ?? [],
     blockOnRejectedReviews: raw.block_on_rejected_reviews ?? false,
+    blockOnOfficialReviewRequests:
+      raw.block_on_official_review_requests ?? false,
+    // Absent on Gitea 1.27.3, which is what production runs — so `false` here
+    // means "no per-folder gate", whether because it is switched off or
+    // because this Gitea has never heard of it. Those are the same fact to
+    // every caller: sign-off rules are not being enforced.
+    blockOnCodeownerReviews: raw.block_on_codeowner_reviews ?? false,
     dismissStaleApprovals: raw.dismiss_stale_approvals ?? false,
     enablePush: raw.enable_push ?? false,
   };
@@ -634,6 +641,23 @@ export interface RepoBranchProtection {
   mergeWhitelistUsernames: string[];
   mergeWhitelistTeams: string[];
   blockOnRejectedReviews: boolean;
+  /**
+   * The 1.27 gate: a merge is blocked while an *official* review request is
+   * outstanding. It was only ever on to make CODEOWNERS block, which it never
+   * did for a team code owner — Gitea writes a team request and then clears
+   * its own `official` flag, a bug still present on 28.0.0.
+   */
+  blockOnOfficialReviewRequests: boolean;
+  /**
+   * The 28.0.0 gate, and the one that makes per-folder sign-off mean anything:
+   * for every CODEOWNERS rule matching a changed file, one of *that rule's*
+   * owners must have approved. It ignores officialness entirely, which is why
+   * a team code owner enforces under this gate and only under this gate.
+   *
+   * False on a Gitea that does not have the field, which is how the rest of
+   * the code tells the two versions apart without sniffing a version string.
+   */
+  blockOnCodeownerReviews: boolean;
   /**
    * When true, Gitea discards every existing approval as soon as a new commit
    * lands on the pull request's head branch, forcing re-review of the version

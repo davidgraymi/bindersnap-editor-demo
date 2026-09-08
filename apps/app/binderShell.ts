@@ -18,6 +18,7 @@ export const BINDER_TABS = [
   "documents",
   "changes",
   "people",
+  "sign-off",
   "history",
   "settings",
 ] as const;

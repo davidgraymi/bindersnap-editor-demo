@@ -5,6 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { GetBinderSettings200Rules } from './getBinderSettings200Rules.ts';
+import type { GetBinderSettings200SignOff } from './getBinderSettings200SignOff.ts';
 import type { GetBinderSettings200TeamsItem } from './getBinderSettings200TeamsItem.ts';
 
 export type GetBinderSettings200 = {
@@ -12,5 +13,6 @@ export type GetBinderSettings200 = {
   workspace: string;
   teams: GetBinderSettings200TeamsItem[];
   rules: GetBinderSettings200Rules;
+  signOff: GetBinderSettings200SignOff;
   canManage: boolean;
 };

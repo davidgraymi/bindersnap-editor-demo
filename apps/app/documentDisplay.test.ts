@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import {
   closedChangeToRecord,
   describeApprovalProgress,
+  describeSubmission,
   describeChangeOutcome,
   formatDocumentName,
   getChangeStateBadgeClass,
@@ -13,6 +14,7 @@ import {
   getReviewerStatusLabel,
   getReviewStateLabel,
   hasEnoughApprovals,
+  parseChangeTitle,
   parseSubmissionSummary,
   resolveDocumentStatus,
   resolveReviewerDisplayStatus,
@@ -310,4 +312,31 @@ test("a reviewer is named as a person, falling back to their username", () => {
     getReviewerDisplayName({ login: "dana", fullName: "Dana Reyes" }),
   ).toBe("Dana Reyes");
   expect(getReviewerDisplayName({ login: "bob", fullName: "  " })).toBe("Bob");
+});
+
+test("a change body with detail keeps its first line as the title", () => {
+  // A binder's sign-off change is the first with a body worth more than one
+  // line. Before this the whole blob became the page's heading, which read as
+  // a paragraph where a title should be.
+  const body = [
+    "Change who signs off on each folder",
+    "",
+    "These rules decide who has to approve a change to each folder.",
+  ].join("\n");
+
+  expect(parseChangeTitle(body, "alice")).toBe(
+    "Change who signs off on each folder",
+  );
+  expect(describeSubmission(body)).toBe(
+    "These rules decide who has to approve a change to each folder.",
+  );
+});
+
+test("a one-line body is the title and leaves no description", () => {
+  // The common case, and it has to keep behaving exactly as it did — a
+  // description equal to the title would say the same sentence twice.
+  expect(parseChangeTitle("Tighten hand hygiene auditing", "alice")).toBe(
+    "Tighten hand hygiene auditing",
+  );
+  expect(describeSubmission("Tighten hand hygiene auditing")).toBe("");
 });

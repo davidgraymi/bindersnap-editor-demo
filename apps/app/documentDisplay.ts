@@ -281,8 +281,15 @@ export function parseChangeTitle(
   if (!body) return fallback;
 
   if (!body.includes("Automated upload from Bindersnap")) {
+    // **The first line, not the whole body.** The convention has always been a
+    // one-line summary, for which this is the same answer — but a change whose
+    // body says more than one thing rendered the whole blob as the page's
+    // `<h2>`, and a binder's sign-off change is the first that legitimately has
+    // detail worth carrying. The rest is not lost: `describeSubmission` picks
+    // it up as the description, which is what that field is for.
     const trimmed = body.trim();
-    return trimmed.length > 0 ? trimmed : fallback;
+    if (trimmed.length === 0) return fallback;
+    return trimmed.split("\n")[0]!.trim() || fallback;
   }
 
   const file = body.match(/Source file:\s*(\S+)/)?.[1] ?? null;
@@ -299,7 +306,14 @@ export function parseChangeTitle(
  */
 export function describeSubmission(body: string | null | undefined): string {
   if (!body) return "";
-  if (!body.includes("Automated upload from Bindersnap")) return body.trim();
+  if (!body.includes("Automated upload from Bindersnap")) {
+    // Everything after the first line, which `parseChangeTitle` took as the
+    // title. A one-line body — the common case — leaves nothing here, and
+    // `describeChangeBody` then renders no description rather than saying the
+    // same sentence twice.
+    const [, ...rest] = body.trim().split("\n");
+    return rest.join("\n").trim();
+  }
 
   const file = body.match(/Source file:\s*(\S+)/)?.[1] ?? null;
   return file ? `Submitted ${file} for review.` : "";
