@@ -921,6 +921,25 @@ In rough dependency order.
    the reason is the admin-only half of the rule and the binder page does not
    ask for it yet.
 
+   **Not the one-line fix it looks like.** `canUserReview` tests
+   `approvalsWhitelistUsernames`, and a binder's whitelist is
+   `approvals_whitelist_teams` — the usernames list is empty, so passing the
+   protection through would answer "allowed" for everybody and say nothing.
+   The question is whether the caller belongs to a whitelisted team, which
+   only the server can answer, and the whitelists must not be sent to the
+   browser (Settings already declines to, deliberately). So this is a computed
+   boolean and reason on the change-detail payload, not a prop the page
+   forgot to pass.
+
+   Worth knowing before starting: it may be near-empty in practice.
+   `recomputeApprovalsWhitelist` derives the list from the teams granted onto
+   the repository plus `Owners`, and a member reaches a binder through exactly
+   those teams — so anyone who can see the binder is normally already
+   authorized. The case it would catch is a direct collaborator, or a grant
+   that skipped the recompute, which every grant path now does in the same
+   handler. Check whether a real customer can reach the state before building
+   the screen for it.
+
 ## Working on this locally — two traps
 
 **Integration tests cannot be pointed at a locally built API.**
