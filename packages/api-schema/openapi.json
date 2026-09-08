@@ -6628,6 +6628,78 @@
         }
       }
     },
+    "/api/app/binders/{org}/{binder}/rules": {
+      "patch": {
+        "operationId": "setBinderRules",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "blockOnUnresolvedThreads": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "blockOnUnresolvedThreads"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The binder's rules, after the change. Immediate",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "blockOnUnresolvedThreads": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "workspace",
+                    "blockOnUnresolvedThreads"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/app/binders/{org}/{binder}/rules/sign-off": {
       "post": {
         "operationId": "proposeBinderSignOffRules",
