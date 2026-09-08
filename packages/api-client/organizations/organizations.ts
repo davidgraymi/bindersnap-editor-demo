@@ -7,6 +7,8 @@
 import type {
   AddOrganizationGroupMember200,
   AddOrganizationGroupMemberBody,
+  AddOrganizationPerson200,
+  AddOrganizationPersonBody,
   CreateOrganization201,
   CreateOrganizationBody,
   CreateOrganizationGroup201,
@@ -113,6 +115,39 @@ export const getOrganizationPeople = async (org: string, options?: Parameters<ty
     method: 'GET'
 
 
+  }
+);}
+
+
+export type addOrganizationPersonResponse200 = {
+  data: AddOrganizationPerson200
+  status: 200
+}
+
+export type addOrganizationPersonResponseSuccess = (addOrganizationPersonResponse200) & {
+  headers: Headers;
+};
+;
+
+export type addOrganizationPersonResponse = (addOrganizationPersonResponseSuccess)
+
+export const getAddOrganizationPersonUrl = (org: string,) => {
+
+
+
+
+  return `/api/app/orgs/${org}/people`
+}
+
+export const addOrganizationPerson = async (org: string,
+    addOrganizationPersonBody: AddOrganizationPersonBody, options?: Parameters<typeof customFetch>[1]): Promise<addOrganizationPersonResponse> => {
+
+  return customFetch<addOrganizationPersonResponse>(getAddOrganizationPersonUrl(org),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(addOrganizationPersonBody)
   }
 );}
 
