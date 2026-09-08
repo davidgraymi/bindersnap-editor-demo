@@ -732,6 +732,19 @@ it needs no Stripe credentials — which the integration environment does not
 always have. The test was checked by breaking `resolveReadOnly` and watching it
 fail, so it is known to be testing something.
 
+**Two controls were missed until somebody looked at the screen**, and both were
+outside every component the feature had touched — which is why reading the diff
+twice did not find them. The top nav's "New document" button sits on _every_
+page, so it was the one unusable affordance a delinquent customer met wherever
+they went. And the binder's empty state read "Nothing filed here yet. Add a
+policy and it joins the binder once the change is approved" — instructions for
+a button no longer on the page.
+
+The lesson generalises past this feature: a mode that removes controls cannot
+be verified by looking at the components that implement it, because its bugs
+are exactly the controls nobody remembered belong to it. Screenshot the running
+app.
+
 ## Why #393 carries the organization-creation flow too
 
 They cannot ship apart. The migration parks every username-keyed billing row
