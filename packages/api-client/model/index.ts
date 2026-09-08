@@ -370,6 +370,8 @@ export * from './setBinderPersonLevel200GroupsItemMembersItem.ts';
 export * from './setBinderPersonLevel200OrganizationMembersItem.ts';
 export * from './setBinderPersonLevel200PeopleItem.ts';
 export * from './setBinderPersonLevelBody.ts';
+export * from './setBinderRules200.ts';
+export * from './setBinderRulesBody.ts';
 export * from './setBinderVisibility200.ts';
 export * from './setBinderVisibility200GroupsItem.ts';
 export * from './setBinderVisibility200GroupsItemMembersItem.ts';

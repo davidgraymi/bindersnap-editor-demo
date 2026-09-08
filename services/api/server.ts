@@ -94,7 +94,11 @@ import {
   setDiscussionResolution,
 } from "./gitea-client/discussions";
 import { isSupportedReaction } from "./gitea-client/reactions";
-import { getReviewSettings } from "./gitea-client/reviewSettings";
+import {
+  DEFAULT_WORKSPACE_SETTINGS,
+  workspaceSettingsStore,
+  type ReviewSettings,
+} from "./workspace-settings";
 import {
   buildClosedChanges,
   resolveClosedOutcome,
@@ -105,6 +109,7 @@ import type {
   BinderPeoplePayload,
   OrganizationPeoplePayload,
   WorkspaceDocumentListEntry,
+  WorkspaceSummary,
 } from "../../packages/api-schema/schemas/workspaces";
 import {
   getCurrentUserRepoPermission,
@@ -152,12 +157,14 @@ import {
 } from "./gitea-client/pullRequests";
 import {
   buildChangeReviewers,
+  approverLogins,
   countApprovals,
   planReviewerChanges,
   readAssignee,
   readRequestedReviewers,
 } from "./change-assignments";
 import { buildChangeUpdates } from "./change-updates";
+import { buildVersionStamp } from "./version-stamp";
 
 /**
  * How far back a change's update history is read.
@@ -376,7 +383,14 @@ function corsHeaders(req: Request): Headers {
     headers.set("Access-Control-Allow-Origin", origin);
     headers.set("Access-Control-Allow-Credentials", "true");
     headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    headers.set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+    // PATCH is here because a binder's rules are the first route to use it.
+    // The browser sends a preflight for any method not on this list and the
+    // request never leaves — which surfaces as "Failed to fetch" with nothing
+    // in the API's log, because the API never saw it.
+    headers.set(
+      "Access-Control-Allow-Methods",
+      "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+    );
     headers.set("Vary", "Origin");
   }
 
@@ -3749,11 +3763,11 @@ async function handlePublishWorkspaceChange(
       );
     }
 
-    const reviewSettings = await getReviewSettings({
-      client,
-      owner,
-      repo: workspaceName,
-    });
+    const reviewSettings = await readBinderSettings(workspace);
+    // Read here rather than beside the tag write, so a failure to read the
+    // protection cannot happen after the merge has already landed.
+    const protection = await readWorkspaceProtection(owner, workspaceName);
+
     if (reviewSettings.blockOnUnresolvedThreads) {
       const discussions = await listDiscussions({
         client,
@@ -3802,6 +3816,32 @@ async function handlePublishWorkspaceChange(
       mergeStyle,
     });
 
+    // **The policy in force, stamped onto the event.** ADR 0004: when
+    // configuration shapes what happened, do not version the configuration —
+    // write it into the annotated tag, where it is immutable, attached to the
+    // exact publish, and readable from a bare clone with no application and no
+    // database running. That is what makes it evidence rather than a settings
+    // row a surveyor would have to be told to trust.
+    //
+    // Read after the merge, because the approvals that count are the ones that
+    // stood when Gitea accepted it — an approval dismissed on the way in is not
+    // a signature on what was published.
+    const merged = await getPullRequestWithReviews({
+      client,
+      owner,
+      repo: workspaceName,
+      pullNumber,
+    }).catch(() => null);
+
+    const stampedPolicy = {
+      requiredApprovals: await readRequiredApprovals(owner, workspaceName),
+      approvedBy: merged ? approverLogins(merged.reviews) : [],
+      blockOnUnresolvedThreads: reviewSettings.blockOnUnresolvedThreads,
+      signOffEnforced: protection?.blockOnCodeownerReviews ?? false,
+      publishedBy: session.username,
+      changeNumber: pullNumber,
+    };
+
     // Sequential: Gitea serializes repository writes, and a partial failure
     // here is easier to read in order than interleaved.
     const tags = [];
@@ -3814,6 +3854,11 @@ async function handlePublishWorkspaceChange(
           slugPath: document.slugPath,
           version,
           target: "main",
+          message: buildVersionStamp({
+            ...stampedPolicy,
+            slugPath: document.slugPath,
+            version,
+          }),
         }),
       );
     }
@@ -3914,7 +3959,7 @@ async function handleWorkspaceChangeDetail(
         pullNumber,
       }),
       readRequiredApprovals(orgName, workspaceName),
-      getReviewSettings({ client, owner: orgName, repo: workspaceName }),
+      readBinderSettings(workspace),
       listDiscussions({
         client,
         owner: orgName,
@@ -4517,9 +4562,7 @@ async function handleWorkspaceSettings(
       // policy every reviewer is entitled to, and Gitea only shows the rule to
       // a repository admin.
       readWorkspaceProtection(orgName, workspaceName),
-      getReviewSettings({ client, owner: orgName, repo: workspaceName }).catch(
-        () => ({ blockOnUnresolvedThreads: false }),
-      ),
+      readBinderSettings(workspace),
       readWorkspaceAccess({ client, org: orgName, name: workspaceName }),
       readSignOffRules({
         client,
@@ -4618,6 +4661,111 @@ async function handleWorkspaceSettings(
       error: err instanceof Error ? err.message : String(err),
     });
     return responseFromError(err, baseHeaders, "Unable to read the settings.");
+  }
+}
+
+/**
+ * Change a binder's rules.
+ *
+ * **Immediate, unlike the sign-off rules two functions down, and the difference
+ * is worth stating.** A sign-off rule decides *who has to approve* a change, so
+ * changing it goes through the same approval a policy does — a product whose
+ * claim is that nothing reaches the record without approval should not exempt
+ * the rules that decide who approves. This setting decides whether the binder
+ * refuses to publish while a discussion is still open. It gates nobody out and
+ * it changes no permission, so making an administrator open a change to tick a
+ * checkbox would be ceremony without a reason.
+ *
+ * **The change is recorded either way.** That is what the committed config file
+ * bought and it is kept — `settings_events` says who relaxed the requirement
+ * and when, indexed, without a git branch or an untyped file that fails open.
+ *
+ * Who may do it is Gitea's answer: the caller's own token has to have admin on
+ * the repository, which `readWorkspaceAccess` asks by reading the repository as
+ * them. An app-side role check standing in for a permission question is the
+ * tripwire ADR 0004 names.
+ */
+async function handleBinderRules(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { client, session } = auth;
+
+  try {
+    const body = (await req.json().catch(() => null)) as {
+      blockOnUnresolvedThreads?: unknown;
+    } | null;
+
+    if (typeof body?.blockOnUnresolvedThreads !== "boolean") {
+      return json(
+        400,
+        {
+          error:
+            "Say whether a change must have every discussion resolved before it can be published.",
+        },
+        baseHeaders,
+      );
+    }
+
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    const access = await readWorkspaceAccess({
+      client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!access.admin) {
+      return json(
+        403,
+        { error: "Only a binder administrator can change its rules." },
+        baseHeaders,
+      );
+    }
+
+    const events = await workspaceSettingsStore.set({
+      giteaRepoId: workspace.id,
+      organization: orgName,
+      workspace: workspaceName,
+      settings: { blockOnUnresolvedThreads: body.blockOnUnresolvedThreads },
+      changedBy: session.username,
+    });
+
+    logger.info("Binder rules changed", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      changed: events.map((event) => event.setting),
+    });
+
+    return json(
+      200,
+      {
+        organization: orgName,
+        workspace: workspaceName,
+        blockOnUnresolvedThreads: body.blockOnUnresolvedThreads,
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to change a binder's rules", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to change the rules.");
   }
 }
 
@@ -4823,6 +4971,32 @@ export function foldersInBinder(paths: readonly string[]): string[] {
   return [...folders]
     .filter((folder) => !folder.startsWith(".gitea/"))
     .sort((left, right) => left.localeCompare(right));
+}
+
+/**
+ * A binder's review policy, from the settings table.
+ *
+ * **This used to read a JSON file off a `bindersnap-config` branch**, which
+ * ADR 0004's migration step 5 retires. The file cost a network round trip per
+ * read, a dedicated branch that existed only because `main` is protected, and —
+ * worst — it degraded silently to the permissive policy when it could not be
+ * parsed, so a corrupt byte turned a control off with nothing said.
+ *
+ * A binder with no row is under the default rather than under an unknown, and
+ * `workspace_settings` is keyed on the Gitea repository id because Gitea
+ * renames repositories.
+ */
+async function readBinderSettings(
+  workspace: Pick<WorkspaceSummary, "id">,
+): Promise<ReviewSettings> {
+  const stored = await workspaceSettingsStore
+    .get(workspace.id)
+    .catch(() => null);
+  return {
+    blockOnUnresolvedThreads:
+      stored?.blockOnUnresolvedThreads ??
+      DEFAULT_WORKSPACE_SETTINGS.blockOnUnresolvedThreads,
+  };
 }
 
 /**
@@ -7622,6 +7796,9 @@ export function createApiServer() {
         const workspaceSignOffMatch = pathname.match(
           /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/rules\/sign-off$/,
         );
+        const workspaceRulesMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/rules$/,
+        );
         // Last of the binder matchers, because every one above it is a longer
         // path under the same two segments.
         const workspaceOverviewMatch = pathname.match(
@@ -7825,6 +8002,13 @@ export function createApiServer() {
             baseHeaders,
             workspaceCollaboratorsMatch[1]!,
             workspaceCollaboratorsMatch[2]!,
+          );
+        } else if (workspaceRulesMatch && method === "PATCH") {
+          response = await handleBinderRules(
+            req,
+            baseHeaders,
+            workspaceRulesMatch[1]!,
+            workspaceRulesMatch[2]!,
           );
         } else if (workspaceSignOffMatch && method === "POST") {
           response = await handleBinderSignOffRules(

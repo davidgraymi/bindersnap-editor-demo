@@ -53,6 +53,8 @@ import {
   OrganizationPersonRoleRequestSchema,
   LibraryPayloadSchema,
   LibrarySearchPayloadSchema,
+  BinderRulesPayloadSchema,
+  BinderRulesRequestSchema,
   OrganizationPeoplePayloadSchema,
   ProposedSignOffChangeSchema,
   SignOffRulesRequestSchema,
@@ -706,6 +708,30 @@ registry.registerPath({
       description: "Who can act in this binder, and the rules it is under",
       content: {
         "application/json": { schema: WorkspaceSettingsPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "patch",
+  path: "/api/app/binders/{org}/{binder}/rules",
+  operationId: "setBinderRules",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({ org: z.string(), binder: z.string() }),
+    body: {
+      required: true,
+      content: {
+        "application/json": { schema: BinderRulesRequestSchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "The binder's rules, after the change. Immediate",
+      content: {
+        "application/json": { schema: BinderRulesPayloadSchema },
       },
     },
   },
