@@ -63,10 +63,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Call the package scripts rather than restating the paths. The
+          # app-and-shared entry used to spell its own out and had drifted:
+          # it omitted packages/ui-tokens, so the design-token suite — the
+          # thing that enforces the design system — ran on nobody's machine
+          # but the author's, and only after they had already pushed.
           - target: app-and-shared
-            command: bun test apps/app packages/editor packages/utils
+            command: bun run test:app
           - target: ops
-            command: bun test services/api scripts infra/backups
+            command: bun run test:ops
           - target: seed-data
             command: bun run test:seed
 
