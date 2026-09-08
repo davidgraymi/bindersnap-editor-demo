@@ -324,8 +324,9 @@ write access to every repository in the org." `ACCESS_ORDER` in `orgs.ts` had
 ranked `owner` highest all along; only the wording was short. Pinned in both a
 unit test and an integration test.
 
-Editing is not built. The page says so in a sentence rather than by drawing
-controls that do nothing.
+Editing was not built at this point, and the page said so in a sentence rather
+than by drawing controls that do nothing. It is built now — the rules are
+editable on Settings, and who signs off on each folder has its own tab.
 
 ### The organization has people, and a binder stops manufacturing teams
 
@@ -384,8 +385,10 @@ creates its own role teams, so it now rewrites the approvals whitelist after
 granting them; without that its own publishes would fail with "does not have
 enough approvals" beside a green tick.
 
-Editing is still not built. Both pages say so in a sentence rather than drawing
-controls that do nothing.
+Editing was still not built at this point, and both pages said so rather than
+drawing controls that do nothing. Both are editable now: the organization's
+people can be added, promoted, demoted and removed, and a binder's people move
+between roles.
 
 ### Groups are named once and composed everywhere
 
