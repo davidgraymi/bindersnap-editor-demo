@@ -1,27 +1,21 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FileText, Plus, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { FileText } from "lucide-react";
 
-import { getWorkspaceDocuments, type WorkspaceDocumentSummary } from "../api";
-import { capitalizeFirst } from "../documentDisplay";
+import { fetchLibrary, type LibraryPayload } from "../api";
 import {
-  applyPersonFilter,
+  applyBinderFilter,
+  binderKey,
   buildDocumentRows,
   buildDocumentsUrl,
-  collectOwners,
   describeDocumentCount,
-  getSavedViewLabel,
+  getDocumentRowStatusLabel,
   parseDocumentsViewState,
-  SAVED_VIEWS,
-  toSearchParams,
-  type DocumentRow,
   type DocumentsViewState,
-  type SavedView,
 } from "../documentsView";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
 interface DocumentsPageProps {
-  currentUsername: string;
-  onSelectDocument: (owner: string, repo: string) => void;
+  onSelectDocument: (org: string, binder: string, slugPath: string) => void;
 }
 
 /** Move the page, and let the app's popstate listener redraw it. */
@@ -31,388 +25,192 @@ function navigateTo(state: DocumentsViewState): void {
 }
 
 /**
- * The library: every document the reader can reach, under one scope at a time.
+ * The library: every policy the reader can reach, across every binder.
  *
- * Home answers "what is waiting on me?"; this page answers the other question —
- * "where is that document?" — so it is a list with a scope, a few people, and
- * nothing else. The scope lives in the URL, which is what makes a saved view
- * saveable.
+ * Home answers "what is waiting on me?"; this page answers the other question,
+ * "where is that policy?" — so it is a list, a search box, and one filter.
+ *
+ * **Unpaged, and that is not a regression.** The old page scrolled through
+ * pages of repositories because each one was a document and Gitea paged them.
+ * The server now reads each binder once, three calls whatever it holds, so
+ * there is no cheaper page to ask for: fetching page two would repeat the whole
+ * read. A customer with four hundred policies in five binders is one request.
+ *
+ * Grouped by binder rather than sorted flat, because the binder is what decides
+ * who can see a policy and what has to happen before it changes — two policies
+ * with the same name in different binders are different objects, and a flat
+ * list would make them look like duplicates.
  */
-export function DocumentsPage({
-  currentUsername,
-  onSelectDocument,
-}: DocumentsPageProps) {
+export function DocumentsPage({ onSelectDocument }: DocumentsPageProps) {
   const [state, setState] = useState<DocumentsViewState>(() =>
-    parseDocumentsViewState(window.location.search, currentUsername),
+    parseDocumentsViewState(window.location.search),
   );
-  const [documents, setDocuments] = useState<WorkspaceDocumentSummary[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [library, setLibrary] = useState<LibraryPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [personPickerOpen, setPersonPickerOpen] = useState(false);
-  // Pages arrive as the reader scrolls. `page` is the last one that landed;
-  // `hasMore` is Gitea's only hint that another might exist.
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const sentinelRef = useRef<HTMLDivElement>(null);
 
-  // Back and forward are the way out of a saved view, so the page follows the
+  // Back and forward are the way out of a filter, so the page follows the
   // address bar rather than its own memory of what was clicked.
   useEffect(() => {
-    const handler = () => {
-      setState(
-        parseDocumentsViewState(window.location.search, currentUsername),
-      );
-    };
-    window.addEventListener("popstate", handler);
-    return () => window.removeEventListener("popstate", handler);
-  }, [currentUsername]);
+    const onPopState = () =>
+      setState(parseDocumentsViewState(window.location.search));
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
-  // Only the scope and the words travel to the server; a person filter is
-  // applied to what comes back.
   useEffect(() => {
     let cancelled = false;
-    setIsLoading(true);
+    setLibrary(null);
     setError(null);
 
-    getWorkspaceDocuments({
-      ...toSearchParams(
-        { view: state.view, people: [], freeText: state.freeText },
-        currentUsername,
-      ),
-      page: 1,
-    })
-      .then((fetched) => {
-        if (cancelled) return;
-        setDocuments(fetched.documents);
-        setPage(fetched.page);
-        setHasMore(fetched.hasMore);
-        setIsLoading(false);
+    fetchLibrary(state.freeText || undefined)
+      .then((payload) => {
+        if (!cancelled) setLibrary(payload);
       })
-      .catch((loadError: unknown) => {
+      .catch((err: unknown) => {
         if (cancelled) return;
         setError(
-          loadError instanceof Error
-            ? loadError.message
-            : "Unable to load documents.",
+          err instanceof Error && err.message.trim() !== ""
+            ? err.message
+            : "Unable to load your policies.",
         );
-        setDocuments([]);
-        setHasMore(false);
-        setIsLoading(false);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [state.view, state.freeText, currentUsername]);
+  }, [state.freeText]);
 
-  // One way to ask for the next page, however the reader got here.
-  const loadMore = useCallback(() => {
-    if (!hasMore || isLoading || isLoadingMore) return;
-
-    setIsLoadingMore(true);
-    getWorkspaceDocuments({
-      ...toSearchParams(
-        { view: state.view, people: [], freeText: state.freeText },
-        currentUsername,
-      ),
-      page: page + 1,
-    })
-      .then((fetched) => {
-        // A repository can move between pages while the reader scrolls, so
-        // rows are merged by identity rather than blindly appended.
-        setDocuments((current) => {
-          const seen = new Set(current.map((doc) => doc.repo.full_name));
-          return [
-            ...current,
-            ...fetched.documents.filter((doc) => !seen.has(doc.repo.full_name)),
-          ];
-        });
-        setPage(fetched.page);
-        setHasMore(fetched.hasMore);
-        setIsLoadingMore(false);
-      })
-      .catch(() => {
-        // Stop asking rather than looping on a page that will not load. The
-        // button stays, so the reader can try again themselves.
-        setIsLoadingMore(false);
-      });
-  }, [
-    hasMore,
-    isLoading,
-    isLoadingMore,
-    page,
-    state.view,
-    state.freeText,
-    currentUsername,
-  ]);
-
-  // Reaching the end of the list is the usual way to ask for more, so arriving
-  // at the sentinel loads the next page without anyone having to press
-  // anything. The button underneath is what happens when that does not fire —
-  // no IntersectionObserver, a browser that never scrolls, or a keyboard.
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel || !hasMore || isLoading || isLoadingMore) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) loadMore();
-      },
-      // Fetch before the reader reaches the very bottom, so the next rows are
-      // usually already there by the time they would have waited for them.
-      { rootMargin: "400px" },
-    );
-
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [loadMore, hasMore, isLoading, isLoadingMore]);
-
-  const visible = useMemo(
-    () => applyPersonFilter(documents, state.people),
-    [documents, state.people],
-  );
   const rows = useMemo(
-    () => buildDocumentRows(visible, currentUsername),
-    [visible, currentUsername],
-  );
-  const owners = useMemo(
     () =>
-      collectOwners(documents).filter((owner) => !state.people.includes(owner)),
-    [documents, state.people],
+      applyBinderFilter(
+        buildDocumentRows(library?.documents ?? []),
+        state.binder,
+      ),
+    [library, state.binder],
   );
 
-  function selectView(view: SavedView) {
-    setPersonPickerOpen(false);
-    navigateTo({ ...state, view });
-  }
+  const grouped = useMemo(() => {
+    const byBinder = new Map<string, typeof rows>();
+    for (const row of rows) {
+      const key = binderKey(row);
+      const existing = byBinder.get(key);
+      if (existing) existing.push(row);
+      else byBinder.set(key, [row]);
+    }
+    return [...byBinder.entries()];
+  }, [rows]);
 
-  function addPerson(login: string) {
-    setPersonPickerOpen(false);
-    navigateTo({ ...state, people: [...state.people, login] });
-  }
-
-  function removePerson(login: string) {
-    navigateTo({
-      ...state,
-      people: state.people.filter((person) => person !== login),
-    });
+  if (error) {
+    return <p className="app-inline-error">{error}</p>;
   }
 
   return (
-    <div className="docs-page">
-      <h1 className="docs-title">Documents</h1>
+    <section className="docs-page">
+      <h1 className="docs-title">Policies</h1>
+      <p className="docs-count">
+        {library === null
+          ? "Reading your binders…"
+          : `${describeDocumentCount(rows.length)} across ${
+              library.binders.length === 1
+                ? "1 binder"
+                : `${library.binders.length} binders`
+            }`}
+      </p>
 
       <div className="docs-views">
-        {SAVED_VIEWS.map((view) => (
-          <button
-            key={view}
-            type="button"
-            className={`docs-chip${view === state.view ? " docs-chip--on" : ""}`}
-            aria-pressed={view === state.view}
-            onClick={() => selectView(view)}
-          >
-            {getSavedViewLabel(view)}
-          </button>
-        ))}
-
-        <span className="docs-views-divider" aria-hidden="true" />
-
-        {state.people.map((person) => (
-          <span key={person} className="docs-chip docs-chip--person">
-            Owned by <strong>{capitalizeFirst(person)}</strong>
-            <button
-              type="button"
-              className="docs-chip-remove"
-              aria-label={`Remove the filter on ${capitalizeFirst(person)}`}
-              onClick={() => removePerson(person)}
-            >
-              <X size={10} strokeWidth={1.5} aria-hidden="true" />
-            </button>
-          </span>
-        ))}
-
-        <PersonPicker
-          owners={owners}
-          open={personPickerOpen}
-          onToggle={() => setPersonPickerOpen((open) => !open)}
-          onPick={addPerson}
+        <input
+          className="bs-input docs-search"
+          type="search"
+          value={state.freeText}
+          placeholder="Search policies"
+          aria-label="Search policies"
+          onChange={(event) => {
+            const next = { ...state, freeText: event.target.value };
+            setState(next);
+            navigateTo(next);
+          }}
         />
 
-        <span className="docs-views-spacer" />
-        <span className="docs-sorted-by">Sorted by last updated</span>
+        {library && library.binders.length > 1 ? (
+          <select
+            className="bs-input docs-binder-filter"
+            value={state.binder ?? ""}
+            aria-label="Which binder"
+            onChange={(event) => {
+              const next = { ...state, binder: event.target.value || null };
+              setState(next);
+              navigateTo(next);
+            }}
+          >
+            <option value="">Every binder</option>
+            {library.binders.map((binder) => (
+              <option
+                key={binderKey({
+                  organization: binder.organization,
+                  binder: binder.name,
+                })}
+                value={binderKey({
+                  organization: binder.organization,
+                  binder: binder.name,
+                })}
+              >
+                {binder.name}
+              </option>
+            ))}
+          </select>
+        ) : null}
       </div>
 
-      <section className="docs-list">
-        {isLoading ? (
-          <DocumentSkeletonRows count={3} />
-        ) : error ? (
-          <div className="docs-notice">
-            <p>{error}</p>
-          </div>
-        ) : rows.length === 0 ? (
-          <div className="docs-notice">
-            <p>{describeEmpty(state)}</p>
-          </div>
-        ) : (
-          rows.map((row) => (
-            <DocumentRowItem
-              key={row.key}
-              row={row}
-              onOpen={() => onSelectDocument(row.owner, row.repo)}
-            />
-          ))
-        )}
-      </section>
-
-      {/* Below the list, so seeing it means the reader wants more. */}
-      {hasMore && !isLoading && !error ? (
-        <div ref={sentinelRef} className="docs-more">
-          {isLoadingMore ? (
-            <SkeletonLine />
-          ) : (
-            <button
-              type="button"
-              className="docs-more-button"
-              onClick={loadMore}
-            >
-              Load more
-            </button>
-          )}
-        </div>
-      ) : null}
-
-      {!isLoading && !error && rows.length > 0 ? (
-        <p className="docs-count">
-          {describeDocumentCount(state.view, rows.length, documents.length)}
-          {hasMore ? " so far" : ""}
+      {library === null ? (
+        <SkeletonGroup label="Reading your policies">
+          <SkeletonLine width="medium" />
+          <SkeletonLine width="short" />
+        </SkeletonGroup>
+      ) : rows.length === 0 ? (
+        <p className="doc-rail-note">
+          {state.freeText
+            ? `Nothing matches “${state.freeText}”.`
+            : library.binders.length === 0
+              ? "You are not in a binder yet. A policy is filed in one, so a binder comes first."
+              : "None of your binders holds a policy yet."}
         </p>
-      ) : null}
-    </div>
-  );
-}
+      ) : (
+        grouped.map(([key, binderRows]) => (
+          <section className="docs-binder-group" key={key}>
+            <h2 className="doc-rail-title">
+              {binderRows[0]!.binder}
+              <span className="doc-tab-count">{binderRows.length}</span>
+            </h2>
 
-/** Why the list is empty, in terms of what the reader last clicked. */
-function describeEmpty(state: DocumentsViewState): string {
-  if (state.freeText) {
-    return `Nothing matched "${state.freeText}".`;
-  }
-  if (state.people.length > 0) {
-    return "Nobody you filtered by owns a document in this view.";
-  }
-  return state.view === "owned"
-    ? "You do not own any documents yet."
-    : "No documents here yet.";
-}
-
-function PersonPicker({
-  owners,
-  open,
-  onToggle,
-  onPick,
-}: {
-  owners: string[];
-  open: boolean;
-  onToggle: () => void;
-  onPick: (login: string) => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const close = (event: MouseEvent) => {
-      if (!ref.current?.contains(event.target as Node)) onToggle();
-    };
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
-  }, [open, onToggle]);
-
-  return (
-    <div className="docs-person-picker" ref={ref}>
-      <button
-        type="button"
-        className="docs-chip docs-chip--add"
-        aria-expanded={open}
-        aria-haspopup="menu"
-        onClick={onToggle}
-      >
-        <Plus size={11} strokeWidth={1.5} aria-hidden="true" />
-        Filter by person
-      </button>
-
-      {open ? (
-        <div className="docs-person-menu" role="menu">
-          {owners.length === 0 ? (
-            <p className="docs-person-menu-empty">
-              Nobody else owns a document in this view.
-            </p>
-          ) : (
-            owners.map((owner) => (
-              <button
-                key={owner}
-                type="button"
-                className="docs-person-menu-item"
-                role="menuitem"
-                onClick={() => onPick(owner)}
-              >
-                {capitalizeFirst(owner)}
-              </button>
-            ))
-          )}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function DocumentRowItem({
-  row,
-  onOpen,
-}: {
-  row: DocumentRow;
-  onOpen: () => void;
-}) {
-  return (
-    <button type="button" className="docs-list-item" onClick={onOpen}>
-      <span
-        className={`docs-list-item-icon${row.urgent ? " docs-list-item-icon--urgent" : ""}`}
-        aria-hidden="true"
-      >
-        <FileText size={16} strokeWidth={1.4} />
-      </span>
-
-      <span className="docs-list-item-body">
-        <span className="docs-list-item-name">{row.name}</span>
-        <span className="docs-list-item-meta">{row.meta}</span>
-      </span>
-
-      <span className={`docs-pill docs-pill--${toneOf(row)}`}>
-        {row.statusLabel}
-      </span>
-    </button>
-  );
-}
-
-/** Coral for work owed, green for settled, quiet grey for everything else. */
-function toneOf(row: DocumentRow): "review" | "approved" | "waiting" {
-  if (row.status === "needs_your_review" || row.status === "ready_to_publish") {
-    return "review";
-  }
-  return row.status === "current" ? "approved" : "waiting";
-}
-
-function DocumentSkeletonRows({ count }: { count: number }) {
-  return (
-    <SkeletonGroup label="Loading documents">
-      {Array.from({ length: count }, (_, index) => (
-        <div className="docs-list-item docs-list-item--skeleton" key={index}>
-          <span className="docs-list-item-icon" />
-          <span className="bs-skeleton-lines">
-            <SkeletonLine width="medium" />
-            <SkeletonLine width="short" />
-          </span>
-        </div>
-      ))}
-    </SkeletonGroup>
+            <div className="docs-list">
+              {binderRows.map((row) => (
+                <button
+                  className="docs-list-item"
+                  type="button"
+                  key={row.key}
+                  onClick={() =>
+                    onSelectDocument(row.organization, row.binder, row.slugPath)
+                  }
+                >
+                  <FileText size={16} strokeWidth={1.5} aria-hidden="true" />
+                  <span className="docs-list-item-body">
+                    <span className="docs-list-item-name">{row.name}</span>
+                    <span className="docs-list-item-meta">
+                      {[
+                        row.folder,
+                        row.version,
+                        getDocumentRowStatusLabel(row.status),
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+        ))
+      )}
+    </section>
   );
 }

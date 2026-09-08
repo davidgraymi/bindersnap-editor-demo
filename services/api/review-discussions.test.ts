@@ -181,6 +181,16 @@ beforeEach(() => {
       return new Response(null, { status: 200 });
     }
 
+    // Which documents the change touches. A binder's publish asks Gitea this
+    // before it merges, because afterwards the branch is gone and with it the
+    // question's cheapest answer.
+    const filesMatch = path.match(
+      /^\/api\/v1\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)\/files$/,
+    );
+    if (filesMatch && method === "GET") {
+      return json([{ filename: "nursing/policy.md", status: "added" }]);
+    }
+
     const prMatch = path.match(
       /^\/api\/v1\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)$/,
     );
@@ -280,8 +290,8 @@ function setPolicy(blockOnUnresolvedThreads: boolean): void {
 const OWNER = "alice";
 const REPO = "contract";
 const PR = 3;
-const DISCUSSIONS = `/api/app/documents/${OWNER}/${REPO}/pull-requests/${PR}/discussions`;
-const PUBLISH = `/api/app/documents/${OWNER}/${REPO}/pull-requests/${PR}/publish`;
+const DISCUSSIONS = `/api/app/binders/${OWNER}/${REPO}/changes/${PR}/discussions`;
+const PUBLISH = `/api/app/binders/${OWNER}/${REPO}/changes/${PR}/publish`;
 
 describe("review discussion routes", () => {
   test("starts a thread and reads it back", async () => {

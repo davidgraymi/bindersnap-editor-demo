@@ -94,13 +94,9 @@ import {
   setDiscussionResolution,
 } from "./gitea-client/discussions";
 import { isSupportedReaction } from "./gitea-client/reactions";
-import {
-  getReviewSettings,
-  updateReviewSettings,
-} from "./gitea-client/reviewSettings";
+import { getReviewSettings } from "./gitea-client/reviewSettings";
 import {
   buildClosedChanges,
-  buildVersionRecords,
   resolveClosedOutcome,
   toVersionReviews,
 } from "./document-history";
@@ -108,26 +104,16 @@ import type { ClosedChange } from "../../packages/api-schema/schemas/documents";
 import type {
   BinderPeoplePayload,
   OrganizationPeoplePayload,
+  WorkspaceDocumentListEntry,
 } from "../../packages/api-schema/schemas/workspaces";
 import {
-  addRepoCollaborator,
-  bootstrapEmptyMainBranch,
-  createDocTag,
-  createMainBranchProtection,
-  createPrivateCurrentUserRepo,
   getCurrentUserRepoPermission,
   getLatestDocTag,
   getRepoBranchProtection,
-  getRepoCollaboratorPermission,
   getRepoInfo,
   listDocTags,
   listRepoCollaborators,
-  searchWorkspaceReposPage,
-  repoExists,
   searchUsers,
-  removeRepoCollaborator,
-  updateRepoBranchProtection,
-  updateRepoVisibility,
   type RepoCollaboratorPermissionSummary,
   type RepoBranchProtection,
   type RepoUserSummary,
@@ -155,7 +141,6 @@ import {
   getPullRequestHeadBranch,
   searchInvolvedChanges,
   type InvolvedChangeRef,
-  mergeOrResolveConflicts,
   mergeWorkspaceChange,
   updateChangeBranch,
   removePullReviewers,
@@ -1105,15 +1090,6 @@ function parsePositiveIntInput(
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-function parseNonNegativeIntInput(
-  value: string | number | null | undefined,
-  fallback: number,
-): number {
-  const parsed =
-    typeof value === "number" ? value : Number.parseInt(value ?? "", 10);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
-}
-
 function parseOptionalString(
   value: FormDataEntryValue | null | undefined,
 ): string {
@@ -1126,30 +1102,6 @@ function parseOptionalFile(
   return value instanceof File ? value : null;
 }
 
-function toRepoCollaboratorRole(
-  permission: string,
-): "read" | "write" | "admin" | "owner" | "unknown" {
-  switch (permission) {
-    case "read":
-    case "write":
-    case "admin":
-    case "owner":
-      return permission;
-    default:
-      return "unknown";
-  }
-}
-
-function buildDownloadFileName(repo: string, storedFileName: string): string {
-  const lastDotIndex = storedFileName.lastIndexOf(".");
-  const extension =
-    lastDotIndex > 0 && lastDotIndex < storedFileName.length - 1
-      ? storedFileName.slice(lastDotIndex + 1)
-      : "";
-
-  return extension ? `${repo}.${extension}` : repo;
-}
-
 function getFileExtension(fileName: string): string {
   const dotIndex = fileName.lastIndexOf(".");
   if (dotIndex <= 0 || dotIndex === fileName.length - 1) {
@@ -1159,45 +1111,10 @@ function getFileExtension(fileName: string): string {
   return fileName.slice(dotIndex + 1).toLowerCase();
 }
 
-function buildCanonicalDocumentFileName(extension: string): string {
-  const normalized = extension.replace(/^\.+/, "").trim().toLowerCase();
-  return normalized === "" ? "document" : `document.${normalized}`;
-}
-
-function normalizeWorkspaceRepoSummary(repo: {
-  id?: number;
-  name?: string;
-  full_name?: string;
-  description?: string;
-  updated_at?: string;
-  owner?: { login?: string };
-}): WorkspaceRepo {
-  return {
-    id: repo.id ?? 0,
-    name: repo.name ?? "",
-    full_name: repo.full_name ?? "",
-    description: repo.description ?? "",
-    updated_at: repo.updated_at ?? "",
-    owner: {
-      login: repo.owner?.login ?? "",
-    },
-  };
-}
-
-async function computeFileHash(file: File): Promise<string> {
-  const buffer = await file.arrayBuffer();
-  return computeFileHashFromBuffer(buffer);
-}
-
 async function computeFileHashFromBuffer(buffer: ArrayBuffer): Promise<string> {
   const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-async function readFileAsBase64(file: File): Promise<string> {
-  const buffer = await file.arrayBuffer();
-  return Buffer.from(buffer).toString("base64");
 }
 
 type RepoContentsEntry = {
@@ -1213,68 +1130,6 @@ type RepoContentsExtResponse = {
 interface CanonicalFileInfo {
   storedFileName: string;
   downloadFileName: string;
-}
-
-function inferStoredDocumentFileName(
-  entries: RepoContentsEntry[],
-  repo: string,
-): string | null {
-  const files = entries.filter(
-    (entry): entry is RepoContentsEntry & { name: string } =>
-      entry.type === "file" && typeof entry.name === "string",
-  );
-
-  const documentFile = files.find(
-    (entry) => entry.name === "document" || entry.name.startsWith("document."),
-  );
-  if (documentFile) {
-    return documentFile.name;
-  }
-
-  const legacyFile = files.find(
-    (entry) => entry.name === repo || entry.name.startsWith(`${repo}.`),
-  );
-  if (legacyFile) {
-    return legacyFile.name;
-  }
-
-  if (files.length === 1) {
-    return files[0]?.name ?? null;
-  }
-
-  return null;
-}
-
-async function resolveCanonicalFileInfo(
-  client: GiteaClient,
-  owner: string,
-  repo: string,
-  ref = "main",
-): Promise<CanonicalFileInfo | null> {
-  const result = await unwrap(
-    client.GET("/repos/{owner}/{repo}/contents-ext/{filepath}", {
-      params: {
-        path: { owner, repo, filepath: "." },
-        query: { ref },
-      },
-    }),
-  );
-
-  const response = result as RepoContentsExtResponse;
-  const entries = [
-    ...(response.dir_contents ?? []),
-    ...(response.file_contents ? [response.file_contents] : []),
-  ];
-  const storedFileName = inferStoredDocumentFileName(entries, repo);
-
-  if (!storedFileName) {
-    return null;
-  }
-
-  return {
-    storedFileName,
-    downloadFileName: buildDownloadFileName(repo, storedFileName),
-  };
 }
 
 async function resolveCurrentUserPermission(
@@ -1375,32 +1230,6 @@ async function resolveCurrentUserPermission(
   }
 }
 
-async function resolveLatestUploadRef(
-  client: GiteaClient,
-  owner: string,
-  repo: string,
-): Promise<string | null> {
-  const pullRequests = await listPullRequests({
-    client,
-    owner,
-    repo,
-    state: "open",
-  });
-
-  const newestFirst = [...pullRequests].sort(
-    (left, right) => (right.number ?? 0) - (left.number ?? 0),
-  );
-
-  const uploadPullRequests = newestFirst.filter((pullRequest) =>
-    (pullRequest.head?.ref ?? "").startsWith("upload/"),
-  );
-
-  // A document whose first version is still under review has no file on
-  // `main` at all. Bindersnap's own uploads win, but any open branch beats
-  // telling the reviewer there is no file to read.
-  return uploadPullRequests[0]?.head?.ref ?? newestFirst[0]?.head?.ref ?? null;
-}
-
 function readInputString(
   payload: Record<string, unknown> | null,
   form: FormData | null,
@@ -1408,21 +1237,6 @@ function readInputString(
 ): string {
   if (payload && typeof payload[key] === "string") {
     return payload[key].trim();
-  }
-
-  return parseOptionalString(form?.get(key) ?? null);
-}
-
-function readInputNumber(
-  payload: Record<string, unknown> | null,
-  form: FormData | null,
-  key: string,
-): string {
-  if (payload) {
-    const value = payload[key];
-    if (typeof value === "string" || typeof value === "number") {
-      return String(value).trim();
-    }
   }
 
   return parseOptionalString(form?.get(key) ?? null);
@@ -2266,20 +2080,25 @@ async function handleAuthMe(
  * repo rows only, in pages, so the panel can render the first results while
  * the reader is still typing and ask for more as they scroll.
  */
+/**
+ * Quick find, in the nav.
+ *
+ * The same question the library page asks, asked shorter — so it runs through
+ * the same reader. Two implementations of "where is that policy" would
+ * eventually disagree about which binders count, and the one that disagreed
+ * would be the one nobody tested.
+ *
+ * A read, so it is never gated.
+ */
 async function handleDocumentSearch(
   req: Request,
   baseHeaders: Headers,
 ): Promise<Response> {
-  // A read. Never gated — see resolveDocumentAccess.
   const auth = await requireSession(req, baseHeaders);
-  if (auth instanceof Response) {
-    return auth;
-  }
+  if (auth instanceof Response) return auth;
 
-  const { client } = auth;
   const url = new URL(req.url);
   const query = url.searchParams.get("q")?.trim() || "";
-  const page = parsePositiveIntInput(url.searchParams.get("page"), 1);
   const limit = Math.min(
     parsePositiveIntInput(url.searchParams.get("limit"), 8),
     50,
@@ -2290,21 +2109,11 @@ async function handleDocumentSearch(
   }
 
   try {
-    const result = await searchWorkspaceReposPage({
-      client,
-      q: query,
-      page,
-      limit,
-    });
+    const found = await readLibrary({ client: auth.client, query, limit });
 
     return json(
       200,
-      {
-        documents: result.repos.map(normalizeWorkspaceRepoSummary),
-        page: result.page,
-        limit: result.limit,
-        hasMore: result.hasMore,
-      },
+      { documents: found.documents, limit, hasMore: found.hasMore },
       baseHeaders,
     );
   } catch (err) {
@@ -2403,57 +2212,148 @@ async function loadOpenChangeSummary(
   }
 }
 
-async function handleDocuments(
+/**
+ * The library: every policy in every binder this person can reach.
+ *
+ * **Rebuilt on binders.** It used to search Gitea for *repositories*, because a
+ * document was a repository — so the page's saved views ("mine", "everyone's")
+ * and its owner filters were questions about who owned a repo. Under ADR 0004 a
+ * document is a file inside a binder owned by the organization, and nobody
+ * owns a document: the questions the old filters answered no longer exist, so
+ * they are gone rather than reinterpreted into something that would quietly
+ * mean something else.
+ *
+ * What is left is the question the page is actually opened with — "where is
+ * that policy" — answered across every organization the reader belongs to.
+ * Personal views stay cross-organization by decision; only an organization's
+ * own pages are scoped to it.
+ *
+ * **Three Gitea calls per binder, not per document.** That is the property the
+ * binder model bought and the reason this is affordable: a customer with five
+ * binders and four hundred policies pays fifteen calls, where the old shape
+ * paid roughly three per document. A binder that cannot be read is skipped
+ * rather than failing the page — one restricted binder should not blank the
+ * library.
+ *
+ * A read, so it is never gated.
+ */
+async function handleLibraryDocuments(
   req: Request,
   baseHeaders: Headers,
 ): Promise<Response> {
-  // A read. Never gated — see resolveDocumentAccess.
   const auth = await requireSession(req, baseHeaders);
-  if (auth instanceof Response) {
-    return auth;
-  }
-
-  const { session: _session, client } = auth;
-  const reqUrl = new URL(req.url);
-  const ownerUsername = reqUrl.searchParams.get("owner") || undefined;
-  const memberUsername = reqUrl.searchParams.get("member") || undefined;
-  const freeText = reqUrl.searchParams.get("q") || undefined;
-  const page = parsePositiveIntInput(reqUrl.searchParams.get("page"), 1);
-  const limit = Math.min(
-    parsePositiveIntInput(
-      reqUrl.searchParams.get("limit"),
-      DOCUMENTS_PAGE_SIZE,
-    ),
-    MAX_DOCUMENTS_PAGE_SIZE,
-  );
+  if (auth instanceof Response) return auth;
 
   try {
-    // One page, always. The unpaged read asked Gitea for a hardcoded 100 and
-    // silently dropped anything past it, so a workspace's 101st document
-    // simply did not exist as far as this list was concerned.
-    const { repos, hasMore } = await searchWorkspaceReposPage({
-      client,
-      q: freeText,
-      ownerUsername,
-      memberUsername,
-      page,
-      limit,
+    const library = await readLibrary({
+      client: auth.client,
+      query: new URL(req.url).searchParams.get("q"),
     });
-    const documents = await Promise.all(
-      repos.map(async (repo) => ({
-        repo: normalizeWorkspaceRepoSummary(repo),
-        ...(await loadOpenChangeSummary(client, repo.owner.login, repo.name)),
-      })),
-    );
 
-    return json(200, { documents, page, limit, hasMore }, baseHeaders);
+    return json(200, library, baseHeaders);
   } catch (err) {
-    return responseFromError(
-      err,
-      baseHeaders,
-      "Unable to load workspace documents.",
-    );
+    logger.error("Failed to read the library", {
+      username: auth.session.username,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to load the documents.");
   }
+}
+
+/** One row of the library: a document, and the binder it is filed in. */
+export interface LibraryDocument extends WorkspaceDocumentListEntry {
+  organization: string;
+  binder: string;
+  binderDescription: string;
+}
+
+/**
+ * Every policy in every binder this person can reach, optionally narrowed.
+ *
+ * Shared by the library page and the nav's quick find, because they ask the
+ * same question at different lengths — and two implementations of "where is
+ * that policy" would eventually disagree about which binders count.
+ *
+ * **Three Gitea calls per binder, not per document.** That is the property the
+ * binder model bought and the reason this is affordable at all: a customer with
+ * five binders and four hundred policies pays fifteen calls, where the old
+ * repo-per-document shape paid roughly three per document.
+ *
+ * A binder that cannot be read is skipped rather than failing the whole read.
+ * One restricted binder should not blank the library.
+ */
+async function readLibrary(params: {
+  client: GiteaClient;
+  query?: string | null;
+  /** Cap the rows returned. Quick find wants a handful; the page wants all. */
+  limit?: number;
+}): Promise<{
+  documents: LibraryDocument[];
+  binders: Array<{ organization: string; name: string; description: string }>;
+  hasMore: boolean;
+}> {
+  const { client, limit } = params;
+  const query = params.query?.trim().toLowerCase() || null;
+
+  const organizations = await listSessionOrganizations(client);
+
+  const binders = (
+    await Promise.all(
+      organizations.map((organization) =>
+        listOrganizationWorkspaces({
+          client,
+          org: organization.name,
+        }).catch(() => []),
+      ),
+    )
+  ).flat();
+
+  const rows = (
+    await Promise.all(
+      binders.map(async (binder) => {
+        const documents = await readBinderDocuments({
+          client,
+          org: binder.owner,
+          workspace: binder.name,
+        }).catch(() => []);
+
+        return documents.map((document) => ({
+          ...document,
+          organization: binder.owner,
+          binder: binder.name,
+          binderDescription: binder.description,
+        }));
+      }),
+    )
+  ).flat();
+
+  // Matched here rather than at Gitea, because the question spans binders and
+  // Gitea's search is per repository. The whole set is already in hand — the
+  // per-binder reads are what cost anything — so filtering it is free.
+  const matched = (
+    query
+      ? rows.filter(
+          (row) =>
+            row.name.toLowerCase().includes(query) ||
+            row.slugPath.toLowerCase().includes(query) ||
+            row.binder.toLowerCase().includes(query),
+        )
+      : rows
+  ).sort(
+    (left, right) =>
+      left.binder.localeCompare(right.binder) ||
+      left.slugPath.localeCompare(right.slugPath),
+  );
+
+  return {
+    documents: limit === undefined ? matched : matched.slice(0, limit),
+    binders: binders.map((binder) => ({
+      organization: binder.owner,
+      name: binder.name,
+      description: binder.description,
+    })),
+    hasMore: limit !== undefined && matched.length > limit,
+  };
 }
 
 /**
@@ -2605,648 +2505,6 @@ async function loadDecidedChanges(
       message: err instanceof Error ? err.message : String(err),
     });
     return { owner, repo, changes: [] as ClosedChange[] };
-  }
-}
-
-async function handleCreateDocument(
-  req: Request,
-  baseHeaders: Headers,
-): Promise<Response> {
-  const auth = await requireSubscription(req, baseHeaders);
-  if (auth instanceof Response) {
-    return auth;
-  }
-
-  const { session, client } = auth;
-  const form = await readMultipartBody(req);
-  if (!form) {
-    return json(
-      400,
-      { error: "Multipart form data is required." },
-      baseHeaders,
-    );
-  }
-
-  const file = parseOptionalFile(form.get("file"));
-  const repoName = parseOptionalString(form.get("repoName"));
-  const description = parseOptionalString(form.get("description")) || undefined;
-  const requiredApprovals = parseNonNegativeIntInput(
-    parseOptionalString(form.get("requiredApprovals")) || null,
-    1,
-  );
-  const nextVersion = parsePositiveIntInput(
-    parseOptionalString(form.get("nextVersion")) || null,
-    1,
-  );
-
-  if (!file || !repoName) {
-    return json(400, { error: "file and repoName are required." }, baseHeaders);
-  }
-
-  const validation = validateUploadFile(file);
-  if (!validation.valid) {
-    return json(
-      400,
-      { error: validation.reason ?? "Invalid file." },
-      baseHeaders,
-    );
-  }
-
-  try {
-    const exists = await repoExists(client, session.username, repoName);
-    if (exists) {
-      return json(
-        409,
-        { error: `A document named "${repoName}" already exists.` },
-        baseHeaders,
-      );
-    }
-
-    const createdRepo = await createPrivateCurrentUserRepo({
-      client,
-      name: repoName,
-      description,
-    });
-    const normalizedRepo = normalizeWorkspaceRepoSummary(createdRepo);
-    const owner = normalizedRepo.owner.login || session.username;
-    const extension = getFileExtension(file.name);
-    const canonicalFile = buildCanonicalDocumentFileName(extension);
-
-    // Read buffer once to compute hash and base64
-    const buffer = await file.arrayBuffer();
-    const [fullHash, base64Content] = await Promise.all([
-      computeFileHashFromBuffer(buffer),
-      Buffer.from(buffer).toString("base64"),
-    ]);
-    const contentHash8 = fullHash.slice(0, 8);
-    const branchName = buildUploadBranchName(repoName, owner, contentHash8);
-
-    // Sequential initialization to avoid sqlite locking issues in gitea.
-    // We keep bootstrapEmptyMainBranch to ensure a clean starting point.
-    await bootstrapEmptyMainBranch({
-      client,
-      owner,
-      repo: repoName,
-    });
-
-    await createMainBranchProtection({
-      client,
-      owner,
-      repo: repoName,
-      requiredApprovals,
-    });
-
-    await createUploadBranch({
-      client,
-      owner,
-      repo: repoName,
-      branchName,
-      from: "main",
-    });
-
-    const commitMessage = buildUploadCommitMessage({
-      docSlug: repoName,
-      canonicalFile,
-      sourceFilename: file.name,
-      uploadBranch: branchName,
-      uploaderSlug: owner,
-      fileHashSha256: fullHash,
-    });
-
-    const { sha: commitSha } = await commitBinaryFile({
-      client,
-      owner,
-      repo: repoName,
-      branch: branchName,
-      filePath: canonicalFile,
-      base64Content,
-      message: commitMessage,
-      isNewFile: true,
-    });
-
-    const prTitle = `Upload v${nextVersion}: ${repoName
-      .split("-")
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(" ")}`;
-    const prBody = [
-      "Automated upload from Bindersnap file vault.",
-      "",
-      `Source file: ${file.name}`,
-      `Document: ${repoName}`,
-      `Uploaded by: ${owner}`,
-      `File hash (SHA-256): ${fullHash}`,
-    ].join("\n");
-
-    const pr = await createPullRequest({
-      client,
-      owner,
-      repo: repoName,
-      title: prTitle,
-      head: branchName,
-      base: "main",
-      body: prBody,
-    });
-
-    return json(
-      201,
-      {
-        repository: normalizedRepo,
-        owner,
-        repo: repoName,
-        canonicalFile,
-        prNumber: pr.number ?? 0,
-        prTitle,
-        branchName,
-        commitSha,
-      },
-      baseHeaders,
-    );
-  } catch (err) {
-    return responseFromError(
-      err,
-      baseHeaders,
-      "Unable to create the document.",
-    );
-  }
-}
-
-async function handleDocumentDetail(
-  req: Request,
-  baseHeaders: Headers,
-  owner: string,
-  repo: string,
-): Promise<Response> {
-  const access = await resolveDocumentAccess(req, baseHeaders, owner, repo);
-  if (access instanceof Response) {
-    return access;
-  }
-
-  const { client, username } = access;
-
-  try {
-    const repository = normalizeWorkspaceRepoSummary(
-      (await unwrap(
-        client.GET("/repos/{owner}/{repo}", {
-          params: { path: { owner, repo } },
-        }),
-      )) as {
-        id?: number;
-        name?: string;
-        full_name?: string;
-        description?: string;
-        updated_at?: string;
-        owner?: { login?: string };
-      },
-    );
-
-    const [
-      tags,
-      openWithReviews,
-      branchProtection,
-      requiredApprovals,
-      reviewSettings,
-    ] = await Promise.all([
-      listDocTags(client, owner, repo),
-      listPullRequestsWithReviews({
-        client,
-        owner,
-        repo,
-        state: "open",
-      }),
-      // The whole rule, whitelists and all, is admin-only and stays that way:
-      // a non-admin gets null here and the count below regardless.
-      getRepoBranchProtection(client, owner, repo, "main").catch(() => null),
-      readRequiredApprovals(owner, repo),
-      getReviewSettings({ client, owner, repo }).catch(() => null),
-    ]);
-
-    // The reviews come back with the pull requests anyway, and a change's page
-    // reads as a log of what happened — an approval is part of that log, so it
-    // travels with the change rather than costing a second round trip. The
-    // reviewer list is the same reviews read a different way: not what
-    // happened, but who the change is still waiting on.
-    //
-    // Built by `buildPendingChangeRow` rather than beside it. This was a second
-    // copy of that function, and the copies drifted: neither ever set
-    // `isRejected`, which the contract requires and which Home and the library
-    // both gate on. One row shape, one place.
-    const openPullRequests = openWithReviews.map((entry) => ({
-      ...buildPendingChangeRow(entry, requiredApprovals),
-      reviews: toVersionReviews(entry.reviews),
-    }));
-
-    const latestTag = tags[0] ?? null;
-    const uploadPullRequests = openPullRequests
-      .filter((pullRequest) =>
-        (pullRequest.head?.ref ?? "").startsWith("upload/"),
-      )
-      .sort((left, right) => (right.number ?? 0) - (left.number ?? 0));
-
-    let canonicalFile = await resolveCanonicalFileInfo(
-      client,
-      owner,
-      repo,
-    ).catch(() => null);
-    if (!canonicalFile) {
-      const fallbackRef = await resolveLatestUploadRef(client, owner, repo);
-      if (fallbackRef) {
-        canonicalFile =
-          (await resolveCanonicalFileInfo(
-            client,
-            owner,
-            repo,
-            fallbackRef,
-          ).catch(() => null)) ?? null;
-      }
-    }
-
-    const currentUserPermission = username
-      ? await resolveCurrentUserPermission(client, owner, repo, username).catch(
-          () => null,
-        )
-      : null;
-
-    return json(
-      200,
-      {
-        repository,
-        tags,
-        latestTag,
-        openPullRequests,
-        uploadPullRequests,
-        branchProtection,
-        reviewSettings,
-        canonicalFile,
-        currentUserPermission,
-      },
-      baseHeaders,
-    );
-  } catch (err) {
-    return responseFromError(
-      err,
-      baseHeaders,
-      "Unable to load document details.",
-    );
-  }
-}
-
-/**
- * The approval trail: every published version with the review that let it
- * through. Kept off the detail payload because it costs a review lookup per
- * closed pull request, and the document view itself does not need it.
- */
-async function handleDocumentHistory(
-  req: Request,
-  baseHeaders: Headers,
-  owner: string,
-  repo: string,
-): Promise<Response> {
-  const access = await resolveDocumentAccess(req, baseHeaders, owner, repo);
-  if (access instanceof Response) {
-    return access;
-  }
-
-  const { client } = access;
-
-  try {
-    const [tags, closedPullRequests] = await Promise.all([
-      listDocTags(client, owner, repo),
-      listPullRequestsWithReviews({
-        client,
-        owner,
-        repo,
-        state: "closed",
-      }),
-    ]);
-
-    const merged: PullRequestWithReviews[] = closedPullRequests.filter(
-      (entry) => entry.pullRequest.approvalState === "published",
-    );
-
-    // Comment counts are decoration, not the record — a failure here must not
-    // cost the user their history.
-    //
-    // The publisher is not decoration: the spline names the person who put
-    // each version on the record. Gitea only fills `merged_by` in on a single
-    // pull request's own endpoint, never in the list, so it is read per change
-    // here. A read that fails leaves that one version unattributed rather than
-    // failing the whole history.
-    const discussionCounts = new Map<number, number>();
-    const publishers = new Map<number, string>();
-    await Promise.all(
-      merged.map(async (entry) => {
-        const pullNumber = entry.pullRequest.number;
-        if (!pullNumber) return;
-
-        const [summary, detail] = await Promise.all([
-          listDiscussions({ client, owner, repo, pullNumber }).catch(
-            () => null,
-          ),
-          getPullRequestWithReviews({ client, owner, repo, pullNumber }).catch(
-            () => null,
-          ),
-        ]);
-
-        if (summary) {
-          discussionCounts.set(pullNumber, summary.totalCount);
-        }
-
-        const publisher = detail?.pullRequest.merged_by?.login;
-        if (publisher) {
-          publishers.set(pullNumber, publisher);
-        }
-      }),
-    );
-
-    let canonicalFile = await resolveCanonicalFileInfo(
-      client,
-      owner,
-      repo,
-    ).catch(() => null);
-    if (!canonicalFile) {
-      const fallbackRef = await resolveLatestUploadRef(client, owner, repo);
-      if (fallbackRef) {
-        canonicalFile =
-          (await resolveCanonicalFileInfo(
-            client,
-            owner,
-            repo,
-            fallbackRef,
-          ).catch(() => null)) ?? null;
-      }
-    }
-
-    return json(
-      200,
-      {
-        versions: buildVersionRecords(
-          tags,
-          merged,
-          discussionCounts,
-          publishers,
-        ),
-        canonicalFile,
-      },
-      baseHeaders,
-    );
-  } catch (err) {
-    return responseFromError(
-      err,
-      baseHeaders,
-      "Unable to load the version history.",
-    );
-  }
-}
-
-/**
- * Changes that are no longer open, and how each one ended.
- *
- * Loaded on its own rather than with the document detail: it costs a review
- * lookup per closed change, and that bill grows with every version a document
- * ever had. Nobody should pay it just to open the document.
- */
-async function handleClosedChanges(
-  req: Request,
-  baseHeaders: Headers,
-  owner: string,
-  repo: string,
-): Promise<Response> {
-  const access = await resolveDocumentAccess(req, baseHeaders, owner, repo);
-  if (access instanceof Response) {
-    return access;
-  }
-
-  const { client } = access;
-
-  try {
-    const [tags, closedPullRequests, requiredApprovals] = await Promise.all([
-      listDocTags(client, owner, repo),
-      listPullRequestsWithReviews({
-        client,
-        owner,
-        repo,
-        state: "closed",
-      }),
-      readRequiredApprovals(owner, repo),
-    ]);
-
-    return json(
-      200,
-      {
-        changes: buildClosedChanges(
-          closedPullRequests,
-          tags,
-          requiredApprovals,
-        ),
-      },
-      baseHeaders,
-    );
-  } catch (err) {
-    return responseFromError(
-      err,
-      baseHeaders,
-      "Unable to load the closed changes.",
-    );
-  }
-}
-
-async function handleDocumentVersions(
-  req: Request,
-  baseHeaders: Headers,
-  owner: string,
-  repo: string,
-): Promise<Response> {
-  const auth = await requireSubscription(req, baseHeaders);
-  if (auth instanceof Response) {
-    return auth;
-  }
-
-  const { client, session } = auth;
-  const form = await readMultipartBody(req);
-  if (!form) {
-    return json(
-      400,
-      { error: "Multipart form data is required." },
-      baseHeaders,
-    );
-  }
-
-  const file = parseOptionalFile(form.get("file"));
-  const docSlug = parseOptionalString(form.get("docSlug")) || repo;
-  const uploaderSlug =
-    parseOptionalString(form.get("uploaderSlug")) || session.username;
-  const nextVersionRaw = parseOptionalString(form.get("nextVersion"));
-  const canonicalFileName = parseOptionalString(form.get("canonicalFileName"));
-
-  if (!file || !docSlug || !uploaderSlug || nextVersionRaw === "") {
-    return json(
-      400,
-      {
-        error: "file, docSlug, uploaderSlug, and nextVersion are required.",
-      },
-      baseHeaders,
-    );
-  }
-
-  const nextVersion = parsePositiveIntInput(nextVersionRaw, 0);
-  if (nextVersion <= 0) {
-    return json(
-      400,
-      { error: "nextVersion must be a positive integer." },
-      baseHeaders,
-    );
-  }
-
-  const validation = validateUploadFile(file);
-  if (!validation.valid) {
-    return json(
-      400,
-      { error: validation.reason ?? "Invalid file." },
-      baseHeaders,
-    );
-  }
-
-  try {
-    const fullHash = await computeFileHash(file);
-    const contentHash8 = fullHash.slice(0, 8);
-    const base64Content = await readFileAsBase64(file);
-    const branchName = buildUploadBranchName(
-      docSlug,
-      uploaderSlug,
-      contentHash8,
-    );
-    const extension = getFileExtension(file.name);
-    const canonicalFile =
-      canonicalFileName || `${docSlug}${extension ? `.${extension}` : ""}`;
-
-    await createUploadBranch({
-      client,
-      owner,
-      repo,
-      branchName,
-      from: "main",
-    });
-
-    const commitMessage = buildUploadCommitMessage({
-      docSlug,
-      canonicalFile,
-      sourceFilename: file.name,
-      uploadBranch: branchName,
-      uploaderSlug,
-      fileHashSha256: fullHash,
-    });
-
-    const { sha: commitSha } = await commitBinaryFile({
-      client,
-      owner,
-      repo,
-      branch: branchName,
-      filePath: canonicalFile,
-      base64Content,
-      message: commitMessage,
-    });
-
-    const prTitle = `Upload v${nextVersion}: ${docSlug
-      .split("-")
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(" ")}`;
-    const prBody = [
-      "Automated upload from Bindersnap file vault.",
-      "",
-      `Source file: ${file.name}`,
-      `Document: ${docSlug}`,
-      `Uploaded by: ${uploaderSlug}`,
-      `File hash (SHA-256): ${fullHash}`,
-    ].join("\n");
-
-    const pr = await createPullRequest({
-      client,
-      owner,
-      repo,
-      title: prTitle,
-      head: branchName,
-      base: "main",
-      body: prBody,
-    });
-
-    return json(
-      201,
-      {
-        owner,
-        repo,
-        canonicalFile,
-        prNumber: pr.number ?? 0,
-        prTitle,
-        branchName,
-        commitSha,
-      },
-      baseHeaders,
-    );
-  } catch (err) {
-    return responseFromError(
-      err,
-      baseHeaders,
-      "Unable to upload the new version.",
-    );
-  }
-}
-
-async function handleDocumentReview(
-  req: Request,
-  baseHeaders: Headers,
-  owner: string,
-  repo: string,
-  prNumber: number,
-): Promise<Response> {
-  const auth = await requireSubscription(req, baseHeaders);
-  if (auth instanceof Response) {
-    return auth;
-  }
-
-  const { client } = auth;
-  const payload = (await readJsonBody(req)) ?? null;
-  const form = payload ? null : await readMultipartBody(req);
-  const eventRaw = readInputString(payload, form, "event").toUpperCase();
-  const bodyText = readInputString(payload, form, "body");
-  const event =
-    eventRaw === "APPROVE" ||
-    eventRaw === "REQUEST_CHANGES" ||
-    eventRaw === "COMMENT"
-      ? eventRaw
-      : "";
-
-  if (!event) {
-    return json(
-      400,
-      {
-        error: "event must be APPROVE, REQUEST_CHANGES, or COMMENT.",
-      },
-      baseHeaders,
-    );
-  }
-
-  const reviewBody = event === "APPROVE" ? bodyText || "APPROVED" : bodyText;
-  if ((event === "REQUEST_CHANGES" || event === "COMMENT") && !reviewBody) {
-    return json(
-      400,
-      { error: "body is required for REQUEST_CHANGES and COMMENT reviews." },
-      baseHeaders,
-    );
-  }
-
-  try {
-    const review = await submitReview({
-      client,
-      owner,
-      repo,
-      pullNumber: prNumber,
-      event,
-      body: reviewBody,
-    });
-
-    return json(200, { review }, baseHeaders);
-  } catch (err) {
-    return responseFromError(err, baseHeaders, "Unable to submit review.");
   }
 }
 
@@ -3702,173 +2960,6 @@ async function handleSetCommentReaction(
   }
 }
 
-async function handleDocumentPublish(
-  req: Request,
-  baseHeaders: Headers,
-  owner: string,
-  repo: string,
-  prNumber: number,
-): Promise<Response> {
-  const auth = await requireSubscription(req, baseHeaders);
-  if (auth instanceof Response) {
-    return auth;
-  }
-
-  const { client } = auth;
-  const payload = (await readJsonBody(req)) ?? null;
-  const form = payload ? null : await readMultipartBody(req);
-  const mergeStyleRaw = readInputString(
-    payload,
-    form,
-    "mergeStyle",
-  ).toLowerCase();
-  const mergeStyle =
-    mergeStyleRaw === "squash" || mergeStyleRaw === "rebase"
-      ? (mergeStyleRaw as "squash" | "rebase")
-      : "merge";
-  const nextVersionRaw = readInputNumber(payload, form, "nextVersion");
-  const latestTag = await getLatestDocTag(client, owner, repo).catch(
-    () => null,
-  );
-  const nextVersion = parsePositiveIntInput(
-    nextVersionRaw || null,
-    (latestTag?.version ?? 0) + 1,
-  );
-
-  try {
-    // Enforce "resolve every thread before publishing". Gitea has no
-    // equivalent of GitHub's required conversation resolution, so the gate
-    // lives here — the BFF is the only path to a merge, so this cannot be
-    // bypassed from the browser. Checked before the merge, never after.
-    const reviewSettings = await getReviewSettings({ client, owner, repo });
-    if (reviewSettings.blockOnUnresolvedThreads) {
-      const discussions = await listDiscussions({
-        client,
-        owner,
-        repo,
-        pullNumber: prNumber,
-      });
-
-      if (discussions.unresolvedCount > 0) {
-        return json(
-          409,
-          {
-            error:
-              discussions.unresolvedCount === 1
-                ? "This version has 1 unresolved discussion thread. Resolve it before publishing."
-                : `This version has ${discussions.unresolvedCount} unresolved discussion threads. Resolve them before publishing.`,
-            unresolvedCount: discussions.unresolvedCount,
-          },
-          baseHeaders,
-        );
-      }
-    }
-
-    await mergeOrResolveConflicts({
-      client,
-      owner,
-      repo,
-      pullNumber: prNumber,
-      mergeStyle,
-    });
-
-    const tag = await createDocTag({
-      client,
-      owner,
-      repo,
-      version: nextVersion,
-      target: "main",
-    });
-
-    return json(200, { ok: true, tag }, baseHeaders);
-  } catch (err) {
-    return responseFromError(
-      err,
-      baseHeaders,
-      "Unable to publish the document.",
-    );
-  }
-}
-
-async function handleDocumentDownload(
-  req: Request,
-  baseHeaders: Headers,
-  owner: string,
-  repo: string,
-): Promise<Response> {
-  const access = await resolveDocumentAccess(req, baseHeaders, owner, repo);
-  if (access instanceof Response) {
-    return access;
-  }
-
-  const { client, token } = access;
-  const url = new URL(req.url);
-  const ref = url.searchParams.get("ref")?.trim() || "main";
-
-  try {
-    let canonicalFile = await resolveCanonicalFileInfo(
-      client,
-      owner,
-      repo,
-      ref,
-    ).catch(() => null);
-    if (!canonicalFile && ref === "main") {
-      const fallbackRef = await resolveLatestUploadRef(client, owner, repo);
-      if (fallbackRef) {
-        canonicalFile =
-          (await resolveCanonicalFileInfo(
-            client,
-            owner,
-            repo,
-            fallbackRef,
-          ).catch(() => null)) ?? null;
-      }
-    }
-
-    if (!canonicalFile) {
-      return json(
-        404,
-        { error: "Unable to determine the document file for this version." },
-        baseHeaders,
-      );
-    }
-
-    const downloadAuthHeaders: HeadersInit = token
-      ? { Authorization: buildTokenAuthHeader(token), Accept: "*/*" }
-      : { Accept: "*/*" };
-
-    const response = await giteaFetch(
-      `/api/v1/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/raw/${encodeURIComponent(canonicalFile.storedFileName)}?ref=${encodeURIComponent(ref)}`,
-      {
-        method: "GET",
-        headers: downloadAuthHeaders,
-      },
-    );
-
-    if (!response.ok) {
-      const errorMessage = await readGiteaErrorMessage(
-        response,
-        "Unable to download document.",
-      );
-      logger.error("Gitea fetch failure on document download", {
-        status: response.status,
-        owner,
-        repo,
-        ref,
-        message: errorMessage,
-      });
-      return json(response.status, { error: errorMessage }, baseHeaders);
-    }
-
-    return new Response(response.body, {
-      status: response.status,
-      headers: downloadHeaders(baseHeaders, response),
-    });
-  } catch (err) {
-    return responseFromError(err, baseHeaders, "Unable to download document.");
-  }
-}
-
 async function handleDocumentCollaborators(
   req: Request,
   baseHeaders: Headers,
@@ -4270,296 +3361,6 @@ async function handleAdminSubscriptionAccessDelete(
     },
     baseHeaders,
   );
-}
-
-async function handleAddCollaborator(
-  req: Request,
-  baseHeaders: Headers,
-  owner: string,
-  repo: string,
-  login: string,
-): Promise<Response> {
-  const auth = await requireSubscription(req, baseHeaders);
-  if (auth instanceof Response) {
-    return auth;
-  }
-
-  const { client } = auth;
-  const payload = (await readJsonBody(req)) ?? null;
-  const form = payload ? null : await readMultipartBody(req);
-  const permissionRaw = readInputString(
-    payload,
-    form,
-    "permission",
-  ).toLowerCase();
-  const permission =
-    permissionRaw === "read" ||
-    permissionRaw === "write" ||
-    permissionRaw === "admin"
-      ? permissionRaw
-      : "write";
-
-  try {
-    await addRepoCollaborator({
-      client,
-      owner,
-      repo,
-      collaborator: login,
-      permission,
-    });
-
-    const collaborator = await getRepoCollaboratorPermission({
-      client,
-      owner,
-      repo,
-      collaborator: login,
-    }).catch(() => ({
-      permission,
-      access: toRepoCollaboratorRole(permission),
-      permissionLabel:
-        permission === "read"
-          ? "Read"
-          : permission === "admin"
-            ? "Admin"
-            : "Write",
-      roleName: permission,
-      user: {
-        id: 0,
-        login,
-        full_name: "",
-        email: "",
-        avatar_url: "",
-      },
-    }));
-
-    return json(200, { collaborator }, baseHeaders);
-  } catch (err) {
-    return responseFromError(
-      err,
-      baseHeaders,
-      "Unable to update collaborator access.",
-    );
-  }
-}
-
-async function handleDeleteCollaborator(
-  req: Request,
-  baseHeaders: Headers,
-  owner: string,
-  repo: string,
-  login: string,
-): Promise<Response> {
-  const auth = await requireSubscription(req, baseHeaders);
-  if (auth instanceof Response) {
-    return auth;
-  }
-
-  const { client } = auth;
-
-  try {
-    await removeRepoCollaborator({
-      client,
-      owner,
-      repo,
-      collaborator: login,
-    });
-
-    return json(200, { ok: true }, baseHeaders);
-  } catch (err) {
-    return responseFromError(
-      err,
-      baseHeaders,
-      "Unable to remove collaborator.",
-    );
-  }
-}
-
-async function handleGetDocumentPermissions(
-  req: Request,
-  baseHeaders: Headers,
-  owner: string,
-  repo: string,
-): Promise<Response> {
-  // A read: who may act on this binder, and what the rules are. Changing any
-  // of it is the PUT, and that is still gated.
-  const auth = await requireSession(req, baseHeaders);
-  if (auth instanceof Response) return auth;
-  const { client, session } = auth;
-
-  try {
-    const [branchProtection, repoInfo, currentUserPermission, reviewSettings] =
-      await Promise.all([
-        getRepoBranchProtection(client, owner, repo, "main").catch(() => null),
-        getRepoInfo({ client, owner, repo }),
-        resolveCurrentUserPermission(
-          client,
-          owner,
-          repo,
-          session.username,
-        ).catch(() => null),
-        getReviewSettings({ client, owner, repo }).catch(() => null),
-      ]);
-
-    return json(
-      200,
-      {
-        branchProtection,
-        isPrivate: repoInfo.isPrivate,
-        isInternal: repoInfo.isInternal,
-        currentUserPermission,
-        reviewSettings,
-      },
-      baseHeaders,
-    );
-  } catch (err) {
-    return responseFromError(
-      err,
-      baseHeaders,
-      "Unable to load document permissions.",
-    );
-  }
-}
-
-async function handleUpdateDocumentPermissions(
-  req: Request,
-  baseHeaders: Headers,
-  owner: string,
-  repo: string,
-): Promise<Response> {
-  const auth = await requireSubscription(req, baseHeaders);
-  if (auth instanceof Response) return auth;
-  const { client, session } = auth;
-
-  // Changing review policy or branch protection is a governance action:
-  // the owner and admin collaborators may do it, write access is not enough.
-  if (session.username !== owner) {
-    const permission = await resolveCurrentUserPermission(
-      client,
-      owner,
-      repo,
-      session.username,
-    ).catch(() => null);
-
-    if (permission?.access !== "admin" && permission?.access !== "owner") {
-      return json(
-        403,
-        {
-          error:
-            "Only the document owner or an admin collaborator can change permissions.",
-        },
-        baseHeaders,
-      );
-    }
-  }
-
-  const payload = await readJsonBody(req);
-
-  const requiredApprovals =
-    typeof payload?.requiredApprovals === "number"
-      ? Math.max(0, Math.floor(payload.requiredApprovals))
-      : undefined;
-  const enableApprovalsWhitelist =
-    typeof payload?.enableApprovalsWhitelist === "boolean"
-      ? payload.enableApprovalsWhitelist
-      : undefined;
-  const approvalsWhitelistUsernames = Array.isArray(
-    payload?.approvalsWhitelistUsernames,
-  )
-    ? (payload.approvalsWhitelistUsernames as unknown[]).filter(
-        (u): u is string => typeof u === "string",
-      )
-    : undefined;
-  const enableMergeWhitelist =
-    typeof payload?.enableMergeWhitelist === "boolean"
-      ? payload.enableMergeWhitelist
-      : undefined;
-  const mergeWhitelistUsernames = Array.isArray(
-    payload?.mergeWhitelistUsernames,
-  )
-    ? (payload.mergeWhitelistUsernames as unknown[]).filter(
-        (u): u is string => typeof u === "string",
-      )
-    : undefined;
-  const isPrivate =
-    typeof payload?.isPrivate === "boolean" ? payload.isPrivate : undefined;
-  const dismissStaleApprovals =
-    typeof payload?.dismissStaleApprovals === "boolean"
-      ? payload.dismissStaleApprovals
-      : undefined;
-  const blockOnUnresolvedThreads =
-    typeof payload?.blockOnUnresolvedThreads === "boolean"
-      ? payload.blockOnUnresolvedThreads
-      : undefined;
-
-  try {
-    const updates: Array<Promise<unknown>> = [];
-
-    const hasBranchUpdate =
-      requiredApprovals !== undefined ||
-      enableApprovalsWhitelist !== undefined ||
-      approvalsWhitelistUsernames !== undefined ||
-      enableMergeWhitelist !== undefined ||
-      mergeWhitelistUsernames !== undefined ||
-      dismissStaleApprovals !== undefined;
-
-    if (hasBranchUpdate) {
-      updates.push(
-        updateRepoBranchProtection({
-          client,
-          owner,
-          repo,
-          ruleName: "main",
-          requiredApprovals,
-          enableApprovalsWhitelist,
-          approvalsWhitelistUsernames,
-          enableMergeWhitelist,
-          mergeWhitelistUsernames,
-          dismissStaleApprovals,
-        }),
-      );
-    }
-
-    if (isPrivate !== undefined) {
-      updates.push(updateRepoVisibility({ client, owner, repo, isPrivate }));
-    }
-
-    if (blockOnUnresolvedThreads !== undefined) {
-      updates.push(
-        updateReviewSettings({
-          client,
-          owner,
-          repo,
-          settings: { blockOnUnresolvedThreads },
-          actor: session.username,
-        }),
-      );
-    }
-
-    await Promise.all(updates);
-
-    const [branchProtection, repoInfo, reviewSettings] = await Promise.all([
-      getRepoBranchProtection(client, owner, repo, "main").catch(() => null),
-      getRepoInfo({ client, owner, repo }),
-      getReviewSettings({ client, owner, repo }).catch(() => null),
-    ]);
-
-    return json(
-      200,
-      {
-        branchProtection,
-        isPrivate: repoInfo.isPrivate,
-        isInternal: repoInfo.isInternal,
-        reviewSettings,
-      },
-      baseHeaders,
-    );
-  } catch (err) {
-    return responseFromError(
-      err,
-      baseHeaders,
-      "Unable to update document permissions.",
-    );
-  }
 }
 
 async function handleStripeWebhook(
@@ -7312,50 +6113,16 @@ async function handleListWorkspaceDocuments(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
-    const documents = await listWorkspaceDocuments({
-      client: auth.client,
-      org: orgName,
-      workspace: workspaceName,
-    });
-
-    // Two calls for the whole binder, then matched per document — rather than
-    // a pull request query and a tags query each, which is the cost the binder
-    // exists to remove. Both are repository-wide, so a binder of two hundred
-    // policies costs the same as one of two.
-    const [openChanges, versionsByDocument] = await Promise.all([
-      listPullRequests({
-        client: auth.client,
-        owner: orgName,
-        repo: workspaceName,
-        state: "open",
-      }),
-      listVersionsByDocument({
-        client: auth.client,
-        org: orgName,
-        workspace: workspaceName,
-      }),
-    ]);
-
-    const published = documents.map((document) => ({
-      ...document,
-      state: "published" as const,
-      openChangeCount: openChanges.filter((pull) =>
-        changeTouchesDocument(pull, document.slugPath),
-      ).length,
-      // A list of policies that does not say which version each one is at
-      // answers none of the questions a list is opened to answer.
-      latestVersion: versionsByDocument.get(document.slugPath)?.[0] ?? null,
-    }));
-
     return json(
       200,
       {
         organization: orgName,
         workspace: workspaceName,
-        documents: [
-          ...published,
-          ...proposedDocuments(openChanges, published),
-        ].sort((a, b) => a.slugPath.localeCompare(b.slugPath)),
+        documents: await readBinderDocuments({
+          client: auth.client,
+          org: orgName,
+          workspace: workspaceName,
+        }),
       },
       baseHeaders,
     );
@@ -7368,6 +6135,44 @@ async function handleListWorkspaceDocuments(
     });
     return responseFromError(err, baseHeaders, "Unable to list the documents.");
   }
+}
+
+/**
+ * Everything one binder holds, published and proposed.
+ *
+ * **Three calls for the whole binder**, whatever it holds — the tree, the open
+ * changes, and the tags — rather than a pull request query and a tags query per
+ * document, which is the cost the binder model exists to remove. A binder of
+ * two hundred policies costs the same as one of two, which is the property that
+ * makes the cross-binder library below affordable at all.
+ */
+async function readBinderDocuments(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+}): Promise<WorkspaceDocumentListEntry[]> {
+  const { client, org, workspace } = params;
+
+  const [documents, openChanges, versionsByDocument] = await Promise.all([
+    listWorkspaceDocuments({ client, org, workspace }),
+    listPullRequests({ client, owner: org, repo: workspace, state: "open" }),
+    listVersionsByDocument({ client, org, workspace }),
+  ]);
+
+  const published = documents.map((document) => ({
+    ...document,
+    state: "published" as const,
+    openChangeCount: openChanges.filter((pull) =>
+      changeTouchesDocument(pull, document.slugPath),
+    ).length,
+    // A list of policies that does not say which version each one is at
+    // answers none of the questions a list is opened to answer.
+    latestVersion: versionsByDocument.get(document.slugPath)?.[0] ?? null,
+  }));
+
+  return [...published, ...proposedDocuments(openChanges, published)].sort(
+    (left, right) => left.slugPath.localeCompare(right.slugPath),
+  );
 }
 
 /**
@@ -8674,11 +7479,9 @@ export function createApiServer() {
       } else if (pathname === "/api/app/home/changes" && method === "GET") {
         response = await handleHomeChanges(req, baseHeaders);
       } else if (pathname === "/api/app/documents" && method === "GET") {
-        response = await handleDocuments(req, baseHeaders);
+        response = await handleLibraryDocuments(req, baseHeaders);
       } else if (pathname === "/api/app/documents/search" && method === "GET") {
         response = await handleDocumentSearch(req, baseHeaders);
-      } else if (pathname === "/api/app/documents" && method === "POST") {
-        response = await handleCreateDocument(req, baseHeaders);
       } else if (pathname === "/api/app/users/search" && method === "GET") {
         response = await handleSearchUsersRoute(req, baseHeaders);
       } else if (
@@ -8709,48 +7512,6 @@ export function createApiServer() {
       } else if (pathname === "/api/dev/end-trial" && method === "POST") {
         response = await handleDevEndTrial(req, baseHeaders);
       } else {
-        const reviewMatch = pathname.match(
-          /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/reviews$/,
-        );
-        const assignmentsMatch = pathname.match(
-          /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/assignments$/,
-        );
-        const publishMatch = pathname.match(
-          /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/publish$/,
-        );
-        const discussionsMatch = pathname.match(
-          /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/discussions$/,
-        );
-        const changeUpdatesMatch = pathname.match(
-          /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/updates$/,
-        );
-        const discussionRepliesMatch = pathname.match(
-          /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/discussions\/([^/]+)\/comments$/,
-        );
-        const discussionResolveMatch = pathname.match(
-          /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/discussions\/([^/]+)\/resolve$/,
-        );
-        const discussionReactionMatch = pathname.match(
-          /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)\/discussions\/([^/]+)\/comments\/(\d+)\/reactions$/,
-        );
-        const downloadMatch = pathname.match(
-          /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/download$/,
-        );
-        const versionsMatch = pathname.match(
-          /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/versions$/,
-        );
-        const historyMatch = pathname.match(
-          /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/history$/,
-        );
-        const closedChangesMatch = pathname.match(
-          /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/changes\/closed$/,
-        );
-        const permissionsMatch = pathname.match(
-          /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/permissions$/,
-        );
-        const collaboratorsActionMatch = pathname.match(
-          /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/collaborators\/([^/]+)$/,
-        );
         const adminSubscriptionAccessActionMatch = pathname.match(
           /^\/api\/app\/admin\/subscriptions\/access\/([^/]+)$/,
         );
@@ -8762,12 +7523,6 @@ export function createApiServer() {
         );
         const adminSubscriptionStatusMatch = pathname.match(
           /^\/api\/app\/admin\/subscriptions\/([^/]+)$/,
-        );
-        const collaboratorsMatch = pathname.match(
-          /^\/api\/app\/documents\/([^/]+)\/([^/]+)\/collaborators$/,
-        );
-        const documentMatch = pathname.match(
-          /^\/api\/app\/documents\/([^/]+)\/([^/]+)$/,
         );
         const workspaceDocumentsMatch = pathname.match(
           /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/documents$/,
@@ -9145,124 +7900,6 @@ export function createApiServer() {
             workspaceDocumentsMatch[1]!,
             workspaceDocumentsMatch[2]!,
           );
-        } else if (reviewMatch && method === "POST") {
-          response = await handleDocumentReview(
-            req,
-            baseHeaders,
-            decodePathParam(reviewMatch[1] ?? ""),
-            decodePathParam(reviewMatch[2] ?? ""),
-            Number.parseInt(reviewMatch[3] ?? "", 10),
-          );
-        } else if (assignmentsMatch && method === "PUT") {
-          response = await handleUpdateChangeAssignments(
-            req,
-            baseHeaders,
-            decodePathParam(assignmentsMatch[1] ?? ""),
-            decodePathParam(assignmentsMatch[2] ?? ""),
-            Number.parseInt(assignmentsMatch[3] ?? "", 10),
-          );
-        } else if (publishMatch && method === "POST") {
-          response = await handleDocumentPublish(
-            req,
-            baseHeaders,
-            decodePathParam(publishMatch[1] ?? ""),
-            decodePathParam(publishMatch[2] ?? ""),
-            Number.parseInt(publishMatch[3] ?? "", 10),
-          );
-        } else if (changeUpdatesMatch && method === "GET") {
-          response = await handleChangeUpdates(
-            req,
-            baseHeaders,
-            decodePathParam(changeUpdatesMatch[1] ?? ""),
-            decodePathParam(changeUpdatesMatch[2] ?? ""),
-            Number.parseInt(changeUpdatesMatch[3] ?? "", 10),
-          );
-        } else if (discussionsMatch && method === "GET") {
-          response = await handleListDiscussions(
-            req,
-            baseHeaders,
-            decodePathParam(discussionsMatch[1] ?? ""),
-            decodePathParam(discussionsMatch[2] ?? ""),
-            Number.parseInt(discussionsMatch[3] ?? "", 10),
-          );
-        } else if (discussionsMatch && method === "POST") {
-          response = await handleCreateDiscussionThread(
-            req,
-            baseHeaders,
-            decodePathParam(discussionsMatch[1] ?? ""),
-            decodePathParam(discussionsMatch[2] ?? ""),
-            Number.parseInt(discussionsMatch[3] ?? "", 10),
-          );
-        } else if (discussionReactionMatch && method === "PUT") {
-          response = await handleSetCommentReaction(
-            req,
-            baseHeaders,
-            decodePathParam(discussionReactionMatch[1] ?? ""),
-            decodePathParam(discussionReactionMatch[2] ?? ""),
-            Number.parseInt(discussionReactionMatch[3] ?? "", 10),
-            decodePathParam(discussionReactionMatch[4] ?? ""),
-            Number.parseInt(discussionReactionMatch[5] ?? "", 10),
-          );
-        } else if (discussionRepliesMatch && method === "POST") {
-          response = await handleReplyToDiscussion(
-            req,
-            baseHeaders,
-            decodePathParam(discussionRepliesMatch[1] ?? ""),
-            decodePathParam(discussionRepliesMatch[2] ?? ""),
-            Number.parseInt(discussionRepliesMatch[3] ?? "", 10),
-            decodePathParam(discussionRepliesMatch[4] ?? ""),
-          );
-        } else if (discussionResolveMatch && method === "POST") {
-          response = await handleResolveDiscussion(
-            req,
-            baseHeaders,
-            decodePathParam(discussionResolveMatch[1] ?? ""),
-            decodePathParam(discussionResolveMatch[2] ?? ""),
-            Number.parseInt(discussionResolveMatch[3] ?? "", 10),
-            decodePathParam(discussionResolveMatch[4] ?? ""),
-          );
-        } else if (downloadMatch && method === "GET") {
-          response = await handleDocumentDownload(
-            req,
-            baseHeaders,
-            decodePathParam(downloadMatch[1] ?? ""),
-            decodePathParam(downloadMatch[2] ?? ""),
-          );
-        } else if (historyMatch && method === "GET") {
-          response = await handleDocumentHistory(
-            req,
-            baseHeaders,
-            decodePathParam(historyMatch[1] ?? ""),
-            decodePathParam(historyMatch[2] ?? ""),
-          );
-        } else if (closedChangesMatch && method === "GET") {
-          response = await handleClosedChanges(
-            req,
-            baseHeaders,
-            decodePathParam(closedChangesMatch[1] ?? ""),
-            decodePathParam(closedChangesMatch[2] ?? ""),
-          );
-        } else if (versionsMatch && method === "POST") {
-          response = await handleDocumentVersions(
-            req,
-            baseHeaders,
-            decodePathParam(versionsMatch[1] ?? ""),
-            decodePathParam(versionsMatch[2] ?? ""),
-          );
-        } else if (permissionsMatch && method === "GET") {
-          response = await handleGetDocumentPermissions(
-            req,
-            baseHeaders,
-            decodePathParam(permissionsMatch[1] ?? ""),
-            decodePathParam(permissionsMatch[2] ?? ""),
-          );
-        } else if (permissionsMatch && method === "PUT") {
-          response = await handleUpdateDocumentPermissions(
-            req,
-            baseHeaders,
-            decodePathParam(permissionsMatch[1] ?? ""),
-            decodePathParam(permissionsMatch[2] ?? ""),
-          );
         } else if (adminSubscriptionGrantMatch && method === "POST") {
           response = await upsertLegacyAdminSubscriptionOverride(
             req,
@@ -9307,36 +7944,6 @@ export function createApiServer() {
             req,
             baseHeaders,
             adminSubscriptionAccessActionMatch[1] ?? "",
-          );
-        } else if (collaboratorsActionMatch && method === "PUT") {
-          response = await handleAddCollaborator(
-            req,
-            baseHeaders,
-            decodePathParam(collaboratorsActionMatch[1] ?? ""),
-            decodePathParam(collaboratorsActionMatch[2] ?? ""),
-            decodePathParam(collaboratorsActionMatch[3] ?? ""),
-          );
-        } else if (collaboratorsActionMatch && method === "DELETE") {
-          response = await handleDeleteCollaborator(
-            req,
-            baseHeaders,
-            decodePathParam(collaboratorsActionMatch[1] ?? ""),
-            decodePathParam(collaboratorsActionMatch[2] ?? ""),
-            decodePathParam(collaboratorsActionMatch[3] ?? ""),
-          );
-        } else if (collaboratorsMatch && method === "GET") {
-          response = await handleDocumentCollaborators(
-            req,
-            baseHeaders,
-            decodePathParam(collaboratorsMatch[1] ?? ""),
-            decodePathParam(collaboratorsMatch[2] ?? ""),
-          );
-        } else if (documentMatch && method === "GET") {
-          response = await handleDocumentDetail(
-            req,
-            baseHeaders,
-            decodePathParam(documentMatch[1] ?? ""),
-            decodePathParam(documentMatch[2] ?? ""),
           );
         } else {
           response = json(404, { error: "Not found." }, baseHeaders);

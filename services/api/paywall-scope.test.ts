@@ -185,16 +185,19 @@ describe("the paywall gates mutation, never reading", () => {
     }
   });
 
-  test("the ways a file leaves in particular stay open", () => {
+  test("the way a file leaves in particular stays open", () => {
     // Exporting is the read that matters most: it is how a customer answers a
-    // surveyor, and it is the one we can never take away. Both models have a
-    // route for it — a repository's `/download` and a binder's `/raw/`.
-    const exports = readRoutes.filter((route) => {
-      const path = readablePath(route.path);
-      return path.endsWith("/download") || path.includes("/raw/");
-    });
+    // surveyor, and it is the one we can never take away.
+    //
+    // There is one route now, not two. A document used to be a repository with
+    // its own `/download`; with that model deleted, a binder's `/raw/` is the
+    // whole of it. The count stays asserted so the route cannot quietly go to
+    // zero — which would take the export away rather than move it.
+    const exports = readRoutes.filter((route) =>
+      readablePath(route.path).includes("/raw/"),
+    );
 
-    expect(exports.length).toBeGreaterThanOrEqual(2);
+    expect(exports.length).toBeGreaterThanOrEqual(1);
     for (const route of exports) {
       expect([...reachableFrom(route.handler, functions)]).not.toContain(
         "requireSubscription",
@@ -217,6 +220,9 @@ describe("the paywall gates mutation, never reading", () => {
 
     const gatedPaths = gatedMutations.map((route) => readablePath(route.path));
     expect(gatedPaths.some((path) => path.endsWith("/publish"))).toBe(true);
-    expect(gatedPaths).toContain("/api/app/documents");
+    // Filing a policy is the authoring act the paywall exists for. It used to
+    // be `POST /api/app/documents`, which made a repository; it is now a commit
+    // into a binder that already exists.
+    expect(gatedPaths.some((path) => path.endsWith("/documents"))).toBe(true);
   });
 });

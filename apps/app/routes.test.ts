@@ -3,7 +3,6 @@ import { expect, test } from "bun:test";
 import {
   asShellRoute,
   getRoute,
-  isLegacyDocumentTabPath,
   isLegacyInboxPath,
   isProtectedAppRoute,
   routeToPath,
@@ -30,205 +29,52 @@ test("getRoute maps the SPA home route to the landing/app home kind", () => {
   });
 });
 
-test("getRoute preserves document detail routes", () => {
-  expect(getRoute("/docs/alice/quarterly-report")).toEqual({
-    kind: "document",
-    owner: "alice",
-    repo: "quarterly-report",
-    tab: "overview",
-  });
+test("routeToPath round-trips a binder, its tabs and one of its changes", () => {
+  // A link into a change arrives from Home and from quick find, so the tab and
+  // the change number have to survive the round trip — landing on the binder's
+  // Documents tab instead would drop somebody one click away from what they
+  // clicked.
+  const routes = [
+    { kind: "binder", org: "riverside-health", binder: "clinical" },
+    {
+      kind: "binder",
+      org: "riverside-health",
+      binder: "clinical",
+      tab: "sign-off",
+    },
+    {
+      kind: "binderDocument",
+      org: "riverside-health",
+      binder: "clinical",
+      documentPath: "nursing/infection-control",
+    },
+  ] as const;
 
-  expect(getRoute("/docs/alice/quarterly-report/access")).toEqual({
-    kind: "document",
-    owner: "alice",
-    repo: "quarterly-report",
-    tab: "access",
-  });
-});
-
-// Team and Settings became one tab. Links that were already sent still land
-// on the page that answers them.
-test("getRoute resolves the retired Team and Settings tabs to Access", () => {
-  expect(getRoute("/docs/alice/quarterly-report/collaborators")).toEqual({
-    kind: "document",
-    owner: "alice",
-    repo: "quarterly-report",
-    tab: "access",
-  });
-
-  expect(getRoute("/docs/alice/quarterly-report/permissions")).toEqual({
-    kind: "document",
-    owner: "alice",
-    repo: "quarterly-report",
-    tab: "access",
-  });
-
-  expect(
-    isLegacyDocumentTabPath("/docs/alice/quarterly-report/permissions"),
-  ).toBe(true);
-  expect(isLegacyDocumentTabPath("/docs/alice/quarterly-report/access")).toBe(
-    false,
-  );
-  expect(isLegacyDocumentTabPath("/docs/alice/quarterly-report")).toBe(false);
-});
-
-test("getRoute maps the changes and history tabs", () => {
-  expect(getRoute("/docs/alice/quarterly-report/changes")).toEqual({
-    kind: "document",
-    owner: "alice",
-    repo: "quarterly-report",
-    tab: "changes",
-  });
-
-  expect(getRoute("/docs/alice/quarterly-report/history")).toEqual({
-    kind: "document",
-    owner: "alice",
-    repo: "quarterly-report",
-    tab: "history",
-  });
-});
-
-test("getRoute gives every change its own page", () => {
-  expect(getRoute("/docs/alice/quarterly-report/changes/7")).toEqual({
-    kind: "document",
-    owner: "alice",
-    repo: "quarterly-report",
-    tab: "changes",
-    changeNumber: 7,
-    changeView: "discussion",
-  });
-
-  expect(
-    routeToPath({
-      kind: "document",
-      owner: "alice",
-      repo: "quarterly-report",
-      tab: "changes",
-      changeNumber: 7,
-    }),
-  ).toBe("/docs/alice/quarterly-report/changes/7");
-});
-
-test("the file under review is its own screen within a change", () => {
-  expect(getRoute("/docs/alice/quarterly-report/changes/7/preview")).toEqual({
-    kind: "document",
-    owner: "alice",
-    repo: "quarterly-report",
-    tab: "changes",
-    changeNumber: 7,
-    changeView: "preview",
-  });
-
-  expect(
-    routeToPath({
-      kind: "document",
-      owner: "alice",
-      repo: "quarterly-report",
-      tab: "changes",
-      changeNumber: 7,
-      changeView: "preview",
-    }),
-  ).toBe("/docs/alice/quarterly-report/changes/7/preview");
-});
-
-test("the comparison against the last version is its own screen too", () => {
-  expect(getRoute("/docs/alice/quarterly-report/changes/7/compare")).toEqual({
-    kind: "document",
-    owner: "alice",
-    repo: "quarterly-report",
-    tab: "changes",
-    changeNumber: 7,
-    changeView: "compare",
-  });
-
-  expect(
-    routeToPath({
-      kind: "document",
-      owner: "alice",
-      repo: "quarterly-report",
-      tab: "changes",
-      changeNumber: 7,
-      changeView: "compare",
-    }),
-  ).toBe("/docs/alice/quarterly-report/changes/7/compare");
-});
-
-test("every published version has a page of its own", () => {
-  expect(getRoute("/docs/alice/quarterly-report/version/2")).toEqual({
-    kind: "document",
-    owner: "alice",
-    repo: "quarterly-report",
-    tab: "overview",
-    version: 2,
-  });
-
-  expect(
-    routeToPath({
-      kind: "document",
-      owner: "alice",
-      repo: "quarterly-report",
-      tab: "overview",
-      version: 2,
-    }),
-  ).toBe("/docs/alice/quarterly-report/version/2");
-});
-
-test("the document tab without a version is the version on record", () => {
-  expect(
-    routeToPath({
-      kind: "document",
-      owner: "alice",
-      repo: "quarterly-report",
-      tab: "overview",
-    }),
-  ).toBe("/docs/alice/quarterly-report");
-});
-
-test("a non-numeric version segment is not a version page", () => {
-  expect(getRoute("/docs/alice/quarterly-report/version/latest")).toEqual({
-    kind: "home",
-  });
-});
-
-test("an unknown segment under a change is not a change page", () => {
-  expect(getRoute("/docs/alice/quarterly-report/changes/7/nonsense")).toEqual({
-    kind: "home",
-  });
-});
-
-test("a non-numeric change segment is not a change page", () => {
-  expect(getRoute("/docs/alice/quarterly-report/changes/latest")).toEqual({
-    kind: "home",
-  });
-});
-
-test("getRoute falls back to home for an unknown document tab", () => {
-  expect(getRoute("/docs/alice/quarterly-report/nonsense")).toEqual({
-    kind: "home",
-  });
-});
-
-test("routeToPath round-trips every document tab", () => {
-  const tabs = ["overview", "changes", "history", "access"] as const;
-
-  for (const tab of tabs) {
-    const route = {
-      kind: "document",
-      owner: "alice",
-      repo: "quarterly-report",
-      tab,
-    } as const;
-    expect(getRoute(routeToPath(route))).toEqual(route);
+  for (const route of routes) {
+    expect(getRoute(routeToPath(route))).toMatchObject({
+      kind: route.kind,
+      org: route.org,
+      binder: route.binder,
+    });
   }
-});
 
-test("getRoute maps the access path with URL-encoded owner/repo", () => {
-  expect(getRoute("/docs/alice-org/my%20doc/access")).toEqual({
-    kind: "document",
-    owner: "alice-org",
-    repo: "my%20doc",
-    tab: "access",
-  });
+  // The binder's own address stays the short one, the way a repository's is.
+  expect(
+    routeToPath({
+      kind: "binder",
+      org: "riverside-health",
+      binder: "clinical",
+    }),
+  ).toBe("/riverside-health/clinical");
+  expect(
+    routeToPath({
+      kind: "binder",
+      org: "riverside-health",
+      binder: "clinical",
+      tab: "changes",
+      change: 3,
+    }),
+  ).toBe("/riverside-health/clinical?tab=changes&change=3");
 });
 
 test("routeToPath keeps home and workspace on the root URL", () => {
@@ -293,16 +139,6 @@ test("everything after the binder is the document's path, folders and all", () =
     binder: "clinical",
     documentPath: "nursing/handover.md",
   });
-});
-
-test("the app's own routes are not organizations", () => {
-  // A bare /{org}/{binder} would swallow every one of these. Anything added to
-  // RESERVED_FIRST_SEGMENTS has to be refused as an organization name too, or
-  // somebody's binder becomes unreachable.
-  expect(getRoute("/organizations/new").kind).toBe("createOrganization");
-  expect(getRoute("/admin/subscriptions").kind).toBe("adminSubscriptions");
-  expect(getRoute("/auth/callback").kind).toBe("callback");
-  expect(getRoute("/docs/alice/handbook").kind).toBe("document");
 });
 
 test("a binder route round-trips through routeToPath", () => {

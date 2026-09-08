@@ -5,7 +5,12 @@ interface NewDocumentButtonProps {
 }
 
 /**
- * "New document", in the top nav.
+ * "New policy", in the top nav.
+ *
+ * It said "New document" while a document was a repository somebody made. It
+ * now opens the same modal the binder's own "Add a policy" does, after asking
+ * which binder — so the word matches what pressing it produces, and matches
+ * the word every other surface uses.
  *
  * Every page already carries its own primary action, so the nav's copy of this
  * one stays quiet: a plain plus that sits with the notification bell rather
@@ -19,8 +24,8 @@ export function NewDocumentButton({ onClick }: NewDocumentButtonProps) {
       className="app-topnav-icon-btn app-topnav-new-btn"
       type="button"
       id="topnav-new-doc-btn"
-      title="New document"
-      aria-label="New document"
+      title="New policy"
+      aria-label="New policy"
       onClick={onClick}
     >
       <Plus size={16} strokeWidth={1.5} aria-hidden="true" />

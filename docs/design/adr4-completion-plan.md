@@ -80,7 +80,7 @@ is worth shipping alone.
 | ----- | -------------------------------------------------------- | ------- | -------------------- |
 | 0     | Land the step-2 stack (#398 → #404)                      | shipped | **done**             |
 | 0     | Writing from the binder UI                               | screens | **done** (#409–#415) |
-| 0     | Delete the old model                                     | both    | not started          |
+| 0     | Delete the old model                                     | both    | **done**             |
 | 1     | Membership read model; `staff`; stop provisioning teams  | backend | **done** (#416)      |
 | 2     | Breadcrumb shell and scope tabs                          | screens | **done**             |
 | 3     | Organization page                                        | screens | **done**             |
@@ -113,10 +113,18 @@ had backwards — a CODEOWNERS pattern that does not compile is dropped silently
 rather than failing closed. That became a requirement on the generator before
 the generator existed.
 
-What is left is **deleting the old model**, plus the items in the
-implementation status notes that were never sequenced here: the
-`document_versions` index, per-workspace settings, and the approvals whitelist
-on a binder's change page.
+**The old model is deleted too** — 20,000 lines out, the library rebuilt on
+binders in the same change because it would otherwise have gone blank, and two
+things named that would have disappeared silently: the regulator export, which
+is now a binder's rather than one document's, and anonymous document viewing,
+which has no surface at all until #364's one-time links exist
+([issue 430](https://github.com/davidgraymi/bindersnap-editor-demo/issues/430)).
+
+What is left is what the implementation status notes carry and this plan never
+sequenced: the `document_versions` derived index and per-workspace settings. The
+approvals whitelist on a binder's change page is **not** being built — with the
+old model gone there is no way to reach a binder except through a team the
+whitelist already names, so the state that screen would explain cannot happen.
 
 Piece 10 went early, out of order, exactly as the note below predicted it
 could.

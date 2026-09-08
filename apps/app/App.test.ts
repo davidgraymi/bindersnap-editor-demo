@@ -607,7 +607,11 @@ test("App shows the setup screen at /organizations/new, not the billing page", a
 });
 
 test("App lets an account with no organization read, instead of gating every route", async () => {
-  installDom("/docs/mercy-health/binder");
+  // A binder address, not the retired `/docs/:owner/:repo` one: the point of
+  // the test is that a person without an organization is not bounced to the
+  // setup screen from a route they can read, and the reading route is a
+  // binder's now.
+  installDom("/mercy-health/binder");
   signedInWithNoOrganization();
 
   const { App } = await import("./App");
@@ -619,8 +623,8 @@ test("App lets an account with no organization read, instead of gating every rou
         '[data-testid="app-shell"]',
       );
 
-      expect(appShell?.dataset.routeKind).toBe("document");
-      expect(window.location.pathname).toBe("/docs/mercy-health/binder");
+      expect(appShell?.dataset.routeKind).toBe("binder");
+      expect(window.location.pathname).toBe("/mercy-health/binder");
       expect(
         container.querySelector('[data-testid="billing-page"]'),
       ).toBeNull();

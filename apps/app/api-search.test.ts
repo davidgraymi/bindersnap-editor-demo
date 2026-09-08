@@ -72,10 +72,10 @@ function runApiCheck(script: string) {
   };
 }
 
-test("getWorkspaceDocuments with no params sends no query string", () => {
+test("fetchLibrary with no query sends no query string", () => {
   const result = runApiCheck(`
     import { JSDOM } from "jsdom";
-    import { getWorkspaceDocuments } from "./apps/app/api.ts";
+    import { fetchLibrary } from "./apps/app/api.ts";
 
     const dom = new JSDOM("<!doctype html><html><body></body></html>", {
       url: "https://bindersnap.com/documents",
@@ -90,14 +90,14 @@ test("getWorkspaceDocuments with no params sends no query string", () => {
       PopStateEvent: dom.window.PopStateEvent,
       fetch: async (input, init) => {
         fetchUrl = typeof input === "string" ? input : input.url;
-        return new Response(JSON.stringify({ documents: [] }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({ documents: [], binders: [], hasMore: false }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
       },
     });
 
-    await getWorkspaceDocuments();
+    await fetchLibrary();
 
     if (!fetchUrl.endsWith("/api/app/documents")) {
       console.error("expected /api/app/documents but got", fetchUrl);
@@ -113,17 +113,19 @@ test("getWorkspaceDocuments with no params sends no query string", () => {
   expect(result.exitCode).toBe(0);
 });
 
-test("getWorkspaceDocuments with structured params sends them as URL query string", () => {
+test("fetchLibrary sends what was typed as the q parameter", () => {
+  // The one filter the library still has. The owner and member filters went
+  // with the old model: nobody owns a document now, so they had nothing left
+  // to mean.
   const result = runApiCheck(`
     import { JSDOM } from "jsdom";
-    import { getWorkspaceDocuments } from "./apps/app/api.ts";
+    import { fetchLibrary } from "./apps/app/api.ts";
 
     const dom = new JSDOM("<!doctype html><html><body></body></html>", {
       url: "https://bindersnap.com/documents",
     });
 
     let fetchUrl = "";
-    let fetchBody = null;
     Object.assign(globalThis, {
       window: dom.window,
       document: dom.window.document,
@@ -132,27 +134,22 @@ test("getWorkspaceDocuments with structured params sends them as URL query strin
       PopStateEvent: dom.window.PopStateEvent,
       fetch: async (input, init) => {
         fetchUrl = typeof input === "string" ? input : input.url;
-        fetchBody = init?.body ?? null;
-        return new Response(JSON.stringify({ documents: [] }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({ documents: [], binders: [], hasMore: false }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
       },
     });
 
-    await getWorkspaceDocuments({ ownerUsername: "alice", freeText: "report" });
+    await fetchLibrary("infection");
 
-    const url = new URL(fetchUrl.startsWith("http") ? fetchUrl : "http://x" + fetchUrl);
-    if (url.searchParams.get("owner") !== "alice") {
-      console.error("expected owner=alice but got", url.searchParams.get("owner"));
+    const url = new URL(fetchUrl, "https://bindersnap.com");
+    if (url.pathname !== "/api/app/documents") {
+      console.error("expected /api/app/documents but got", url.pathname);
       process.exit(1);
     }
-    if (url.searchParams.get("q") !== "report") {
-      console.error("expected q=report but got", url.searchParams.get("q"));
-      process.exit(1);
-    }
-    if (fetchBody !== null && fetchBody !== undefined) {
-      console.error("expected no request body but got", fetchBody);
+    if (url.searchParams.get("q") !== "infection") {
+      console.error("expected q=infection but got", url.search);
       process.exit(1);
     }
   `);
