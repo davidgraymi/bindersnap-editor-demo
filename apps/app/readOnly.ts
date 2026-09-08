@@ -2,7 +2,7 @@
  * Read-only mode — what a delinquent organization looks like from the screen.
  *
  * ADR 0004 is structural about this: the paywall gates authoring and mutation
- * and never gates reading or exporting. The API has enforced that since #392,
+ * and never gates reading or exporting. The API has enforced that since PR 392,
  * but the SPA answered a lapsed subscription by replacing the whole app with
  * the card form, so no customer could reach the record the rule promises to
  * keep open. This is the other half — the app renders, the record is legible,
