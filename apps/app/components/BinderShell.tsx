@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useIsReadOnly } from "../readOnlyContext";
 
 import { fetchBinder } from "../api";
 import type { WorkspaceOverviewPayload } from "../../../packages/api-schema/schemas/workspaces";
@@ -53,6 +54,7 @@ export function BinderShell({
   onOpenBinder,
   onOpenOrganization,
 }: BinderShellProps) {
+  const isReadOnly = useIsReadOnly();
   const [overview, setOverview] = useState<WorkspaceOverviewPayload | null>(
     null,
   );
@@ -179,14 +181,18 @@ export function BinderShell({
           </div>
 
           {/* The binder is where the work is, so the way to add to it is on
-              the binder rather than in a menu somewhere else. */}
-          <button
-            className="doc-header-submit"
-            type="button"
-            onClick={() => setAdding(true)}
-          >
-            Add a policy
-          </button>
+              the binder rather than in a menu somewhere else. Gone rather
+              than disabled while the organization is read-only: the banner
+              above says why once, and a row of dead buttons says it badly. */}
+          {isReadOnly ? null : (
+            <button
+              className="doc-header-submit"
+              type="button"
+              onClick={() => setAdding(true)}
+            >
+              Add a policy
+            </button>
+          )}
         </div>
 
         <nav className="doc-tabs" role="tablist" aria-label="Binder">

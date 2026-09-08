@@ -1325,6 +1325,18 @@ describe("admin subscription access overrides", () => {
       );
       expect(gatedWhileRevoked.status).toBe(402);
 
+      // The paywall's 402 says so in the body. The SPA used to tell a refusal
+      // from `GET /api/app/billing`'s own 402 by matching the request path,
+      // which every new billing route had to remember to be added to; the
+      // code is that distinction stated. The organization is named because
+      // the read-only banner has to say whose bill it is.
+      const gatedBody = (await gatedWhileRevoked.json()) as {
+        code?: string;
+        organization?: string | null;
+      };
+      expect(gatedBody.code).toBe("subscription_required");
+      expect(gatedBody.organization).toBe(`${memberUsername}-org`);
+
       const clear = await server.fetch(
         makeSessionRequest(
           `/api/app/admin/subscriptions/access/${encodeURIComponent(memberUsername)}`,
