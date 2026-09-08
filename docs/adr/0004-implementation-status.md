@@ -717,6 +717,21 @@ Not folded in: mutating controls in the per-document workspace, which leaves
 with the old model. The API refuses them regardless, so the failure mode there
 is an error rather than a silent write.
 
+**Pinned against a real stack.** `tests/read-only-mode.pw.ts` signs a member
+up, gives them an organization and a binder, revokes the organization's access
+the way an administrator would, and asserts both halves of the promise: the
+binder still renders with its heading and its documents endpoint still answers
+200, while the banner appears, "Add a policy" is gone, and creating a binder is
+refused with a typed 402 naming the organization. It also asserts the URL did
+not move, because being sent to `/billing` is exactly the behaviour this
+replaced.
+
+`admin_revoke` is the route in rather than a lapsed Stripe subscription: it is
+the top of `resolveAccess`'s precedence list, so it reaches the same state, and
+it needs no Stripe credentials — which the integration environment does not
+always have. The test was checked by breaking `resolveReadOnly` and watching it
+fail, so it is known to be testing something.
+
 ## Why #393 carries the organization-creation flow too
 
 They cannot ship apart. The migration parks every username-keyed billing row
