@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useIsReadOnly } from "../readOnlyContext";
 import { FileText, Folder } from "lucide-react";
 
 import { fetchBinderDocuments } from "../api";
@@ -93,6 +94,7 @@ export function BinderDocuments({
   binder,
   onOpenDocument,
 }: BinderDocumentsProps) {
+  const isReadOnly = useIsReadOnly();
   const [documents, setDocuments] = useState<
     WorkspaceDocumentListEntry[] | null
   >(null);
@@ -160,9 +162,15 @@ export function BinderDocuments({
       {documents.length === 0 ? (
         // Not an error, and not a failure of theirs: a binder somebody just
         // made is empty, which is the ordinary first state.
+        //
+        // A read-only organization is told what is here, not what to do next:
+        // the sentence names an action whose control has just been taken
+        // away, and pointing at a button that is not on the page is worse
+        // than saying less.
         <p style={{ color: "var(--bs-text-muted)" }}>
-          Nothing filed here yet. Add a policy and it joins the binder once the
-          change is approved.
+          {isReadOnly
+            ? "Nothing filed here yet."
+            : "Nothing filed here yet. Add a policy and it joins the binder once the change is approved."}
         </p>
       ) : (
         groups.map((group) => (

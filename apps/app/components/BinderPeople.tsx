@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useIsReadOnly } from "../readOnlyContext";
 
 import {
   addBinderPerson,
@@ -43,6 +44,12 @@ interface BinderPeopleProps {
 }
 
 export function BinderPeople({ org, binder }: BinderPeopleProps) {
+  // Read-only folds into `canManage` rather than sitting beside it, because
+  // every control here is already conditional on that one flag — a second
+  // condition threaded through the same places is a second thing to forget.
+  // The two are different questions (permission is Gitea's answer, billing is
+  // ours) that happen to have the same consequence: draw nothing.
+  const isReadOnly = useIsReadOnly();
   const [payload, setPayload] = useState<BinderPeoplePayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -132,7 +139,7 @@ export function BinderPeople({ org, binder }: BinderPeopleProps) {
         <VisibilitySwitch
           org={org}
           open={payload.openToOrganization}
-          canManage={payload.canManage}
+          canManage={payload.canManage && !isReadOnly}
           busy={busy}
           onChange={(next) => run(() => setBinderVisibility(org, binder, next))}
         />
@@ -150,7 +157,7 @@ export function BinderPeople({ org, binder }: BinderPeopleProps) {
               <PersonRow
                 key={person.login}
                 person={person}
-                canManage={payload.canManage}
+                canManage={payload.canManage && !isReadOnly}
                 busy={busy}
                 onSetLevel={(level) =>
                   run(() =>
@@ -165,7 +172,7 @@ export function BinderPeople({ org, binder }: BinderPeopleProps) {
           </div>
         )}
 
-        {payload.canManage ? (
+        {payload.canManage && !isReadOnly ? (
           <AddPersonForm
             people={payload.organizationMembers}
             // Only the people whose grant here is this binder's own. Somebody
@@ -188,12 +195,12 @@ export function BinderPeople({ org, binder }: BinderPeopleProps) {
         org={org}
         binder={binder}
         groups={payload.groups}
-        canManage={payload.canManage}
+        canManage={payload.canManage && !isReadOnly}
         busy={busy}
         onChanged={run}
       />
 
-      {payload.canManage ? null : (
+      {payload.canManage && !isReadOnly ? null : (
         <p className="doc-rail-note">
           Only a binder administrator can change any of this.
         </p>

@@ -112,6 +112,11 @@ describe("design tokens (docs/design/design-system-audit.md, Task 6)", () => {
       const allowed = LITERAL_ALLOWLIST.filter((a) => a.file === rel).map(
         (a) => a.literal,
       );
+      // Note for whoever this catches next: the hex pattern also matches a
+      // pull-request reference written as `#392` in a comment, because that
+      // is six hex digits' worth of nothing. The offender line names the file
+      // and the literal, so read it before assuming a colour crept in — and
+      // write "PR 392" in prose rather than allowlisting it.
       const found = [
         ...(text.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []),
         ...(text.match(/rgba?\([^)]*\)/g) ?? []),

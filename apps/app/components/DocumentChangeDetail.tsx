@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useIsReadOnly } from "../readOnlyContext";
 import { Download, FileText, GitCompare } from "lucide-react";
 
 import type { ChangeUpdate, RepoBranchProtection } from "../api";
@@ -208,6 +209,9 @@ export function DocumentChangeDetail({
   onViewChange,
   onBackToList,
 }: DocumentChangeDetailProps) {
+  // Above every early return, like the other hooks here — the notes on
+  // `DocumentPreview` record what hook order costs when it slips.
+  const isReadOnly = useIsReadOnly();
   const [actionState, setActionState] = useState<PRActionState>(
     DEFAULT_PR_ACTION_STATE,
   );
@@ -345,6 +349,12 @@ export function DocumentChangeDetail({
     canReview: reviewPerms.allowed,
     canMerge: mergePerms.allowed,
   });
+  // A delinquent organization records no decisions. Folded into `decision`
+  // rather than checked at each button because "none" is already the shape
+  // this component draws when there is nothing to offer — and approving or
+  // publishing here would be refused by the API anyway, after the customer
+  // had typed a comment they are about to lose.
+  const reviewDecision = isReadOnly ? "none" : decision;
 
   if (view === "compare") {
     return (
@@ -579,7 +589,7 @@ export function DocumentChangeDetail({
         }}
       />
 
-      {change.open && ownSubmission && decision !== "publish" ? (
+      {change.open && ownSubmission && reviewDecision !== "publish" ? (
         <p className="rev-note">
           You submitted this version — it is waiting on its reviewers.
         </p>
@@ -601,7 +611,7 @@ export function DocumentChangeDetail({
 
       {/* The decision, always reachable. A reviewer who has read enough should
           never have to scroll back through the argument to record it. */}
-      {decision === "none" ? null : (
+      {reviewDecision === "none" ? null : (
         <div className="rev-decision" role="group" aria-label="Your decision">
           {actionState.showApproveConfirm ? (
             <div className="rev-decision-confirm">
@@ -674,7 +684,7 @@ export function DocumentChangeDetail({
                 </button>
               </div>
             </div>
-          ) : decision === "publish" ? (
+          ) : reviewDecision === "publish" ? (
             <button
               className="rev-btn rev-btn--green"
               type="button"

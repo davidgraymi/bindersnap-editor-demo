@@ -7157,3 +7157,39 @@ input {
   background: var(--bs-surface-2);
   outline: none;
 }
+
+/* Read-only mode — a delinquent organization can read everything and write
+   nothing. Above the whole app rather than beside any one control, because
+   the controls it explains are not drawn at all. */
+.read-only-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-4);
+  flex-wrap: wrap;
+  padding: var(--brand-space-3) var(--brand-space-5);
+  background: var(--bs-status-warn-bg);
+  border-bottom: 1px solid var(--bs-status-warn-border);
+  color: var(--bs-status-warn-fg);
+  font-size: var(--brand-text-sm);
+}
+
+.read-only-banner__message {
+  margin: 0;
+  flex: 1 1 24rem;
+}
+
+.read-only-banner__action {
+  flex: 0 0 auto;
+  padding: var(--brand-space-2) var(--brand-space-4);
+  background: transparent;
+  border: 1px solid var(--bs-status-warn-border);
+  border-radius: var(--brand-radius-md);
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.read-only-banner__action:hover {
+  background: var(--bs-surface-1);
+}

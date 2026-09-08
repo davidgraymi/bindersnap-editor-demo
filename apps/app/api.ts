@@ -150,21 +150,28 @@ export function validateUploadFile(file: File): UploadValidationResult {
 export { validateUploadFile as validateUploadFileWithClient };
 
 import { ApiRequestError } from "../../packages/api-client/mutator";
-import {
-  notifyPaymentRequired,
-  shouldInterceptPaymentRequired,
-} from "./paymentRequired";
+import { isPaywallResponse, notifyPaymentRequired } from "./paymentRequired";
 import type { DocumentSearchParams } from "./documentSearch";
 import type { ChangeScope } from "./changeScope";
 import { scopeChangeBase, scopeRepo } from "./changeScope";
 
+/**
+ * Turn a refused write into read-only mode.
+ *
+ * `path` is kept for the call sites that read as documentation of which
+ * endpoint they front, but it no longer decides anything: whether a 402 is
+ * the paywall is the body's answer now, not the URL's.
+ */
 function handlePaymentRequired(path: string, error: unknown): never {
+  void path;
   if (
     error instanceof ApiRequestError &&
     error.status === 402 &&
-    shouldInterceptPaymentRequired(path)
+    isPaywallResponse(error.data)
   ) {
-    notifyPaymentRequired();
+    notifyPaymentRequired({
+      organizationName: error.data.organization ?? null,
+    });
   }
   throw error;
 }
