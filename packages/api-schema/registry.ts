@@ -50,6 +50,7 @@ import {
   CreateOrganizationGroupRequestSchema,
   CreatedOrganizationGroupPayloadSchema,
   OrganizationGroupMemberRequestSchema,
+  AddOrganizationPersonRequestSchema,
   OrganizationPersonRoleRequestSchema,
   OrganizationPeoplePayloadSchema,
   WorkspaceHistoryPayloadSchema,
@@ -855,6 +856,30 @@ registry.registerPath({
   responses: {
     200: {
       description: "Who is in this organization, and the groups it has",
+      content: {
+        "application/json": { schema: OrganizationPeoplePayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/orgs/{org}/people",
+  operationId: "addOrganizationPerson",
+  tags: ["organizations"],
+  request: {
+    params: z.object({ org: z.string() }),
+    body: {
+      required: true,
+      content: {
+        "application/json": { schema: AddOrganizationPersonRequestSchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "The organization's people and groups, after the change",
       content: {
         "application/json": { schema: OrganizationPeoplePayloadSchema },
       },
