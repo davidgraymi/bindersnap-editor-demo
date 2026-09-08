@@ -10,6 +10,30 @@
           "COMMENT",
           "PENDING"
         ]
+      },
+      "BranchProtection": {
+        "properties": {
+          "block_on_codeowner_reviews": {
+            "type": "boolean",
+            "description": "Gitea 28.0.0 (go-gitea PR #34995). Declared here rather than generated, because the committed spec is 1.27.3 \u2014 the version production runs \u2014 and this field does not exist there. See spec/README.md."
+          }
+        }
+      },
+      "CreateBranchProtectionOption": {
+        "properties": {
+          "block_on_codeowner_reviews": {
+            "type": "boolean",
+            "description": "Gitea 28.0.0 (go-gitea PR #34995). Declared here rather than generated, because the committed spec is 1.27.3 \u2014 the version production runs \u2014 and this field does not exist there. See spec/README.md."
+          }
+        }
+      },
+      "EditBranchProtectionOption": {
+        "properties": {
+          "block_on_codeowner_reviews": {
+            "type": "boolean",
+            "description": "Gitea 28.0.0 (go-gitea PR #34995). Declared here rather than generated, because the committed spec is 1.27.3 \u2014 the version production runs \u2014 and this field does not exist there. See spec/README.md."
+          }
+        }
       }
     }
   }

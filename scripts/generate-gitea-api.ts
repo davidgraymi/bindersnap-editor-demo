@@ -32,37 +32,63 @@ function deepMerge(target: any, source: any) {
 
 async function main() {
   const GITEA_URL = process.env.GITEA_URL || "http://localhost:3000";
+  /**
+   * Re-run the conversion, the extension merge and the typegen against the
+   * `swagger2.json` already committed here, fetching nothing.
+   *
+   * This exists because dev and production run different Gitea versions on
+   * purpose: dev is on a 28.0.0 nightly for `block_on_codeowner_reviews`,
+   * production is on 1.27.3, and the committed spec describes **production's**
+   * API — the one the code can rely on everywhere. Without this flag the only
+   * way to pick up a change to `extensions.json` is to fetch from whatever
+   * Gitea happens to be running, which would quietly replace the 1.27.3 spec
+   * with a nightly's and put 402 endpoints nobody has tested into the types.
+   */
+  const offline = process.argv.includes("--offline");
   const SPEC_DIR = "services/api/gitea-client/spec";
   const SWAGGER2_FILE = path.join(SPEC_DIR, "swagger2.json");
   const OPENAPI3_FILE = path.join(SPEC_DIR, "openapi3.json");
   const EXTENSIONS_FILE = path.join(SPEC_DIR, "extensions.json");
   const TYPES_FILE = path.join(SPEC_DIR, "gitea.d.ts");
 
-  console.log(
-    `→ Fetching Swagger 2.0 spec from ${GITEA_URL}/swagger.v1.json ...`,
-  );
-
-  // Verify Gitea is reachable
-  try {
-    const versionCheck = await fetch(`${GITEA_URL}/api/v1/version`);
-    if (!versionCheck.ok) throw new Error("Not ok");
-  } catch (error) {
-    console.error(`ERROR: Cannot reach Gitea at ${GITEA_URL}`);
-    console.error(`       Start the dev stack with: bun run up`);
-    process.exit(1);
-  }
-
   await fs.mkdir(SPEC_DIR, { recursive: true });
 
-  // 1. Pull swagger spec
-  const swaggerResponse = await fetch(`${GITEA_URL}/swagger.v1.json`);
-  if (!swaggerResponse.ok) {
-    console.error(`ERROR: Failed to download swagger.v1.json`);
-    process.exit(1);
-  }
+  let swaggerData: string;
 
-  const swaggerData = await swaggerResponse.text();
-  await fs.writeFile(SWAGGER2_FILE, swaggerData, "utf8");
+  if (offline) {
+    console.log(`→ Offline: reusing the committed ${SWAGGER2_FILE} ...`);
+    try {
+      swaggerData = await fs.readFile(SWAGGER2_FILE, "utf8");
+    } catch {
+      console.error(`ERROR: ${SWAGGER2_FILE} is not there to reuse.`);
+      console.error(`       Drop --offline to fetch it from a running Gitea.`);
+      process.exit(1);
+    }
+  } else {
+    console.log(
+      `→ Fetching Swagger 2.0 spec from ${GITEA_URL}/swagger.v1.json ...`,
+    );
+
+    // Verify Gitea is reachable
+    try {
+      const versionCheck = await fetch(`${GITEA_URL}/api/v1/version`);
+      if (!versionCheck.ok) throw new Error("Not ok");
+    } catch (error) {
+      console.error(`ERROR: Cannot reach Gitea at ${GITEA_URL}`);
+      console.error(`       Start the dev stack with: bun run up`);
+      process.exit(1);
+    }
+
+    // 1. Pull swagger spec
+    const swaggerResponse = await fetch(`${GITEA_URL}/swagger.v1.json`);
+    if (!swaggerResponse.ok) {
+      console.error(`ERROR: Failed to download swagger.v1.json`);
+      process.exit(1);
+    }
+
+    swaggerData = await swaggerResponse.text();
+    await fs.writeFile(SWAGGER2_FILE, swaggerData, "utf8");
+  }
 
   const parsedSwagger = JSON.parse(swaggerData);
   const GITEA_VERSION = parsedSwagger.info?.version || "unknown";
@@ -120,7 +146,7 @@ async function main() {
   // 5. Prepend version header
   const generatedAt = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
   const header = `// Generated from Gitea ${GITEA_VERSION} at ${generatedAt}
-// Source: ${GITEA_URL}/swagger.v1.json
+// Source: ${offline ? SWAGGER2_FILE : `${GITEA_URL}/swagger.v1.json`}
 // Note: Types have been extended via extensions.json
 // Do not edit manually — re-run: bun run generate:api\n\n`;
 

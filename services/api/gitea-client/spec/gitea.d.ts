@@ -1,5 +1,5 @@
-// Generated from Gitea 1.27.3 at 2026-09-01T12:44:23Z
-// Source: http://localhost:3000/swagger.v1.json
+// Generated from Gitea 1.27.3 at 2026-09-08T14:01:58Z
+// Source: services/api/gitea-client/spec/swagger2.json
 // Note: Types have been extended via extensions.json
 // Do not edit manually — re-run: bun run generate:api
 
@@ -5942,6 +5942,8 @@ export interface components {
             unprotected_file_patterns?: string;
             /** Format: date-time */
             updated_at?: string;
+            /** @description Gitea 28.0.0 (go-gitea PR #34995). Declared here rather than generated, because the committed spec is 1.27.3 — the version production runs — and this field does not exist there. See spec/README.md. */
+            block_on_codeowner_reviews?: boolean;
         };
         /** @description ChangeFileOperation for creating, updating or deleting a file */
         ChangeFileOperation: {
@@ -6294,6 +6296,8 @@ export interface components {
             rule_name?: string;
             status_check_contexts?: string[];
             unprotected_file_patterns?: string;
+            /** @description Gitea 28.0.0 (go-gitea PR #34995). Declared here rather than generated, because the committed spec is 1.27.3 — the version production runs — and this field does not exist there. See spec/README.md. */
+            block_on_codeowner_reviews?: boolean;
         };
         /** @description CreateBranchRepoOption options when creating a branch in a repository */
         CreateBranchRepoOption: {
@@ -6873,6 +6877,8 @@ export interface components {
             required_approvals?: number;
             status_check_contexts?: string[];
             unprotected_file_patterns?: string;
+            /** @description Gitea 28.0.0 (go-gitea PR #34995). Declared here rather than generated, because the committed spec is 1.27.3 — the version production runs — and this field does not exist there. See spec/README.md. */
+            block_on_codeowner_reviews?: boolean;
         };
         /** @description EditDeadlineOption options for creating a deadline */
         EditDeadlineOption: {

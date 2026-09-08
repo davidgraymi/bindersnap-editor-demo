@@ -26203,6 +26203,10 @@
             "type": "string",
             "format": "date-time",
             "x-go-name": "Updated"
+          },
+          "block_on_codeowner_reviews": {
+            "type": "boolean",
+            "description": "Gitea 28.0.0 (go-gitea PR #34995). Declared here rather than generated, because the committed spec is 1.27.3 — the version production runs — and this field does not exist there. See spec/README.md."
           }
         },
         "x-go-package": "gitea.dev/modules/structs"
@@ -27065,6 +27069,10 @@
           "unprotected_file_patterns": {
             "type": "string",
             "x-go-name": "UnprotectedFilePatterns"
+          },
+          "block_on_codeowner_reviews": {
+            "type": "boolean",
+            "description": "Gitea 28.0.0 (go-gitea PR #34995). Declared here rather than generated, because the committed spec is 1.27.3 — the version production runs — and this field does not exist there. See spec/README.md."
           }
         },
         "x-go-package": "gitea.dev/modules/structs"
@@ -28537,6 +28545,10 @@
           "unprotected_file_patterns": {
             "type": "string",
             "x-go-name": "UnprotectedFilePatterns"
+          },
+          "block_on_codeowner_reviews": {
+            "type": "boolean",
+            "description": "Gitea 28.0.0 (go-gitea PR #34995). Declared here rather than generated, because the committed spec is 1.27.3 — the version production runs — and this field does not exist there. See spec/README.md."
           }
         },
         "x-go-package": "gitea.dev/modules/structs"

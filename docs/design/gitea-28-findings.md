@@ -169,33 +169,88 @@ only: it answers `is_owner`, `is_admin`, `can_write`, `can_read`,
 `can_create_repository`. That is the right call for "may this person manage the
 organization", and therefore for the billing guard.
 
-## 6. What this file does not verify
+## 6. Verified against a running Gitea 28.0.0 — 2026-09-08
 
-Everything above is read from source, the merged diff, the generated swagger, or
-the registry. None of it has been exercised against a running Gitea 28.0.0. Before
-any of it is depended on:
+Everything above was read from source. It has now been **run**, against
+`gitea/gitea@sha256:b40d17f0…` (`1.28.0+dev-477-g8b6ad49a5f`, the 2026-09-08
+nightly), which is the digest `docker-compose.yml` pins. The assertions live in
+`tests/gitea-permission-model.pw.ts` under
+`Gitea 28.0.0: block_on_codeowner_reviews`, and all nine cases in that file pass.
 
-- Stand a `main-nightly` container up and assert `block_on_codeowner_reviews`
-  round-trips through `POST`/`PATCH /repos/{owner}/{repo}/branch_protections`
-  and appears in the `GET`.
-- Assert the per-rule gate: two folders, two owner teams, one change touching both,
-  one approval — merge still blocked; second approval — merge released.
-- Assert the fail-closed path with a deliberately malformed CODEOWNERS.
-- Assert the author-only-rule waiver, because it is the one branch that _loosens_
-  the gate and a mistake there is silent.
-- Re-run `tests/gitea-permission-model.pw.ts` unchanged, to catch anything the
-  major version moved underneath us.
+| §6 asked for                                | Result                                                   |
+| ------------------------------------------- | -------------------------------------------------------- |
+| The field round-trips create → read → edit  | **Holds**                                                |
+| The per-rule gate over two folders          | **Holds** — one approval leaves the second rule blocking |
+| A team code owner blocks, a member releases | **Holds** — §2's headline claim                          |
+| The author-only-rule waiver                 | **Holds**                                                |
+| The fail-closed path                        | **Wrong as written** — see below                         |
+| The four 1.27 cases, re-run unchanged       | **All still pass**                                       |
 
-Until those pass, treat 28.0.0's behaviour as designed-for, not relied-on.
+Two of those deserve more than a row.
+
+**The 1.27 team case still passes**, which is the direct confirmation of §3:
+`AddTeamReviewRequest` still clears its own `official` flag on this build, so
+`block_on_official_review_requests` still blocks on nothing when the code owner
+is a team. Teams work under the new gate and only under the new gate. The two
+changes really are one change.
+
+**Note the version string.** The binary self-reports `1.28.0+dev`, not
+`28.0.0`. §1's reading of the rename is about the milestone and the release
+naming, not about `/api/v1/version` — so anything that sniffs the version to
+decide whether the gate is available must not look for a leading `28`.
+
+### The fail-closed claim was backwards, and it is the finding that matters
+
+§2 says an unreadable CODEOWNERS blocks the merge rather than reading as "no
+owners". That is true — of three specific things. It is **not** true of a
+pattern that does not compile, which is the case a generator can actually
+produce.
+
+`getCodeOwnerRules` (`services/issue/pull.go`) fails closed on exactly: the file
+exceeding `setting.UI.MaxDisplayFileSize`, an unreadable blob, and — in
+`getMatchingCodeOwnerRules` — matching cut short by the aggregate match budget.
+A bad pattern is none of these. `GetCodeOwnersFromContent` returns
+`(rules, warnings)`, the warnings are logged, and the offending line is simply
+absent from `rules`. `HasAllRequiredCodeownerReviews` then finds no matching
+rule and returns `true`.
+
+A test asserting the documented behaviour failed, which is how this was found.
+
+> **A CODEOWNERS rule whose pattern does not compile is not enforced, not
+> reported, and not visible anywhere a customer looks.** A file where every line
+> is malformed leaves the gate wide open while every screen says sign-off is
+> required.
+
+This is the `parseReviewSettings` failure mode ADR 0004 complains about —
+degrading silently to the permissive policy, so a corrupt byte turns a control
+off — living inside Gitea's own parser. It converts into a requirement on the
+generator rather than a bug to file:
+
+- **Every pattern the generator emits must be known to compile**, as a Go
+  regex, before the file is committed.
+- **A binder whose rules did not take effect has to say so**, rather than
+  drawing a rule that is enforcing nothing.
+
+The three genuine fail-closed paths are left read-from-source. Triggering the
+size one means committing an 8 MiB file on every test run, and shrinking
+`MaxDisplayFileSize` to make it cheap would change how every `.docx` in a binder
+is handled — a worse trade, and the generator never emits a file within three
+orders of magnitude of that limit. The pattern case is the reachable one, and it
+is the one that is pinned.
 
 ## 7. Where the version is pinned, and the one-way door
 
 The image is pinned in exactly two places, and they must move together:
 
-- `docker-compose.yml:25` — the dev stack
-- `deploy/files/docker-compose.prod.yml:22` — production
+- `docker-compose.yml` — the dev stack
+- `deploy/files/docker-compose.prod.yml` — production
 
-Both say `gitea/gitea:1.27.3` today.
+**Dev moved on 2026-09-08; production has not.** Dev is pinned to
+`gitea/gitea@sha256:b40d17f0…`, the 2026-09-08 `main-nightly`; production is
+still `gitea/gitea:1.27.3`. Both files carry a comment saying why they
+disagree, because an unexplained version skew is a thing somebody eventually
+"fixes". CI needs no change — it brings the stack up through the same compose
+file, so it takes the pin with it.
 
 The risk that makes this more than a tag bump: `deploy/files/litestream.yml`
 replicates `/data/gitea/gitea.db`. Gitea runs its schema migrations on start, and
