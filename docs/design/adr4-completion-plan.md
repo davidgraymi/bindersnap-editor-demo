@@ -120,11 +120,22 @@ is now a binder's rather than one document's, and anonymous document viewing,
 which has no surface at all until #364's one-time links exist
 ([issue 430](https://github.com/davidgraymi/bindersnap-editor-demo/issues/430)).
 
-What is left is what the implementation status notes carry and this plan never
-sequenced: the `document_versions` derived index and per-workspace settings. The
-approvals whitelist on a binder's change page is **not** being built — with the
-old model gone there is no way to reach a binder except through a team the
-whitelist already names, so the state that screen would explain cannot happen.
+**Per-workspace settings landed too**, which finishes ADR 0004's own migration
+list: the `bindersnap-config` branch is retired, and the policy in force at a
+publish is stamped into that version's annotated tag.
+
+**Nothing is left.** Two items were deliberately not built, each with the
+reasoning recorded rather than left as a gap:
+
+- The **approvals whitelist on a binder's change page**. With the old model gone
+  there is no way to reach a binder except through a team the whitelist already
+  names, so the state that screen would explain cannot happen.
+- The **`document_versions` derived index**. Measured rather than assumed: the
+  cross-binder library answers in ~400 ms for twelve binders, and the ADR's own
+  rule — the index serves browsing, Gitea serves proving — means it can only
+  ever buy latency. There is no latency problem to buy off. The investigation
+  found three real version-reading bugs instead, which an index would have
+  papered over.
 
 Piece 10 went early, out of order, exactly as the note below predicted it
 could.

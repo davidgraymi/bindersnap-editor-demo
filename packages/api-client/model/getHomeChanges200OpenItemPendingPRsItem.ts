@@ -32,4 +32,8 @@ export type GetHomeChanges200OpenItemPendingPRsItem = {
   /** @nullable */
   user?: GetHomeChanges200OpenItemPendingPRsItemUser;
   reviews?: GetHomeChanges200OpenItemPendingPRsItemReviewsItem[];
+  /** @nullable */
+  documentSlugPath: string | null;
+  /** @nullable */
+  nextVersion: number | null;
 };

@@ -108,6 +108,7 @@ import type { ClosedChange } from "../../packages/api-schema/schemas/documents";
 import type {
   BinderPeoplePayload,
   OrganizationPeoplePayload,
+  DocumentVersion,
   WorkspaceDocumentListEntry,
   WorkspaceSummary,
 } from "../../packages/api-schema/schemas/workspaces";
@@ -2138,6 +2139,12 @@ async function handleDocumentSearch(
 /** One open change as a list row carries it — the wire shape, not Gitea's. */
 type PendingChangeRow = ReturnType<typeof buildPendingChangeRow>;
 
+/** The same row on Home, which also says which document and which version. */
+type HomePendingChangeRow = PendingChangeRow & {
+  documentSlugPath: string | null;
+  nextVersion: number | null;
+};
+
 function buildPendingChangeRow(
   entry: PullRequestWithReviews,
   requiredApprovals: number | null,
@@ -2186,8 +2193,16 @@ async function loadOpenChangeSummary(
   repo: string,
 ) {
   try {
-    const [latestTag, openWithReviews] = await Promise.all([
-      getLatestDocTag(client, owner, repo),
+    const [versionsByDocument, openWithReviews] = await Promise.all([
+      // **The binder's own version tags, not `doc/vNNNN`.** That pattern is the
+      // old one-repo-per-document model's, which nothing writes any more — so
+      // this used to find nothing, `latestTag` was always null, and Home told
+      // everybody their change "becomes v1 when you publish" however many
+      // versions the document already had. A version number is the one thing
+      // this product cannot be casually wrong about.
+      listVersionsByDocument({ client, org: owner, workspace: repo }).catch(
+        () => new Map<string, DocumentVersion[]>(),
+      ),
       listPullRequestsWithReviews({ client, owner, repo, state: "open" }),
     ]);
     const pending = openWithReviews.filter((entry) =>
@@ -2204,9 +2219,26 @@ async function loadOpenChangeSummary(
       pending.length > 0 ? await readRequiredApprovals(owner, repo) : null;
 
     return {
-      latestTag,
       pendingPRs: pending
-        .map((entry) => buildPendingChangeRow(entry, requiredApprovals))
+        .map((entry) => {
+          // Which document this change is about comes from its branch, the same
+          // convention the binder's own lists read. A version is per document,
+          // so it belongs on the row rather than on the binder — one change can
+          // touch several, and a single number for the binder would be a claim
+          // about none of them.
+          const slugPath = documentSlugPathFromUploadBranch(
+            entry.pullRequest.head?.ref ?? "",
+          );
+          const versions = slugPath
+            ? (versionsByDocument.get(slugPath) ?? [])
+            : [];
+
+          return {
+            ...buildPendingChangeRow(entry, requiredApprovals),
+            documentSlugPath: slugPath,
+            nextVersion: slugPath === null ? null : nextVersionFrom(versions),
+          };
+        })
         .sort((left, right) => (right.number ?? 0) - (left.number ?? 0)),
       error: null,
     };
@@ -2219,8 +2251,7 @@ async function loadOpenChangeSummary(
       message: errorMessage,
     });
     return {
-      latestTag: null,
-      pendingPRs: [] as PendingChangeRow[],
+      pendingPRs: [] as HomePendingChangeRow[],
       error: errorMessage,
     };
   }

@@ -195,7 +195,6 @@ export * from './getHomeChanges200DecidedItemChangesItemReviewsItem.ts';
 export * from './getHomeChanges200DecidedItemChangesItemReviewsItemAuthor.ts';
 export * from './getHomeChanges200DecidedItemChangesItemReviewsItemState.ts';
 export * from './getHomeChanges200OpenItem.ts';
-export * from './getHomeChanges200OpenItemLatestTag.ts';
 export * from './getHomeChanges200OpenItemPendingPRsItem.ts';
 export * from './getHomeChanges200OpenItemPendingPRsItemApprovalState.ts';
 export * from './getHomeChanges200OpenItemPendingPRsItemAssignee.ts';
