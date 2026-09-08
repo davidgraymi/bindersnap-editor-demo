@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useIsReadOnly } from "../readOnlyContext";
 import { Bell, FileText, LogOut, Moon, Shield } from "lucide-react";
 import type { SessionUser } from "../api";
 import { buildDocumentsUrl, parseDocumentsViewState } from "../documentsView";
@@ -82,6 +83,7 @@ export function AppShell({
   onNavigate,
   onSignOut,
 }: AppShellProps) {
+  const isReadOnly = useIsReadOnly();
   const isWorkspace = route.kind === "workspace";
   const isDocuments = route.kind === "documents" || route.kind === "document";
   const isAdminSubscriptions = route.kind === "adminSubscriptions";
@@ -175,8 +177,14 @@ export function AppShell({
             onSearchLibrary={navigateToSearch}
           />
 
-          {/* Create document — a convenience, not the page's headline action */}
-          <NewDocumentButton onClick={openCreateDocumentModal} />
+          {/* Create document — a convenience, not the page's headline action.
+              Gone while the organization is read-only, like every other way
+              in: it sits on every page, so leaving it is offering the one
+              affordance a delinquent customer sees everywhere and cannot
+              use. */}
+          {isReadOnly ? null : (
+            <NewDocumentButton onClick={openCreateDocumentModal} />
+          )}
 
           {/* Notifications */}
           <button
