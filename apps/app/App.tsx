@@ -8,7 +8,6 @@ import {
 
 import "./app.css";
 
-import { AnonymousDocumentShell } from "./components/AnonymousDocumentShell";
 import { AppShell } from "./components/AppShell";
 import { BillingPage } from "./components/BillingPage";
 import { OrganizationSetupPage } from "./components/OrganizationSetupPage";
@@ -38,7 +37,6 @@ import { ReadOnlyBanner } from "./components/ReadOnlyBanner";
 import {
   asShellRoute,
   getRoute,
-  isLegacyDocumentTabPath,
   isLegacyInboxPath,
   isProtectedAppRoute,
   routeToPath,
@@ -53,8 +51,7 @@ type AuthView =
   | "login"
   | "billing"
   | "createOrganization"
-  | "app"
-  | "publicDoc";
+  | "app";
 type AuthMode = "signin" | "signup";
 
 interface LoginPageProps {
@@ -432,11 +429,6 @@ export function App() {
       navigateTo({ kind: "workspace" }, true);
       return;
     }
-
-    // Same for the document's old Team and Settings tabs, now one page.
-    if (isLegacyDocumentTabPath(window.location.pathname)) {
-      navigateTo(route, true);
-    }
   }, [route]);
 
   useEffect(() => {
@@ -589,10 +581,6 @@ export function App() {
       return "billing";
     }
 
-    if (!user && route.kind === "document") {
-      return "publicDoc";
-    }
-
     return user ? "app" : "login";
   }, [accessSource, isCheckingSession, route, subscriptionStatus, user]);
 
@@ -741,10 +729,6 @@ export function App() {
         }}
       />
     );
-  }
-
-  if (view === "publicDoc" && route.kind === "document") {
-    return <AnonymousDocumentShell route={route} onNavigate={navigateTo} />;
   }
 
   if (view === "landing") {

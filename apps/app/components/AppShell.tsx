@@ -11,9 +11,8 @@ import { OrganizationSwitcher } from "./OrganizationSwitcher";
 import { AdminSubscriptionManagementPage } from "./AdminSubscriptionManagementPage";
 import { AppIcon } from "./AppIcon";
 import { BindersnapLogoMark } from "./BindersnapLogoMark";
-import { CreateDocumentModal } from "./CreateDocumentModal";
-import { DocumentDetail } from "./DocumentDetail";
 import { DocumentsPage } from "./DocumentsPage";
+import { NewPolicyModal } from "./NewPolicyModal";
 import { HomePage } from "./HomePage";
 import { NavSearch } from "./NavSearch";
 import { NewDocumentButton } from "./NewDocumentButton";
@@ -44,7 +43,7 @@ function navigateToSearch(freeText: string): void {
   window.history.pushState(
     {},
     "",
-    buildDocumentsUrl({ view: "contributing", people: [], freeText }),
+    buildDocumentsUrl({ binder: null, freeText }),
   );
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
@@ -85,7 +84,7 @@ export function AppShell({
 }: AppShellProps) {
   const isReadOnly = useIsReadOnly();
   const isWorkspace = route.kind === "workspace";
-  const isDocuments = route.kind === "documents" || route.kind === "document";
+  const isDocuments = route.kind === "documents";
   const isAdminSubscriptions = route.kind === "adminSubscriptions";
 
   const displayName = user?.fullName ?? user?.username ?? "";
@@ -98,7 +97,7 @@ export function AppShell({
   // A search that was linked to or reloaded is still the search that is on
   // screen, so the box says so.
   const [initialSearch] = useState(
-    () => parseDocumentsViewState(window.location.search, "").freeText,
+    () => parseDocumentsViewState(window.location.search).freeText,
   );
 
   const openCreateDocumentModal = useCallback(() => {
@@ -322,61 +321,14 @@ export function AppShell({
           <main
             className={`app-main${isWorkspace ? " app-main--workspace" : " app-main--page"}`}
           >
-            {route.kind === "document" ? (
-              <DocumentDetail
-                owner={route.owner}
-                repo={route.repo}
-                uploaderSlug={user?.username ?? "unknown"}
-                activeView={route.tab}
-                activeChangeNumber={route.changeNumber ?? null}
-                activeChangeView={route.changeView ?? "discussion"}
-                activeVersion={route.version ?? null}
-                onTabChange={(tab) =>
-                  onNavigate({
-                    kind: "document",
-                    owner: route.owner,
-                    repo: route.repo,
-                    tab,
-                    // A version lives on the Document tab; walking to another
-                    // tab leaves it behind rather than carrying it along.
-                    ...(tab === "overview" && route.version !== undefined
-                      ? { version: route.version }
-                      : {}),
-                  })
-                }
-                onSelectVersion={(version) =>
-                  onNavigate({
-                    kind: "document",
-                    owner: route.owner,
-                    repo: route.repo,
-                    tab: "overview",
-                    ...(version === null ? {} : { version }),
-                  })
-                }
-                onOpenChange={(pullNumber, changeView) =>
-                  onNavigate({
-                    kind: "document",
-                    owner: route.owner,
-                    repo: route.repo,
-                    tab: "changes",
-                    ...(pullNumber === null
-                      ? {}
-                      : {
-                          changeNumber: pullNumber,
-                          changeView: changeView ?? "discussion",
-                        }),
-                  })
-                }
-              />
-            ) : route.kind === "documents" ? (
+            {route.kind === "documents" ? (
               <DocumentsPage
-                currentUsername={currentUsername}
-                onSelectDocument={(owner, repo) =>
+                onSelectDocument={(org, binder, documentPath) =>
                   onNavigate({
-                    kind: "document",
-                    owner,
-                    repo,
-                    tab: "overview",
+                    kind: "binderDocument",
+                    org,
+                    binder,
+                    documentPath,
                   })
                 }
               />
@@ -427,14 +379,16 @@ export function AppShell({
               <HomePage
                 currentUsername={currentUsername}
                 currentUserFullName={user?.fullName ?? ""}
-                onOpenChange={(owner, repo, changeNumber) =>
+                // A change is on a binder now: Home's rows carry the owning
+                // organization and the binder, which is what `owner`/`repo`
+                // always were once a document stopped being a repository.
+                onOpenChange={(org, binder, changeNumber) =>
                   onNavigate({
-                    kind: "document",
-                    owner,
-                    repo,
+                    kind: "binder",
+                    org,
+                    binder,
                     tab: "changes",
-                    changeNumber,
-                    changeView: "discussion",
+                    change: changeNumber,
                   })
                 }
                 onBrowseDocuments={() => onNavigate({ kind: "documents" })}
@@ -446,17 +400,11 @@ export function AppShell({
       </div>
 
       {showCreateDocumentModal ? (
-        <CreateDocumentModal
-          owner={currentUsername}
+        <NewPolicyModal
           onClose={() => setShowCreateDocumentModal(false)}
-          onSuccess={(owner, repo) => {
+          onAdded={(org, binder, documentPath) => {
             setShowCreateDocumentModal(false);
-            onNavigate({
-              kind: "document",
-              owner,
-              repo,
-              tab: "overview",
-            });
+            onNavigate({ kind: "binderDocument", org, binder, documentPath });
           }}
         />
       ) : null}

@@ -6564,6 +6564,44 @@ input {
   flex: 1;
 }
 
+/*
+ * The library's two controls.
+ *
+ * They replaced the saved-view chips and the person picker, which went with the
+ * old model: a document was a repository somebody owned, so "mine" and
+ * "everyone's" were real distinctions. Nobody owns a document now, and the only
+ * thing that still tells two policies apart is which binder they are filed in.
+ *
+ * Sized rather than stretched. A full-width search box on a page whose rows are
+ * short reads as a form to fill in, when it is a filter to type into.
+ */
+.docs-search {
+  flex: 1 1 260px;
+  min-width: 200px;
+  max-width: 420px;
+}
+
+.docs-binder-filter {
+  flex: 0 0 auto;
+  max-width: 260px;
+}
+
+/*
+ * One group per binder.
+ *
+ * Grouped rather than sorted flat because the binder decides who can see a
+ * policy and what has to happen before it changes — two policies with the same
+ * name in different binders are different objects, and a flat list would make
+ * them look like duplicates.
+ */
+.docs-binder-group {
+  margin-bottom: var(--brand-space-6);
+}
+
+.docs-binder-group .doc-rail-title {
+  margin-bottom: var(--brand-space-3);
+}
+
 .docs-sorted-by {
   font-size: var(--brand-text-ui-sm);
   color: var(--bs-text-muted);

@@ -15,10 +15,10 @@ function runApiCheck(script: string) {
   };
 }
 
-test("getWorkspaceDocuments reports the paywall after a typed 402 response", () => {
+test("fetchLibrary reports the paywall after a typed 402 response", () => {
   const result = runApiCheck(`
     import { JSDOM } from "jsdom";
-    import { getWorkspaceDocuments } from "./apps/app/api.ts";
+    import { fetchLibrary } from "./apps/app/api.ts";
     import { registerPaymentRequiredHandler } from "./apps/app/paymentRequired.ts";
 
     const dom = new JSDOM("<!doctype html><html><body></body></html>", {
@@ -55,7 +55,7 @@ test("getWorkspaceDocuments reports the paywall after a typed 402 response", () 
     });
 
     try {
-      await getWorkspaceDocuments();
+      await fetchLibrary();
       console.error("expected getWorkspaceDocuments to reject");
       process.exit(1);
     } catch (error) {

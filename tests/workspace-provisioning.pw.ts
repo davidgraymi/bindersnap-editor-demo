@@ -94,11 +94,17 @@ async function createWorkspace(
   org: string,
   name: string,
   description?: string,
+  /** Whether the whole organization can read it. Open is the product default. */
+  openToOrganization?: boolean,
 ): Promise<{ status: number; body: string }> {
   const response = await fetch(`${API_BASE_URL}/api/app/orgs/${org}/binders`, {
     method: "POST",
     headers: authHeaders(sessionCookie),
-    body: JSON.stringify({ name, description }),
+    body: JSON.stringify({
+      name,
+      description,
+      ...(openToOrganization === undefined ? {} : { openToOrganization }),
+    }),
   });
   return { status: response.status, body: await response.text() };
 }
@@ -2918,6 +2924,179 @@ test("the visibility switch needs an answer, and the binder has to exist", async
     (await setVisibility(sessionCookie, org.name, "no-such-binder", true))
       .status,
   ).toBe(404);
+});
+
+async function readLibrary(
+  sessionCookie: string,
+  query?: string,
+): Promise<{
+  documents: Array<{
+    organization: string;
+    binder: string;
+    slugPath: string;
+    name: string;
+    folder: string;
+    state: string;
+  }>;
+  binders: Array<{ organization: string; name: string }>;
+  hasMore: boolean;
+}> {
+  const url = new URL(`${API_BASE_URL}/api/app/documents`);
+  if (query) url.searchParams.set("q", query);
+  const response = await fetch(url, {
+    headers: { Cookie: `bindersnap_session=${sessionCookie}` },
+  });
+  expect(response.status, await response.clone().text()).toBe(200);
+  return response.json() as never;
+}
+
+test("the library is every policy in every binder, across organizations", async () => {
+  // **The replacement for the old repo search**, and the assertion that
+  // matters is the cross-binder one: the library used to search Gitea for
+  // repositories because a document was one, and the question it answers —
+  // "where is that policy" — now spans binders rather than repos.
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+
+  // A person with no binders gets an empty library, not an error.
+  const empty = await readLibrary(sessionCookie);
+  expect(empty.documents).toEqual([]);
+  expect(empty.binders).toEqual([]);
+
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Corporate")).status,
+  ).toBe(201);
+
+  expect(
+    (
+      await addDocument(sessionCookie, org.name, "clinical", {
+        name: "Infection Control Policy",
+        folder: "nursing",
+      })
+    ).status,
+  ).toBe(201);
+  expect(
+    (
+      await addDocument(sessionCookie, org.name, "corporate", {
+        name: "Expenses Policy",
+      })
+    ).status,
+  ).toBe(201);
+
+  const library = await readLibrary(sessionCookie);
+  expect(library.binders.map((binder) => binder.name).sort()).toEqual([
+    "clinical",
+    "corporate",
+  ]);
+
+  // Both policies, each naming the binder it is filed in — which is what
+  // replaced "who owns this repository".
+  const rows = library.documents.map(
+    (document) => `${document.binder}:${document.slugPath}`,
+  );
+  expect(rows.sort()).toEqual([
+    "clinical:nursing/infection-control-policy",
+    "corporate:expenses-policy",
+  ]);
+
+  // Uploaded and not yet published, so they are on the record as proposed
+  // rather than missing from a list somebody is watching.
+  expect(
+    library.documents.every((document) => document.state === "proposed"),
+  ).toBe(true);
+});
+
+test("the library and quick find answer the same question", async () => {
+  // They run through one server-side read on purpose: two implementations of
+  // "where is that policy" would eventually disagree about which binders
+  // count, and the one that disagreed would be the one nobody tested.
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+  expect(
+    (
+      await addDocument(sessionCookie, org.name, "clinical", {
+        name: "Infection Control Policy",
+        folder: "nursing",
+      })
+    ).status,
+  ).toBe(201);
+  expect(
+    (
+      await addDocument(sessionCookie, org.name, "clinical", {
+        name: "Expenses Policy",
+      })
+    ).status,
+  ).toBe(201);
+
+  // The stored name is the slug — the app formats it for display, the way the
+  // binder's own Documents tab does. Asserting the slug here is asserting what
+  // the server actually holds.
+  const narrowed = await readLibrary(sessionCookie, "infection");
+  expect(narrowed.documents.map((document) => document.name)).toEqual([
+    "infection-control-policy",
+  ]);
+
+  const search = await fetch(
+    `${API_BASE_URL}/api/app/documents/search?q=infection`,
+    { headers: { Cookie: `bindersnap_session=${sessionCookie}` } },
+  );
+  expect(search.status).toBe(200);
+  const found = (await search.json()) as {
+    documents: Array<{ slugPath: string; binder: string }>;
+  };
+  expect(found.documents.map((document) => document.slugPath)).toEqual([
+    "nursing/infection-control-policy",
+  ]);
+  expect(found.documents[0]?.binder).toBe("clinical");
+});
+
+test("a binder somebody cannot see is not in their library", async () => {
+  // The library is read with the caller's own token, so this is Gitea's answer
+  // rather than a filter of ours — but it is the one property of the page that
+  // would be a disclosure if it were wrong.
+  const owner = buildCredentials();
+  const ownerCookie = await signUp(owner);
+  const org = await createOrganization(ownerCookie, `Binder ${randomUUID()}`);
+  expect(
+    (
+      await createWorkspace(
+        ownerCookie,
+        org.name,
+        "Investigations",
+        undefined,
+        false,
+      )
+    ).status,
+  ).toBe(201);
+  expect(
+    (
+      await addDocument(ownerCookie, org.name, "investigations", {
+        name: "Case Notes",
+      })
+    ).status,
+  ).toBe(201);
+
+  const outsider = buildCredentials();
+  const outsiderCookie = await signUp(outsider);
+
+  const theirs = await readLibrary(outsiderCookie);
+  expect(theirs.documents).toEqual([]);
+  expect(theirs.binders).toEqual([]);
+
+  // And the owner still sees it, so the empty answer above is about access
+  // rather than about the library being broken.
+  const mine = await readLibrary(ownerCookie);
+  expect(mine.documents.map((document) => document.slugPath)).toEqual([
+    "case-notes",
+  ]);
 });
 
 async function readSettings(

@@ -89,8 +89,8 @@ test("the button is named for a screen reader and on hover", () => {
 
   const button = container.querySelector("button");
   expect(button).not.toBeNull();
-  expect(button?.getAttribute("aria-label")).toBe("New document");
-  expect(button?.getAttribute("title")).toBe("New document");
+  expect(button?.getAttribute("aria-label")).toBe("New policy");
+  expect(button?.getAttribute("title")).toBe("New policy");
   expect(button?.getAttribute("type")).toBe("button");
 
   unmount();

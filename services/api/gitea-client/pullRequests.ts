@@ -716,55 +716,6 @@ export async function updateChangeBranch(params: {
   return false;
 }
 
-export async function mergeOrResolveConflicts(
-  params: MergePullRequestParams,
-): Promise<void> {
-  const { client, owner, repo, pullNumber, mergeStyle, message } = params;
-
-  // Check if the PR has merge conflicts before attempting.
-  const pr = await unwrap(
-    client.GET("/repos/{owner}/{repo}/pulls/{index}", {
-      params: { path: { owner, repo, index: pullNumber } },
-    }),
-  );
-
-  if (pr.mergeable !== false) {
-    // No known conflict — try normal merge.
-    const result = await attemptMerge(
-      client,
-      owner,
-      repo,
-      pullNumber,
-      mergeStyle,
-      message,
-    );
-    if (result === "ok") return;
-    // Still failed — fall through to conflict resolution.
-  }
-
-  await resolveConflictsByRebase(client, owner, repo, pullNumber);
-
-  // Retry after resolution with more attempts — Gitea needs time to
-  // recalculate mergeability after the branch update.
-  const POST_RESOLVE_ATTEMPTS = 15;
-  const retryResult = await attemptMerge(
-    client,
-    owner,
-    repo,
-    pullNumber,
-    mergeStyle,
-    message,
-    POST_RESOLVE_ATTEMPTS,
-  );
-
-  if (retryResult !== "ok") {
-    throw toGiteaApiError(
-      409,
-      "Merge conflict persisted after conflict resolution.",
-    );
-  }
-}
-
 /**
  * List pull requests and keep each one's reviews alongside it.
  *

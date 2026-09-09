@@ -31,8 +31,8 @@ import {
 import {
   getLatestDocTag,
   listDocTags,
-  listWorkspaceRepos,
 } from "../services/api/gitea-client/repos";
+import { listOrganizationWorkspaces } from "../services/api/gitea-client/workspaces";
 import {
   buildUploadBranchName,
   buildUploadCommitMessage,
@@ -461,14 +461,22 @@ test.describe("pull request workflow", () => {
 // ---------------------------------------------------------------------------
 
 test.describe("repos", () => {
-  test("listWorkspaceRepos includes the seeded repository", async () => {
-    const repos = await listWorkspaceRepos(makeClient());
+  test("the organization's binders include the seeded one", async () => {
+    // This used to call `listWorkspaceRepos`, a wrapper on Gitea's
+    // `/repos/search` that existed because a document was a repository and the
+    // library searched for them. With the old model deleted, binders are asked
+    // for by organization — which is also what made the old version flaky on a
+    // dev stack full of test debris, since the seeded repo could fall outside
+    // the first hundred search results.
+    const binders = await listOrganizationWorkspaces({
+      client: makeClient(),
+      org: OWNER,
+    });
 
-    const seeded = repos.find(
-      (r) => r.name === REPO && r.owner.login === OWNER,
-    );
-    expect(seeded).toBeDefined();
-    expect(seeded!.full_name).toBe(`${OWNER}/${REPO}`);
+    const seeded = binders.find((binder) => binder.name === REPO);
+    expect(seeded, JSON.stringify(binders.map((b) => b.name))).toBeDefined();
+    expect(seeded!.fullName).toBe(`${OWNER}/${REPO}`);
+    expect(seeded!.owner).toBe(OWNER);
   });
 
   test("getLatestDocTag returns null or a valid DocTag", async () => {

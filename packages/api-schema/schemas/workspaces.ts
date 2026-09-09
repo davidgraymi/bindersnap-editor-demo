@@ -177,6 +177,43 @@ export type WorkspaceDocumentListEntry = z.infer<
   typeof WorkspaceDocumentListEntrySchema
 >;
 
+/**
+ * One row of the library: a document, and the binder it is filed in.
+ *
+ * The library used to be a list of *repositories*, because a document was one —
+ * so a row carried an owner and a repo name. Under ADR 0004 the organization
+ * owns everything and nobody owns a document, so what identifies a row is where
+ * it is filed: which organization, which binder, which folder.
+ */
+export const LibraryDocumentSchema = WorkspaceDocumentListEntrySchema.extend({
+  organization: z.string(),
+  binder: z.string(),
+  binderDescription: z.string(),
+});
+export type LibraryDocument = z.infer<typeof LibraryDocumentSchema>;
+
+export const LibraryPayloadSchema = z.object({
+  documents: z.array(LibraryDocumentSchema),
+  /** Every binder the reader can reach, so the page can offer them as a filter. */
+  binders: z.array(
+    z.object({
+      organization: z.string(),
+      name: z.string(),
+      description: z.string(),
+    }),
+  ),
+  /** Whether the answer was capped. Quick find asks for a few; the page does not. */
+  hasMore: z.boolean(),
+});
+export type LibraryPayload = z.infer<typeof LibraryPayloadSchema>;
+
+export const LibrarySearchPayloadSchema = z.object({
+  documents: z.array(LibraryDocumentSchema),
+  limit: z.number(),
+  hasMore: z.boolean(),
+});
+export type LibrarySearchPayload = z.infer<typeof LibrarySearchPayloadSchema>;
+
 export const WorkspaceDocumentListPayloadSchema = z.object({
   organization: z.string().optional(),
   workspace: z.string(),

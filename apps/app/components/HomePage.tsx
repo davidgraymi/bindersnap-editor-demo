@@ -153,7 +153,7 @@ export function HomePage({
               className="home-row-action"
               onClick={onNewDocument}
             >
-              New document
+              Add a policy
             </button>
           </div>
         </section>

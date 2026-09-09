@@ -52,6 +52,8 @@ import {
   OrganizationGroupMemberRequestSchema,
   AddOrganizationPersonRequestSchema,
   OrganizationPersonRoleRequestSchema,
+  LibraryPayloadSchema,
+  LibrarySearchPayloadSchema,
   OrganizationPeoplePayloadSchema,
   ProposedSignOffChangeSchema,
   SignOffRulesRequestSchema,
@@ -194,32 +196,19 @@ registry.registerPath({
   tags: ["documents"],
   request: {
     query: z.object({
-      owner: z.string().optional(),
-      member: z.string().optional(),
+      /** Plain words, matched against the name, the path and the binder. */
       q: z.string().optional(),
-      page: z.coerce.number().optional(),
-      limit: z.coerce.number().optional(),
     }),
   },
   responses: {
     200: {
-      description: "One page of workspace documents",
+      description: "Every policy in every binder this person can reach",
       content: {
-        "application/json": {
-          schema: z.object({
-            documents: z.array(WorkspaceDocumentSummarySchema),
-            page: z.number(),
-            limit: z.number(),
-            /** Gitea reports no total, so a full page is the only hint of another. */
-            hasMore: z.boolean(),
-          }),
-        },
+        "application/json": { schema: LibraryPayloadSchema },
       },
     },
   },
 });
-
-registry.register("HomeChangesPayload", HomeChangesPayloadSchema);
 
 registry.registerPath({
   method: "get",
@@ -244,313 +233,15 @@ registry.registerPath({
   request: {
     query: z.object({
       q: z.string(),
-      page: z.string().optional(),
       limit: z.string().optional(),
     }),
   },
   responses: {
     200: {
-      description: "One page of document search results",
+      description: "The best matches, capped — quick find, not the library",
       content: {
-        "application/json": {
-          schema: DocumentSearchResultsPayloadSchema,
-        },
+        "application/json": { schema: LibrarySearchPayloadSchema },
       },
-    },
-  },
-});
-
-registry.registerPath({
-  method: "post",
-  path: "/api/app/documents",
-  operationId: "createDocument",
-  tags: ["documents"],
-  request: {
-    body: {
-      required: true,
-      content: {
-        "multipart/form-data": {
-          schema: z.object({
-            file: z.string().openapi({
-              type: "string",
-              format: "binary",
-              description: "File upload",
-            }),
-            repoName: z.string(),
-            nextVersion: z.string(),
-            requiredApprovals: z.string().optional(),
-            description: z.string().optional(),
-          }),
-        },
-      },
-    },
-  },
-  responses: {
-    200: {
-      description: "Document created",
-      content: {
-        "application/json": { schema: InitialDocumentUploadResultSchema },
-      },
-    },
-  },
-});
-
-registry.registerPath({
-  method: "get",
-  path: "/api/app/documents/{owner}/{repo}",
-  operationId: "getDocumentDetail",
-  tags: ["documents"],
-  request: {
-    params: z.object({ owner: z.string(), repo: z.string() }),
-  },
-  responses: {
-    200: {
-      description: "Document detail",
-      content: { "application/json": { schema: DocumentDetailPayloadSchema } },
-    },
-  },
-});
-
-registry.registerPath({
-  method: "get",
-  path: "/api/app/documents/{owner}/{repo}/history",
-  operationId: "getDocumentHistory",
-  tags: ["documents"],
-  request: {
-    params: z.object({ owner: z.string(), repo: z.string() }),
-  },
-  responses: {
-    200: {
-      description: "Published versions with the reviews that approved them",
-      content: { "application/json": { schema: DocumentHistoryPayloadSchema } },
-    },
-  },
-});
-
-registry.registerPath({
-  method: "get",
-  path: "/api/app/documents/{owner}/{repo}/changes/closed",
-  operationId: "getClosedChanges",
-  tags: ["documents"],
-  request: {
-    params: z.object({ owner: z.string(), repo: z.string() }),
-  },
-  responses: {
-    200: {
-      description: "Changes that are no longer open, with how each one ended",
-      content: { "application/json": { schema: ClosedChangesPayloadSchema } },
-    },
-  },
-});
-
-registry.registerPath({
-  method: "post",
-  path: "/api/app/documents/{owner}/{repo}/versions",
-  operationId: "uploadDocumentVersion",
-  tags: ["documents"],
-  request: {
-    params: z.object({ owner: z.string(), repo: z.string() }),
-    body: {
-      required: true,
-      content: {
-        "multipart/form-data": {
-          schema: z.object({
-            file: z.string().openapi({
-              type: "string",
-              format: "binary",
-              description: "File upload",
-            }),
-            docSlug: z.string(),
-            uploaderSlug: z.string(),
-            nextVersion: z.string(),
-            canonicalFileName: z.string().optional(),
-          }),
-        },
-      },
-    },
-  },
-  responses: {
-    200: {
-      description: "Version uploaded",
-      content: { "application/json": { schema: UploadResultSchema } },
-    },
-  },
-});
-
-registry.registerPath({
-  method: "get",
-  path: "/api/app/documents/{owner}/{repo}/download",
-  operationId: "downloadDocument",
-  tags: ["documents"],
-  request: {
-    params: z.object({ owner: z.string(), repo: z.string() }),
-    query: z.object({ ref: z.string().optional() }),
-  },
-  responses: {
-    200: {
-      description: "File download",
-      content: {
-        "application/octet-stream": {
-          schema: z.string(),
-        },
-      },
-    },
-  },
-});
-
-registry.registerPath({
-  method: "get",
-  path: "/api/app/documents/{owner}/{repo}/permissions",
-  operationId: "getDocumentPermissions",
-  tags: ["documents"],
-  request: {
-    params: z.object({ owner: z.string(), repo: z.string() }),
-  },
-  responses: {
-    200: {
-      description: "Document permissions",
-      content: {
-        "application/json": { schema: DocumentPermissionsPayloadSchema },
-      },
-    },
-  },
-});
-
-registry.registerPath({
-  method: "put",
-  path: "/api/app/documents/{owner}/{repo}/permissions",
-  operationId: "updateDocumentPermissions",
-  tags: ["documents"],
-  request: {
-    params: z.object({ owner: z.string(), repo: z.string() }),
-    body: {
-      required: true,
-      content: { "application/json": { schema: UpdatePermissionsBodySchema } },
-    },
-  },
-  responses: {
-    200: {
-      description: "Permissions updated",
-      content: {
-        "application/json": { schema: DocumentPermissionsPayloadSchema },
-      },
-    },
-  },
-});
-
-registry.registerPath({
-  method: "get",
-  path: "/api/app/documents/{owner}/{repo}/collaborators",
-  operationId: "listDocumentCollaborators",
-  tags: ["documents"],
-  request: {
-    params: z.object({ owner: z.string(), repo: z.string() }),
-    query: z.object({
-      page: z.string().optional(),
-      limit: z.string().optional(),
-    }),
-  },
-  responses: {
-    200: {
-      description: "Collaborators list",
-      content: {
-        "application/json": { schema: CollaboratorListPayloadSchema },
-      },
-    },
-  },
-});
-
-registry.registerPath({
-  method: "put",
-  path: "/api/app/documents/{owner}/{repo}/collaborators/{collaborator}",
-  operationId: "addDocumentCollaborator",
-  tags: ["documents"],
-  request: {
-    params: z.object({
-      owner: z.string(),
-      repo: z.string(),
-      collaborator: z.string(),
-    }),
-    body: {
-      required: true,
-      content: { "application/json": { schema: AddCollaboratorBodySchema } },
-    },
-  },
-  responses: {
-    200: {
-      description: "Collaborator added",
-      content: {
-        "application/json": {
-          schema: z.object({
-            collaborator:
-              RepoCollaboratorPermissionSummarySchema.optional().nullable(),
-          }),
-        },
-      },
-    },
-  },
-});
-
-registry.registerPath({
-  method: "delete",
-  path: "/api/app/documents/{owner}/{repo}/collaborators/{collaborator}",
-  operationId: "removeDocumentCollaborator",
-  tags: ["documents"],
-  request: {
-    params: z.object({
-      owner: z.string(),
-      repo: z.string(),
-      collaborator: z.string(),
-    }),
-  },
-  responses: {
-    204: { description: "Collaborator removed" },
-  },
-});
-
-registry.registerPath({
-  method: "post",
-  path: "/api/app/documents/{owner}/{repo}/pull-requests/{pullNumber}/reviews",
-  operationId: "submitDocumentReview",
-  tags: ["documents"],
-  request: {
-    params: z.object({
-      owner: z.string(),
-      repo: z.string(),
-      pullNumber: z.string(),
-    }),
-    body: {
-      required: true,
-      content: { "application/json": { schema: SubmitReviewBodySchema } },
-    },
-  },
-  responses: {
-    204: { description: "Review submitted" },
-  },
-});
-
-registry.registerPath({
-  method: "put",
-  path: "/api/app/documents/{owner}/{repo}/pull-requests/{pullNumber}/assignments",
-  operationId: "updateChangeAssignments",
-  tags: ["documents"],
-  request: {
-    params: z.object({
-      owner: z.string(),
-      repo: z.string(),
-      pullNumber: z.string(),
-    }),
-    body: {
-      required: true,
-      content: {
-        "application/json": { schema: UpdateChangeAssignmentsBodySchema },
-      },
-    },
-  },
-  responses: {
-    200: {
-      description: "Assignee and reviewers updated",
-      content: { "application/json": { schema: ChangeAssignmentsSchema } },
     },
   },
 });
@@ -562,140 +253,6 @@ const discussionParams = z.object({
 });
 
 const threadParams = discussionParams.extend({ threadId: z.string() });
-
-registry.registerPath({
-  method: "get",
-  path: "/api/app/documents/{owner}/{repo}/pull-requests/{pullNumber}/discussions",
-  operationId: "listDocumentDiscussions",
-  tags: ["documents"],
-  request: { params: discussionParams },
-  responses: {
-    200: {
-      description: "Review discussion threads",
-      content: { "application/json": { schema: DiscussionSummarySchema } },
-    },
-  },
-});
-
-registry.registerPath({
-  method: "post",
-  path: "/api/app/documents/{owner}/{repo}/pull-requests/{pullNumber}/discussions",
-  operationId: "createDocumentDiscussion",
-  tags: ["documents"],
-  request: {
-    params: discussionParams,
-    body: {
-      required: true,
-      content: { "application/json": { schema: CreateDiscussionBodySchema } },
-    },
-  },
-  responses: {
-    201: {
-      description: "Thread started",
-      content: { "application/json": { schema: DiscussionSummarySchema } },
-    },
-  },
-});
-
-registry.registerPath({
-  method: "post",
-  path: "/api/app/documents/{owner}/{repo}/pull-requests/{pullNumber}/discussions/{threadId}/comments",
-  operationId: "replyToDocumentDiscussion",
-  tags: ["documents"],
-  request: {
-    params: threadParams,
-    body: {
-      required: true,
-      content: { "application/json": { schema: CreateDiscussionBodySchema } },
-    },
-  },
-  responses: {
-    201: {
-      description: "Reply posted",
-      content: { "application/json": { schema: DiscussionSummarySchema } },
-    },
-  },
-});
-
-registry.registerPath({
-  method: "post",
-  path: "/api/app/documents/{owner}/{repo}/pull-requests/{pullNumber}/discussions/{threadId}/resolve",
-  operationId: "resolveDocumentDiscussion",
-  tags: ["documents"],
-  request: {
-    params: threadParams,
-    body: {
-      required: true,
-      content: { "application/json": { schema: ResolveDiscussionBodySchema } },
-    },
-  },
-  responses: {
-    200: {
-      description: "Thread status updated",
-      content: { "application/json": { schema: DiscussionSummarySchema } },
-    },
-  },
-});
-
-registry.registerPath({
-  method: "put",
-  path: "/api/app/documents/{owner}/{repo}/pull-requests/{pullNumber}/discussions/{threadId}/comments/{commentId}/reactions",
-  operationId: "setDiscussionCommentReaction",
-  tags: ["documents"],
-  request: {
-    params: threadParams.extend({ commentId: z.string() }),
-    body: {
-      required: true,
-      content: { "application/json": { schema: SetCommentReactionBodySchema } },
-    },
-  },
-  responses: {
-    200: {
-      description: "Reaction added or taken back",
-      content: { "application/json": { schema: DiscussionSummarySchema } },
-    },
-  },
-});
-
-registry.registerPath({
-  method: "get",
-  path: "/api/app/documents/{owner}/{repo}/pull-requests/{pullNumber}/updates",
-  operationId: "listChangeUpdates",
-  tags: ["documents"],
-  request: { params: discussionParams },
-  responses: {
-    200: {
-      description: "Every update this change has proposed, oldest first",
-      content: { "application/json": { schema: ChangeUpdatesPayloadSchema } },
-    },
-  },
-});
-
-registry.registerPath({
-  method: "post",
-  path: "/api/app/documents/{owner}/{repo}/pull-requests/{pullNumber}/publish",
-  operationId: "publishDocument",
-  tags: ["documents"],
-  request: {
-    params: z.object({
-      owner: z.string(),
-      repo: z.string(),
-      pullNumber: z.string(),
-    }),
-    body: {
-      required: true,
-      content: { "application/json": { schema: PublishDocumentBodySchema } },
-    },
-  },
-  responses: {
-    200: {
-      description: "Document published",
-      content: {
-        "application/json": { schema: PublishDocumentResultSchema },
-      },
-    },
-  },
-});
 
 // Users route
 registry.registerPath({

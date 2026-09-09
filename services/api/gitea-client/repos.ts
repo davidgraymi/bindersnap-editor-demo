@@ -189,149 +189,6 @@ function formatRepoCollaboratorPermissionLabel(
   }
 }
 
-function normalizeRepoCollaboratorPermission(
-  raw: RepoCollaboratorPermission,
-): RepoCollaboratorPermissionSummary {
-  const permission = raw.permission ?? "";
-  const access = normalizeRepoCollaboratorAccess(permission);
-
-  return {
-    permission,
-    access,
-    permissionLabel: formatRepoCollaboratorPermissionLabel(access),
-    roleName: raw.role_name ?? "",
-    user: normalizeUser(raw.user),
-  };
-}
-
-function parseDocTagVersion(tagName: string): number | null {
-  const match = /^doc\/v(\d{4})$/.exec(tagName);
-  if (!match) {
-    return null;
-  }
-
-  const version = Number.parseInt(match[1] ?? "", 10);
-  return Number.isFinite(version) && version > 0 ? version : null;
-}
-
-function normalizeDocTag(tag: Tag): DocTag | null {
-  const name = tag.name ?? "";
-  const version = parseDocTagVersion(name);
-
-  if (version === null) {
-    return null;
-  }
-
-  return {
-    name,
-    version,
-    sha: tag.commit?.sha ?? "",
-    created: tag.commit?.created ?? "",
-  };
-}
-
-export async function listWorkspaceRepos(
-  client: GiteaClient,
-): Promise<WorkspaceRepo[]> {
-  const result = await unwrap(
-    client.GET("/repos/search", {
-      params: { query: { limit: 100 } },
-    }),
-  );
-
-  return result.data?.map(normalizeWorkspaceRepo) ?? [];
-}
-
-export interface SearchWorkspaceReposParams {
-  client: GiteaClient;
-  /** Free-text keyword to filter repository names/descriptions. */
-  q?: string;
-  /** If set, return only repos owned by this username (exclusive owner filter). */
-  ownerUsername?: string;
-  /** If set, return repos where this username is a member (owner or collaborator). */
-  memberUsername?: string;
-  /** 1-based page of results. Defaults to the first page. */
-  page?: number;
-  /** How many repos one page holds. */
-  limit?: number;
-}
-
-export interface SearchWorkspaceReposResult {
-  repos: WorkspaceRepo[];
-  page: number;
-  limit: number;
-  /**
-   * Gitea's repo search reports no total, so a full page is taken as the sign
-   * that another one may exist. The cost of guessing wrong is one empty fetch.
-   */
-  hasMore: boolean;
-}
-
-/** One page of matching repos, for a caller that pages through results. */
-export async function searchWorkspaceReposPage(
-  params: SearchWorkspaceReposParams,
-): Promise<SearchWorkspaceReposResult> {
-  const { client, q, ownerUsername, memberUsername } = params;
-  const page = params.page ?? 1;
-  const limit = params.limit ?? 100;
-
-  const filterUsername = ownerUsername ?? memberUsername;
-  const exclusive = !!ownerUsername;
-
-  let uid: number | undefined;
-  if (filterUsername) {
-    const user = await unwrap(
-      client.GET("/users/{username}", {
-        params: { path: { username: filterUsername } },
-      }),
-    );
-    uid = user.id;
-  }
-
-  const result = await unwrap(
-    client.GET("/repos/search", {
-      params: {
-        query: {
-          page,
-          limit,
-          ...(q ? { q } : {}),
-          ...(uid !== undefined ? { uid } : {}),
-          ...(exclusive ? { exclusive: true } : {}),
-        },
-      },
-    }),
-  );
-
-  const repos = result.data?.map(normalizeWorkspaceRepo) ?? [];
-
-  return { repos, page, limit, hasMore: repos.length === limit };
-}
-
-export async function searchWorkspaceRepos(
-  params: SearchWorkspaceReposParams,
-): Promise<WorkspaceRepo[]> {
-  const { repos } = await searchWorkspaceReposPage(params);
-  return repos;
-}
-
-export async function createPrivateCurrentUserRepo(
-  params: CreatePrivateCurrentUserRepoParams,
-): Promise<Repository> {
-  const { client, name, description } = params;
-
-  return await unwrap(
-    client.POST("/user/repos", {
-      body: {
-        name,
-        description,
-        private: true,
-        auto_init: true,
-        default_branch: "main",
-      },
-    }),
-  );
-}
-
 async function loadRepoCollaboratorPermission(
   client: GiteaClient,
   owner: string,
@@ -391,60 +248,79 @@ export async function listRepoCollaborators(
   };
 }
 
-export async function getRepoCollaboratorPermission(
-  params: GetRepoCollaboratorPermissionParams,
-): Promise<RepoCollaboratorPermissionSummary> {
-  const { client, owner, repo, collaborator } = params;
-  return await loadRepoCollaboratorPermission(
-    client,
-    owner,
-    repo,
-    collaborator,
-  );
+function normalizeRepoCollaboratorPermission(
+  raw: RepoCollaboratorPermission,
+): RepoCollaboratorPermissionSummary {
+  const permission = raw.permission ?? "";
+  const access = normalizeRepoCollaboratorAccess(permission);
+
+  return {
+    permission,
+    access,
+    permissionLabel: formatRepoCollaboratorPermissionLabel(access),
+    roleName: raw.role_name ?? "",
+    user: normalizeUser(raw.user),
+  };
 }
+
+function parseDocTagVersion(tagName: string): number | null {
+  const match = /^doc\/v(\d{4})$/.exec(tagName);
+  if (!match) {
+    return null;
+  }
+
+  const version = Number.parseInt(match[1] ?? "", 10);
+  return Number.isFinite(version) && version > 0 ? version : null;
+}
+
+function normalizeDocTag(tag: Tag): DocTag | null {
+  const name = tag.name ?? "";
+  const version = parseDocTagVersion(name);
+
+  if (version === null) {
+    return null;
+  }
+
+  return {
+    name,
+    version,
+    sha: tag.commit?.sha ?? "",
+    created: tag.commit?.created ?? "",
+  };
+}
+
+export interface SearchWorkspaceReposParams {
+  client: GiteaClient;
+  /** Free-text keyword to filter repository names/descriptions. */
+  q?: string;
+  /** If set, return only repos owned by this username (exclusive owner filter). */
+  ownerUsername?: string;
+  /** If set, return repos where this username is a member (owner or collaborator). */
+  memberUsername?: string;
+  /** 1-based page of results. Defaults to the first page. */
+  page?: number;
+  /** How many repos one page holds. */
+  limit?: number;
+}
+
+export interface SearchWorkspaceReposResult {
+  repos: WorkspaceRepo[];
+  page: number;
+  limit: number;
+  /**
+   * Gitea's repo search reports no total, so a full page is taken as the sign
+   * that another one may exist. The cost of guessing wrong is one empty fetch.
+   */
+  hasMore: boolean;
+}
+
+/** One page of matching repos, for a caller that pages through results. */
 
 export async function getCurrentUserRepoPermission(
   params: GetCurrentUserRepoPermissionParams,
 ): Promise<RepoCollaboratorPermissionSummary> {
   const { client, owner, repo, username } = params;
   return await loadRepoCollaboratorPermission(client, owner, repo, username);
-}
-
-export async function addRepoCollaborator(
-  params: AddRepoCollaboratorParams,
-): Promise<void> {
-  const { client, owner, repo, collaborator, permission } = params;
-
-  const { error, response } = await client.PUT(
-    "/repos/{owner}/{repo}/collaborators/{collaborator}",
-    {
-      params: { path: { owner, repo, collaborator } },
-      body: {
-        permission,
-      } satisfies AddCollaboratorOption,
-    },
-  );
-
-  if (error !== undefined || !response.ok) {
-    throw toGiteaApiError(response.status, error);
-  }
-}
-
-export async function removeRepoCollaborator(
-  params: RemoveRepoCollaboratorParams,
-): Promise<void> {
-  const { client, owner, repo, collaborator } = params;
-
-  const { error, response } = await client.DELETE(
-    "/repos/{owner}/{repo}/collaborators/{collaborator}",
-    {
-      params: { path: { owner, repo, collaborator } },
-    },
-  );
-
-  if (error !== undefined || !response.ok) {
-    throw toGiteaApiError(response.status, error);
-  }
 }
 
 export async function searchUsers(
@@ -501,26 +377,6 @@ export async function findUser(params: {
   } catch (err) {
     if (err instanceof GiteaApiError && err.status === 404) {
       return null;
-    }
-    throw err;
-  }
-}
-
-export async function repoExists(
-  client: GiteaClient,
-  owner: string,
-  repo: string,
-): Promise<boolean> {
-  try {
-    await unwrap(
-      client.GET("/repos/{owner}/{repo}", {
-        params: { path: { owner, repo } },
-      }),
-    );
-    return true;
-  } catch (err) {
-    if (err instanceof GiteaApiError && err.status === 404) {
-      return false;
     }
     throw err;
   }
@@ -732,31 +588,6 @@ export interface CreateDocTagParams {
   target: string;
 }
 
-export async function createDocTag(
-  params: CreateDocTagParams,
-): Promise<DocTag> {
-  const { client, owner, repo, version, target } = params;
-  const versionStr = version.toString().padStart(4, "0");
-  const tagName = `doc/v${versionStr}`;
-
-  const tag = await unwrap(
-    client.POST("/repos/{owner}/{repo}/tags", {
-      params: { path: { owner, repo } },
-      body: {
-        tag_name: tagName,
-        target,
-        message: `Published version ${versionStr}`,
-      },
-    }),
-  );
-
-  const docTag = normalizeDocTag(tag);
-  if (!docTag) {
-    throw new GiteaApiError(0, `Failed to parse created tag: ${tagName}`);
-  }
-  return docTag;
-}
-
 export interface UpdateRepoBranchProtectionParams {
   client: GiteaClient;
   owner: string;
@@ -802,21 +633,6 @@ export interface UpdateRepoVisibilityParams {
   owner: string;
   repo: string;
   isPrivate: boolean;
-}
-
-export async function updateRepoVisibility(
-  params: UpdateRepoVisibilityParams,
-): Promise<void> {
-  const { client, owner, repo, isPrivate } = params;
-  const { error, response } = await client.PATCH("/repos/{owner}/{repo}", {
-    params: { path: { owner, repo } },
-    body: {
-      private: isPrivate,
-    } as import("./spec/gitea").components["schemas"]["EditRepoOption"],
-  });
-  if (error !== undefined || !response.ok) {
-    throw toGiteaApiError(response.status, error);
-  }
 }
 
 export interface GetRepoInfoParams {

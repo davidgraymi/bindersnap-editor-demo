@@ -264,8 +264,7 @@ async function seedSession(username: string): Promise<string> {
   return sessionId;
 }
 
-const ASSIGNMENTS =
-  "/api/app/documents/alice/contract/pull-requests/3/assignments";
+const ASSIGNMENTS = "/api/app/binders/alice/contract/changes/3/assignments";
 
 function request(body: Record<string, unknown> | null, sessionId: string) {
   return new Request(`http://localhost${ASSIGNMENTS}`, {

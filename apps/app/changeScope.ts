@@ -1,35 +1,36 @@
 /**
- * Which repository a change lives in, and how to address it.
+ * Which binder a change lives in, and which document inside it the change's
+ * file operations are about.
  *
- * ADR 0004 gave documents a second shape: one used to be a repository of its
- * own, and now it is a file inside a binder. A change request is identical in
- * both — it is a Gitea pull request either way — so the review screens are
- * one set of components, and this is the only thing that differs between them.
+ * **This used to be a two-variant union**, because ADR 0004 gave documents a
+ * second shape: one used to be a repository of its own, and became a file
+ * inside a binder. A change request is identical in both — it is a Gitea pull
+ * request either way — so the review screens stayed one set of components and
+ * this was the only thing that differed between them.
  *
- * Kept as data rather than a bag of callbacks because that is all it is: a
- * pair of names and, for a binder, which document inside it the change
- * carries. `api.ts` turns it into a URL; nothing else needs to know.
+ * The old shape is gone, so the seam has collapsed to the one that remains. It
+ * is kept as a named type rather than three loose props because five components
+ * and a dozen `api.ts` functions pass it around whole, and because the comment
+ * about `documentPath` below is worth having somewhere.
  */
 
-export type ChangeScope =
-  | { kind: "document"; owner: string; repo: string }
-  | {
-      kind: "binder";
-      org: string;
-      binder: string;
-      /**
-       * The document whose file this change proposes, by identity. Only the
-       * file operations need it — a binder's discussions, reviewers and
-       * updates belong to the change, not to any one document it touches.
-       */
-      documentPath: string;
-    };
+export interface ChangeScope {
+  org: string;
+  binder: string;
+  /**
+   * The document whose file this change proposes, by identity.
+   *
+   * Only the file operations need it — a change's discussions, reviewers and
+   * updates belong to the change, not to any one document it touches, and a
+   * change may touch several. Empty for a change that is about no document at
+   * all, which is what a sign-off rules change is.
+   */
+  documentPath: string;
+}
 
-/** `alice/contract`, or `riverside-health/clinical`. */
+/** `riverside-health/clinical`, as Gitea addresses the repository. */
 export function scopeRepo(scope: ChangeScope): { owner: string; repo: string } {
-  return scope.kind === "binder"
-    ? { owner: scope.org, repo: scope.binder }
-    : { owner: scope.owner, repo: scope.repo };
+  return { owner: scope.org, repo: scope.binder };
 }
 
 /**
@@ -43,15 +44,10 @@ export function scopeChangeBase(
   scope: ChangeScope,
   pullNumber: number,
 ): string {
-  return scope.kind === "binder"
-    ? `/api/app/binders/${scope.org}/${scope.binder}/changes/${pullNumber}`
-    : `/api/app/documents/${scope.owner}/${scope.repo}/pull-requests/${pullNumber}`;
+  return `/api/app/binders/${scope.org}/${scope.binder}/changes/${pullNumber}`;
 }
 
 /** A stable key for effect dependencies, so a scope object can be inline. */
 export function scopeKey(scope: ChangeScope): string {
-  const { owner, repo } = scopeRepo(scope);
-  return scope.kind === "binder"
-    ? `binder:${owner}/${repo}:${scope.documentPath}`
-    : `document:${owner}/${repo}`;
+  return `${scope.org}/${scope.binder}:${scope.documentPath}`;
 }

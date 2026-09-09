@@ -258,10 +258,13 @@ test.describe("app shell routes", () => {
   });
 
   test("deep links still resolve inside the SPA shell", async ({ page }) => {
+    // A binder's own address, which is the deep link there is now — the
+    // `/docs/:owner/:repo` this used to load belonged to the one-repo-per-
+    // document model and is retired with it.
     await signInAsAlice(page);
-    await page.goto(`/docs/${OWNER}/${REPO}`);
+    await page.goto(`/${OWNER}/${REPO}`);
 
-    await expect(page).toHaveURL(new RegExp(`/docs/${OWNER}/${REPO}$`));
+    await expect(page).toHaveURL(new RegExp(`/${OWNER}/${REPO}$`));
     await expect(page.locator(".docw-page")).toBeVisible();
     await expect(
       page.locator(".app-topnav-link", { hasText: "Documents" }),

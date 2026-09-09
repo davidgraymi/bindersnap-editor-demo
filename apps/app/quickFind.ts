@@ -1,6 +1,5 @@
-import type { WorkspaceRepo } from "./api";
-import { capitalizeFirst, formatDocumentName } from "./documentDisplay";
-import { formatWhen } from "./homeChanges";
+import type { LibraryDocument } from "./api";
+import { formatDocumentName } from "./documentDisplay";
 
 /**
  * Quick find, decided here so the panel only renders.
@@ -18,13 +17,23 @@ import { formatWhen } from "./homeChanges";
 
 /** One row in the panel: a document, and the one line that identifies it. */
 export interface QuickFindResult {
-  /** "alice/vendor-agreement" — stable across pages, so it dedupes. */
+  /** "riverside-health/clinical/nursing/infection-control" — dedupes pages. */
   key: string;
-  owner: string;
-  repo: string;
-  /** "Vendor Agreement". */
+  organization: string;
+  binder: string;
+  /** The document's identity inside the binder, which is its address. */
+  slugPath: string;
+  /** "Infection Control Policy", formatted from the stored slug. */
   name: string;
-  /** "Alice owns · updated 2h ago". */
+  /**
+   * "Clinical · nursing · v3".
+   *
+   * **The binder, not the owner.** A document used to be a repository somebody
+   * owned, so the line that identified it said whose it was. Under ADR 0004 the
+   * organization owns everything and nobody owns a document — the question a
+   * reader is actually disambiguating with is *which binder*, and after that
+   * which folder.
+   */
   meta: string;
 }
 
@@ -37,66 +46,33 @@ export const QUICK_FIND_DEBOUNCE_MS = 180;
 /** A query shorter than this is not yet a question worth asking. */
 export const QUICK_FIND_MIN_QUERY = 2;
 
-function normalizeLogin(login: string): string {
-  return login.trim().replace(/^@/, "").toLowerCase();
+/** "Clinical · nursing · v3", or as much of it as is known. */
+function describeResult(document: LibraryDocument): string {
+  const parts = [document.binder];
+  if (document.folder) parts.push(document.folder);
+  if (document.latestVersion) parts.push(`v${document.latestVersion.version}`);
+  else if (document.state === "proposed") parts.push("not published yet");
+  return parts.join(" · ");
 }
 
-/** The one line under a result's name: whose it is, and when it last moved. */
-function describeResult(
-  repo: WorkspaceRepo,
-  currentUsername: string,
-  now: number,
-): string {
-  const owner = repo.owner.login;
-  const ownership =
-    normalizeLogin(owner) === normalizeLogin(currentUsername)
-      ? "You own"
-      : `${capitalizeFirst(owner)} owns`;
-  return `${ownership} · updated ${formatWhen(repo.updated_at, now)}`;
-}
-
-/** One repo, as a row. */
+/** One document, as a row. */
 export function buildQuickFindResult(
-  repo: WorkspaceRepo,
-  currentUsername: string,
-  now: number = Date.now(),
+  document: LibraryDocument,
 ): QuickFindResult {
   return {
-    key: `${repo.owner.login}/${repo.name}`,
-    owner: repo.owner.login,
-    repo: repo.name,
-    name: formatDocumentName(repo.name),
-    meta: describeResult(repo, currentUsername, now),
+    key: `${document.organization}/${document.binder}/${document.slugPath}`,
+    organization: document.organization,
+    binder: document.binder,
+    slugPath: document.slugPath,
+    name: formatDocumentName(document.name),
+    meta: describeResult(document),
   };
 }
 
 export function buildQuickFindResults(
-  repos: WorkspaceRepo[],
-  currentUsername: string,
-  now: number = Date.now(),
+  documents: LibraryDocument[],
 ): QuickFindResult[] {
-  return repos.map((repo) => buildQuickFindResult(repo, currentUsername, now));
-}
-
-/**
- * Add a page to what is already on screen.
- *
- * Gitea pages a live index: a document that moves between two requests can
- * come back on both pages, and a row that appeared twice would be a row the
- * arrow keys visit twice. The first copy wins, because that is the one the
- * reader has already looked at.
- */
-export function appendQuickFindPage(
-  existing: QuickFindResult[],
-  incoming: QuickFindResult[],
-): QuickFindResult[] {
-  const seen = new Set(existing.map((result) => result.key));
-  const added = incoming.filter((result) => {
-    if (seen.has(result.key)) return false;
-    seen.add(result.key);
-    return true;
-  });
-  return added.length === 0 ? existing : [...existing, ...added];
+  return documents.map(buildQuickFindResult);
 }
 
 /**
@@ -120,22 +96,6 @@ export function moveQuickFindHighlight(
   if (next < 0) return count - 1;
   if (next >= count) return 0;
   return next;
-}
-
-/**
- * Whether a scroll has reached far enough to ask for the next page.
- *
- * Measured against the bottom rather than the last row so the fetch starts
- * roughly a row early — the results are then usually there by the time the
- * reader arrives at them.
- */
-export function shouldLoadNextQuickFindPage(
-  scrollTop: number,
-  clientHeight: number,
-  scrollHeight: number,
-  threshold = 48,
-): boolean {
-  return scrollHeight - (scrollTop + clientHeight) <= threshold;
 }
 
 /** A query the server should actually be asked about. */
