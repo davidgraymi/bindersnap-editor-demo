@@ -350,6 +350,38 @@ export async function searchUsers(
   };
 }
 
+/**
+ * One account by login, or `null` when there is none.
+ *
+ * ADR 0004 ships without invitations, so an organization adds people who
+ * already have an account — which makes "there is no such account" a sentence
+ * a customer will actually meet, the first time an owner reaches for a
+ * colleague who has not signed up yet. Asking here is what lets the refusal
+ * name that cause. Letting `addTeamMember` answer instead gives a bare 404,
+ * which every layer above reads as "no such organization" and sends the owner
+ * hunting the wrong thing.
+ */
+export async function findUser(params: {
+  client: GiteaClient;
+  username: string;
+}): Promise<RepoUserSummary | null> {
+  const { client, username } = params;
+
+  try {
+    const user = await unwrap(
+      client.GET("/users/{username}", {
+        params: { path: { username } },
+      }),
+    );
+    return normalizeUser(user);
+  } catch (err) {
+    if (err instanceof GiteaApiError && err.status === 404) {
+      return null;
+    }
+    throw err;
+  }
+}
+
 function normalizeBranchProtection(
   raw: BranchProtection,
 ): RepoBranchProtection {

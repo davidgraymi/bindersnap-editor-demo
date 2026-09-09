@@ -686,6 +686,22 @@ export type CreatedOrganizationGroupPayload = z.infer<
  * team, so this is one team membership either way and nothing is stored —
  * billing keeps reading the same team it always did.
  */
+/**
+ * Adding somebody to the organization.
+ *
+ * The account has to exist already: Gitea cannot hold a pending invitation and
+ * this product cannot yet send an email, so an owner adds a person who has
+ * signed up. The invitations issue, 426, is the rest of that story.
+ */
+export const AddOrganizationPersonRequestSchema = z.object({
+  username: z.string(),
+  /** Land them as an owner rather than a member. Defaults to a member. */
+  owner: z.boolean().optional(),
+});
+export type AddOrganizationPersonRequest = z.infer<
+  typeof AddOrganizationPersonRequestSchema
+>;
+
 export const OrganizationPersonRoleRequestSchema = z.object({
   owner: z.boolean(),
 });

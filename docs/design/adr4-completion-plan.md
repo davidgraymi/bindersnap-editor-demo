@@ -125,7 +125,6 @@ sequenced: the `document_versions` derived index and per-workspace settings. The
 approvals whitelist on a binder's change page is **not** being built — with the
 old model gone there is no way to reach a binder except through a team the
 whitelist already names, so the state that screen would explain cannot happen.
-
 Piece 10 went early, out of order, exactly as the note below predicted it
 could.
 

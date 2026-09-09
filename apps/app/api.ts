@@ -697,6 +697,26 @@ export async function createOrganizationGroup(
 }
 
 /**
+ * Put somebody in the organization.
+ *
+ * They must already have an account: there is no invitation and no email
+ * behind this — see the invitations issue, 426 — so the one refusal worth
+ * expecting is
+ * "no such account yet", which the API says in as many words.
+ */
+export async function addOrganizationPerson(
+  org: string,
+  username: string,
+  owner: boolean,
+): Promise<OrganizationPeoplePayload> {
+  const response = await OrganizationsClient.addOrganizationPerson(org, {
+    username,
+    owner,
+  });
+  return response.data;
+}
+
+/**
  * Promote somebody to owner, or demote them back to member.
  *
  * Refused with a sentence when it would leave the organization with no owner —
