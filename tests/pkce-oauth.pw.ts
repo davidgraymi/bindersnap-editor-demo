@@ -16,9 +16,26 @@ import {
 import { seedDevStack } from "./seed";
 
 test.describe("PKCE OAuth2 app registration", () => {
+  // `seedDevStack` is a few dozen Gitea round trips, and it runs twice in here
+  // — once in the hook and once to prove idempotence. The suite default is
+  // 10 s, sized for UI tests, so this was a `beforeAll` whose own work could
+  // not fit inside the budget containing it: the same shape as the two harness
+  // defects the implementation notes already record. It went from marginal to
+  // failing when dev moved to the Gitea 28.0.0 nightly, which is a slower
+  // seed rather than a broken one.
+  test.describe.configure({ mode: "serial", timeout: 120_000 });
+
   let oauthClientId: string | undefined;
 
   test.beforeAll(async () => {
+    // **`describe.configure` does not reach a `beforeAll` hook.** It sets the
+    // per-test timeout; the hook keeps the 10 s default and has to raise its
+    // own, which is why the configure line above was not enough on its own.
+    // The hook runs the whole of `seedDevStack` — a few dozen Gitea round
+    // trips — and does it twice in this file, so it exceeds 10 s whenever the
+    // stack is under load from the rest of the suite.
+    test.setTimeout(120_000);
+
     const result = await seedDevStack({
       baseUrl: GITEA_URL,
       adminUser: GITEA_ADMIN_USER,

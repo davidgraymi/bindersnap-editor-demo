@@ -163,6 +163,13 @@ against a database stamped by a newer version. So bumping `gitea/gitea:<tag>` in
 alone cannot undo: reverting the tag brings back the old binary on top of an
 already-migrated database and the container will fail to start.
 
+**Dev and production are deliberately on different Gitea versions.** Dev runs a
+digest-pinned 28.0.0 nightly for `block_on_codeowner_reviews`, which is what
+makes per-folder sign-off enforce anything; production stays on the released
+`1.27.3` precisely because of the paragraph above — a nightly's migration would
+be a one-way door taken on a build nobody has released. The two compose files
+each say so. When 28.0.0 ships a real tag, they move together.
+
 Rolling a Gitea upgrade back means restoring the database too:
 
 1. Revert the tag bump on `main` so the deploy stops pulling the newer image.

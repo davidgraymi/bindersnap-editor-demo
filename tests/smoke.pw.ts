@@ -200,6 +200,14 @@ test.describe("Gitea dev stack health", () => {
   });
 
   test("seedDevStack is idempotent — re-running does not throw or duplicate data", async () => {
+    // The third test in this suite to run the whole of `seedDevStack` on the
+    // 10 s default, and the third to start failing when dev moved to the
+    // slower Gitea 28.0.0 nightly. Same shape as the two harness defects the
+    // implementation notes record: an inner wait bigger than the budget
+    // containing it. Raised per test rather than for the describe, so the
+    // assertions around it keep a tight budget.
+    test.setTimeout(120_000);
+
     await expect(
       seedDevStack({
         baseUrl: GITEA_URL,
