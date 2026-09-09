@@ -88,16 +88,33 @@ is worth shipping alone.
 | 5     | Managing binder people; the visibility switch            | backend | **done** (#421)      |
 | 6     | Managing org people; last-owner rule                     | backend | **done** (#421)      |
 | 7     | People and groups screens                                | screens | **done**             |
-| 8     | Invitations — table, routes, email                       | backend | not started          |
-| 9     | Invite screens and pending state                         | screens | not started          |
+| 8     | ~~Invitations — table, routes, email~~                   | backend | **descoped**         |
+| 9     | ~~Invite screens and pending state~~                     | screens | **descoped**         |
 | 10    | Read-only mode — typed 402 and the banner                | both    | **done** (#424)      |
-| —     | **Gitea 28.0.0 upgrade**, its own PR, no feature         | ops     | not started          |
-| 11    | The CODEOWNERS generator                                 | backend | blocked on the above |
-| 12    | Sign-off rules page                                      | screens | blocked on the above |
+| —     | **Gitea 28.0.0 upgrade**, its own PR, no feature         | ops     | **done**             |
+| 11    | The CODEOWNERS generator                                 | backend | **done**             |
+| 12    | Sign-off rules page                                      | screens | **done**             |
 
-**Nine of the thirteen are done.** What is left is invitations (8 and 9),
-deleting the old model, and the two pieces behind the Gitea upgrade — plus the
-items in the implementation status notes that were never sequenced here: the
+**Updated 2026-09-08.** Twelve of the thirteen are done, and the thirteenth is
+not being built.
+
+**Invitations are descoped**, on the product owner's call. Gitea can neither
+hold a pending invitation nor send an email, and this repository has no mail
+infrastructure at all — so finishing them needs a delivery decision and
+credentials only a human can create. Instead, an organization adds a person who
+already has an account: one route, one search-based form, and two costs written
+down rather than rediscovered — somebody with no account cannot be added at
+all, and nobody consents to being added. The rest is
+[issue 426](https://github.com/davidgraymi/bindersnap-editor-demo/issues/426).
+
+**The Gitea upgrade happened**, digest-pinned to a `main-nightly` in dev with
+production left on 1.27.3, and its verification turned up one claim the design
+had backwards — a CODEOWNERS pattern that does not compile is dropped silently
+rather than failing closed. That became a requirement on the generator before
+the generator existed.
+
+What is left is **deleting the old model**, plus the items in the
+implementation status notes that were never sequenced here: the
 `document_versions` index, per-workspace settings, and the approvals whitelist
 on a binder's change page.
 

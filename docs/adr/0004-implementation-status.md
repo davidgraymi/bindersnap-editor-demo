@@ -745,6 +745,118 @@ be verified by looking at the components that implement it, because its bugs
 are exactly the controls nobody remembered belong to it. Screenshot the running
 app.
 
+### Per-folder sign-off, and the escaping bug underneath it
+
+Pieces 11 and 12, and the reason the Gitea 28.0.0 upgrade was worth taking.
+
+**A sign-off rule names a group, and that is the whole point.** Before
+`block_on_codeowner_reviews`, a `.gitea/CODEOWNERS` rule had to name
+individuals — a team code owner blocks nothing, because Gitea writes a team
+review request and then clears its own `official` flag. So every personnel
+change became a pull request in every binder naming that person, approved by
+the very code owners the file was being edited to change. For a compliance
+manager with twenty binders that is not a workflow, it is an outage. Now the
+rule names a group and changing who is in that group is one Gitea call:
+instant, no commit, no approval, nothing stale.
+
+**Changing the rules is an approved change, and the screen says so.** `main` is
+protected, so the regenerated file goes onto a branch and opens a change like
+any other, and the endpoint returns a **change number rather than a success** —
+a caller holding a number cannot report otherwise. Gitea reads CODEOWNERS from
+the base branch, so the rules already in force govern the change to them, which
+is the right authority and costs nothing. A customer buying "nothing changes
+without approval" who discovered the approval rules could be changed silently
+would have found the hole in the product.
+
+**One open sign-off change at a time.** Two would leave competing versions of
+the rules in review and whichever published last would silently win, with no
+screen able to say the other had been overwritten.
+
+#### The escaping is doubled, and one layer of it was missing from the design
+
+The design said folder names must be regex-escaped. That is half of it, and the
+half that does not work alone.
+
+`TokenizeCodeOwnersLine` runs **before** `ParseCodeOwnersLine` compiles
+anything, and it **consumes backslashes** — `\x` becomes a bare `x` — as well
+as splitting on spaces and truncating at an unescaped `#`. So a backslash
+written to escape a regex metacharacter never reaches the regex. A folder called
+`Q1 (2026)`, escaped once, is written `Q1 \(2026\)/.*`: the space splits the
+line, the pattern becomes `Q1`, and everything after it is read as an owner.
+Escaped once without the space, `(2026)` would still arrive at the regex as a
+**capture group**.
+
+So escaping is regex-escape first, then tokenizer-escape the result —
+`escapeRegex` then `escapeForTokenizer`, composed only by `codeownersToken`.
+`packages/utils/codeowners.ts` carries a faithful port of Gitea's tokenizer so
+that every assertion about matching runs through what Gitea will actually
+compile; checking the raw line passes exactly this class of bug.
+
+#### What the generator owes, and why
+
+Verified against a running Gitea 28.0.0 on 2026-09-08: **a CODEOWNERS pattern
+that does not compile is dropped with a log warning, not refused.**
+`GetCodeOwnersFromContent` returns `(rules, warnings)`, logs the warnings, and
+leaves the bad line out; the gate then finds no matching rule and passes. A file
+where every rule is malformed leaves the gate wide open while every screen says
+sign-off is required — the `parseReviewSettings` failure mode ADR 0004
+complains about, inside Gitea's own parser.
+
+Since **we** generate the file, that is a bug of ours that lands as a control
+which quietly stops controlling. `validateSignOffRules` therefore refuses,
+before a single Gitea call:
+
+- a pattern that does not compile **as Gitea will see it**, after tokenizing;
+- a pattern that compiles but does not match its own folder, or that also
+  matches a sibling — the check that catches an escaping bug, which mere
+  compilation does not;
+- a rule naming a group the organization does not have, which can never be
+  satisfied and would leave the binder unable to publish;
+- a rule with nobody on it, and two rules over one folder;
+- a file over a conservative size ceiling, far below the 8 MiB at which Gitea
+  fails closed.
+
+#### The capability is read back, never inferred
+
+Dev runs a 28.0.0 nightly and production runs 1.27.3, which accepts
+`block_on_codeowner_reviews` on a write and **silently drops it**. So
+`protectWorkspaceMain` writes the field and reads the protection back to see
+what stuck. A version string cannot answer this — not least because the 28.0.0
+binary self-reports `1.28.0+dev`.
+
+`block_on_official_review_requests` is switched off **only** once the new gate
+is confirmed. Turning it off unconditionally would remove the only per-folder
+enforcement a 1.27 binder has and put nothing in its place. And the probe fails
+safe: the protection is already written when it runs, so a read that fails
+answers "assume not supported" and leaves the older gate on.
+
+#### Three things this turned up in code that already existed
+
+- **Publishing refused a change that touches no document.** Correct for every
+  other change — one that versions nothing is a mistake — and wrong for a
+  sign-off change, which versions nothing by design. Told apart by the branch,
+  the same way an upload is. A sign-off branch is deliberately **not** under
+  `upload/`, because `documentSlugPathFromUploadBranch` would read it as a
+  document and the binder would list a policy that does not exist.
+- **The change page claimed "becomes v1 when published"** on a change that
+  publishes no version, and drew a document panel with every control disabled.
+  `DocumentChangeDetail` now takes an optional `subject`, and a binder's change
+  page passes one when the change touches no document. That string is exactly
+  the kind of thing a compliance customer notices.
+- **A change's title came from its whole body.** `parseChangeTitle` returned the
+  entire trimmed body, which was fine while every body was one line and made the
+  sign-off change's explanation into the page's `<h2>`. It takes the first line
+  now and `describeSubmission` takes the rest — a one-line body behaves exactly
+  as before, and a body with detail finally renders as a title plus a
+  description.
+
+The seed sets `block_on_codeowner_reviews` too, so a seeded binder demonstrates
+the feature instead of opening its Sign-off rules tab with a warning. That is a
+**third** copy of the binder's branch protection — the app's and the permission
+model test's are the others — and copies of one rule are what this codebase
+keeps catching mid-drift. It stays separate only because the seed talks to Gitea
+directly with no app running.
+
 ## Why #393 carries the organization-creation flow too
 
 They cannot ship apart. The migration parks every username-keyed billing row
@@ -939,10 +1051,10 @@ In rough dependency order.
    once per document — so this is now an optimization rather than a rescue.
 4. **Per-workspace settings and `settings_events`.** Not started.
    `blockOnUnresolvedThreads` still lives in the config branch.
-5. **CODEOWNERS generation.** Not started, and blocked on the Gitea 28.0.0
-   upgrade — `block_on_codeowner_reviews` is what lets a rule name a **team**
-   rather than the list of people #389's finding forced. Groups now exist to be
-   named in one.
+5. ~~**CODEOWNERS generation.**~~ **Built 2026-09-08**, with the Gitea 28.0.0
+   upgrade it was blocked on — see "Per-folder sign-off, and the escaping bug
+   underneath it" above. Rules name groups, changing them is an approved
+   change, and the generator refuses a file that would enforce nothing.
 6. **The approvals whitelist on a binder change.** `branchProtection` is
    passed as null, so the page never says "your account is not authorized to
    approve this". Gitea still refuses, and the required count is shown — but

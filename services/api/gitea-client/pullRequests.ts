@@ -805,6 +805,28 @@ export async function listPullRequests(
 }
 
 /** One change and its reviews, for the pages that show a single change. */
+/**
+ * A change's head branch, and nothing else.
+ *
+ * The branch is what tells the shapes of change apart —
+ * `upload/<slugPath>/…` is a document, `sign-off/…` is a rules change — so
+ * this is asked for on paths that need to know which one they are holding and
+ * do not need the reviews that come with the fuller read.
+ */
+export async function getPullRequestHeadBranch(
+  params: PullRequestRef,
+): Promise<string> {
+  const { client, owner, repo, pullNumber } = params;
+
+  const pullRequest = await unwrap(
+    client.GET("/repos/{owner}/{repo}/pulls/{index}", {
+      params: { path: { owner, repo, index: pullNumber } },
+    }),
+  );
+
+  return pullRequest.head?.ref ?? "";
+}
+
 export async function getPullRequestWithReviews(
   params: PullRequestRef,
 ): Promise<PullRequestWithReviews> {

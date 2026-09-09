@@ -134,6 +134,11 @@ import {
   type RepoUserSummary,
   type WorkspaceRepo,
 } from "./gitea-client/repos";
+import { proposeSignOffRules, readSignOffRules } from "./gitea-client/signOff";
+import {
+  validateSignOffRules,
+  type SignOffRule,
+} from "../../packages/utils/codeowners";
 import {
   buildUploadBranchName,
   buildUploadCommitMessage,
@@ -148,6 +153,7 @@ import {
   listBranchUpdates,
   listPullRequests,
   listPullRequestsWithReviews,
+  getPullRequestHeadBranch,
   searchInvolvedChanges,
   type InvolvedChangeRef,
   mergeOrResolveConflicts,
@@ -4916,7 +4922,26 @@ async function handlePublishWorkspaceChange(
       pullNumber,
     });
 
-    if (documents.length === 0) {
+    // **A sign-off change touches no document, and that is correct.** It
+    // changes `.gitea/CODEOWNERS` — who has to approve each folder — so there
+    // is nothing to version and no tag to write. The refusal below is still
+    // right for every other change: one that versions nothing is a mistake, and
+    // publishing it silently would leave somebody waiting for a version that
+    // never arrives.
+    //
+    // Told apart by the branch, the same way an upload is
+    // (`upload/<slugPath>/…`). A sign-off branch is deliberately not under that
+    // prefix, because `documentSlugPathFromUploadBranch` would then read it as
+    // a document and the binder would list a policy that does not exist.
+    const changeBranch = await getPullRequestHeadBranch({
+      client,
+      owner,
+      repo: workspaceName,
+      pullNumber,
+    });
+    const isSignOffChange = changeBranch.startsWith("sign-off/");
+
+    if (documents.length === 0 && !isSignOffChange) {
       return json(
         409,
         { error: "This change does not touch any document." },
@@ -5673,7 +5698,16 @@ async function handleWorkspaceSettings(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
-    const [teams, protection, reviewSettings, access] = await Promise.all([
+    const [
+      teams,
+      protection,
+      reviewSettings,
+      access,
+      signOff,
+      documents,
+      orgTeams,
+      openChanges,
+    ] = await Promise.all([
       // A member without admin on the binder cannot list its teams. That costs
       // them the people, not the page.
       listRepoTeams({ client, owner: orgName, repo: workspaceName }).catch(
@@ -5687,6 +5721,29 @@ async function handleWorkspaceSettings(
         () => ({ blockOnUnresolvedThreads: false }),
       ),
       readWorkspaceAccess({ client, org: orgName, name: workspaceName }),
+      readSignOffRules({
+        client,
+        org: orgName,
+        workspace: workspaceName,
+      }).catch(() => ({ exists: false, rules: [], unreadable: [] })),
+      listWorkspaceDocuments({
+        client,
+        org: orgName,
+        workspace: workspaceName,
+      }).catch(() => []),
+      // The folders a rule may name are this binder's; the **groups** a rule
+      // may name are the organization's, and deliberately not only the ones
+      // granted here — a committee that signs off without gaining access is a
+      // team granted onto no repository, which ADR 0004 already allows for.
+      // Listing them needs org ownership, so a binder admin who is not an owner
+      // falls back to the teams granted here rather than losing the page.
+      listOrganizationTeams({ client, org: orgName }).catch(() => null),
+      listPullRequests({
+        client,
+        owner: orgName,
+        repo: workspaceName,
+        state: "open",
+      }).catch(() => []),
     ]);
 
     const withMembers = await Promise.all(
@@ -5720,6 +5777,35 @@ async function handleWorkspaceSettings(
           pushBlocked: protection ? !protection.enablePush : false,
           blockOnUnresolvedThreads: reviewSettings.blockOnUnresolvedThreads,
         },
+        signOff: {
+          /**
+           * Whether Gitea will actually hold a merge for these rules.
+           *
+           * False on a Gitea without `block_on_codeowner_reviews` — which is
+           * what production runs — and the page has to say so, because rules
+           * that are listed but not enforced are worse than no rules at all.
+           */
+          enforced: protection?.blockOnCodeownerReviews ?? false,
+          exists: signOff.exists,
+          rules: signOff.rules,
+          // Lines Gitea would drop with only a log warning. Surfaced because a
+          // rule the screen omits is a rule somebody believes is not there.
+          unreadable: signOff.unreadable,
+          folders: foldersInBinder(documents.map((entry) => entry.path)),
+          groups: (orgTeams ?? teams)
+            .map((team) => team.name)
+            .filter((name) => name !== STAFF_TEAM_NAME)
+            .sort((left, right) => left.localeCompare(right)),
+          /**
+           * An open sign-off change, if there is one. Offering to open a second
+           * would leave two competing versions of the rules in review, and
+           * whichever merged last would silently win.
+           */
+          pendingChange:
+            openChanges.find((change) =>
+              (change.head?.ref ?? "").startsWith("sign-off/"),
+            )?.number ?? null,
+        },
         canManage: access.admin,
       },
       baseHeaders,
@@ -5733,6 +5819,210 @@ async function handleWorkspaceSettings(
     });
     return responseFromError(err, baseHeaders, "Unable to read the settings.");
   }
+}
+
+/**
+ * Propose new per-folder sign-off rules.
+ *
+ * **This does not change anything, and the response says so by returning a
+ * change number.** `main` is protected, so the regenerated file goes onto a
+ * branch and opens a change like any other. A product whose claim is that
+ * nothing reaches the record without approval should not exempt the rules that
+ * decide who approves — and because Gitea reads CODEOWNERS from the base
+ * branch, the rules already in force are the ones governing this very change.
+ * That is the right authority and it falls out for free.
+ *
+ * **Validated before a single call to Gitea.** The generator owes this: a bad
+ * rule here is our bug rather than a customer's typo, and Gitea's own parser
+ * drops a line it cannot compile with nothing but a log warning — so a
+ * malformed file does not fail loudly, it silently stops enforcing while every
+ * screen still says sign-off is required. Verified against a running Gitea
+ * 28.0.0 on 2026-09-08.
+ */
+async function handleBinderSignOffRules(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { client, session } = auth;
+
+  try {
+    const body = (await req.json().catch(() => null)) as {
+      rules?: unknown;
+    } | null;
+
+    const rules = parseSignOffRulesInput(body?.rules);
+    if (rules === null) {
+      return json(
+        400,
+        {
+          error:
+            "Send the rules as a list, each with a folder and the groups or people who sign it off.",
+        },
+        baseHeaders,
+      );
+    }
+
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    // Every group a rule names has to exist, or the rule can never be
+    // satisfied and the binder cannot publish. Read from the organization
+    // rather than from the binder, because a group that signs off without
+    // gaining access is a team granted onto no repository.
+    const orgTeams = await listOrganizationTeams({
+      client,
+      org: orgName,
+    }).catch(() =>
+      listRepoTeams({ client, owner: orgName, repo: workspaceName }).catch(
+        () => [],
+      ),
+    );
+
+    const validation = validateSignOffRules({
+      org: orgName,
+      rules,
+      knownTeams: orgTeams.map((team) => team.name),
+    });
+    if (!validation.ok) {
+      return json(
+        422,
+        { error: validation.problems.join(" "), problems: validation.problems },
+        baseHeaders,
+      );
+    }
+
+    // One open sign-off change at a time. Two would leave competing versions
+    // of the rules in review, and whichever merged last would silently win —
+    // with no screen able to say that the other one had been overwritten.
+    const open = await listPullRequests({
+      client,
+      owner: orgName,
+      repo: workspaceName,
+      state: "open",
+    });
+    const pending = open.find((change) =>
+      (change.head?.ref ?? "").startsWith("sign-off/"),
+    );
+    if (pending) {
+      return json(
+        409,
+        {
+          error: `This binder already has a sign-off change waiting for a decision. Publish or withdraw change ${pending.number} first.`,
+          changeNumber: pending.number,
+        },
+        baseHeaders,
+      );
+    }
+
+    const proposed = await proposeSignOffRules({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      rules,
+      author: session.username,
+    });
+
+    logger.info("Sign-off rules proposed", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      changeNumber: proposed.changeNumber,
+      ruleCount: rules.length,
+    });
+
+    return json(201, proposed, baseHeaders);
+  } catch (err) {
+    logger.error("Failed to propose sign-off rules", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to propose the sign-off rules.",
+    );
+  }
+}
+
+/** The request body, or `null` when it is not the shape this route takes. */
+function parseSignOffRulesInput(input: unknown): SignOffRule[] | null {
+  if (!Array.isArray(input)) return null;
+
+  const rules: SignOffRule[] = [];
+
+  for (const entry of input) {
+    if (typeof entry !== "object" || entry === null) return null;
+    const candidate = entry as {
+      folder?: unknown;
+      teams?: unknown;
+      users?: unknown;
+    };
+
+    if (typeof candidate.folder !== "string") return null;
+
+    const teams = toStringList(candidate.teams);
+    const users = toStringList(candidate.users);
+    if (teams === null || users === null) return null;
+
+    rules.push({ folder: candidate.folder.trim(), teams, users });
+  }
+
+  return rules;
+}
+
+function toStringList(input: unknown): string[] | null {
+  if (input === undefined) return [];
+  if (!Array.isArray(input)) return null;
+  const out: string[] = [];
+  for (const item of input) {
+    if (typeof item !== "string") return null;
+    const trimmed = item.trim();
+    if (trimmed !== "") out.push(trimmed);
+  }
+  return out;
+}
+
+/**
+ * Every folder that holds a document, plus every folder above it.
+ *
+ * A sign-off rule is set on a folder, and the folders a binder has are exactly
+ * the ones its documents live in — git has no empty directories, so there is
+ * nothing else to offer. Intermediate folders are included because
+ * `policies/nursing/infection-control.docx` means a customer may reasonably
+ * want a rule on `policies` as well as on `policies/nursing`; both are real
+ * places in the tree.
+ */
+export function foldersInBinder(paths: readonly string[]): string[] {
+  const folders = new Set<string>();
+
+  for (const path of paths) {
+    const segments = path.split("/");
+    // The last segment is the file itself.
+    for (let depth = 1; depth < segments.length; depth += 1) {
+      folders.add(segments.slice(0, depth).join("/"));
+    }
+  }
+
+  // `.gitea` holds the sign-off file itself and nothing a customer filed. A
+  // rule over it would be a rule about our own plumbing.
+  folders.delete(".gitea");
+
+  return [...folders]
+    .filter((folder) => !folder.startsWith(".gitea/"))
+    .sort((left, right) => left.localeCompare(right));
 }
 
 /**
@@ -8700,6 +8990,9 @@ export function createApiServer() {
         const workspaceSettingsMatch = pathname.match(
           /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/settings$/,
         );
+        const workspaceSignOffMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/rules\/sign-off$/,
+        );
         // Last of the binder matchers, because every one above it is a longer
         // path under the same two segments.
         const workspaceOverviewMatch = pathname.match(
@@ -8909,6 +9202,13 @@ export function createApiServer() {
             baseHeaders,
             workspaceCollaboratorsMatch[1]!,
             workspaceCollaboratorsMatch[2]!,
+          );
+        } else if (workspaceSignOffMatch && method === "POST") {
+          response = await handleBinderSignOffRules(
+            req,
+            baseHeaders,
+            workspaceSignOffMatch[1]!,
+            workspaceSignOffMatch[2]!,
           );
         } else if (workspaceSettingsMatch && method === "GET") {
           response = await handleWorkspaceSettings(

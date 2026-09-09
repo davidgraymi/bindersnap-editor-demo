@@ -260,10 +260,21 @@ export function BinderChangePage({
         blockOnUnresolvedThreads={detail.blockOnUnresolvedThreads}
         canManageAssignments={detail.canManage}
         nextVersion={shown?.nextVersion ?? 1}
-        documentName={
+        // A change that touches no document is a change to this binder's
+        // sign-off rules — the one kind that goes through review and versions
+        // nothing. Saying so replaces the version wording and the file panel,
+        // both of which would otherwise be false.
+        subject={
           shown
-            ? formatDocumentName(shown.name)
-            : `Change #${detail.change.number}`
+            ? null
+            : {
+                title: "Who signs off on each folder",
+                description:
+                  "This change updates the binder's sign-off rules. It publishes no version.",
+              }
+        }
+        documentName={
+          shown ? formatDocumentName(shown.name) : `this binder's rules`
         }
         fileName={shown ? downloadFileName(shown) : null}
         comparisonBase={

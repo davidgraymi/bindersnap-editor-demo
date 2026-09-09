@@ -53,6 +53,8 @@ import {
   AddOrganizationPersonRequestSchema,
   OrganizationPersonRoleRequestSchema,
   OrganizationPeoplePayloadSchema,
+  ProposedSignOffChangeSchema,
+  SignOffRulesRequestSchema,
   WorkspaceHistoryPayloadSchema,
   WorkspaceSettingsPayloadSchema,
   WorkspaceOverviewPayloadSchema,
@@ -1172,6 +1174,31 @@ registry.registerPath({
       description: "Who can act in this binder, and the rules it is under",
       content: {
         "application/json": { schema: WorkspaceSettingsPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/binders/{org}/{binder}/rules/sign-off",
+  operationId: "proposeBinderSignOffRules",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({ org: z.string(), binder: z.string() }),
+    body: {
+      required: true,
+      content: {
+        "application/json": { schema: SignOffRulesRequestSchema },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description:
+        "The change that would apply these rules. Nothing has taken effect yet",
+      content: {
+        "application/json": { schema: ProposedSignOffChangeSchema },
       },
     },
   },
