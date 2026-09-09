@@ -374,6 +374,12 @@ state is a cache, and caches are still banned.
 pull-request time and lives on the same timeline as the content it governs, so
 `?ref=<tag>` answers "who owned this policy when this version was approved."
 
+A document's **title** is evidence too, not configuration, and it is designed to
+live in a committed sidecar beside the content it names. Design only, not built:
+`docs/adr/0005-document-identity-titles-and-the-version-index.md`, which also
+keys version tags on a UID so a rename cannot restart a policy's numbering, and
+which requires the derived index above rather than deferring it.
+
 Migrating in: `.bindersnap/config.json` on the `bindersnap-config` branch
 (`reviewSettings.ts`) predates this rule and is moving to a per-workspace settings
 row. Do not copy the pattern.
