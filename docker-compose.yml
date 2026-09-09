@@ -22,7 +22,28 @@ services:
       - ./data/gitea:/data
 
   gitea:
-    image: gitea/gitea:1.27.3
+    # Dev runs a 28.0.0 nightly; production stays on 1.27.3. The two disagree
+    # on purpose, and this is the note that stops somebody "fixing" the skew.
+    #
+    # `block_on_codeowner_reviews` (go-gitea PR #34995, milestone 28.0.0) is
+    # what turns CODEOWNERS from a file that assigns reviewers into a gate that
+    # blocks a merge, and it is what lets a sign-off rule name a *team* rather
+    # than the list of people ADR 0004 was forced into. There is no released
+    # 28 tag yet — no rc either — so `main-nightly` is the only image carrying
+    # the code.
+    #
+    # **Pinned by digest, not by tag.** `main-nightly` is rebuilt daily, so
+    # pinning the tag pins nothing: two developers on "the same" nightly would
+    # be on different builds with different migration state. This digest is
+    # the 2026-09-08 build, `1.28.0+dev-477-g8b6ad49a5f`.
+    #
+    # Production waits for a released tag because **a Gitea migration is a
+    # one-way door**: 28.0.0 runs `v1_28/v345.go` on start, there is no
+    # downgrade, and Litestream faithfully replicates the migrated schema — so
+    # rolling back would mean restoring to a point in time before the start and
+    # losing everything written since. A dev database is disposable; the
+    # production one is the customer's record.
+    image: gitea/gitea@sha256:b40d17f0baebdd2c0db4b8a745ff514cb66c3c5680d6d1e0d7a06f3bf1a92975
     container_name: ${STACK_NAME:-bindersnap}-gitea
     restart: unless-stopped
     depends_on:

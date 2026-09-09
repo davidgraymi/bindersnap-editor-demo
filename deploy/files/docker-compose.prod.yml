@@ -19,6 +19,11 @@ services:
     restart: "no"
 
   gitea:
+    # Stays on 1.27.3 while dev runs a 28.0.0 nightly — see the long note in
+    # the repository's own `docker-compose.yml`. Short version: a Gitea schema
+    # migration is a one-way door and Litestream replicates the migrated schema
+    # faithfully, so production moves only on a released tag, never on a
+    # nightly. When 28.0.0 ships, this line and that one move together.
     image: gitea/gitea:1.27.3
     container_name: bindersnap-gitea-prod
     restart: unless-stopped

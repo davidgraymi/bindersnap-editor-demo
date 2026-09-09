@@ -13,4 +13,34 @@ Regenerate after every Gitea upgrade: `bun run up`, then
 
 ## extensions.json
 
-Maintained by Bindersnap. Used to extend the openapi spec with additional information. Typically used for adding enumerations to `string` types.
+Maintained by Bindersnap. Used to extend the openapi spec with additional
+information. Typically used for adding enumerations to `string` types.
+
+It is also how a field the **running** Gitea has and the **committed** spec
+does not gets typed, which is not hypothetical: dev runs a digest-pinned
+28.0.0 nightly for `block_on_codeowner_reviews`, and production runs 1.27.3.
+
+**The committed spec describes production's API on purpose.** It is the version
+the code can rely on everywhere, so regenerating against the dev nightly would
+quietly widen the types to a Gitea that only one environment runs — and a
+handler reaching for a 28-only path would compile, pass in dev, and 404 in
+production. Declaring one field here says exactly which piece of the future we
+have decided to use, and leaves the other four hundred out.
+
+So `block_on_codeowner_reviews` is declared in `extensions.json` on
+`BranchProtection`, `CreateBranchProtectionOption` and
+`EditBranchProtectionOption`. Being typed is not the same as being supported:
+1.27.3 accepts the field on a write and silently drops it, which is why
+`tests/gitea-permission-model.pw.ts` asserts the value **round-trips** rather
+than that the write succeeded.
+
+To pick up a change to this file without replacing the committed spec:
+
+```bash
+bun run scripts/generate-gitea-api.ts --offline
+```
+
+That re-runs the conversion, the merge and the typegen against the
+`swagger2.json` already here and fetches nothing. Drop `--offline` only when
+you actually mean to move the spec to the version of whatever Gitea is
+running — which, today, is not the version production runs.
