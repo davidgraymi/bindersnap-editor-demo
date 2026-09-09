@@ -324,8 +324,9 @@ write access to every repository in the org." `ACCESS_ORDER` in `orgs.ts` had
 ranked `owner` highest all along; only the wording was short. Pinned in both a
 unit test and an integration test.
 
-Editing is not built. The page says so in a sentence rather than by drawing
-controls that do nothing.
+Editing was not built at this point, and the page said so in a sentence rather
+than by drawing controls that do nothing. It is built now — the rules are
+editable on Settings, and who signs off on each folder has its own tab.
 
 ### The organization has people, and a binder stops manufacturing teams
 
@@ -384,8 +385,10 @@ creates its own role teams, so it now rewrites the approvals whitelist after
 granting them; without that its own publishes would fail with "does not have
 enough approvals" beside a green tick.
 
-Editing is still not built. Both pages say so in a sentence rather than drawing
-controls that do nothing.
+Editing was still not built at this point, and both pages said so rather than
+drawing controls that do nothing. Both are editable now: the organization's
+people can be added, promoted, demoted and removed, and a binder's people move
+between roles.
 
 ### Groups are named once and composed everywhere
 
@@ -986,6 +989,79 @@ The browser refused the preflight and the request never left — which surfaces
 as "Failed to fetch" with **nothing in the API's log**, because the API never
 saw it. Worth knowing before the next verb is added.
 
+### Version numbers were being read the old model's way
+
+Three defects of one shape, found while deciding whether the
+`document_versions` index was worth building. All three are the binder
+migration leaving a version read pointed at the shape that is gone.
+
+**Gitea's tag list is paged, and the defaults are small.** Measured against the
+dev stack on 2026-09-08 with a repository of sixty tags:
+
+| Request     | Tags returned |
+| ----------- | ------------- |
+| no params   | 30            |
+| `limit=100` | **50**        |
+| `limit=50`  | 50            |
+
+`listVersionsByDocument` sent no parameters at all, so it saw thirty.
+`listDocTags` asked for a hundred and silently got fifty — `MaxResponseItems`
+caps it. Neither said anything about the rest.
+
+A binder's tags are its **version history**, so truncating them is not a display
+bug. Thirty versions is ten documents at v3. Past that, the History tab — the
+compliance record, the thing a surveyor is shown — would quietly stop listing
+versions that exist, and `nextVersionFrom` would compute a next version that had
+already been used. `listAllTags` follows the pagination, and an integration test
+writes sixty-five tags and asserts all sixty-five come back. Checked by
+reverting the fix: it returns thirty.
+
+This is the same defect the notes already record about the document list — "the
+unpaged read asked Gitea for a hardcoded 100 and silently dropped anything past
+it" — at a different endpoint. Worth looking for a third.
+
+**Home said "becomes v1" for every change.** `getLatestDocTag` matches
+`doc/v0001`, the _old model's_ tag format; a binder writes
+`nursing/infection-control/v3`. So `latestTag` was always null, `nextVersionOf`
+was always `0 + 1`, and Home told everybody their change would publish v1
+however many versions the document already had. A version number is the one
+thing this product cannot be casually wrong about.
+
+The version is now on the **change**, not the binder — a binder holds many
+documents with their own versions, so one number for the binder is a claim about
+none of them. Read from the change's `upload/<slugPath>/…` branch against one
+tags read per binder, which Home was already paying for.
+
+**And Home named the binder where it meant the document.** `document.repo` is
+the binder now, so a row about the infection control policy said "Clinical". The
+change carries which document it is about; the binder's name is the fallback for
+a change that is about none — a sign-off rules change, for instance.
+
+### The `document_versions` index: measured, and not built
+
+The last item on ADR 0004's list, and the answer is not to build it yet.
+
+The ADR wanted it because tags are repo-global: "a 200-policy binder with twenty
+versions each is four thousand tags, eighty paginated calls, on a page load."
+That was the cost under one-repo-per-document. The binder model already removed
+it — `listVersionsByDocument` reads a binder's tags once rather than once per
+document — which is why the notes had already downgraded this from a rescue to
+an optimization.
+
+Measured on the dev stack: the cross-binder library answers in **~400 ms for 12
+binders and 29 documents**, about 33 ms per binder, at three Gitea calls each.
+
+So the case for building it now is speed nobody has complained about, and the
+cost is a second source of truth with a webhook consumer, a reconciler and a
+rebuild job — under three conditions the ADR sets precisely because that shape
+is dangerous. The ADR's own rule settles it: **the index serves browsing; Gitea
+serves proving.** Nothing that gates a decision may depend on it, so it can only
+ever buy latency — and there is no latency problem to buy off yet.
+
+What the investigation _did_ find was the three correctness bugs above, which an
+index would have papered over rather than fixed: a stale row and a truncated
+read look identical from the page.
+
 ## Why #393 carries the organization-creation flow too
 
 They cannot ship apart. The migration parks every username-keyed billing row
@@ -1169,10 +1245,10 @@ In rough dependency order.
 2. ~~**Delete the old model.**~~ **Done 2026-09-08** — see "The old model is
    deleted" above. The library moved onto binders in the same change, as this
    note warned it had to.
-3. **The `document_versions` derived index.** Not started. The ADR's "Derived
-   indexes" section is the specification. Note the binder model already made the
-   list cheap — `listVersionsByDocument` reads a binder's tags once rather than
-   once per document — so this is now an optimization rather than a rescue.
+3. ~~**The `document_versions` derived index.**~~ **Measured and deliberately
+   not built** — see "The `document_versions` index: measured, and not built"
+   above. The investigation turned up three real version-reading bugs instead,
+   which are fixed.
 4. ~~**Per-workspace settings and `settings_events`.**~~ **Done 2026-09-08** —
    see "The config branch is retired, and the policy is stamped on the event"
    above.

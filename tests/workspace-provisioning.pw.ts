@@ -3127,6 +3127,80 @@ async function readSettings(
   return response.json() as never;
 }
 
+test("a binder past Gitea's tag page still knows every version", async () => {
+  // **Gitea's tag list is paged, and the defaults are small.** Measured against
+  // this stack on 2026-09-08 with a repository of sixty tags: an
+  // unparameterised read returns 30, and asking for `limit=100` silently
+  // returns 50 — `MaxResponseItems` caps it. Neither says anything about the
+  // rest.
+  //
+  // A binder's tags are its version history, so truncating them is not a
+  // display bug: past thirty versions the History tab would quietly stop
+  // listing versions that exist, and the next version computed for a publish
+  // would be one that had already been used. Thirty versions is ten documents
+  // at v3.
+  //
+  // The tags are written directly rather than by publishing thirty-five
+  // changes, because what is under test is the *read*.
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+  expect(
+    (
+      await addDocument(sessionCookie, org.name, "clinical", {
+        name: "Infection Control Policy",
+        folder: "nursing",
+      })
+    ).status,
+  ).toBe(201);
+
+  const token = await createUserToken(
+    credentials.username,
+    credentials.password,
+  );
+
+  // Well past both page sizes, on documents that do not otherwise exist — the
+  // read has to find them all to report the last one.
+  const TOTAL = 65;
+  for (let version = 1; version <= TOTAL; version += 1) {
+    const response = await fetch(
+      `${GITEA_URL}/api/v1/repos/${org.name}/clinical/tags`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `token ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          tag_name: `nursing/paged-policy/v${version}`,
+          target: "main",
+          message: `v${version}`,
+        }),
+      },
+    );
+    expect(response.status, await response.clone().text()).toBe(201);
+  }
+
+  const history = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org.name}/clinical/history`,
+    { headers: { Cookie: `bindersnap_session=${sessionCookie}` } },
+  );
+  expect(history.status, await history.clone().text()).toBe(200);
+
+  const versions = (
+    (await history.json()) as {
+      versions: Array<{ slugPath: string; version: number }>;
+    }
+  ).versions.filter((entry) => entry.slugPath === "nursing/paged-policy");
+
+  // Every one of them, not the first page.
+  expect(versions).toHaveLength(TOTAL);
+  expect(Math.max(...versions.map((entry) => entry.version))).toBe(TOTAL);
+});
+
 async function setBinderRules(
   sessionCookie: string,
   org: string,

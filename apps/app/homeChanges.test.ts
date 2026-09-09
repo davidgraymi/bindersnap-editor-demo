@@ -5,7 +5,7 @@ import type {
   ClosedChange,
   PullRequestWithApprovalState,
   VersionReview,
-  WorkspaceDocumentSummary,
+  HomeOpenDocument,
 } from "./api";
 import {
   buildDecidedChangeRows,
@@ -52,9 +52,9 @@ function review(
   };
 }
 
-function change(
-  overrides: Partial<PullRequestWithApprovalState> = {},
-): PullRequestWithApprovalState {
+type HomeChange = HomeOpenDocument["pendingPRs"][number];
+
+function change(overrides: Partial<HomeChange> = {}): HomeChange {
   return {
     id: 1,
     number: 4,
@@ -73,25 +73,25 @@ function change(
     body: "Updated liability clause",
     approvalState: "in_review",
     user: { login: "maya" },
+    // A version is per document, so it rides on the change. It used to be a
+    // repository-wide `latestTag`, which answered a question about none of a
+    // binder's documents.
+    documentSlugPath: "nursing/vendor-agreement",
+    nextVersion: 2,
     ...overrides,
   };
 }
 
 function document(
-  overrides: Partial<WorkspaceDocumentSummary> = {},
-  repoOverrides: Partial<WorkspaceDocumentSummary["repo"]> = {},
-): WorkspaceDocumentSummary {
+  overrides: Partial<HomeOpenDocument> = {},
+  repoOverrides: Partial<HomeOpenDocument["repo"]> = {},
+): HomeOpenDocument {
   return {
     repo: {
-      id: 1,
-      name: "vendor-agreement",
-      full_name: "david/vendor-agreement",
-      description: "",
-      updated_at: "2026-08-22T10:00:00Z",
-      owner: { login: "david" },
+      name: "clinical",
+      owner: { login: "riverside-health" },
       ...repoOverrides,
     },
-    latestTag: { name: "v1", version: 1, sha: "abc", created: "" },
     pendingPRs: [],
     error: null,
     ...overrides,
@@ -163,7 +163,6 @@ describe("buildOpenChangeRows", () => {
     const rows = buildOpenChangeRows(
       [
         document({
-          latestTag: { name: "v1", version: 1, sha: "abc", created: "" },
           pendingPRs: [
             change({
               user: { login: "david" },
@@ -249,7 +248,7 @@ describe("buildOpenChangeRows", () => {
               }),
             ],
           },
-          { id: 2, name: "data-retention-policy" },
+          { name: "corporate" },
         ),
       ],
       "david",
@@ -405,5 +404,98 @@ describe("copy helpers", () => {
   test("the greeting uses a first name, not a login", () => {
     expect(getGreetingName("david-gray")).toBe("David");
     expect(getGreetingName("dgray", "David Gray")).toBe("David");
+  });
+});
+
+describe("naming what a row is about", () => {
+  test("a row names the document, not the binder it is in", () => {
+    // `document.repo` is the binder now, so naming it put "Clinical" on a row
+    // about the infection control policy. The change carries which document it
+    // is about.
+    const rows = buildOpenChangeRows(
+      [
+        document({
+          pendingPRs: [
+            change({
+              documentSlugPath: "nursing/infection-control-policy",
+              reviewers: [reviewer("david")],
+            }),
+          ],
+        }),
+      ],
+      "david",
+      NOW,
+    );
+
+    expect(rows[0]?.documentName).toBe("Infection Control Policy");
+  });
+
+  test("a change about no document falls back to the binder", () => {
+    // A sign-off rules change touches no document. Naming the binder is the
+    // honest answer; inventing a document is not.
+    const rows = buildOpenChangeRows(
+      [
+        document({
+          pendingPRs: [
+            change({
+              documentSlugPath: null,
+              nextVersion: null,
+              reviewers: [reviewer("david")],
+            }),
+          ],
+        }),
+      ],
+      "david",
+      NOW,
+    );
+
+    expect(rows[0]?.documentName).toBe("Clinical");
+  });
+
+  test("a change ready to publish says the version it becomes", () => {
+    const rows = buildOpenChangeRows(
+      [
+        document({
+          pendingPRs: [
+            change({
+              nextVersion: 4,
+              approvalCount: 3,
+              requiredApprovals: 3,
+              approvalState: "approved",
+            }),
+          ],
+        }),
+      ],
+      "maya",
+      NOW,
+    );
+
+    expect(rows[0]?.meta).toContain("becomes v4 when you publish");
+  });
+
+  test("a change with no document says it is ready, without inventing v1", () => {
+    // The bug this replaced: `latestTag` matched the retired `doc/vNNNN`
+    // format, so it was always null and every row said "becomes v1" however
+    // many versions the document already had.
+    const rows = buildOpenChangeRows(
+      [
+        document({
+          pendingPRs: [
+            change({
+              documentSlugPath: null,
+              nextVersion: null,
+              approvalCount: 3,
+              requiredApprovals: 3,
+              approvalState: "approved",
+            }),
+          ],
+        }),
+      ],
+      "maya",
+      NOW,
+    );
+
+    expect(rows[0]?.meta).toBe("all approvals in · ready to publish");
+    expect(rows[0]?.meta).not.toContain("v1");
   });
 });
