@@ -1,91 +1,74 @@
 import { describe, expect, test } from "bun:test";
 
-import type { WorkspaceRepo } from "./api";
+import type { LibraryDocument } from "./api";
 import {
-  appendQuickFindPage,
   buildQuickFindResults,
   describeQuickFindEmptyState,
   isQuickFindQuery,
   moveQuickFindHighlight,
-  shouldLoadNextQuickFindPage,
 } from "./quickFind";
 
-const NOW = new Date("2026-08-25T12:00:00Z").getTime();
-
-function repo(overrides: Partial<WorkspaceRepo> = {}): WorkspaceRepo {
+function policy(overrides: Partial<LibraryDocument> = {}): LibraryDocument {
   return {
-    id: 1,
-    name: "vendor-agreement",
-    full_name: "alice/vendor-agreement",
-    description: "",
-    updated_at: "2026-08-25T10:00:00Z",
-    owner: { login: "alice" },
+    path: "nursing/infection-control.docx",
+    slugPath: "nursing/infection-control",
+    name: "Infection Control Policy",
+    folder: "nursing",
+    size: 1024,
+    sha: "abc",
+    state: "published",
+    openChangeCount: 0,
+    latestVersion: {
+      tag: "nursing/infection-control/v3",
+      version: 3,
+      commitSha: "abc",
+      publishedAt: "2026-08-25T10:00:00Z",
+    },
+    organization: "riverside-health",
+    binder: "clinical",
+    binderDescription: "Clinical and administrative policies",
     ...overrides,
-  };
+  } as LibraryDocument;
 }
 
 describe("building rows", () => {
-  test("a row is a document name and one line about it", () => {
-    const [result] = buildQuickFindResults([repo()], "bob", NOW);
+  test("a row names the policy and says which binder it is in", () => {
+    // **The binder, not the owner.** A document used to be a repository
+    // somebody owned, so the line under the name said whose it was. Nobody
+    // owns a document now — the question a reader is disambiguating with is
+    // which binder, and after that which folder.
+    const [result] = buildQuickFindResults([policy()]);
 
     expect(result).toEqual({
-      key: "alice/vendor-agreement",
-      owner: "alice",
-      repo: "vendor-agreement",
-      name: "Vendor Agreement",
-      meta: "Alice owns · updated 2h ago",
+      key: "riverside-health/clinical/nursing/infection-control",
+      organization: "riverside-health",
+      binder: "clinical",
+      slugPath: "nursing/infection-control",
+      name: "Infection Control Policy",
+      meta: "clinical · nursing · v3",
     });
   });
 
-  test("the reader's own document says so", () => {
-    const [result] = buildQuickFindResults([repo()], "alice", NOW);
-    expect(result?.meta).toBe("You own · updated 2h ago");
-  });
-
-  test("the owner is matched regardless of case or a leading @", () => {
-    const [result] = buildQuickFindResults([repo()], "@Alice", NOW);
-    expect(result?.meta).toStartWith("You own");
-  });
-});
-
-describe("paging", () => {
-  test("a page is appended after what is already on screen", () => {
-    const first = buildQuickFindResults([repo()], "bob", NOW);
-    const second = buildQuickFindResults(
-      [repo({ id: 2, name: "nda", full_name: "alice/nda" })],
-      "bob",
-      NOW,
-    );
-
-    expect(appendQuickFindPage(first, second).map((r) => r.repo)).toEqual([
-      "vendor-agreement",
-      "nda",
+  test("a policy at the binder's root has no folder in its line", () => {
+    const [result] = buildQuickFindResults([
+      policy({ folder: "", slugPath: "handbook" }),
     ]);
+    expect(result?.meta).toBe("clinical · v3");
   });
 
-  test("a document that shifted between pages is not listed twice", () => {
-    const first = buildQuickFindResults([repo()], "bob", NOW);
-    const second = buildQuickFindResults(
-      [repo(), repo({ id: 2, name: "nda", full_name: "alice/nda" })],
-      "bob",
-      NOW,
-    );
-
-    expect(appendQuickFindPage(first, second)).toHaveLength(2);
+  test("a policy nobody has published says so rather than showing a version", () => {
+    const [result] = buildQuickFindResults([
+      policy({ state: "proposed", latestVersion: null }),
+    ]);
+    expect(result?.meta).toBe("clinical · nursing · not published yet");
   });
 
-  test("a page with nothing new leaves the list identical", () => {
-    const first = buildQuickFindResults([repo()], "bob", NOW);
-    expect(appendQuickFindPage(first, first)).toBe(first);
-  });
-
-  test("scrolling near the bottom asks for the next page", () => {
-    expect(shouldLoadNextQuickFindPage(0, 264, 264)).toBe(true);
-    expect(shouldLoadNextQuickFindPage(240, 264, 520)).toBe(true);
-  });
-
-  test("scrolling in the middle of a long list does not", () => {
-    expect(shouldLoadNextQuickFindPage(0, 264, 1000)).toBe(false);
+  test("two binders can hold a policy of the same name without colliding", () => {
+    // The key is what dedupes rows and what the arrow keys address, so two
+    // genuinely different policies must not share one.
+    const [first] = buildQuickFindResults([policy()]);
+    const [second] = buildQuickFindResults([policy({ binder: "corporate" })]);
+    expect(first?.key).not.toBe(second?.key);
   });
 });
 

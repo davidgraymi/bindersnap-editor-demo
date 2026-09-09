@@ -2,8 +2,8 @@ import { expect, test } from "@playwright/test";
 
 import { openTopnavNewDocumentModal, signInAsAlice } from "./helpers";
 
-test.describe("topnav new document button", () => {
-  test("opens the create-document modal from Home", async ({ page }) => {
+test.describe("topnav new policy button", () => {
+  test("opens the add-a-policy modal from Home", async ({ page }) => {
     await signInAsAlice(page);
     await page.goto("/");
 
@@ -11,7 +11,7 @@ test.describe("topnav new document button", () => {
 
     await openTopnavNewDocumentModal(page);
 
-    await expect(page.locator(".create-document-modal")).toBeVisible();
+    await expect(page.locator("#add-policy-file")).toBeVisible();
   });
 
   test("the retired /inbox link lands on Home", async ({ page }) => {

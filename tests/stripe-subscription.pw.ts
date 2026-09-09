@@ -461,7 +461,7 @@ async function signUpOrganization(credentials: {
   username: string;
   email: string;
   password: string;
-}): Promise<{ sessionCookie: string; giteaOrgId: number }> {
+}): Promise<{ sessionCookie: string; giteaOrgId: number; org: string }> {
   const sessionCookie = await signUpUser(credentials);
 
   // Signup no longer creates an organization — a person names their own, and
@@ -493,7 +493,11 @@ async function signUpOrganization(credentials: {
     );
   }
 
-  return { sessionCookie, giteaOrgId };
+  return {
+    sessionCookie,
+    giteaOrgId,
+    org: billing.organization?.name ?? "",
+  };
 }
 
 /**
@@ -532,12 +536,20 @@ async function getBillingStatus(
  * The status the paywall answers with, probed by attempting to author.
  *
  * Reading is never gated (ADR 0004), so a GET can no longer tell us anything
- * about billing. Creating a document is gated, and `requireSubscription` runs
+ * about billing. Creating a **binder** is gated, and `requireSubscription` runs
  * before the request body is validated — so a deliberately empty POST answers
  * 402 when the organization is blocked and 400 when it is not.
+ *
+ * It used to probe `POST /api/app/documents`, which made a repository per
+ * document. That route is gone with the model it belonged to, and a probe
+ * pointed at a deleted route answers 404 — which is neither of the two answers
+ * this is asking about, and would have read as "not blocked".
  */
-async function getAuthoringHttpStatus(sessionCookie: string): Promise<number> {
-  const response = await fetch(`${API_BASE_URL}/api/app/documents`, {
+async function getAuthoringHttpStatus(
+  sessionCookie: string,
+  org: string,
+): Promise<number> {
+  const response = await fetch(`${API_BASE_URL}/api/app/orgs/${org}/binders`, {
     method: "POST",
     headers: {
       Cookie: `bindersnap_session=${sessionCookie}`,
@@ -600,7 +612,7 @@ test.describe("Stripe subscription lifecycle", () => {
 
   test("a new organization authors on its trial, and is blocked once it ends", async () => {
     const credentials = uniqueCredentials();
-    const { sessionCookie } = await signUpOrganization(credentials);
+    const { sessionCookie, org } = await signUpOrganization(credentials);
 
     // #369: fourteen days, no card. There is deliberately no Stripe customer
     // behind this, which is the whole reason the trial is a local column.
@@ -608,7 +620,7 @@ test.describe("Stripe subscription lifecycle", () => {
     expect(trialing.hasAccess).toBe(true);
     expect(trialing.accessSource).toBe("trial");
     expect(trialing.trialEndsAt).toBeGreaterThan(Math.floor(Date.now() / 1000));
-    expect(await getAuthoringHttpStatus(sessionCookie)).not.toBe(402);
+    expect(await getAuthoringHttpStatus(sessionCookie, org)).not.toBe(402);
 
     await endTrial(sessionCookie);
 
@@ -616,7 +628,7 @@ test.describe("Stripe subscription lifecycle", () => {
     // access.
     const expired = await getBillingStatus(sessionCookie);
     expect(expired.hasAccess).toBe(false);
-    expect(await getAuthoringHttpStatus(sessionCookie)).toBe(402);
+    expect(await getAuthoringHttpStatus(sessionCookie, org)).toBe(402);
   });
 
   // -------------------------------------------------------------------------
@@ -627,12 +639,13 @@ test.describe("Stripe subscription lifecycle", () => {
     test.skip(!stripeFullyConfigured, "Stripe test credentials not configured");
 
     const credentials = uniqueCredentials();
-    const { sessionCookie, giteaOrgId } = await signUpOrganization(credentials);
+    const { sessionCookie, giteaOrgId, org } =
+      await signUpOrganization(credentials);
     await endTrial(sessionCookie);
 
     // Pre-condition: the trial is over and nothing has been paid, so authoring
     // is blocked.
-    expect(await getAuthoringHttpStatus(sessionCookie)).toBe(402);
+    expect(await getAuthoringHttpStatus(sessionCookie, org)).toBe(402);
 
     const { customerId, subscriptionId } =
       await createTestCustomerAndSubscription(giteaOrgId);
@@ -657,7 +670,7 @@ test.describe("Stripe subscription lifecycle", () => {
       expect(typeof billing.currentPeriodEnd).toBe("number");
 
       // Access should now be granted
-      expect(await getAuthoringHttpStatus(sessionCookie)).not.toBe(402);
+      expect(await getAuthoringHttpStatus(sessionCookie, org)).not.toBe(402);
     } finally {
       await cancelTestSubscription(subscriptionId);
     }
@@ -667,7 +680,8 @@ test.describe("Stripe subscription lifecycle", () => {
     test.skip(!stripeFullyConfigured, "Stripe test credentials not configured");
 
     const credentials = uniqueCredentials();
-    const { sessionCookie, giteaOrgId } = await signUpOrganization(credentials);
+    const { sessionCookie, giteaOrgId, org } =
+      await signUpOrganization(credentials);
     await endTrial(sessionCookie);
     const { customerId, subscriptionId, currentPeriodEnd } =
       await createTestCustomerAndSubscription(giteaOrgId);
@@ -679,7 +693,7 @@ test.describe("Stripe subscription lifecycle", () => {
         customer: customerId,
         subscription: subscriptionId,
       });
-      expect(await getAuthoringHttpStatus(sessionCookie)).not.toBe(402);
+      expect(await getAuthoringHttpStatus(sessionCookie, org)).not.toBe(402);
 
       // Simulate Stripe dunning: payment fails → subscription moves to past_due
       const updateResp = await postWebhook("customer.subscription.updated", {
@@ -694,7 +708,7 @@ test.describe("Stripe subscription lifecycle", () => {
       expect(billing.status).toBe("past_due");
 
       // Access must be revoked for past_due
-      expect(await getAuthoringHttpStatus(sessionCookie)).toBe(402);
+      expect(await getAuthoringHttpStatus(sessionCookie, org)).toBe(402);
     } finally {
       await cancelTestSubscription(subscriptionId);
     }
@@ -704,7 +718,8 @@ test.describe("Stripe subscription lifecycle", () => {
     test.skip(!stripeFullyConfigured, "Stripe test credentials not configured");
 
     const credentials = uniqueCredentials();
-    const { sessionCookie, giteaOrgId } = await signUpOrganization(credentials);
+    const { sessionCookie, giteaOrgId, org } =
+      await signUpOrganization(credentials);
     await endTrial(sessionCookie);
     const { customerId, subscriptionId, currentPeriodEnd } =
       await createTestCustomerAndSubscription(giteaOrgId);
@@ -723,7 +738,7 @@ test.describe("Stripe subscription lifecycle", () => {
         status: "past_due",
         current_period_end: currentPeriodEnd,
       });
-      expect(await getAuthoringHttpStatus(sessionCookie)).toBe(402);
+      expect(await getAuthoringHttpStatus(sessionCookie, org)).toBe(402);
 
       // Simulate successful payment retry → active
       const renewedPeriodEnd = currentPeriodEnd + 30 * 24 * 60 * 60;
@@ -737,7 +752,7 @@ test.describe("Stripe subscription lifecycle", () => {
       const billing = await getBillingStatus(sessionCookie);
       expect(billing.status).toBe("active");
       expect(billing.currentPeriodEnd).toBe(renewedPeriodEnd);
-      expect(await getAuthoringHttpStatus(sessionCookie)).not.toBe(402);
+      expect(await getAuthoringHttpStatus(sessionCookie, org)).not.toBe(402);
     } finally {
       await cancelTestSubscription(subscriptionId);
     }
@@ -752,7 +767,8 @@ test.describe("Stripe subscription lifecycle", () => {
     test.skip(!stripeFullyConfigured, "Stripe test credentials not configured");
 
     const credentials = uniqueCredentials();
-    const { sessionCookie, giteaOrgId } = await signUpOrganization(credentials);
+    const { sessionCookie, giteaOrgId, org } =
+      await signUpOrganization(credentials);
     await endTrial(sessionCookie);
     const { customerId, subscriptionId } =
       await createTestCustomerAndSubscription(giteaOrgId);
@@ -764,7 +780,7 @@ test.describe("Stripe subscription lifecycle", () => {
         customer: customerId,
         subscription: subscriptionId,
       });
-      expect(await getAuthoringHttpStatus(sessionCookie)).not.toBe(402);
+      expect(await getAuthoringHttpStatus(sessionCookie, org)).not.toBe(402);
 
       // Send a subscription.updated payload shaped like the new API:
       // NO top-level current_period_end; only items.data[0].current_period_end.
@@ -790,7 +806,7 @@ test.describe("Stripe subscription lifecycle", () => {
       // The handler must have picked up the nested period end, not the
       // (stale) one stored at activation time.
       expect(billing.currentPeriodEnd).toBe(newShapePeriodEnd);
-      expect(await getAuthoringHttpStatus(sessionCookie)).not.toBe(402);
+      expect(await getAuthoringHttpStatus(sessionCookie, org)).not.toBe(402);
     } finally {
       await cancelTestSubscription(subscriptionId);
     }
@@ -800,7 +816,8 @@ test.describe("Stripe subscription lifecycle", () => {
     test.skip(!stripeFullyConfigured, "Stripe test credentials not configured");
 
     const credentials = uniqueCredentials();
-    const { sessionCookie, giteaOrgId } = await signUpOrganization(credentials);
+    const { sessionCookie, giteaOrgId, org } =
+      await signUpOrganization(credentials);
     await endTrial(sessionCookie);
     const { customerId, subscriptionId, currentPeriodEnd } =
       await createTestCustomerAndSubscription(giteaOrgId);
@@ -811,7 +828,7 @@ test.describe("Stripe subscription lifecycle", () => {
       customer: customerId,
       subscription: subscriptionId,
     });
-    expect(await getAuthoringHttpStatus(sessionCookie)).not.toBe(402);
+    expect(await getAuthoringHttpStatus(sessionCookie, org)).not.toBe(402);
 
     // Delete — no cleanup needed, subscription is being canceled here
     const deleteResp = await postWebhook("customer.subscription.deleted", {
@@ -824,14 +841,14 @@ test.describe("Stripe subscription lifecycle", () => {
 
     const billing = await getBillingStatus(sessionCookie);
     expect(billing.status).toBe("canceled");
-    expect(await getAuthoringHttpStatus(sessionCookie)).toBe(402);
+    expect(await getAuthoringHttpStatus(sessionCookie, org)).toBe(402);
   });
 
   test("billing/checkout returns a Stripe Checkout Session URL", async () => {
     test.skip(!stripeFullyConfigured, "Stripe test credentials not configured");
 
     const credentials = uniqueCredentials();
-    const { sessionCookie } = await signUpOrganization(credentials);
+    const { sessionCookie, org } = await signUpOrganization(credentials);
 
     const response = await fetch(`${API_BASE_URL}/api/app/billing/checkout`, {
       method: "POST",

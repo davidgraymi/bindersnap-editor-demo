@@ -857,6 +857,81 @@ model test's are the others — and copies of one rule are what this codebase
 keeps catching mid-drift. It stays separate only because the seed talks to Gitea
 directly with no app running.
 
+### The old model is deleted
+
+ADR 0004 migration step 2's last sentence, and the largest single deletion in
+the series: **20,000 lines out, 2,300 in.** No compatibility window — decision 3
+from 2026-09-04 — so the one-repo-per-document endpoints go outright rather than
+deprecated.
+
+Gone: `createPrivateCurrentUserRepo` and the whole upload path built on it, the
+sixteen `documents/:owner/:repo` route matchers and every handler only they
+reached, the per-document workspace in the SPA (`DocumentDetail`,
+`DocumentPermissions`, `DocumentCollaborators`, `DocumentAccess`,
+`DocumentHistory`, `CreateDocumentModal`, `UploadModal`), and the `/docs/:owner/:repo`
+route with it.
+
+**What could not simply be deleted was the library, and it is the interesting
+part.** Home already worked — `searchInvolvedChanges` asks Gitea about pull
+requests, and a binder is a repository, so its changes were always in the
+answer. The library was not: it searched Gitea for _repositories_, because a
+document was one.
+
+So it is rebuilt on binders, and it lost most of its questions doing so. The
+saved views — "contributing", "owned", "everything" — and the filter by person
+were all questions about who owned a repo. Nobody owns a document now: the
+organization owns the binder and the binder holds the policy, and everyone who
+can see a binder sees everything in it. Those chips had nothing left to mean, so
+they are gone rather than reinterpreted into something that would quietly mean
+something else. What is left is the question the page is actually opened with —
+"where is that policy" — narrowed by the one thing that does distinguish
+policies: which binder they are in.
+
+**Three Gitea calls per binder, not per document**, which is the property the
+binder model bought and the only reason a cross-organization library is
+affordable: five binders and four hundred policies is fifteen calls, where the
+old shape paid roughly three per document. It is unpaged for the same reason —
+the server reads each binder once, so there is no cheaper page to fetch, and
+asking for page two would repeat the whole read. Quick find runs through the
+same reader with a cap, so the two cannot disagree about which binders count.
+
+**`ChangeScope` collapsed.** It was a two-variant union introduced so one set of
+review screens could serve both models; with one model left it is a plain
+interface, and `api.ts` lost a dozen branches that always took the same side.
+
+#### Two things that would have gone silently
+
+**The regulator export was about to be deleted with the page that reached it.**
+`auditRecord.ts` builds the self-contained HTML file that answers a surveyor —
+the product's own claim — and its only caller was the old document's History
+tab. Deleting it would have removed a stated feature with no error anywhere. It
+is now a **binder's** record instead of one document's, which is the better
+shape anyway: a regulator asking for "your infection control policies" got one
+file per policy before, and gets one file per binder now.
+
+**Anonymous document viewing is gone, and that is a real loss to name.** An
+unauthenticated visitor hitting a document URL used to get the document shell,
+served by the service account — but only for a **public** repository.
+`resolveDocumentAccess` refused a private one, and a binder is private by
+design, so the path had nothing left to serve. It is deleted rather than ported.
+ADR 0004 already makes #364's one-time links the way an external reviewer gets
+in, and this is the moment that stopped being a nice-to-have.
+
+#### The approvals whitelist on a change page: verified unreachable, not built
+
+The last item in "What is left" asked for a computed "your account is not
+authorized to approve this" on the binder change payload. It should not be
+built, and the reason is worth recording so it is not proposed again.
+
+`recomputeApprovalsWhitelist` derives the list from the teams granted onto the
+repository plus `Owners`, and every path into a binder goes through one of those
+teams. The one shape that could produce an unauthorized approver is a **direct
+repository collaborator** — and with the old model deleted, `addRepoCollaborator`
+has no caller at all: the only route that used it was
+`documents/:owner/:repo/collaborators`. A binder's people are teams, always. So
+the state the screen would explain cannot be reached, and a screen for an
+unreachable state is a screen that will be wrong the first time it is right.
+
 ## Why #393 carries the organization-creation flow too
 
 They cannot ship apart. The migration parks every username-keyed billing row
@@ -1037,14 +1112,9 @@ In rough dependency order.
    invitation, so it is a SQLite table, four routes, an email, and acceptance
    bound to the invited address rather than to the link. Everything before it
    assumes the person already has an account.
-2. **Delete the old model.** `POST /api/app/documents`,
-   `createPrivateCurrentUserRepo`, the 16 `documents/:owner/:repo` routes in
-   `services/api/server.ts`, and roughly a dozen SPA files that address a
-   document as `owner/repo`. The review screens no longer stand in the way —
-   they take a `ChangeScope` and serve both models — so what is left is the
-   per-document workspace itself. Note that Home and the library still read
-   `/api/app/documents`, so they have to move to the binder listings in the
-   same change or they go blank.
+2. ~~**Delete the old model.**~~ **Done 2026-09-08** — see "The old model is
+   deleted" above. The library moved onto binders in the same change, as this
+   note warned it had to.
 3. **The `document_versions` derived index.** Not started. The ADR's "Derived
    indexes" section is the specification. Note the binder model already made the
    list cheap — `listVersionsByDocument` reads a binder's tags once rather than
@@ -1055,7 +1125,10 @@ In rough dependency order.
    upgrade it was blocked on — see "Per-folder sign-off, and the escaping bug
    underneath it" above. Rules name groups, changing them is an approved
    change, and the generator refuses a file that would enforce nothing.
-6. **The approvals whitelist on a binder change.** `branchProtection` is
+6. ~~**The approvals whitelist on a binder change.**~~ **Not building it** —
+   the state it would explain is unreachable now that the old model is gone.
+   The reasoning is under "The approvals whitelist on a change page" above. The
+   original note, kept because it is the analysis that led there: `branchProtection` is
    passed as null, so the page never says "your account is not authorized to
    approve this". Gitea still refuses, and the required count is shown — but
    the reason is the admin-only half of the rule and the binder page does not

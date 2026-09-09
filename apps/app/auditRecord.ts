@@ -9,40 +9,22 @@
  * So this builds one self-contained HTML file out of the history payload the
  * History tab already loaded. Nothing new is fetched and nothing is stored:
  * every fact in the file is a fact Gitea already holds, and re-exporting the
- * same document produces the same record. It prints to PDF straight from the
+ * same binder produces the same record. It prints to PDF straight from the
  * browser, which is how a record actually gets attached to an audit response.
+ *
+ * **It is a binder's record now, not one document's.** Under ADR 0004 a binder
+ * is the policy manual and a `git clone` of it is the whole approval trail —
+ * which is most of what the export was for. Exporting per document meant a
+ * regulator asking for "your infection control policies" got one file per
+ * policy; one file per binder is the shape they actually asked for.
  *
  * Pure on purpose. The component only hands it data and saves the result.
  */
 
-import type { DocumentVersionRecord, VersionReview } from "./api";
-import {
-  capitalizeFirst,
-  formatDocumentName,
-  formatTimestamp,
-  parseChangeTitle,
-} from "./documentDisplay";
+import type { WorkspaceHistoryEntry } from "./api";
+import { capitalizeFirst, formatTimestamp } from "./documentDisplay";
 
 /** What a verdict is called in the record. Bindersnap says "approved". */
-const REVIEW_VERDICTS: Record<VersionReview["state"], string> = {
-  approved: "Approved",
-  changes_requested: "Requested changes",
-  commented: "Commented",
-  other: "Reviewed",
-};
-
-/**
- * Whether a review belongs in the record of a *published* version.
- *
- * A request for changes is a step on the way, not an outcome: the version
- * underneath it only exists because that request was answered and the change
- * was then approved. Printing it invites an auditor to ask what became of it,
- * and the answer is the version they are already holding. The approvals — and
- * what the approvers said — are what the record is for.
- */
-function isRecordedReview(review: VersionReview): boolean {
-  return review.state !== "changes_requested";
-}
 
 export function escapeHtml(value: string): string {
   return value
@@ -54,9 +36,10 @@ export function escapeHtml(value: string): string {
 }
 
 export interface AuditRecordInput {
-  owner: string;
-  repo: string;
-  versions: DocumentVersionRecord[];
+  organization: string;
+  binder: string;
+  /** Every published version in the binder, newest first. */
+  versions: WorkspaceHistoryEntry[];
   /** When the export was taken. Passed in so the output is testable. */
   generatedAt: Date;
 }
@@ -92,86 +75,25 @@ function personLabel(login: string | null | undefined): string {
   return `${capitalizeFirst(trimmed)} (${trimmed})`;
 }
 
-function reviewerLabel(review: VersionReview): string {
-  const login = review.author.login.trim();
-  const fullName = review.author.fullName.trim();
-  if (!login) return "Unknown";
-  return `${fullName || capitalizeFirst(login)} (${login})`;
-}
-
-/**
- * The qualifiers that decide whether an approval still counts.
- *
- * A stale or dismissed approval stays in the record — dropping it would be
- * editing history — but it has to be labelled, or the file reads as though the
- * version carried more approval than it did.
- */
-function reviewQualifier(review: VersionReview): string {
-  const notes: string[] = [];
-  if (review.stale) notes.push("superseded by a later upload");
-  if (review.dismissed) notes.push("dismissed");
-  return notes.join(", ");
-}
-
-function renderReviewRows(allReviews: VersionReview[]): string {
-  const reviews = allReviews.filter(isRecordedReview);
-  if (reviews.length === 0) {
-    return `<tr><td class="record-empty" colspan="4">No approvals were recorded on this change.</td></tr>`;
-  }
-
-  return reviews
-    .map((review) => {
-      const qualifier = reviewQualifier(review);
-      const verdict = REVIEW_VERDICTS[review.state];
-      return [
-        "<tr>",
-        `<td>${escapeHtml(reviewerLabel(review))}</td>`,
-        `<td>${escapeHtml(verdict)}${
-          qualifier
-            ? ` <span class="record-note">(${escapeHtml(qualifier)})</span>`
-            : ""
-        }</td>`,
-        `<td class="record-stamp">${escapeHtml(formatTimestamp(review.submittedAt) || "Unknown")}</td>`,
-        `<td>${review.body.trim() ? escapeHtml(review.body.trim()) : '<span class="record-note">No comment</span>'}</td>`,
-        "</tr>",
-      ].join("");
-    })
-    .join("");
-}
-
-function renderVersion(entry: DocumentVersionRecord): string {
-  const submission = entry.submission;
-  const title = submission
-    ? parseChangeTitle(submission.body, submission.submittedBy)
-    : `Version ${entry.version}`;
-
+function renderVersion(entry: WorkspaceHistoryEntry): string {
   // A version number is the whole identity a reader needs. The tag and the
   // commit underneath it are how Bindersnap stores that version, not what the
   // version is — and nobody reading this record can look either one up, so
   // printing them only invites a question the file cannot answer.
   const facts: [string, string][] = [
-    ["Published", formatTimestamp(entry.createdAt) || "Unknown"],
+    ["Published", formatTimestamp(entry.publishedAt) || "Unknown"],
   ];
 
-  if (submission) {
+  if (entry.changeNumber !== null) {
     facts.push(
-      ["Change", `#${submission.number}`],
-      ["Submitted by", personLabel(submission.submittedBy)],
-      ["Submitted", formatTimestamp(submission.submittedAt) || "Unknown"],
-      ["Published by", personLabel(submission.mergedBy)],
+      ["Change", `#${entry.changeNumber}`],
+      ["Submitted by", personLabel(entry.submittedBy)],
     );
   } else {
     // A version with no surviving change record is still on the record. Saying
     // so is the honest answer; leaving the rows out looks like an omission.
     facts.push(["Change", "No change record survives for this version"]);
   }
-
-  facts.push([
-    "Discussion",
-    entry.discussionCount === 1
-      ? "1 comment"
-      : `${entry.discussionCount} comments`,
-  ]);
 
   const factRows = facts
     .map(
@@ -184,16 +106,36 @@ function renderVersion(entry: DocumentVersionRecord): string {
     '<section class="record-version">',
     '<header class="record-version-head">',
     `<p class="record-version-label">Version ${entry.version}</p>`,
-    `<h2>${escapeHtml(title)}</h2>`,
+    `<h2>${escapeHtml(entry.changeTitle || `Version ${entry.version}`)}</h2>`,
     "</header>",
     `<dl class="record-facts">${factRows}</dl>`,
     '<table class="record-reviews">',
-    '<colgroup><col class="record-col-who" /><col class="record-col-verdict" /><col class="record-col-when" /><col /></colgroup>',
-    "<thead><tr><th>Reviewer</th><th>Verdict</th><th>When</th><th>Comment</th></tr></thead>",
-    `<tbody>${renderReviewRows(entry.reviews)}</tbody>`,
+    '<colgroup><col class="record-col-who" /><col /></colgroup>',
+    "<thead><tr><th>Approved by</th><th></th></tr></thead>",
+    `<tbody>${renderApproverRows(entry.approvers)}</tbody>`,
     "</table>",
     "</section>",
   ].join("");
+}
+
+/**
+ * Who signed this version off.
+ *
+ * **Only approvals that stood at the moment it was published.** A stale or
+ * dismissed review is not a sign-off, and a record that listed one would be
+ * claiming somebody approved a version they did not see. The server already
+ * applies that rule when it builds the history; this only prints it.
+ */
+function renderApproverRows(approvers: string[]): string {
+  if (approvers.length === 0) {
+    return '<tr><td colspan="2">No approval was recorded against this version.</td></tr>';
+  }
+
+  return approvers
+    .map(
+      (login) => `<tr><td>${escapeHtml(personLabel(login))}</td><td></td></tr>`,
+    )
+    .join("");
 }
 
 /**
@@ -204,20 +146,35 @@ function renderVersion(entry: DocumentVersionRecord): string {
  * tokens come along as custom properties rather than as an import.
  */
 export function buildAuditRecord(input: AuditRecordInput): AuditRecord {
-  const { owner, repo, versions, generatedAt } = input;
-  const documentName = formatDocumentName(repo);
-  const newestFirst = [...versions].sort((a, b) => b.version - a.version);
-  const current = newestFirst[0] ?? null;
+  const { organization, binder, versions, generatedAt } = input;
+  const documentName = binder;
+
+  // Grouped by document, newest version first inside each. A regulator reads
+  // this one policy at a time — "show me infection control" — not as one
+  // chronological stream across the manual.
+  const byDocument = new Map<string, WorkspaceHistoryEntry[]>();
+  for (const entry of versions) {
+    const existing = byDocument.get(entry.slugPath);
+    if (existing) existing.push(entry);
+    else byDocument.set(entry.slugPath, [entry]);
+  }
+
+  const documents = [...byDocument.entries()]
+    .map(([slugPath, entries]) => ({
+      slugPath,
+      name: entries[0]?.name ?? slugPath,
+      entries: [...entries].sort((a, b) => b.version - a.version),
+    }))
+    .sort((left, right) => left.slugPath.localeCompare(right.slugPath));
 
   const summary: [string, string][] = [
-    // The owner, not "owner/repo" — the slug is a storage path, and the
-    // document already has a name at the top of the page.
-    ["Workspace", owner],
+    ["Organization", organization],
+    ["Binder", binder],
     [
-      "Version on record",
-      current ? `Version ${current.version}` : "None published",
+      "Policies on record",
+      documents.length === 1 ? "1 policy" : `${documents.length} policies`,
     ],
-    ["Published versions", String(newestFirst.length)],
+    ["Published versions", String(versions.length)],
     ["Exported", formatTimestamp(generatedAt.toISOString()) || "Unknown"],
   ];
 
@@ -229,9 +186,19 @@ export function buildAuditRecord(input: AuditRecordInput): AuditRecord {
     .join("");
 
   const body =
-    newestFirst.length === 0
-      ? '<p class="record-empty-state">This document has no published versions yet, so there is nothing on the record.</p>'
-      : newestFirst.map(renderVersion).join("");
+    documents.length === 0
+      ? '<p class="record-empty-state">This binder has no published versions yet, so there is nothing on the record.</p>'
+      : documents
+          .map((document) =>
+            [
+              '<section class="record-document">',
+              `<h2 class="record-document-name">${escapeHtml(document.name)}</h2>`,
+              `<p class="record-document-path">${escapeHtml(document.slugPath)}</p>`,
+              document.entries.map(renderVersion).join(""),
+              "</section>",
+            ].join(""),
+          )
+          .join("");
 
   const html = `<!doctype html>
 <html lang="en">
@@ -386,11 +353,11 @@ footer {
 <p class="record-lede">Every published version of this document, who submitted it, who approved it, and when. A published version cannot be altered — changing the document means a new version, reviewed again.</p>
 <div class="record-summary"><dl class="record-facts">${summaryRows}</dl></div>
 ${body}
-<footer>Exported from Bindersnap. This record is generated from the document's version history; it is not editable and re-exporting reproduces it.</footer>
+<footer>Exported from Bindersnap. This record is generated from the binder's version history; it is not editable and re-exporting reproduces it.</footer>
 </main>
 </body>
 </html>
 `;
 
-  return { fileName: buildAuditRecordFileName(repo, generatedAt), html };
+  return { fileName: buildAuditRecordFileName(binder, generatedAt), html };
 }

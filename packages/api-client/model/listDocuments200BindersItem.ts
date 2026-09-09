@@ -5,6 +5,8 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type ListDocumentsParams = {
-q?: string;
+export type ListDocuments200BindersItem = {
+  organization: string;
+  name: string;
+  description: string;
 };

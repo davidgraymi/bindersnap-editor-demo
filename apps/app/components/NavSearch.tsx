@@ -5,14 +5,12 @@ import { CornerDownLeft, Search } from "lucide-react";
 import { searchDocuments } from "../api";
 import type { QuickFindResult } from "../quickFind";
 import {
-  appendQuickFindPage,
   buildQuickFindResults,
   describeQuickFindEmptyState,
   isQuickFindQuery,
   moveQuickFindHighlight,
   QUICK_FIND_DEBOUNCE_MS,
   QUICK_FIND_PAGE_SIZE,
-  shouldLoadNextQuickFindPage,
 } from "../quickFind";
 import type { AppRoute } from "../routes";
 
@@ -56,7 +54,6 @@ export function NavSearch({
   const [results, setResults] = useState<QuickFindResult[]>([]);
   const [highlight, setHighlight] = useState(-1);
   const [loading, setLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -64,7 +61,6 @@ export function NavSearch({
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
-  const pageRef = useRef(1);
   /**
    * Which query each response belongs to. Responses can land out of order, and
    * a slow answer to a query the reader has since edited is not an answer.
@@ -130,11 +126,10 @@ export function NavSearch({
 
     const timer = setTimeout(() => {
       const asked = query;
-      void searchDocuments(asked, 1, QUICK_FIND_PAGE_SIZE)
+      void searchDocuments(asked, QUICK_FIND_PAGE_SIZE)
         .then((payload) => {
           if (queryRef.current !== asked) return;
-          pageRef.current = payload.page;
-          setResults(buildQuickFindResults(payload.documents, currentUsername));
+          setResults(buildQuickFindResults(payload.documents));
           setHasMore(payload.hasMore);
           setHighlight(-1);
         })
@@ -153,46 +148,14 @@ export function NavSearch({
     return () => clearTimeout(timer);
   }, [open, query, currentUsername]);
 
-  const loadNextPage = useCallback(() => {
-    if (!hasMore || loading || loadingMore) return;
-
-    const asked = queryRef.current;
-    const nextPage = pageRef.current + 1;
-    setLoadingMore(true);
-
-    void searchDocuments(asked, nextPage, QUICK_FIND_PAGE_SIZE)
-      .then((payload) => {
-        if (queryRef.current !== asked) return;
-        pageRef.current = payload.page;
-        setResults((current) =>
-          appendQuickFindPage(
-            current,
-            buildQuickFindResults(payload.documents, currentUsername),
-          ),
-        );
-        setHasMore(payload.hasMore);
-      })
-      .catch(() => {
-        if (queryRef.current !== asked) return;
-        // A page that failed is not a search that failed: keep what is on
-        // screen and stop asking rather than emptying the list underneath
-        // the reader.
-        setHasMore(false);
-      })
-      .finally(() => {
-        if (queryRef.current !== asked) return;
-        setLoadingMore(false);
-      });
-  }, [currentUsername, hasMore, loading, loadingMore]);
-
   const openResult = useCallback(
     (result: QuickFindResult) => {
       closeOverlay();
       onNavigate({
-        kind: "document",
-        owner: result.owner,
-        repo: result.repo,
-        tab: "overview",
+        kind: "binderDocument",
+        org: result.organization,
+        binder: result.binder,
+        documentPath: result.slugPath,
       });
     },
     [closeOverlay, onNavigate],
@@ -330,18 +293,6 @@ export function NavSearch({
               id="quick-find-results"
               role="listbox"
               aria-label="Matching documents"
-              onScroll={(event) => {
-                const list = event.currentTarget;
-                if (
-                  shouldLoadNextQuickFindPage(
-                    list.scrollTop,
-                    list.clientHeight,
-                    list.scrollHeight,
-                  )
-                ) {
-                  loadNextPage();
-                }
-              }}
             >
               {results.map((result, index) => (
                 <li
@@ -381,9 +332,9 @@ export function NavSearch({
             </ul>
           )}
 
-          {loadingMore && (
+          {hasMore && (
             <p className="quick-find-note" role="status">
-              Loading more…
+              More match than fit here — keep typing, or open Documents.
             </p>
           )}
 

@@ -170,9 +170,7 @@ test("a delinquent organization keeps its record and loses its controls", async 
   await expect(
     page.getByRole("button", { name: "Add a policy" }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "New document" }),
-  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "New policy" })).toBeVisible();
   await expect(page.getByTestId("read-only-banner")).toHaveCount(0);
 
   const adminSession = await signIn(GITEA_ADMIN_USER, GITEA_ADMIN_PASS);
@@ -191,9 +189,7 @@ test("a delinquent organization keeps its record and loses its controls", async 
   // The top nav's create button sits on every page, so leaving it would put
   // the one unusable affordance in front of them everywhere they went. It was
   // missed on the first pass and found by looking at a screenshot.
-  await expect(page.getByRole("button", { name: "New document" })).toHaveCount(
-    0,
-  );
+  await expect(page.getByRole("button", { name: "New policy" })).toHaveCount(0);
   expect(new URL(page.url()).pathname).toBe(`/${org}/${binder}`);
   // The empty state must not instruct an action whose control is gone.
   await expect(page.getByText("Nothing filed here yet.")).toBeVisible();

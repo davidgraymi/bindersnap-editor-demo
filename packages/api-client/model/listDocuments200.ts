@@ -4,11 +4,11 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
+import type { ListDocuments200BindersItem } from './listDocuments200BindersItem.ts';
 import type { ListDocuments200DocumentsItem } from './listDocuments200DocumentsItem.ts';
 
 export type ListDocuments200 = {
   documents: ListDocuments200DocumentsItem[];
-  page: number;
-  limit: number;
+  binders: ListDocuments200BindersItem[];
   hasMore: boolean;
 };

@@ -659,11 +659,25 @@ export async function openNewDocumentModal(page: Page): Promise<void> {
   ).toBeVisible();
 }
 
+/**
+ * Open the nav's "New policy" modal and get past the binder question.
+ *
+ * The nav is the one place no binder is in scope, so it asks which one before
+ * it can ask anything about the file. A seeded account is in more than one, so
+ * the question is always shown here — with exactly one binder it is skipped,
+ * because choosing from a list of one teaches nothing.
+ */
 export async function openTopnavNewDocumentModal(page: Page): Promise<void> {
   const button = page.locator("#topnav-new-doc-btn");
   await expect(button).toBeVisible();
   await button.click();
+
   await expect(
-    page.getByRole("heading", { name: "Create workspace document" }),
+    page.getByRole("heading", { name: "Which binder?" }),
+  ).toBeVisible();
+  await page.locator(".docs-list-item").first().click();
+
+  await expect(
+    page.getByRole("heading", { name: "Add a policy" }),
   ).toBeVisible();
 }
