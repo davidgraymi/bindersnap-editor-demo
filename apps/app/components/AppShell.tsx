@@ -12,6 +12,7 @@ import { AdminSubscriptionManagementPage } from "./AdminSubscriptionManagementPa
 import { AppIcon } from "./AppIcon";
 import { BindersnapLogoMark } from "./BindersnapLogoMark";
 import { DocumentsPage } from "./DocumentsPage";
+import { ReviewQueuePage } from "./ReviewQueuePage";
 import { NewPolicyModal } from "./NewPolicyModal";
 import { HomePage } from "./HomePage";
 import { NavSearch } from "./NavSearch";
@@ -85,6 +86,7 @@ export function AppShell({
   const isReadOnly = useIsReadOnly();
   const isWorkspace = route.kind === "workspace";
   const isDocuments = route.kind === "documents";
+  const isChanges = route.kind === "changes";
   const isAdminSubscriptions = route.kind === "adminSubscriptions";
 
   const displayName = user?.fullName ?? user?.username ?? "";
@@ -140,6 +142,14 @@ export function AppShell({
             aria-current={isWorkspace ? "page" : undefined}
           >
             Home
+          </button>
+          <button
+            type="button"
+            className={`app-topnav-link${isChanges ? " app-topnav-link--active" : ""}`}
+            onClick={() => onNavigate({ kind: "changes" })}
+            aria-current={isChanges ? "page" : undefined}
+          >
+            Change requests
           </button>
           <button
             type="button"
@@ -321,7 +331,21 @@ export function AppShell({
           <main
             className={`app-main${isWorkspace ? " app-main--workspace" : " app-main--page"}`}
           >
-            {route.kind === "documents" ? (
+            {route.kind === "changes" ? (
+              <ReviewQueuePage
+                currentUsername={currentUsername}
+                onOpenChange={(org, binder, change) =>
+                  onNavigate({
+                    kind: "binder",
+                    org,
+                    binder,
+                    tab: "changes",
+                    change,
+                  })
+                }
+                onBrowseDocuments={() => onNavigate({ kind: "documents" })}
+              />
+            ) : route.kind === "documents" ? (
               <DocumentsPage
                 onSelectDocument={(org, binder, documentPath) =>
                   onNavigate({
