@@ -46,6 +46,8 @@ import type {
   SetBinderDiscussionCommentReactionBody,
   SetBinderPersonLevel200,
   SetBinderPersonLevelBody,
+  SetBinderRules200,
+  SetBinderRulesBody,
   SetBinderVisibility200,
   SetBinderVisibilityBody,
   UpdateBinderChange200,
@@ -507,6 +509,41 @@ export const getBinderSettings = async (org: string,
     method: 'GET'
 
 
+  }
+);}
+
+
+export type setBinderRulesResponse200 = {
+  data: SetBinderRules200
+  status: 200
+}
+
+export type setBinderRulesResponseSuccess = (setBinderRulesResponse200) & {
+  headers: Headers;
+};
+;
+
+export type setBinderRulesResponse = (setBinderRulesResponseSuccess)
+
+export const getSetBinderRulesUrl = (org: string,
+    binder: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/rules`
+}
+
+export const setBinderRules = async (org: string,
+    binder: string,
+    setBinderRulesBody: SetBinderRulesBody, options?: Parameters<typeof customFetch>[1]): Promise<setBinderRulesResponse> => {
+
+  return customFetch<setBinderRulesResponse>(getSetBinderRulesUrl(org,binder),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(setBinderRulesBody)
   }
 );}
 

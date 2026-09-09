@@ -446,9 +446,17 @@ Production data is minimal today. This is the cheapest this migration will ever 
 
 4. **Re-key billing.** Map each `subscriptions.username` to its new org id; carry
    `subscription_access_overrides` across the same way.
-5. **Retire the config-branch policy file.** Stamp the effective policy into the
-   annotated tag and merge commit first — that part has evidentiary value and can ship
-   on its own. Then move `blockOnUnresolvedThreads` to a per-workspace settings row.
+5. ~~**Retire the config-branch policy file.**~~ **Built 2026-09-08**, both
+   halves. The effective policy is stamped into each version's annotated tag at
+   publish — approvals required, who approved, whether thread resolution was
+   enforced, whether per-folder sign-off was — and `blockOnUnresolvedThreads`
+   moved to a `workspace_settings` row with an append-only `settings_events`
+   trail. `.bindersnap/config.json` and the `bindersnap-config` branch are gone.
+
+   The stamp is deliberately plain sentences rather than JSON: nothing in the
+   product reads it back, the audience is somebody running `git tag -n99` on a
+   clone in five years, and a format nothing parses cannot drift out of step
+   with a parser.
 
 **The migration is where the evidence is at risk, and it is the part of this ADR that
 deserves the most care.** Verification before any source repository is deleted: every
