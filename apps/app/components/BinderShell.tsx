@@ -203,8 +203,16 @@ export function BinderShell({
           {/* The binder is where the work is, so the way to add to it is on
               the binder rather than in a menu somewhere else. Gone rather
               than disabled while the organization is read-only: the banner
-              above says why once, and a row of dead buttons says it badly. */}
-          {isReadOnly ? null : (
+              above says why once, and a row of dead buttons says it badly.
+
+              Documents only. This is the header's one filled button, which
+              makes it the most emphatic thing on whatever page it sits above —
+              and on five of the six tabs the answer to "what is this page for"
+              is not "add a policy". On a change awaiting your decision it was
+              actively competing with Approve. Each tab that has a primary
+              action of its own already puts it in the body, next to the thing
+              it acts on. */}
+          {isReadOnly || activeTab !== "documents" ? null : (
             <button
               className="doc-header-submit"
               type="button"
