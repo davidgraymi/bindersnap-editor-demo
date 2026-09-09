@@ -22,6 +22,8 @@
  *   SKIP_STACK=1 bun run test:integration -- tests/stripe-subscription.pw.ts
  */
 
+import { randomUUID } from "node:crypto";
+
 import { test, expect, type Locator, type Page } from "@playwright/test";
 import { resolveStripeWebhookSecret } from "./stripe-runtime";
 import { buildTestStripeEvent, signWebhookBody } from "./stripe-webhook";
@@ -896,7 +898,12 @@ test.describe("Stripe subscription lifecycle", () => {
       await expect(page).toHaveURL(/\/organizations\/new$/, {
         timeout: 60_000,
       });
-      await page.getByLabel("Organization name").fill("Mercy Health");
+      // A fresh display name per run. The API steps a taken name to the next
+      // free suffix and gives up at twenty, so a fixed one here quietly caps
+      // this suite at twenty runs against any one stack.
+      await page
+        .getByLabel("Organization name")
+        .fill(`Mercy Health ${randomUUID().slice(0, 6)}`);
       await page.getByRole("button", { name: "Create organization" }).click();
 
       // Wait for the workspace itself, not for the absence of /billing: a
