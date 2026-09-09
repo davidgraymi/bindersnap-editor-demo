@@ -116,6 +116,7 @@ import {
   getCurrentUserRepoPermission,
   getLatestDocTag,
   getRepoBranchProtection,
+  findUser,
   getRepoInfo,
   listDocTags,
   listRepoCollaborators,
@@ -5235,6 +5236,131 @@ async function refuseLastOwner(params: {
 }
 
 /**
+ * Put somebody in the organization.
+ *
+ * **There is no invitation, and that is a decision rather than an omission.**
+ * Gitea has no invitation primitive — `/orgs/{org}/members` is `GET` only, and
+ * the only way in is `PUT /teams/{id}/members/{username}`, which needs the
+ * account to exist. Building the pending-invitation half means a SQLite table,
+ * four routes, address-bound acceptance and an email nobody can send yet: this
+ * repository has no mail infrastructure at all. So an owner adds a person who
+ * has already signed up, and the rest is the invitations issue, 426.
+ *
+ * Two consequences worth being straight about, because both are visible from
+ * the outside. Somebody with no account cannot be added at all — hence the
+ * refusal below, which names that cause rather than letting Gitea answer 404
+ * and having every layer above read it as "no such organization". And nobody
+ * consents to being added. Neither is a bug to be found later; they are the
+ * shape of the MVP.
+ *
+ * `staff` before `Owners`, the same order every other path into the
+ * organization uses: a failure part-way leaves them a member who can read the
+ * open binders, which is the Member rung and a safe place to stop. The reverse
+ * order could leave an owner who is not in the organization's own membership
+ * team.
+ *
+ * Who may do it is Gitea's answer, not ours. `PUT /teams/{id}/members/...` is
+ * guarded by organization ownership, so checking it here as well would be an
+ * app-side ACL over a permission question — the tripwire ADR 0004 names.
+ */
+async function handleAddOrganizationPerson(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { client, session } = auth;
+
+  try {
+    const body = (await req.json().catch(() => null)) as {
+      username?: unknown;
+      owner?: unknown;
+    } | null;
+
+    const username =
+      typeof body?.username === "string" ? body.username.trim() : "";
+    if (username === "") {
+      return json(400, { error: "Name somebody to add." }, baseHeaders);
+    }
+
+    const owner = body?.owner === true;
+
+    const organization = await findOrganization({ client, org: orgName });
+    if (!organization) {
+      return json(404, { error: "No such organization." }, baseHeaders);
+    }
+
+    // Asked before anything is written, so the refusal can name the cause.
+    // This is the one refusal on this route a customer meets in normal use,
+    // and it is the visible edge of having no invitation flow.
+    const account = await findUser({ client, username });
+    if (!account) {
+      return json(
+        404,
+        {
+          error:
+            `${username} does not have a Bindersnap account yet. ` +
+            `They need to sign up first — then you can add them here.`,
+        },
+        baseHeaders,
+      );
+    }
+
+    await ensureOrganizationMembership({
+      client,
+      org: orgName,
+      username: account.login,
+    });
+
+    if (owner) {
+      const owners = await findOrganizationTeam({
+        client,
+        org: orgName,
+        name: OWNERS_TEAM_NAME,
+      });
+      if (!owners) {
+        return json(
+          404,
+          { error: "This organization has no owners team." },
+          baseHeaders,
+        );
+      }
+      await addTeamMember({
+        client,
+        teamId: owners.id,
+        username: account.login,
+      });
+    }
+
+    logger.info("Organization member added", {
+      username: session.username,
+      organization: orgName,
+      subject: account.login,
+      owner,
+    });
+
+    return json(
+      200,
+      await readOrganizationPeople(client, orgName, session.username),
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to add somebody to an organization", {
+      username: session.username,
+      organization: orgName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to add them to the organization.",
+    );
+  }
+}
+
+/**
  * Promote somebody to owner, or demote them back to member.
  *
  * Two rungs and only two, because every third org-level role anyone proposes
@@ -7838,6 +7964,12 @@ export function createApiServer() {
 
         if (organizationPeopleMatch && method === "GET") {
           response = await handleOrganizationPeople(
+            req,
+            baseHeaders,
+            organizationPeopleMatch[1]!,
+          );
+        } else if (organizationPeopleMatch && method === "POST") {
+          response = await handleAddOrganizationPerson(
             req,
             baseHeaders,
             organizationPeopleMatch[1]!,

@@ -3626,6 +3626,141 @@ async function removeOrgPerson(
   return { status: response.status, body: await response.text() };
 }
 
+async function addOrgPerson(
+  sessionCookie: string,
+  org: string,
+  username: string,
+  owner = false,
+): Promise<{ status: number; body: string }> {
+  const response = await fetch(`${API_BASE_URL}/api/app/orgs/${org}/people`, {
+    method: "POST",
+    headers: authHeaders(sessionCookie),
+    body: JSON.stringify({ username, owner }),
+  });
+  return { status: response.status, body: await response.text() };
+}
+
+test("an owner adds somebody to the organization, as a member or as an owner", async () => {
+  // ADR 0004 ships without invitations, so this is how anybody gets in: an
+  // owner names an existing account. `staff` is what makes them a member, and
+  // it is what "open to the organization" grants against — so the test that
+  // matters is not that the row appears, it is that the new member can read a
+  // binder nobody added them to.
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const member = buildCredentials();
+  const memberCookie = await signUp(member);
+
+  // Before: the binder is open to the organization, but they are not in it.
+  const before = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org.name}/clinical`,
+    { headers: { Cookie: `bindersnap_session=${memberCookie}` } },
+  );
+  expect(before.status).toBe(404);
+
+  const added = await addOrgPerson(sessionCookie, org.name, member.username);
+  expect(added.status, added.body).toBe(200);
+  const people = JSON.parse(added.body) as {
+    people: Array<{ login: string; isOwner: boolean }>;
+  };
+  expect(
+    people.people.find((row) => row.login === member.username),
+  ).toMatchObject({ login: member.username, isOwner: false });
+
+  // After: `staff` reaches the binder, so they can read it without anybody
+  // adding them to it. That is the whole point of the membership team.
+  const after = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org.name}/clinical`,
+    { headers: { Cookie: `bindersnap_session=${memberCookie}` } },
+  );
+  expect(after.status, await after.clone().text()).toBe(200);
+
+  // And an owner can be added in one act rather than added and then promoted.
+  const second = buildCredentials();
+  await signUp(second);
+  const asOwner = await addOrgPerson(
+    sessionCookie,
+    org.name,
+    second.username,
+    true,
+  );
+  expect(asOwner.status, asOwner.body).toBe(200);
+  expect(
+    (
+      JSON.parse(asOwner.body) as {
+        people: Array<{ login: string; isOwner: boolean }>;
+      }
+    ).people.find((row) => row.login === second.username)?.isOwner,
+  ).toBe(true);
+});
+
+test("adding somebody who has no account says so, rather than 404ing the organization", async () => {
+  // The visible edge of having no invitation flow, and the one refusal on this
+  // route a customer meets in normal use. A bare 404 from `addTeamMember`
+  // reads as "no such organization" everywhere above it, which sends an owner
+  // hunting the wrong thing entirely.
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+
+  const response = await addOrgPerson(
+    sessionCookie,
+    org.name,
+    `nobody-${randomUUID().slice(0, 8)}`,
+  );
+  expect(response.status).toBe(404);
+  expect(response.body).toContain("does not have a Bindersnap account");
+
+  // And the organization itself is still findable, which is what distinguishes
+  // this 404 from the one that means the org is not there.
+  const stillThere = await fetch(
+    `${API_BASE_URL}/api/app/orgs/${org.name}/people`,
+    { headers: { Cookie: `bindersnap_session=${sessionCookie}` } },
+  );
+  expect(stillThere.status).toBe(200);
+});
+
+test("adding somebody needs a name, and a real organization", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+
+  const nameless = await addOrgPerson(sessionCookie, org.name, "   ");
+  expect(nameless.status).toBe(400);
+
+  const nowhere = await addOrgPerson(
+    sessionCookie,
+    `no-such-org-${randomUUID().slice(0, 8)}`,
+    credentials.username,
+  );
+  expect(nowhere.status).toBe(404);
+});
+
+test("a member cannot add themselves to somebody else's organization", async () => {
+  // Who may do this is Gitea's answer rather than ours — `PUT
+  // /teams/{id}/members/...` is guarded by organization ownership — so the
+  // check is that we did not accidentally stand in front of it with an
+  // app-side one that is more permissive.
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+
+  const outsider = buildCredentials();
+  const outsiderCookie = await signUp(outsider);
+
+  const response = await addOrgPerson(
+    outsiderCookie,
+    org.name,
+    outsider.username,
+  );
+  expect(response.status).not.toBe(200);
+});
+
 test("somebody is promoted to owner and demoted again", async () => {
   // Two rungs and only two: an owner is a member of Gitea's built-in Owners
   // team, so this is one team membership either way and nothing is stored.
