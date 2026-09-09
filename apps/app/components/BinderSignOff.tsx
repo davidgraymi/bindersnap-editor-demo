@@ -142,12 +142,11 @@ export function BinderSignOff({
 
         {/* Read first, and said before anything else on the page. Rules that
             are listed but not enforced are worse than no rules at all: the
-            screen would be promising something Gitea is not doing. */}
+            screen would be promising something that is not happening. */}
         {signOff.enforced ? null : (
           <p className="app-inline-error">
-            This binder is on a version of Gitea that does not hold a change for
-            these rules. Anything set here is recorded and shown, and nothing
-            enforces it yet.
+            This binder cannot hold a change for these rules yet. Anything set
+            here is recorded and shown, and nothing enforces it yet.
           </p>
         )}
 

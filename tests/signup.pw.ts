@@ -7,6 +7,8 @@
  * UI.
  */
 
+import { randomUUID } from "node:crypto";
+
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
 import { signOutCurrentUser } from "./helpers";
@@ -103,7 +105,12 @@ async function signUpThroughOrganizationSetup(
   ).toBeVisible({ timeout: 15_000 });
 
   // Authoring needs an organization, so create one the way a person would.
-  await page.getByLabel("Organization name").fill("Mercy Health");
+  // A fresh display name per run. The API steps a taken name to the next
+  // free suffix and gives up at twenty, so a fixed one here quietly caps
+  // this suite at twenty runs against any one stack.
+  await page
+    .getByLabel("Organization name")
+    .fill(`Mercy Health ${randomUUID().slice(0, 6)}`);
   await page.getByRole("button", { name: "Create organization" }).click();
 
   // Provisioning creates the organization, its first binder, three role teams

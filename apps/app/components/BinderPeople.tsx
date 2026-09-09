@@ -113,9 +113,6 @@ export function BinderPeople({ org, binder }: BinderPeopleProps) {
     );
   }
 
-  const seats = payload.people.filter((person) => person.seat).length;
-  const free = payload.people.length - seats;
-
   return (
     <div className="binder-pane">
       <section className="binder-settings-section">
@@ -123,15 +120,6 @@ export function BinderPeople({ org, binder }: BinderPeopleProps) {
           People
           <span className="doc-tab-count">{payload.people.length}</span>
         </h2>
-
-        {/* Where "reviewers are free" has to land, and it is not the pricing
-            page. A running count over the list somebody is already reading. */}
-        <p className="doc-rail-note">
-          {payload.people.length === 1
-            ? "1 person"
-            : `${payload.people.length} people`}
-          {` · ${seats === 1 ? "1 seat" : `${seats} seats`} · ${free} free`}
-        </p>
 
         {/* The switch sits above the list because it changes what the list
             means: when the whole organization can read, the list below stops
@@ -262,7 +250,7 @@ function VisibilitySwitch({
           <span className="docs-list-item-name">Everyone at {org}</span>
           <span className="docs-list-item-meta">
             They can read it and comment on changes — and approve them, because
-            reading a change is what approving one costs. It uses no seats.
+            reading a change is what approving one costs.
           </span>
         </span>
       </label>
@@ -372,10 +360,6 @@ function PersonRow({
         </span>
       )}
 
-      {/* A fact, not a status, so it is quiet — but it is on every row,
-          because "reviewers are free" is a promise somebody checks here. */}
-      <span className="binder-seat-chip">{person.seat ? "Seat" : "Free"}</span>
-
       {canManage && !fixed ? (
         <button
           type="button"
@@ -464,15 +448,6 @@ function AddPersonForm({
       >
         Add
       </button>
-
-      {/* Said before the change rather than discovered on an invoice. The
-          amount waits for billing; that it costs a seat does not. */}
-      {level !== "reviewer" ? (
-        <p className="doc-rail-note">
-          Admins and editors use a seat. Reviewers are free, always — add as
-          many as you like.
-        </p>
-      ) : null}
     </div>
   );
 }

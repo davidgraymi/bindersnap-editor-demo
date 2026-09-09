@@ -282,3 +282,56 @@ test("the library lists a policy across every binder it can reach", async ({
     page.getByRole("heading", { name: corporate, exact: false }),
   ).toBeVisible();
 });
+
+test("the binder's tabs still work once a document is open", async ({
+  page,
+}) => {
+  // **The bug this guards.** A document opens under the binder's own header,
+  // sharing its tab bar — and that tab bar moved the address bar without
+  // telling the app, so the app kept rendering the document while the URL said
+  // People. Every tab in the binder went dead the moment somebody clicked a
+  // policy, which is the first thing anybody does here.
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(
+    sessionCookie,
+    `Riverbend ${randomUUID().slice(0, 6)}`,
+  );
+  const binder = await createBinder(sessionCookie, org, "Clinical Policies");
+
+  await signInBrowser(page, sessionCookie);
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await page.getByRole("button", { name: "Add a policy" }).click();
+  await fileAPolicy(page, "Hand Hygiene Policy", "nursing");
+
+  await expect(page.locator("h1.doc-header-title").last()).toHaveText(
+    "Hand Hygiene Policy",
+    { timeout: 30_000 },
+  );
+
+  // Leaving the document by a tab, which is the act that was broken.
+  await page.getByRole("tab", { name: "People" }).click();
+
+  await expect(page.getByRole("heading", { name: "People" })).toBeVisible({
+    timeout: 30_000,
+  });
+  // The document is gone, not merely covered: the binder's header remains and
+  // the document's does not.
+  await expect(page.locator("h1.doc-header-title")).toHaveText(binder);
+  expect(new URL(page.url()).pathname).toBe(`/${org}/${binder}`);
+
+  // Who can act here is a question about people, not about billing. The seat
+  // chip on every row and the "N people · N seats · N free" line above them
+  // both said the same thing twice and neither belonged on this page.
+  await expect(page.getByText(/\d+ seats? · \d+ free/)).toHaveCount(0);
+  await expect(page.getByText("Seat", { exact: true })).toHaveCount(0);
+
+  // And a second tab, to prove the first was not a one-off — plus the one
+  // thing the sign-off page must never say. Gitea is our plumbing, and naming
+  // it on a page a compliance manager reads explains nothing.
+  await page.getByRole("tab", { name: "Sign-off rules" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Sign-off rules" }),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("Gitea")).toHaveCount(0);
+});

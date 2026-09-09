@@ -35,6 +35,22 @@ import { SkeletonLine } from "./Skeleton";
  * with Documents still marked — you are still in the binder, further in.
  */
 
+/**
+ * Move the address bar, and tell the app it moved.
+ *
+ * The dispatch is the whole point, and leaving it out is the bug this
+ * replaced. A tab click drops the document path off the URL, but the route
+ * the app holds is only re-read on `popstate` — so without one, the app kept
+ * rendering `/{org}/{binder}/{path}` while the address bar said
+ * `/{org}/{binder}?tab=people`, and every tab in the binder stopped working
+ * the moment somebody opened a document. Same shape as the library's own
+ * navigation, for the same reason.
+ */
+function moveTo(url: string): void {
+  window.history.pushState({}, "", url);
+  window.dispatchEvent(new PopStateEvent("popstate"));
+}
+
 interface BinderShellProps {
   org: string;
   binder: string;
@@ -104,11 +120,7 @@ export function BinderShell({
   }, [loadOverview]);
 
   const goTo = (next: BinderTab) => {
-    window.history.pushState(
-      {},
-      "",
-      buildBinderUrl({ org, binder, tab: next }),
-    );
+    moveTo(buildBinderUrl({ org, binder, tab: next }));
     setTab(next);
     setOpenChange(null);
   };
@@ -117,9 +129,7 @@ export function BinderShell({
     changeNumber: number,
     view: DocumentChangeView = "discussion",
   ) => {
-    window.history.pushState(
-      {},
-      "",
+    moveTo(
       buildBinderUrl({
         org,
         binder,

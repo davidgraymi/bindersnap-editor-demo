@@ -2826,30 +2826,6 @@
                               "owner"
                             ]
                           },
-                          "latestTag": {
-                            "type": "object",
-                            "nullable": true,
-                            "properties": {
-                              "name": {
-                                "type": "string"
-                              },
-                              "version": {
-                                "type": "number"
-                              },
-                              "sha": {
-                                "type": "string"
-                              },
-                              "created": {
-                                "type": "string"
-                              }
-                            },
-                            "required": [
-                              "name",
-                              "version",
-                              "sha",
-                              "created"
-                            ]
-                          },
                           "pendingPRs": {
                             "type": "array",
                             "items": {
@@ -3040,6 +3016,14 @@
                                       "dismissed"
                                     ]
                                   }
+                                },
+                                "documentSlugPath": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "nextVersion": {
+                                  "type": "number",
+                                  "nullable": true
                                 }
                               },
                               "required": [
@@ -3055,7 +3039,9 @@
                                 "isRejected",
                                 "reviewers",
                                 "assignee",
-                                "approvalState"
+                                "approvalState",
+                                "documentSlugPath",
+                                "nextVersion"
                               ]
                             }
                           },
@@ -3066,7 +3052,6 @@
                         },
                         "required": [
                           "repo",
-                          "latestTag",
                           "pendingPRs",
                           "error"
                         ]

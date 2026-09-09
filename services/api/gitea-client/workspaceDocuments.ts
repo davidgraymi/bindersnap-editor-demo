@@ -384,6 +384,72 @@ export async function findPendingDocumentBranch(params: {
  * for the cost of a single call. That difference is the whole reason ADR 0004
  * expects the documents list to get cheaper rather than dearer.
  */
+/**
+ * Every tag in a repository, following Gitea's pagination to the end.
+ *
+ * **Gitea's tag list is paged and the defaults are small**, which this code
+ * used to ignore in two different ways — verified against a running Gitea on
+ * 2026-09-08 by making a repository with sixty tags:
+ *
+ * | Request      | Tags returned |
+ * | ------------ | ------------- |
+ * | no params    | 30            |
+ * | `limit=100`  | **50**        |
+ * | `limit=50`   | 50            |
+ *
+ * So an unparameterised read saw thirty, and asking for a hundred silently got
+ * fifty — `MaxResponseItems` caps it. Neither said anything about the rest.
+ *
+ * A binder's tags are its **version history**, so truncating them is not a
+ * display bug. Thirty versions is ten documents at v3: past that, the binder's
+ * History tab — the compliance record, the thing a surveyor is shown — would
+ * quietly stop listing versions that exist, and `nextVersionFrom` would compute
+ * a next version that has already been used.
+ *
+ * This is the same defect the implementation notes already record once, about
+ * the document list: "The unpaged read asked Gitea for a hardcoded 100 and
+ * silently dropped anything past it, so a workspace's 101st document simply did
+ * not exist as far as this list was concerned." Same shape, different endpoint.
+ *
+ * A binder that has published nothing costs one call, as before. The pages are
+ * fetched in sequence rather than in parallel because the total is not known
+ * until a short page arrives — and a mature binder is the rare case, not the
+ * page-load one.
+ */
+export async function listAllTags(params: {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+}): Promise<GitTag[]> {
+  const { client, owner, repo } = params;
+
+  // Gitea's ceiling. Asking for more is not an error, it is silently this.
+  const PAGE_SIZE = 50;
+  // A stop that cannot be reached by any real binder — 500 pages is 25,000
+  // versions — but that turns a Gitea that ignored `page` from an infinite
+  // loop into a bounded read.
+  const MAX_PAGES = 500;
+
+  const all: GitTag[] = [];
+
+  for (let page = 1; page <= MAX_PAGES; page += 1) {
+    const batch = (await unwrap(
+      client.GET("/repos/{owner}/{repo}/tags", {
+        params: {
+          path: { owner, repo },
+          query: { page, limit: PAGE_SIZE },
+        },
+      }),
+    )) as GitTag[];
+
+    if (!batch || batch.length === 0) break;
+    all.push(...batch);
+    if (batch.length < PAGE_SIZE) break;
+  }
+
+  return all;
+}
+
 export async function listVersionsByDocument(params: {
   client: GiteaClient;
   org: string;
@@ -391,11 +457,7 @@ export async function listVersionsByDocument(params: {
 }): Promise<Map<string, DocumentVersion[]>> {
   const { client, org, workspace } = params;
 
-  const tags = (await unwrap(
-    client.GET("/repos/{owner}/{repo}/tags", {
-      params: { path: { owner: org, repo: workspace } },
-    }),
-  )) as GitTag[];
+  const tags = await listAllTags({ client, owner: org, repo: workspace });
 
   const byDocument = new Map<string, DocumentVersion[]>();
 

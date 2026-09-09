@@ -429,8 +429,22 @@ export const HomeOpenDocumentSchema = z.object({
     name: z.string(),
     owner: z.object({ login: z.string() }),
   }),
-  latestTag: DocTagSchema.nullable(),
-  pendingPRs: z.array(PullRequestWithApprovalStateSchema),
+  /**
+   * The binder's open changes.
+   *
+   * There is no repository-wide `latestTag` any more, and its absence is the
+   * fix rather than an omission: a binder holds many documents, each with its
+   * own version, so one number for the binder is a claim about none of them.
+   * The version a change would publish is on the change.
+   */
+  pendingPRs: z.array(
+    PullRequestWithApprovalStateSchema.extend({
+      /** Which document this change is about, from its upload branch. */
+      documentSlugPath: z.string().nullable(),
+      /** The version it would publish, or null when the document is unknown. */
+      nextVersion: z.number().nullable(),
+    }),
+  ),
   /** Set when this document could not be read; its rows are simply absent. */
   error: z.string().nullable(),
 });

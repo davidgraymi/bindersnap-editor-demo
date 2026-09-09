@@ -144,8 +144,17 @@ function awaitingReviewerNames(change: PullRequestWithApprovalState): string[] {
     .map(getReviewerDisplayName);
 }
 
-function nextVersionOf(document: HomeOpenDocument): number {
-  return (document.latestTag?.version ?? 0) + 1;
+/**
+ * The version this change would publish.
+ *
+ * **Read from the change, not from the binder.** It used to be
+ * `binder.latestTag.version + 1`, which was a repository-wide answer to a
+ * per-document question — and worse, `latestTag` matched the retired
+ * `doc/vNNNN` tag format, so it was always null and every row said "becomes
+ * v1" however many versions the document already had.
+ */
+function nextVersionOf(change: { nextVersion: number | null }): number | null {
+  return change.nextVersion;
 }
 
 function submitterName(change: { user?: { login: string } | null }): string {
@@ -178,9 +187,29 @@ function classify(
   return null;
 }
 
+/**
+ * What a row is about: the document, or the binder when there is no document.
+ *
+ * A change to a binder's sign-off rules touches no document, so it has no
+ * `documentSlugPath` — and the honest answer there is the binder's own name
+ * rather than a document that does not exist.
+ */
+function describeChangeSubject(
+  document: HomeOpenDocument,
+  change: HomeOpenDocument["pendingPRs"][number],
+): string {
+  const slugPath = change.documentSlugPath;
+  if (slugPath === null || slugPath === "") {
+    return formatDocumentName(document.repo.name);
+  }
+
+  const leaf = slugPath.split("/").pop() ?? slugPath;
+  return formatDocumentName(leaf);
+}
+
 function describeOpenChange(
   document: HomeOpenDocument,
-  change: PullRequestWithApprovalState,
+  change: HomeOpenDocument["pendingPRs"][number],
   kind: HomeChangeKind,
   username: string,
   now: number,
@@ -189,7 +218,13 @@ function describeOpenChange(
   const progress = describeApprovalProgress(change);
 
   if (kind === "ready_to_publish") {
-    return `all approvals in · becomes v${nextVersionOf(document)} when you publish`;
+    const becomes = nextVersionOf(change);
+    // A change whose document cannot be identified from its branch still has
+    // every approval it needs — it just cannot be told what version it becomes,
+    // and inventing "v1" is the bug this replaced.
+    return becomes === null
+      ? "all approvals in · ready to publish"
+      : `all approvals in · becomes v${becomes} when you publish`;
   }
 
   if (kind === "needs_review") {
@@ -243,7 +278,12 @@ export function buildOpenChangeRows(
         key: `${document.repo.owner.login}/${document.repo.name}#${change.number}`,
         owner: document.repo.owner.login,
         repo: document.repo.name,
-        documentName: formatDocumentName(document.repo.name),
+        // **The document, not the binder.** `document.repo` is the binder now,
+        // so naming it here put "Clinical" on a row about the infection
+        // control policy. The change carries which document it is about; the
+        // binder's name is the fallback for a change that is about none —
+        // a sign-off rules change, for instance.
+        documentName: describeChangeSubject(document, change),
         number: change.number,
         title: parseChangeTitle(change.body, change.user?.login ?? ""),
         kind,

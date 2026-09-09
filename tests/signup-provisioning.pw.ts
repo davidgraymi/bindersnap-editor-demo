@@ -46,12 +46,25 @@ function buildCredentials(): Credentials {
   };
 }
 
+/**
+ * A display name no earlier run has used.
+ *
+ * A fixed "Mercy Health" made this suite survive exactly twenty runs against
+ * one stack. The API steps a taken name to the next free suffix and gives up
+ * at twenty, so run twenty-one arrived to find `mercy-health` through
+ * `mercy-health-20` all taken and every test here started failing with a 502
+ * that had nothing to do with the code under test.
+ */
+function buildOrgName(): string {
+  return `Mercy Health ${randomUUID().slice(0, 6)}`;
+}
+
 /** Sign up, and return the session cookie the rest of the test acts with. */
 async function signUp(credentials: Credentials): Promise<string> {
   const response = await fetch(`${API_BASE_URL}/auth/signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
-    body: JSON.stringify({ ...credentials, organization: "Mercy Health" }),
+    body: JSON.stringify({ ...credentials, organization: buildOrgName() }),
   });
 
   // Read the body once. `expect`'s message argument is evaluated eagerly, so
@@ -118,11 +131,16 @@ test("creating an organization creates the organization, and no binder", async (
   const credentials = buildCredentials();
   const sessionCookie = await signUp(credentials);
 
-  const created = await createOrganization(sessionCookie, "Mercy Health");
+  const displayName = buildOrgName();
+  const created = await createOrganization(sessionCookie, displayName);
   // The typed name survives: the slug is the URL, the display name is what
   // they called it.
-  expect(created.displayName).toBe("Mercy Health");
-  expect(created.name).toMatch(/^mercy-health(-\d+)?$/);
+  expect(created.displayName).toBe(displayName);
+  // Derived from what they typed, plus a numeric suffix only if that slug was
+  // already taken. Built from `displayName` rather than written out, because
+  // the display name carries a per-run suffix of its own.
+  const slug = displayName.toLowerCase().replace(/\s+/g, "-");
+  expect(created.name).toMatch(new RegExp(`^${slug}(-\\d+)?$`));
 
   const token = await createUserToken(
     credentials.username,
@@ -166,20 +184,18 @@ test("a second organization of the same name gets its own", async () => {
   const first = buildCredentials();
   const second = buildCredentials();
 
-  const firstOrg = await createOrganization(
-    await signUp(first),
-    "Mercy Health",
-  );
+  // The same display name twice, and one no earlier run has burned through:
+  // the collision is the subject of this test, so it has to be a fresh one.
+  const displayName = buildOrgName();
+
+  const firstOrg = await createOrganization(await signUp(first), displayName);
   // The second customer cannot see the first's private organization, so Gitea
   // answers "does mercy-health exist?" with a 404 either way. Creation is what
   // settles it, and a taken name steps to the next candidate rather than
   // failing the request.
-  const secondOrg = await createOrganization(
-    await signUp(second),
-    "Mercy Health",
-  );
+  const secondOrg = await createOrganization(await signUp(second), displayName);
 
   expect(secondOrg.name).not.toBe(firstOrg.name);
-  expect(secondOrg.name).toMatch(/^mercy-health(-\d+)?$/);
-  expect(secondOrg.displayName).toBe("Mercy Health");
+  expect(secondOrg.name).toMatch(new RegExp(`^${firstOrg.name}-\\d+$`));
+  expect(secondOrg.displayName).toBe(displayName);
 });
