@@ -92,6 +92,31 @@ export function latestReviewByUser(
  * what Gitea itself will allow at merge time, so the number on the page and
  * the number the server enforces are the same number.
  */
+/**
+ * Everyone whose approval **stood** on this change, by login.
+ *
+ * The same rule `countApprovals` counts by, which is deliberate: a record that
+ * named more approvers than the count would be claiming a sign-off Gitea did
+ * not honour. A stale approval is one recorded against a version that has since
+ * been replaced — it is not a signature on what is being published, and naming
+ * somebody who approved a version they never saw is worse than naming nobody.
+ */
+export function approverLogins(reviews: PullReview[]): string[] {
+  const logins: string[] = [];
+
+  for (const review of latestReviewByUser(reviews).values()) {
+    if (
+      toReviewerStatus(review.state) === "approved" &&
+      review.stale !== true
+    ) {
+      const login = review.user?.login ?? "";
+      if (login !== "") logins.push(login);
+    }
+  }
+
+  return logins.sort((left, right) => left.localeCompare(right));
+}
+
 export function countApprovals(reviews: PullReview[]): number {
   let approvals = 0;
 

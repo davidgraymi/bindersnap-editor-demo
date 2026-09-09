@@ -122,6 +122,69 @@ export const legacyUsernameSubscriptionAccessOverrides = sqliteTable(
   },
 );
 
+/**
+ * A binder's review policy, for the one rule Gitea cannot express.
+ *
+ * Gitea has no equivalent of GitHub's "require conversation resolution", so
+ * `blockOnUnresolvedThreads` is enforced by the BFF at publish time. It used to
+ * be a committed JSON file on a `bindersnap-config` branch, and ADR 0004
+ * retires that: it is configuration, not evidence, and the ADR's own section on
+ * why configuration does not go in a git repo is about exactly this file.
+ *
+ * The argument for the file was that a commit records who changed the policy
+ * and when. That is worth keeping — it is just not worth a git branch, an
+ * untyped JSON blob that degrades **silently to the permissive policy** when
+ * malformed, and a network round trip per read. `settings_events` below records
+ * the same fact, indexed, in one query.
+ *
+ * **Keyed on the Gitea repository id**, for the same reason `organizations` is
+ * keyed on the org id: Gitea renames repositories, and a name key breaks
+ * silently when it does. The organization and binder names ride along for
+ * display and are never identifiers.
+ */
+export const workspaceSettings = sqliteTable("workspace_settings", {
+  giteaRepoId: integer("gitea_repo_id").primaryKey(),
+  organization: text("organization").notNull(),
+  workspace: text("workspace").notNull(),
+  blockOnUnresolvedThreads: integer("block_on_unresolved_threads", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+/**
+ * Who changed a binder's rules, when, and to what. Append-only.
+ *
+ * ADR 0004: "A settings *change* is still worth recording — who relaxed the
+ * thread requirement, and when. That is an append-only `settings_events` table.
+ * It is telemetry about administration, not evidence about a document."
+ *
+ * The distinction is the whole point and is worth not blurring. Evidence about
+ * a *document* — what the policy was when a version was published — is stamped
+ * into that version's annotated tag, where it is immutable, attached to the
+ * exact event, and readable from a bare clone with no application running.
+ * Losing this table costs the administrative trail and no evidence at all.
+ */
+export const settingsEvents = sqliteTable(
+  "settings_events",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    giteaRepoId: integer("gitea_repo_id").notNull(),
+    /** The setting's name, so a second rule can be added without a migration. */
+    setting: text("setting").notNull(),
+    /** Null for the first time a setting is written. */
+    previousValue: text("previous_value"),
+    newValue: text("new_value").notNull(),
+    changedBy: text("changed_by").notNull(),
+    changedAt: integer("changed_at").notNull(),
+  },
+  (table) => [
+    index("idx_settings_events_repo").on(table.giteaRepoId, table.changedAt),
+  ],
+);
+
 export const processedWebhookEvents = sqliteTable("processed_webhook_events", {
   eventId: text("event_id").primaryKey(),
   eventType: text("event_type").notNull(),

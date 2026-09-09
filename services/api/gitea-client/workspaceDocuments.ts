@@ -295,6 +295,19 @@ export async function createDocumentVersionTag(params: {
   slugPath: string;
   version: number;
   target: string;
+  /**
+   * The approval policy in force, written into the annotated tag.
+   *
+   * ADR 0004: when configuration shapes what happened, do not version the
+   * configuration — stamp it onto the event. The tag is immutable, attached to
+   * the exact publish, and readable from a bare clone with no application
+   * running, which is what makes it better evidence than a settings row a
+   * surveyor would have to be told to trust.
+   *
+   * Optional so a caller with nothing to say still writes a usable tag rather
+   * than a misleading one.
+   */
+  message?: string;
 }): Promise<DocumentVersion> {
   const { client, org, workspace, slugPath, version, target } = params;
   const tagName = buildDocumentVersionTag(slugPath, version);
@@ -305,7 +318,7 @@ export async function createDocumentVersionTag(params: {
       body: {
         tag_name: tagName,
         target,
-        message: `Published ${slugPath} v${version}`,
+        message: params.message ?? `Published ${slugPath} v${version}`,
       },
     }),
   )) as GitTag;

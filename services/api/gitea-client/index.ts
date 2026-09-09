@@ -5,7 +5,6 @@ export * from "./documents";
 export * from "./orgs";
 export * from "./pullRequests";
 export * from "./reactions";
-export * from "./reviewSettings";
 export * from "./repos";
 export * from "./signOff";
 export * from "./uploads";

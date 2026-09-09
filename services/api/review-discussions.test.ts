@@ -3,6 +3,10 @@ import { randomUUID } from "crypto";
 
 import { config } from "./config";
 import { createApiServer } from "./server";
+import {
+  WorkspaceSettingsStore,
+  workspaceSettingsStore,
+} from "./workspace-settings";
 import { SessionStore, sessionStore } from "./sessions";
 import { resetStripeClientForTests } from "./stripe/client";
 import {
@@ -63,6 +67,14 @@ beforeEach(() => {
 
   (sessionStore as unknown as { _store: SessionStore | null })._store =
     new SessionStore(config.sessionsDbPath);
+  // The settings store is a lazy singleton that keeps whichever database it
+  // first opened, so without this a policy set by one test is still in force
+  // for the next — which reads as the publish gate ignoring its own setting.
+  (
+    workspaceSettingsStore as unknown as {
+      _store: WorkspaceSettingsStore | null;
+    }
+  )._store = new WorkspaceSettingsStore(config.sessionsDbPath);
   (
     subscriptionStore as unknown as { _store: SubscriptionStore | null }
   )._store = new SubscriptionStore(config.sessionsDbPath);
@@ -280,10 +292,22 @@ function request(
   });
 }
 
-function setPolicy(blockOnUnresolvedThreads: boolean): void {
-  reviewConfigFile = JSON.stringify({
-    version: 1,
-    review: { blockOnUnresolvedThreads },
+/**
+ * Turn the thread-resolution rule on or off for the binder under test.
+ *
+ * It used to write a JSON file onto a `bindersnap-config` branch, which the
+ * publish gate then fetched from Gitea. ADR 0004's migration step 5 retires
+ * that: the rule is configuration, so it lives in a typed table, and the gate
+ * reads it from there. The mocked repository answers with `id: 1`, which is
+ * what the settings are keyed on.
+ */
+async function setPolicy(blockOnUnresolvedThreads: boolean): Promise<void> {
+  await workspaceSettingsStore.set({
+    giteaRepoId: 1,
+    organization: OWNER,
+    workspace: REPO,
+    settings: { blockOnUnresolvedThreads },
+    changedBy: OWNER,
   });
 }
 
@@ -450,7 +474,7 @@ describe("publish gate on unresolved threads", () => {
   test("blocks publishing when the policy is on and a thread is open", async () => {
     const server = createApiServer();
     const session = await seedSession(OWNER);
-    setPolicy(true);
+    await setPolicy(true);
 
     try {
       await server.fetch(
@@ -480,7 +504,7 @@ describe("publish gate on unresolved threads", () => {
   test("allows publishing once the thread is resolved", async () => {
     const server = createApiServer();
     const session = await seedSession(OWNER);
-    setPolicy(true);
+    await setPolicy(true);
 
     try {
       const created = await server.fetch(
@@ -515,7 +539,7 @@ describe("publish gate on unresolved threads", () => {
   test("does not block when the policy is off", async () => {
     const server = createApiServer();
     const session = await seedSession(OWNER);
-    setPolicy(false);
+    await setPolicy(false);
 
     try {
       await server.fetch(
@@ -568,7 +592,7 @@ describe("publish gate on unresolved threads", () => {
   test("a Gitea-native comment does not wedge the document shut", async () => {
     const server = createApiServer();
     const session = await seedSession(OWNER);
-    setPolicy(true);
+    await setPolicy(true);
 
     // A review body written outside Bindersnap carries no thread marker and
     // can never be resolved through this API — it must not gate publishing.

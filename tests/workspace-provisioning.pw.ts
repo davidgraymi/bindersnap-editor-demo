@@ -3104,7 +3104,10 @@ async function readSettings(
   org: string,
   workspace: string,
 ): Promise<{
-  rules: { requiredApprovals: number | null };
+  rules: {
+    requiredApprovals: number | null;
+    blockOnUnresolvedThreads: boolean;
+  };
   signOff: {
     enforced: boolean;
     exists: boolean;
@@ -3123,6 +3126,175 @@ async function readSettings(
   expect(response.status, await response.clone().text()).toBe(200);
   return response.json() as never;
 }
+
+async function setBinderRules(
+  sessionCookie: string,
+  org: string,
+  workspace: string,
+  blockOnUnresolvedThreads: boolean,
+): Promise<{ status: number; body: string }> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${workspace}/rules`,
+    {
+      method: "PATCH",
+      headers: authHeaders(sessionCookie),
+      body: JSON.stringify({ blockOnUnresolvedThreads }),
+    },
+  );
+  return { status: response.status, body: await response.text() };
+}
+
+test("a binder's thread rule is changed immediately, and read back", async () => {
+  // **Immediate, unlike a sign-off rule**, and the difference is the design
+  // rather than an inconsistency: a sign-off rule decides who has to approve a
+  // change, so changing it is itself an approved change. This decides whether
+  // the binder waits for discussions to be resolved — it gates nobody out and
+  // changes no permission.
+  //
+  // It used to live in a JSON file on a `bindersnap-config` branch, which ADR
+  // 0004's migration step 5 retires: it is configuration, so it is a typed
+  // table, and the change is recorded in `settings_events` rather than as a
+  // commit.
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  // The default is permissive, and a binder nobody has configured says so
+  // rather than reporting an unknown.
+  const before = await readSettings(sessionCookie, org.name, "clinical");
+  expect(before.rules.blockOnUnresolvedThreads).toBe(false);
+
+  const turnedOn = await setBinderRules(
+    sessionCookie,
+    org.name,
+    "clinical",
+    true,
+  );
+  expect(turnedOn.status, turnedOn.body).toBe(200);
+
+  const after = await readSettings(sessionCookie, org.name, "clinical");
+  expect(after.rules.blockOnUnresolvedThreads).toBe(true);
+
+  // And back off again, because a rule that is off is still a rule somebody
+  // chose.
+  expect(
+    (await setBinderRules(sessionCookie, org.name, "clinical", false)).status,
+  ).toBe(200);
+  expect(
+    (await readSettings(sessionCookie, org.name, "clinical")).rules
+      .blockOnUnresolvedThreads,
+  ).toBe(false);
+});
+
+test("changing a binder's rules needs an answer, a real binder, and admin", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const nothingSaid = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org.name}/clinical/rules`,
+    {
+      method: "PATCH",
+      headers: authHeaders(sessionCookie),
+      body: JSON.stringify({}),
+    },
+  );
+  expect(nothingSaid.status).toBe(400);
+
+  const nowhere = await setBinderRules(
+    sessionCookie,
+    org.name,
+    "no-such-binder",
+    true,
+  );
+  expect(nowhere.status).toBe(404);
+
+  // A member who is not an administrator of the binder is refused. Permission
+  // is Gitea's answer — read as them — not a role table of ours.
+  const member = buildCredentials();
+  const memberCookie = await signUp(member);
+  expect(
+    (
+      await addBinderPerson(
+        sessionCookie,
+        org.name,
+        "clinical",
+        member.username,
+        "reviewer",
+      )
+    ).status,
+  ).toBe(200);
+
+  const refused = await setBinderRules(
+    memberCookie,
+    org.name,
+    "clinical",
+    true,
+  );
+  expect(refused.status, refused.body).toBe(403);
+});
+
+test("publishing stamps the policy in force onto the version's tag", async () => {
+  // ADR 0004: "when configuration shapes what happened, do not version the
+  // configuration — stamp it onto the event." This is that, asserted where it
+  // actually has to be true: on the annotated tag in Gitea, readable from a
+  // bare clone with no application and no database running.
+  const owner = buildCredentials();
+  const ownerCookie = await signUp(owner);
+  const org = await createOrganization(ownerCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(ownerCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const ownerToken = await createUserToken(owner.username, owner.password);
+  const approver = await addApprover(ownerToken, org.name, "clinical");
+
+  expect(
+    (
+      await addDocument(ownerCookie, org.name, "clinical", {
+        name: "Infection Control Policy",
+        folder: "nursing",
+      })
+    ).status,
+  ).toBe(201);
+
+  const listed = await listChanges(ownerCookie, org.name, "clinical", "open");
+  const change = (
+    JSON.parse(listed.body) as { changes: Array<{ number: number }> }
+  ).changes[0];
+  expect(change, listed.body).toBeTruthy();
+
+  await approveChange(approver.token, org.name, "clinical", change!.number);
+  expect(
+    (await publishChange(ownerCookie, org.name, "clinical", change!.number))
+      .status,
+  ).toBe(200);
+
+  // Read the tag back the way a clone would.
+  const tag = await giteaGet<{ message?: string }>(
+    ownerToken,
+    `/repos/${org.name}/clinical/tags/${encodeURIComponent("nursing/infection-control-policy/v1")}`,
+  );
+
+  expect(tag.message).toContain("The approval policy in force");
+  expect(tag.message).toContain("Approvals required: 1");
+  expect(tag.message).toContain(
+    `Approved by: ${approver.credentials.username}`,
+  );
+  // Both sides of every rule: one that was off is still a rule somebody chose,
+  // and a stamp that only listed what was on would be silent about the rest.
+  expect(tag.message).toContain(
+    "Unresolved discussions blocked publishing: no",
+  );
+  expect(tag.message).toContain(`Published by: ${owner.username}`);
+  expect(tag.message).toContain(`From change: #${change!.number}`);
+});
 
 async function proposeSignOff(
   sessionCookie: string,

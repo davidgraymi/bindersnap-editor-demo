@@ -567,6 +567,26 @@ export const WorkspaceSignOffSchema = z.object({
 });
 export type WorkspaceSignOff = z.infer<typeof WorkspaceSignOffSchema>;
 
+/**
+ * Changing a binder's rules.
+ *
+ * Immediate, unlike a sign-off rule: this decides whether the binder waits for
+ * every discussion to be resolved, which gates nobody out and changes no
+ * permission. The change is still recorded — `settings_events` says who
+ * relaxed the requirement and when.
+ */
+export const BinderRulesRequestSchema = z.object({
+  blockOnUnresolvedThreads: z.boolean(),
+});
+export type BinderRulesRequest = z.infer<typeof BinderRulesRequestSchema>;
+
+export const BinderRulesPayloadSchema = z.object({
+  organization: z.string(),
+  workspace: z.string(),
+  blockOnUnresolvedThreads: z.boolean(),
+});
+export type BinderRulesPayload = z.infer<typeof BinderRulesPayloadSchema>;
+
 export const WorkspaceSettingsPayloadSchema = z.object({
   organization: z.string(),
   workspace: z.string(),

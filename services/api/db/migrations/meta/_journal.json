@@ -22,6 +22,13 @@
       "when": 1788234293834,
       "tag": "0002_bill_the_organization",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1788893891756,
+      "tag": "0003_workspace_settings",
+      "breakpoints": true
     }
   ]
 }

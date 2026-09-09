@@ -14,6 +14,7 @@ import type {
   CreatedWorkspaceDocumentPayload,
   BinderGroupsPayload,
   BinderPeoplePayload,
+  BinderRulesPayload,
   CreatedOrganizationGroupPayload,
   LibraryPayload,
   LibrarySearchPayload,
@@ -644,6 +645,27 @@ export async function fetchBinderChanges(
 ): Promise<WorkspaceChangeListPayload> {
   const response = await BindersClient.listBinderChanges(org, binder, {
     state,
+  });
+  return response.data;
+}
+
+/**
+ * Change a binder's rules. **Immediate**, unlike a sign-off rule.
+ *
+ * The difference is deliberate: a sign-off rule decides who has to approve a
+ * change, so changing one goes through the same approval a policy does. This
+ * decides whether the binder waits for every discussion to be resolved — it
+ * gates nobody out and changes no permission, so making somebody open a change
+ * to tick a checkbox would be ceremony without a reason. It is recorded either
+ * way.
+ */
+export async function setBinderRules(
+  org: string,
+  binder: string,
+  blockOnUnresolvedThreads: boolean,
+): Promise<BinderRulesPayload> {
+  const response = await BindersClient.setBinderRules(org, binder, {
+    blockOnUnresolvedThreads,
   });
   return response.data;
 }

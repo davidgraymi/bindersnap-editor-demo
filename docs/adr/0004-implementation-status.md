@@ -932,6 +932,60 @@ has no caller at all: the only route that used it was
 the state the screen would explain cannot be reached, and a screen for an
 unreachable state is a screen that will be wrong the first time it is right.
 
+### The config branch is retired, and the policy is stamped on the event
+
+ADR 0004's migration step 5, both halves.
+
+**`blockOnUnresolvedThreads` is a table row now.** The committed
+`.bindersnap/config.json` on a `bindersnap-config` branch paid every cost the
+ADR lists for putting configuration in git — a network round trip per read, two
+to four API calls plus permanent objects per write, a branch that existed only
+because `main` is protected — and bought one property: a commit recording who
+changed the policy and when. That property is kept as `settings_events`,
+append-only and indexed, and the costs are not.
+
+The cost worth naming on its own is the third one: the file had no types and no
+constraints, so `parseReviewSettings` had to tolerate a malformed one — and it
+degraded **silently to the permissive policy**. A corrupt byte turned a control
+off and said nothing. That is the same failure the Gitea 28.0.0 verification
+found inside Gitea's own CODEOWNERS parser, and it is the reason this is a
+typed table rather than a tidier file.
+
+Keyed on the Gitea repository id, because Gitea renames repositories and a name
+key breaks silently when it does — the same reasoning as `organizations`.
+
+**The policy in force is stamped into each version's annotated tag.** ADR 0004:
+"when configuration shapes what happened, do not version the configuration —
+stamp it onto the event." So publishing writes approvals required, everyone
+whose approval **stood**, whether unresolved discussions blocked publishing,
+whether per-folder sign-off was enforced, who published, and which change it
+came from — into the tag. Immutable, attached to the exact event, no join
+against historical settings, and readable from a bare clone with no application
+and no database running.
+
+Three details that are decisions rather than formatting:
+
+- **Both sides of every rule.** A stamp that listed only the rules that were on
+  would be silent about the ones that were not, which is the same ambiguity as
+  no stamp at all.
+- **An unreadable approval count says "unknown", not "0".** Branch protection is
+  admin-only, so the service account can fail to read it — and "0" is a claim
+  that no approvals were required, which is a very different statement.
+- **The approvers are read after the merge**, because the approvals that count
+  are the ones that stood when Gitea accepted it. One dismissed on the way in is
+  not a signature on what was published.
+
+**Changing the thread rule is immediate; changing a sign-off rule is not**, and
+Settings says so. A sign-off rule decides who has to approve a change, so
+changing it goes through the same approval a policy does. The thread rule gates
+nobody out and changes no permission, so making an administrator open a change
+to tick a checkbox would be ceremony without a reason. Both are recorded.
+
+**PATCH was not in the API's CORS allow-list**, because no route had used it.
+The browser refused the preflight and the request never left — which surfaces
+as "Failed to fetch" with **nothing in the API's log**, because the API never
+saw it. Worth knowing before the next verb is added.
+
 ## Why #393 carries the organization-creation flow too
 
 They cannot ship apart. The migration parks every username-keyed billing row
@@ -1119,8 +1173,9 @@ In rough dependency order.
    indexes" section is the specification. Note the binder model already made the
    list cheap — `listVersionsByDocument` reads a binder's tags once rather than
    once per document — so this is now an optimization rather than a rescue.
-4. **Per-workspace settings and `settings_events`.** Not started.
-   `blockOnUnresolvedThreads` still lives in the config branch.
+4. ~~**Per-workspace settings and `settings_events`.**~~ **Done 2026-09-08** —
+   see "The config branch is retired, and the policy is stamped on the event"
+   above.
 5. ~~**CODEOWNERS generation.**~~ **Built 2026-09-08**, with the Gitea 28.0.0
    upgrade it was blocked on — see "Per-folder sign-off, and the escaping bug
    underneath it" above. Rules name groups, changing them is an approved
