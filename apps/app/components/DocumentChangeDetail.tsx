@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
-import { Download, FileText, GitCompare } from "lucide-react";
+import { Columns2, Download, FileText } from "lucide-react";
 
 import type { ChangeUpdate, RepoBranchProtection } from "../api";
 import {
@@ -567,7 +567,8 @@ export function DocumentChangeDetail({
             }
             onClick={() => onViewChange("compare")}
           >
-            <GitCompare size={13} strokeWidth={1.75} aria-hidden="true" />
+            {/* Two panes side by side, not a branch diagram. */}
+            <Columns2 size={13} strokeWidth={1.75} aria-hidden="true" />
             Compare
           </button>
         </div>
