@@ -573,6 +573,17 @@ async function ensureMainBranchProtection(
       enable_approvals_whitelist: false,
       enable_merge_whitelist: false,
       block_on_rejected_reviews: true,
+      // Gitea 28.0.0's per-folder gate, which the dev stack's pinned nightly
+      // has and 1.27.3 silently drops. Set here so a seeded binder
+      // demonstrates the feature rather than opening its Sign-off rules tab
+      // with a warning that nothing is being enforced.
+      //
+      // Note this is a *third* copy of the binder's protection — the app's
+      // `protectWorkspaceMain` and `tests/gitea-permission-model.pw.ts` are
+      // the others — and copies of one rule are what this codebase keeps
+      // catching mid-drift. It stays separate only because the seed talks to
+      // Gitea directly with no app running.
+      block_on_codeowner_reviews: true,
       block_on_outdated_branch: true,
       dismiss_stale_approvals: true,
       enable_force_push: false,

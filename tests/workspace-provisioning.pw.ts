@@ -211,6 +211,7 @@ test("a member creates the binder, and it belongs to the organization", async ()
     enable_approvals_whitelist: boolean;
     approvals_whitelist_teams: string[];
     block_on_official_review_requests: boolean;
+    block_on_codeowner_reviews?: boolean;
   }>(token, `/repos/${org.name}/clinical-policies/branch_protections/main`);
 
   // Nothing reaches main except a merged, approved change.
@@ -230,7 +231,25 @@ test("a member creates the binder, and it belongs to the organization", async ()
     "Owners",
     "staff",
   ]);
-  expect(protection.block_on_official_review_requests).toBe(true);
+  // **The two gates, and which one is on depends on the Gitea underneath.**
+  // `block_on_codeowner_reviews` (28.0.0) is the per-folder gate that actually
+  // enforces a sign-off rule and lets it name a team. `block_on_official_review_requests`
+  // (1.27) was only ever on to make CODEOWNERS block, which it never did for a
+  // team code owner — and left on beside the new gate it blocks on *manually*
+  // requested reviews, so any member could stall a publish by requesting one.
+  //
+  // Provisioning writes the new field and reads the protection back to see
+  // whether it stuck, because a Gitea that does not have it accepts the write
+  // and silently drops it. So exactly one of these is true, and which one is
+  // the honest answer to "what version is this stack on".
+  if (protection.block_on_codeowner_reviews) {
+    expect(protection.block_on_official_review_requests).toBe(false);
+  } else {
+    // The 1.27 path: the older gate stays on, because it is then the only
+    // per-folder enforcement the binder has and turning it off would put
+    // nothing in its place.
+    expect(protection.block_on_official_review_requests).toBe(true);
+  }
 });
 
 test("a second binder of the same name is refused, not silently reused", async () => {
@@ -2899,6 +2918,258 @@ test("the visibility switch needs an answer, and the binder has to exist", async
     (await setVisibility(sessionCookie, org.name, "no-such-binder", true))
       .status,
   ).toBe(404);
+});
+
+async function readSettings(
+  sessionCookie: string,
+  org: string,
+  workspace: string,
+): Promise<{
+  rules: { requiredApprovals: number | null };
+  signOff: {
+    enforced: boolean;
+    exists: boolean;
+    rules: Array<{ folder: string; teams: string[]; users: string[] }>;
+    unreadable: Array<{ line: number; text: string }>;
+    folders: string[];
+    groups: string[];
+    pendingChange: number | null;
+  };
+  canManage: boolean;
+}> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${workspace}/settings`,
+    { headers: { Cookie: `bindersnap_session=${sessionCookie}` } },
+  );
+  expect(response.status, await response.clone().text()).toBe(200);
+  return response.json() as never;
+}
+
+async function proposeSignOff(
+  sessionCookie: string,
+  org: string,
+  workspace: string,
+  rules: Array<{ folder: string; teams?: string[]; users?: string[] }>,
+): Promise<{ status: number; body: string }> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${workspace}/rules/sign-off`,
+    {
+      method: "POST",
+      headers: authHeaders(sessionCookie),
+      body: JSON.stringify({ rules }),
+    },
+  );
+  return { status: response.status, body: await response.text() };
+}
+
+test("a new binder is protected by the per-folder gate, on a Gitea that has it", async () => {
+  // The capability is read back rather than assumed, because dev runs a 28.0.0
+  // nightly and production runs 1.27.3, which accepts the field on a write and
+  // silently drops it. This asserts which of the two the stack under test is —
+  // so if CI ever moves back to a released tag, the sign-off tests below fail
+  // with a cause somebody can name instead of a mystery.
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const settings = await readSettings(sessionCookie, org.name, "clinical");
+  expect(
+    settings.signOff.enforced,
+    "block_on_codeowner_reviews did not stick — is this Gitea 28.0.0?",
+  ).toBe(true);
+
+  // No rules yet, and the binder says so rather than pretending to have some.
+  expect(settings.signOff.exists).toBe(false);
+  expect(settings.signOff.rules).toEqual([]);
+  expect(settings.signOff.pendingChange).toBeNull();
+});
+
+test("proposing sign-off rules opens a change and changes nothing yet", async () => {
+  // The whole point of the endpoint returning a change number. `main` is
+  // protected, so the rules that decide who approves are themselves approved —
+  // and a caller that gets a number back cannot report otherwise.
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+  expect(
+    (
+      await addDocument(sessionCookie, org.name, "clinical", {
+        name: "Infection Control Policy",
+        folder: "nursing",
+      })
+    ).status,
+  ).toBe(201);
+
+  const group = await createGroup(
+    sessionCookie,
+    org.name,
+    "Infection Control",
+    "reviewer",
+  );
+  expect(group.status, group.body).toBe(201);
+
+  const proposed = await proposeSignOff(sessionCookie, org.name, "clinical", [
+    { folder: "nursing", teams: ["infection-control"] },
+  ]);
+  expect(proposed.status, proposed.body).toBe(201);
+  const { changeNumber } = JSON.parse(proposed.body) as {
+    changeNumber: number;
+  };
+  expect(changeNumber).toBeGreaterThan(0);
+
+  const settings = await readSettings(sessionCookie, org.name, "clinical");
+  // Still nothing on `main` — the rules are in review, not in force.
+  expect(settings.signOff.exists).toBe(false);
+  expect(settings.signOff.rules).toEqual([]);
+  // And the binder knows a change is waiting, so it will not offer a second.
+  expect(settings.signOff.pendingChange).toBe(changeNumber);
+
+  const second = await proposeSignOff(sessionCookie, org.name, "clinical", [
+    { folder: "nursing", teams: ["infection-control"] },
+  ]);
+  expect(second.status, second.body).toBe(409);
+  expect(second.body).toContain(String(changeNumber));
+});
+
+test("a rule naming a group the organization does not have is refused before anything is written", async () => {
+  // The refusal the generator owes. Gitea drops a rule it cannot satisfy with
+  // nothing but a log warning, so a bad rule does not fail loudly — it stops
+  // enforcing while the screen still says sign-off is required.
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const refused = await proposeSignOff(sessionCookie, org.name, "clinical", [
+    { folder: "nursing", teams: ["no-such-committee"] },
+  ]);
+  expect(refused.status, refused.body).toBe(422);
+  expect(refused.body).toContain("no-such-committee");
+
+  // Nothing was written, so no change is left behind for somebody to find.
+  const settings = await readSettings(sessionCookie, org.name, "clinical");
+  expect(settings.signOff.pendingChange).toBeNull();
+
+  // And a rule with nobody on it is refused for its own reason.
+  const empty = await proposeSignOff(sessionCookie, org.name, "clinical", [
+    { folder: "nursing" },
+  ]);
+  expect(empty.status, empty.body).toBe(422);
+  expect(empty.body).toContain("nobody on it");
+});
+
+test("published sign-off rules gate the folder they name", async () => {
+  // **The assertion that proves the feature.** Everything else checks that a
+  // file was written; this checks that Gitea holds a merge for it, and that a
+  // member of the named *group* is what releases it — which is the whole reason
+  // 28.0.0 is worth the upgrade. On 1.27.3 a team code owner enforces nothing.
+  const owner = buildCredentials();
+  const ownerCookie = await signUp(owner);
+  const org = await createOrganization(ownerCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(ownerCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const ownerToken = await createUserToken(owner.username, owner.password);
+
+  // Two reviewers: one in the nursing sign-off group, one not. The one who is
+  // not is how the approval count gets met without satisfying the rule — the
+  // only way to observe the gate on its own.
+  const signer = await addApprover(ownerToken, org.name, "clinical");
+  const bystander = await addApprover(ownerToken, org.name, "clinical");
+
+  const group = await createGroup(
+    ownerCookie,
+    org.name,
+    "Infection Control",
+    "reviewer",
+  );
+  expect(group.status, group.body).toBe(201);
+  expect(
+    (
+      await addToGroup(
+        ownerCookie,
+        org.name,
+        "infection-control",
+        signer.credentials.username,
+      )
+    ).status,
+  ).toBe(200);
+
+  // Put the rules in force: propose, approve, publish.
+  const proposed = await proposeSignOff(ownerCookie, org.name, "clinical", [
+    { folder: "nursing", teams: ["infection-control"] },
+  ]);
+  expect(proposed.status, proposed.body).toBe(201);
+  const rulesChange = (JSON.parse(proposed.body) as { changeNumber: number })
+    .changeNumber;
+
+  await approveChange(bystander.token, org.name, "clinical", rulesChange);
+  expect(
+    (await publishChange(ownerCookie, org.name, "clinical", rulesChange))
+      .status,
+  ).toBe(200);
+
+  const inForce = await readSettings(ownerCookie, org.name, "clinical");
+  expect(inForce.signOff.exists).toBe(true);
+  expect(inForce.signOff.rules).toEqual([
+    { folder: "nursing", teams: ["infection-control"], users: [] },
+  ]);
+  expect(inForce.signOff.unreadable).toEqual([]);
+
+  // Now a change to that folder. The bystander's approval meets the count and
+  // satisfies no rule.
+  expect(
+    (
+      await addDocument(ownerCookie, org.name, "clinical", {
+        name: "Infection Control Policy",
+        folder: "nursing",
+      })
+    ).status,
+  ).toBe(201);
+
+  const listed = await listChanges(ownerCookie, org.name, "clinical", "open");
+  expect(listed.status, listed.body).toBe(200);
+  const policyChange = (
+    JSON.parse(listed.body) as { changes: Array<{ number: number }> }
+  ).changes[0];
+  expect(policyChange, listed.body).toBeTruthy();
+
+  await approveChange(
+    bystander.token,
+    org.name,
+    "clinical",
+    policyChange!.number,
+  );
+
+  const blocked = await publishChange(
+    ownerCookie,
+    org.name,
+    "clinical",
+    policyChange!.number,
+  );
+  expect(
+    blocked.status,
+    `the nursing rule did not hold the merge: ${blocked.body}`,
+  ).not.toBe(200);
+
+  // A member of the named group approves, and it goes through.
+  await approveChange(signer.token, org.name, "clinical", policyChange!.number);
+  const released = await publishChange(
+    ownerCookie,
+    org.name,
+    "clinical",
+    policyChange!.number,
+  );
+  expect(released.status, released.body).toBe(200);
 });
 
 async function setOrgRole(

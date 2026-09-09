@@ -50,7 +50,12 @@ function personName(author: { login: string; fullName: string }): string {
  */
 export function describeChangeOpening(
   change: Pick<ChangeRecord, "submittedBy" | "submittedAt" | "open">,
-  nextVersion: number,
+  /**
+   * The version this change would publish, or `null` when it would publish
+   * none — a change to a binder's sign-off rules versions no document, and
+   * "becomes v1 when published" would be false for it.
+   */
+  nextVersion: number | null,
 ): { who: string; when: string; becomes: number | null } {
   return {
     who: capitalizeFirst(change.submittedBy || "Someone"),

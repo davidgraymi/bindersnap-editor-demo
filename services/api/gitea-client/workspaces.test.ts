@@ -98,7 +98,120 @@ test("protectWorkspaceMain whitelists the role teams so a free reviewer's approv
   // CODEOWNERS is enforcement only when a merge is blocked on the outstanding
   // request it creates.
   expect(body.block_on_official_review_requests).toBe(true);
+  // Ignored by a Gitea that has never heard of it, which is what makes reading
+  // it back the capability check rather than a version string.
+  expect(body.block_on_codeowner_reviews).toBe(true);
   expect(body.dismiss_stale_approvals).toBe(true);
+});
+
+test("the per-folder gate is confirmed by reading it back, not assumed", async () => {
+  // Dev runs a Gitea 28.0.0 nightly and production runs 1.27.3, which accepts
+  // `block_on_codeowner_reviews` on a write and silently drops it. So the only
+  // honest capability check is to write it and ask what stuck — a version
+  // string cannot answer, not least because the 28.0.0 binary self-reports
+  // `1.28.0+dev`.
+  const { client, mockPatch } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/branch_protections/{name}": () => NOT_FOUND,
+    },
+    POST: {
+      "/repos/{owner}/{repo}/branch_protections": (init: {
+        body: Record<string, unknown>;
+      }) => init.body,
+    },
+  });
+
+  const { protectWorkspaceMain } = await import("./workspaces");
+  const result = await protectWorkspaceMain({
+    client,
+    org: "mercy-health",
+    workspace: "clinical-policies",
+  });
+
+  // The read back 404s here, so the answer is "we do not know" — which reads
+  // as "not supported", leaving the older gate on.
+  expect(result.codeownerGate).toBe(false);
+  expect(mockPatch.mock.calls).toHaveLength(0);
+});
+
+test("when the gate sticks, the older one is switched off in the same call", async () => {
+  // Left on, `block_on_official_review_requests` blocks on *manually* requested
+  // reviews, so any member could stall a publish by requesting one. It was only
+  // ever on to make CODEOWNERS block, which the new gate now does properly.
+  let stored: Record<string, unknown> = {};
+
+  const { client, mockPatch } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/branch_protections/{name}": () =>
+        Object.keys(stored).length > 0 ? stored : NOT_FOUND,
+    },
+    POST: {
+      "/repos/{owner}/{repo}/branch_protections": (init: {
+        body: Record<string, unknown>;
+      }) => {
+        stored = init.body;
+        return init.body;
+      },
+    },
+    PATCH: {
+      "/repos/{owner}/{repo}/branch_protections/{name}": (init: {
+        body: Record<string, unknown>;
+      }) => init.body,
+    },
+  });
+
+  const { protectWorkspaceMain } = await import("./workspaces");
+  const result = await protectWorkspaceMain({
+    client,
+    org: "mercy-health",
+    workspace: "clinical-policies",
+  });
+
+  expect(result.codeownerGate).toBe(true);
+  expect(bodyOf(mockPatch.mock.calls[0])).toEqual({
+    block_on_official_review_requests: false,
+  });
+});
+
+test("a Gitea without the field keeps the older gate on", async () => {
+  // The production case. Turning the old gate off here would remove the only
+  // per-folder enforcement a 1.27 binder has and put nothing in its place —
+  // the decorative-reviewer failure ADR 0004 has already caught once.
+  let stored: Record<string, unknown> = {};
+
+  const { client, mockPatch } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/branch_protections/{name}": () =>
+        Object.keys(stored).length > 0 ? stored : NOT_FOUND,
+    },
+    POST: {
+      "/repos/{owner}/{repo}/branch_protections": (init: {
+        body: Record<string, unknown>;
+      }) => {
+        // What 1.27.3 does: takes the write, keeps everything it knows about,
+        // and drops the field it does not.
+        const { block_on_codeowner_reviews: _dropped, ...kept } = init.body;
+        stored = kept;
+        return kept;
+      },
+    },
+    PATCH: {
+      "/repos/{owner}/{repo}/branch_protections/{name}": (init: {
+        body: Record<string, unknown>;
+      }) => init.body,
+    },
+  });
+
+  const { protectWorkspaceMain } = await import("./workspaces");
+  const result = await protectWorkspaceMain({
+    client,
+    org: "mercy-health",
+    workspace: "clinical-policies",
+  });
+
+  expect(result.codeownerGate).toBe(false);
+  expect(mockPatch.mock.calls).toHaveLength(0);
+  expect(stored.block_on_official_review_requests).toBe(true);
 });
 
 test("protectWorkspaceMain updates an existing rule instead of failing on it", async () => {
