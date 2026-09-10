@@ -315,9 +315,21 @@ Two departures from the mockup, both deliberate:
   mockup's queue ends at `Approved` with nothing to click, which drops the single
   most important action in the product.
 
-The API needs an aggregate endpoint; today `GET /api/app/documents` is per-repo.
-Whatever it returns must obey the ADR 0004 rule — Gitea is the source, any index
-is rebuildable and never gates a publish.
+**Correction, made while building this (PR #443).** This section originally
+said the API needed a new aggregate endpoint. It does not.
+`GET /api/app/home/changes` already returns every open change on every binder
+the reader is involved in — Home filters that payload down to two sections
+rather than the server sending a narrower one. The queue reads the same
+endpoint, so it needs no new API and cannot disagree with Home about the state
+of a change.
+
+The real limit is the scoping, not the shape: "involved in" means the reader has
+a change of their own in the binder, is a requested reviewer on one, or owns the
+document. A binder they can see but have never been part of does not appear.
+That is the right shape for a review queue — the work that concerns you, not a
+feed of the organization — but the day the product wants "every change I have
+permission to see", that needs a server-side search, not a wider filter on the
+client.
 
 ### Verify
 

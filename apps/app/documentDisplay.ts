@@ -535,8 +535,23 @@ function joinNames(reviewers: { login: string; fullName: string }[]): string {
  * has no blocker, where there is simply nothing to report. The caller falls
  * back to the state badge in that case.
  */
+/**
+ * The four fields the standing is decided from.
+ *
+ * Narrower than ChangeRecord on purpose: the same sentence has to be written
+ * for a change arriving from the home payload, which is a Gitea pull request
+ * rather than a document's own record. Two shapes, one vocabulary — the
+ * alternative was a second copy of this that drifts.
+ */
+export interface ChangeStandingInput {
+  open: boolean;
+  approvalCount: number;
+  requiredApprovals: number | null;
+  reviewers: ChangeReviewer[];
+}
+
 export function describeChangeStanding(
-  change: ChangeRecord,
+  change: ChangeStandingInput,
   openThreadAuthors: ReadonlySet<string> = new Set(),
 ): ChangeStanding | null {
   if (!change.open) return null;

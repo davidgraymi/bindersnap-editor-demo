@@ -7152,3 +7152,185 @@ input {
 .read-only-banner__action:hover {
   background: var(--bs-surface-1);
 }
+
+/* ── THE REVIEW QUEUE ─────────────────────────────────────────
+   Every change in flight, across every binder. The counters are
+   the filters: a number you cannot press is a number you have to
+   go somewhere else to act on.
+──────────────────────────────────────────────────────────────── */
+
+.queue-counters {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--brand-space-3);
+  margin: var(--brand-space-5) 0 var(--brand-space-5);
+}
+
+@media (max-width: 900px) {
+  .queue-counters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.queue-counter {
+  display: grid;
+  gap: var(--brand-space-1);
+  padding: var(--brand-space-4);
+  text-align: left;
+  background: var(--bs-surface-1);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+  cursor: pointer;
+  transition:
+    border-color var(--brand-transition-base),
+    background var(--brand-transition-base);
+}
+
+.queue-counter:hover {
+  border-color: var(--bs-coral-border);
+}
+
+.queue-counter:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 2px;
+}
+
+/* The pressed filter is the one the list below is showing, so it takes the
+   page's one coral edge rather than a fill — a filled tile beside four
+   outlined ones reads as a status, not as a selection. */
+.queue-counter--active {
+  border-color: var(--brand-coral);
+  background: var(--bs-coral-glow);
+}
+
+.queue-counter-value {
+  font-size: var(--brand-text-h3);
+  font-weight: var(--brand-weight-semibold);
+  color: var(--bs-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.queue-counter-label {
+  font-size: var(--brand-text-sm);
+  color: var(--bs-text-muted);
+}
+
+.queue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--bs-surface-1);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+  overflow: hidden;
+}
+
+.queue-row + .queue-row {
+  border-top: 1px solid var(--bs-rule-warm);
+}
+
+.queue-row-btn {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--brand-space-4);
+  padding: var(--brand-space-4);
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--brand-transition-base);
+}
+
+.queue-row-btn:hover,
+.queue-row-btn:focus-visible {
+  background: var(--bs-surface-2);
+  outline: none;
+}
+
+.queue-row-main {
+  display: grid;
+  gap: var(--brand-space-1);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.queue-row-title {
+  font-size: var(--brand-text-body);
+  font-weight: var(--brand-weight-medium);
+  color: var(--bs-text-primary);
+  overflow-wrap: anywhere;
+}
+
+/* Binder, document, who sent it, when it last moved. The four facts that tell
+   one change from another when they are stacked fifty deep. */
+.queue-row-meta {
+  font-size: var(--brand-text-sm);
+  color: var(--bs-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.queue-row-standing {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-3);
+  flex: none;
+}
+
+@media (max-width: 720px) {
+  .queue-row-btn {
+    flex-direction: column;
+    gap: var(--brand-space-2);
+  }
+
+  .queue-row-standing {
+    flex-wrap: wrap;
+  }
+}
+
+/* Cuts across the status rather than replacing it: a change can be blocked
+   *and* want something from you, and neither fact is safe to hide. */
+.queue-row-flag {
+  font-size: var(--brand-text-xs);
+  font-weight: var(--brand-weight-medium);
+  color: var(--bs-coral-text);
+  background: var(--bs-coral-dim);
+  border: 1px solid var(--bs-coral-border-soft);
+  border-radius: var(--brand-radius-full);
+  padding: 2px var(--brand-space-2-5);
+  white-space: nowrap;
+}
+
+.queue-row-status {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  font-size: var(--brand-text-xs);
+  border: 1px solid;
+  border-radius: var(--brand-radius-full);
+  padding: 3px var(--brand-space-3);
+  white-space: nowrap;
+}
+
+.queue-row-progress {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+.queue-row-status--in_review {
+  color: var(--bs-text-secondary);
+  background: var(--bs-surface-2);
+  border-color: var(--bs-rule);
+}
+
+.queue-row-status--ready {
+  color: var(--bs-status-ok-fg);
+  background: var(--bs-status-ok-bg);
+  border-color: var(--bs-status-ok-border);
+}
+
+.queue-row-status--blocked {
+  color: var(--bs-status-danger-fg);
+  background: var(--bs-status-danger-bg);
+  border-color: var(--bs-status-danger-border);
+}
