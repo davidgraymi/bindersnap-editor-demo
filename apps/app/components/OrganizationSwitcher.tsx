@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Building2, ChevronDown } from "lucide-react";
 
 import { fetchOrganizations } from "../api";
+import { defaultOrganization } from "../useOrganizationDisplayName";
 import type { OrganizationSummary } from "../../../packages/api-schema/schemas/organizations";
 
 /**
@@ -81,11 +82,13 @@ export function OrganizationSwitcher({
 
   if (organizations.length === 0) return null;
 
+  // Same rule as the sidebar and the server when the page names no
+  // organization: the oldest, so all three agree about which one is meant.
   const label =
     organizations.find((organization) => organization.name === currentOrg)
       ?.displayName ??
     currentOrg ??
-    organizations[0]?.displayName ??
+    defaultOrganization(organizations)?.displayName ??
     "";
 
   // One organization is not a choice. Show where you are, without pretending

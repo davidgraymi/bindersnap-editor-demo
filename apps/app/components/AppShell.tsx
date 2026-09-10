@@ -201,6 +201,7 @@ export function AppShell({
           {/* Search — the only search there is, on every page */}
           <NavSearch
             currentUsername={currentUsername}
+            org={sidebarOrg}
             initialQuery={initialSearch}
             onNavigate={onNavigate}
             onSearchLibrary={navigateToSearch}
