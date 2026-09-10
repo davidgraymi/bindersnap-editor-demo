@@ -338,3 +338,44 @@ test("the binder's tabs still work once a document is open", async ({
   ).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("Gitea")).toHaveCount(0);
 });
+
+test("the header's one filled button belongs to the tab it sits above", async ({
+  page,
+}) => {
+  // "Add a policy" is the header's only filled button, which makes it the most
+  // emphatic thing on whatever page it sits above. It used to sit above all six
+  // tabs — so on a change request awaiting a decision it competed with Approve,
+  // and won on colour. It belongs to Documents and nowhere else.
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(
+    sessionCookie,
+    `Hierarchy ${randomUUID().slice(0, 6)}`,
+  );
+  const binder = await createBinder(sessionCookie, org, "Clinical Policies");
+
+  await signInBrowser(page, sessionCookie);
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+
+  const addAPolicy = page.getByRole("button", { name: "Add a policy" });
+  await expect(addAPolicy).toBeVisible();
+
+  for (const tab of [
+    "Change requests",
+    "People",
+    "Sign-off rules",
+    "History",
+    "Settings",
+  ] as const) {
+    await page.getByRole("tab", { name: tab }).click();
+    await expect(addAPolicy).toHaveCount(0, { timeout: 30_000 });
+  }
+
+  // Back to Documents and it returns: scoped, not deleted.
+  await page.getByRole("tab", { name: "Documents" }).click();
+  await expect(addAPolicy).toBeVisible({ timeout: 30_000 });
+
+  // Filing a policy is never more than one click away regardless — the top
+  // nav carries it on every page in the app.
+  await expect(page.getByRole("button", { name: "New policy" })).toBeVisible();
+});
