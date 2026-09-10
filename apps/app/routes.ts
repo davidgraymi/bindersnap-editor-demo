@@ -7,6 +7,7 @@ export type AppRoute =
   | { kind: "callback" }
   | { kind: "workspace" }
   | { kind: "documents" }
+  | { kind: "changes" }
   | { kind: "activity" }
   | { kind: "adminSubscriptions" }
   | { kind: "billing" }
@@ -85,6 +86,7 @@ export const RESERVED_FIRST_SEGMENTS = new Set([
   "admin",
   "auth",
   "billing",
+  "changes",
   "docs",
   "documents",
   "login",
@@ -109,6 +111,12 @@ export function getRoute(pathname: string): AppRoute {
 
   if (normalizedPath === "/documents") {
     return { kind: "documents" };
+  }
+
+  // Every change in flight, across every binder. The counterpart to a binder's
+  // own Change requests tab, which can only answer for one binder.
+  if (normalizedPath === "/changes") {
+    return { kind: "changes" };
   }
 
   // The redesign folded the inbox into Home — every change request that was
@@ -170,6 +178,8 @@ export function routeToPath(route: AppRoute): string {
       return "/auth/callback";
     case "documents":
       return "/documents";
+    case "changes":
+      return "/changes";
     case "activity":
       return "/activity";
     case "adminSubscriptions":
@@ -201,6 +211,7 @@ export function isProtectedAppRoute(route: AppRoute): boolean {
   return (
     route.kind === "workspace" ||
     route.kind === "documents" ||
+    route.kind === "changes" ||
     route.kind === "activity" ||
     route.kind === "adminSubscriptions" ||
     // An organization's own pages need a session to resolve at all: which
