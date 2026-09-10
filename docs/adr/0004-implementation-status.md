@@ -1041,11 +1041,13 @@ a change that is about none — a sign-off rules change, for instance.
 
 The last item on ADR 0004's list, and the answer is not to build it yet.
 
-> **Superseded 2026-09-09 by [ADR 0005](0005-document-identity-titles-and-the-version-index.md).**
-> The measurement below still stands and the reasoning was right for what it knew.
-> ADR 0005 puts a document's title in a committed sidecar, so a listing needs one
-> sidecar read per document — a cost this measurement did not have. The index is
-> required now, on the same three conditions.
+> **Reopened 2026-09-09, and closed again 2026-09-10. The answer is still not to
+> build it.** The first version of [ADR 0005](0005-document-identity-and-version-tags.md)
+> put a document's title in a committed sidecar, which would have cost one read
+> per document on a listing — a cost this measurement did not have — and the
+> index followed from that. The rewritten ADR 0005 leaves the title in the
+> filename, so the cost never appears and the measurement below stands unchanged.
+> The three conditions still bind if it is ever built.
 
 The ADR wanted it because tags are repo-global: "a 200-policy binder with twenty
 versions each is four thousand tags, eighty paginated calls, on a page load."
@@ -1254,8 +1256,9 @@ In rough dependency order.
 3. ~~**The `document_versions` derived index.**~~ **Measured and deliberately
    not built** — see "The `document_versions` index: measured, and not built"
    above. The investigation turned up three real version-reading bugs instead,
-   which are fixed. **Reopened 2026-09-09 by ADR 0005**, which
-   gives it a reason the measurement did not have.
+   which are fixed. Reopened 2026-09-09 by ADR 0005 and closed again on
+   2026-09-10 when that ADR was rewritten: the sidecar that gave it a reason is
+   gone, so the measurement stands.
 4. ~~**Per-workspace settings and `settings_events`.**~~ **Done 2026-09-08** —
    see "The config branch is retired, and the policy is stamped on the event"
    above.

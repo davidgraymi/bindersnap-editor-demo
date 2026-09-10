@@ -17,9 +17,10 @@ inside of changes. Restores the container half of TECHNICAL_VISION Q6 (one repo
 per workspace) and drops its file-format half (documents need not be `.json`).
 Amends the datastore rule in `AGENTS.md`.
 
-**Amended by [ADR 0005](0005-document-identity-titles-and-the-version-index.md)**
-in two places and nothing else: a document's identity is a UID rather than its
-path, and the `document_versions` index is required rather than deferred.
+**Amended by [ADR 0005](0005-document-identity-and-version-tags.md)** in one
+place and nothing else: a document's identity is a UID carried in its filename
+rather than its path, so a rename cannot restart a policy's version numbering.
+The `document_versions` index stays deferred.
 
 ## Why This Exists
 
