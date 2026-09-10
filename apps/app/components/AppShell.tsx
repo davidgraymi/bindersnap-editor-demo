@@ -14,6 +14,7 @@ import { BindersnapLogoMark } from "./BindersnapLogoMark";
 import { DocumentsPage } from "./DocumentsPage";
 import { ReviewQueuePage } from "./ReviewQueuePage";
 import { AppSidebar } from "./AppSidebar";
+import { AppBottomNav } from "./AppBottomNav";
 import { useDefaultOrganization } from "../useOrganizationDisplayName";
 import { NewPolicyModal } from "./NewPolicyModal";
 import { HomePage } from "./HomePage";
@@ -453,6 +454,10 @@ export function AppShell({
           </main>
         </div>
       </div>
+
+      {/* Below 768px the sidebar is not rendered and this is the navigation.
+          Fixed to the bottom, so it sits outside the scrolling body. */}
+      <AppBottomNav route={route} org={sidebarOrg} onNavigate={onNavigate} />
 
       {showCreateDocumentModal ? (
         <NewPolicyModal

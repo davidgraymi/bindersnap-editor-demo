@@ -456,12 +456,29 @@ closed.
   pressing it opened a change request that changed nothing. Adding the first rule
   now carries the weight until there is something to send.
 
-- **Mobile.** At 390px the build shows a raw slug in the top bar, no search, no
-  notifications, no account control, and no bottom navigation. The mockups have
-  no mobile frame at all. For a product whose central act is a named person
-  signing off, approving from a phone is not an edge case. Worth a frame before
-  the desktop IA locks, because sidebar and bottom-tab navigation want different
-  architectures.
+- **Mobile — done (PR #450).** Two of the four complaints had already been fixed
+  in passing: the raw slug went with the display-name work, and the top bar's
+  links gained Change requests. The other two were worse than the review knew.
+
+  **Search, notifications and the account control were not merely missing —
+  they were unreachable.** `.app-topnav` has `overflow: hidden`, and three nav
+  links plus the organization switcher consumed the row, so everything after
+  them was clipped off the right edge. A person on a phone could not search.
+
+  **And two binder tabs were unreachable.** The six tabs wrapped: "Sign-off
+  rules" folded onto three lines and History and Settings fell off the bottom
+  with nothing to scroll to. That is a functional bug, not polish — a third of
+  a binder was inaccessible on a phone.
+
+  There is now a bottom bar below 768px — Home, Changes, Policies, Binders —
+  which is the half of the screen a thumb reaches and gives the top bar back to
+  search and the account. The tab strip scrolls sideways instead of wrapping.
+
+  The review's own framing is why the sidebar was not simply revealed here:
+  sidebar and bottom-tab navigation want different architectures. The bottom bar
+  carries the four destinations somebody navigates _between_; everything under
+  Manage and Settings stays one level in, on the pages that own it.
+
 - **Discussions as a first-class object — decided, and deferred.** It is a new
   object. The threads on a change request resolve, and their resolution is
   evidence that gates publishing; a discussion is a question that never resolves,

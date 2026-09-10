@@ -1271,6 +1271,35 @@ input {
   padding: 0;
 }
 
+/* On a phone the six tabs do not fit, and wrapping them broke the binder:
+   "Change requests" folded onto two lines, "Sign-off rules" onto three, and
+   History and Settings fell off the bottom edge with nothing to scroll to.
+   Two tabs were simply unreachable.
+
+   They scroll sideways instead. `flex-wrap: nowrap` is the fix; the rest keeps
+   the row from looking cut off — a little end padding so the last tab clears
+   the edge, and momentum scrolling so it behaves like every other horizontal
+   strip on the platform. */
+@media (max-width: 768px) {
+  .doc-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    gap: var(--brand-space-5);
+    padding-right: var(--brand-space-5);
+  }
+
+  .doc-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .doc-tab {
+    flex: none;
+    white-space: nowrap;
+  }
+}
+
 .doc-tab {
   appearance: none;
   display: inline-flex;
@@ -4736,9 +4765,86 @@ input {
    navigation there is — which is why they stay in the markup. The organization
    switcher beside them is not part of this: it is a control, not a link, and it
    is wanted at every width. */
-@media (min-width: 769px) {
-  .app-topnav-nav {
-    display: none;
+/* Above 768px the sidebar carries these destinations; below it the bottom bar
+   does. The top bar's own links are not the navigation at either width any
+   more — they were only ever there because there was nowhere else to put them,
+   and on a phone they pushed search and the account control off the edge of a
+   bar with overflow:hidden. */
+.app-topnav-nav {
+  display: none;
+}
+
+/* ── BOTTOM NAVIGATION ───────────────────────────────────────
+   Phones only. The half of the screen a thumb reaches, and it
+   gives the top bar back to search and the account.
+──────────────────────────────────────────────────────────────── */
+
+.app-bottom-nav {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .app-bottom-nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: var(--brand-z-nav);
+    display: flex;
+    background: var(--bs-nav-bg);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--bs-rule);
+    /* Clear of the home indicator on a phone that has one. */
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .app-bottom-nav-item {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    /* 56px of target before the safe-area padding — comfortably past the 44px
+       a finger needs. */
+    height: 56px;
+    padding: 0 var(--brand-space-1);
+    border: none;
+    background: transparent;
+    color: var(--bs-text-muted);
+    cursor: pointer;
+  }
+
+  .app-bottom-nav-item svg {
+    opacity: 0.7;
+  }
+
+  .app-bottom-nav-item--active {
+    color: var(--bs-coral-text);
+  }
+
+  .app-bottom-nav-item--active svg {
+    opacity: 1;
+  }
+
+  .app-bottom-nav-label {
+    font-size: var(--brand-text-ui-xs);
+    font-weight: var(--brand-weight-medium);
+    line-height: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  /* The bar floats over the page, so the last row of content needs somewhere
+     to end that is not underneath it. */
+  .docw-page,
+  .app-page-shell {
+    padding-bottom: calc(
+      72px + env(safe-area-inset-bottom, 0px) + var(--brand-space-8)
+    );
   }
 }
 
