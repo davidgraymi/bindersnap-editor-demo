@@ -109,18 +109,24 @@ test("exactly one navigation exists at any width", async ({ page }) => {
   await page.goto(APP_BASE_URL);
 
   const sidebar = page.locator(".app-sidebar");
-  const topnavLinks = page.locator(".app-topnav-nav");
+  const bottomNav = page.locator(".app-bottom-nav");
   // Which organization you are looking at is a control, not a link, and is
-  // wanted at both widths — it is why the switcher sits outside that nav.
+  // wanted at both widths — it is why the switcher sits outside the nav.
   const switcher = page.locator(".app-topnav-org");
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await expect(sidebar).toBeVisible();
-  await expect(topnavLinks).toBeHidden();
+  await expect(bottomNav).toBeHidden();
   await expect(switcher).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(sidebar).toBeHidden();
-  await expect(topnavLinks).toBeVisible();
+  await expect(bottomNav).toBeVisible();
   await expect(switcher).toBeVisible();
+
+  // The top bar's own links are the navigation at neither width now. They were
+  // only ever there because there was nowhere else to put them, and on a phone
+  // they pushed search and the account control off the edge of a bar with
+  // overflow:hidden.
+  await expect(page.locator(".app-topnav-nav")).toBeHidden();
 });
