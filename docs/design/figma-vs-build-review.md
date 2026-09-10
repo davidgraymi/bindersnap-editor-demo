@@ -377,6 +377,24 @@ model depends on it being one.
 Sequencing note: build this **after** the queue, not before. The sidebar mainly
 exists to point at global destinations, and until Task 5 lands there are only two.
 
+**What shipped (PR #444), and two departures.**
+
+_Discussions is not on it._ This section's own caveat said to decide first
+whether it is a genuinely new object or a view over the review threads that
+already exist on changes. That is still undecided, so the entry would have been
+a link to a page we have not designed. It goes on when the question is answered.
+
+_The top bar keeps its links._ `.app-sidebar` is `display: none` below 768px, so
+moving navigation into it wholesale would have left small screens with none at
+all. The top bar's links are now hidden **above** 768px instead, where the
+sidebar carries the same destinations — exactly one navigation exists at any
+width, and neither is duplicated. The organization switcher moved out of that
+nav into its own box, because it is a control rather than a link and is wanted
+at every width. There is an integration test for the breakpoint.
+
+Mobile navigation is still thin. That is the gap below, not something this
+closed.
+
 ### Verify
 
 - Every existing route still resolves; `routes.test.ts` passes unchanged.

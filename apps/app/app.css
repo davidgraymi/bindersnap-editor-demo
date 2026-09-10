@@ -4727,6 +4727,34 @@ input {
   flex-shrink: 0;
 }
 
+/* The sidebar is the map above 768px and carries these same destinations plus
+   the ones the top bar never had, so the links come out rather than being said
+   twice. Below that the sidebar is display:none and these are the only
+   navigation there is — which is why they stay in the markup. The organization
+   switcher beside them is not part of this: it is a control, not a link, and it
+   is wanted at every width. */
+@media (min-width: 769px) {
+  .app-topnav-nav {
+    display: none;
+  }
+}
+
+/* The switcher sat inside .app-topnav-nav until the sidebar arrived, so hiding
+   that nav took it with it. It has its own box now: same place on screen, at
+   every width. */
+.app-topnav-org {
+  display: flex;
+  align-items: center;
+  margin-left: var(--brand-space-6);
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .app-topnav-org {
+    margin-left: var(--brand-space-3);
+  }
+}
+
 .app-workspace-pill {
   display: flex;
   align-items: center;

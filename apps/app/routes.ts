@@ -12,8 +12,14 @@ export type AppRoute =
   | { kind: "adminSubscriptions" }
   | { kind: "billing" }
   | { kind: "createOrganization" }
-  /** An organization: what it owns, and who is in it. `/{org}`. */
-  | { kind: "organization"; org: string }
+  /**
+   * An organization: what it owns, and who is in it. `/{org}`.
+   *
+   * `tab` exists so a link from outside can land on People rather than on the
+   * binder list. The page manages the query itself once it is on screen, the
+   * same way a binder's tabs do.
+   */
+  | { kind: "organization"; org: string; tab?: OrganizationTab }
   /** A binder's documents: `/{org}/{binder}`. */
   | {
       kind: "binder";
@@ -38,6 +44,8 @@ export type AppRoute =
       documentPath: string;
     };
 export type DocumentChangeView = "discussion" | "preview" | "compare";
+/** The organization's own tabs. Binders is the one it opens on. */
+export type OrganizationTab = "binders" | "people";
 
 /**
  * The two tabs that became one.
@@ -189,7 +197,9 @@ export function routeToPath(route: AppRoute): string {
     case "createOrganization":
       return "/organizations/new";
     case "organization":
-      return `/${route.org}`;
+      return route.tab && route.tab !== "binders"
+        ? `/${route.org}?tab=${route.tab}`
+        : `/${route.org}`;
     case "binder":
       return buildBinderUrl({
         org: route.org,

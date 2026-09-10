@@ -13,6 +13,8 @@ import { AppIcon } from "./AppIcon";
 import { BindersnapLogoMark } from "./BindersnapLogoMark";
 import { DocumentsPage } from "./DocumentsPage";
 import { ReviewQueuePage } from "./ReviewQueuePage";
+import { AppSidebar } from "./AppSidebar";
+import { useDefaultOrganization } from "../useOrganizationDisplayName";
 import { NewPolicyModal } from "./NewPolicyModal";
 import { HomePage } from "./HomePage";
 import { NavSearch } from "./NavSearch";
@@ -87,6 +89,18 @@ export function AppShell({
   const isWorkspace = route.kind === "workspace";
   const isDocuments = route.kind === "documents";
   const isChanges = route.kind === "changes";
+
+  // The organization the sidebar's org-scoped entries point at: the one on
+  // screen, or the one the switcher settled on. Null on a page that belongs to
+  // no organization and before the switcher has answered — those entries go
+  // inert rather than guessing.
+  const defaultOrg = useDefaultOrganization();
+  const sidebarOrg =
+    route.kind === "organization" ||
+    route.kind === "binder" ||
+    route.kind === "binderDocument"
+      ? route.org
+      : defaultOrg;
   const isAdminSubscriptions = route.kind === "adminSubscriptions";
 
   const displayName = user?.fullName ?? user?.username ?? "";
@@ -133,7 +147,7 @@ export function AppShell({
           <span className="app-topnav-wordmark">Bindersnap</span>
         </button>
 
-        {/* Two places to be. Changes are not one of them — they live on Home. */}
+        {/* Small screens only — the sidebar carries these above 768px. */}
         <nav className="app-topnav-nav" aria-label="Workspace">
           <button
             type="button"
@@ -159,10 +173,16 @@ export function AppShell({
           >
             Documents
           </button>
+        </nav>
 
-          {/* Which organization you are looking at, and how to look at
-              another. Absent for somebody in one, because a switcher offering
-              a single choice is furniture. */}
+        {/* Outside the nav above, and deliberately so: that nav is hidden once
+            the sidebar takes over the same destinations, and this is a control
+            rather than a link — which organization you are looking at is worth
+            answering at every width.
+
+            Absent for somebody in one organization, because a switcher
+            offering a single choice is furniture. */}
+        <div className="app-topnav-org">
           <OrganizationSwitcher
             currentOrg={
               route.kind === "organization" ||
@@ -173,7 +193,7 @@ export function AppShell({
             }
             onSelect={(org) => onNavigate({ kind: "organization", org })}
           />
-        </nav>
+        </div>
 
         <div className="app-topnav-spacer" />
 
@@ -326,6 +346,16 @@ export function AppShell({
 
       {/* ── BODY ── */}
       <div className="app-body-wrap">
+        {/* The map of the product. Hidden below 768px, where the top bar's own
+            links take over — see AppSidebar. */}
+        <AppSidebar
+          route={route}
+          org={sidebarOrg}
+          currentUsername={currentUsername}
+          currentUserFullName={user?.fullName ?? ""}
+          onNavigate={onNavigate}
+        />
+
         {/* Main content area */}
         <div className="app-main-area">
           <main

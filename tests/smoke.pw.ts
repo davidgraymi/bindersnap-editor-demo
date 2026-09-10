@@ -252,8 +252,10 @@ test.describe("app shell routes", () => {
         `.app-topnav-avatar[aria-label="User: ${GITEA_ADMIN_USER}"]`,
       ),
     ).toBeVisible();
+    // The shell's navigation. At this viewport that is the sidebar — the top
+    // bar's own links are for widths where the sidebar is not rendered.
     await expect(
-      page.locator(".app-topnav-link", { hasText: "Documents" }),
+      page.locator(".app-sidebar").getByRole("button", { name: "Documents" }),
     ).toBeVisible();
   });
 
@@ -267,7 +269,7 @@ test.describe("app shell routes", () => {
     await expect(page).toHaveURL(new RegExp(`/${OWNER}/${REPO}$`));
     await expect(page.locator(".docw-page")).toBeVisible();
     await expect(
-      page.locator(".app-topnav-link", { hasText: "Documents" }),
+      page.locator(".app-sidebar").getByRole("button", { name: "Documents" }),
     ).toBeVisible();
   });
 });
