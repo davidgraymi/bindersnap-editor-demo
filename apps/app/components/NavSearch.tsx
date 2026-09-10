@@ -1,22 +1,46 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CornerDownLeft, Search } from "lucide-react";
 
-import { searchDocuments } from "../api";
+import {
+  fetchOrganizationBinders,
+  fetchOrganizationPeople,
+  searchDocuments,
+} from "../api";
 import type { QuickFindResult } from "../quickFind";
 import {
+  buildBinderResult,
+  buildPersonResult,
   buildQuickFindResults,
   describeQuickFindEmptyState,
   isQuickFindQuery,
+  matchesQuickFindQuery,
   moveQuickFindHighlight,
+  orderQuickFindResults,
   QUICK_FIND_DEBOUNCE_MS,
+  QUICK_FIND_GROUP_LABELS,
   QUICK_FIND_PAGE_SIZE,
 } from "../quickFind";
 import type { AppRoute } from "../routes";
 
+/**
+ * How many binders and how many people one search may list.
+ *
+ * Documents page; these do not. They are short lists filtered in the browser,
+ * and a reader who typed two letters should not get forty names between them
+ * and the policy they were after.
+ */
+const QUICK_FIND_KIND_LIMIT = 4;
+
 interface NavSearchProps {
   /** Whose workspace this is, so a row can say "You own" instead of a name. */
   currentUsername: string;
+  /**
+   * The organization whose binders and people are searchable, or null before
+   * one is known. Null narrows the panel back to documents rather than
+   * failing — a search that returns policies is still useful.
+   */
+  org: string | null;
   /** The query the address bar arrived with, if the reader linked to one. */
   initialQuery: string;
   /** Open a document — the whole point of the overlay. */
@@ -45,6 +69,7 @@ interface NavSearchProps {
  */
 export function NavSearch({
   currentUsername,
+  org,
   initialQuery,
   onNavigate,
   onSearchLibrary,
@@ -126,10 +151,65 @@ export function NavSearch({
 
     const timer = setTimeout(() => {
       const asked = query;
-      void searchDocuments(asked, QUICK_FIND_PAGE_SIZE)
-        .then((payload) => {
+
+      // Documents come from the server, which knows how to search them.
+      // Binders and people are two short lists the reader already has access
+      // to, so they are fetched whole and matched here — a search endpoint for
+      // a list of four binders would be a round trip to filter an array.
+      // Neither can fail the panel: a document search that works is still worth
+      // showing when the org lookup does not.
+      void Promise.all([
+        searchDocuments(asked, QUICK_FIND_PAGE_SIZE),
+        org
+          ? fetchOrganizationBinders(org).catch(() => [])
+          : Promise.resolve([]),
+        org
+          ? fetchOrganizationPeople(org).catch(() => null)
+          : Promise.resolve(null),
+      ])
+        .then(([payload, binders, peoplePayload]) => {
           if (queryRef.current !== asked) return;
-          setResults(buildQuickFindResults(payload.documents));
+
+          const binderRows = org
+            ? binders
+                .filter((binder) =>
+                  matchesQuickFindQuery(
+                    `${binder.name} ${binder.description ?? ""}`,
+                    asked,
+                  ),
+                )
+                .slice(0, QUICK_FIND_KIND_LIMIT)
+                .map((binder) => buildBinderResult(org, binder))
+            : [];
+
+          const personRows = org
+            ? (peoplePayload?.people ?? [])
+                .filter((person) =>
+                  matchesQuickFindQuery(
+                    `${person.login} ${person.fullName}`,
+                    asked,
+                  ),
+                )
+                .slice(0, QUICK_FIND_KIND_LIMIT)
+                .map((person) =>
+                  buildPersonResult(org, {
+                    username: person.login,
+                    fullName: person.fullName,
+                    // What they are in this organization. An owner is the one
+                    // fact worth saying on a one-line result; everything else
+                    // is a question the People tab answers.
+                    role: person.isOwner ? "Owner" : undefined,
+                  }),
+                )
+            : [];
+
+          setResults(
+            orderQuickFindResults([
+              ...buildQuickFindResults(payload.documents),
+              ...binderRows,
+              ...personRows,
+            ]),
+          );
           setHasMore(payload.hasMore);
           setHighlight(-1);
         })
@@ -146,17 +226,41 @@ export function NavSearch({
     }, QUICK_FIND_DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
-  }, [open, query, currentUsername]);
+  }, [open, query, currentUsername, org]);
 
   const openResult = useCallback(
     (result: QuickFindResult) => {
       closeOverlay();
-      onNavigate({
-        kind: "binderDocument",
-        org: result.organization,
-        binder: result.binder,
-        documentPath: result.slugPath,
-      });
+
+      if (result.kind === "binder" && result.binder) {
+        onNavigate({
+          kind: "binder",
+          org: result.organization,
+          binder: result.binder,
+        });
+        return;
+      }
+
+      if (result.kind === "person") {
+        // There is no page for one person. The organization's People tab is
+        // where every question about somebody is answered, so that is where
+        // picking them goes.
+        onNavigate({
+          kind: "organization",
+          org: result.organization,
+          tab: "people",
+        });
+        return;
+      }
+
+      if (result.binder && result.slugPath) {
+        onNavigate({
+          kind: "binderDocument",
+          org: result.organization,
+          binder: result.binder,
+          documentPath: result.slugPath,
+        });
+      }
     },
     [closeOverlay, onNavigate],
   );
@@ -248,7 +352,7 @@ export function NavSearch({
         className="quick-find-dialog"
         role="dialog"
         aria-modal="true"
-        aria-label="Search documents"
+        aria-label="Search binders, policies, or people"
         ref={dialogRef}
         onKeyDown={handleDialogKeyDown}
       >
@@ -267,8 +371,8 @@ export function NavSearch({
             ref={inputRef}
             className="quick-find-input"
             type="text"
-            placeholder="Search documents"
-            aria-label="Search documents"
+            placeholder="Search binders, policies, or people"
+            aria-label="Search binders, policies, or people"
             role="combobox"
             aria-expanded={searching}
             aria-controls="quick-find-results"
@@ -292,42 +396,53 @@ export function NavSearch({
               className="quick-find-results"
               id="quick-find-results"
               role="listbox"
-              aria-label="Matching documents"
+              aria-label="Matches"
             >
               {results.map((result, index) => (
-                <li
-                  key={result.key}
-                  id={`quick-find-result-${index}`}
-                  className={`quick-find-result${
-                    index === highlight ? " quick-find-result--active" : ""
-                  }`}
-                  role="option"
-                  aria-selected={index === highlight}
-                  onMouseEnter={() => setHighlight(index)}
-                  onMouseDown={(event) => {
-                    // Mouse-down, not click: the input blurs first otherwise
-                    // and the row is gone before the click lands.
-                    event.preventDefault();
-                    openResult(result);
-                  }}
-                >
-                  <span className="quick-find-result-copy">
-                    <span className="quick-find-result-name">
-                      {result.name}
+                <Fragment key={result.key}>
+                  {/* A heading above the first row of each kind. Three kinds in
+                      one flat list is a jumble; a heading costs one line and
+                      says which question each run of rows answers. Presentational
+                      so the arrow keys still see a flat list of options and the
+                      indices stay in step with `results`. */}
+                  {index === 0 || results[index - 1]!.kind !== result.kind ? (
+                    <li className="quick-find-group" role="presentation">
+                      {QUICK_FIND_GROUP_LABELS[result.kind]}
+                    </li>
+                  ) : null}
+                  <li
+                    id={`quick-find-result-${index}`}
+                    className={`quick-find-result${
+                      index === highlight ? " quick-find-result--active" : ""
+                    }`}
+                    role="option"
+                    aria-selected={index === highlight}
+                    onMouseEnter={() => setHighlight(index)}
+                    onMouseDown={(event) => {
+                      // Mouse-down, not click: the input blurs first otherwise
+                      // and the row is gone before the click lands.
+                      event.preventDefault();
+                      openResult(result);
+                    }}
+                  >
+                    <span className="quick-find-result-copy">
+                      <span className="quick-find-result-name">
+                        {result.name}
+                      </span>
+                      <span className="quick-find-result-meta">
+                        {result.meta}
+                      </span>
                     </span>
-                    <span className="quick-find-result-meta">
-                      {result.meta}
-                    </span>
-                  </span>
-                  {index === highlight && (
-                    <CornerDownLeft
-                      className="quick-find-result-enter"
-                      aria-hidden="true"
-                      size={14}
-                      strokeWidth={1.5}
-                    />
-                  )}
-                </li>
+                    {index === highlight && (
+                      <CornerDownLeft
+                        className="quick-find-result-enter"
+                        aria-hidden="true"
+                        size={14}
+                        strokeWidth={1.5}
+                      />
+                    )}
+                  </li>
+                </Fragment>
               ))}
             </ul>
           )}
@@ -391,7 +506,7 @@ export function NavSearch({
         onClick={() => setOpen(true)}
         // Named here rather than by its own text: on a phone the label and the
         // shortcut hint are gone and only the icon is left.
-        aria-label="Search documents"
+        aria-label="Search binders, policies, or people"
         aria-haspopup="dialog"
         aria-expanded={open}
       >
@@ -402,10 +517,14 @@ export function NavSearch({
           strokeWidth={1.5}
         />
         <span className="app-nav-search-trigger-label">
-          {query.trim() || "Search documents"}
+          {query.trim() || "Search binders, policies, or people"}
         </span>
+        {/* ⌘K, not "/". Both open it and always have — but the hint is the half
+            a reader learns from, and "/" is a reflex from vim and GitHub while
+            ⌘K is the one this audience has already met in Notion, Slack and
+            Linear. */}
         <span className="app-nav-search-kbd" aria-hidden="true">
-          /
+          ⌘K
         </span>
       </button>
 

@@ -165,6 +165,10 @@ async function render(element: ReactElement) {
 function props(overrides: Record<string, unknown> = {}) {
   return {
     currentUsername: "bob",
+    // Null by default: these tests are about the panel's behaviour, and a
+    // named organization would make every one of them fetch binders and
+    // people as well as documents.
+    org: null as string | null,
     initialQuery: "",
     onNavigate: (_route: AppRoute) => {},
     onSearchLibrary: (_query: string) => {},
@@ -327,7 +331,7 @@ test("typing lists matching documents without a submit", async () => {
 
   expect(rows()).toHaveLength(2);
   expect(overlay()!.textContent).toContain("Vendor Agreement");
-  expect(overlay()!.textContent).toContain("clinical · nursing");
+  expect(overlay()!.textContent).toContain("Clinical · nursing");
   expect(searchCalls).toEqual([{ query: "ven", limit: 8 }]);
 
   await view.unmount();
@@ -454,7 +458,7 @@ test("nothing matching says so", async () => {
 
   await type(view.container, "zzz");
 
-  expect(overlay()!.textContent).toContain("No documents match “zzz”");
+  expect(overlay()!.textContent).toContain("Nothing matches “zzz”");
 
   await view.unmount();
 });
