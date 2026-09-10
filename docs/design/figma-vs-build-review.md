@@ -359,7 +359,7 @@ Adopt the mockups' sidebar, including its grouping, which is doing real teaching
 Home
 Binders
 Change requests
-Discussions          (see caveat below)
+Discussions          (decided, deferred — see below)
 ── MANAGE
 People & access
 Activity
@@ -379,10 +379,11 @@ exists to point at global destinations, and until Task 5 lands there are only tw
 
 **What shipped (PR #444), and two departures.**
 
-_Discussions is not on it._ This section's own caveat said to decide first
-whether it is a genuinely new object or a view over the review threads that
-already exist on changes. That is still undecided, so the entry would have been
-a link to a page we have not designed. It goes on when the question is answered.
+_Discussions is not on it._ The question this section said to answer first has
+since been answered — a discussion **is** a new object, not a view over review
+threads — and the answer is that it is not MVP. Tracked in
+[#445](https://github.com/davidgraymi/bindersnap-editor-demo/issues/445). Adding
+the sidebar entry is a few lines once there is a page to point at.
 
 _The top bar keeps its links._ `.app-sidebar` is `display: none` below 768px, so
 moving navigation into it wholesale would have left small screens with none at
@@ -427,10 +428,16 @@ closed.
   signing off, approving from a phone is not an edge case. Worth a frame before
   the desktop IA locks, because sidebar and bottom-tab navigation want different
   architectures.
-- **Discussions as a first-class object.** The mockups promote it to a top-level
-  destination. Before building it, decide whether it is a genuinely new object or
-  a view over the review threads that already exist on changes. The mockup does
-  not say, and the answer changes the data model.
+- **Discussions as a first-class object — decided, and deferred.** It is a new
+  object. The threads on a change request resolve, and their resolution is
+  evidence that gates publishing; a discussion is a question that never resolves,
+  gates nothing, and outlives the change it may not even be about. Modelling
+  either as the other would mean giving discussions a resolution they do not have
+  or taking it off the threads that need it. **Not MVP** — the decision and the
+  open questions are recorded in
+  [#445](https://github.com/davidgraymi/bindersnap-editor-demo/issues/445).
+  One caution for whoever builds it: the mockup's `03 - Discussions` frame draws
+  a **Resolved** tab, which contradicts this and should not be built as drawn.
 
 ---
 
