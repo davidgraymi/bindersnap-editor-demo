@@ -26,6 +26,7 @@ import {
   buildDocumentFilePath,
   buildDocumentSlugPath,
 } from "../../packages/utils/documentPath";
+import { mintDocumentUid } from "../../packages/utils/documentUid";
 import {
   findWorkspaceRepo,
   listOrganizationWorkspaces,
@@ -37,6 +38,8 @@ import {
   createDocumentVersionTag,
   findPendingDocumentBranch,
   findWorkspaceDocument,
+  groupVersionsByDocument,
+  listAllTags,
   listChangedDocuments,
   listDocumentVersions,
   listVersionsByDocument,
@@ -3795,6 +3798,33 @@ async function handlePublishWorkspaceChange(
       );
     }
 
+    // **A content file with no identity segment is refused, loudly** (ADR
+    // 0005). Every document Bindersnap writes carries a UID in its filename,
+    // and that UID is what its version tags are named after. A file without one
+    // cannot be versioned: publishing it would merge the change and then
+    // silently write no tag, leaving somebody waiting for a version that never
+    // arrives — and the next publish would do the same thing again.
+    //
+    // Refusing before the merge is the point. ADR 0004 names degrading quietly
+    // as the failure to avoid twice over: the old config parser falling back to
+    // the permissive policy, and Gitea's CODEOWNERS parser dropping a line it
+    // cannot compile. This is the same shape and gets the same answer.
+    const unidentified = documents.filter((document) => document.uid === null);
+    if (unidentified.length > 0) {
+      return json(
+        409,
+        {
+          error:
+            unidentified.length === 1
+              ? `"${unidentified[0]!.path}" was not added through Bindersnap, so it has no version history to add to. Remove it from this change, or add it as a document.`
+              : `${unidentified.length} files in this change were not added through Bindersnap, so they have no version history to add to: ${unidentified
+                  .map((document) => `"${document.path}"`)
+                  .join(", ")}.`,
+        },
+        baseHeaders,
+      );
+    }
+
     const reviewSettings = await readBinderSettings(workspace);
     // Read here rather than beside the tag write, so a failure to read the
     // protection cannot happen after the merge has already landed.
@@ -3834,7 +3864,7 @@ async function handlePublishWorkspaceChange(
             client,
             org: owner,
             workspace: workspaceName,
-            slugPath: document.slugPath,
+            uid: document.uid,
           }),
         ),
       })),
@@ -3883,12 +3913,18 @@ async function handlePublishWorkspaceChange(
           client,
           org: owner,
           workspace: workspaceName,
+          // Not null: the guard above refused this change if any file lacked
+          // an identity, which is what makes this assertion safe rather than
+          // hopeful.
+          uid: document.uid!,
           slugPath: document.slugPath,
           version,
           target: "main",
           message: buildVersionStamp({
             ...stampedPolicy,
+            title: document.name,
             slugPath: document.slugPath,
+            path: document.path,
             version,
           }),
         }),
@@ -4010,7 +4046,7 @@ async function handleWorkspaceChangeDetail(
           client,
           org: orgName,
           workspace: workspaceName,
-          slugPath: document.slugPath,
+          uid: document.uid,
         });
         return {
           ...document,
@@ -6484,11 +6520,15 @@ async function readBinderDocuments(params: {
 }): Promise<WorkspaceDocumentListEntry[]> {
   const { client, org, workspace } = params;
 
-  const [documents, openChanges, versionsByDocument] = await Promise.all([
+  const [documents, openChanges, tags] = await Promise.all([
     listWorkspaceDocuments({ client, org, workspace }),
     listPullRequests({ client, owner: org, repo: workspace, state: "open" }),
-    listVersionsByDocument({ client, org, workspace }),
+    listAllTags({ client, owner: org, repo: workspace }),
   ]);
+
+  // Joined here rather than inside a fourth call, so the three above stay
+  // parallel and a binder still costs three reads whatever it holds.
+  const versionsByDocument = groupVersionsByDocument(tags, documents);
 
   const published = documents.map((document) => ({
     ...document,
@@ -6654,7 +6694,7 @@ async function handleWorkspaceDocumentDetail(
         client: auth.client,
         org: orgName,
         workspace: workspaceName,
-        slugPath: resolved.slugPath,
+        uid: resolved.uid,
       }),
       listPullRequests({
         client: auth.client,
@@ -6827,8 +6867,13 @@ async function handleCreateWorkspaceDocument(
     );
   }
 
+  // **The identity, minted once and never again.** It is what this document's
+  // version tags will be named after for the rest of its life, so it is decided
+  // here — at the only moment a document comes into existence — and never
+  // derived from anything a person can change afterwards (ADR 0005).
+  const uid = mintDocumentUid();
   const extension = getFileExtension(file.name);
-  const filePath = buildDocumentFilePath(name, extension, folder);
+  const filePath = buildDocumentFilePath(name, extension, uid, folder);
 
   const organization = await resolveSessionOrganization(client, session);
   if (!organization) {

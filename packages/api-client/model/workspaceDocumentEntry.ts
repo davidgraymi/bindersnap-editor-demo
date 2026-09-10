@@ -9,6 +9,8 @@ export interface WorkspaceDocumentEntry {
   path: string;
   slugPath: string;
   name: string;
+  /** @nullable */
+  uid: string | null;
   folder: string;
   size: number;
   sha: string;

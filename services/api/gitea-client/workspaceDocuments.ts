@@ -1,6 +1,7 @@
 import {
   buildDocumentVersionTag,
-  documentSlugPathFromVersionTag,
+  documentUidFromVersionTag,
+  parseDocumentFilename,
   versionFromTag,
 } from "../../../packages/utils/documentPath";
 
@@ -18,12 +19,27 @@ import { GiteaApiError, unwrap, type GiteaClient } from "./client";
 
 /** A document as the binder holds it: a file at a path. */
 export interface WorkspaceDocumentEntry {
-  /** `clinical/infection-control.pdf` — where the file is. */
+  /** `clinical/infection-control.01J8XZ4K7M….pdf` — where the file is. */
   path: string;
-  /** `clinical/infection-control` — the document's identity. */
+  /**
+   * `clinical/infection-control` — the document's **address**: where it is
+   * filed and what it is called, with neither the identity nor the extension.
+   *
+   * This is what a URL carries and what a person reads. Under ADR 0004 it was
+   * also the identity; ADR 0005 separates them, so this may change over a
+   * document's life and {@link uid} may not.
+   */
   slugPath: string;
   /** The last segment, for a heading: `infection-control`. */
   name: string;
+  /**
+   * The document's identity, or null for a file this product did not write.
+   *
+   * Null is a real state in a tree — somebody committed a `NOTES.md` outside
+   * Bindersnap — and it is described rather than hidden, so the publish guard
+   * can refuse it by name instead of the version series quietly going wrong.
+   */
+  uid: string | null;
   /** `clinical`, or "" at the binder's root. */
   folder: string;
   /** Bytes, as git reports them. */
@@ -65,15 +81,17 @@ export function toDocumentEntry(
   const folder = lastSlash === -1 ? "" : path.slice(0, lastSlash);
   const filename = lastSlash === -1 ? path : path.slice(lastSlash + 1);
 
-  // The identity is the path without its extension. A file with no extension
-  // is its own identity — `readme` is a document, not a broken one.
-  const lastDot = filename.lastIndexOf(".");
-  const stem = lastDot <= 0 ? filename : filename.slice(0, lastDot);
+  // Three things out of one filename: what it is called, which document it is,
+  // and how to render it. The address drops the last two — `hand-hygiene`, not
+  // `hand-hygiene.01J8XZ4K7M….md` — because that is what a link carries and
+  // what a heading says.
+  const { name, uid } = parseDocumentFilename(filename);
 
   return {
     path,
-    slugPath: folder === "" ? stem : `${folder}/${stem}`,
-    name: stem,
+    slugPath: folder === "" ? name : `${folder}/${name}`,
+    name,
+    uid,
     folder,
     size: entry.size ?? 0,
     sha: entry.sha ?? "",
@@ -134,11 +152,12 @@ export interface FindWorkspaceDocumentParams {
 }
 
 /**
- * One document, addressed by file path or by identity.
+ * One document, addressed by file path or by address.
  *
- * A URL may carry `clinical/infection-control` or
- * `clinical/infection-control.pdf`, and both should resolve. The extension is
- * how we render the document, not how a person refers to it.
+ * A URL carries `clinical/infection-control`; a link out of a commit or a
+ * change carries the full `clinical/infection-control.01J8XZ4K7M….pdf`. Both
+ * resolve, because neither the identity segment nor the extension is how a
+ * person refers to a policy.
  */
 export async function findWorkspaceDocument(
   params: FindWorkspaceDocumentParams,
@@ -146,11 +165,11 @@ export async function findWorkspaceDocument(
   const { documentPath } = params;
   const documents = await listWorkspaceDocuments(params);
 
-  // An exact file path wins over an identity match, so that a link carrying
-  // the extension always resolves to that exact file. Uploads refuse to create
-  // two documents sharing an identity, but a binder edited outside Bindersnap
-  // could still hold one — and resolving it deterministically beats resolving
-  // it alphabetically.
+  // An exact file path wins over an address match, so that a link carrying the
+  // whole filename always resolves to that exact file. Uploads refuse to create
+  // two documents at one address, but a binder edited outside Bindersnap could
+  // still hold two — and resolving that deterministically beats resolving it
+  // alphabetically.
   return (
     documents.find((entry) => entry.path === documentPath) ??
     documents.find((entry) => entry.slugPath === documentPath) ??
@@ -173,7 +192,7 @@ export interface DocumentVersion {
   publishedAt: string;
 }
 
-interface GitTag {
+export interface GitTag {
   name?: string;
   commit?: { sha?: string; created?: string };
 }
@@ -181,22 +200,30 @@ interface GitTag {
 /**
  * The published versions of one document.
  *
- * Tags are repository-global and a binder holds many documents, so the tags
- * are filtered by the document's own namespace — `clinical/infection-control`
- * owns `clinical/infection-control/v1`, `…/v2`, and nothing else. Tags this
- * app did not write are ignored rather than counted as versions.
+ * Tags are repository-global and a binder holds many documents, so the tags are
+ * filtered by the document's own namespace — `01J8XZ4K7M…` owns
+ * `01J8XZ4K7M…/v1`, `…/v2`, and nothing else. Tags this app did not write are
+ * ignored rather than counted as versions.
  *
- * The ADR is explicit that this walk is what the `document_versions` derived
- * index will eventually make cheap. Until that index exists, correctness comes
- * first: these tags are the evidence, and reading them is never wrong.
+ * One call per document, so it is for the pages that are about one document.
+ * {@link listVersionsByDocument} answers the same question for a whole binder
+ * in a single read, and is what every list uses.
  */
 export async function listDocumentVersions(params: {
   client: GiteaClient;
   org: string;
   workspace: string;
-  slugPath: string;
+  /**
+   * The document's identity. A path would restart at v1 on a rename.
+   *
+   * Null for a file with no identity segment, which has published nothing and
+   * answers with nothing — a caller listing a binder should not have to branch
+   * on it, and the refusal belongs at publish, where it can be a sentence.
+   */
+  uid: string | null;
 }): Promise<DocumentVersion[]> {
-  const { client, org, workspace, slugPath } = params;
+  const { client, org, workspace, uid } = params;
+  if (uid === null) return [];
 
   const tags = (await unwrap(
     client.GET("/repos/{owner}/{repo}/tags", {
@@ -207,7 +234,7 @@ export async function listDocumentVersions(params: {
   return (tags ?? [])
     .flatMap((tag) => {
       const name = tag.name ?? "";
-      if (documentSlugPathFromVersionTag(name) !== slugPath) return [];
+      if (documentUidFromVersionTag(name) !== uid) return [];
 
       const version = versionFromTag(name);
       if (version === null) return [];
@@ -231,10 +258,10 @@ export function nextVersionFrom(versions: DocumentVersion[]): number {
 
 /** The tag that would publish this document's next version. */
 export function nextVersionTag(
-  slugPath: string,
+  uid: string,
   versions: DocumentVersion[],
 ): string {
-  return buildDocumentVersionTag(slugPath, nextVersionFrom(versions));
+  return buildDocumentVersionTag(uid, nextVersionFrom(versions));
 }
 
 interface ChangedFile {
@@ -285,13 +312,21 @@ export async function listChangedDocuments(params: {
  * Publish one document: a tag naming it, pointing at the merge commit.
  *
  * Several tags on one commit is ordinary git, and it is what lets one approved
- * change publish `infection-control/v4`, `handover/v2` and `medication/v7`
- * together while keeping each document's version its own.
+ * change publish v4 of one policy, v2 of another and v7 of a third together
+ * while keeping each document's version its own.
+ *
+ * **Two changes publishing one document at once both compute the same version
+ * and both try to create this ref. Git refuses the second**, atomically, and
+ * the caller gets a conflict instead of two v4s. That guarantee is the reason
+ * the tag is the counter rather than a column somewhere.
  */
 export async function createDocumentVersionTag(params: {
   client: GiteaClient;
   org: string;
   workspace: string;
+  /** The document's identity, which is what the tag is named after. */
+  uid: string;
+  /** Where it was filed at the publish. For the fallback message only. */
   slugPath: string;
   version: number;
   target: string;
@@ -309,8 +344,8 @@ export async function createDocumentVersionTag(params: {
    */
   message?: string;
 }): Promise<DocumentVersion> {
-  const { client, org, workspace, slugPath, version, target } = params;
-  const tagName = buildDocumentVersionTag(slugPath, version);
+  const { client, org, workspace, uid, slugPath, version, target } = params;
+  const tagName = buildDocumentVersionTag(uid, version);
 
   const tag = (await unwrap(
     client.POST("/repos/{owner}/{repo}/tags", {
@@ -377,14 +412,6 @@ export async function findPendingDocumentBranch(params: {
 }
 
 /**
- * Every document's versions, from one read of the binder's tags.
- *
- * `listDocumentVersions` asks per document, which is one call each; a binder's
- * tags are repository-global, so asking once and grouping is the same answer
- * for the cost of a single call. That difference is the whole reason ADR 0004
- * expects the documents list to get cheaper rather than dearer.
- */
-/**
  * Every tag in a repository, following Gitea's pagination to the end.
  *
  * **Gitea's tag list is paged and the defaults are small**, which this code
@@ -450,22 +477,80 @@ export async function listAllTags(params: {
   return all;
 }
 
+/**
+ * Every document's versions, from one read of the binder's tags.
+ *
+ * {@link listDocumentVersions} asks per document, which is one call each; a
+ * binder's tags are repository-global, so asking once and grouping is the same
+ * answer for the cost of a single call. That difference is the whole reason
+ * ADR 0004 expects the documents list to get cheaper rather than dearer.
+ *
+ * **Keyed by address, from tags named after identities.** The tags say
+ * `01J8XZ4K7M…/v4`; every caller wants `clinical/infection-control`, because
+ * that is what its rows and its URLs are keyed on. The tree is what joins the
+ * two, and it is a read most callers have already made — hence `documents`.
+ * Pass it and this costs exactly what it did before; omit it and it reads the
+ * tree itself rather than making the caller thread one through.
+ *
+ * **A tag whose identity names no document in the tree is left out**, which is
+ * the one behaviour worth stating plainly. It cannot happen through the
+ * product: nothing deletes a document and nothing strips an identity segment.
+ * It can happen to a binder somebody edited directly in Gitea — the assumption
+ * ADR 0005 records that it rests on — and to tags written under ADR 0004's
+ * `<slugPath>/vN` shape, which are not versions of anything now and which the
+ * seed replaces. Reporting them is the orphan check the ADR describes, and it
+ * is a set difference over exactly these two inputs on the day it is wanted.
+ */
 export async function listVersionsByDocument(params: {
   client: GiteaClient;
   org: string;
   workspace: string;
+  /**
+   * The binder's tree, if the caller has already read it.
+   *
+   * Most callers have — a list needs both — and passing it keeps this at one
+   * call. A caller that has not gets the tree read for it rather than being
+   * made to thread one through.
+   */
+  documents?: WorkspaceDocumentEntry[];
 }): Promise<Map<string, DocumentVersion[]>> {
   const { client, org, workspace } = params;
 
-  const tags = await listAllTags({ client, owner: org, repo: workspace });
+  const [tags, documents] = await Promise.all([
+    listAllTags({ client, owner: org, repo: workspace }),
+    params.documents ?? listWorkspaceDocuments({ client, org, workspace }),
+  ]);
+
+  return groupVersionsByDocument(tags, documents);
+}
+
+/**
+ * The joining rule on its own, for a caller that already holds both reads.
+ *
+ * Separate from the call above so that `readBinderDocuments` can fetch the
+ * tree, the open changes and the tags in one `Promise.all` and still be three
+ * calls for a whole binder — which is the property ADR 0004 exists to buy and
+ * the one this must not quietly spend.
+ */
+export function groupVersionsByDocument(
+  tags: readonly GitTag[],
+  documents: readonly WorkspaceDocumentEntry[],
+): Map<string, DocumentVersion[]> {
+  const addressOf = new Map<string, string>();
+  for (const document of documents) {
+    if (document.uid !== null) addressOf.set(document.uid, document.slugPath);
+  }
 
   const byDocument = new Map<string, DocumentVersion[]>();
 
   for (const tag of tags ?? []) {
     const name = tag.name ?? "";
-    const slugPath = documentSlugPathFromVersionTag(name);
+    const uid = documentUidFromVersionTag(name);
     const version = versionFromTag(name);
-    if (slugPath === null || version === null) continue;
+    if (uid === null || version === null) continue;
+
+    const slugPath = addressOf.get(uid);
+    if (slugPath === undefined) continue;
 
     const entry = {
       tag: name,

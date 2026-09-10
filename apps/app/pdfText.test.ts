@@ -36,6 +36,7 @@ async function blocksOf(document: typeof policy) {
     document,
     "pdf",
     "nursing/handover",
+    "01J8XZ4K7MQ9V3B0RN7YHS2E1D",
   );
   const bytes = Buffer.from(file.content, "base64");
   return extractPdfBlocks(new Blob([new Uint8Array(bytes)]));

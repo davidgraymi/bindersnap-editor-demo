@@ -70,15 +70,16 @@ export type CreatedWorkspacePayload = z.infer<
  * Where a document landed, and the change that will publish it.
  *
  * ADR 0004's step 2: the document is a file at a path inside the binder, not a
- * repository of its own. `slugPath` is that path without its extension — the
- * document's identity, and what its version tags are namespaced under.
+ * repository of its own. `slugPath` is that path without the extension or the
+ * identity segment — the address a person links to. What the version tags are
+ * namespaced under is the identity inside the filename (ADR 0005).
  */
 export const CreatedWorkspaceDocumentPayloadSchema = z.object({
   organization: z.string(),
   workspace: z.string(),
-  /** `clinical/infection-control.pdf` — where the file is. */
+  /** `clinical/infection-control.01J8XZ4K7M….pdf` — where the file is. */
   documentPath: z.string(),
-  /** `clinical/infection-control` — what the document is called. */
+  /** `clinical/infection-control` — the address the document answers to. */
   slugPath: z.string(),
   branch: z.string(),
   pullRequestNumber: z.number().nullable(),
@@ -89,11 +90,21 @@ export type CreatedWorkspaceDocumentPayload = z.infer<
 
 /** A document as the binder holds it: a file at a path. */
 export const WorkspaceDocumentEntrySchema = z.object({
-  /** `clinical/infection-control.pdf` — where the file is. */
+  /** `clinical/infection-control.01J8XZ4K7M….pdf` — where the file is. */
   path: z.string(),
-  /** `clinical/infection-control` — the document's identity. */
+  /**
+   * `clinical/infection-control` — the document's **address**: where it is
+   * filed and what it is called, with neither the identity nor the extension.
+   * What a URL carries. It may change over a document's life; `uid` may not.
+   */
   slugPath: z.string(),
   name: z.string(),
+  /**
+   * The document's identity (ADR 0005), or null for a file this product did
+   * not write. What its version tags are named after, and what survives a
+   * rename — which is the whole reason it is not the path.
+   */
+  uid: z.string().nullable(),
   /** `clinical`, or "" at the binder's root. */
   folder: z.string(),
   size: z.number(),
