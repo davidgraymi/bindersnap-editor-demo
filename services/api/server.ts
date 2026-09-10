@@ -26,6 +26,7 @@ import {
   buildDocumentFilePath,
   buildDocumentSlugPath,
 } from "../../packages/utils/documentPath";
+import { formatDocumentName } from "../../packages/utils/documentTitle";
 import { mintDocumentUid } from "../../packages/utils/documentUid";
 import {
   findWorkspaceRepo,
@@ -3922,7 +3923,11 @@ async function handlePublishWorkspaceChange(
           target: "main",
           message: buildVersionStamp({
             ...stampedPolicy,
-            title: document.name,
+            // The title the product shows, by the rule the product shows it
+            // with. A tag reading "hand-hygiene-and-ppe" while every screen
+            // says "Hand Hygiene and PPE" is two names for one policy in the
+            // hands of somebody holding a clone and a screenshot.
+            title: formatDocumentName(document.name),
             slugPath: document.slugPath,
             path: document.path,
             version,

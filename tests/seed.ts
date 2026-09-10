@@ -987,6 +987,8 @@ async function publishChange(
   repo: string,
   pull: GiteaPull,
   title: string,
+  /** What the policy is called, as against what the change was called. */
+  documentTitle: string,
   slugPath: string,
   uid: string,
   version: number,
@@ -1045,7 +1047,7 @@ async function publishChange(
       body: JSON.stringify({
         tag_name: tagName,
         target: "main",
-        message: `${title} v${version} — ${slugPath}`,
+        message: `${documentTitle} v${version} — ${slugPath}`,
       }),
       expectedStatuses: [201, 409, 422],
     },
@@ -1235,6 +1237,7 @@ async function applyChange(
       repo,
       pull,
       change.title,
+      change.document.title,
       slugPath,
       uid,
       version,
