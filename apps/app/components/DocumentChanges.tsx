@@ -1,4 +1,4 @@
-import { CircleSlash, GitMerge, GitPullRequest, Undo2 } from "lucide-react";
+import { CircleCheck, CircleSlash, FilePen, Undo2 } from "lucide-react";
 
 import type { ChangeRecord } from "../documentDisplay";
 import {
@@ -39,13 +39,21 @@ interface DocumentChangesProps {
   onSubmitVersion: () => void;
 }
 
-/** The icon carries the outcome, so the list reads before it is read. */
+/**
+ * The icon carries the outcome, so the list reads before it is read.
+ *
+ * Not git glyphs. A branch-fork and a merge-arrow are precise to anyone who
+ * has used GitHub and unreadable to everyone else, and the reader here is a
+ * compliance manager. A document-with-a-pen for a change somebody is still
+ * proposing, and a tick for one that is published, say the same thing without
+ * the vocabulary lesson.
+ */
 function ChangeIcon({ change }: { change: ChangeRecord }) {
   const props = { size: 16, strokeWidth: 1.5, "aria-hidden": true } as const;
 
   if (change.outcome === "published") {
     return (
-      <GitMerge
+      <CircleCheck
         className="change-row-icon change-row-icon--published"
         {...props}
       />
@@ -68,10 +76,7 @@ function ChangeIcon({ change }: { change: ChangeRecord }) {
     );
   }
   return (
-    <GitPullRequest
-      className="change-row-icon change-row-icon--open"
-      {...props}
-    />
+    <FilePen className="change-row-icon change-row-icon--open" {...props} />
   );
 }
 
@@ -107,8 +112,13 @@ function ChangeRow({
         <ChangeIcon change={change} />
         <span className="change-row-main">
           <span className="change-row-title">{change.summary}</span>
+          {/* No "#8". The number is Gitea's pull-request id — a GitHub habit
+              that means nothing to a compliance manager and reads like it
+              ought to. What identifies a change to the person reading the row
+              is its title, who sent it and when, all of which are here. The
+              number still addresses the change in the URL. */}
           <span className="change-row-meta">
-            #{change.number} submitted by {submitter}
+            Submitted by {submitter}
             {submitted ? ` on ${submitted}` : ""}
             {subject
               ? ` · ${subject}`
@@ -167,7 +177,7 @@ export function DocumentChanges({
             aria-pressed={filter === "open"}
             onClick={() => onFilterChange("open")}
           >
-            <GitPullRequest size={14} strokeWidth={1.5} aria-hidden="true" />
+            <FilePen size={14} strokeWidth={1.5} aria-hidden="true" />
             {openChanges.length} Open
           </button>
           <button
@@ -176,7 +186,7 @@ export function DocumentChanges({
             aria-pressed={filter === "closed"}
             onClick={() => onFilterChange("closed")}
           >
-            <GitMerge size={14} strokeWidth={1.5} aria-hidden="true" />
+            <CircleCheck size={14} strokeWidth={1.5} aria-hidden="true" />
             {closedChanges === null ? "" : `${closedChanges.length} `}Closed
           </button>
         </div>

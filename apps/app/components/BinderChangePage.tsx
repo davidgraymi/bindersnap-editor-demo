@@ -198,9 +198,9 @@ export function BinderChangePage({
         <div className="change-behind" role="status">
           <div>
             <strong>The binder has moved on since this change was made.</strong>{" "}
-            Bringing it up to date merges the binder&rsquo;s current main into
-            it. Approvals already given are dismissed, because they were for
-            different content.
+            Updating it will pull in everything published since. Approvals
+            already given are dismissed, because they were for different
+            content.
           </div>
           <button
             className="bs-btn bs-btn-secondary"
