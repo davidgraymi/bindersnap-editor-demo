@@ -406,15 +406,30 @@ closed.
 
 ## Smaller items, not yet scheduled
 
-- **Search.** Bind to `⌘K` as well as `/` — `/` is a reflex learned from vim and
-  GitHub, `⌘K` is the convention this audience has met in Notion, Slack and
-  Linear. Widen the placeholder from "Search documents" to "Search binders,
-  policies, or people", and make it actually reach people and binders.
-- **Roles.** The build names roles after the Gitea teams underneath — `admins`,
-  `authors`, `reviewers`. The mockups use Admin / Editor / Viewer with a one-line
-  definition each. Adopt the vocabulary and the inline definitions. Do **not**
-  adopt the mockup's binder "Owner" column — a single owner does not exist in
-  ADR 0004's model, which gives a binder three role teams and uniform access.
+- **Search — done (PR #447), with a correction.** The review said to "bind ⌘K as
+  well as `/`". **⌘K was already bound**, and had been: the review read the
+  visible hint rather than the handler. What was actually wrong was narrower and
+  more interesting — the hint _advertised_ `/`, which is the half a reader learns
+  from, and the panel searched documents only. It now advertises ⌘K (both still
+  work), and reaches binders and people as well as policies, grouped under
+  headings. Documents come from the server; binders and people are two short
+  lists filtered in the browser, because a search endpoint for a list of four
+  binders is a round trip to filter an array.
+- **Roles — already done, and the review was wrong about this.** It claimed the
+  build "names roles after the Gitea teams underneath — `admins`, `authors`,
+  `reviewers`". Those are the _team names in Gitea_; the interface has shown
+  **Admin / Editor / Reviewer** with a one-line definition each since before this
+  review, in `apps/app/binderSettings.ts`. The review looked at the wrong layer.
+
+  It is also better than what the mockups drew, for reasons already written down
+  there: **Reviewer, not Viewer**, because a reviewer approves and asks for
+  changes and the free tier depends on that being understood without a footnote;
+  and **Editor, not Author**, because "Author: Priya" on a policy Priya never
+  drafted reads as a false attribution on a product whose output is evidence.
+
+  The one thing still owed: group rows show their Gitea team names ("Clinical
+  Authors") beside the correct level labels. A small leak, not scheduled.
+
 - **Density.** The build is a single centred column of ~1200px; at 1440×900 the
   right half is empty on every page, and Sign-off rules is six lines in a full
   viewport. The mockups fill that space with a right rail — but with static

@@ -73,6 +73,31 @@ export function useOrganizationDisplayName(org: string): string {
 }
 
 /**
+ * Which organization a page that names none should act on.
+ *
+ * **The oldest, by Gitea id** — the same rule the server applies in
+ * `services/api/session-organization.ts`, which logs "belongs to several
+ * organizations; using the oldest" and returns the lowest id. Taking whichever
+ * Gitea happened to list first meant the client could disagree with the server
+ * about the same question, which showed up as a sidebar and a search pointed at
+ * a different organization from the one the API was answering for.
+ *
+ * Deterministic rather than correct: for somebody in two organizations the
+ * oldest is a guess, just a repeatable one. Remembering the organization the
+ * reader last visited would be the better answer and is a bigger change than
+ * this one.
+ */
+export function defaultOrganization(
+  organizations: readonly OrganizationSummary[],
+): OrganizationSummary | null {
+  let oldest: OrganizationSummary | null = null;
+  for (const organization of organizations) {
+    if (!oldest || organization.id < oldest.id) oldest = organization;
+  }
+  return oldest;
+}
+
+/**
  * The organization a page that names none should act on.
  *
  * Home, the review queue and Activity belong to the reader rather than to one
@@ -83,5 +108,7 @@ export function useOrganizationDisplayName(org: string): string {
  */
 export function useDefaultOrganization(): string | null {
   const organizations = useOrganizations();
-  return organizations?.[0]?.name ?? null;
+  return organizations
+    ? (defaultOrganization(organizations)?.name ?? null)
+    : null;
 }
