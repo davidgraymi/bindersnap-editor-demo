@@ -2,13 +2,24 @@ import { expect, test } from "@playwright/test";
 
 import { signInAsBob } from "./helpers";
 
+// A browser test that signs in, navigates and waits on the network does not
+// fit the suite-wide 10s budget on a loaded runner — it passes alone in ~7s,
+// which leaves nothing spare. Same treatment every other heavy file here
+// already gets.
+test.describe.configure({ timeout: 60_000 });
+
 test.describe("top nav new policy button", () => {
   test("opens the add-a-policy modal from the documents page", async ({
     page,
   }) => {
     await signInAsBob(page);
 
-    await page.locator(".app-topnav-link", { hasText: "Documents" }).click();
+    // The sidebar, not the top bar: at this viewport the top bar's links are
+    // hidden because the sidebar carries the same destinations.
+    await page
+      .locator(".app-sidebar")
+      .getByRole("button", { name: "Documents" })
+      .click();
     await expect(page.locator(".docs-page")).toBeVisible();
 
     // Subtle by design: the nav's create action is an icon with an accessible

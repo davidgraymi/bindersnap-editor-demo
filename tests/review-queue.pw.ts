@@ -16,7 +16,15 @@ import { expect, test } from "@playwright/test";
 import { APP_BASE_URL, signInAsAlice } from "./helpers";
 import { seedDevStack } from "./seed";
 
+// Serial, and given room: the whole suite's files run in parallel, and these
+// read the seeded fixture rather than building their own.
+test.describe.configure({ mode: "serial", timeout: 120_000 });
+
 test.beforeAll(async () => {
+  // The hook has its own budget, and describe.configure's timeout does not
+  // reach it. Seeding is idempotent but not instant on a loaded runner, and a
+  // 10s hook fails the suite before a single assertion has run.
+  test.setTimeout(90_000);
   await seedDevStack();
 });
 
@@ -75,20 +83,26 @@ test("the counters are the filters, and they agree with the list", async ({
     const counter = page
       .locator(".queue-counters")
       .getByRole("button", { name: new RegExp(label) });
-    const shown = Number(
-      (await counter.locator(".queue-counter-value").innerText()).trim(),
-    );
 
     await counter.click();
     await expect(counter).toHaveAttribute("aria-pressed", "true");
 
-    if (shown === 0) {
-      await expect(page.locator(".queue-row")).toHaveCount(0);
-    } else {
-      await expect(page.locator(".queue-row")).toHaveCount(shown, {
-        timeout: 30_000,
-      });
-    }
+    // Counter and rows are read in the same tick and compared as a pair. Read
+    // separately, another suite publishing one of Alice's changes between the
+    // two reads would fail this for a disagreement that never existed — the
+    // files of this suite run in parallel against one seeded stack.
+    await expect
+      .poll(
+        async () => {
+          const [shown, rows] = await Promise.all([
+            counter.locator(".queue-counter-value").innerText(),
+            page.locator(".queue-row").count(),
+          ]);
+          return `${Number(shown.trim())}/${rows}`;
+        },
+        { timeout: 30_000 },
+      )
+      .toMatch(/^(\d+)\/\1$/);
   }
 });
 
