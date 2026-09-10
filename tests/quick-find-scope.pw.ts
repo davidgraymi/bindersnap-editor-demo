@@ -32,8 +32,16 @@ async function ask(page: import("@playwright/test").Page, query: string) {
   });
   await expect(field).toBeVisible({ timeout: 30_000 });
   await field.fill(query);
-  // The panel debounces, then asks three sources.
-  await page.waitForTimeout(1_200);
+
+  // The panel debounces, then asks three sources. Waiting for it to settle
+  // rather than sleeping a fixed time: under the load of the whole suite those
+  // three requests take longer than any sleep worth writing, and a fixed wait
+  // plus a default 5s assertion is how this failed only in a full run.
+  await expect(
+    page
+      .locator(".quick-find-dialog")
+      .locator(".quick-find-group, .quick-find-empty, .quick-find-note"),
+  ).not.toHaveCount(0, { timeout: 30_000 });
 }
 
 test("one query reaches policies, binders and people at once", async ({
@@ -46,10 +54,10 @@ test("one query reaches policies, binders and people at once", async ({
   await ask(page, "cl");
 
   const dialog = page.locator(".quick-find-dialog");
-  await expect(dialog.locator(".quick-find-group")).toContainText([
-    "Policies",
-    "Binders",
-  ]);
+  await expect(dialog.locator(".quick-find-group")).toContainText(
+    ["Policies", "Binders"],
+    { timeout: 30_000 },
+  );
   await expect(
     dialog.getByRole("option", { name: /Infection Control Policy/ }),
   ).toBeVisible();
@@ -63,7 +71,9 @@ test("a person is findable by name and by username", async ({ page }) => {
   await ask(page, "bob");
 
   const dialog = page.locator(".quick-find-dialog");
-  await expect(dialog.locator(".quick-find-group")).toContainText(["People"]);
+  await expect(dialog.locator(".quick-find-group")).toContainText(["People"], {
+    timeout: 30_000,
+  });
   // Shown by name, disambiguated by username — the case for two people called
   // Bob, which the username is on the line to answer.
   await expect(
