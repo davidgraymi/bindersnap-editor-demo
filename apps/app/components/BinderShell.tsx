@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
+import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
 
 import { fetchBinder } from "../api";
 import type { WorkspaceOverviewPayload } from "../../../packages/api-schema/schemas/workspaces";
@@ -11,6 +12,7 @@ import {
 } from "../binderShell";
 import type { DocumentChangeView } from "../routes";
 import { parseRequestedChange } from "../binderChange";
+import { formatDocumentName } from "../documentDisplay";
 import { AddPolicyModal } from "./AddPolicyModal";
 import { BinderChangePage } from "./BinderChangePage";
 import { BinderChanges } from "./BinderChanges";
@@ -72,6 +74,7 @@ export function BinderShell({
   onOpenOrganization,
 }: BinderShellProps) {
   const isReadOnly = useIsReadOnly();
+  const orgDisplayName = useOrganizationDisplayName(org);
   const [overview, setOverview] = useState<WorkspaceOverviewPayload | null>(
     null,
   );
@@ -175,11 +178,16 @@ export function BinderShell({
                   type="button"
                   onClick={onOpenOrganization}
                 >
-                  {org}
+                  {orgDisplayName}
                 </button>
               </span>
             </nav>
-            <h1 className="doc-header-title">{binder}</h1>
+            {/* The binder titled the way a person would write it, not the
+                way the repository is addressed. A binder carries no display
+                name of its own yet — only the slug — so this derives one.
+                When binders get a real title field, read it here and keep
+                this as the fallback. */}
+            <h1 className="doc-header-title">{formatDocumentName(binder)}</h1>
             {/* What the binder is for, in the customer's own words. Absent
                 until they have written one — a placeholder sentence would be
                 us talking, in the place their answer goes. */}

@@ -27,6 +27,30 @@ test("formatDocumentName turns a repo slug into a title", () => {
   expect(formatDocumentName("resume")).toBe("Resume");
 });
 
+test("formatDocumentName keeps an initialism upper-case", () => {
+  // "Hipaa Training Policy" is a machine guessing at the name of a regulation
+  // on a page whose job is to be trustworthy.
+  expect(formatDocumentName("hipaa-training-policy")).toBe(
+    "HIPAA Training Policy",
+  );
+  expect(formatDocumentName("ppe-and-hand-hygiene")).toBe(
+    "PPE And Hand Hygiene",
+  );
+  expect(formatDocumentName("hr")).toBe("HR");
+});
+
+test("formatDocumentName only upper-cases words that are on the list", () => {
+  expect(formatDocumentName("phishing-response")).toBe("Phishing Response");
+  expect(formatDocumentName("hipaas-cousin")).toBe("Hipaas Cousin");
+
+  // The known cost of matching on the word alone: "it" is far more often
+  // Information Technology than the pronoun in a policy manual's filing, so
+  // the list takes it — and this is what that decision looks like when the
+  // pronoun does turn up. Pinned so the trade-off is visible rather than a
+  // surprise, and so a stored title (the real fix) has a test to delete.
+  expect(formatDocumentName("it-is-policy")).toBe("IT Is Policy");
+});
+
 test("resolveDocumentStatus reports the most urgent open state first", () => {
   expect(
     resolveDocumentStatus({

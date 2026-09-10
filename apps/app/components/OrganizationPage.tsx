@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
+import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
 import { BookOpen, Plus } from "lucide-react";
 
 import { createBinder, fetchOrganizationBinders } from "../api";
 import type { WorkspaceSummary } from "../../../packages/api-schema/schemas/workspaces";
+import { formatDocumentName } from "../documentDisplay";
 import { OrganizationPeople } from "./OrganizationPeople";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
@@ -37,6 +39,7 @@ interface OrganizationPageProps {
 
 export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
   const isReadOnly = useIsReadOnly();
+  const displayName = useOrganizationDisplayName(org);
   const [tab, setTab] = useState<OrgTab>(() =>
     orgTabFromSearch(window.location.search),
   );
@@ -99,7 +102,7 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
     <header className="doc-header">
       <div className="doc-header-top">
         <div className="doc-header-identity">
-          <h1 className="doc-header-title">{org}</h1>
+          <h1 className="doc-header-title">{displayName}</h1>
         </div>
 
         {/* The one coral element on this page, and the same place the binder
@@ -293,7 +296,9 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
                 <BookOpen size={16} strokeWidth={1.4} />
               </span>
               <span className="docs-list-item-body">
-                <span className="docs-list-item-name">{binder.name}</span>
+                <span className="docs-list-item-name">
+                  {formatDocumentName(binder.name)}
+                </span>
                 <span className="docs-list-item-meta">
                   {binder.description || "No description"}
                 </span>

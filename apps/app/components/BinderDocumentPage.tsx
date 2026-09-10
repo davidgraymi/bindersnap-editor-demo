@@ -12,6 +12,7 @@ import {
 } from "../binderDocument";
 import {
   formatDocumentName,
+  formatShortDate,
   getApprovalStateLabel,
   parseChangeTitle,
 } from "../documentDisplay";
@@ -356,12 +357,20 @@ export function BinderDocumentPage({
                       >
                         v{version.version}
                       </span>
-                      {/* The commit the tag points at. There is no date on a
-                          tag we can read without another call per version,
-                          and the SHA is the coordinate the evidence is
-                          actually keyed on. */}
+                      {/* When this version was published. The tag's commit
+                          carries the date in the same call, so nothing extra
+                          is fetched to say it.
+
+                          This used to print the commit SHA. The SHA is the
+                          coordinate the evidence is keyed on, but it is not a
+                          fact about the policy that a compliance manager can
+                          use — on a page whose job is to be trustworthy it
+                          reads as an error code. It stays in the tag, the
+                          audit export and the API, where a surveyor can ask
+                          for it. Empty when Gitea did not give us a date:
+                          "v1 · Current" says more than a date we invented. */}
                       <span className="doc-rail-row-date">
-                        {version.commitSha.slice(0, 7)}
+                        {formatShortDate(version.publishedAt)}
                       </span>
                       {isCurrent ? (
                         <span className="doc-rail-row-note">Current</span>

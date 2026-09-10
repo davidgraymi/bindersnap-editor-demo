@@ -15,11 +15,43 @@ import type {
 export type DocumentStatus =
   "published" | "in_review" | "changes_requested" | "approved" | "draft";
 
-/** "quarterly-report" → "Quarterly Report". */
+/**
+ * Initialisms this product's own documents are named after.
+ *
+ * A slug is lower-case by the time it reaches us, so the casing a person typed
+ * is already gone and cannot be recovered — "hipaa-training-policy" title-cased
+ * word by word reads "Hipaa Training Policy", which is a machine visibly
+ * guessing at the name of a regulation on a page whose whole job is to be
+ * trustworthy.
+ *
+ * This list is a stopgap, not the fix. The fix is storing the title a person
+ * typed instead of deriving one from the slug; until a document carries its own
+ * name, this at least stops the guess being wrong about the words the ICP uses
+ * every day.
+ */
+const INITIALISMS = new Set([
+  "cdc",
+  "dpa",
+  "ehr",
+  "hipaa",
+  "hr",
+  "it",
+  "osha",
+  "pdf",
+  "phi",
+  "ppe",
+  "sop",
+]);
+
+/** "quarterly-report" → "Quarterly Report"; "hipaa-training" → "HIPAA Training". */
 export function formatDocumentName(repoName: string): string {
   return repoName
     .split("-")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .map((word) =>
+      INITIALISMS.has(word.toLowerCase())
+        ? word.toUpperCase()
+        : word.charAt(0).toUpperCase() + word.slice(1),
+    )
     .join(" ");
 }
 
