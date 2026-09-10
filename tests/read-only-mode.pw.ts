@@ -161,7 +161,8 @@ test("a delinquent organization keeps its record and loses its controls", async 
     sessionCookie,
     `Readonly Health ${randomUUID().slice(0, 6)}`,
   );
-  const binder = await createBinder(sessionCookie, org, "Clinical Policies");
+  const binderTitle = "Clinical Policies";
+  const binder = await createBinder(sessionCookie, org, binderTitle);
 
   await signInBrowser(page, sessionCookie);
 
@@ -182,7 +183,9 @@ test("a delinquent organization keeps its record and loses its controls", async 
   // own heading is what tells the two apart.
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
   await expect(page.getByTestId("read-only-banner")).toBeVisible();
-  await expect(page.getByRole("heading", { name: binder })).toBeVisible();
+  // The heading shows the name they typed, not the slug the repository is
+  // addressed by — "Clinical Policies", not "clinical-policies".
+  await expect(page.getByRole("heading", { name: binderTitle })).toBeVisible();
   await expect(page.getByRole("button", { name: "Add a policy" })).toHaveCount(
     0,
   );

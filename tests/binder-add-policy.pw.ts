@@ -297,7 +297,8 @@ test("the binder's tabs still work once a document is open", async ({
     sessionCookie,
     `Riverbend ${randomUUID().slice(0, 6)}`,
   );
-  const binder = await createBinder(sessionCookie, org, "Clinical Policies");
+  const binderTitle = "Clinical Policies";
+  const binder = await createBinder(sessionCookie, org, binderTitle);
 
   await signInBrowser(page, sessionCookie);
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
@@ -317,7 +318,9 @@ test("the binder's tabs still work once a document is open", async ({
   });
   // The document is gone, not merely covered: the binder's header remains and
   // the document's does not.
-  await expect(page.locator("h1.doc-header-title")).toHaveText(binder);
+  // The binder heads its own page by the name it was given, not by the slug
+  // the repository is addressed by.
+  await expect(page.locator("h1.doc-header-title")).toHaveText(binderTitle);
   expect(new URL(page.url()).pathname).toBe(`/${org}/${binder}`);
 
   // Who can act here is a question about people, not about billing. The seat
