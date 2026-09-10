@@ -143,7 +143,6 @@ input {
   padding: 0;
   background: transparent;
   color: var(--brand-coral);
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-label);
   letter-spacing: var(--brand-tracking-wide);
   text-transform: uppercase;
@@ -159,7 +158,6 @@ input {
 .app-login-hint {
   margin: 0;
   color: var(--bs-text-muted);
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-label);
   letter-spacing: var(--brand-tracking-wide);
   text-transform: uppercase;
@@ -238,7 +236,6 @@ input {
 }
 
 .app-breadcrumb-back {
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-label);
   letter-spacing: var(--brand-tracking-wide);
   color: var(--bs-text-muted);
@@ -255,14 +252,12 @@ input {
 }
 
 .app-breadcrumb-sep {
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-label);
   color: var(--bs-text-faint);
   user-select: none;
 }
 
 .app-breadcrumb-current {
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-label);
   letter-spacing: var(--brand-tracking-wide);
   color: var(--bs-text-primary);
@@ -279,7 +274,6 @@ input {
   background: var(--bs-surface-2);
   border: 1px solid var(--bs-rule);
   border-radius: var(--brand-radius-full);
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-xs);
   color: var(--bs-text-secondary);
   white-space: nowrap;
@@ -313,7 +307,6 @@ input {
 
 .app-error dt,
 .app-doc-card dt {
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-label);
   color: var(--bs-text-muted);
   text-transform: uppercase;
@@ -348,13 +341,6 @@ input {
 
 .app-doc-empty {
   padding: var(--brand-space-6);
-  color: var(--bs-text-muted);
-}
-
-.app-doc-path {
-  margin: var(--brand-space-2) 0 0;
-  font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-xs);
   color: var(--bs-text-muted);
 }
 
@@ -565,7 +551,6 @@ input {
 .collaborator-permission-badge {
   display: inline-block;
   padding: var(--brand-space-1) var(--brand-space-3);
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-xs);
   font-weight: var(--brand-weight-medium);
   border-radius: var(--brand-radius-sm);
@@ -831,7 +816,6 @@ input {
    choice. */
 .org-group-level {
   margin-left: var(--brand-space-2);
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-label);
   letter-spacing: var(--brand-tracking-wide);
   text-transform: uppercase;
@@ -866,7 +850,6 @@ input {
   padding: var(--brand-space-1) var(--brand-space-3);
   border-radius: var(--brand-radius-full);
   background: var(--bs-surface-2);
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-ui-sm);
   color: var(--bs-text-secondary);
 }
@@ -1094,7 +1077,7 @@ input {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-family: var(--brand-font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--brand-text-label);
   font-weight: var(--brand-weight-medium);
   letter-spacing: 0.04em;
@@ -1131,7 +1114,6 @@ input {
   appearance: none;
   border: none;
   cursor: pointer;
-  font-family: var(--brand-font-mono);
   transition: filter var(--brand-transition-base);
 }
 
@@ -1198,7 +1180,6 @@ input {
 }
 
 .doc-version-menu-label {
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-label);
   letter-spacing: 0.04em;
 }
@@ -1328,7 +1309,7 @@ input {
   border-radius: var(--brand-radius-full);
   background: var(--bs-surface-2);
   color: var(--bs-text-muted);
-  font-family: var(--brand-font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: 10.5px;
 }
 
@@ -1389,7 +1370,6 @@ input {
 }
 
 .doc-preview-size {
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-xs);
   color: var(--bs-text-faint);
 }
@@ -1606,7 +1586,6 @@ input {
 
 .doc-preview-prose th {
   background: var(--bs-surface-2);
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-xs);
   text-transform: uppercase;
   letter-spacing: var(--brand-tracking-wide);
@@ -1659,7 +1638,6 @@ input {
 }
 
 .doc-rail-title {
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-ui-xs);
   font-weight: var(--brand-weight-medium);
   letter-spacing: var(--brand-tracking-wider);
@@ -1777,7 +1755,7 @@ input {
 .doc-rail-version {
   display: inline-flex;
   align-items: center;
-  font-family: var(--brand-font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--brand-text-label);
   font-weight: var(--brand-weight-medium);
   letter-spacing: 0.04em;
@@ -1992,7 +1970,6 @@ input {
 
 /* Why a closed change is closed. "Closed" on its own answers nothing. */
 .change-row-outcome {
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-xs);
   color: var(--bs-text-faint);
   overflow-wrap: anywhere;
@@ -2025,7 +2002,7 @@ input {
   border-radius: var(--brand-radius-full);
   background: var(--bs-surface-2);
   color: var(--bs-text-secondary);
-  font-family: var(--brand-font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--brand-text-xs);
   font-weight: var(--brand-weight-medium);
   white-space: nowrap;
@@ -2224,7 +2201,7 @@ input {
 }
 
 .rev-approval-count {
-  font-family: var(--brand-font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--brand-text-ui-xs);
   color: var(--bs-text-muted);
 }
@@ -2288,7 +2265,6 @@ input {
 
 .rev-proposed-meta {
   margin: var(--brand-space-0-5) 0 0;
-  font-family: var(--brand-font-mono);
   font-size: 11.5px;
   color: var(--bs-text-muted);
   overflow-wrap: anywhere;
@@ -2309,7 +2285,6 @@ input {
 
 .rev-reviewers-label {
   margin: 0;
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-ui-xs);
   font-weight: var(--brand-weight-medium);
   letter-spacing: var(--brand-tracking-wider);
@@ -2465,7 +2440,6 @@ input {
 }
 
 .rev-picker-login {
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-xs);
   color: var(--bs-text-muted);
 }
@@ -2615,7 +2589,6 @@ input {
 }
 
 .rev-event-tag {
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-ui-xs);
 }
 
@@ -2659,7 +2632,6 @@ input {
 }
 
 .rev-thread-external {
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-ui-xs);
   padding: var(--brand-space-0-5) var(--brand-space-2);
   border: 1px dashed var(--bs-rule);
@@ -3219,7 +3191,6 @@ input {
   border-radius: var(--brand-radius-full);
   background: var(--bs-surface-1);
   border: 1.5px solid var(--bs-rule);
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-xs);
   color: var(--bs-text-secondary);
 }
@@ -3269,7 +3240,6 @@ input {
    per-document version list does not need: when, and by whom. */
 .doc-spline-date {
   flex-shrink: 0;
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-xs);
   color: var(--bs-text-faint);
   white-space: nowrap;
@@ -3337,14 +3307,12 @@ input {
 }
 
 .doc-spline-person-role {
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-xs);
   color: var(--bs-text-faint);
 }
 
 .doc-spline-meta {
   margin: 0;
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-xs);
   color: var(--bs-text-muted);
 }
@@ -3375,7 +3343,6 @@ input {
   border-radius: var(--brand-radius-full);
   background: var(--bs-surface-3);
   color: var(--bs-text-secondary);
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-xs);
 }
 
@@ -3400,7 +3367,6 @@ input {
 
 .doc-review-time,
 .doc-review-flag {
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-xs);
   color: var(--bs-text-faint);
 }
@@ -3609,7 +3575,7 @@ input {
 .collaborator-current-user,
 .collaborator-row-note,
 .collaborator-manage-error {
-  font-family: var(--brand-font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--brand-text-label);
   letter-spacing: var(--brand-tracking-wide);
   text-transform: uppercase;
@@ -3650,7 +3616,6 @@ input {
 
 .collaborators-table-head {
   padding: 0 var(--brand-space-4);
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-xs);
   color: var(--bs-text-muted);
   text-transform: uppercase;
@@ -3688,7 +3653,6 @@ input {
 .collaborator-avatar-fallback {
   display: grid;
   place-items: center;
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-label);
   color: var(--bs-text-secondary);
 }
@@ -3711,7 +3675,6 @@ input {
 
 .collaborator-username,
 .collaborator-row-email {
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-xs);
   color: var(--bs-text-muted);
   overflow: hidden;
@@ -3819,7 +3782,6 @@ input {
 }
 
 .collaborator-search-label {
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-label);
   color: var(--bs-text-muted);
   text-transform: uppercase;
@@ -3903,7 +3865,6 @@ input {
   border-radius: var(--brand-radius-sm);
   background: var(--bs-surface-1);
   color: var(--bs-text-secondary);
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-xs);
   letter-spacing: var(--brand-tracking-wide);
   text-transform: uppercase;
@@ -3971,7 +3932,6 @@ input {
 
 .perms-group-heading {
   margin: 0 0 var(--brand-space-4);
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-label);
   letter-spacing: var(--brand-tracking-wider);
   text-transform: uppercase;
@@ -4023,7 +3983,6 @@ input {
   border: 1px solid var(--bs-rule);
   border-radius: var(--brand-radius-md);
   color: var(--bs-text-primary);
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-body);
   box-sizing: border-box;
 }
@@ -4063,7 +4022,6 @@ input {
 }
 
 .perms-sub-label {
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-xs);
   font-weight: var(--brand-weight-medium);
   color: var(--bs-text-muted);
@@ -4091,7 +4049,6 @@ input {
   background: var(--bs-surface-1);
   border: 1px solid var(--bs-rule);
   border-radius: var(--brand-radius-full);
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-xs);
   color: var(--bs-text-secondary);
 }
@@ -4178,7 +4135,6 @@ input {
 }
 
 .perms-picker-result-login {
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-xs);
   color: var(--bs-text-muted);
   flex-shrink: 0;
@@ -4564,7 +4520,6 @@ input {
   border-radius: var(--brand-radius-md);
   background: var(--bs-surface-1);
   cursor: pointer;
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-sm);
   color: var(--bs-text-secondary);
   width: 100%;
@@ -4595,7 +4550,6 @@ input {
   gap: var(--brand-space-3);
   font-size: var(--brand-text-sm);
   color: var(--bs-text-muted);
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-label);
   letter-spacing: var(--brand-tracking-wide);
 }
@@ -4614,7 +4568,6 @@ input {
 }
 
 .upload-pr-number {
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-sm);
   color: var(--bs-text-muted);
 }
@@ -4647,7 +4600,6 @@ input {
   background: var(--bs-surface-2);
   color: var(--bs-text-secondary);
   cursor: pointer;
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-label);
   letter-spacing: var(--brand-tracking-wide);
   text-transform: uppercase;
@@ -5157,7 +5109,6 @@ input {
   border: 1.5px solid transparent;
   transition: none;
   flex-shrink: 0;
-  font-family: var(--brand-font-mono);
 }
 
 .app-topnav-avatar:hover {
@@ -5223,7 +5174,6 @@ input {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-xs);
   font-weight: var(--brand-weight-semibold);
   border: 1px solid var(--bs-coral-border-soft);
@@ -5424,7 +5374,7 @@ input {
   margin-left: auto;
   font-size: var(--brand-text-ui-xs);
   color: var(--bs-text-faint);
-  font-family: var(--brand-font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 .app-sidebar-item--muted {
@@ -5456,7 +5406,6 @@ input {
   font-weight: var(--brand-weight-semibold);
   color: var(--brand-coral);
   flex-shrink: 0;
-  font-family: var(--brand-font-mono);
 }
 
 .app-sidebar-user-name {
@@ -5599,7 +5548,6 @@ input {
   border: 1px solid var(--bs-rule);
   background: var(--bs-surface-1);
   color: var(--brand-coral);
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-label);
   letter-spacing: var(--brand-tracking-wide);
   text-transform: uppercase;
@@ -5676,7 +5624,6 @@ input {
   justify-content: space-between;
   gap: var(--brand-space-3);
   color: var(--bs-text-secondary);
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-label);
   letter-spacing: var(--brand-tracking-wide);
   text-transform: uppercase;
@@ -5776,7 +5723,6 @@ input {
 .admin-pro-state-label {
   margin: 0 0 var(--brand-space-2);
   color: var(--bs-text-faint);
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-label);
   letter-spacing: var(--brand-tracking-wide);
   text-transform: uppercase;
@@ -5794,7 +5740,6 @@ input {
   min-height: var(--brand-space-8);
   padding: 0 var(--brand-space-3);
   border-radius: var(--brand-radius-full);
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-label);
   letter-spacing: var(--brand-tracking-wide);
   text-transform: uppercase;
@@ -5826,7 +5771,6 @@ input {
 
 .admin-pro-meta dt {
   color: var(--bs-text-faint);
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-label);
   letter-spacing: var(--brand-tracking-wide);
   text-transform: uppercase;
@@ -6047,7 +5991,6 @@ input {
   border-radius: 0;
   padding: var(--brand-space-3) var(--brand-space-4);
   margin-bottom: -1px;
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-label);
   letter-spacing: var(--brand-tracking-wide);
   text-transform: uppercase;
@@ -6116,7 +6059,6 @@ input {
 }
 
 .home-section-label {
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-label);
   font-weight: var(--brand-weight-medium);
   letter-spacing: var(--brand-tracking-wider);
@@ -6130,7 +6072,7 @@ input {
 }
 
 .home-section-count {
-  font-family: var(--brand-font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--brand-text-label);
   background: var(--bs-coral-dim);
   color: var(--bs-coral-text);
@@ -6233,7 +6175,6 @@ input {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-label);
   font-weight: var(--brand-weight-medium);
   letter-spacing: 0.04em;
@@ -6366,7 +6307,6 @@ input {
 }
 
 .activity-preview-label {
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-xs);
   letter-spacing: var(--brand-tracking-wide);
   text-transform: uppercase;
@@ -6722,7 +6662,6 @@ input {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-label);
   font-weight: var(--brand-weight-medium);
   letter-spacing: 0.04em;
@@ -6863,7 +6802,6 @@ input {
   display: inline-flex;
   align-items: center;
   gap: var(--brand-space-2);
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-xs);
   color: var(--bs-text-faint);
 }
@@ -6871,7 +6809,6 @@ input {
 .doc-compare-chip {
   padding: var(--brand-space-0-5) var(--brand-space-2);
   border-radius: var(--brand-radius-sm);
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-xs);
 }
 
@@ -6886,7 +6823,6 @@ input {
 }
 
 .doc-compare-summary {
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-xs);
   color: var(--bs-text-muted);
 }
@@ -6910,7 +6846,6 @@ input {
   border-radius: var(--brand-radius-sm);
   background: none;
   color: var(--bs-text-muted);
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-xs);
   cursor: pointer;
   transition: background var(--brand-transition-fast);
@@ -6935,7 +6870,6 @@ input {
 .doc-compare-key {
   padding: var(--brand-space-0-5) var(--brand-space-2);
   border-radius: var(--brand-radius-sm);
-  font-family: var(--brand-font-mono);
 }
 
 .doc-compare-key--added {
@@ -7021,7 +6955,6 @@ input {
 }
 
 .doc-compare-columns figcaption {
-  font-family: var(--brand-font-mono);
   font-size: var(--brand-text-xs);
   color: var(--bs-text-faint);
 }
