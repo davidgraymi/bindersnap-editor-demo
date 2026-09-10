@@ -13,9 +13,10 @@ import {
   toDocumentEntry,
 } from "./workspaceDocuments";
 
-/** Two real identities, so the tests exercise the validation the product does. */
+/** Real identities, so the tests exercise the validation the product does. */
 const HANDOVER = "01J8XZ4K7MQ9V3B0RN7YHS2E1D";
 const ADMISSIONS = "01J9A0B1C2D3E4F5G6H7J8K9M0";
+const OTHER_ABSENT = "01JB1C2D3E4F5G6H7J8K9MNPQR";
 
 type Handler = (init?: any) => unknown;
 
@@ -358,6 +359,62 @@ test("listChangedDocuments counts a document once, however many times it changed
       pullNumber: 7,
     }),
   ).toHaveLength(1);
+});
+
+test("a renamed document is one document, at its new address", async () => {
+  // Gitea reports a rename as two entries carrying one identity. Publishing
+  // both would compute the same next version twice and write one tag twice —
+  // git refuses the second, and the publish half-succeeds.
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/pulls/{index}/files": () => [
+        {
+          filename: `nursing/hand-hygiene.${HANDOVER}.md`,
+          // Gitea's spelling, verified against a running one. GitHub says
+          // "removed"; both are treated the same, because guessing wrong here
+          // writes a version tag for a file that is not there.
+          status: "deleted",
+        },
+        {
+          filename: `nursing/hand-hygiene-and-ppe.${HANDOVER}.md`,
+          status: "added",
+        },
+      ],
+    },
+  });
+
+  const documents = await listChangedDocuments({
+    client,
+    org: "mercy-health",
+    workspace: "clinical",
+    pullNumber: 7,
+  });
+
+  expect(documents).toHaveLength(1);
+  expect(documents[0]?.slugPath).toBe("nursing/hand-hygiene-and-ppe");
+  expect(documents[0]?.uid).toBe(HANDOVER);
+});
+
+test("a document a change only deletes publishes nothing", async () => {
+  // Tagging it would name a version after a path that is not in the tree.
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/pulls/{index}/files": () => [
+        { filename: `nursing/handover.${HANDOVER}.md`, status: "removed" },
+        { filename: `nursing/old.${OTHER_ABSENT}.md`, status: "deleted" },
+        { filename: `admissions.${ADMISSIONS}.md`, status: "modified" },
+      ],
+    },
+  });
+
+  const documents = await listChangedDocuments({
+    client,
+    org: "mercy-health",
+    workspace: "clinical",
+    pullNumber: 7,
+  });
+
+  expect(documents.map((d) => d.slugPath)).toEqual(["admissions"]);
 });
 
 test("createDocumentVersionTag names the document in the tag", async () => {

@@ -266,7 +266,21 @@ export function nextVersionTag(
 
 interface ChangedFile {
   filename?: string;
+  /** `added`, `modified`, `deleted`, `renamed` — Gitea's own vocabulary. */
+  status?: string;
 }
+
+/**
+ * The statuses that mean "this file is not in the merged tree".
+ *
+ * **`deleted`, not `removed`** — verified against a running Gitea 1.28.0-dev on
+ * 2026-09-10 by renaming a document through a change request, which the API
+ * reported as `deleted` plus `added`. Gitea's own spec says only "added,
+ * modified, deleted, etc.", so `removed` is carried as well: it is the spelling
+ * GitHub uses, it is what half the ecosystem assumes, and guessing wrong here
+ * writes a version tag for a file that is not there.
+ */
+const ABSENT_STATUSES = new Set(["deleted", "removed"]);
 
 /**
  * The documents a change touches.
@@ -279,6 +293,21 @@ interface ChangedFile {
  * Repository furniture is filtered out the same way it is in the list: a change
  * that edits CODEOWNERS alongside two policies publishes two versions, not
  * three.
+ *
+ * **Two subtleties, both of which a rename creates.** Gitea reports a rename as
+ * two entries — the old path removed and the new path added — and both carry
+ * the same identity.
+ *
+ * 1. A **deleted** file is not a document this change publishes. Tagging it
+ *    would name a version after a path that is no longer in the tree.
+ * 2. Documents are deduplicated by **identity**, not by address, so a rename is
+ *    one document at its new address rather than two. Deduplicating by address
+ *    would compute the same next version twice and try to write one tag twice;
+ *    git would refuse the second, and the publish would half-succeed.
+ *
+ * Neither is reachable through the product today — nothing renames or deletes —
+ * which is exactly why it is worth being right about now, while it costs a
+ * filter and a key.
  */
 export async function listChangedDocuments(params: {
   client: GiteaClient;
@@ -298,10 +327,18 @@ export async function listChangedDocuments(params: {
   const documents: WorkspaceDocumentEntry[] = [];
 
   for (const file of files ?? []) {
-    const entry = toDocumentEntry({ path: file.filename ?? "", type: "blob" });
-    if (!entry || seen.has(entry.slugPath)) continue;
+    if (ABSENT_STATUSES.has((file.status ?? "").toLowerCase())) continue;
 
-    seen.add(entry.slugPath);
+    const entry = toDocumentEntry({ path: file.filename ?? "", type: "blob" });
+    if (!entry) continue;
+
+    // Identity where there is one, address where there is not — a file with no
+    // identity is still one file, and two of them at one address are still one
+    // thing the publish guard will refuse by name.
+    const key = entry.uid ?? entry.slugPath;
+    if (seen.has(key)) continue;
+
+    seen.add(key);
     documents.push(entry);
   }
 
