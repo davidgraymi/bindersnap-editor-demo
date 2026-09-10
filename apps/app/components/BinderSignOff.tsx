@@ -135,6 +135,12 @@ export function BinderSignOff({
     }
   }
 
+  // Nothing drafted and nothing published: proposing would open a change
+  // request that changes nothing. Deleting every rule from a binder that has
+  // some is a real proposal, which is why the published count is part of this.
+  const nothingToPropose =
+    (draft?.length ?? 0) === 0 && signOff.rules.length === 0;
+
   return (
     <div className="binder-pane">
       <section className="binder-settings-section">
@@ -170,10 +176,33 @@ export function BinderSignOff({
         ) : null}
 
         {signOff.rules.length === 0 && signOff.unreadable.length === 0 ? (
-          <p className="doc-rail-note">
-            No folder needs its own sign-off. Every change needs only this
-            binder&rsquo;s usual approvals.
-          </p>
+          /* The empty state is the page, so it says what the thing is rather
+             than only that there is none of it. This is the one place the
+             mockups' instinct — explain the model where it is used — earns its
+             keep: a reader who has never set one cannot act on "no folder
+             needs its own sign-off". It disappears the moment a rule exists,
+             which is what keeps it from being the permanent onboarding rail
+             the mockups drew. */
+          <div className="binder-empty-rule">
+            <p className="binder-empty-rule-lead">
+              No folder needs its own sign-off yet.
+            </p>
+            <p className="doc-rail-note">
+              Every change to this binder needs its usual approvals, whichever
+              folder it touches. A sign-off rule adds a second requirement to
+              one folder —{" "}
+              <em>
+                the infection control group signs off on anything filed in
+                nursing
+              </em>{" "}
+              — so a policy cannot be published without the people who own that
+              subject.
+            </p>
+            <p className="doc-rail-note">
+              Rules are set on folders, and a change that lands in two folders
+              needs both.
+            </p>
+          </div>
         ) : (
           <ul className="binder-rule-list">
             {signOff.rules.map((rule) => (
@@ -249,7 +278,9 @@ export function BinderSignOff({
               <div className="org-group-add">
                 <button
                   type="button"
-                  className="bs-btn bs-btn-secondary bs-btn--sm"
+                  className={`bs-btn bs-btn--sm ${
+                    nothingToPropose ? "bs-btn-primary" : "bs-btn-secondary"
+                  }`}
                   disabled={saving || signOff.folders.length === 0}
                   onClick={() =>
                     setDraft([
@@ -265,10 +296,23 @@ export function BinderSignOff({
                   Add a rule
                 </button>
 
+                {/* Nothing drafted and nothing published is nothing to
+                    propose: pressing this would open a change request that
+                    changes nothing. Adding the first rule is the primary act
+                    in that state, so it carries the weight until there is
+                    something to send. Deleting every rule from a binder that
+                    has some is a real proposal, and stays enabled. */}
                 <button
                   type="button"
-                  className="bs-btn bs-btn-primary bs-btn--sm"
-                  disabled={saving}
+                  className={`bs-btn bs-btn--sm ${
+                    nothingToPropose ? "bs-btn-secondary" : "bs-btn-primary"
+                  }`}
+                  disabled={saving || nothingToPropose}
+                  title={
+                    nothingToPropose
+                      ? "Add a rule before proposing a change."
+                      : undefined
+                  }
                   onClick={() => void propose()}
                 >
                   {saving ? "Opening a change…" : "Propose these rules"}

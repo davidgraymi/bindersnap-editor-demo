@@ -235,6 +235,20 @@
   --brand-mockup-highlight: rgba(232, 93, 38, 0.04);
 
   /* ── Fonts ── */
+  /* ── MEASURE ─────────────────────────────────────────────────
+     How wide a line of prose may run before it stops being
+     comfortable to read. The page column is 1080px because that is
+     what a list of documents wants; a paragraph in that column runs
+     to about 110 characters, which is well past the 45–75 a reader
+     tracks a line at without losing their place.
+
+     A cap, not a width: it does nothing until the container is wider
+     than the measure, so it is safe to put on anything textual.
+  ──────────────────────────────────────────────────────────────── */
+  --brand-measure: 68ch;
+  /* For a heading, which is larger and can carry a longer line. */
+  --brand-measure-wide: 84ch;
+
   --brand-font-serif: "Lora", Georgia, "Times New Roman", serif;
   --brand-font-sans: "Geist", system-ui, -apple-system, sans-serif;
   --brand-font-mono: "Geist Mono", "Fira Code", Consolas, monospace;

@@ -430,13 +430,32 @@ closed.
   The one thing still owed: group rows show their Gitea team names ("Clinical
   Authors") beside the correct level labels. A small leak, not scheduled.
 
-- **Density.** The build is a single centred column of ~1200px; at 1440×900 the
-  right half is empty on every page, and Sign-off rules is six lines in a full
-  viewport. The mockups fill that space with a right rail — but with static
-  onboarding copy ("Approval flow 01–04", "Discussion principles") that is dead
-  pixels by week four. Take the instinct, change the payload: live context for
-  the current screen — who is waiting and for how long, what changed since you
-  last looked, which version this becomes on publish.
+- **Density — done (PR #449), and it was not what the review thought.** The
+  review called this a _horizontal_ problem: an empty right half, to be filled
+  with a rail. Looked at again after the sidebar landed, that reading was wrong
+  twice over. The sidebar already claimed the left, and `.docw-page` was always
+  capped at 1080px and centred — so nothing was running edge to edge. The
+  emptiness was **vertical**, and the real defect underneath it was
+  **typographic**: a sentence in a column sized for a list of documents ran to
+  about 110 characters, well past the 45–75 a reader tracks a line at.
+
+  So: a `--brand-measure` token capping prose at 68ch, applied to the sentences
+  rather than to the pane, so a document list still uses everything it is given.
+
+  And Sign-off rules — the review's own example of the problem — got the fix its
+  emptiness actually called for. When there are no rules the empty state _is_ the
+  page, so it now says what a sign-off rule does, with a worked example. This is
+  the one place the mockups' instinct earns its keep, and it earns it precisely
+  because it **disappears when a rule exists** rather than sitting there forever.
+
+  A rail was not built. Building one for pages that have no live context to put
+  in it would have been the mockups' mistake with different copy.
+
+  One bug found there, of exactly the kind Task 3 was about: **"Propose these
+  rules" was the coral primary with nothing drafted and nothing published**, so
+  pressing it opened a change request that changed nothing. Adding the first rule
+  now carries the weight until there is something to send.
+
 - **Mobile.** At 390px the build shows a raw slug in the top bar, no search, no
   notifications, no account control, and no bottom navigation. The mockups have
   no mobile frame at all. For a product whose central act is a named person

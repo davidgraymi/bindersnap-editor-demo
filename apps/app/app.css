@@ -1714,6 +1714,9 @@ input {
   margin: 0;
   font-size: var(--brand-text-ui-sm);
   color: var(--bs-text-muted);
+  /* A cap, not a width. The page column is sized for a list of documents; a
+     sentence in it ran to about 110 characters. */
+  max-width: var(--brand-measure);
 }
 
 /* Versions: hairline-separated rows inside one card, not one card each. */
@@ -7195,6 +7198,46 @@ input {
 
 .read-only-banner__action:hover {
   background: var(--bs-surface-1);
+}
+
+/* The empty state on Sign-off rules. When there are no rules this is the
+   whole page, so it is set as something to read rather than as a note about
+   an absence. */
+.binder-empty-rule {
+  display: grid;
+  gap: var(--brand-space-3);
+  padding: var(--brand-space-5);
+  background: var(--bs-surface-2);
+  border: 1px solid var(--bs-rule-warm);
+  border-radius: var(--brand-radius-lg);
+  max-width: var(--brand-measure);
+}
+
+.binder-empty-rule-lead {
+  margin: 0;
+  font-size: var(--brand-text-body);
+  font-weight: var(--brand-weight-medium);
+  color: var(--bs-text-primary);
+}
+
+/* The worked example. Italic rather than quoted so it reads as an instance of
+   the rule, not as somebody speaking. */
+.binder-empty-rule em {
+  color: var(--bs-text-secondary);
+  font-style: italic;
+}
+
+/* Prose in the binder's panes reads at a measure, not at the width of a
+   document list. Applied to the sentences rather than to the pane, so a table
+   or a row of policies still uses everything it is given. */
+.binder-rule,
+.binder-settings-section > p,
+.doc-header-fact {
+  max-width: var(--brand-measure);
+}
+
+.doc-header-title {
+  max-width: var(--brand-measure-wide);
 }
 
 /* ── THE REVIEW QUEUE ─────────────────────────────────────────
