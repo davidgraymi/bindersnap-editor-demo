@@ -319,6 +319,30 @@ export function BinderSignOff({
                 document.
               </p>
 
+              {/* **Why the picker is short, when it is.** A document rule is
+                  keyed on the identity in the filename, so a binder filed
+                  before that existed offers no documents at all — and an empty
+                  list with no explanation reads as a missing feature rather
+                  than as a binder that cannot use it yet. The folder fallback
+                  is said because it is real advice, not consolation. */}
+              {signOff.documents.length === 0 &&
+              signOff.unnameableDocuments > 0 ? (
+                <p className="doc-rail-note">
+                  {signOff.unnameableDocuments === 1
+                    ? "The document in this binder was filed before Bindersnap could track policies individually, so no rule can name it on its own."
+                    : `All ${signOff.unnameableDocuments} documents in this binder were filed before Bindersnap could track policies individually, so no rule can name one on its own.`}{" "}
+                  A rule on their folder still covers them.
+                </p>
+              ) : null}
+
+              {signOff.documents.length === 0 &&
+              signOff.unnameableDocuments === 0 ? (
+                <p className="doc-rail-note">
+                  This binder holds no documents yet, so a rule can only cover
+                  the binder itself.
+                </p>
+              ) : null}
+
               {draft.map((rule) => (
                 <RuleEditor
                   key={rule.key}

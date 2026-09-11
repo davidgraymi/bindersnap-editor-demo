@@ -3168,6 +3168,7 @@ async function readSettings(
       name: string;
       folder: string;
     }>;
+    unnameableDocuments: number;
     groups: string[];
     emptyGroups: string[];
     pendingChange: number | null;

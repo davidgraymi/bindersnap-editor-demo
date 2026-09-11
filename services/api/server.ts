@@ -4734,6 +4734,12 @@ async function handleWorkspaceSettings(
               name: entry.name,
               folder: entry.folder,
             })),
+          // The ones the line above drops. A binder filed before ADR 0005 has
+          // no identities at all, so this list is empty and the picker offers
+          // no documents — which, unexplained, reads as a missing feature
+          // rather than as a binder that cannot use it yet.
+          unnameableDocuments: documents.filter((entry) => entry.uid === null)
+            .length,
           groups: (orgTeams ?? teams)
             .map((team) => team.name)
             .filter((name) => name !== STAFF_TEAM_NAME)

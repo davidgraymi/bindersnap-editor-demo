@@ -6613,6 +6613,9 @@
                             ]
                           }
                         },
+                        "unnameableDocuments": {
+                          "type": "number"
+                        },
                         "groups": {
                           "type": "array",
                           "items": {
@@ -6637,6 +6640,7 @@
                         "unreadable",
                         "folders",
                         "documents",
+                        "unnameableDocuments",
                         "groups",
                         "emptyGroups",
                         "pendingChange"

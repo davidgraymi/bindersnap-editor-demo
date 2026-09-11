@@ -600,6 +600,20 @@ export const WorkspaceSignOffSchema = z.object({
    * the binder no longer holds, which the screen says rather than hides.
    */
   documents: z.array(SignOffDocumentSchema),
+  /**
+   * How many of this binder's files a rule cannot name on its own.
+   *
+   * A document rule is keyed on the identity in the filename (ADR 0005), so a
+   * file that has none cannot be named individually — which is every document
+   * in a binder filed before that existed. Counted rather than listed, because
+   * the only useful thing to say about them is that they are there and why the
+   * picker is short.
+   *
+   * Silently returning an empty `documents` was a screen offering a feature
+   * with no way to reach it and no explanation, which is the same failure as a
+   * rule that is listed but not enforced.
+   */
+  unnameableDocuments: z.number(),
   /** The groups a rule may name. */
   groups: z.array(z.string()),
   /**

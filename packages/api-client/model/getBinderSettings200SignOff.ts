@@ -15,6 +15,7 @@ export type GetBinderSettings200SignOff = {
   unreadable: GetBinderSettings200SignOffUnreadableItem[];
   folders: string[];
   documents: GetBinderSettings200SignOffDocumentsItem[];
+  unnameableDocuments: number;
   groups: string[];
   emptyGroups: string[];
   /** @nullable */
