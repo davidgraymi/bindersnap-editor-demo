@@ -7102,6 +7102,9 @@
                   },
                   "folder": {
                     "type": "string"
+                  },
+                  "changeNumber": {
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -7615,6 +7618,9 @@
                     "description": "File upload"
                   },
                   "documentPath": {
+                    "type": "string"
+                  },
+                  "changeNumber": {
                     "type": "string"
                   }
                 },

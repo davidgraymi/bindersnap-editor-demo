@@ -6,6 +6,7 @@ import {
 } from "../../../packages/utils/documentPath";
 import { createBinderDocument, validateUploadFile } from "../api";
 import { formatFileSize } from "../documentFile";
+import { ChangeTargetField } from "./ChangeTargetField";
 
 /**
  * Adding a policy to a binder.
@@ -21,8 +22,16 @@ interface AddPolicyModalProps {
   org: string;
   binder: string;
   onClose: () => void;
-  /** The document's identity, which is the address its page lives at. */
-  onAdded: (slugPath: string) => void;
+  /**
+   * The change request the policy is now in.
+   *
+   * **Not the document's page**, which is where this used to land. A filed
+   * policy is not in the binder — it is a change request waiting on a decision,
+   * and the binder's own list says so by not carrying it. Landing on the
+   * document made the act look finished; landing on the change shows what
+   * actually happened and what has to happen next.
+   */
+  onAdded: (changeNumber: number) => void;
 }
 
 /** `Infection_Control_Policy_v3.docx` → `Infection Control Policy v3`. */
@@ -51,6 +60,7 @@ export function AddPolicyModal({
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState("");
   const [folder, setFolder] = useState("");
+  const [changeNumber, setChangeNumber] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -111,8 +121,9 @@ export function AddPolicyModal({
         file,
         name.trim(),
         folder.trim() || undefined,
+        changeNumber ?? undefined,
       );
-      onAdded(created.slugPath);
+      onAdded(created.pullRequestNumber ?? 0);
     } catch (err) {
       setError(
         err instanceof Error && err.message.trim() !== ""
@@ -187,6 +198,14 @@ export function AddPolicyModal({
             />
           </label>
 
+          <ChangeTargetField
+            org={org}
+            binder={binder}
+            value={changeNumber}
+            onChange={setChangeNumber}
+            disabled={submitting}
+          />
+
           {/* Where it lands, before they commit to it. Folders nest as deep as
               anyone wants, and a customer who types one is entitled to see
               what the binder will actually call it. */}
@@ -206,8 +225,9 @@ export function AddPolicyModal({
               the whole product makes, said where somebody is about to make a
               change rather than only in the marketing. */}
           <p className="add-policy-note">
-            This opens a change. The policy joins the binder once it is approved
-            and published.
+            {changeNumber === null
+              ? "This opens a change request. The policy joins the binder once it is approved and published."
+              : "This goes into that change request. The policy joins the binder once the change is approved and published."}
           </p>
 
           <div className="upload-modal-actions">

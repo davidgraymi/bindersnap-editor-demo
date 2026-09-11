@@ -1052,12 +1052,15 @@ export async function createBinderDocument(
   file: File,
   name: string,
   folder?: string,
+  /** An open change to put it in, instead of opening one of its own. */
+  changeNumber?: number,
 ): Promise<CreatedWorkspaceDocumentPayload> {
   try {
     const response = await BindersClient.createBinderDocument(org, binder, {
       file,
       name,
       ...(folder ? { folder } : {}),
+      ...(changeNumber ? { changeNumber: String(changeNumber) } : {}),
     });
     return response.data;
   } catch (error) {
@@ -1078,11 +1081,14 @@ export async function reviseBinderDocument(
   binder: string,
   file: File,
   documentPath: string,
+  /** An open change to put it in, instead of opening one of its own. */
+  changeNumber?: number,
 ): Promise<CreatedWorkspaceDocumentPayload> {
   try {
     const response = await BindersClient.reviseBinderDocument(org, binder, {
       file,
       documentPath,
+      ...(changeNumber ? { changeNumber: String(changeNumber) } : {}),
     });
     return response.data;
   } catch (error) {

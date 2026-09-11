@@ -22,10 +22,17 @@
  * lands on a branch and opens a change request — the same path a policy takes,
  * because a binder's shape is part of its record and ADR 0004's claim is that
  * nothing reaches the record without approval.
+ *
+ * **A change request holds as many of these as somebody wants to put in it.**
+ * Every act used to open one of its own, so revising three cross-referencing
+ * policies produced three change requests that had to be approved separately
+ * and could be published apart — which is precisely the thing ADR 0004 §4 says
+ * the change is the unit of approval to prevent. {@link addToBinderChange}
+ * commits onto a change that is already open instead of starting another.
  */
 
 import { unwrap, type GiteaClient } from "./client";
-import { createPullRequest } from "./pullRequests";
+import { createPullRequest, getPullRequestHeadBranch } from "./pullRequests";
 import { createUploadBranch } from "./uploads";
 
 /** One thing to do to one path, in the caller's language rather than Gitea's. */
@@ -79,6 +86,88 @@ export interface ProposedBinderFileChange {
 }
 
 /**
+ * Write a list of operations onto a branch, as one commit.
+ *
+ * Shared by "open a change for this" and "put this in the change I already
+ * have", which differ in everything around the commit and in nothing about it.
+ */
+async function commitBinderFiles(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  branch: string;
+  operations: readonly BinderFileOperation[];
+  message: string;
+}): Promise<void> {
+  const { client, org, workspace, branch, operations, message } = params;
+
+  if (operations.length === 0) {
+    // A change that changes nothing would merge cleanly and publish nothing,
+    // leaving somebody waiting on a version that never arrives. Refusing here
+    // is the cheapest place to notice.
+    throw new Error("A change has to do something to at least one file.");
+  }
+
+  await unwrap(
+    client.POST("/repos/{owner}/{repo}/contents", {
+      params: { path: { owner: org, repo: workspace } },
+      body: {
+        branch,
+        message,
+        files: operations.map(toGiteaOperation),
+      },
+    }),
+  );
+}
+
+/**
+ * Put these operations into a change request that is already open.
+ *
+ * The second half of "a change request is the unit of work": the first act
+ * opens one, and every act after it can join that one rather than starting
+ * another. Three policies revised together are then approved together and
+ * published together, which is what ADR 0004 means by the change being the
+ * unit of approval.
+ *
+ * Answers with the branch it committed to, because the caller has to be able
+ * to say where the file went.
+ */
+export async function addToBinderChange(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  changeNumber: number;
+  operations: readonly BinderFileOperation[];
+  message: string;
+}): Promise<{ changeNumber: number; branch: string }> {
+  const { client, org, workspace, changeNumber, operations, message } = params;
+
+  const branch = await getPullRequestHeadBranch({
+    client,
+    owner: org,
+    repo: workspace,
+    pullNumber: changeNumber,
+  });
+
+  if (branch === "") {
+    throw new Error(
+      `Change ${changeNumber} has no branch to add to, so there is nowhere to put this.`,
+    );
+  }
+
+  await commitBinderFiles({
+    client,
+    org,
+    workspace,
+    branch,
+    operations,
+    message,
+  });
+
+  return { changeNumber, branch };
+}
+
+/**
  * Put a list of operations on a branch and open a change request for them.
  *
  * The branch name is the caller's, because it is read back: a binder works out
@@ -103,13 +192,6 @@ export async function proposeBinderFileChange(params: {
   const { client, org, workspace, branch, operations, message, title, body } =
     params;
 
-  if (operations.length === 0) {
-    // A change that changes nothing would merge cleanly and publish nothing,
-    // leaving somebody waiting on a version that never arrives. Refusing here
-    // is the cheapest place to notice.
-    throw new Error("A change has to do something to at least one file.");
-  }
-
   await createUploadBranch({
     client,
     owner: org,
@@ -118,16 +200,14 @@ export async function proposeBinderFileChange(params: {
     from: "main",
   });
 
-  await unwrap(
-    client.POST("/repos/{owner}/{repo}/contents", {
-      params: { path: { owner: org, repo: workspace } },
-      body: {
-        branch,
-        message,
-        files: operations.map(toGiteaOperation),
-      },
-    }),
-  );
+  await commitBinderFiles({
+    client,
+    org,
+    workspace,
+    branch,
+    operations,
+    message,
+  });
 
   const change = await createPullRequest({
     client,

@@ -10,4 +10,5 @@ export type CreateBinderDocumentBody = {
   file: Blob;
   name: string;
   folder?: string;
+  changeNumber?: string;
 };

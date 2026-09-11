@@ -49,6 +49,7 @@ import {
   toDocumentEntry,
 } from "./gitea-client/workspaceDocuments";
 import {
+  addToBinderChange,
   proposeBinderFileChange,
   type BinderFileOperation,
 } from "./gitea-client/binderFiles";
@@ -6657,14 +6658,18 @@ async function readBinderDocuments(params: {
   // Joined here rather than inside a fourth call, so the three above stay
   // parallel and a binder still costs three reads whatever it holds.
   const versionsByDocument = groupVersionsByDocument(tags, documents);
+  const changesByDocument = await countOpenChangesByDocument({
+    client,
+    org,
+    workspace,
+    openChanges,
+  });
 
   return documents
     .map((document) => ({
       ...document,
       state: "published" as const,
-      openChangeCount: openChanges.filter((pull) =>
-        changeTouchesDocument(pull, document.slugPath),
-      ).length,
+      openChangeCount: changesByDocument.get(document.slugPath) ?? 0,
       // A list of policies that does not say which version each one is at
       // answers none of the questions a list is opened to answer.
       latestVersion: versionsByDocument.get(document.slugPath)?.[0] ?? null,
@@ -6673,19 +6678,86 @@ async function readBinderDocuments(params: {
 }
 
 /**
- * Whether an open change is about this document.
+ * The open changes that actually touch this document.
  *
- * Matched on the upload branch convention — `upload/<slugPath>/…` — because
- * asking Gitea which files a pull request touches is a call per change, and
- * this list exists to stop paying per document. The answer only decides a
- * badge; nothing gates on it, so a convention is the right price.
+ * Same reason as {@link countOpenChangesByDocument}: the branch name carries
+ * one document, and a change request can hold several. A policy revised inside
+ * somebody else's change used to show "nothing in review" on its own page,
+ * which is the worst place to be wrong about it.
  */
-function changeTouchesDocument(
-  pull: { head?: { ref?: string } | null },
-  slugPath: string,
-): boolean {
-  const ref = pull.head?.ref ?? "";
-  return ref.startsWith(`upload/${slugPath}/`);
+async function filterChangesTouching<T extends { number?: number }>(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  openChanges: readonly T[];
+  slugPath: string;
+}): Promise<T[]> {
+  const { client, org, workspace, openChanges, slugPath } = params;
+
+  const touching = await Promise.all(
+    openChanges.map(async (pull) => {
+      if (typeof pull.number !== "number") return false;
+      const documents = await listChangedDocuments({
+        client,
+        org,
+        workspace,
+        pullNumber: pull.number,
+      }).catch(() => []);
+      return documents.some((document) => document.slugPath === slugPath);
+    }),
+  );
+
+  return openChanges.filter((_, index) => touching[index]);
+}
+
+/**
+ * How many open changes touch each document.
+ *
+ * **This used to read the branch name** — `upload/<slugPath>/…` — which is one
+ * document, and was free. That was the right trade while a change could only
+ * ever be about one document, and it stopped being right the moment a change
+ * request could hold several: the branch names whichever document opened it,
+ * so every other policy in that change showed nothing in flight while a change
+ * to it sat waiting for approval. A binder quietly understating what is being
+ * changed is the failure this list exists to avoid.
+ *
+ * So it asks. One call per **open change**, run in parallel — not one per
+ * document, which is the cost ADR 0004 actually set out to remove and which
+ * this does not reintroduce: a binder of two hundred policies with three
+ * changes in flight pays for three.
+ *
+ * A change whose files cannot be read counts for nothing rather than failing
+ * the list: this decides a line of small print, and a binder is worth showing
+ * without it.
+ */
+async function countOpenChangesByDocument(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  openChanges: ReadonlyArray<{ number?: number }>;
+}): Promise<Map<string, number>> {
+  const { client, org, workspace, openChanges } = params;
+
+  const perChange = await Promise.all(
+    openChanges.map(async (pull) =>
+      typeof pull.number === "number"
+        ? await listChangedDocuments({
+            client,
+            org,
+            workspace,
+            pullNumber: pull.number,
+          }).catch(() => [])
+        : [],
+    ),
+  );
+
+  const counts = new Map<string, number>();
+  for (const documents of perChange) {
+    for (const document of documents) {
+      counts.set(document.slugPath, (counts.get(document.slugPath) ?? 0) + 1);
+    }
+  }
+  return counts;
 }
 
 /**
@@ -6786,9 +6858,13 @@ async function handleWorkspaceDocumentDetail(
         ref,
         versions,
         latestVersion: versions[0] ?? null,
-        openChanges: openChanges.filter((pull) =>
-          changeTouchesDocument(pull, resolved.slugPath),
-        ),
+        openChanges: await filterChangesTouching({
+          client: auth.client,
+          org: orgName,
+          workspace: workspaceName,
+          openChanges,
+          slugPath: resolved.slugPath,
+        }),
       },
       baseHeaders,
     );
@@ -6895,6 +6971,67 @@ async function handleWorkspaceDocumentRaw(
 }
 
 /**
+ * The change request an act should join, if the caller named one.
+ *
+ * **Every act used to open a change request of its own**, so revising three
+ * cross-referencing policies produced three of them — approved separately and
+ * publishable apart, which is the exact thing ADR 0004 §4 makes the change the
+ * unit of approval to prevent. Naming one here puts the work into it instead.
+ *
+ * Checked against the binder's *open* changes rather than taken on trust: a
+ * number that names a closed change, a change in another binder, or nothing at
+ * all would otherwise commit onto whatever branch Gitea happened to resolve.
+ */
+async function resolveChangeToJoin(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  raw: string | null;
+}): Promise<
+  { changeNumber: number; branch: string } | { error: string } | null
+> {
+  const { client, org, workspace, raw } = params;
+  if (raw === null || raw.trim() === "") return null;
+
+  const changeNumber = Number(raw);
+  if (!Number.isInteger(changeNumber) || changeNumber <= 0) {
+    return { error: "That is not a change request number." };
+  }
+
+  const open = await listPullRequests({
+    client,
+    owner: org,
+    repo: workspace,
+    state: "open",
+  });
+
+  const match = open.find((pull) => pull.number === changeNumber);
+  if (!match) {
+    return {
+      error: `Change ${changeNumber} is not open in this binder, so there is nothing to add to.`,
+    };
+  }
+
+  // A sign-off change rewrites who has to approve things. Filing a policy into
+  // it would put a permission decision and a policy in one approval, and the
+  // binder reads that branch prefix to mean "this change is about no document".
+  if ((match.head?.ref ?? "").startsWith("sign-off/")) {
+    return {
+      error: `Change ${changeNumber} changes who signs off on this binder. A policy cannot go in it.`,
+    };
+  }
+
+  const branch = match.head?.ref ?? "";
+  if (branch === "") {
+    return {
+      error: `Change ${changeNumber} has no branch to add to, so there is nowhere to put this.`,
+    };
+  }
+
+  return { changeNumber, branch };
+}
+
+/**
  * A new version of a document that is already in the binder.
  *
  * **The gap this closes.** Adding a policy was the only way anything reached a
@@ -6933,6 +7070,7 @@ async function handleReviseWorkspaceDocument(
 
   const file = parseOptionalFile(form.get("file"));
   const documentPath = parseOptionalString(form.get("documentPath"));
+  const joinRaw = parseOptionalString(form.get("changeNumber"));
 
   if (!file || !documentPath) {
     return json(
@@ -7018,39 +7156,60 @@ async function handleReviseWorkspaceDocument(
             { kind: "write", path: nextPath, base64Content },
           ];
 
+    const join = await resolveChangeToJoin({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      raw: joinRaw,
+    });
+    if (join && "error" in join) {
+      return json(409, { error: join.error }, baseHeaders);
+    }
+
     const branch = buildUploadBranchName(
       existing.slugPath,
       session.username,
       fullHash.slice(0, 8),
     );
 
-    const proposed = await proposeBinderFileChange({
-      client,
-      org: orgName,
-      workspace: workspaceName,
-      branch,
-      operations,
-      message: buildUploadCommitMessage({
-        docSlug: existing.slugPath,
-        canonicalFile: nextPath,
-        sourceFilename: file.name,
-        uploadBranch: branch,
-        uploaderSlug: session.username,
-        fileHashSha256: fullHash,
-      }),
-      title: `Update ${existing.slugPath}`,
-      body: [
-        `Update ${existing.slugPath}`,
-        "",
-        "A new version proposed from Bindersnap.",
-        "",
-        `Source file: ${file.name}`,
-        `Document: ${existing.slugPath}`,
-        `Binder: ${orgName}/${workspaceName}`,
-        `Proposed by: ${session.username}`,
-        `File hash (SHA-256): ${fullHash}`,
-      ].join("\n"),
+    const message = buildUploadCommitMessage({
+      docSlug: existing.slugPath,
+      canonicalFile: nextPath,
+      sourceFilename: file.name,
+      uploadBranch: join ? `change-${join.changeNumber}` : branch,
+      uploaderSlug: session.username,
+      fileHashSha256: fullHash,
     });
+
+    const proposed = join
+      ? await addToBinderChange({
+          client,
+          org: orgName,
+          workspace: workspaceName,
+          changeNumber: join.changeNumber,
+          operations,
+          message,
+        })
+      : await proposeBinderFileChange({
+          client,
+          org: orgName,
+          workspace: workspaceName,
+          branch,
+          operations,
+          message,
+          title: `Update ${existing.slugPath}`,
+          body: [
+            `Update ${existing.slugPath}`,
+            "",
+            "A new version proposed from Bindersnap.",
+            "",
+            `Source file: ${file.name}`,
+            `Document: ${existing.slugPath}`,
+            `Binder: ${orgName}/${workspaceName}`,
+            `Proposed by: ${session.username}`,
+            `File hash (SHA-256): ${fullHash}`,
+          ].join("\n"),
+        });
 
     logger.info("Workspace document revised", {
       username: session.username,
@@ -7110,6 +7269,7 @@ async function handleCreateWorkspaceDocument(
   const file = parseOptionalFile(form.get("file"));
   const name = parseOptionalString(form.get("name"));
   const folder = parseOptionalString(form.get("folder")) || null;
+  const joinRaw = parseOptionalString(form.get("changeNumber"));
 
   if (!file || !name) {
     return json(400, { error: "file and name are required." }, baseHeaders);
@@ -7210,6 +7370,39 @@ async function handleCreateWorkspaceDocument(
       );
     }
 
+    const join = await resolveChangeToJoin({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      raw: joinRaw,
+    });
+    if (join && "error" in join) {
+      return json(409, { error: join.error }, baseHeaders);
+    }
+
+    // The address has to be free on the branch this is joining, too. `main`
+    // does not know about a policy the same change added five minutes ago, so
+    // checking only the record would let one change hold two documents at one
+    // address — a collision that appears on publish rather than here.
+    if (join) {
+      const alreadyInChange = await findWorkspaceDocument({
+        client,
+        org: orgName,
+        workspace: workspaceName,
+        documentPath: slugPath,
+        ref: join.branch,
+      });
+      if (alreadyInChange) {
+        return json(
+          409,
+          {
+            error: `Change ${join.changeNumber} already files something at "${slugPath}".`,
+          },
+          baseHeaders,
+        );
+      }
+    }
+
     const buffer = await file.arrayBuffer();
     const [fullHash, base64Content] = await Promise.all([
       computeFileHashFromBuffer(buffer),
@@ -7222,59 +7415,57 @@ async function handleCreateWorkspaceDocument(
       contentHash8,
     );
 
-    // No repository to create and no rules to install: the binder already has
-    // a protected `main` and its role teams. That is the point of the level.
-    await createUploadBranch({
-      client,
-      owner: orgName,
-      repo: workspaceName,
-      branchName,
-      from: "main",
-    });
-
     const commitMessage = buildUploadCommitMessage({
       docSlug: slugPath,
       canonicalFile: filePath,
       sourceFilename: file.name,
-      uploadBranch: branchName,
+      uploadBranch: join ? `change-${join.changeNumber}` : branchName,
       uploaderSlug: session.username,
       fileHashSha256: fullHash,
     });
 
-    await commitBinaryFile({
-      client,
-      owner: orgName,
-      repo: workspaceName,
-      branch: branchName,
-      filePath,
-      base64Content,
-      message: commitMessage,
-      isNewFile: true,
-    });
+    const operations: BinderFileOperation[] = [
+      { kind: "write", path: filePath, base64Content },
+    ];
 
-    const pr = await createPullRequest({
-      client,
-      owner: orgName,
-      repo: workspaceName,
-      title: `Add ${slugPath}`,
-      head: branchName,
-      base: "main",
-      body: [
-        "Automated upload from Bindersnap.",
-        "",
-        `Source file: ${file.name}`,
-        `Document: ${slugPath}`,
-        `Binder: ${organization.name}/${workspaceName}`,
-        `Uploaded by: ${session.username}`,
-        `File hash (SHA-256): ${fullHash}`,
-      ].join("\n"),
-    });
+    // No repository to create and no rules to install: the binder already has
+    // a protected `main` and its role teams. That is the point of the level.
+    const proposed = join
+      ? await addToBinderChange({
+          client,
+          org: orgName,
+          workspace: workspaceName,
+          changeNumber: join.changeNumber,
+          operations,
+          message: commitMessage,
+        })
+      : await proposeBinderFileChange({
+          client,
+          org: orgName,
+          workspace: workspaceName,
+          branch: branchName,
+          operations,
+          message: commitMessage,
+          title: `Add ${slugPath}`,
+          body: [
+            `Add ${slugPath}`,
+            "",
+            "Automated upload from Bindersnap.",
+            "",
+            `Source file: ${file.name}`,
+            `Document: ${slugPath}`,
+            `Binder: ${organization.name}/${workspaceName}`,
+            `Uploaded by: ${session.username}`,
+            `File hash (SHA-256): ${fullHash}`,
+          ].join("\n"),
+        });
 
     logger.info("Workspace document created", {
       username: session.username,
       organization: orgName,
       workspace: workspaceName,
       documentPath: filePath,
+      changeNumber: proposed.changeNumber,
     });
 
     return json(
@@ -7284,8 +7475,8 @@ async function handleCreateWorkspaceDocument(
         workspace: workspaceName,
         documentPath: filePath,
         slugPath,
-        branch: branchName,
-        pullRequestNumber: pr.number ?? null,
+        branch: proposed.branch,
+        pullRequestNumber: proposed.changeNumber,
       },
       baseHeaders,
     );
