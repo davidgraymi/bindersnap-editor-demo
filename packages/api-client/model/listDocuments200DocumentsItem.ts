@@ -8,15 +8,12 @@ import type { ListDocuments200DocumentsItemLatestVersion } from './listDocuments
 import type { ListDocuments200DocumentsItemState } from './listDocuments200DocumentsItemState.ts';
 
 export type ListDocuments200DocumentsItem = {
-  /** @nullable */
-  path: string | null;
+  path: string;
   slugPath: string;
   name: string;
   folder: string;
-  /** @nullable */
-  size: number | null;
-  /** @nullable */
-  sha: string | null;
+  size: number;
+  sha: string;
   state: ListDocuments200DocumentsItemState;
   openChangeCount: number;
   /** @nullable */

@@ -86,22 +86,22 @@ describe("building rows", () => {
     );
   });
 
-  test("a policy nobody has published is not the same as one at v1", () => {
-    // It has never been on the record. A blank version would read as a
-    // rendering fault; "Not published yet" is the fact.
+  test("a file on the record with no version is not the same as one at v1", () => {
+    // Reachable for a file nothing ever tagged. A blank version would read as
+    // a rendering fault; saying there is none is the fact.
     const row = buildDocumentRow(
-      policy({ state: "proposed", latestVersion: null, openChangeCount: 0 }),
+      policy({ latestVersion: null, openChangeCount: 0 }),
     );
     expect(row.status).toBe("unpublished");
     expect(row.version).toBe("");
-    expect(getDocumentRowStatusLabel(row.status)).toBe("Not published yet");
+    expect(getDocumentRowStatusLabel(row.status)).toBe("No published version");
   });
 
-  test("a policy that exists only inside an open change reads as in review", () => {
+  test("a policy with a change in flight reads as in review", () => {
+    // What a reader is about to walk into, so it leads over the version.
     expect(
-      buildDocumentRow(
-        policy({ state: "proposed", latestVersion: null, openChangeCount: 1 }),
-      ).status,
+      buildDocumentRow(policy({ latestVersion: null, openChangeCount: 1 }))
+        .status,
     ).toBe("in_review");
   });
 });

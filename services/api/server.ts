@@ -6617,7 +6617,19 @@ async function handleListWorkspaceDocuments(
 }
 
 /**
- * Everything one binder holds, published and proposed.
+ * Everything one binder holds — which is what is on `main`, and nothing else.
+ *
+ * **A binder is the record, so it lists the record.** It used to add a row per
+ * policy that existed only inside an open change, so that a filing somebody had
+ * just done was visible immediately. That reads well for ten seconds and badly
+ * afterwards: a list whose whole job is to answer "what is in force here" was
+ * mixing in things that are not in force — no version, no file, and no
+ * guarantee of ever arriving. A reader could not tell the two apart at a
+ * glance, which is the one thing this list must never allow.
+ *
+ * A policy in flight is not lost. It is a change request, and Change requests
+ * is where it lives; the upload still opens the document's own page, which
+ * says in as many words that it is in review.
  *
  * **Three calls for the whole binder**, whatever it holds — the tree, the open
  * changes, and the tags — rather than a pull request query and a tags query per
@@ -6642,74 +6654,18 @@ async function readBinderDocuments(params: {
   // parallel and a binder still costs three reads whatever it holds.
   const versionsByDocument = groupVersionsByDocument(tags, documents);
 
-  const published = documents.map((document) => ({
-    ...document,
-    state: "published" as const,
-    openChangeCount: openChanges.filter((pull) =>
-      changeTouchesDocument(pull, document.slugPath),
-    ).length,
-    // A list of policies that does not say which version each one is at
-    // answers none of the questions a list is opened to answer.
-    latestVersion: versionsByDocument.get(document.slugPath)?.[0] ?? null,
-  }));
-
-  return [...published, ...proposedDocuments(openChanges, published)].sort(
-    (left, right) => left.slugPath.localeCompare(right.slugPath),
-  );
-}
-
-/**
- * The documents a binder is being asked to hold but does not hold yet.
- *
- * `main` is the record, so a policy uploaded an hour ago is not in the tree —
- * and a binder that silently omits what somebody just added looks broken in
- * the one moment they are watching it. These rows come out of the open changes
- * this list has already fetched, read through the `upload/<slugPath>/…` branch
- * convention, so they cost nothing: asking Gitea which files each change
- * touches would be a call per change, which is the cost the binder exists to
- * remove.
- *
- * The extension is not knowable this cheaply, so `path`, `size` and `sha` are
- * null. A row is addressed by its identity, and the document's own page pays
- * for the exact file once.
- */
-function proposedDocuments(
-  openChanges: Array<{ head?: { ref?: string } | null }>,
-  published: Array<{ slugPath: string }>,
-): Array<{
-  path: null;
-  slugPath: string;
-  name: string;
-  folder: string;
-  size: null;
-  sha: null;
-  state: "proposed";
-  openChangeCount: number;
-  latestVersion: null;
-}> {
-  const onRecord = new Set(published.map((document) => document.slugPath));
-  const counts = new Map<string, number>();
-
-  for (const pull of openChanges) {
-    const slugPath = documentSlugPathFromUploadBranch(pull.head?.ref ?? "");
-    if (slugPath === null || onRecord.has(slugPath)) continue;
-    counts.set(slugPath, (counts.get(slugPath) ?? 0) + 1);
-  }
-
-  return [...counts.entries()].map(([slugPath, openChangeCount]) => {
-    const lastSlash = slugPath.lastIndexOf("/");
-    return {
-      path: null,
-      slugPath,
-      name: lastSlash === -1 ? slugPath : slugPath.slice(lastSlash + 1),
-      folder: lastSlash === -1 ? "" : slugPath.slice(0, lastSlash),
-      size: null,
-      sha: null,
-      state: "proposed" as const,
-      openChangeCount,
-      latestVersion: null,
-    };
-  });
+  return documents
+    .map((document) => ({
+      ...document,
+      state: "published" as const,
+      openChangeCount: openChanges.filter((pull) =>
+        changeTouchesDocument(pull, document.slugPath),
+      ).length,
+      // A list of policies that does not say which version each one is at
+      // answers none of the questions a list is opened to answer.
+      latestVersion: versionsByDocument.get(document.slugPath)?.[0] ?? null,
+    }))
+    .sort((left, right) => left.slugPath.localeCompare(right.slugPath));
 }
 
 /**
