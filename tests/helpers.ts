@@ -15,6 +15,7 @@ import {
   validateToken,
 } from "../services/api/gitea-client/auth";
 import { seedDevStack } from "./seed";
+import { seedDocumentUid } from "./seed-scenario";
 
 // ---------------------------------------------------------------------------
 // Environment constants
@@ -57,7 +58,21 @@ export const OWNER = "riverside-health";
 export const REPO = "corporate";
 export const SEEDED_BRANCH =
   "upload/quarterly-report/20260210/091500Z-alice-4b1c9de2";
-export const SEEDED_DOC_PATH = "quarterly-report.json";
+
+/**
+ * The seeded document's filename, identity segment and all.
+ *
+ * Derived rather than written out, by the same function the seed commits with
+ * (ADR 0005). A document's identity is minted per upload and the seed's is
+ * derived from where it is filed — so hard-coding one here would be a second
+ * copy of a rule that is already stated once, and it would go stale the moment
+ * the scenario moved the document.
+ */
+export const SEEDED_DOC_PATH = `quarterly-report.${seedDocumentUid(
+  OWNER,
+  REPO,
+  "quarterly-report",
+)}.json`;
 
 // ---------------------------------------------------------------------------
 // In-memory Storage
