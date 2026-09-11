@@ -308,6 +308,17 @@ export function BinderSignOff({
             </div>
           ) : (
             <>
+              {/* **What a rule can cover, said before anybody opens a picker.**
+                  The three scopes live inside a `<select>`, which shows nothing
+                  until it is opened — so a binder with no rules yet offered no
+                  hint that a rule could name one policy rather than a folder,
+                  and the feature was invisible to somebody looking straight at
+                  it. A control's vocabulary belongs beside the control. */}
+              <p className="doc-rail-note">
+                A rule can cover this whole binder, one folder, or a single
+                document.
+              </p>
+
               {draft.map((rule) => (
                 <RuleEditor
                   key={rule.key}
