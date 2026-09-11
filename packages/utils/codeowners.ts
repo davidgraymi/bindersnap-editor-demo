@@ -54,17 +54,44 @@
  * only that it compiles.
  */
 
-/** One folder, and who signs off on what is in it. */
+/**
+ * How much of a binder one rule covers.
+ *
+ * Three, because those are the three answers a customer actually gives to
+ * "what has to be signed off?" — everything here, this drawer, this policy.
+ * Anything narrower is a folder; anything broader is the binder.
+ */
+export type SignOffScope = "binder" | "folder" | "document";
+
+/** Something in a binder, and who signs off on changes to it. */
 export interface SignOffRule {
+  scope: SignOffScope;
   /**
-   * A folder inside the binder, with no leading or trailing slash. The empty
-   * string is the binder's root — a rule over everything in it.
+   * What the scope names:
+   *
+   * - `binder` — the empty string. There is only one binder.
+   * - `folder` — a folder inside it, with no leading or trailing slash.
+   * - `document` — the document's **identity**, not its path (ADR 0005).
+   *
+   * The last one is the reason this is a `target` rather than a `path`. A rule
+   * written against `nursing/hand-hygiene.md` stops applying the moment
+   * somebody retitles the policy — silently, because Gitea finds no matching
+   * rule and lets the merge through. Written against the identity segment, it
+   * follows the document through a rename and a move both.
    */
-  folder: string;
+  target: string;
   /** Org team handles, written as `@org/team`. The preferred form. */
   teams: string[];
   /** Individual logins, written as `@login`. Supported, rarely the right answer. */
   users: string[];
+}
+
+/** A rule over everything in the binder. */
+export function binderRule(
+  teams: string[] = [],
+  users: string[] = [],
+): SignOffRule {
+  return { scope: "binder", target: "", teams, users };
 }
 
 /**
@@ -110,31 +137,136 @@ export function escapeForTokenizer(input: string): string {
 }
 
 /**
- * The regex Gitea will compile for a folder — after tokenizing, before
- * anchoring.
+ * The regex Gitea will compile for a rule — after tokenizing, before anchoring.
  *
- * A rule over the root is `.*`, because `escapeRegex("") + "/.*"` would be
- * `/.*`; Gitea strips a leading `/` from a pattern, so that would collapse to
+ * Three shapes, one per scope:
+ *
+ * | Scope    | Pattern                    | Matches                              |
+ * | -------- | -------------------------- | ------------------------------------ |
+ * | binder   | `.*`                       | every path in the binder             |
+ * | folder   | `nursing/.*`               | every path under `nursing`           |
+ * | document | `.*\.<uid>(\..*)?`         | that document, wherever it is filed  |
+ *
+ * A rule over the binder is `.*` rather than `/.*`, because Gitea strips a
+ * leading `/` from a pattern — so `escapeRegex("") + "/.*"` would collapse to
  * the same thing by accident rather than on purpose.
+ *
+ * **The document pattern deliberately says nothing about where the file is.**
+ * The identity segment is the one part of a filename that cannot change (ADR
+ * 0005), so a rule keyed on it survives a retitle and a move to another folder,
+ * both of which would otherwise silently drop the sign-off requirement. The
+ * optional trailing group is for a document with no extension, which is a
+ * filename that ends at its identity.
  */
-export function folderPattern(folder: string): string {
-  const trimmed = trimFolder(folder);
-  return trimmed === "" ? ".*" : `${escapeRegex(trimmed)}/.*`;
+export function rulePattern(rule: {
+  scope: SignOffScope;
+  target: string;
+}): string {
+  switch (rule.scope) {
+    case "binder":
+      return ".*";
+    case "folder": {
+      const trimmed = trimFolder(rule.target);
+      // A folder rule with no folder is a binder rule. Emitting `/.*` here
+      // would be a pattern Gitea silently reinterprets.
+      return trimmed === "" ? ".*" : `${escapeRegex(trimmed)}/.*`;
+    }
+    case "document":
+      return `.*\\.${rule.target}(\\..*)?`;
+  }
 }
 
 /**
- * The text that actually goes in the file for a folder: the pattern above,
- * escaped a second time for the tokenizer.
+ * The text that actually goes in the file: the pattern above, escaped a second
+ * time for the tokenizer.
+ *
+ * Applied to the whole pattern rather than to the folder name alone, so every
+ * scope goes through the same two layers in the same order. The deliberate
+ * metacharacters survive it — only `\`, a space and `#` mean anything to the
+ * tokenizer — and a folder containing one of those three is escaped exactly
+ * once, which is the bug this module exists to be careful about.
  */
-export function codeownersToken(folder: string): string {
-  const trimmed = trimFolder(folder);
-  return trimmed === ""
-    ? ".*"
-    : `${escapeForTokenizer(escapeRegex(trimmed))}/.*`;
+export function codeownersToken(rule: {
+  scope: SignOffScope;
+  target: string;
+}): string {
+  return escapeForTokenizer(rulePattern(rule));
 }
 
 function trimFolder(folder: string): string {
   return folder.replace(/^\/+/, "").replace(/\/+$/, "");
+}
+
+/** What a rule covers, in the customer's words, for a problem message. */
+function describeTarget(rule: { scope: SignOffScope; target: string }): string {
+  switch (rule.scope) {
+    case "binder":
+      return "the whole binder";
+    case "folder":
+      return `\u201c${rule.target}\u201d`;
+    case "document":
+      // The identity, not a title: this module has no document list and
+      // inventing a name it cannot check would be worse than saying "a
+      // document". The screen has the list and says the title.
+      return "a document";
+  }
+}
+
+/**
+ * Show that a compiled pattern hits what it is for and misses the lookalike.
+ *
+ * The check that matters, and the one a "does it compile" test would pass while
+ * the rule silently protected the wrong files. Each scope has a different near
+ * miss, so each gets its own pair.
+ */
+function checkPatternAim(
+  rule: { scope: SignOffScope; target: string },
+  compiled: RegExp,
+  where: string,
+): string[] {
+  const problems: string[] = [];
+
+  if (rule.scope === "document") {
+    // A document rule follows the document, so it has to match wherever the
+    // file is filed and whatever it is called — including with no extension.
+    for (const path of [
+      `nursing/a-policy.${rule.target}.md`,
+      `elsewhere/renamed.${rule.target}.pdf`,
+      `a-policy.${rule.target}`,
+    ]) {
+      if (!compiled.test(path)) {
+        problems.push(
+          `${where} produced a rule that does not match the document it is for. That document would go unprotected.`,
+        );
+        break;
+      }
+    }
+
+    // The near miss: another document whose identity merely starts the same.
+    if (compiled.test(`nursing/other.${rule.target}XYZ.md`)) {
+      problems.push(
+        `${where} produced a rule that also matches other documents. It would demand sign-off on policies nobody chose.`,
+      );
+    }
+
+    return problems;
+  }
+
+  const folder = trimFolder(rule.target);
+  const inside = folder === "" ? "anything.md" : `${folder}/a-policy.md`;
+  if (!compiled.test(inside)) {
+    problems.push(
+      `${where} produced a rule that does not match its own folder. That folder would go unprotected.`,
+    );
+  }
+
+  if (folder !== "" && compiled.test(`${folder}-elsewhere/a-policy.md`)) {
+    problems.push(
+      `${where} produced a rule that also matches \u201c${folder}-elsewhere\u201d. It would demand sign-off on folders nobody chose.`,
+    );
+  }
+
+  return problems;
 }
 
 /** `@riverside-health/infection-control`, the way Gitea addresses a team. */
@@ -198,8 +330,12 @@ export function renderCodeowners(
   const lines = [
     "# Generated by Bindersnap. Do not edit by hand.",
     "#",
-    "# Each line is a folder and the groups or people who sign off on changes",
-    "# to it. Patterns are anchored regular expressions, not shell globs, and",
+    "# Each line is something in this binder — the whole binder, one folder, or",
+    "# one document — and the groups or people who sign off on changes to it.",
+    "# A document is matched by the identity in its filename rather than by its",
+    "# path, so its rule survives being retitled or refiled.",
+    "#",
+    "# Patterns are anchored regular expressions, not shell globs, and",
     "# backslashes are consumed twice — once by Gitea's tokenizer and once by",
     "# its regex. Change these rules from the binder's Settings tab.",
     "",
@@ -211,7 +347,7 @@ export function renderCodeowners(
       ...rule.users.map((user) => `@${user}`),
     ];
     if (owners.length === 0) continue;
-    lines.push(`${codeownersToken(rule.folder)}  ${owners.join(" ")}`);
+    lines.push(`${codeownersToken(rule)}  ${owners.join(" ")}`);
   }
 
   return `${lines.join("\n")}\n`;
@@ -249,8 +385,8 @@ export function parseCodeowners(
 
     const [pattern, ...owners] = tokens as [string, ...string[]];
 
-    const folder = folderFromPattern(pattern);
-    if (folder === null) {
+    const scoped = ruleFromPattern(pattern);
+    if (scoped === null) {
       unreadable.push({ line: index + 1, text });
       return;
     }
@@ -275,34 +411,48 @@ export function parseCodeowners(
       }
     }
 
-    rules.push({ folder, teams, users });
+    rules.push({ ...scoped, teams, users });
   });
 
   return { rules, unreadable };
 }
 
 /**
- * Recover the folder a generated pattern came from, or `null` if this is not a
- * pattern this module would have produced.
+ * Recover the scope and target a generated pattern came from, or `null` if this
+ * is not a pattern this module would have produced.
  *
  * Takes the **tokenized** pattern — what Gitea compiles — not the raw text of
  * the line.
  *
- * Only our own shape is recognised. A hand-written rule using the full
+ * Only our own three shapes are recognised. A hand-written rule using the full
  * expressive power of a regex is legal, enforced by Gitea, and simply not
- * something a folder picker can represent, so it is reported as unreadable and
- * shown verbatim rather than silently reinterpreted as a folder it is not.
+ * something a picker can represent, so it is reported as unreadable and shown
+ * verbatim rather than silently reinterpreted as something it is not.
+ *
+ * Every branch round-trips through {@link rulePattern} before it is believed:
+ * anything that only *looks* like one of ours comes back differently, and an
+ * unescaped metacharacter is exactly the case that would otherwise be read as a
+ * folder it is not.
  */
-export function folderFromPattern(pattern: string): string | null {
-  if (pattern === ".*") return "";
+export function ruleFromPattern(
+  pattern: string,
+): { scope: SignOffScope; target: string } | null {
+  if (pattern === ".*") return { scope: "binder", target: "" };
+
+  const document = pattern.match(/^\.\*\\\.([^.\\]+)\(\\\.\.\*\)\?$/);
+  if (document) {
+    const candidate = { scope: "document" as const, target: document[1]! };
+    return rulePattern(candidate) === pattern ? candidate : null;
+  }
+
   if (!pattern.endsWith("/.*")) return null;
 
   const escaped = pattern.slice(0, -"/.*".length);
-  const folder = escaped.replace(/\\(.)/g, "$1");
-
-  // Round-trip, so anything that only *looks* like an escaped folder is
-  // rejected: an unescaped metacharacter comes back differently.
-  return folderPattern(folder) === pattern ? folder : null;
+  const candidate = {
+    scope: "folder" as const,
+    target: escaped.replace(/\\(.)/g, "$1"),
+  };
+  return rulePattern(candidate) === pattern ? candidate : null;
 }
 
 export interface SignOffValidation {
@@ -327,15 +477,49 @@ export function validateSignOffRules(params: {
   rules: readonly SignOffRule[];
   /** Team handles that exist in the organization, for the existence check. */
   knownTeams: readonly string[];
+  /**
+   * The identities of the documents this binder holds, for a document rule.
+   *
+   * Optional: a caller that has not read the tree checks everything else and
+   * skips this one check, rather than refusing every document rule it cannot
+   * corroborate.
+   */
+  knownDocuments?: readonly string[];
 }): SignOffValidation {
-  const { org, rules, knownTeams } = params;
+  const { org, rules, knownTeams, knownDocuments } = params;
   const problems: string[] = [];
 
   const known = new Set(knownTeams.map((team) => team.toLowerCase()));
+  const documents = knownDocuments ? new Set(knownDocuments) : null;
   const seen = new Set<string>();
 
   for (const rule of rules) {
-    const where = rule.folder === "" ? "the whole binder" : `“${rule.folder}”`;
+    const where = describeTarget(rule);
+
+    if (rule.scope === "binder" && trimFolder(rule.target) !== "") {
+      problems.push(
+        `A rule over the whole binder cannot also name “${rule.target}”. Set it on that folder or that document instead.`,
+      );
+      continue;
+    }
+
+    if (rule.scope !== "binder" && trimFolder(rule.target) === "") {
+      problems.push(
+        rule.scope === "folder"
+          ? "A folder rule has no folder on it. Choose a folder, or set the rule over the whole binder."
+          : "A document rule has no document on it. Choose a document, or set the rule over a folder.",
+      );
+      continue;
+    }
+
+    if (rule.scope === "document" && documents && !documents.has(rule.target)) {
+      // A rule naming a document the binder does not hold can never be
+      // satisfied, and reads on screen as a rule about nothing.
+      problems.push(
+        "A rule names a document that is not in this binder. Remove the rule, or set it on a document that is.",
+      );
+      continue;
+    }
 
     if (rule.teams.length === 0 && rule.users.length === 0) {
       problems.push(
@@ -344,13 +528,13 @@ export function validateSignOffRules(params: {
       continue;
     }
 
-    // Two rules over one folder is not an error to Gitea — both match and both
+    // Two rules over one thing is not an error to Gitea — both match and both
     // have to be satisfied — but it is never what somebody meant, and on screen
     // it reads as one rule having lost its owners.
-    const key = trimFolder(rule.folder).toLowerCase();
+    const key = `${rule.scope}:${trimFolder(rule.target).toLowerCase()}`;
     if (seen.has(key)) {
       problems.push(
-        `${where} has two sign-off rules. Put every group for a folder on one rule.`,
+        `${where} has two sign-off rules. Put every group for it on one rule.`,
       );
     }
     seen.add(key);
@@ -367,13 +551,13 @@ export function validateSignOffRules(params: {
     // tokenizer. Anything less than this round trip misses the double-escaping
     // bugs entirely.
     const tokens = tokenizeCodeownersLine(
-      `${codeownersToken(rule.folder)}  @placeholder`,
+      `${codeownersToken(rule)}  @placeholder`,
     );
     const compiledSource = tokens[0];
 
     if (tokens.length < 2 || compiledSource === undefined) {
       problems.push(
-        `${where} produced a rule Gitea would read as an incomplete line. That folder would go unprotected.`,
+        `${where} produced a rule Gitea would read as an incomplete line. It would go unprotected.`,
       );
       continue;
     }
@@ -383,29 +567,16 @@ export function validateSignOffRules(params: {
       compiled = new RegExp(`^${compiledSource}$`);
     } catch {
       problems.push(
-        `${where} produced a rule Gitea cannot read. It would be ignored and the folder would go unprotected.`,
+        `${where} produced a rule Gitea cannot read. It would be ignored and go unprotected.`,
       );
       continue;
     }
 
-    // Stronger than "it compiles". A wrongly escaped folder compiles perfectly
-    // and matches the wrong paths, so the pattern must be shown to match inside
-    // its own folder and to leave a sibling alone.
-    const folder = trimFolder(rule.folder);
-    const inside = folder === "" ? "anything.md" : `${folder}/a-policy.md`;
-    if (!compiled.test(inside)) {
-      problems.push(
-        `${where} produced a rule that does not match its own folder. That folder would go unprotected.`,
-      );
-    }
-
-    if (folder !== "") {
-      const sibling = `${folder}-elsewhere/a-policy.md`;
-      if (compiled.test(sibling)) {
-        problems.push(
-          `${where} produced a rule that also matches “${folder}-elsewhere”. It would demand sign-off on folders nobody chose.`,
-        );
-      }
+    // Stronger than "it compiles". A wrongly escaped target compiles perfectly
+    // and matches the wrong paths, so every pattern must be shown to match what
+    // it is for and to leave the nearest lookalike alone.
+    for (const problem of checkPatternAim(rule, compiled, where)) {
+      problems.push(problem);
     }
   }
 

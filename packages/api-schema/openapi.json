@@ -6531,7 +6531,15 @@
                           "items": {
                             "type": "object",
                             "properties": {
-                              "folder": {
+                              "scope": {
+                                "type": "string",
+                                "enum": [
+                                  "binder",
+                                  "folder",
+                                  "document"
+                                ]
+                              },
+                              "target": {
                                 "type": "string"
                               },
                               "teams": {
@@ -6548,7 +6556,8 @@
                               }
                             },
                             "required": [
-                              "folder",
+                              "scope",
+                              "target",
                               "teams",
                               "users"
                             ]
@@ -6578,7 +6587,39 @@
                             "type": "string"
                           }
                         },
+                        "documents": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "uid": {
+                                "type": "string"
+                              },
+                              "slugPath": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "folder": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "uid",
+                              "slugPath",
+                              "name",
+                              "folder"
+                            ]
+                          }
+                        },
                         "groups": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "emptyGroups": {
                           "type": "array",
                           "items": {
                             "type": "string"
@@ -6595,7 +6636,9 @@
                         "rules",
                         "unreadable",
                         "folders",
+                        "documents",
                         "groups",
+                        "emptyGroups",
                         "pendingChange"
                       ]
                     },
@@ -6726,7 +6769,15 @@
                     "items": {
                       "type": "object",
                       "properties": {
-                        "folder": {
+                        "scope": {
+                          "type": "string",
+                          "enum": [
+                            "binder",
+                            "folder",
+                            "document"
+                          ]
+                        },
+                        "target": {
                           "type": "string"
                         },
                         "teams": {
@@ -6743,7 +6794,8 @@
                         }
                       },
                       "required": [
-                        "folder",
+                        "scope",
+                        "target",
                         "teams",
                         "users"
                       ]

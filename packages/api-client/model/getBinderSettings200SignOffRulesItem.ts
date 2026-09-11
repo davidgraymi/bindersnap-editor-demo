@@ -4,9 +4,11 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
+import type { GetBinderSettings200SignOffRulesItemScope } from './getBinderSettings200SignOffRulesItemScope.ts';
 
 export type GetBinderSettings200SignOffRulesItem = {
-  folder: string;
+  scope: GetBinderSettings200SignOffRulesItemScope;
+  target: string;
   teams: string[];
   users: string[];
 };

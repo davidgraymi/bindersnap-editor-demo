@@ -4,6 +4,7 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
+import type { GetBinderSettings200SignOffDocumentsItem } from './getBinderSettings200SignOffDocumentsItem.ts';
 import type { GetBinderSettings200SignOffRulesItem } from './getBinderSettings200SignOffRulesItem.ts';
 import type { GetBinderSettings200SignOffUnreadableItem } from './getBinderSettings200SignOffUnreadableItem.ts';
 
@@ -13,7 +14,9 @@ export type GetBinderSettings200SignOff = {
   rules: GetBinderSettings200SignOffRulesItem[];
   unreadable: GetBinderSettings200SignOffUnreadableItem[];
   folders: string[];
+  documents: GetBinderSettings200SignOffDocumentsItem[];
   groups: string[];
+  emptyGroups: string[];
   /** @nullable */
   pendingChange: number | null;
 };

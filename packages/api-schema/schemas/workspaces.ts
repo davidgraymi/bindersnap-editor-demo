@@ -532,10 +532,20 @@ export const WorkspaceRulesSchema = z.object({
 });
 export type WorkspaceRules = z.infer<typeof WorkspaceRulesSchema>;
 
-/** One folder, and who has to sign off on a change to it. */
+/** Something in a binder, and who has to sign off on a change to it. */
 export const SignOffRuleSchema = z.object({
-  /** A folder in the binder. The empty string is the binder's root. */
-  folder: z.string(),
+  /**
+   * How much a rule covers — the three answers a customer actually gives to
+   * "what has to be signed off?": everything here, this drawer, this policy.
+   */
+  scope: z.enum(["binder", "folder", "document"]),
+  /**
+   * What the scope names: "" for the binder, a folder path for a folder, and
+   * for a document its **identity** rather than its path (ADR 0005) — so the
+   * rule follows the policy through a retitle or a move instead of silently
+   * ceasing to apply.
+   */
+  target: z.string(),
   /** Group handles. The preferred form: a group's membership can change
    * without touching the binder, which is the whole reason Gitea 28.0.0 is
    * worth the upgrade. */
@@ -545,8 +555,22 @@ export const SignOffRuleSchema = z.object({
 });
 export type SignOffRuleView = z.infer<typeof SignOffRuleSchema>;
 
+/** A document a rule may name, as the picker and the rule list need it. */
+export const SignOffDocumentSchema = z.object({
+  /** The identity a rule is written against. */
+  uid: z.string(),
+  /** `nursing/hand-hygiene` — its address, for a link and for sorting. */
+  slugPath: z.string(),
+  /** `hand-hygiene` — what it is called, before the screen title-cases it. */
+  name: z.string(),
+  /** `nursing`, or "" at the binder's root. Said beside the name in a picker,
+   * because two binders' worth of policies are not all uniquely named. */
+  folder: z.string(),
+});
+export type SignOffDocumentView = z.infer<typeof SignOffDocumentSchema>;
+
 /**
- * A binder's per-folder sign-off, as the Settings tab needs it.
+ * A binder's sign-off rules, as the Settings tab needs it.
  *
  * `enforced` is the field to read first. The rules are a file in the binder;
  * whether Gitea will actually hold a merge for them depends on
@@ -567,8 +591,31 @@ export const WorkspaceSignOffSchema = z.object({
   unreadable: z.array(z.object({ line: z.number(), text: z.string() })),
   /** The folders this binder actually has, for the picker. */
   folders: z.array(z.string()),
+  /**
+   * The documents this binder holds, for the picker and for naming a rule.
+   *
+   * A document rule carries an identity, and an identity is not something to
+   * put in front of a customer — this is how the screen turns one back into
+   * "Hand Hygiene". A rule whose identity is not in this list names a document
+   * the binder no longer holds, which the screen says rather than hides.
+   */
+  documents: z.array(SignOffDocumentSchema),
   /** The groups a rule may name. */
   groups: z.array(z.string()),
+  /**
+   * Groups named by a rule that have nobody in them.
+   *
+   * **Verified against a running Gitea on 2026-09-10: a rule whose owners are
+   * an empty team enforces nothing.** There is no owner to wait for, so the
+   * gate finds nothing outstanding and the merge goes through — silently,
+   * while the page says that folder requires sign-off. Same shape as a rule
+   * Gitea cannot compile, and it gets the same treatment: said out loud rather
+   * than left to be discovered.
+   *
+   * Not refused when the rules are proposed, because "make the group, set the
+   * rule, then add people to it" is a legitimate order to do things in.
+   */
+  emptyGroups: z.array(z.string()),
   /**
    * An open sign-off change, if there is one. Two at once would leave
    * competing versions of the rules in review, and whichever merged last would

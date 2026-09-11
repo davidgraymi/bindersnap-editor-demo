@@ -134,6 +134,7 @@ import { proposeSignOffRules, readSignOffRules } from "./gitea-client/signOff";
 import {
   validateSignOffRules,
   type SignOffRule,
+  type SignOffScope,
 } from "../../packages/utils/codeowners";
 import {
   buildUploadBranchName,
@@ -4677,6 +4678,17 @@ async function handleWorkspaceSettings(
       })),
     );
 
+    // **A rule whose group is empty enforces nothing**, verified against a
+    // running Gitea: there is no owner to wait for, so the gate passes and the
+    // page's promise is false. Read only for the groups a rule actually names,
+    // which is a handful — asking for every team's membership would put an
+    // organization-sized fan-out on a settings page.
+    const emptySignOffGroups = await findEmptySignOffGroups({
+      client,
+      rules: signOff.rules,
+      teams: orgTeams ?? teams,
+    });
+
     return json(
       200,
       {
@@ -4708,10 +4720,25 @@ async function handleWorkspaceSettings(
           // rule the screen omits is a rule somebody believes is not there.
           unreadable: signOff.unreadable,
           folders: foldersInBinder(documents.map((entry) => entry.path)),
+          /**
+           * The documents a rule may name. A document rule carries an
+           * identity, so this is what lets the screen offer "Hand Hygiene"
+           * rather than a ULID — and what lets it say when a rule names a
+           * document the binder no longer holds.
+           */
+          documents: documents
+            .filter((entry) => entry.uid !== null)
+            .map((entry) => ({
+              uid: entry.uid!,
+              slugPath: entry.slugPath,
+              name: entry.name,
+              folder: entry.folder,
+            })),
           groups: (orgTeams ?? teams)
             .map((team) => team.name)
             .filter((name) => name !== STAFF_TEAM_NAME)
             .sort((left, right) => left.localeCompare(right)),
+          emptyGroups: emptySignOffGroups,
           /**
            * An open sign-off change, if there is one. Offering to open a second
            * would leave two competing versions of the rules in review, and
@@ -4882,7 +4909,7 @@ async function handleBinderSignOffRules(
         400,
         {
           error:
-            "Send the rules as a list, each with a folder and the groups or people who sign it off.",
+            "Send the rules as a list, each naming the binder, a folder or a document, and the groups or people who sign it off.",
         },
         baseHeaders,
       );
@@ -4910,10 +4937,22 @@ async function handleBinderSignOffRules(
       ),
     );
 
+    // The binder's documents, so a rule naming one that is not there is
+    // refused rather than committed as a rule that can never be satisfied.
+    const binderDocuments = await listWorkspaceDocuments({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+    }).catch(() => null);
+
     const validation = validateSignOffRules({
       org: orgName,
       rules,
       knownTeams: orgTeams.map((team) => team.name),
+      knownDocuments:
+        binderDocuments
+          ?.map((entry) => entry.uid)
+          .filter((uid): uid is string => uid !== null) ?? undefined,
     });
     if (!validation.ok) {
       return json(
@@ -4951,6 +4990,13 @@ async function handleBinderSignOffRules(
       org: orgName,
       workspace: workspaceName,
       rules,
+      // So the change's body names each document rather than printing its
+      // identity at a reviewer who is being asked to approve it.
+      documentNames: new Map(
+        (binderDocuments ?? [])
+          .filter((entry) => entry.uid !== null)
+          .map((entry) => [entry.uid!, formatDocumentName(entry.name)]),
+      ),
       author: session.username,
     });
 
@@ -4978,6 +5024,10 @@ async function handleBinderSignOffRules(
   }
 }
 
+function isSignOffScope(input: unknown): input is SignOffScope {
+  return input === "binder" || input === "folder" || input === "document";
+}
+
 /** The request body, or `null` when it is not the shape this route takes. */
 function parseSignOffRulesInput(input: unknown): SignOffRule[] | null {
   if (!Array.isArray(input)) return null;
@@ -4987,18 +5037,25 @@ function parseSignOffRulesInput(input: unknown): SignOffRule[] | null {
   for (const entry of input) {
     if (typeof entry !== "object" || entry === null) return null;
     const candidate = entry as {
-      folder?: unknown;
+      scope?: unknown;
+      target?: unknown;
       teams?: unknown;
       users?: unknown;
     };
 
-    if (typeof candidate.folder !== "string") return null;
+    if (!isSignOffScope(candidate.scope)) return null;
+    if (typeof candidate.target !== "string") return null;
 
     const teams = toStringList(candidate.teams);
     const users = toStringList(candidate.users);
     if (teams === null || users === null) return null;
 
-    rules.push({ folder: candidate.folder.trim(), teams, users });
+    rules.push({
+      scope: candidate.scope,
+      target: candidate.target.trim(),
+      teams,
+      users,
+    });
   }
 
   return rules;
@@ -5026,6 +5083,50 @@ function toStringList(input: unknown): string[] | null {
  * want a rule on `policies` as well as on `policies/nursing`; both are real
  * places in the tree.
  */
+/**
+ * The groups a rule names that have nobody in them.
+ *
+ * A rule whose owners are an empty team is enforced by nothing — Gitea has no
+ * owner to wait for, so `HasAllRequiredCodeownerReviews` finds nothing
+ * outstanding and the merge goes through. Verified on a running Gitea on
+ * 2026-09-10 by approving a change with every human in the organization while
+ * the folder's rule named an empty group: it merged.
+ *
+ * That is the same silent failure as a pattern Gitea cannot compile, and it
+ * gets the same treatment — said on the page rather than left to be found by
+ * whoever eventually audits the binder.
+ *
+ * One call per group *named by a rule*, which is a handful. Asking for every
+ * team in the organization would be an organization-sized fan-out on a settings
+ * page, to answer a question about three of them. A group whose membership
+ * cannot be read is left out: reporting "this enforces nothing" on a failed
+ * request would be a worse lie than saying nothing.
+ */
+async function findEmptySignOffGroups(params: {
+  client: GiteaClient;
+  rules: readonly SignOffRule[];
+  teams: ReadonlyArray<{ id: number; name: string }>;
+}): Promise<string[]> {
+  const { client, rules, teams } = params;
+
+  const named = new Set(rules.flatMap((rule) => rule.teams));
+  const wanted = teams.filter((team) => named.has(team.name));
+
+  const counted = await Promise.all(
+    wanted.map(async (team) => ({
+      name: team.name,
+      members: await listTeamMembers({ client, teamId: team.id }).catch(
+        () => null,
+      ),
+    })),
+  );
+
+  return counted
+    .filter((entry) => entry.members !== null && entry.members.length === 0)
+    .map((entry) => entry.name)
+    .sort((left, right) => left.localeCompare(right));
+}
+
 export function foldersInBinder(paths: readonly string[]): string[] {
   const folders = new Set<string>();
 

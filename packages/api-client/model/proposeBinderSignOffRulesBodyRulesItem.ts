@@ -4,9 +4,11 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
+import type { ProposeBinderSignOffRulesBodyRulesItemScope } from './proposeBinderSignOffRulesBodyRulesItemScope.ts';
 
 export type ProposeBinderSignOffRulesBodyRulesItem = {
-  folder: string;
+  scope: ProposeBinderSignOffRulesBodyRulesItemScope;
+  target: string;
   teams: string[];
   users: string[];
 };
