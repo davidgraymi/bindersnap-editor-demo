@@ -15,6 +15,7 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test } from "@playwright/test";
 
+import { isDocumentUid } from "../packages/utils/documentUid";
 import {
   API_BASE_URL,
   APP_BASE_URL,
@@ -326,6 +327,19 @@ async function addDocument(
   return { status: response.status, body: await response.text() };
 }
 
+/**
+ * The identity the server minted, read back out of the filename it returned.
+ *
+ * Tests assert on it rather than hard-coding one, because it is minted per
+ * upload and only the server knows it (ADR 0005). `documentPath` is the one
+ * place a caller ever sees it.
+ */
+function uidOf(documentPath: string): string {
+  const uid = documentPath.split(".").find(isDocumentUid);
+  expect(uid, `no identity segment in "${documentPath}"`).toBeDefined();
+  return uid!;
+}
+
 test("a document is a file at a path inside the binder", async () => {
   const credentials = buildCredentials();
   const sessionCookie = await signUp(credentials);
@@ -346,8 +360,13 @@ test("a document is a file at a path inside the binder", async () => {
     branch: string;
     pullRequestNumber: number | null;
   };
-  expect(payload.documentPath).toBe("nursing/infection-control.md");
+  // The address is what a person typed; the filename also carries the identity
+  // minted for the document (ADR 0005), which is what its version tags will be
+  // named after for the rest of its life.
   expect(payload.slugPath).toBe("nursing/infection-control");
+  expect(payload.documentPath).toMatch(
+    /^nursing\/infection-control\.[0-9A-HJKMNP-TV-Z]{26}\.md$/,
+  );
   expect(payload.pullRequestNumber).toBeGreaterThan(0);
 
   const token = await createUserToken(
@@ -418,7 +437,7 @@ test("a document cannot be written outside the binder that governs it", async ()
   // meant to type, and committing to one would write outside the binder.
   expect(
     (JSON.parse(escaped.body) as { documentPath: string }).documentPath,
-  ).toBe("etc/escape.md");
+  ).toMatch(/^etc\/escape\.[0-9A-HJKMNP-TV-Z]{26}\.md$/);
 });
 
 test("adding a document where one already lives is refused", async () => {
@@ -609,7 +628,10 @@ test("an unpublished document is listed as proposed, and opens", async () => {
     body: "draft policy text",
   });
   expect(added.status, added.body).toBe(201);
-  const { slugPath } = JSON.parse(added.body) as { slugPath: string };
+  const { slugPath, documentPath } = JSON.parse(added.body) as {
+    slugPath: string;
+    documentPath: string;
+  };
 
   // The upload is on a branch with an open change, and nothing reaches main
   // except a merged, approved change — so this document is not on the record.
@@ -654,7 +676,7 @@ test("an unpublished document is listed as proposed, and opens", async () => {
   };
   expect(detailPayload.state).toBe("proposed");
   expect(detailPayload.ref.startsWith(`upload/${slugPath}/`)).toBe(true);
-  expect(detailPayload.document.path).toBe(`${slugPath}.md`);
+  expect(detailPayload.document.path).toBe(documentPath);
   expect(detailPayload.versions).toEqual([]);
 
   const bytes = await downloadDocument(
@@ -679,9 +701,12 @@ test("publishing turns a proposed document into a published one", async () => {
   const added = await addDocument(sessionCookie, org.name, "clinical", {
     name: "Infection Control",
   });
-  const { pullRequestNumber, slugPath } = JSON.parse(added.body) as {
+  const { pullRequestNumber, slugPath, documentPath } = JSON.parse(
+    added.body,
+  ) as {
     pullRequestNumber: number;
     slugPath: string;
+    documentPath: string;
   };
 
   const token = await createUserToken(
@@ -712,7 +737,7 @@ test("publishing turns a proposed document into a published one", async () => {
   expect(documents[0]).toMatchObject({
     slugPath,
     state: "published",
-    path: `${slugPath}.md`,
+    path: documentPath,
   });
 });
 
@@ -910,9 +935,12 @@ test("publishing a change versions the document and puts it on main", async () =
     folder: "Nursing",
   });
   expect(added.status, added.body).toBe(201);
-  const { pullRequestNumber, slugPath } = JSON.parse(added.body) as {
+  const { pullRequestNumber, slugPath, documentPath } = JSON.parse(
+    added.body,
+  ) as {
     pullRequestNumber: number;
     slugPath: string;
+    documentPath: string;
   };
 
   const token = await createUserToken(
@@ -933,8 +961,9 @@ test("publishing a change versions the document and puts it on main", async () =
   const { tags } = JSON.parse(published.body) as {
     tags: Array<{ tag: string; version: number; commitSha: string }>;
   };
-  // The tag names the document, because a binder's tags are repository-global.
-  expect(tags.map((t) => t.tag)).toEqual([`${slugPath}/v1`]);
+  // The tag names the document by its identity, because a binder's tags are
+  // repository-global and because a rename must not restart the numbering.
+  expect(tags.map((t) => t.tag)).toEqual([`${uidOf(documentPath)}/v1`]);
 
   // And now it is part of the record: on main, and in the binder's list.
   const listed = await listDocuments(sessionCookie, org.name, "clinical");
@@ -960,9 +989,9 @@ test("publishing a change versions the document and puts it on main", async () =
 
   const onMain = await giteaGet<{ path: string }>(
     token,
-    `/repos/${org.name}/clinical/contents/${slugPath}.md?ref=main`,
+    `/repos/${org.name}/clinical/contents/${documentPath}?ref=main`,
   );
-  expect(onMain.path).toBe(`${slugPath}.md`);
+  expect(onMain.path).toBe(documentPath);
 });
 
 test("a published document hands back its bytes, by identity or by path", async () => {
@@ -1030,7 +1059,7 @@ test("a published document hands back its bytes, by identity or by path", async 
     org.name,
     "clinical",
     slugPath,
-    `${slugPath}/v1`,
+    `${uidOf(documentPath)}/v1`,
   );
   expect(atVersion.status, atVersion.body).toBe(200);
   expect(atVersion.body).toBe("wash your hands");
@@ -1123,9 +1152,12 @@ test("approving through the binder counts, and then it publishes", async () => {
   const added = await addDocument(sessionCookie, org.name, "clinical", {
     name: "Infection Control",
   });
-  const { pullRequestNumber, slugPath } = JSON.parse(added.body) as {
+  const { pullRequestNumber, slugPath, documentPath } = JSON.parse(
+    added.body,
+  ) as {
     pullRequestNumber: number;
     slugPath: string;
+    documentPath: string;
   };
 
   const ownerToken = await createUserToken(
@@ -1184,7 +1216,7 @@ test("approving through the binder counts, and then it publishes", async () => {
     (JSON.parse(published.body) as { tags: Array<{ tag: string }> }).tags.map(
       (tag) => tag.tag,
     ),
-  ).toEqual([`${slugPath}/v1`]);
+  ).toEqual([`${uidOf(documentPath)}/v1`]);
 });
 
 test("asking for changes needs words, and an approval does not", async () => {
@@ -1375,9 +1407,12 @@ test("a binder lists its change requests, open and then decided", async () => {
     name: "Infection Control",
     folder: "Nursing",
   });
-  const { pullRequestNumber, slugPath } = JSON.parse(added.body) as {
+  const { pullRequestNumber, slugPath, documentPath } = JSON.parse(
+    added.body,
+  ) as {
     pullRequestNumber: number;
     slugPath: string;
+    documentPath: string;
   };
 
   const open = await listChanges(sessionCookie, org.name, "clinical", "open");
@@ -1580,9 +1615,12 @@ test("a change detail says whether this caller may set its reviewers", async () 
   const added = await addDocument(sessionCookie, org.name, "clinical", {
     name: "Infection Control",
   });
-  const { pullRequestNumber, slugPath } = JSON.parse(added.body) as {
+  const { pullRequestNumber, slugPath, documentPath } = JSON.parse(
+    added.body,
+  ) as {
     pullRequestNumber: number;
     slugPath: string;
+    documentPath: string;
   };
 
   const detail = await getChange(
@@ -1646,9 +1684,12 @@ test("the binder's history answers who approved which version", async () => {
     name: "Infection Control",
     folder: "Nursing",
   });
-  const { pullRequestNumber, slugPath } = JSON.parse(added.body) as {
+  const { pullRequestNumber, slugPath, documentPath } = JSON.parse(
+    added.body,
+  ) as {
     pullRequestNumber: number;
     slugPath: string;
+    documentPath: string;
   };
 
   const ownerToken = await createUserToken(
@@ -1850,9 +1891,9 @@ test("an owner's approval counts, although Owners is never granted", async () =>
   const addedDoc = await addDocument(authorCookie, org.name, "clinical", {
     name: "Infection Control",
   });
-  const { pullRequestNumber, slugPath } = JSON.parse(addedDoc.body) as {
+  const { pullRequestNumber, documentPath } = JSON.parse(addedDoc.body) as {
     pullRequestNumber: number;
-    slugPath: string;
+    documentPath: string;
   };
 
   await approveChange(
@@ -1875,7 +1916,7 @@ test("an owner's approval counts, although Owners is never granted", async () =>
     (JSON.parse(published.body) as { tags: Array<{ tag: string }> }).tags.map(
       (tag) => tag.tag,
     ),
-  ).toEqual([`${slugPath}/v1`]);
+  ).toEqual([`${uidOf(documentPath)}/v1`]);
 });
 
 test("a member of staff can approve, and the approval counts", async () => {
@@ -3883,9 +3924,12 @@ test("removing somebody takes their access and leaves the record", async () => {
   const added = await addDocument(authorCookie, org.name, "clinical", {
     name: "Infection Control",
   });
-  const { pullRequestNumber, slugPath } = JSON.parse(added.body) as {
+  const { pullRequestNumber, slugPath, documentPath } = JSON.parse(
+    added.body,
+  ) as {
     pullRequestNumber: number;
     slugPath: string;
+    documentPath: string;
   };
 
   await approveChange(reviewer.token, org.name, "clinical", pullRequestNumber);
