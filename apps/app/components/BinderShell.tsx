@@ -212,7 +212,11 @@ export function BinderShell({
               actively competing with Approve. Each tab that has a primary
               action of its own already puts it in the body, next to the thing
               it acts on. */}
-          {isReadOnly || activeTab !== "documents" ? null : (
+          {/* And not while a document is open, which is the Documents tab but
+              not the documents *list*. That page has a primary act of its own —
+              "New version" — and two filled buttons on one screen is two
+              answers to "what is this page for". */}
+          {isReadOnly || activeTab !== "documents" || documentPath ? null : (
             <button
               className="doc-header-submit"
               type="button"

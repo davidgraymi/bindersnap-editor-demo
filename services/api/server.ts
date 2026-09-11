@@ -49,6 +49,10 @@ import {
   toDocumentEntry,
 } from "./gitea-client/workspaceDocuments";
 import {
+  proposeBinderFileChange,
+  type BinderFileOperation,
+} from "./gitea-client/binderFiles";
+import {
   accessCostsSeat,
   addTeamMember,
   createOrganizationGroup,
@@ -6890,6 +6894,200 @@ async function handleWorkspaceDocumentRaw(
   }
 }
 
+/**
+ * A new version of a document that is already in the binder.
+ *
+ * **The gap this closes.** Adding a policy was the only way anything reached a
+ * binder, so revising one meant uploading a file whose name slugged to exactly
+ * the same thing — and if it did not, you got a second document at a second
+ * address instead of a second version of the first. That is not a workflow
+ * anybody would choose; it is what was left over from a create-only path.
+ *
+ * The document is named by its **address**, and the file that lands keeps its
+ * identity (ADR 0005). So a Word policy can be replaced by a PDF and it is
+ * still the same policy, on v5 rather than back at v1 — the identity segment
+ * does not change, only the extension after it, and the version tags are named
+ * after the identity.
+ *
+ * Like every other write to a binder, it proposes rather than changes: `main`
+ * is protected, so this opens a change request and answers with its number.
+ */
+async function handleReviseWorkspaceDocument(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { session, client } = auth;
+  const form = await readMultipartBody(req);
+  if (!form) {
+    return json(
+      400,
+      { error: "Multipart form data is required." },
+      baseHeaders,
+    );
+  }
+
+  const file = parseOptionalFile(form.get("file"));
+  const documentPath = parseOptionalString(form.get("documentPath"));
+
+  if (!file || !documentPath) {
+    return json(
+      400,
+      { error: "file and documentPath are required." },
+      baseHeaders,
+    );
+  }
+
+  const validation = validateUploadFile(file);
+  if (!validation.valid) {
+    return json(
+      400,
+      { error: validation.reason ?? "Invalid file." },
+      baseHeaders,
+    );
+  }
+
+  try {
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    // Read from `main`, deliberately. A revision revises what is on the record;
+    // a document that only exists inside somebody else's open change is not
+    // something to build a second change on top of.
+    const existing = await findWorkspaceDocument({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      documentPath,
+    });
+
+    if (!existing) {
+      return json(
+        404,
+        {
+          error: `"${documentPath}" is not in this binder. A new policy is added rather than revised.`,
+        },
+        baseHeaders,
+      );
+    }
+
+    if (existing.uid === null) {
+      // No identity means no version series to add to, which is the same
+      // refusal publish makes — said here, where it is still actionable.
+      return json(
+        409,
+        {
+          error: `"${existing.path}" was not added through Bindersnap, so it has no version history to revise.`,
+        },
+        baseHeaders,
+      );
+    }
+
+    const buffer = await file.arrayBuffer();
+    const [fullHash, base64Content] = await Promise.all([
+      computeFileHashFromBuffer(buffer),
+      Buffer.from(buffer).toString("base64"),
+    ]);
+
+    const nextPath = buildDocumentFilePath(
+      existing.name,
+      getFileExtension(file.name),
+      existing.uid,
+      existing.folder || null,
+    );
+
+    // **Replacing a .docx with a .pdf moves the file**, because the extension
+    // is part of the filename. The identity segment is not, so this is still
+    // the same document and its next version is the next one — which is the
+    // whole reason the identity is a segment rather than the whole name.
+    const operations: BinderFileOperation[] =
+      nextPath === existing.path
+        ? [{ kind: "write", path: nextPath, base64Content }]
+        : [
+            { kind: "remove", path: existing.path },
+            { kind: "write", path: nextPath, base64Content },
+          ];
+
+    const branch = buildUploadBranchName(
+      existing.slugPath,
+      session.username,
+      fullHash.slice(0, 8),
+    );
+
+    const proposed = await proposeBinderFileChange({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      branch,
+      operations,
+      message: buildUploadCommitMessage({
+        docSlug: existing.slugPath,
+        canonicalFile: nextPath,
+        sourceFilename: file.name,
+        uploadBranch: branch,
+        uploaderSlug: session.username,
+        fileHashSha256: fullHash,
+      }),
+      title: `Update ${existing.slugPath}`,
+      body: [
+        `Update ${existing.slugPath}`,
+        "",
+        "A new version proposed from Bindersnap.",
+        "",
+        `Source file: ${file.name}`,
+        `Document: ${existing.slugPath}`,
+        `Binder: ${orgName}/${workspaceName}`,
+        `Proposed by: ${session.username}`,
+        `File hash (SHA-256): ${fullHash}`,
+      ].join("\n"),
+    });
+
+    logger.info("Workspace document revised", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      documentPath: nextPath,
+      changeNumber: proposed.changeNumber,
+    });
+
+    return json(
+      201,
+      {
+        organization: orgName,
+        workspace: workspaceName,
+        documentPath: nextPath,
+        slugPath: existing.slugPath,
+        branch: proposed.branch,
+        pullRequestNumber: proposed.changeNumber,
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to revise a document", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      documentPath,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to propose a new version.",
+    );
+  }
+}
+
 async function handleCreateWorkspaceDocument(
   req: Request,
   baseHeaders: Headers,
@@ -7971,6 +8169,14 @@ export function createApiServer() {
         const workspaceDocumentsMatch = pathname.match(
           /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/documents$/,
         );
+        // A new version of a document already in the binder. The document is
+        // named in the body rather than in the path, because a path suffix
+        // would collide with a policy filed in a folder of that name —
+        // `…/documents/nursing/revisions` is a real address a person could
+        // have made.
+        const workspaceDocumentRevisionsMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/document-revisions$/,
+        );
         // The document's path carries slashes — it is a path inside the binder,
         // not one segment — so this captures the rest of the URL.
         const workspaceDocumentMatch = pathname.match(
@@ -8352,6 +8558,13 @@ export function createApiServer() {
             baseHeaders,
             workspaceOverviewMatch[1]!,
             workspaceOverviewMatch[2]!,
+          );
+        } else if (workspaceDocumentRevisionsMatch && method === "POST") {
+          return await handleReviseWorkspaceDocument(
+            req,
+            baseHeaders,
+            workspaceDocumentRevisionsMatch[1]!,
+            workspaceDocumentRevisionsMatch[2]!,
           );
         } else if (workspaceDocumentsMatch && method === "POST") {
           response = await handleCreateWorkspaceDocument(

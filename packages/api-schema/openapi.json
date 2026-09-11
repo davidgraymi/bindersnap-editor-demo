@@ -7578,6 +7578,97 @@
         }
       }
     },
+    "/api/app/binders/{org}/{binder}/document-revisions": {
+      "post": {
+        "operationId": "reviseBinderDocument",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "File upload"
+                  },
+                  "documentPath": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "file",
+                  "documentPath"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The new file's path, and the change that would publish it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "documentPath": {
+                      "type": "string"
+                    },
+                    "slugPath": {
+                      "type": "string"
+                    },
+                    "branch": {
+                      "type": "string"
+                    },
+                    "pullRequestNumber": {
+                      "type": "number",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "workspace",
+                    "documentPath",
+                    "slugPath",
+                    "branch",
+                    "pullRequestNumber"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/app/binders/{org}/{binder}/changes/{changeNumber}": {
       "get": {
         "operationId": "getBinderChange",

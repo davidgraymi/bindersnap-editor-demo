@@ -904,6 +904,47 @@ registry.registerPath({
 });
 
 registry.registerPath({
+  method: "post",
+  path: "/api/app/binders/{org}/{binder}/document-revisions",
+  operationId: "reviseBinderDocument",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({ org: z.string(), binder: z.string() }),
+    body: {
+      required: true,
+      content: {
+        "multipart/form-data": {
+          schema: z.object({
+            file: z.string().openapi({
+              type: "string",
+              format: "binary",
+              description: "File upload",
+            }),
+            /**
+             * The document to revise, by its address — `nursing/hand-hygiene`.
+             *
+             * In the body rather than the path: a path suffix would collide
+             * with a policy filed in a folder of that name.
+             */
+            documentPath: z.string(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "The new file's path, and the change that would publish it",
+      content: {
+        "application/json": {
+          schema: CreatedWorkspaceDocumentPayloadSchema,
+        },
+      },
+    },
+  },
+});
+
+registry.registerPath({
   method: "get",
   path: "/api/app/binders/{org}/{binder}/changes/{changeNumber}",
   operationId: "getBinderChange",
