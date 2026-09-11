@@ -32,10 +32,16 @@ test("with no rules, the page says what a rule is", async ({ page }) => {
   await expect(empty).toBeVisible({ timeout: 30_000 });
 
   // What it is, and a worked example — a reader who has never set one cannot
-  // act on "no folder needs its own sign-off".
-  await expect(empty).toContainText("No folder needs its own sign-off yet");
-  await expect(empty).toContainText("adds a second requirement to one folder");
+  // act on "nothing needs its own sign-off".
+  await expect(empty).toContainText("Nothing here needs its own sign-off yet");
+  await expect(empty).toContainText(
+    "adds a second requirement to one part of it",
+  );
   await expect(empty).toContainText("signs off on anything filed in nursing");
+  // And what a rule may cover, which is no longer only a folder.
+  await expect(empty).toContainText(
+    "this whole binder, one folder, or a single document",
+  );
 });
 
 test("nothing to propose means nothing to press", async ({ page }) => {
