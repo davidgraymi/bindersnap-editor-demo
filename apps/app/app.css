@@ -7527,3 +7527,14 @@ input {
   background: var(--bs-status-danger-bg);
   border-color: var(--bs-status-danger-border);
 }
+
+/* Two acts side by side in a page header — "New folder" beside "Add a policy",
+   "Rename or move" beside "New version". The weight is carried by the buttons
+   themselves; this only stops them from touching and keeps them together when
+   the header wraps. */
+.doc-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  flex-wrap: wrap;
+}

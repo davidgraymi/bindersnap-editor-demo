@@ -11,6 +11,7 @@ import * as AdminClient from "../../packages/api-client/admin/admin";
 import * as OrganizationsClient from "../../packages/api-client/organizations/organizations";
 import * as BindersClient from "../../packages/api-client/workspaces/workspaces";
 import type {
+  BinderShapeChangePayload,
   CreatedWorkspaceDocumentPayload,
   BinderGroupsPayload,
   BinderPeoplePayload,
@@ -1094,6 +1095,53 @@ export async function reviseBinderDocument(
   } catch (error) {
     handlePaymentRequired(
       `/api/app/binders/${org}/${binder}/document-revisions`,
+      error,
+    );
+  }
+}
+
+/**
+ * Make a folder in a binder.
+ *
+ * Git has no empty directories, so this is a real file committed into a change
+ * request like everything else — a binder's shape is part of its record, and
+ * `main` is protected against anything that has not been approved.
+ */
+export async function createBinderFolder(
+  org: string,
+  binder: string,
+  folder: string,
+  changeNumber?: number,
+): Promise<BinderShapeChangePayload> {
+  try {
+    const response = await BindersClient.createBinderFolder(org, binder, {
+      folder,
+      ...(changeNumber ? { changeNumber } : {}),
+    });
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(`/api/app/binders/${org}/${binder}/folders`, error);
+  }
+}
+
+/** Rename a folder, or move it under another one. Everything inside moves. */
+export async function renameBinderFolder(
+  org: string,
+  binder: string,
+  from: string,
+  to: string,
+  changeNumber?: number,
+): Promise<BinderShapeChangePayload> {
+  try {
+    const response = await BindersClient.renameBinderFolder(org, binder, {
+      from,
+      to,
+      ...(changeNumber ? { changeNumber } : {}),
+    });
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/binders/${org}/${binder}/folder-renames`,
       error,
     );
   }

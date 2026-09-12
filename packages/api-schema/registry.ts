@@ -59,6 +59,7 @@ import {
   OrganizationPeoplePayloadSchema,
   ProposedSignOffChangeSchema,
   SignOffRulesRequestSchema,
+  BinderShapeChangePayloadSchema,
   WorkspaceHistoryPayloadSchema,
   WorkspaceSettingsPayloadSchema,
   WorkspaceOverviewPayloadSchema,
@@ -948,6 +949,68 @@ registry.registerPath({
         "application/json": {
           schema: CreatedWorkspaceDocumentPayloadSchema,
         },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/binders/{org}/{binder}/folders",
+  operationId: "createBinderFolder",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({ org: z.string(), binder: z.string() }),
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z.object({
+            /** Nests as deep as wanted — `clinical/nursing/ward-3`. */
+            folder: z.string(),
+            /** An open change request to put it in, instead of opening one. */
+            changeNumber: z.number().optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "The change request that would add the folder",
+      content: {
+        "application/json": { schema: BinderShapeChangePayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/binders/{org}/{binder}/folder-renames",
+  operationId: "renameBinderFolder",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({ org: z.string(), binder: z.string() }),
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z.object({
+            from: z.string(),
+            /** A new name, or a path — renaming and moving are one act. */
+            to: z.string(),
+            changeNumber: z.number().optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "The change request that would rename the folder",
+      content: {
+        "application/json": { schema: BinderShapeChangePayloadSchema },
       },
     },
   },

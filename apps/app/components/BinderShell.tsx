@@ -14,6 +14,7 @@ import type { DocumentChangeView } from "../routes";
 import { parseRequestedChange } from "../binderChange";
 import { formatDocumentName } from "../documentDisplay";
 import { AddPolicyModal } from "./AddPolicyModal";
+import { NewFolderModal } from "./NewFolderModal";
 import { BinderChangePage } from "./BinderChangePage";
 import { BinderChanges } from "./BinderChanges";
 import { BinderHistory } from "./BinderHistory";
@@ -79,6 +80,7 @@ export function BinderShell({
     null,
   );
   const [adding, setAdding] = useState(false);
+  const [addingFolder, setAddingFolder] = useState(false);
 
   // Back and forward are how somebody leaves a tab or a change, so the shell
   // follows the address bar rather than its own memory of what was clicked.
@@ -217,13 +219,22 @@ export function BinderShell({
               "New version" — and two filled buttons on one screen is two
               answers to "what is this page for". */}
           {isReadOnly || activeTab !== "documents" || documentPath ? null : (
-            <button
-              className="doc-header-submit"
-              type="button"
-              onClick={() => setAdding(true)}
-            >
-              Add a policy
-            </button>
+            <div className="doc-header-actions">
+              <button
+                className="bs-btn bs-btn-secondary"
+                type="button"
+                onClick={() => setAddingFolder(true)}
+              >
+                New folder
+              </button>
+              <button
+                className="doc-header-submit"
+                type="button"
+                onClick={() => setAdding(true)}
+              >
+                Add a policy
+              </button>
+            </div>
           )}
         </div>
 
@@ -297,6 +308,19 @@ export function BinderShell({
           onOpenDocument={onOpenDocument}
         />
       )}
+
+      {addingFolder ? (
+        <NewFolderModal
+          org={org}
+          binder={binder}
+          onClose={() => setAddingFolder(false)}
+          onProposed={(changeNumber) => {
+            setAddingFolder(false);
+            loadOverview();
+            openChangeNumber(changeNumber);
+          }}
+        />
+      ) : null}
 
       {adding ? (
         <AddPolicyModal

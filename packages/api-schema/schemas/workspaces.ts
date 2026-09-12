@@ -88,6 +88,23 @@ export type CreatedWorkspaceDocumentPayload = z.infer<
   typeof CreatedWorkspaceDocumentPayloadSchema
 >;
 
+/**
+ * What an act that changes a binder's shape answers with.
+ *
+ * A change request number, not a success: making a folder or renaming one has
+ * not happened yet. `main` is protected and a binder's shape is part of its
+ * record, so it waits on a decision like a policy does.
+ */
+export const BinderShapeChangePayloadSchema = z.object({
+  organization: z.string(),
+  workspace: z.string(),
+  branch: z.string(),
+  changeNumber: z.number(),
+});
+export type BinderShapeChangePayload = z.infer<
+  typeof BinderShapeChangePayloadSchema
+>;
+
 /** A document as the binder holds it: a file at a path. */
 export const WorkspaceDocumentEntrySchema = z.object({
   /** `clinical/infection-control.01J8XZ4K7M….pdf` — where the file is. */
