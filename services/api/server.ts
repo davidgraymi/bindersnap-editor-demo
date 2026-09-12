@@ -57,6 +57,7 @@ import {
   type BinderFileOperation,
 } from "./gitea-client/binderFiles";
 import {
+  planDocumentRename,
   planFolderRename,
   planNewFolder,
   type ShapeChangeResult,
@@ -6786,12 +6787,20 @@ async function handleWorkspaceDocumentDetail(
 
     let ref = "main";
     let state: "published" | "proposed" = "published";
-    let document = await findWorkspaceDocument({
+
+    // One read of the tree answers both "which document is this" and "what
+    // folders could it be moved to", so the page that offers a move has the
+    // list without a second call.
+    const tree = await readWorkspaceTree({
       client: auth.client,
       org: orgName,
       workspace: workspaceName,
-      documentPath,
     });
+
+    let document =
+      tree.documents.find((entry) => entry.path === documentPath) ??
+      tree.documents.find((entry) => entry.slugPath === documentPath) ??
+      null;
 
     // Not on the record, so it is either a document that was never uploaded or
     // one whose first change nobody has approved yet. The binder's list shows
@@ -6855,6 +6864,7 @@ async function handleWorkspaceDocumentDetail(
         ref,
         versions,
         latestVersion: versions[0] ?? null,
+        folders: tree.folders,
         openChanges: await filterChangesTouching({
           client: auth.client,
           org: orgName,
@@ -8527,6 +8537,9 @@ export function createApiServer() {
         const workspaceFolderRenamesMatch = pathname.match(
           /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/folder-renames$/,
         );
+        const workspaceDocumentRenamesMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/document-renames$/,
+        );
         // The document's path carries slashes — it is a path inside the binder,
         // not one segment — so this captures the rest of the URL.
         const workspaceDocumentMatch = pathname.match(
@@ -8934,6 +8947,33 @@ export function createApiServer() {
                 paths: tree.paths,
                 existingFolders: tree.folders,
               }),
+          );
+        } else if (workspaceDocumentRenamesMatch && method === "POST") {
+          return await handleBinderShapeChange(
+            req,
+            baseHeaders,
+            workspaceDocumentRenamesMatch[1]!,
+            workspaceDocumentRenamesMatch[2]!,
+            ({ body, tree }) => {
+              const documentPath =
+                typeof body.documentPath === "string" ? body.documentPath : "";
+              const document =
+                tree.documents.find((entry) => entry.path === documentPath) ??
+                tree.documents.find((entry) => entry.slugPath === documentPath);
+
+              if (!document) {
+                return { error: `"${documentPath}" is not in this binder.` };
+              }
+
+              return planDocumentRename({
+                document,
+                ...(typeof body.name === "string" ? { name: body.name } : {}),
+                ...(typeof body.folder === "string"
+                  ? { folder: body.folder }
+                  : {}),
+                paths: tree.paths,
+              });
+            },
           );
         } else if (workspaceDocumentRevisionsMatch && method === "POST") {
           return await handleReviseWorkspaceDocument(

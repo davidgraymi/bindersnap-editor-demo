@@ -1017,6 +1017,40 @@ registry.registerPath({
 });
 
 registry.registerPath({
+  method: "post",
+  path: "/api/app/binders/{org}/{binder}/document-renames",
+  operationId: "renameBinderDocument",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({ org: z.string(), binder: z.string() }),
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z.object({
+            /** The document, by its address. */
+            documentPath: z.string(),
+            /** A new title, or absent to keep the one it has. */
+            name: z.string().optional(),
+            /** A new folder, or absent to leave it where it is. "" is the root. */
+            folder: z.string().optional(),
+            changeNumber: z.number().optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "The change request that would rename the document",
+      content: {
+        "application/json": { schema: BinderShapeChangePayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
   method: "get",
   path: "/api/app/binders/{org}/{binder}/changes/{changeNumber}",
   operationId: "getBinderChange",

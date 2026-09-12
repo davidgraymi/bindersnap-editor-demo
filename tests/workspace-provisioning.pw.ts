@@ -5017,7 +5017,7 @@ async function shapeChange(
   sessionCookie: string,
   org: string,
   workspace: string,
-  route: "folders" | "folder-renames",
+  route: "folders" | "folder-renames" | "document-renames",
   body: Record<string, unknown>,
 ): Promise<{ status: number; body: string }> {
   const response = await fetch(
@@ -5085,6 +5085,89 @@ test("a folder can be made empty, and survives being published", async () => {
   );
   expect(again.status, again.body).toBe(409);
   expect(again.body).toContain("already has a folder");
+});
+
+test("a renamed document keeps every version it had", async () => {
+  // **The act ADR 0005 was written for.** Under ADR 0004 this was a new
+  // document starting again at v1 with every tag it had orphaned behind it —
+  // which is why renaming could not be shipped until the identity stopped
+  // being the path.
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const token = await createUserToken(
+    credentials.username,
+    credentials.password,
+  );
+  const approver = await addApprover(token, org.name, "clinical");
+
+  const added = await addDocument(sessionCookie, org.name, "clinical", {
+    name: "Hand Hygiene",
+    folder: "nursing",
+  });
+  const {
+    pullRequestNumber: firstChange,
+    slugPath,
+    documentPath,
+  } = JSON.parse(added.body) as {
+    pullRequestNumber: number;
+    slugPath: string;
+    documentPath: string;
+  };
+  await approveChange(approver.token, org.name, "clinical", firstChange);
+  expect(
+    (await publishChange(sessionCookie, org.name, "clinical", firstChange))
+      .status,
+  ).toBe(200);
+
+  // Renamed *and* refiled in one act — the two changes that would each have
+  // broken the version series on their own.
+  const renamed = await shapeChange(
+    sessionCookie,
+    org.name,
+    "clinical",
+    "document-renames",
+    {
+      documentPath: slugPath,
+      name: "Hand Hygiene and PPE",
+      folder: "infection-control",
+    },
+  );
+  expect(renamed.status, renamed.body).toBe(201);
+  const { changeNumber } = JSON.parse(renamed.body) as { changeNumber: number };
+
+  await approveChange(approver.token, org.name, "clinical", changeNumber);
+  const published = await publishChange(
+    sessionCookie,
+    org.name,
+    "clinical",
+    changeNumber,
+  );
+  expect(published.status, published.body).toBe(200);
+
+  // v2, not another v1 — the identity is a segment of the filename, it moved
+  // with the file, and the tags still match.
+  expect(
+    (JSON.parse(published.body) as { tags: Array<{ tag: string }> }).tags.map(
+      (tag) => tag.tag,
+    ),
+  ).toEqual([`${uidOf(documentPath)}/v2`]);
+
+  const detail = await getDocument(
+    sessionCookie,
+    org.name,
+    "clinical",
+    "infection-control/hand-hygiene-and-ppe",
+  );
+  expect(detail.status, detail.body).toBe(200);
+  const { versions } = JSON.parse(detail.body) as {
+    versions: Array<{ version: number }>;
+  };
+  expect(versions.map((version) => version.version)).toEqual([2, 1]);
 });
 
 test("renaming a folder moves everything in it, as one change", async () => {

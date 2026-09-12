@@ -37,6 +37,8 @@ import type {
   ProposeBinderSignOffRulesBody,
   PublishBinderChange200,
   RemoveBinderPerson200,
+  RenameBinderDocument201,
+  RenameBinderDocumentBody,
   RenameBinderFolder201,
   RenameBinderFolderBody,
   ReplyToBinderChangeDiscussion201,
@@ -889,6 +891,41 @@ export const renameBinderFolder = async (org: string,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(renameBinderFolderBody)
+  }
+);}
+
+
+export type renameBinderDocumentResponse201 = {
+  data: RenameBinderDocument201
+  status: 201
+}
+
+export type renameBinderDocumentResponseSuccess = (renameBinderDocumentResponse201) & {
+  headers: Headers;
+};
+;
+
+export type renameBinderDocumentResponse = (renameBinderDocumentResponseSuccess)
+
+export const getRenameBinderDocumentUrl = (org: string,
+    binder: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/document-renames`
+}
+
+export const renameBinderDocument = async (org: string,
+    binder: string,
+    renameBinderDocumentBody: RenameBinderDocumentBody, options?: Parameters<typeof customFetch>[1]): Promise<renameBinderDocumentResponse> => {
+
+  return customFetch<renameBinderDocumentResponse>(getRenameBinderDocumentUrl(org,binder),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(renameBinderDocumentBody)
   }
 );}
 
