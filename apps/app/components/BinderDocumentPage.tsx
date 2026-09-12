@@ -18,6 +18,8 @@ import {
 } from "../documentDisplay";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 import { DocumentPreview } from "./DocumentPreview";
+import { ReviseDocumentModal } from "./ReviseDocumentModal";
+import { useIsReadOnly } from "../readOnlyContext";
 
 /**
  * One document inside a binder, at `/{org}/{binder}/{path}`.
@@ -64,6 +66,8 @@ export function BinderDocumentPage({
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [revising, setRevising] = useState(false);
+  const isReadOnly = useIsReadOnly();
 
   // Back and forward are how a reader leaves an earlier version, so the page
   // follows the address bar rather than its own memory of what was clicked.
@@ -245,13 +249,47 @@ export function BinderDocumentPage({
                 </button>
               ) : null}
 
+              {/* The file as a person would name it. The identity segment in
+                  the real filename is how a rename does not lose the version
+                  history (ADR 0005); it is 26 characters of machinery and has
+                  no business on a page somebody reads. */}
               <span className="doc-header-fact doc-header-file">
-                {document.path}
+                {downloadFileName(document)}
               </span>
             </div>
           </div>
+
+          {/* **The act that was missing.** Revising a policy used to mean
+              filing a new one and getting the name character-for-character
+              right, or ending up with two policies instead of two versions.
+              Only offered on the record: revising an earlier version would
+              silently discard everything published since. */}
+          {!isReadOnly && isViewingRecord && state !== "proposed" ? (
+            <button
+              type="button"
+              className="bs-btn bs-btn-primary"
+              onClick={() => setRevising(true)}
+            >
+              New version
+            </button>
+          ) : null}
         </div>
       </header>
+
+      {revising ? (
+        <ReviseDocumentModal
+          org={org}
+          binder={binder}
+          slugPath={document.slugPath}
+          name={document.name}
+          currentVersion={latestVersion?.version ?? null}
+          onClose={() => setRevising(false)}
+          onProposed={(changeNumber) => {
+            setRevising(false);
+            onOpenChange(changeNumber);
+          }}
+        />
+      ) : null}
 
       {state === "proposed" ? (
         <p className="vault-pr-notice" role="status">

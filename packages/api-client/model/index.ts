@@ -334,6 +334,8 @@ export * from './resolveBinderChangeDiscussionBody.ts';
 export * from './reviewBinderChange200.ts';
 export * from './reviewBinderChangeBody.ts';
 export * from './reviewBinderChangeBodyEvent.ts';
+export * from './reviseBinderDocument201.ts';
+export * from './reviseBinderDocumentBody.ts';
 export * from './revokeBinderGroup200.ts';
 export * from './revokeBinderGroup200TeamsItem.ts';
 export * from './revokeBinderGroup200TeamsItemMembersItem.ts';

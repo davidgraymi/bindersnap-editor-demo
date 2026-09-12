@@ -1066,6 +1066,34 @@ export async function createBinderDocument(
 }
 
 /**
+ * Propose a new version of a document already in the binder.
+ *
+ * Named by its address rather than by its filename: a person revising the hand
+ * hygiene policy is revising *that policy*, whatever file it happens to be
+ * today. The server keeps its identity, so replacing a Word file with a PDF is
+ * still the same document on its next version.
+ */
+export async function reviseBinderDocument(
+  org: string,
+  binder: string,
+  file: File,
+  documentPath: string,
+): Promise<CreatedWorkspaceDocumentPayload> {
+  try {
+    const response = await BindersClient.reviseBinderDocument(org, binder, {
+      file,
+      documentPath,
+    });
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/binders/${org}/${binder}/document-revisions`,
+      error,
+    );
+  }
+}
+
+/**
  * The bytes of one document in a binder, at a ref.
  *
  * `ref` is a version tag for a published version, or a change's branch for one
