@@ -41,6 +41,8 @@ import type {
   ResolveBinderChangeDiscussionBody,
   ReviewBinderChange200,
   ReviewBinderChangeBody,
+  ReviseBinderDocument201,
+  ReviseBinderDocumentBody,
   RevokeBinderGroup200,
   SetBinderDiscussionCommentReaction200,
   SetBinderDiscussionCommentReactionBody,
@@ -769,6 +771,44 @@ export const downloadBinderDocument = async (org: string,
     method: 'GET'
 
 
+  }
+);}
+
+
+export type reviseBinderDocumentResponse201 = {
+  data: ReviseBinderDocument201
+  status: 201
+}
+
+export type reviseBinderDocumentResponseSuccess = (reviseBinderDocumentResponse201) & {
+  headers: Headers;
+};
+;
+
+export type reviseBinderDocumentResponse = (reviseBinderDocumentResponseSuccess)
+
+export const getReviseBinderDocumentUrl = (org: string,
+    binder: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/document-revisions`
+}
+
+export const reviseBinderDocument = async (org: string,
+    binder: string,
+    reviseBinderDocumentBody: ReviseBinderDocumentBody, options?: Parameters<typeof customFetch>[1]): Promise<reviseBinderDocumentResponse> => {
+    const formData = new FormData();
+formData.append(`file`, reviseBinderDocumentBody.file);
+formData.append(`documentPath`, reviseBinderDocumentBody.documentPath);
+
+  return customFetch<reviseBinderDocumentResponse>(getReviseBinderDocumentUrl(org,binder),
+  {
+    ...options,
+    method: 'POST'
+    ,
+    body: formData
   }
 );}
 

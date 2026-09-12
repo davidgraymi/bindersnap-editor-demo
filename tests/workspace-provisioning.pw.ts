@@ -4573,6 +4573,234 @@ test("a second change to the same document publishes v2, not another v1", async 
   expect(latestVersion?.version).toBe(2);
 });
 
+async function reviseDocumentFile(
+  sessionCookie: string,
+  org: string,
+  workspace: string,
+  documentPath: string,
+  fields: { filename: string; body?: string },
+): Promise<{ status: number; body: string }> {
+  const form = new FormData();
+  form.set(
+    "file",
+    new File([fields.body ?? "revised policy text"], fields.filename, {
+      type: "application/octet-stream",
+    }),
+  );
+  form.set("documentPath", documentPath);
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${workspace}/document-revisions`,
+    {
+      method: "POST",
+      headers: {
+        Cookie: `bindersnap_session=${sessionCookie}`,
+        Origin: APP_BASE_URL,
+      },
+      body: form,
+    },
+  );
+  return { status: response.status, body: await response.text() };
+}
+
+test("a document is revised in place, and its version follows", async () => {
+  // **The act that did not exist.** Revising a policy meant filing a new one
+  // whose name slugged to exactly the same thing — get a character wrong and
+  // the binder held two policies instead of one policy on its second version.
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const added = await addDocument(sessionCookie, org.name, "clinical", {
+    name: "Infection Control",
+    folder: "nursing",
+  });
+  expect(added.status, added.body).toBe(201);
+  const {
+    pullRequestNumber: firstChange,
+    slugPath,
+    documentPath,
+  } = JSON.parse(added.body) as {
+    pullRequestNumber: number;
+    slugPath: string;
+    documentPath: string;
+  };
+
+  const token = await createUserToken(
+    credentials.username,
+    credentials.password,
+  );
+  const approver = await addApprover(token, org.name, "clinical");
+  await approveChange(approver.token, org.name, "clinical", firstChange);
+  expect(
+    (await publishChange(sessionCookie, org.name, "clinical", firstChange))
+      .status,
+  ).toBe(200);
+
+  const revised = await reviseDocumentFile(
+    sessionCookie,
+    org.name,
+    "clinical",
+    slugPath,
+    { filename: "whatever-the-file-is-called.md" },
+  );
+  expect(revised.status, revised.body).toBe(201);
+  const revision = JSON.parse(revised.body) as {
+    documentPath: string;
+    slugPath: string;
+    pullRequestNumber: number;
+  };
+
+  // Same address, same file, whatever the uploaded file happened to be called.
+  expect(revision.slugPath).toBe(slugPath);
+  expect(revision.documentPath).toBe(documentPath);
+
+  await approveChange(
+    approver.token,
+    org.name,
+    "clinical",
+    revision.pullRequestNumber,
+  );
+  const published = await publishChange(
+    sessionCookie,
+    org.name,
+    "clinical",
+    revision.pullRequestNumber,
+  );
+  expect(published.status, published.body).toBe(200);
+  expect(
+    (JSON.parse(published.body) as { tags: Array<{ tag: string }> }).tags.map(
+      (tag) => tag.tag,
+    ),
+  ).toEqual([`${uidOf(documentPath)}/v2`]);
+
+  // One document in the binder, on v2 — not two documents on v1 each.
+  const listed = await listDocuments(sessionCookie, org.name, "clinical");
+  const { documents } = JSON.parse(listed.body) as {
+    documents: Array<{ slugPath: string; latestVersion: { version: number } }>;
+  };
+  expect(documents).toHaveLength(1);
+  expect(documents[0]?.slugPath).toBe(slugPath);
+  expect(documents[0]?.latestVersion.version).toBe(2);
+});
+
+test("a policy can change format and still be the same policy", async () => {
+  // The identity is a segment of the filename rather than the whole of it
+  // (ADR 0005), so the extension after it can change without the document
+  // becoming a different one. A Word policy reissued as a PDF is the same
+  // policy on its next version, and its earlier versions are still there.
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const added = await addDocument(sessionCookie, org.name, "clinical", {
+    name: "Infection Control",
+    folder: "nursing",
+    filename: "policy.md",
+  });
+  const {
+    pullRequestNumber: firstChange,
+    slugPath,
+    documentPath,
+  } = JSON.parse(added.body) as {
+    pullRequestNumber: number;
+    slugPath: string;
+    documentPath: string;
+  };
+  expect(documentPath.endsWith(".md")).toBe(true);
+
+  const token = await createUserToken(
+    credentials.username,
+    credentials.password,
+  );
+  const approver = await addApprover(token, org.name, "clinical");
+  await approveChange(approver.token, org.name, "clinical", firstChange);
+  expect(
+    (await publishChange(sessionCookie, org.name, "clinical", firstChange))
+      .status,
+  ).toBe(200);
+
+  const revised = await reviseDocumentFile(
+    sessionCookie,
+    org.name,
+    "clinical",
+    slugPath,
+    { filename: "reissued.pdf", body: "%PDF-1.4 not really" },
+  );
+  expect(revised.status, revised.body).toBe(201);
+  const revision = JSON.parse(revised.body) as {
+    documentPath: string;
+    pullRequestNumber: number;
+  };
+  expect(revision.documentPath).toBe(`${slugPath}.${uidOf(documentPath)}.pdf`);
+
+  await approveChange(
+    approver.token,
+    org.name,
+    "clinical",
+    revision.pullRequestNumber,
+  );
+  expect(
+    (
+      await publishChange(
+        sessionCookie,
+        org.name,
+        "clinical",
+        revision.pullRequestNumber,
+      )
+    ).status,
+  ).toBe(200);
+
+  // The old file is gone from the tree and the new one is there — one commit,
+  // not a delete somebody has to notice separately.
+  const listed = await listDocuments(sessionCookie, org.name, "clinical");
+  const { documents } = JSON.parse(listed.body) as {
+    documents: Array<{ path: string; latestVersion: { version: number } }>;
+  };
+  expect(documents.map((document) => document.path)).toEqual([
+    revision.documentPath,
+  ]);
+
+  // And every version is still its version.
+  const detail = await getDocument(
+    sessionCookie,
+    org.name,
+    "clinical",
+    slugPath,
+  );
+  const { versions } = JSON.parse(detail.body) as {
+    versions: Array<{ version: number }>;
+  };
+  expect(versions.map((version) => version.version)).toEqual([2, 1]);
+});
+
+test("revising something the binder does not hold is refused", async () => {
+  // A new policy is added rather than revised, and saying so beats opening a
+  // change request that creates a document at an address nobody chose.
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const refused = await reviseDocumentFile(
+    sessionCookie,
+    org.name,
+    "clinical",
+    "nursing/not-a-policy",
+    { filename: "policy.md" },
+  );
+  expect(refused.status, refused.body).toBe(404);
+  expect(refused.body).toContain("not in this binder");
+});
+
 test("two documents cannot claim one address", async () => {
   // A URL has to name one thing, or a link somebody sends is a coin toss. The
   // identity drops the extension deliberately — re-uploading a policy as a PDF
