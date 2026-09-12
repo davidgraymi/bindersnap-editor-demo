@@ -462,9 +462,16 @@ export function AppShell({
       {showCreateDocumentModal ? (
         <NewPolicyModal
           onClose={() => setShowCreateDocumentModal(false)}
-          onAdded={(org, binder, documentPath) => {
+          onAdded={(org, binder, changeNumber) => {
             setShowCreateDocumentModal(false);
-            onNavigate({ kind: "binderDocument", org, binder, documentPath });
+            // The change request it is in, not the document it will become.
+            onNavigate({
+              kind: "binder",
+              org,
+              binder,
+              tab: "changes",
+              change: changeNumber,
+            });
           }}
         />
       ) : null}

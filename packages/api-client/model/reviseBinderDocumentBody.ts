@@ -9,4 +9,5 @@ export type ReviseBinderDocumentBody = {
   /** File upload */
   file: Blob;
   documentPath: string;
+  changeNumber?: string;
 };

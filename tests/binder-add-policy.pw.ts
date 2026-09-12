@@ -148,25 +148,23 @@ test("a member files a policy from the binder's own page", async ({ page }) => {
 
   await fileAPolicy(page, "Infection Control Policy", "nursing");
 
-  // **The assertion that matters.** `main` is the record, so a policy filed a
-  // moment ago is not in the tree — and a binder that silently omitted it
-  // would look broken in the one moment somebody is watching. Filing opens the
-  // document's own page, which says so in as many words.
-  //
-  // Matched on the heading rather than on the text: the landing page's mockup
-  // markup is still in the DOM and carries "Infection Control Policy" in a
-  // hidden element, so a bare text match finds the wrong one.
-  // The document's own header, not the rendered file — the preview below it
-  // shows the markdown's `# Infection Control Policy` as a heading too.
-  // The last one: the binder's own header carries the same class above it, and
-  // a document opens *under* that header rather than on a page of its own.
-  await expect(page.locator("h1.doc-header-title").last()).toHaveText(
-    "Infection Control Policy",
-    { timeout: 30_000 },
-  );
-  await expect(
-    page.getByText("This policy is not in the binder yet"),
-  ).toBeVisible();
+  // **The assertion that matters.** Filing a policy does not put it in the
+  // binder — it opens a change request, and that is where this lands. Landing
+  // on the document's page made the act look finished; a change request is
+  // what actually happened and what has to be decided next.
+  await expect(page).toHaveURL(/tab=changes&change=\d+/, { timeout: 30_000 });
+  // The change's own screen: the file it proposes, and the way back to the
+  // list. Not "Publish", which a change with no approvals yet does not offer.
+  await expect(page.getByText("Proposed version")).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(page.getByRole("button", { name: "All changes" })).toBeVisible();
+
+  // And the binder still holds nothing, because nothing has been published.
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await expect(page.getByText("Nothing filed here yet.")).toBeVisible({
+    timeout: 30_000,
+  });
 });
 
 test("the nav's New policy asks which binder, then files into it", async ({
@@ -206,12 +204,9 @@ test("the nav's New policy asks which binder, then files into it", async ({
 
   await fileAPolicy(page, "Expenses Policy", "");
 
-  // Wait for the app to land on the document before asking the API about it —
-  // otherwise the fetch races the upload and reads an empty binder.
-  await expect(page.locator("h1.doc-header-title").last()).toHaveText(
-    "Expenses Policy",
-    { timeout: 30_000 },
-  );
+  // Wait for the app to land on the change request before asking the API about
+  // it — otherwise the fetch races the upload and reads an empty binder.
+  await expect(page).toHaveURL(/tab=changes&change=\d+/, { timeout: 30_000 });
 
   // It landed in the binder that was chosen, not the first one in the list.
   //
@@ -331,7 +326,8 @@ test("the library lists a policy across every binder it can reach", async ({
     await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
     await page.getByRole("button", { name: "Add a policy" }).click();
     await fileAPolicy(page, name, "");
-    await expect(page.locator("h1.doc-header-title").last()).toHaveText(name, {
+    // Filing opens a change request, which is where it lands.
+    await expect(page).toHaveURL(/tab=changes&change=\d+/, {
       timeout: 30_000,
     });
     // Onto `main`, because the library lists the record and nothing else.
@@ -381,6 +377,15 @@ test("the binder's tabs still work once a document is open", async ({
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
   await page.getByRole("button", { name: "Add a policy" }).click();
   await fileAPolicy(page, "Hand Hygiene Policy", "nursing");
+  await expect(page).toHaveURL(/tab=changes&change=\d+/, { timeout: 30_000 });
+
+  // Published, because a binder lists the record — and a document is opened by
+  // clicking it in that list, which is the journey this test is about.
+  await publishTheOpenChange(sessionCookie, org, binder);
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await page
+    .getByRole("button", { name: "Hand Hygiene Policy" })
+    .click({ timeout: 30_000 });
 
   await expect(page.locator("h1.doc-header-title").last()).toHaveText(
     "Hand Hygiene Policy",

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { reviseBinderDocument, validateUploadFile } from "../api";
 import { formatDocumentName } from "../documentDisplay";
 import { formatFileSize } from "../documentFile";
+import { ChangeTargetField } from "./ChangeTargetField";
 
 /**
  * A new version of a policy that is already in the binder.
@@ -47,6 +48,7 @@ export function ReviseDocumentModal({
   onProposed,
 }: ReviseDocumentModalProps) {
   const [file, setFile] = useState<File | null>(null);
+  const [changeNumber, setChangeNumber] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -76,7 +78,13 @@ export function ReviseDocumentModal({
     setError(null);
 
     try {
-      const proposed = await reviseBinderDocument(org, binder, file, slugPath);
+      const proposed = await reviseBinderDocument(
+        org,
+        binder,
+        file,
+        slugPath,
+        changeNumber ?? undefined,
+      );
       onProposed(proposed.pullRequestNumber ?? 0);
     } catch (err) {
       setError(
@@ -134,6 +142,14 @@ export function ReviseDocumentModal({
             </p>
           ) : null}
 
+          <ChangeTargetField
+            org={org}
+            binder={binder}
+            value={changeNumber}
+            onChange={setChangeNumber}
+            disabled={submitting}
+          />
+
           {/* The question somebody dragging a different format in will have,
               answered before they ask it. */}
           <p className="add-policy-note">
@@ -150,8 +166,9 @@ export function ReviseDocumentModal({
           {/* Nothing on this screen saves, and the button's word is "propose"
               for the same reason the sign-off page's is. */}
           <p className="add-policy-note">
-            This opens a change. The version on record does not change until it
-            is published.
+            {changeNumber === null
+              ? "This opens a change request. The version on record does not change until it is published."
+              : "This goes into that change request. The version on record does not change until the change is published."}
           </p>
 
           <div className="upload-modal-actions">

@@ -886,6 +886,13 @@ registry.registerPath({
             name: z.string(),
             /** Optional directory inside the binder. Nests as deep as wanted. */
             folder: z.string().optional(),
+            /**
+             * An open change request to put this in, instead of opening one.
+             *
+             * The change is the unit of approval (ADR 0004 §4), so several
+             * policies filed together can be approved and published together.
+             */
+            changeNumber: z.string().optional(),
           }),
         },
       },
@@ -927,6 +934,8 @@ registry.registerPath({
              * with a policy filed in a folder of that name.
              */
             documentPath: z.string(),
+            /** An open change request to put this in, instead of opening one. */
+            changeNumber: z.string().optional(),
           }),
         },
       },

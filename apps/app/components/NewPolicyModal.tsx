@@ -24,7 +24,8 @@ import { AddPolicyModal } from "./AddPolicyModal";
 
 interface NewPolicyModalProps {
   onClose: () => void;
-  onAdded: (org: string, binder: string, slugPath: string) => void;
+  /** The binder it was filed into, and the change request it is in. */
+  onAdded: (org: string, binder: string, changeNumber: number) => void;
 }
 
 export function NewPolicyModal({ onClose, onAdded }: NewPolicyModalProps) {
@@ -61,7 +62,9 @@ export function NewPolicyModal({ onClose, onAdded }: NewPolicyModalProps) {
         org={chosen.owner}
         binder={chosen.name}
         onClose={onClose}
-        onAdded={(slugPath) => onAdded(chosen.owner, chosen.name, slugPath)}
+        onAdded={(changeNumber) =>
+          onAdded(chosen.owner, chosen.name, changeNumber)
+        }
       />
     );
   }

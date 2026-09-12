@@ -303,13 +303,15 @@ export function BinderShell({
           org={org}
           binder={binder}
           onClose={() => setAdding(false)}
-          onAdded={(slugPath) => {
+          onAdded={(changeNumber) => {
             setAdding(false);
             loadOverview();
-            // Straight to the policy they just added. It is not on `main` yet,
-            // so its page reads the change's own branch — which is the whole
-            // reason the binder shows proposed documents at all.
-            onOpenDocument(slugPath);
+            // **Straight to the change request, not to the document.** What
+            // just happened is that a change request was opened — the policy
+            // is not in the binder and the binder's own list says so by not
+            // carrying it. Landing on the document made the act look finished;
+            // this shows what happened and what has to happen next.
+            openChangeNumber(changeNumber);
           }}
         />
       ) : null}

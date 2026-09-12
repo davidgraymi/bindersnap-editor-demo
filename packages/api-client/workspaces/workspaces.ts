@@ -683,6 +683,9 @@ formData.append(`name`, createBinderDocumentBody.name);
 if(createBinderDocumentBody.folder !== undefined) {
  formData.append(`folder`, createBinderDocumentBody.folder);
  }
+if(createBinderDocumentBody.changeNumber !== undefined) {
+ formData.append(`changeNumber`, createBinderDocumentBody.changeNumber);
+ }
 
   return customFetch<createBinderDocumentResponse>(getCreateBinderDocumentUrl(org,binder),
   {
@@ -802,6 +805,9 @@ export const reviseBinderDocument = async (org: string,
     const formData = new FormData();
 formData.append(`file`, reviseBinderDocumentBody.file);
 formData.append(`documentPath`, reviseBinderDocumentBody.documentPath);
+if(reviseBinderDocumentBody.changeNumber !== undefined) {
+ formData.append(`changeNumber`, reviseBinderDocumentBody.changeNumber);
+ }
 
   return customFetch<reviseBinderDocumentResponse>(getReviseBinderDocumentUrl(org,binder),
   {
