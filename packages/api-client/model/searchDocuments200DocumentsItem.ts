@@ -8,15 +8,12 @@ import type { SearchDocuments200DocumentsItemLatestVersion } from './searchDocum
 import type { SearchDocuments200DocumentsItemState } from './searchDocuments200DocumentsItemState.ts';
 
 export type SearchDocuments200DocumentsItem = {
-  /** @nullable */
-  path: string | null;
+  path: string;
   slugPath: string;
   name: string;
   folder: string;
-  /** @nullable */
-  size: number | null;
-  /** @nullable */
-  sha: string | null;
+  size: number;
+  sha: string;
   state: SearchDocuments200DocumentsItemState;
   openChangeCount: number;
   /** @nullable */

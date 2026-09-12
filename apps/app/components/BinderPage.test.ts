@@ -87,21 +87,13 @@ test("open changes are counted alongside the version", () => {
   ).toBe("Version 1 · 2 open changes");
 });
 
-test("a document that is only proposed is waiting, not faulty", () => {
-  // "No published version" reads like something is wrong with it. It is
-  // waiting on a decision, which is the ordinary state of a policy somebody
-  // uploaded an hour ago.
-  expect(
-    describeDocument(
-      entry({
-        slugPath: "nursing/hand-hygiene",
-        folder: "nursing",
-        path: null,
-        size: null,
-        sha: null,
-        state: "proposed",
-        openChangeCount: 1,
-      }),
-    ),
-  ).toBe("Not published yet · 1 open change");
+test("a binder lists the record, so every row has a file behind it", () => {
+  // The list used to carry rows for policies that existed only inside an open
+  // change — no version, no file, no guarantee of arriving — beside policies
+  // in force. A reader could not tell the two apart at a glance, which is the
+  // one thing a list of what is in force must never allow.
+  const row = entry({ slugPath: "nursing/hand-hygiene", folder: "nursing" });
+  expect(row.state).toBe("published");
+  expect(typeof row.path).toBe("string");
+  expect(typeof row.sha).toBe("string");
 });
