@@ -5013,6 +5013,213 @@ test("a policy cannot be filed into a change that is not open here", async () =>
   expect(refused.body).toContain("not open in this binder");
 });
 
+async function shapeChange(
+  sessionCookie: string,
+  org: string,
+  workspace: string,
+  route: "folders" | "folder-renames",
+  body: Record<string, unknown>,
+): Promise<{ status: number; body: string }> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${workspace}/${route}`,
+    {
+      method: "POST",
+      headers: authHeaders(sessionCookie),
+      body: JSON.stringify(body),
+    },
+  );
+  return { status: response.status, body: await response.text() };
+}
+
+test("a folder can be made empty, and survives being published", async () => {
+  // **Git has no empty directories**, so making one means committing a
+  // placeholder — and `main` is protected, so that goes through a change
+  // request. The alternative was folders that exist only once the first policy
+  // lands in one, which would make laying out a filing structure impossible.
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const token = await createUserToken(
+    credentials.username,
+    credentials.password,
+  );
+  const approver = await addApprover(token, org.name, "clinical");
+
+  const made = await shapeChange(
+    sessionCookie,
+    org.name,
+    "clinical",
+    "folders",
+    {
+      folder: "Ward 3",
+    },
+  );
+  expect(made.status, made.body).toBe(201);
+  const { changeNumber } = JSON.parse(made.body) as { changeNumber: number };
+
+  await approveChange(approver.token, org.name, "clinical", changeNumber);
+  expect(
+    (await publishChange(sessionCookie, org.name, "clinical", changeNumber))
+      .status,
+  ).toBe(200);
+
+  // It is there, and it holds nothing — which is the whole point.
+  const settings = await readSettings(sessionCookie, org.name, "clinical");
+  expect(settings.signOff.folders).toContain("ward-3");
+  const listed = await listDocuments(sessionCookie, org.name, "clinical");
+  expect(
+    (JSON.parse(listed.body) as { documents: unknown[] }).documents,
+  ).toEqual([]);
+
+  // And making it twice is refused rather than doing nothing.
+  const again = await shapeChange(
+    sessionCookie,
+    org.name,
+    "clinical",
+    "folders",
+    { folder: "ward-3" },
+  );
+  expect(again.status, again.body).toBe(409);
+  expect(again.body).toContain("already has a folder");
+});
+
+test("renaming a folder moves everything in it, as one change", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const token = await createUserToken(
+    credentials.username,
+    credentials.password,
+  );
+  const approver = await addApprover(token, org.name, "clinical");
+
+  for (const name of ["Hand Hygiene", "Handover"]) {
+    const added = await addDocument(sessionCookie, org.name, "clinical", {
+      name,
+      folder: "nursing",
+    });
+    const { pullRequestNumber } = JSON.parse(added.body) as {
+      pullRequestNumber: number;
+    };
+    await approveChange(
+      approver.token,
+      org.name,
+      "clinical",
+      pullRequestNumber,
+    );
+    expect(
+      (
+        await publishChange(
+          sessionCookie,
+          org.name,
+          "clinical",
+          pullRequestNumber,
+        )
+      ).status,
+    ).toBe(200);
+  }
+
+  const renamed = await shapeChange(
+    sessionCookie,
+    org.name,
+    "clinical",
+    "folder-renames",
+    { from: "nursing", to: "infection-control" },
+  );
+  expect(renamed.status, renamed.body).toBe(201);
+  const { changeNumber } = JSON.parse(renamed.body) as { changeNumber: number };
+
+  await approveChange(approver.token, org.name, "clinical", changeNumber);
+  const published = await publishChange(
+    sessionCookie,
+    org.name,
+    "clinical",
+    changeNumber,
+  );
+  expect(published.status, published.body).toBe(200);
+  // Both documents versioned by the one change, and both still on v2 rather
+  // than back at v1.
+  expect(
+    (JSON.parse(published.body) as { tags: Array<{ version: number }> }).tags
+      .map((tag) => tag.version)
+      .sort(),
+  ).toEqual([2, 2]);
+
+  const listed = await listDocuments(sessionCookie, org.name, "clinical");
+  const { documents } = JSON.parse(listed.body) as {
+    documents: Array<{ slugPath: string }>;
+  };
+  expect(documents.map((document) => document.slugPath).sort()).toEqual([
+    "infection-control/hand-hygiene",
+    "infection-control/handover",
+  ]);
+});
+
+test("a folder rename that would collide with what is there is refused", async () => {
+  // Merging two folders is a thing somebody might want. Doing it by accident,
+  // as the result of a typo, is not.
+  //
+  // And the collision that matters is the **address**, not the path: two
+  // policies of the same name carry different identity segments, so their
+  // filenames differ while the address a link resolves by does not.
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const token = await createUserToken(
+    credentials.username,
+    credentials.password,
+  );
+  const approver = await addApprover(token, org.name, "clinical");
+
+  for (const folder of ["nursing", "clinical"]) {
+    const added = await addDocument(sessionCookie, org.name, "clinical", {
+      name: "Hand Hygiene",
+      folder,
+    });
+    const { pullRequestNumber } = JSON.parse(added.body) as {
+      pullRequestNumber: number;
+    };
+    await approveChange(
+      approver.token,
+      org.name,
+      "clinical",
+      pullRequestNumber,
+    );
+    expect(
+      (
+        await publishChange(
+          sessionCookie,
+          org.name,
+          "clinical",
+          pullRequestNumber,
+        )
+      ).status,
+    ).toBe(200);
+  }
+
+  const refused = await shapeChange(
+    sessionCookie,
+    org.name,
+    "clinical",
+    "folder-renames",
+    { from: "nursing", to: "clinical" },
+  );
+  expect(refused.status, refused.body).toBe(409);
+  expect(refused.body).toContain("cannot share one address");
+});
+
 test("two documents cannot claim one address", async () => {
   // A URL has to name one thing, or a link somebody sends is a coin toss. The
   // identity drops the extension deliberately — re-uploading a policy as a PDF

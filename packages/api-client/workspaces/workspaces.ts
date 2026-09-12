@@ -13,6 +13,8 @@ import type {
   CreateBinderChangeDiscussionBody,
   CreateBinderDocument201,
   CreateBinderDocumentBody,
+  CreateBinderFolder201,
+  CreateBinderFolderBody,
   DownloadBinderDocumentParams,
   GetBinder200,
   GetBinderChange200,
@@ -35,6 +37,8 @@ import type {
   ProposeBinderSignOffRulesBody,
   PublishBinderChange200,
   RemoveBinderPerson200,
+  RenameBinderFolder201,
+  RenameBinderFolderBody,
   ReplyToBinderChangeDiscussion201,
   ReplyToBinderChangeDiscussionBody,
   ResolveBinderChangeDiscussion200,
@@ -815,6 +819,76 @@ if(reviseBinderDocumentBody.changeNumber !== undefined) {
     method: 'POST'
     ,
     body: formData
+  }
+);}
+
+
+export type createBinderFolderResponse201 = {
+  data: CreateBinderFolder201
+  status: 201
+}
+
+export type createBinderFolderResponseSuccess = (createBinderFolderResponse201) & {
+  headers: Headers;
+};
+;
+
+export type createBinderFolderResponse = (createBinderFolderResponseSuccess)
+
+export const getCreateBinderFolderUrl = (org: string,
+    binder: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/folders`
+}
+
+export const createBinderFolder = async (org: string,
+    binder: string,
+    createBinderFolderBody: CreateBinderFolderBody, options?: Parameters<typeof customFetch>[1]): Promise<createBinderFolderResponse> => {
+
+  return customFetch<createBinderFolderResponse>(getCreateBinderFolderUrl(org,binder),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createBinderFolderBody)
+  }
+);}
+
+
+export type renameBinderFolderResponse201 = {
+  data: RenameBinderFolder201
+  status: 201
+}
+
+export type renameBinderFolderResponseSuccess = (renameBinderFolderResponse201) & {
+  headers: Headers;
+};
+;
+
+export type renameBinderFolderResponse = (renameBinderFolderResponseSuccess)
+
+export const getRenameBinderFolderUrl = (org: string,
+    binder: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/folder-renames`
+}
+
+export const renameBinderFolder = async (org: string,
+    binder: string,
+    renameBinderFolderBody: RenameBinderFolderBody, options?: Parameters<typeof customFetch>[1]): Promise<renameBinderFolderResponse> => {
+
+  return customFetch<renameBinderFolderResponse>(getRenameBinderFolderUrl(org,binder),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(renameBinderFolderBody)
   }
 );}
 

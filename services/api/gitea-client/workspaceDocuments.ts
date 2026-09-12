@@ -105,6 +105,81 @@ export interface ListWorkspaceDocumentsParams {
   ref?: string;
 }
 
+/** Everything one read of a binder's tree answers. */
+export interface WorkspaceTree {
+  documents: WorkspaceDocumentEntry[];
+  /**
+   * Every folder in the binder, whether or not it holds a document.
+   *
+   * Read from the tree's own directory entries rather than derived from the
+   * document paths, and the difference is the whole point: git has no empty
+   * directories, so a folder somebody made and has not filed anything in yet
+   * exists because a `.gitkeep` is sitting in it — and that file is furniture,
+   * filtered out of the documents. Deriving folders from documents would make
+   * a folder appear only once it stopped being empty, which is not a filing
+   * system anybody would recognise.
+   */
+  folders: string[];
+  /**
+   * Every blob in the binder, furniture included.
+   *
+   * `documents` drops the repository's own files — `.gitea/CODEOWNERS`, the
+   * placeholders that hold empty folders open — because they are not policies.
+   * A rename has to move them all the same, and a collision check has to know
+   * they are there, so the raw list is kept rather than reconstructed from the
+   * two above. Reconstructing it was a bug: it named a placeholder in every
+   * folder, including the folders that have documents in them and no
+   * placeholder at all, and Gitea refused to move a file that was never there.
+   */
+  paths: string[];
+}
+
+/** Dot-directories are repository furniture — `.gitea` is not a folder. */
+function isDocumentFolder(path: string): boolean {
+  return !path.split("/").some((segment) => segment.startsWith("."));
+}
+
+/**
+ * One read of the binder's tree, as both the things it holds.
+ *
+ * The documents list and the folder list come from the same call because they
+ * come from the same tree, and asking twice would be two reads of one answer.
+ */
+export async function readWorkspaceTree(
+  params: ListWorkspaceDocumentsParams,
+): Promise<WorkspaceTree> {
+  const entries = await readTreeEntries(params);
+
+  return {
+    documents: entries
+      .map(toDocumentEntry)
+      .filter((entry): entry is WorkspaceDocumentEntry => entry !== null)
+      .sort((a, b) => a.path.localeCompare(b.path)),
+    folders: entries
+      .filter(
+        (entry) =>
+          entry.type === "tree" &&
+          typeof entry.path === "string" &&
+          entry.path !== "" &&
+          isDocumentFolder(entry.path),
+      )
+      .map((entry) => entry.path!)
+      .sort((a, b) => a.localeCompare(b)),
+    paths: entries
+      .filter(
+        (entry) =>
+          entry.type === "blob" &&
+          typeof entry.path === "string" &&
+          entry.path !== "" &&
+          // `.gitea/` is the repository's own configuration, not the binder's
+          // shape. Renaming a folder must never sweep it along.
+          !entry.path.startsWith(".gitea/"),
+      )
+      .map((entry) => entry.path!)
+      .sort((a, b) => a.localeCompare(b)),
+  };
+}
+
 /**
  * The binder's documents, from one recursive tree read.
  *
@@ -115,11 +190,16 @@ export interface ListWorkspaceDocumentsParams {
 export async function listWorkspaceDocuments(
   params: ListWorkspaceDocumentsParams,
 ): Promise<WorkspaceDocumentEntry[]> {
+  return (await readWorkspaceTree(params)).documents;
+}
+
+async function readTreeEntries(
+  params: ListWorkspaceDocumentsParams,
+): Promise<GitTreeEntry[]> {
   const { client, org, workspace, ref = "main" } = params;
 
-  let tree: { tree?: GitTreeEntry[] };
   try {
-    tree = (await unwrap(
+    const tree = (await unwrap(
       client.GET("/repos/{owner}/{repo}/git/trees/{sha}", {
         params: {
           path: { owner: org, repo: workspace, sha: ref },
@@ -127,6 +207,7 @@ export async function listWorkspaceDocuments(
         },
       }),
     )) as { tree?: GitTreeEntry[] };
+    return tree.tree ?? [];
   } catch (err) {
     // A binder whose `main` has no commits yet answers 404 for its tree. That
     // is an empty binder, which is a state, not a problem.
@@ -135,11 +216,6 @@ export async function listWorkspaceDocuments(
     }
     throw err;
   }
-
-  return (tree.tree ?? [])
-    .map(toDocumentEntry)
-    .filter((entry): entry is WorkspaceDocumentEntry => entry !== null)
-    .sort((a, b) => a.path.localeCompare(b.path));
 }
 
 export interface FindWorkspaceDocumentParams {
