@@ -3,7 +3,7 @@ import { randomUUID } from "crypto";
 
 import { config } from "./config";
 import { OrganizationStore, organizationStore } from "./organizations";
-import { createApiServer, foldersInBinder } from "./server";
+import { createApiServer } from "./server";
 import { SessionStore, sessionStore } from "./sessions";
 import { resetStripeClientForTests } from "./stripe/client";
 import {
@@ -1587,46 +1587,5 @@ describe("admin subscription access overrides", () => {
     } finally {
       server.stop(true);
     }
-  });
-});
-
-describe("foldersInBinder", () => {
-  test("offers every folder a document lives in, and every folder above it", () => {
-    // A sign-off rule is set on a folder, and git has no empty directories —
-    // so the folders a binder has are exactly the ones its documents are in.
-    // Intermediate folders count: a rule on `policies` is as reasonable as one
-    // on `policies/nursing`, and both are real places in the tree.
-    expect(
-      foldersInBinder([
-        "policies/nursing/infection-control.docx",
-        "policies/hr/conduct.md",
-        "training/induction.pdf",
-      ]),
-    ).toEqual(["policies", "policies/hr", "policies/nursing", "training"]);
-  });
-
-  test("a document at the binder's root contributes no folder", () => {
-    expect(foldersInBinder(["standalone.md"])).toEqual([]);
-    expect(foldersInBinder([])).toEqual([]);
-  });
-
-  test("leaves our own plumbing out of the picker", () => {
-    // `.gitea` holds the sign-off file itself. A rule over it would be a rule
-    // about who approves changes to the rules, expressed as a folder — which
-    // is confusing rather than useful, and is not a place a customer filed
-    // anything.
-    expect(
-      foldersInBinder([
-        ".gitea/CODEOWNERS",
-        ".gitea/workflows/ci.yml",
-        "policies/nursing/a.md",
-      ]),
-    ).toEqual(["policies", "policies/nursing"]);
-  });
-
-  test("names a folder once however many documents are in it", () => {
-    expect(
-      foldersInBinder(["nursing/a.md", "nursing/b.md", "nursing/c.md"]),
-    ).toEqual(["nursing"]);
   });
 });

@@ -45,6 +45,9 @@ import {
   listDocumentVersions,
   listVersionsByDocument,
   listWorkspaceDocuments,
+  readWorkspaceTree,
+  type WorkspaceDocumentEntry,
+  type WorkspaceTree,
   nextVersionFrom,
   toDocumentEntry,
 } from "./gitea-client/workspaceDocuments";
@@ -53,6 +56,11 @@ import {
   proposeBinderFileChange,
   type BinderFileOperation,
 } from "./gitea-client/binderFiles";
+import {
+  planFolderRename,
+  planNewFolder,
+  type ShapeChangeResult,
+} from "./binderShape";
 import {
   accessCostsSeat,
   addTeamMember,
@@ -3778,26 +3786,30 @@ async function handlePublishWorkspaceChange(
       pullNumber,
     });
 
-    // **A sign-off change touches no document, and that is correct.** It
-    // changes `.gitea/CODEOWNERS` — who has to approve each folder — so there
-    // is nothing to version and no tag to write. The refusal below is still
-    // right for every other change: one that versions nothing is a mistake, and
-    // publishing it silently would leave somebody waiting for a version that
-    // never arrives.
+    // **Two kinds of change legitimately version nothing.** A sign-off change
+    // rewrites `.gitea/CODEOWNERS` — who has to approve what — and a shape
+    // change can be a folder made and nothing filed in it yet. Both are real
+    // acts with nothing to tag.
+    //
+    // The refusal is still right for everything else: a change that versions
+    // nothing is a mistake, and publishing it silently would leave somebody
+    // waiting for a version that never arrives.
     //
     // Told apart by the branch, the same way an upload is
-    // (`upload/<slugPath>/…`). A sign-off branch is deliberately not under that
-    // prefix, because `documentSlugPathFromUploadBranch` would then read it as
-    // a document and the binder would list a policy that does not exist.
+    // (`upload/<slugPath>/…`). Neither prefix is under that one, deliberately:
+    // the binder reads an upload branch to work out which document a change is
+    // about, and a folder rename is about no single document — one that moved
+    // twelve would have to pick one to be named after.
     const changeBranch = await getPullRequestHeadBranch({
       client,
       owner,
       repo: workspaceName,
       pullNumber,
     });
-    const isSignOffChange = changeBranch.startsWith("sign-off/");
+    const mayVersionNothing =
+      changeBranch.startsWith("sign-off/") || changeBranch.startsWith("shape/");
 
-    if (documents.length === 0 && !isSignOffChange) {
+    if (documents.length === 0 && !mayVersionNothing) {
       return json(
         409,
         { error: "This change does not touch any document." },
@@ -4628,7 +4640,7 @@ async function handleWorkspaceSettings(
       reviewSettings,
       access,
       signOff,
-      documents,
+      tree,
       orgTeams,
       openChanges,
     ] = await Promise.all([
@@ -4648,11 +4660,15 @@ async function handleWorkspaceSettings(
         org: orgName,
         workspace: workspaceName,
       }).catch(() => ({ exists: false, rules: [], unreadable: [] })),
-      listWorkspaceDocuments({
+      // The whole tree, not just the documents: a sign-off rule can name a
+      // folder somebody made and has not filed anything in yet, and deriving
+      // the folder list from document paths would offer only the folders that
+      // already hold something.
+      readWorkspaceTree({
         client,
         org: orgName,
         workspace: workspaceName,
-      }).catch(() => []),
+      }).catch(() => ({ documents: [], folders: [], paths: [] })),
       // The folders a rule may name are this binder's; the **groups** a rule
       // may name are the organization's, and deliberately not only the ones
       // granted here — a committee that signs off without gaining access is a
@@ -4724,14 +4740,14 @@ async function handleWorkspaceSettings(
           // Lines Gitea would drop with only a log warning. Surfaced because a
           // rule the screen omits is a rule somebody believes is not there.
           unreadable: signOff.unreadable,
-          folders: foldersInBinder(documents.map((entry) => entry.path)),
+          folders: tree.folders,
           /**
            * The documents a rule may name. A document rule carries an
            * identity, so this is what lets the screen offer "Hand Hygiene"
            * rather than a ULID — and what lets it say when a rule names a
            * document the binder no longer holds.
            */
-          documents: documents
+          documents: tree.documents
             .filter((entry) => entry.uid !== null)
             .map((entry) => ({
               uid: entry.uid!,
@@ -4743,8 +4759,9 @@ async function handleWorkspaceSettings(
           // no identities at all, so this list is empty and the picker offers
           // no documents — which, unexplained, reads as a missing feature
           // rather than as a binder that cannot use it yet.
-          unnameableDocuments: documents.filter((entry) => entry.uid === null)
-            .length,
+          unnameableDocuments: tree.documents.filter(
+            (entry) => entry.uid === null,
+          ).length,
           groups: (orgTeams ?? teams)
             .map((team) => team.name)
             .filter((name) => name !== STAFF_TEAM_NAME)
@@ -5135,26 +5152,6 @@ async function findEmptySignOffGroups(params: {
   return counted
     .filter((entry) => entry.members !== null && entry.members.length === 0)
     .map((entry) => entry.name)
-    .sort((left, right) => left.localeCompare(right));
-}
-
-export function foldersInBinder(paths: readonly string[]): string[] {
-  const folders = new Set<string>();
-
-  for (const path of paths) {
-    const segments = path.split("/");
-    // The last segment is the file itself.
-    for (let depth = 1; depth < segments.length; depth += 1) {
-      folders.add(segments.slice(0, depth).join("/"));
-    }
-  }
-
-  // `.gitea` holds the sign-off file itself and nothing a customer filed. A
-  // rule over it would be a rule about our own plumbing.
-  folders.delete(".gitea");
-
-  return [...folders]
-    .filter((folder) => !folder.startsWith(".gitea/"))
     .sort((left, right) => left.localeCompare(right));
 }
 
@@ -7032,6 +7029,158 @@ async function resolveChangeToJoin(params: {
 }
 
 /**
+ * The acts that change a binder's shape: folders, and where things are filed.
+ *
+ * One handler for three routes, because they differ only in how they work out
+ * the operations — everything around that is identical, and three copies of
+ * "resolve the binder, check the access, read the tree, join or open a change"
+ * would drift apart at the edges.
+ *
+ * Like every other write to a binder, they propose rather than change: `main`
+ * is protected, and a binder's shape is part of its record.
+ */
+async function handleBinderShapeChange(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+  plan: (context: {
+    body: Record<string, unknown>;
+    tree: WorkspaceTree;
+  }) => ShapeChangeResult,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { session, client } = auth;
+
+  try {
+    const body = ((await req.json().catch(() => null)) ?? {}) as Record<
+      string,
+      unknown
+    >;
+
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    const join = await resolveChangeToJoin({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      raw:
+        typeof body.changeNumber === "number"
+          ? String(body.changeNumber)
+          : typeof body.changeNumber === "string"
+            ? body.changeNumber
+            : null,
+    });
+    if (join && "error" in join) {
+      return json(409, { error: join.error }, baseHeaders);
+    }
+
+    // **Read the branch this is joining, not `main`.** A folder made five
+    // minutes ago in the same change is a folder for these purposes, and a
+    // rename has to see it — otherwise the second act in a change collides
+    // with the first or refuses a folder that is right there.
+    const tree = await readWorkspaceTree({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      ...(join ? { ref: join.branch } : {}),
+    });
+
+    const planned = plan({ body, tree });
+    if ("error" in planned) {
+      return json(409, { error: planned.error }, baseHeaders);
+    }
+
+    const proposed = join
+      ? await addToBinderChange({
+          client,
+          org: orgName,
+          workspace: workspaceName,
+          changeNumber: join.changeNumber,
+          operations: planned.operations,
+          message: planned.message,
+        })
+      : await proposeBinderFileChange({
+          client,
+          org: orgName,
+          workspace: workspaceName,
+          branch: buildShapeBranchName(session.username),
+          operations: planned.operations,
+          message: planned.message,
+          title: planned.title,
+          body: [
+            planned.title,
+            "",
+            `${session.username} proposed this from Bindersnap.`,
+            "",
+            "Nothing in this change alters what any policy says. It changes",
+            "where things are filed, which the binder records like anything",
+            "else.",
+          ].join("\n"),
+        });
+
+    logger.info("Binder shape change proposed", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      changeNumber: proposed.changeNumber,
+      operations: planned.operations.length,
+    });
+
+    return json(
+      201,
+      {
+        organization: orgName,
+        workspace: workspaceName,
+        branch: proposed.branch,
+        changeNumber: proposed.changeNumber,
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to change a binder's shape", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to propose that change.",
+    );
+  }
+}
+
+/**
+ * The branch a shape change lives on.
+ *
+ * Deliberately **not** under `upload/`, which carries a document's address and
+ * is what the binder reads to work out which document an open change is about.
+ * A folder rename is about no single document, and one that moved twelve would
+ * have to pick one to name the branch after.
+ */
+function buildShapeBranchName(
+  username: string,
+  now: Date = new Date(),
+): string {
+  const stamp = now
+    .toISOString()
+    .replace(/[^0-9]/g, "")
+    .slice(0, 14);
+  return `shape/${username}/${stamp}`;
+}
+
+/**
  * A new version of a document that is already in the binder.
  *
  * **The gap this closes.** Adding a policy was the only way anything reached a
@@ -8368,6 +8517,16 @@ export function createApiServer() {
         const workspaceDocumentRevisionsMatch = pathname.match(
           /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/document-revisions$/,
         );
+        // The acts that change where things are filed rather than what they
+        // say. Each names its subject in the body for the same reason a
+        // revision does: a folder called `folders` is a folder somebody could
+        // legitimately make.
+        const workspaceFoldersMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/folders$/,
+        );
+        const workspaceFolderRenamesMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/folder-renames$/,
+        );
         // The document's path carries slashes — it is a path inside the binder,
         // not one segment — so this captures the rest of the URL.
         const workspaceDocumentMatch = pathname.match(
@@ -8749,6 +8908,32 @@ export function createApiServer() {
             baseHeaders,
             workspaceOverviewMatch[1]!,
             workspaceOverviewMatch[2]!,
+          );
+        } else if (workspaceFoldersMatch && method === "POST") {
+          return await handleBinderShapeChange(
+            req,
+            baseHeaders,
+            workspaceFoldersMatch[1]!,
+            workspaceFoldersMatch[2]!,
+            ({ body, tree }) =>
+              planNewFolder({
+                folder: typeof body.folder === "string" ? body.folder : "",
+                existingFolders: tree.folders,
+              }),
+          );
+        } else if (workspaceFolderRenamesMatch && method === "POST") {
+          return await handleBinderShapeChange(
+            req,
+            baseHeaders,
+            workspaceFolderRenamesMatch[1]!,
+            workspaceFolderRenamesMatch[2]!,
+            ({ body, tree }) =>
+              planFolderRename({
+                from: typeof body.from === "string" ? body.from : "",
+                to: typeof body.to === "string" ? body.to : "",
+                paths: tree.paths,
+                existingFolders: tree.folders,
+              }),
           );
         } else if (workspaceDocumentRevisionsMatch && method === "POST") {
           return await handleReviseWorkspaceDocument(

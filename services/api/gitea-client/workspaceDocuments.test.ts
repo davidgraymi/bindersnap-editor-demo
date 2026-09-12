@@ -8,6 +8,7 @@ import {
   listDocumentVersions,
   listVersionsByDocument,
   listWorkspaceDocuments,
+  readWorkspaceTree,
   nextVersionFrom,
   nextVersionTag,
   toDocumentEntry,
@@ -501,4 +502,63 @@ test("an exact file path wins over an address match", async () => {
   });
   expect(byIdentity).not.toBeNull();
   expect(byIdentity?.slugPath).toBe("nursing/policy");
+});
+
+test("the tree answers with folders, including the empty ones", async () => {
+  // **Git has no empty directories**, so a folder somebody made and has not
+  // filed anything in yet exists because a placeholder is sitting in it — and
+  // that file is furniture, filtered out of the documents. Deriving folders
+  // from document paths, which is what this replaced, made a folder appear
+  // only once it stopped being empty.
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/git/trees/{sha}": () => ({
+        tree: [
+          { path: "nursing", type: "tree" },
+          { path: `nursing/handover.${HANDOVER}.md`, type: "blob" },
+          { path: "ward-3", type: "tree" },
+          { path: "ward-3/.gitkeep", type: "blob" },
+          { path: ".gitea", type: "tree" },
+          { path: ".gitea/CODEOWNERS", type: "blob" },
+        ],
+      }),
+    },
+  });
+
+  const tree = await readWorkspaceTree({
+    client,
+    org: "mercy-health",
+    workspace: "clinical",
+  });
+
+  expect(tree.folders).toEqual(["nursing", "ward-3"]);
+  expect(tree.documents.map((d) => d.slugPath)).toEqual(["nursing/handover"]);
+  // Every blob, furniture included — a rename has to move a placeholder, and a
+  // collision check has to know it is there. Reconstructing this list from the
+  // two above named a placeholder in folders that never had one, and Gitea
+  // refused to move a file that was not there.
+  expect(tree.paths).toEqual([
+    `nursing/handover.${HANDOVER}.md`,
+    "ward-3/.gitkeep",
+  ]);
+});
+
+test("the binder's own configuration is not part of its shape", async () => {
+  // `.gitea/` holds the sign-off rules. Renaming a folder must never sweep it
+  // along, so it is not in the paths a rename operates over.
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/git/trees/{sha}": () => ({
+        tree: [{ path: ".gitea/CODEOWNERS", type: "blob" }],
+      }),
+    },
+  });
+
+  const tree = await readWorkspaceTree({
+    client,
+    org: "mercy-health",
+    workspace: "clinical",
+  });
+  expect(tree.paths).toEqual([]);
+  expect(tree.folders).toEqual([]);
 });
