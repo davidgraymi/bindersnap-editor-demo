@@ -5,56 +5,67 @@ import {
   codeownersToken,
   escapeForTokenizer,
   escapeRegex,
-  folderFromPattern,
-  folderPattern,
   MAX_CODEOWNERS_BYTES,
   parseCodeowners,
   renderCodeowners,
+  ruleFromPattern,
+  rulePattern,
   tokenizeCodeownersLine,
   validateSignOffRules,
   type SignOffRule,
 } from "./codeowners";
 
 /**
- * What Gitea actually compiles for a folder: the file text, put through its
+ * What Gitea actually compiles for a rule: the file text, put through its
  * tokenizer. Every assertion about matching goes through this, because
  * asserting on the raw line would pass exactly the double-escaping bugs these
  * tests exist to catch.
  */
-function compiledFor(folder: string): RegExp {
-  const tokens = tokenizeCodeownersLine(`${codeownersToken(folder)}  @owner`);
+function compiledFor(target: { scope: SignOffRule["scope"]; target: string }) {
+  const tokens = tokenizeCodeownersLine(`${codeownersToken(target)}  @owner`);
   return new RegExp(`^${tokens[0]}$`);
 }
 
 const ORG = "riverside-health";
 
-function rule(partial: Partial<SignOffRule> & { folder: string }): SignOffRule {
-  return { teams: [], users: [], ...partial };
+/** A real identity, so the tests exercise the shape the product writes. */
+const HAND_HYGIENE = "01J8XZ4K7MQ9V3B0RN7YHS2E1D";
+
+function folder(
+  target: string,
+  partial: Partial<SignOffRule> = {},
+): SignOffRule {
+  return { scope: "folder", target, teams: [], users: [], ...partial };
 }
 
-describe("folderPattern", () => {
+function binder(partial: Partial<SignOffRule> = {}): SignOffRule {
+  return { scope: "binder", target: "", teams: [], users: [], ...partial };
+}
+
+function document(
+  target: string,
+  partial: Partial<SignOffRule> = {},
+): SignOffRule {
+  return { scope: "document", target, teams: [], users: [], ...partial };
+}
+
+describe("a rule over a folder", () => {
   test("anchors on the folder and matches everything inside it", () => {
     // The mechanic that fails silently: Gitea compiles `^<pattern>$`, so the
     // `policies/nursing/` a GitHub habit produces matches nothing at all.
-    expect(folderPattern("policies/nursing")).toBe("policies/nursing/.*");
+    expect(rulePattern(folder("policies/nursing"))).toBe("policies/nursing/.*");
 
-    const compiled = compiledFor("policies/nursing");
+    const compiled = compiledFor(folder("policies/nursing"));
     expect(compiled.test("policies/nursing/infection-control.md")).toBe(true);
     expect(compiled.test("policies/nursing/sub/deeper.md")).toBe(true);
     expect(compiled.test("policies/nursing")).toBe(false);
     expect(compiled.test("policies/hr/conduct.md")).toBe(false);
   });
 
-  test("the binder root is `.*`, not `/.*`", () => {
-    // Paths in a git tree are relative, so a leading slash matches nothing.
-    expect(folderPattern("")).toBe(".*");
-    expect(compiledFor("").test("anywhere/at/all.md")).toBe(true);
-  });
-
   test("escapes metacharacters, so a folder is matched literally", () => {
     // The defect nobody finds until an audit. `Q1 (2026)` is full of regex
     // metacharacters; unescaped, its rule matches the wrong files or none.
-    const compiled = compiledFor("reports/Q1 (2026)");
+    const compiled = compiledFor(folder("reports/Q1 (2026)"));
 
     expect(compiled.test("reports/Q1 (2026)/summary.md")).toBe(true);
     expect(compiled.test("reports/Q1 2026/summary.md")).toBe(false);
@@ -64,13 +75,72 @@ describe("folderPattern", () => {
   });
 
   test("a dot in a folder name does not become a wildcard", () => {
-    const compiled = compiledFor("policies.v2");
+    const compiled = compiledFor(folder("policies.v2"));
     expect(compiled.test("policies.v2/a.md")).toBe(true);
     expect(compiled.test("policiesXv2/a.md")).toBe(false);
   });
 
   test("tolerates slashes a caller left on either end", () => {
-    expect(folderPattern("/policies/nursing/")).toBe("policies/nursing/.*");
+    expect(rulePattern(folder("/policies/nursing/"))).toBe(
+      "policies/nursing/.*",
+    );
+  });
+});
+
+describe("a rule over the whole binder", () => {
+  test("is `.*`, not `/.*`", () => {
+    // Paths in a git tree are relative, so a leading slash matches nothing.
+    expect(rulePattern(binder())).toBe(".*");
+    expect(compiledFor(binder()).test("anywhere/at/all.md")).toBe(true);
+  });
+
+  test("a folder rule with no folder is the same thing, not `/.*`", () => {
+    // Not reachable through the UI, and the one shape Gitea would silently
+    // reinterpret if it ever were.
+    expect(rulePattern(folder(""))).toBe(".*");
+  });
+});
+
+describe("a rule over one document", () => {
+  test("follows the document rather than its path", () => {
+    // The whole reason a document rule is keyed on the identity. Retitle the
+    // policy or refile it and the rule still applies — written against a path,
+    // it would stop applying silently, because Gitea finds no matching rule
+    // and lets the merge through.
+    const compiled = compiledFor(document(HAND_HYGIENE));
+
+    expect(compiled.test(`nursing/hand-hygiene.${HAND_HYGIENE}.md`)).toBe(true);
+    expect(
+      compiled.test(
+        `infection-control/hand-hygiene-and-ppe.${HAND_HYGIENE}.pdf`,
+      ),
+    ).toBe(true);
+    // A document at the binder root, and one with no extension.
+    expect(compiled.test(`handover.${HAND_HYGIENE}.md`)).toBe(true);
+    expect(compiled.test(`handover.${HAND_HYGIENE}`)).toBe(true);
+  });
+
+  test("leaves every other document alone", () => {
+    const compiled = compiledFor(document(HAND_HYGIENE));
+
+    expect(
+      compiled.test("nursing/handover.01J9A0B1C2D3E4F5G6H7J8K9M0.md"),
+    ).toBe(false);
+    // The near miss: an identity that merely starts the same.
+    expect(compiled.test(`nursing/other.${HAND_HYGIENE}XYZ.md`)).toBe(false);
+    // And the folder it happens to be filed in.
+    expect(compiled.test("nursing/a-different-policy.md")).toBe(false);
+  });
+
+  test("the escaped dots survive both layers", () => {
+    // Written once for the regex and once for the tokenizer. A single layer
+    // leaves `.` as a wildcard, and the rule would match half the binder.
+    expect(rulePattern(document(HAND_HYGIENE))).toBe(
+      `.*\\.${HAND_HYGIENE}(\\..*)?`,
+    );
+    expect(codeownersToken(document(HAND_HYGIENE))).toBe(
+      `.*\\\\.${HAND_HYGIENE}(\\\\..*)?`,
+    );
   });
 });
 
@@ -111,23 +181,23 @@ describe("escaping, which happens twice", () => {
     expect(new RegExp(`^${tokens[0]}$`).test("Q1 (2026)/a.md")).toBe(false);
 
     // Escaped for both layers, it survives intact.
-    const both = codeownersToken("Q1 (2026)");
+    const both = codeownersToken(folder("Q1 (2026)"));
     expect(tokenizeCodeownersLine(`${both}  @owner`)[0]).toBe(
       "Q1 \\(2026\\)/.*",
     );
-    expect(compiledFor("Q1 (2026)").test("Q1 (2026)/a.md")).toBe(true);
+    expect(compiledFor(folder("Q1 (2026)")).test("Q1 (2026)/a.md")).toBe(true);
   });
 
   test("a folder with a `#` in it keeps the rest of its line", () => {
     // Unescaped, the tokenizer treats it as the start of a comment and the
     // owners simply vanish — a rule with a pattern and nobody on it, which
     // Gitea drops with a warning nobody reads.
-    const line = `${codeownersToken("ward-#3")}  @riverside-health/ic`;
+    const line = `${codeownersToken(folder("ward-#3"))}  @riverside-health/ic`;
     expect(tokenizeCodeownersLine(line)).toEqual([
       "ward-#3/.*",
       "@riverside-health/ic",
     ]);
-    expect(compiledFor("ward-#3").test("ward-#3/a.md")).toBe(true);
+    expect(compiledFor(folder("ward-#3")).test("ward-#3/a.md")).toBe(true);
   });
 });
 
@@ -157,8 +227,8 @@ describe("tokenizeCodeownersLine", () => {
 describe("renderCodeowners", () => {
   test("writes a team as @org/team and a person as @login", () => {
     const file = renderCodeowners(ORG, [
-      rule({ folder: "policies/nursing", teams: ["infection-control"] }),
-      rule({ folder: "policies/hr", users: ["priya"] }),
+      folder("policies/nursing", { teams: ["infection-control"] }),
+      folder("policies/hr", { users: ["priya"] }),
     ]);
 
     expect(file).toContain(
@@ -169,8 +239,7 @@ describe("renderCodeowners", () => {
 
   test("puts several owners on one line", () => {
     const file = renderCodeowners(ORG, [
-      rule({
-        folder: "policies/nursing",
+      folder("policies/nursing", {
         teams: ["infection-control", "quality-committee"],
         users: ["priya"],
       }),
@@ -184,7 +253,7 @@ describe("renderCodeowners", () => {
   test("drops a rule with nobody on it rather than writing a half line", () => {
     // Gitea needs a pattern *and* an owner; a lone pattern is a line it cannot
     // read, and an unreadable line is dropped silently rather than refused.
-    const file = renderCodeowners(ORG, [rule({ folder: "policies/nursing" })]);
+    const file = renderCodeowners(ORG, [folder("policies/nursing")]);
     expect(file).not.toContain("policies/nursing");
   });
 
@@ -193,8 +262,8 @@ describe("renderCodeowners", () => {
     // rule has to be satisfied. Stable order is for a readable diff, since
     // changing these rules is a change somebody has to review.
     const file = renderCodeowners(ORG, [
-      rule({ folder: "zebra", teams: ["a"] }),
-      rule({ folder: "alpha", teams: ["b"] }),
+      folder("zebra", { teams: ["a"] }),
+      folder("alpha", { teams: ["b"] }),
     ]);
     expect(file.indexOf("zebra")).toBeLessThan(file.indexOf("alpha"));
   });
@@ -209,12 +278,12 @@ describe("renderCodeowners", () => {
 describe("parseCodeowners", () => {
   test("round-trips what the generator wrote", () => {
     const rules = [
-      rule({
-        folder: "policies/nursing",
+      folder("policies/nursing", {
         teams: ["infection-control", "quality-committee"],
       }),
-      rule({ folder: "reports/Q1 (2026)", users: ["priya"] }),
-      rule({ folder: "", teams: ["clinical-admins"] }),
+      folder("reports/Q1 (2026)", { users: ["priya"] }),
+      binder({ teams: ["clinical-admins"] }),
+      document(HAND_HYGIENE, { teams: ["infection-control"] }),
     ];
 
     const parsed = parseCodeowners(ORG, renderCodeowners(ORG, rules));
@@ -238,7 +307,7 @@ describe("parseCodeowners", () => {
       "policies/nursing/.*  @riverside-health/ic @priya\n",
     );
     expect(parsed.rules[0]).toEqual(
-      rule({ folder: "policies/nursing", teams: ["ic"], users: ["priya"] }),
+      folder("policies/nursing", { teams: ["ic"], users: ["priya"] }),
     );
   });
 
@@ -266,20 +335,31 @@ describe("parseCodeowners", () => {
   });
 });
 
-describe("folderFromPattern", () => {
-  test("recovers the folder, escaping and all", () => {
-    expect(folderFromPattern("policies/nursing/.*")).toBe("policies/nursing");
-    expect(folderFromPattern("reports/Q1 \\(2026\\)/.*")).toBe(
-      "reports/Q1 (2026)",
-    );
-    expect(folderFromPattern(".*")).toBe("");
+describe("ruleFromPattern", () => {
+  test("recovers each of the three shapes, escaping and all", () => {
+    expect(ruleFromPattern("policies/nursing/.*")).toEqual({
+      scope: "folder",
+      target: "policies/nursing",
+    });
+    expect(ruleFromPattern("reports/Q1 \\(2026\\)/.*")).toEqual({
+      scope: "folder",
+      target: "reports/Q1 (2026)",
+    });
+    expect(ruleFromPattern(".*")).toEqual({ scope: "binder", target: "" });
+    expect(ruleFromPattern(`.*\\.${HAND_HYGIENE}(\\..*)?`)).toEqual({
+      scope: "document",
+      target: HAND_HYGIENE,
+    });
   });
 
-  test("refuses a pattern that only looks like an escaped folder", () => {
+  test("refuses a pattern that only looks like one of ours", () => {
     // `policies/.*/.*` unescapes to `policies/./.` and would not re-render to
     // itself, so it is not a folder rule and is not treated as one.
-    expect(folderFromPattern("policies/.*/.*")).toBeNull();
-    expect(folderFromPattern("policies/nursing")).toBeNull();
+    expect(ruleFromPattern("policies/.*/.*")).toBeNull();
+    expect(ruleFromPattern("policies/nursing")).toBeNull();
+    // A document shape with an unescaped dot matches different files than the
+    // one that would have been written, so it is not read as a document rule.
+    expect(ruleFromPattern(`.*.${HAND_HYGIENE}(\\..*)?`)).toBeNull();
   });
 });
 
@@ -291,8 +371,10 @@ describe("validateSignOffRules", () => {
       org: ORG,
       knownTeams,
       rules: [
-        rule({ folder: "policies/nursing", teams: ["infection-control"] }),
-        rule({ folder: "reports/Q1 (2026)", teams: ["quality-committee"] }),
+        folder("policies/nursing", { teams: ["infection-control"] }),
+        folder("reports/Q1 (2026)", { teams: ["quality-committee"] }),
+        binder({ teams: ["quality-committee"] }),
+        document(HAND_HYGIENE, { teams: ["infection-control"] }),
       ],
     });
     expect(result).toEqual({ ok: true, problems: [] });
@@ -304,7 +386,7 @@ describe("validateSignOffRules", () => {
     const result = validateSignOffRules({
       org: ORG,
       knownTeams,
-      rules: [rule({ folder: "policies/nursing", teams: ["ghost-committee"] })],
+      rules: [folder("policies/nursing", { teams: ["ghost-committee"] })],
     });
 
     expect(result.ok).toBe(false);
@@ -316,23 +398,63 @@ describe("validateSignOffRules", () => {
     const result = validateSignOffRules({
       org: ORG,
       knownTeams,
-      rules: [rule({ folder: "policies/nursing" })],
+      rules: [folder("policies/nursing")],
     });
     expect(result.ok).toBe(false);
     expect(result.problems[0]).toContain("nobody on it");
   });
 
-  test("refuses two rules over one folder", () => {
+  test("refuses two rules over one thing", () => {
     const result = validateSignOffRules({
       org: ORG,
       knownTeams,
       rules: [
-        rule({ folder: "policies/nursing", teams: ["infection-control"] }),
-        rule({ folder: "policies/nursing", teams: ["quality-committee"] }),
+        folder("policies/nursing", { teams: ["infection-control"] }),
+        folder("policies/nursing", { teams: ["quality-committee"] }),
       ],
     });
     expect(result.ok).toBe(false);
     expect(result.problems.join(" ")).toContain("two sign-off rules");
+  });
+
+  test("a folder and a document may both cover one file", () => {
+    // Not a duplicate: Gitea's gate is per rule and every matching rule has to
+    // be satisfied, so "Nursing signs off on this drawer, and Legal also signs
+    // off on this one policy" is a thing somebody means.
+    const result = validateSignOffRules({
+      org: ORG,
+      knownTeams,
+      rules: [
+        folder("nursing", { teams: ["infection-control"] }),
+        document(HAND_HYGIENE, { teams: ["quality-committee"] }),
+      ],
+    });
+    expect(result).toEqual({ ok: true, problems: [] });
+  });
+
+  test("refuses a rule naming a document the binder does not hold", () => {
+    // It can never be satisfied, and on screen it reads as a rule about
+    // nothing.
+    const result = validateSignOffRules({
+      org: ORG,
+      knownTeams,
+      knownDocuments: ["01J9A0B1C2D3E4F5G6H7J8K9M0"],
+      rules: [document(HAND_HYGIENE, { teams: ["infection-control"] })],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.problems[0]).toContain("not in this binder");
+  });
+
+  test("a caller that has not read the tree checks everything else", () => {
+    // Refusing every document rule it cannot corroborate would be worse than
+    // skipping the one check it cannot make.
+    const result = validateSignOffRules({
+      org: ORG,
+      knownTeams,
+      rules: [document(HAND_HYGIENE, { teams: ["infection-control"] })],
+    });
+    expect(result.ok).toBe(true);
   });
 
   test("refuses a file over the size ceiling", () => {
@@ -340,8 +462,7 @@ describe("validateSignOffRules", () => {
     // unable to publish at all. Refusing to write it is the kinder failure, and
     // the ceiling here is far below Gitea's.
     const many = Array.from({ length: 4000 }, (_, index) =>
-      rule({
-        folder: `policies/folder-with-a-fairly-long-name-${index}`,
+      folder(`policies/folder-with-a-fairly-long-name-${index}`, {
         teams: ["infection-control", "quality-committee"],
       }),
     );
@@ -364,10 +485,7 @@ describe("validateSignOffRules", () => {
       org: ORG,
       knownTeams,
       rules: [
-        rule({
-          folder: "reports/Q1 (2026) [draft]",
-          teams: ["infection-control"],
-        }),
+        folder("reports/Q1 (2026) [draft]", { teams: ["infection-control"] }),
       ],
     });
     expect(result).toEqual({ ok: true, problems: [] });
@@ -377,7 +495,7 @@ describe("validateSignOffRules", () => {
     const result = validateSignOffRules({
       org: ORG,
       knownTeams: [],
-      rules: [rule({ folder: "policies/hr", users: ["priya"] })],
+      rules: [folder("policies/hr", { users: ["priya"] })],
     });
     expect(result.ok).toBe(true);
   });

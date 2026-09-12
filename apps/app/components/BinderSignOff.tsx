@@ -3,19 +3,28 @@ import { useIsReadOnly } from "../readOnlyContext";
 
 import { fetchBinderSettings, proposeBinderSignOff } from "../api";
 import type {
+  SignOffDocumentView,
   SignOffRuleView,
   WorkspaceSettingsPayload,
 } from "../../../packages/api-schema/schemas/workspaces";
 import { describeGroupName } from "../../../packages/utils/groupName";
+import { formatDocumentName } from "../../../packages/utils/documentTitle";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
 /**
- * Who has to sign off on each folder.
+ * Who has to sign off on what.
+ *
+ * **Three scopes, one control.** A rule covers the whole binder, one folder, or
+ * one document, and those are the three answers a customer actually gives to
+ * "what has to be signed off?" — so the picker asks it once, with the folders
+ * and the documents grouped under headings, rather than making somebody choose
+ * a mode before they can choose a thing.
  *
  * **The customer never sees `.gitea/CODEOWNERS` and never hears "code owner".**
  * They see a sentence: "Nursing must be signed off by Infection Control." There
- * is no pattern, no path syntax and no file — the folder picker lists the
- * binder's actual folders and the group picker lists the organization's groups.
+ * is no pattern, no path syntax and no file — the picker lists the binder's
+ * actual folders and documents, and the group picker lists the organization's
+ * groups.
  *
  * **A group, not a list of names**, and this page exists to spend that. It is
  * what the Gitea 28.0.0 upgrade buys: when somebody leaves Infection Control,
@@ -37,9 +46,37 @@ interface BinderSignOffProps {
   onOpenChange: (changeNumber: number) => void;
 }
 
-/** A rule being edited. `key` survives a folder being retyped. */
+/** A rule being edited. `key` survives the target being changed. */
 interface DraftRule extends SignOffRuleView {
   key: string;
+}
+
+/**
+ * The picker's value: scope and target in one string.
+ *
+ * One `<select>` rather than two controls, because "what has to be signed off"
+ * is one question. `binder` has no target; the others carry theirs after a
+ * colon, and a folder path may contain anything but the scope prefix is fixed
+ * so the split is on the first colon only.
+ */
+function targetValue(rule: {
+  scope: SignOffRuleView["scope"];
+  target: string;
+}) {
+  return rule.scope === "binder" ? "binder" : `${rule.scope}:${rule.target}`;
+}
+
+function parseTargetValue(value: string): {
+  scope: SignOffRuleView["scope"];
+  target: string;
+} {
+  if (value === "binder") return { scope: "binder", target: "" };
+  const at = value.indexOf(":");
+  const scope = value.slice(0, at);
+  return {
+    scope: scope === "document" ? "document" : "folder",
+    target: value.slice(at + 1),
+  };
 }
 
 let nextKey = 0;
@@ -117,8 +154,9 @@ export function BinderSignOff({
       const result = await proposeBinderSignOff(
         org,
         binder,
-        (draft ?? []).map(({ folder, teams, users }) => ({
-          folder,
+        (draft ?? []).map(({ scope, target, teams, users }) => ({
+          scope,
+          target,
           teams,
           users,
         })),
@@ -151,10 +189,27 @@ export function BinderSignOff({
             screen would be promising something that is not happening. */}
         {signOff.enforced ? null : (
           <p className="app-inline-error">
-            This binder cannot hold a change for these rules yet. Anything set
-            here is recorded and shown, and nothing enforces it yet.
+            Nothing here is being enforced. These rules are recorded and shown,
+            but this binder is not holding a change for them — so a change can
+            be published without the sign-off below. Ask an administrator to
+            check the binder&rsquo;s protection rules.
           </p>
         )}
+
+        {/* **A rule whose group is empty enforces nothing**, verified against
+            a running Gitea: there is no owner to wait for, so the gate finds
+            nothing outstanding and the merge goes through. Said here for the
+            same reason an unreadable line is — a control that is listed but
+            not working is worse than one that was never set. */}
+        {signOff.emptyGroups.length > 0 ? (
+          <p className="app-inline-error">
+            {signOff.emptyGroups.length === 1
+              ? `${describeGroupName(signOff.emptyGroups[0]!)} has nobody in it, so the rule naming it is holding nothing. Add somebody to the group, or change the rule.`
+              : `These groups have nobody in them, so the rules naming them are holding nothing: ${signOff.emptyGroups
+                  .map((group) => describeGroupName(group))
+                  .join(", ")}. Add somebody to each, or change the rules.`}
+          </p>
+        ) : null}
 
         {notice ? <p className="app-inline-error">{notice}</p> : null}
 
@@ -179,18 +234,18 @@ export function BinderSignOff({
           /* The empty state is the page, so it says what the thing is rather
              than only that there is none of it. This is the one place the
              mockups' instinct — explain the model where it is used — earns its
-             keep: a reader who has never set one cannot act on "no folder
-             needs its own sign-off". It disappears the moment a rule exists,
-             which is what keeps it from being the permanent onboarding rail
-             the mockups drew. */
+             keep: a reader who has never set one cannot act on "nothing needs
+             its own sign-off". It disappears the moment a rule exists, which is
+             what keeps it from being the permanent onboarding rail the mockups
+             drew. */
           <div className="binder-empty-rule">
             <p className="binder-empty-rule-lead">
-              No folder needs its own sign-off yet.
+              Nothing here needs its own sign-off yet.
             </p>
             <p className="doc-rail-note">
-              Every change to this binder needs its usual approvals, whichever
-              folder it touches. A sign-off rule adds a second requirement to
-              one folder —{" "}
+              Every change to this binder needs its usual approvals, whatever it
+              touches. A sign-off rule adds a second requirement to one part of
+              it —{" "}
               <em>
                 the infection control group signs off on anything filed in
                 nursing
@@ -199,15 +254,15 @@ export function BinderSignOff({
               subject.
             </p>
             <p className="doc-rail-note">
-              Rules are set on folders, and a change that lands in two folders
-              needs both.
+              A rule can cover this whole binder, one folder, or a single
+              document, and a change that lands under two rules needs both.
             </p>
           </div>
         ) : (
           <ul className="binder-rule-list">
             {signOff.rules.map((rule) => (
-              <li className="binder-rule" key={rule.folder}>
-                {describeSignOffRule(rule)}
+              <li className="binder-rule" key={`${rule.scope}:${rule.target}`}>
+                {describeSignOffRule(rule, signOff.documents)}
               </li>
             ))}
           </ul>
@@ -253,11 +308,47 @@ export function BinderSignOff({
             </div>
           ) : (
             <>
+              {/* **What a rule can cover, said before anybody opens a picker.**
+                  The three scopes live inside a `<select>`, which shows nothing
+                  until it is opened — so a binder with no rules yet offered no
+                  hint that a rule could name one policy rather than a folder,
+                  and the feature was invisible to somebody looking straight at
+                  it. A control's vocabulary belongs beside the control. */}
+              <p className="doc-rail-note">
+                A rule can cover this whole binder, one folder, or a single
+                document.
+              </p>
+
+              {/* **Why the picker is short, when it is.** A document rule is
+                  keyed on the identity in the filename, so a binder filed
+                  before that existed offers no documents at all — and an empty
+                  list with no explanation reads as a missing feature rather
+                  than as a binder that cannot use it yet. The folder fallback
+                  is said because it is real advice, not consolation. */}
+              {signOff.documents.length === 0 &&
+              signOff.unnameableDocuments > 0 ? (
+                <p className="doc-rail-note">
+                  {signOff.unnameableDocuments === 1
+                    ? "The document in this binder was filed before Bindersnap could track policies individually, so no rule can name it on its own."
+                    : `All ${signOff.unnameableDocuments} documents in this binder were filed before Bindersnap could track policies individually, so no rule can name one on its own.`}{" "}
+                  A rule on their folder still covers them.
+                </p>
+              ) : null}
+
+              {signOff.documents.length === 0 &&
+              signOff.unnameableDocuments === 0 ? (
+                <p className="doc-rail-note">
+                  This binder holds no documents yet, so a rule can only cover
+                  the binder itself.
+                </p>
+              ) : null}
+
               {draft.map((rule) => (
                 <RuleEditor
                   key={rule.key}
                   rule={rule}
                   folders={signOff.folders}
+                  documents={signOff.documents}
                   groups={signOff.groups}
                   busy={saving}
                   onChange={(next) =>
@@ -281,12 +372,19 @@ export function BinderSignOff({
                   className={`bs-btn bs-btn--sm ${
                     nothingToPropose ? "bs-btn-primary" : "bs-btn-secondary"
                   }`}
-                  disabled={saving || signOff.folders.length === 0}
+                  // No longer gated on the binder having a folder: a rule can
+                  // cover the binder itself, which every binder has.
+                  disabled={saving}
                   onClick={() =>
                     setDraft([
                       ...draft,
                       draftFrom({
-                        folder: signOff.folders[0] ?? "",
+                        // A new rule starts at the whole binder: it is the one
+                        // choice that is always available and always means
+                        // something, so the row is never born pointing at
+                        // whichever folder happened to sort first.
+                        scope: "binder",
+                        target: "",
                         teams: [],
                         users: [],
                       }),
@@ -319,13 +417,6 @@ export function BinderSignOff({
                 </button>
               </div>
 
-              {signOff.folders.length === 0 ? (
-                <p className="doc-rail-note">
-                  This binder has no folders yet. A sign-off rule is set on a
-                  folder, so file a policy in one first.
-                </p>
-              ) : null}
-
               {/* Immediate versus approved, made visible. Nothing else on this
                   page saves instantly, and the button says "propose" for the
                   same reason. */}
@@ -346,13 +437,16 @@ export function BinderSignOff({
 }
 
 /** "Nursing must be signed off by Infection Control." */
-export function describeSignOffRule(rule: SignOffRuleView): string {
+export function describeSignOffRule(
+  rule: SignOffRuleView,
+  documents: readonly SignOffDocumentView[] = [],
+): string {
   const owners = [
     ...rule.teams.map((team) => describeGroupName(team)),
     ...rule.users,
   ];
 
-  const where = rule.folder === "" ? "Everything in this binder" : rule.folder;
+  const where = describeTarget(rule, documents);
 
   if (owners.length === 0) {
     // Gitea would have dropped this line, so it should never arrive — said
@@ -361,6 +455,38 @@ export function describeSignOffRule(rule: SignOffRuleView): string {
   }
 
   return `${where} must be signed off by ${listSentence(owners)}.`;
+}
+
+/**
+ * What a rule covers, as a customer reads it.
+ *
+ * A document rule carries an identity, which is not a thing to put in front of
+ * anybody — so it is looked up in the binder's own list. One that is not there
+ * is **said**, not hidden: a rule about a document this binder no longer holds
+ * enforces nothing, and a screen that quietly omitted it would be a screen
+ * somebody trusts to be complete.
+ */
+export function describeTarget(
+  rule: Pick<SignOffRuleView, "scope" | "target">,
+  documents: readonly SignOffDocumentView[],
+): string {
+  switch (rule.scope) {
+    case "binder":
+      return "Everything in this binder";
+    case "folder":
+      return describeFolder(rule.target);
+    case "document": {
+      const match = documents.find((entry) => entry.uid === rule.target);
+      return match
+        ? formatDocumentName(match.name)
+        : "A document that is no longer in this binder";
+    }
+  }
+}
+
+/** `clinical/nursing` → "Clinical / Nursing". A folder is a slug too. */
+export function describeFolder(folder: string): string {
+  return folder.split("/").map(formatDocumentName).join(" / ");
 }
 
 /** "A", "A and B", "A, B and C" — the way a person would say a list. */
@@ -372,6 +498,7 @@ function listSentence(items: string[]): string {
 function RuleEditor({
   rule,
   folders,
+  documents,
   groups,
   busy,
   onChange,
@@ -379,31 +506,61 @@ function RuleEditor({
 }: {
   rule: DraftRule;
   folders: string[];
+  documents: SignOffDocumentView[];
   groups: string[];
   busy: boolean;
   onChange: (rule: SignOffRuleView) => void;
   onRemove: () => void;
 }) {
-  // A folder that has a rule but no longer holds a document is still offered,
-  // so editing another rule cannot silently retarget this one.
-  const options = folders.includes(rule.folder)
-    ? folders
-    : [rule.folder, ...folders];
+  const current = targetValue(rule);
+
+  // Whatever this rule already points at stays on the list even if the binder
+  // no longer holds it, so opening the page to fix one rule cannot silently
+  // retarget it at whichever folder happens to sort first.
+  const missing =
+    rule.scope !== "binder" &&
+    !folders.includes(rule.target) &&
+    !documents.some((entry) => entry.uid === rule.target);
 
   return (
     <div className="org-group-add">
       <select
         className="bs-input org-group-select"
-        value={rule.folder}
+        value={current}
         disabled={busy}
-        aria-label="Which folder"
-        onChange={(event) => onChange({ ...rule, folder: event.target.value })}
+        aria-label="What has to be signed off"
+        onChange={(event) =>
+          onChange({ ...rule, ...parseTargetValue(event.target.value) })
+        }
       >
-        {options.map((folder) => (
-          <option key={folder} value={folder}>
-            {folder === "" ? "Everything in this binder" : folder}
-          </option>
-        ))}
+        <option value="binder">Everything in this binder</option>
+
+        {missing ? (
+          <option value={current}>{describeTarget(rule, documents)}</option>
+        ) : null}
+
+        {folders.length > 0 ? (
+          <optgroup label="Folders">
+            {folders.map((folder) => (
+              <option key={folder} value={`folder:${folder}`}>
+                {describeFolder(folder)}
+              </option>
+            ))}
+          </optgroup>
+        ) : null}
+
+        {documents.length > 0 ? (
+          <optgroup label="Documents">
+            {documents.map((entry) => (
+              <option key={entry.uid} value={`document:${entry.uid}`}>
+                {formatDocumentName(entry.name)}
+                {entry.folder === ""
+                  ? ""
+                  : ` — ${describeFolder(entry.folder)}`}
+              </option>
+            ))}
+          </optgroup>
+        ) : null}
       </select>
 
       <span className="docs-list-item-meta">must be signed off by</span>

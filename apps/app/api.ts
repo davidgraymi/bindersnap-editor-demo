@@ -682,7 +682,12 @@ export async function setBinderRules(
 export async function proposeBinderSignOff(
   org: string,
   binder: string,
-  rules: Array<{ folder: string; teams: string[]; users: string[] }>,
+  rules: Array<{
+    scope: "binder" | "folder" | "document";
+    target: string;
+    teams: string[];
+    users: string[];
+  }>,
 ): Promise<{ changeNumber: number; branch: string }> {
   const response = await BindersClient.proposeBinderSignOffRules(org, binder, {
     rules,

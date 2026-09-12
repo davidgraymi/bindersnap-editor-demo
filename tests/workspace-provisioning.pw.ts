@@ -3154,10 +3154,23 @@ async function readSettings(
   signOff: {
     enforced: boolean;
     exists: boolean;
-    rules: Array<{ folder: string; teams: string[]; users: string[] }>;
+    rules: Array<{
+      scope: "binder" | "folder" | "document";
+      target: string;
+      teams: string[];
+      users: string[];
+    }>;
     unreadable: Array<{ line: number; text: string }>;
     folders: string[];
+    documents: Array<{
+      uid: string;
+      slugPath: string;
+      name: string;
+      folder: string;
+    }>;
+    unnameableDocuments: number;
     groups: string[];
+    emptyGroups: string[];
     pendingChange: number | null;
   };
   canManage: boolean;
@@ -3452,7 +3465,12 @@ async function proposeSignOff(
   sessionCookie: string,
   org: string,
   workspace: string,
-  rules: Array<{ folder: string; teams?: string[]; users?: string[] }>,
+  rules: Array<{
+    scope: "binder" | "folder" | "document";
+    target: string;
+    teams?: string[];
+    users?: string[];
+  }>,
 ): Promise<{ status: number; body: string }> {
   const response = await fetch(
     `${API_BASE_URL}/api/app/binders/${org}/${workspace}/rules/sign-off`,
@@ -3518,7 +3536,7 @@ test("proposing sign-off rules opens a change and changes nothing yet", async ()
   expect(group.status, group.body).toBe(201);
 
   const proposed = await proposeSignOff(sessionCookie, org.name, "clinical", [
-    { folder: "nursing", teams: ["infection-control"] },
+    { scope: "folder", target: "nursing", teams: ["infection-control"] },
   ]);
   expect(proposed.status, proposed.body).toBe(201);
   const { changeNumber } = JSON.parse(proposed.body) as {
@@ -3534,7 +3552,7 @@ test("proposing sign-off rules opens a change and changes nothing yet", async ()
   expect(settings.signOff.pendingChange).toBe(changeNumber);
 
   const second = await proposeSignOff(sessionCookie, org.name, "clinical", [
-    { folder: "nursing", teams: ["infection-control"] },
+    { scope: "folder", target: "nursing", teams: ["infection-control"] },
   ]);
   expect(second.status, second.body).toBe(409);
   expect(second.body).toContain(String(changeNumber));
@@ -3552,7 +3570,7 @@ test("a rule naming a group the organization does not have is refused before any
   ).toBe(201);
 
   const refused = await proposeSignOff(sessionCookie, org.name, "clinical", [
-    { folder: "nursing", teams: ["no-such-committee"] },
+    { scope: "folder", target: "nursing", teams: ["no-such-committee"] },
   ]);
   expect(refused.status, refused.body).toBe(422);
   expect(refused.body).toContain("no-such-committee");
@@ -3563,7 +3581,7 @@ test("a rule naming a group the organization does not have is refused before any
 
   // And a rule with nobody on it is refused for its own reason.
   const empty = await proposeSignOff(sessionCookie, org.name, "clinical", [
-    { folder: "nursing" },
+    { scope: "folder", target: "nursing" },
   ]);
   expect(empty.status, empty.body).toBe(422);
   expect(empty.body).toContain("nobody on it");
@@ -3609,7 +3627,7 @@ test("published sign-off rules gate the folder they name", async () => {
 
   // Put the rules in force: propose, approve, publish.
   const proposed = await proposeSignOff(ownerCookie, org.name, "clinical", [
-    { folder: "nursing", teams: ["infection-control"] },
+    { scope: "folder", target: "nursing", teams: ["infection-control"] },
   ]);
   expect(proposed.status, proposed.body).toBe(201);
   const rulesChange = (JSON.parse(proposed.body) as { changeNumber: number })
@@ -3624,7 +3642,12 @@ test("published sign-off rules gate the folder they name", async () => {
   const inForce = await readSettings(ownerCookie, org.name, "clinical");
   expect(inForce.signOff.exists).toBe(true);
   expect(inForce.signOff.rules).toEqual([
-    { folder: "nursing", teams: ["infection-control"], users: [] },
+    {
+      scope: "folder",
+      target: "nursing",
+      teams: ["infection-control"],
+      users: [],
+    },
   ]);
   expect(inForce.signOff.unreadable).toEqual([]);
 
@@ -3675,6 +3698,226 @@ test("published sign-off rules gate the folder they name", async () => {
   );
   expect(released.status, released.body).toBe(200);
 });
+
+test("a sign-off rule over one document gates that document and no other", async () => {
+  // The scope the folder test above cannot reach. A rule over one policy is
+  // written against its identity rather than its path (ADR 0005), so it keeps
+  // applying through a retitle — and it has to leave every neighbour alone, or
+  // a binder ends up demanding sign-off on policies nobody chose.
+  const owner = buildCredentials();
+  const ownerCookie = await signUp(owner);
+  const org = await createOrganization(ownerCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(ownerCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const ownerToken = await createUserToken(owner.username, owner.password);
+  const signer = await addApprover(ownerToken, org.name, "clinical");
+  const bystander = await addApprover(ownerToken, org.name, "clinical");
+
+  expect(
+    (await createGroup(ownerCookie, org.name, "Infection Control", "reviewer"))
+      .status,
+  ).toBe(201);
+  expect(
+    (
+      await addToGroup(
+        ownerCookie,
+        org.name,
+        "infection-control",
+        signer.credentials.username,
+      )
+    ).status,
+  ).toBe(200);
+
+  // Two policies in the same folder, both published, so the rule has a
+  // neighbour to leave alone.
+  const guarded = await publishNewDocument(
+    ownerCookie,
+    bystander.token,
+    org.name,
+    "Hand Hygiene",
+    "nursing",
+  );
+  const neighbour = await publishNewDocument(
+    ownerCookie,
+    bystander.token,
+    org.name,
+    "Handover",
+    "nursing",
+  );
+
+  // The rule names one of them, by identity.
+  const proposed = await proposeSignOff(ownerCookie, org.name, "clinical", [
+    {
+      scope: "document",
+      target: uidOf(guarded.documentPath),
+      teams: ["infection-control"],
+    },
+  ]);
+  expect(proposed.status, proposed.body).toBe(201);
+  const rulesChange = (JSON.parse(proposed.body) as { changeNumber: number })
+    .changeNumber;
+  await approveChange(bystander.token, org.name, "clinical", rulesChange);
+  expect(
+    (await publishChange(ownerCookie, org.name, "clinical", rulesChange))
+      .status,
+  ).toBe(200);
+
+  const inForce = await readSettings(ownerCookie, org.name, "clinical");
+  expect(inForce.signOff.rules).toEqual([
+    {
+      scope: "document",
+      target: uidOf(guarded.documentPath),
+      teams: ["infection-control"],
+      users: [],
+    },
+  ]);
+  // And the page can name the document a rule is about, rather than showing a
+  // ULID to somebody being asked to approve it.
+  expect(inForce.signOff.documents.map((entry) => entry.uid)).toContain(
+    uidOf(guarded.documentPath),
+  );
+
+  // A revision to the guarded policy: the count is met and the rule is not.
+  const guardedChange = await reviseDocument(
+    ownerCookie,
+    ownerToken,
+    org.name,
+    guarded.documentPath,
+  );
+  await approveChange(bystander.token, org.name, "clinical", guardedChange);
+  const blocked = await publishChange(
+    ownerCookie,
+    org.name,
+    "clinical",
+    guardedChange,
+  );
+  expect(
+    blocked.status,
+    `the document's own rule did not hold the merge: ${blocked.body}`,
+  ).not.toBe(200);
+
+  await approveChange(signer.token, org.name, "clinical", guardedChange);
+  expect(
+    (await publishChange(ownerCookie, org.name, "clinical", guardedChange))
+      .status,
+  ).toBe(200);
+
+  // The neighbour is in the same folder and is not covered. The bystander's
+  // approval alone is enough.
+  const neighbourChange = await reviseDocument(
+    ownerCookie,
+    ownerToken,
+    org.name,
+    neighbour.documentPath,
+  );
+  await approveChange(bystander.token, org.name, "clinical", neighbourChange);
+  const released = await publishChange(
+    ownerCookie,
+    org.name,
+    "clinical",
+    neighbourChange,
+  );
+  expect(
+    released.status,
+    `a rule over one document blocked a change to another: ${released.body}`,
+  ).toBe(200);
+});
+
+/** Add a policy and get it onto `main`, so a rule has something to guard. */
+async function publishNewDocument(
+  sessionCookie: string,
+  approverToken: string,
+  org: string,
+  name: string,
+  folder: string,
+): Promise<{ slugPath: string; documentPath: string }> {
+  const added = await addDocument(sessionCookie, org, "clinical", {
+    name,
+    folder,
+  });
+  expect(added.status, added.body).toBe(201);
+  const { pullRequestNumber, slugPath, documentPath } = JSON.parse(
+    added.body,
+  ) as {
+    pullRequestNumber: number;
+    slugPath: string;
+    documentPath: string;
+  };
+
+  await approveChange(approverToken, org, "clinical", pullRequestNumber);
+  expect(
+    (await publishChange(sessionCookie, org, "clinical", pullRequestNumber))
+      .status,
+  ).toBe(200);
+
+  return { slugPath, documentPath };
+}
+
+/** Open a change that edits an existing document, and answer with its number. */
+async function reviseDocument(
+  sessionCookie: string,
+  token: string,
+  org: string,
+  documentPath: string,
+): Promise<number> {
+  const branch = `upload/${documentPath.split(".")[0]}/${randomUUID().slice(0, 8)}`;
+  expect(
+    (
+      await fetch(`${GITEA_URL}/api/v1/repos/${org}/clinical/branches`, {
+        method: "POST",
+        headers: {
+          Authorization: `token ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          new_branch_name: branch,
+          old_branch_name: "main",
+        }),
+      })
+    ).status,
+  ).toBe(201);
+
+  const existing = await giteaGet<{ sha: string }>(
+    token,
+    `/repos/${org}/clinical/contents/${documentPath}?ref=main`,
+  );
+
+  const written = await fetch(
+    `${GITEA_URL}/api/v1/repos/${org}/clinical/contents/${documentPath}`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `token ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        branch,
+        sha: existing.sha,
+        message: "Revise",
+        content: Buffer.from(`revised ${randomUUID()}`).toString("base64"),
+      }),
+    },
+  );
+  expect(written.status, await written.clone().text()).toBe(200);
+
+  const pull = await fetch(`${GITEA_URL}/api/v1/repos/${org}/clinical/pulls`, {
+    method: "POST",
+    headers: {
+      Authorization: `token ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ head: branch, base: "main", title: "Revise" }),
+  });
+  expect(pull.status, await pull.clone().text()).toBe(201);
+  const { number } = (await pull.json()) as { number: number };
+
+  // Gitea computes mergeability in the background, and an approval submitted
+  // while that runs can be dismissed by it.
+  await new Promise((resolve) => setTimeout(resolve, 1_500));
+  return number;
+}
 
 async function setOrgRole(
   sessionCookie: string,

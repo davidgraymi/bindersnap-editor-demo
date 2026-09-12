@@ -13,8 +13,6 @@ type BranchProtection = components["schemas"]["BranchProtection"];
 type User = components["schemas"]["User"];
 type RepoCollaboratorPermission =
   components["schemas"]["RepoCollaboratorPermission"];
-type CreateBranchProtectionOption =
-  components["schemas"]["CreateBranchProtectionOption"];
 type AddCollaboratorOption = components["schemas"]["AddCollaboratorOption"];
 type RepoFileContent = {
   sha?: string;
@@ -41,13 +39,6 @@ export interface CreatePrivateCurrentUserRepoParams {
   client: GiteaClient;
   name: string;
   description?: string;
-}
-
-export interface CreateMainBranchProtectionParams {
-  client: GiteaClient;
-  owner: string;
-  repo: string;
-  requiredApprovals?: number;
 }
 
 export interface BootstrapEmptyMainBranchParams {
@@ -404,31 +395,6 @@ function normalizeBranchProtection(
     dismissStaleApprovals: raw.dismiss_stale_approvals ?? false,
     enablePush: raw.enable_push ?? false,
   };
-}
-
-export async function createMainBranchProtection(
-  params: CreateMainBranchProtectionParams,
-): Promise<RepoBranchProtection> {
-  const { client, owner, repo, requiredApprovals = 0 } = params;
-
-  const protection = await unwrap(
-    client.POST("/repos/{owner}/{repo}/branch_protections", {
-      params: { path: { owner, repo } },
-      body: {
-        rule_name: "main",
-        required_approvals: requiredApprovals,
-        enable_approvals_whitelist: false,
-        enable_merge_whitelist: false,
-        block_on_rejected_reviews: true,
-        block_on_outdated_branch: true,
-        dismiss_stale_approvals: false,
-        enable_force_push: false,
-        enable_push: false,
-      } satisfies CreateBranchProtectionOption,
-    }),
-  );
-
-  return normalizeBranchProtection(protection);
 }
 
 export async function bootstrapEmptyMainBranch(

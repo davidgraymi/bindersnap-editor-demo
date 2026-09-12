@@ -547,6 +547,28 @@ async function bootstrapEmptyMainBranch(
   log(`Bootstrapped empty main branch: ${owner}/${repo}`);
 }
 
+/**
+ * Protect `main`, and **keep it protected the way it is meant to be**.
+ *
+ * This used to return early when a rule already existed, which is the wrong
+ * shape for a seed that runs again on every `bun run up`. `block_on_codeowner_
+ * reviews` was added to this body after stacks already had a `main` rule
+ * without it, and those stacks never picked it up: the flag stayed off, Gitea
+ * held no merge for `.gitea/CODEOWNERS`, and the binder's Sign-off rules tab
+ * warned — correctly — that nothing there was being enforced. Only
+ * `up --fresh` cleared it.
+ *
+ * So it reconciles instead. `PATCH` writes the same body onto an existing rule,
+ * which makes this idempotent in the way the rest of the seed already is: the
+ * settings below are what ends up on the branch whether this is the first run
+ * or the fourth. The app's own `protectWorkspaceMain` reached that conclusion
+ * first and is worth reading beside this.
+ *
+ * Note this is still a *second* copy of the binder's protection — the app's is
+ * the other — and copies of one rule are what this codebase keeps catching
+ * mid-drift. It stays separate only because the seed talks to Gitea directly
+ * with no app running.
+ */
 async function ensureMainBranchProtection(
   baseUrl: string,
   adminAuth: BasicAuth,
@@ -554,6 +576,23 @@ async function ensureMainBranchProtection(
   repo: string,
   log: (message: string) => void,
 ): Promise<void> {
+  const body = {
+    rule_name: "main",
+    required_approvals: 1,
+    enable_approvals_whitelist: false,
+    enable_merge_whitelist: false,
+    block_on_rejected_reviews: true,
+    // Gitea 28.0.0's per-folder gate, which the dev stack's pinned nightly has
+    // and 1.27.3 silently drops. Set here so a seeded binder demonstrates the
+    // feature rather than opening its Sign-off rules tab with a warning that
+    // nothing is being enforced.
+    block_on_codeowner_reviews: true,
+    block_on_outdated_branch: true,
+    dismiss_stale_approvals: true,
+    enable_force_push: false,
+    enable_push: false,
+  };
+
   const protections = await giteaJson<GiteaBranchProtection[]>(
     baseUrl,
     `${repoPath(owner, repo)}/branch_protections`,
@@ -561,35 +600,24 @@ async function ensureMainBranchProtection(
   );
 
   if (protections.some((protection) => protection.rule_name === "main")) {
-    log(`Main branch protection already exists: ${owner}/${repo}`);
+    await giteaRequest(
+      baseUrl,
+      `${repoPath(owner, repo)}/branch_protections/main`,
+      {
+        method: "PATCH",
+        auth: adminAuth,
+        body: JSON.stringify(body),
+        expectedStatuses: [200],
+      },
+    );
+    log(`Reconciled main branch protection: ${owner}/${repo}`);
     return;
   }
 
   await giteaRequest(baseUrl, `${repoPath(owner, repo)}/branch_protections`, {
     method: "POST",
     auth: adminAuth,
-    body: JSON.stringify({
-      rule_name: "main",
-      required_approvals: 1,
-      enable_approvals_whitelist: false,
-      enable_merge_whitelist: false,
-      block_on_rejected_reviews: true,
-      // Gitea 28.0.0's per-folder gate, which the dev stack's pinned nightly
-      // has and 1.27.3 silently drops. Set here so a seeded binder
-      // demonstrates the feature rather than opening its Sign-off rules tab
-      // with a warning that nothing is being enforced.
-      //
-      // Note this is a *third* copy of the binder's protection — the app's
-      // `protectWorkspaceMain` and `tests/gitea-permission-model.pw.ts` are
-      // the others — and copies of one rule are what this codebase keeps
-      // catching mid-drift. It stays separate only because the seed talks to
-      // Gitea directly with no app running.
-      block_on_codeowner_reviews: true,
-      block_on_outdated_branch: true,
-      dismiss_stale_approvals: true,
-      enable_force_push: false,
-      enable_push: false,
-    }),
+    body: JSON.stringify(body),
     expectedStatuses: [201],
   });
 
