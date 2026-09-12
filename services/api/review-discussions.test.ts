@@ -200,7 +200,14 @@ beforeEach(() => {
       /^\/api\/v1\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)\/files$/,
     );
     if (filesMatch && method === "GET") {
-      return json([{ filename: "nursing/policy.md", status: "added" }]);
+      // Carrying an identity segment, because publish refuses a content file
+      // without one — a file with no identity has no version series to add to.
+      return json([
+        {
+          filename: "nursing/policy.01J8XZ4K7MQ9V3B0RN7YHS2E1D.md",
+          status: "added",
+        },
+      ]);
     }
 
     const prMatch = path.match(

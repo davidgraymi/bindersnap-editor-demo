@@ -10,18 +10,20 @@ import {
 } from "./binderDocument";
 
 const documentInFolder = {
-  path: "nursing/hand-hygiene.pdf",
+  path: "nursing/hand-hygiene.01J8XZ4K7MQ9V3B0RN7YHS2E1D.pdf",
   slugPath: "nursing/hand-hygiene",
   name: "hand-hygiene",
+  uid: "01J8XZ4K7MQ9V3B0RN7YHS2E1D",
   folder: "nursing",
   size: 1024,
   sha: "abc123",
 };
 
 const rootDocument = {
-  path: "handover.md",
+  path: "handover.01J9A0B1C2D3E4F5G6H7J8K9M0.md",
   slugPath: "handover",
   name: "handover",
+  uid: "01J9A0B1C2D3E4F5G6H7J8K9M0",
   folder: "",
   size: 512,
   sha: "def456",
@@ -130,6 +132,13 @@ test("an unpublished document says so rather than showing nothing", () => {
 test("a download lands under the file's own name, not its path", () => {
   expect(downloadFileName(documentInFolder)).toBe("hand-hygiene.pdf");
   expect(downloadFileName(rootDocument)).toBe("handover.md");
+});
+
+test("a download does not carry the identity segment", () => {
+  // It is in the repository so a document survives a rename. It has no
+  // business in somebody's Downloads folder, in the middle of a filename they
+  // have to read.
+  expect(downloadFileName(documentInFolder)).not.toContain("01J8XZ4K7M");
 });
 
 // ── the version in the address bar ─────────────────────────────────

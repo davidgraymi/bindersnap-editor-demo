@@ -11,8 +11,11 @@
  * the middle of a `docker compose up`.
  */
 
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { parse as parseYaml } from "yaml";
+
+import { documentUidFrom } from "../packages/utils/documentUid";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -66,6 +69,43 @@ export const SEED_DOCUMENT_FORMATS = [
  * (`inferStoredDocumentFileName`), so the seed has to agree with it — a
  * mismatch produces a repo the app cannot read a single version out of.
  */
+/**
+ * The instant every seeded identity is stamped with.
+ *
+ * The same one `seed-documents.ts` freezes its generated files at, and for the
+ * same reason: a seed that produced different bytes on every run would make
+ * every `bun run up` a change to every document.
+ */
+const SEED_INSTANT = Date.parse("2026-01-05T09:00:00Z");
+
+/**
+ * A seeded document's identity — derived, not minted.
+ *
+ * Every document Bindersnap creates gets a ULID minted at upload (ADR 0005),
+ * and the seed cannot: it runs again on every `bun run up` and only rewrites
+ * what changed, so a fresh identity each time would file the same policy under
+ * a new name, orphan its tags, and restart it at v1 — which is precisely the
+ * bug ADR 0005 exists to prevent, reproduced by the tool meant to demonstrate
+ * the fix.
+ *
+ * Derived from where the document is filed and what the binder is, so two
+ * policies with the same name in different binders are different documents and
+ * the same policy is the same document on every run. A hash rather than a
+ * counter because the YAML is edited: inserting a document at the top of the
+ * list must not renumber everything below it.
+ */
+export function seedDocumentUid(
+  organization: string,
+  binder: string,
+  slugPath: string,
+): string {
+  const digest = createHash("sha256")
+    .update(`${organization}/${binder}/${slugPath}`)
+    .digest();
+
+  return documentUidFrom(SEED_INSTANT, new Uint8Array(digest));
+}
+
 export function canonicalFileNameFor(format: SeedDocumentFormat): string {
   switch (format) {
     case "markdown":
@@ -462,9 +502,10 @@ export function parseSeedScenario(source: string): SeedScenario {
       requireKnown(member.user, `${binderPath}.members[${mIndex}].user`);
     });
 
-    // A document's identity is its path, and two documents at one path are one
-    // document — so the collision has to be caught here rather than discovered
-    // as a silent overwrite halfway through seeding.
+    // Two documents at one address are one document — the seed derives an
+    // identity from the address, so a duplicate would be a single document
+    // seeded twice rather than two. Caught here rather than discovered as a
+    // silent overwrite halfway through seeding.
     const seenPaths = new Set<string>();
 
     binder.documents.forEach((document, index) => {

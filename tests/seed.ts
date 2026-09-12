@@ -17,6 +17,7 @@ import { ROLE_TEAM_OPTIONS } from "../services/api/gitea-client/orgs";
 import { renderSeedDocumentFile } from "./seed-documents";
 import {
   loadSeedScenario,
+  seedDocumentUid,
   type SeedChange,
   type SeedBinder,
   type SeedBinderDocument,
@@ -986,7 +987,10 @@ async function publishChange(
   repo: string,
   pull: GiteaPull,
   title: string,
+  /** What the policy is called, as against what the change was called. */
+  documentTitle: string,
   slugPath: string,
+  uid: string,
   version: number,
   refreshReviews: () => Promise<void>,
   log: (message: string) => void,
@@ -1030,8 +1034,10 @@ async function publishChange(
   }
 
   // A binder's tags are repository-global and many documents share them, so
-  // the version has to carry the document with it.
-  const tagName = `${slugPath}/v${version}`;
+  // the version has to carry the document with it — and it carries the
+  // *identity*, not the path (ADR 0005), so renaming a policy does not restart
+  // its numbering. The message carries what the name stopped saying.
+  const tagName = `${uid}/v${version}`;
   const response = await giteaRequest(
     baseUrl,
     `${repoPath(owner, repo)}/tags`,
@@ -1041,7 +1047,7 @@ async function publishChange(
       body: JSON.stringify({
         tag_name: tagName,
         target: "main",
-        message: `Published version ${tagName}`,
+        message: `${documentTitle} v${version} — ${slugPath}`,
       }),
       expectedStatuses: [201, 409, 422],
     },
@@ -1155,11 +1161,13 @@ async function applyChange(
 ): Promise<number> {
   const { owner, repo, slugPathFor } = context;
   const slugPath = slugPathFor(document);
+  const uid = seedDocumentUid(owner, repo, slugPath);
   const authorAuth = authFor(change.author ?? context.organizationOwner);
   const file = await renderSeedDocumentFile(
     change.document,
     document.format,
     slugPath,
+    uid,
   );
 
   await ensureBranch(
@@ -1229,7 +1237,9 @@ async function applyChange(
       repo,
       pull,
       change.title,
+      change.document.title,
       slugPath,
+      uid,
       version,
       refreshReviews,
       log,
@@ -1256,7 +1266,7 @@ interface BinderContext {
   slugPathFor: (document: SeedBinderDocument) => string;
 }
 
-/** `nursing/infection-control` — folder and name, which is the identity. */
+/** `nursing/infection-control` — folder and name, which is the address. */
 function slugPathOf(document: SeedBinderDocument): string {
   return document.folder
     ? `${document.folder}/${document.name}`

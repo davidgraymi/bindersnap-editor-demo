@@ -13,6 +13,7 @@ import type {
   WorkspaceDocumentEntry,
   WorkspaceDocumentState,
 } from "../../packages/api-schema/schemas/workspaces";
+import { parseDocumentFilename } from "../../packages/utils/documentPath";
 import { formatDocumentName } from "./documentDisplay";
 
 /** One step of the trail down to the document, inside its binder. */
@@ -97,10 +98,21 @@ export function describeVersionState(
   return state === "proposed" ? "In review" : "No published version yet";
 }
 
-/** The file name a download should land under: `hand-hygiene.pdf`. */
+/**
+ * The file name a download should land under: `hand-hygiene.pdf`.
+ *
+ * The name and the extension, with the identity segment left out. It is in the
+ * repository because a document has to be recognisable across a rename (ADR
+ * 0005); it has no business in somebody's Downloads folder, where it would be
+ * 26 characters of noise in the middle of a filename they have to read.
+ */
 export function downloadFileName(document: WorkspaceDocumentEntry): string {
   const lastSlash = document.path.lastIndexOf("/");
-  return lastSlash === -1 ? document.path : document.path.slice(lastSlash + 1);
+  const filename =
+    lastSlash === -1 ? document.path : document.path.slice(lastSlash + 1);
+
+  const { name, extension } = parseDocumentFilename(filename);
+  return extension === "" ? name : `${name}.${extension}`;
 }
 
 /**

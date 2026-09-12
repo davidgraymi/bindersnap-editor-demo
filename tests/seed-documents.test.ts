@@ -1,7 +1,14 @@
 import { expect, test } from "bun:test";
 
 import { renderSeedDocumentFile, renderSeedMarkdown } from "./seed-documents";
-import { canonicalFileNameFor, type SeedDocument } from "./seed-scenario";
+import {
+  canonicalFileNameFor,
+  seedDocumentUid,
+  type SeedDocument,
+} from "./seed-scenario";
+
+/** What the seed derives for this document, which is what it commits under. */
+const UID = seedDocumentUid("riverside-health", "clinical", "nursing/handover");
 
 /**
  * The bytes the seed commits.
@@ -57,21 +64,32 @@ test("Markdown keeps the document's structure as headings", () => {
 });
 
 test("a seeded Word file is a real .docx", async () => {
-  const file = await renderSeedDocumentFile(policy, "docx", "nursing/handover");
+  const file = await renderSeedDocumentFile(
+    policy,
+    "docx",
+    "nursing/handover",
+    UID,
+  );
   const bytes = Buffer.from(file.content, "base64");
 
-  // The document is a file inside a binder, so its path is its identity.
-  expect(file.path).toBe("nursing/handover.docx");
+  // A file inside a binder, named for where it is filed, which document it is,
+  // and how to render it.
+  expect(file.path).toBe(`nursing/handover.${UID}.docx`);
   // "PK" — a .docx is an Office Open XML package in a ZIP.
   expect([...bytes.subarray(0, 4)]).toEqual([0x50, 0x4b, 0x03, 0x04]);
   expect(bytes.toString("latin1")).toContain("word/document.xml");
 });
 
 test("a seeded PDF is a real PDF carrying the policy's words", async () => {
-  const file = await renderSeedDocumentFile(policy, "pdf", "nursing/handover");
+  const file = await renderSeedDocumentFile(
+    policy,
+    "pdf",
+    "nursing/handover",
+    UID,
+  );
   const bytes = Buffer.from(file.content, "base64");
 
-  expect(file.path).toBe("nursing/handover.pdf");
+  expect(file.path).toBe(`nursing/handover.${UID}.pdf`);
   expect(bytes.subarray(0, 5).toString("latin1")).toBe("%PDF-");
 
   // The text layer is the point: the comparison screen reads the words back
@@ -93,12 +111,14 @@ test("re-rendering an unchanged policy produces the same bytes", async () => {
       policy,
       format,
       "nursing/handover",
+      UID,
     );
     await new Promise((resolve) => setTimeout(resolve, 1_100));
     const second = await renderSeedDocumentFile(
       policy,
       format,
       "nursing/handover",
+      UID,
     );
     expect(second.content).toBe(first.content);
   }
@@ -124,12 +144,35 @@ test("editing the prose changes the bytes for every format", async () => {
       policy,
       format,
       "nursing/handover",
+      UID,
     );
     const after = await renderSeedDocumentFile(
       edited,
       format,
       "nursing/handover",
+      UID,
     );
     expect(after.content).not.toBe(before.content);
   }
+});
+
+test("a document's identity is the same on every seed run", () => {
+  // What keeps re-seeding a no-op. A minted identity would file the same policy
+  // under a new name every run, orphan its tags, and restart it at v1 — the
+  // exact bug ADR 0005 exists to prevent, reproduced by the tool that is meant
+  // to demonstrate the fix.
+  expect(
+    seedDocumentUid("riverside-health", "clinical", "nursing/handover"),
+  ).toBe(UID);
+});
+
+test("the same policy name in two binders is two documents", () => {
+  // Derived from the binder as well as the address, so a "Handover" in
+  // Clinical and a "Handover" in Facilities do not share a version series.
+  expect(
+    seedDocumentUid("riverside-health", "facilities", "nursing/handover"),
+  ).not.toBe(UID);
+  expect(
+    seedDocumentUid("mercy-health", "clinical", "nursing/handover"),
+  ).not.toBe(UID);
 });

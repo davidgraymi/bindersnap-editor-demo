@@ -4,7 +4,9 @@ import { buildVersionStamp, type PublishedPolicy } from "./version-stamp";
 
 function policy(overrides: Partial<PublishedPolicy> = {}): PublishedPolicy {
   return {
+    title: "Infection Control",
     slugPath: "nursing/infection-control",
+    path: "nursing/infection-control.01J8XZ4K7MQ9V3B0RN7YHS2E1D.pdf",
     version: 4,
     requiredApprovals: 2,
     approvedBy: ["carol", "dan"],
@@ -17,11 +19,32 @@ function policy(overrides: Partial<PublishedPolicy> = {}): PublishedPolicy {
 }
 
 describe("the summary line", () => {
-  test("names the document and the version, and nothing else", () => {
-    // It is what git shows wherever a tag is listed, so it carries the two
-    // facts that identify the version and no policy detail.
+  test("names the document, the version and the file, and nothing else", () => {
+    // It is what git shows wherever a tag is listed, and the tag name is now a
+    // ULID — so this line is the only place a person scanning `git tag -n1`
+    // learns which policy they are looking at.
     const [summary] = buildVersionStamp(policy()).split("\n");
-    expect(summary).toBe("Published nursing/infection-control v4");
+    expect(summary).toBe(
+      "Infection Control v4 — nursing/infection-control.01J8XZ4K7MQ9V3B0RN7YHS2E1D.pdf",
+    );
+  });
+
+  test("carries no policy detail", () => {
+    const [summary] = buildVersionStamp(policy()).split("\n");
+    expect(summary).not.toContain("Approvals");
+    expect(summary).not.toContain("alice");
+  });
+});
+
+describe("what the tag name stopped saying", () => {
+  test("the title and the path are recorded as they stood at this publish", () => {
+    // Both are point-in-time facts. Rename the policy tomorrow and nothing
+    // else records what it was called when this version was signed off — the
+    // tag name is a ULID and the tree only holds what is true now.
+    const stamp = buildVersionStamp(policy());
+
+    expect(stamp).toContain("Title at this version: Infection Control");
+    expect(stamp).toContain("Filed at: nursing/infection-control");
   });
 });
 
