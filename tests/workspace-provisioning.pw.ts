@@ -302,7 +302,14 @@ async function addDocument(
   sessionCookie: string,
   org: string,
   workspace: string,
-  fields: { name: string; folder?: string; filename?: string; body?: string },
+  fields: {
+    name: string;
+    folder?: string;
+    filename?: string;
+    body?: string;
+    /** An open change to put it in, instead of opening one of its own. */
+    changeNumber?: number;
+  },
 ): Promise<{ status: number; body: string }> {
   const form = new FormData();
   form.set(
@@ -312,6 +319,9 @@ async function addDocument(
   );
   form.set("name", fields.name);
   if (fields.folder) form.set("folder", fields.folder);
+  if (fields.changeNumber !== undefined) {
+    form.set("changeNumber", String(fields.changeNumber));
+  }
 
   const response = await fetch(
     `${API_BASE_URL}/api/app/binders/${org}/${workspace}/documents`,
@@ -4578,7 +4588,7 @@ async function reviseDocumentFile(
   org: string,
   workspace: string,
   documentPath: string,
-  fields: { filename: string; body?: string },
+  fields: { filename: string; body?: string; changeNumber?: number },
 ): Promise<{ status: number; body: string }> {
   const form = new FormData();
   form.set(
@@ -4588,6 +4598,9 @@ async function reviseDocumentFile(
     }),
   );
   form.set("documentPath", documentPath);
+  if (fields.changeNumber !== undefined) {
+    form.set("changeNumber", String(fields.changeNumber));
+  }
 
   const response = await fetch(
     `${API_BASE_URL}/api/app/binders/${org}/${workspace}/document-revisions`,
@@ -4799,6 +4812,205 @@ test("revising something the binder does not hold is refused", async () => {
   );
   expect(refused.status, refused.body).toBe(404);
   expect(refused.body).toContain("not in this binder");
+});
+
+test("one change request holds several edits, and publishes them together", async () => {
+  // **ADR 0004 §4 made the change the unit of approval**, and until now the
+  // product could not express it: every act opened a change request of its own,
+  // so three cross-referencing policies meant three approvals that could be
+  // published apart. A change request holds as many edits as somebody puts in
+  // it now — including a revision of something already on the record.
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const token = await createUserToken(
+    credentials.username,
+    credentials.password,
+  );
+  const approver = await addApprover(token, org.name, "clinical");
+
+  // One policy already on the record, so the change can revise something.
+  const existing = await addDocument(sessionCookie, org.name, "clinical", {
+    name: "Infection Control",
+    folder: "nursing",
+  });
+  const {
+    pullRequestNumber: firstChange,
+    slugPath: existingSlug,
+    documentPath: existingPath,
+  } = JSON.parse(existing.body) as {
+    pullRequestNumber: number;
+    slugPath: string;
+    documentPath: string;
+  };
+  await approveChange(approver.token, org.name, "clinical", firstChange);
+  expect(
+    (await publishChange(sessionCookie, org.name, "clinical", firstChange))
+      .status,
+  ).toBe(200);
+
+  // The first act opens a change request.
+  const opened = await addDocument(sessionCookie, org.name, "clinical", {
+    name: "Falls Prevention",
+    folder: "nursing",
+  });
+  expect(opened.status, opened.body).toBe(201);
+  const { pullRequestNumber: changeNumber } = JSON.parse(opened.body) as {
+    pullRequestNumber: number;
+  };
+
+  // The next two join it rather than starting their own.
+  const second = await addDocument(sessionCookie, org.name, "clinical", {
+    name: "Restraint Use",
+    folder: "nursing",
+    changeNumber,
+  });
+  expect(second.status, second.body).toBe(201);
+  expect(
+    (JSON.parse(second.body) as { pullRequestNumber: number })
+      .pullRequestNumber,
+  ).toBe(changeNumber);
+
+  const revised = await reviseDocumentFile(
+    sessionCookie,
+    org.name,
+    "clinical",
+    existingSlug,
+    { filename: "reissued.md", changeNumber },
+  );
+  expect(revised.status, revised.body).toBe(201);
+  expect(
+    (JSON.parse(revised.body) as { pullRequestNumber: number })
+      .pullRequestNumber,
+  ).toBe(changeNumber);
+
+  // One change open, not three.
+  const open = await listChanges(sessionCookie, org.name, "clinical", "open");
+  expect(
+    (JSON.parse(open.body) as { changes: unknown[] }).changes,
+  ).toHaveLength(1);
+
+  // One approval, one publish, three versions.
+  await approveChange(approver.token, org.name, "clinical", changeNumber);
+  const published = await publishChange(
+    sessionCookie,
+    org.name,
+    "clinical",
+    changeNumber,
+  );
+  expect(published.status, published.body).toBe(200);
+  const { tags } = JSON.parse(published.body) as {
+    tags: Array<{ tag: string; version: number; commitSha: string }>;
+  };
+  expect(tags).toHaveLength(3);
+  // The revised policy is on v2; the two new ones start at v1.
+  expect(
+    tags.find((tag) => tag.tag.startsWith(`${uidOf(existingPath)}/`))?.version,
+  ).toBe(2);
+  expect(tags.filter((tag) => tag.version === 1)).toHaveLength(2);
+  // All on one commit, because it was one change.
+  expect(new Set(tags.map((tag) => tag.commitSha)).size).toBe(1);
+});
+
+test("a binder counts an open change against every document in it", async () => {
+  // The count used to be read off the branch name, which carries one document.
+  // A change request holding three policies would then have shown two of them
+  // as having nothing in flight, while a change to them waited for approval —
+  // a binder understating what is being changed.
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const token = await createUserToken(
+    credentials.username,
+    credentials.password,
+  );
+  const approver = await addApprover(token, org.name, "clinical");
+
+  // Two policies on the record.
+  const slugs: string[] = [];
+  for (const name of ["Infection Control", "Hand Hygiene"]) {
+    const added = await addDocument(sessionCookie, org.name, "clinical", {
+      name,
+      folder: "nursing",
+    });
+    const { pullRequestNumber, slugPath } = JSON.parse(added.body) as {
+      pullRequestNumber: number;
+      slugPath: string;
+    };
+    slugs.push(slugPath);
+    await approveChange(
+      approver.token,
+      org.name,
+      "clinical",
+      pullRequestNumber,
+    );
+    expect(
+      (
+        await publishChange(
+          sessionCookie,
+          org.name,
+          "clinical",
+          pullRequestNumber,
+        )
+      ).status,
+    ).toBe(200);
+  }
+
+  // One change request revising both.
+  const first = await reviseDocumentFile(
+    sessionCookie,
+    org.name,
+    "clinical",
+    slugs[0]!,
+    { filename: "a.md" },
+  );
+  const { pullRequestNumber: changeNumber } = JSON.parse(first.body) as {
+    pullRequestNumber: number;
+  };
+  expect(
+    (
+      await reviseDocumentFile(sessionCookie, org.name, "clinical", slugs[1]!, {
+        filename: "b.md",
+        changeNumber,
+      })
+    ).status,
+  ).toBe(201);
+
+  const listed = await listDocuments(sessionCookie, org.name, "clinical");
+  const { documents } = JSON.parse(listed.body) as {
+    documents: Array<{ slugPath: string; openChangeCount: number }>;
+  };
+  // Both, not just the one the branch happens to be named after.
+  for (const slug of slugs) {
+    expect(
+      documents.find((document) => document.slugPath === slug)?.openChangeCount,
+      slug,
+    ).toBe(1);
+  }
+});
+
+test("a policy cannot be filed into a change that is not open here", async () => {
+  const credentials = buildCredentials();
+  const sessionCookie = await signUp(credentials);
+  const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const refused = await addDocument(sessionCookie, org.name, "clinical", {
+    name: "Falls Prevention",
+    changeNumber: 9999,
+  });
+  expect(refused.status, refused.body).toBe(409);
+  expect(refused.body).toContain("not open in this binder");
 });
 
 test("two documents cannot claim one address", async () => {
