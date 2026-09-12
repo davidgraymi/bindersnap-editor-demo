@@ -94,12 +94,17 @@ export type CreatedWorkspaceDocumentPayload = z.infer<
  * A change request number, not a success: making a folder or renaming one has
  * not happened yet. `main` is protected and a binder's shape is part of its
  * record, so it waits on a decision like a policy does.
+ *
+ * **Null when the act went into a draft**, which is not the same as failing.
+ * A draft has no change request by definition — that is what makes it a draft
+ * — so there is no number to give, and a caller that shows one has to tell the
+ * two apart rather than printing `#0`.
  */
 export const BinderShapeChangePayloadSchema = z.object({
   organization: z.string(),
   workspace: z.string(),
   branch: z.string(),
-  changeNumber: z.number(),
+  changeNumber: z.number().nullable(),
 });
 export type BinderShapeChangePayload = z.infer<
   typeof BinderShapeChangePayloadSchema
@@ -962,3 +967,61 @@ export const OrganizationPeoplePayloadSchema = z.object({
 export type OrganizationPeoplePayload = z.infer<
   typeof OrganizationPeoplePayloadSchema
 >;
+
+/**
+ * One act on a draft.
+ *
+ * A commit, described the way the person who made it would: "Make the folder
+ * nursing", "Rename Hand Hygiene to Hand Hygiene and PPE". The planners write
+ * these subjects, so a draft reads back as the list of things you did to it —
+ * which is also what prefills the change request's description.
+ */
+export const DraftActSchema = z.object({
+  summary: z.string(),
+  sha: z.string(),
+  at: z.string().nullable(),
+  /** The files this act touched, for a draft that wants to show its shape. */
+  paths: z.array(z.string()),
+});
+export type DraftAct = z.infer<typeof DraftActSchema>;
+
+/** Somebody else's unproposed work: that it exists, and nothing more. */
+export const OtherDraftSchema = z.object({
+  branch: z.string(),
+  owner: z.string(),
+  updatedAt: z.string().nullable(),
+  lastAct: z.string().nullable(),
+});
+export type OtherDraft = z.infer<typeof OtherDraftSchema>;
+
+/**
+ * Your draft in a binder, and whose else is open.
+ *
+ * `draft` is null when you are not editing, which is the ordinary state rather
+ * than a missing thing. Other people's drafts are listed without their
+ * contents: knowing somebody is editing is what stops two people making the
+ * same folder twice, and reading unproposed work is not what a draft offers.
+ */
+export const BinderDraftPayloadSchema = z.object({
+  organization: z.string(),
+  workspace: z.string(),
+  draft: z
+    .object({
+      branch: z.string(),
+      owner: z.string(),
+      updatedAt: z.string().nullable(),
+      acts: z.array(DraftActSchema),
+    })
+    .nullable(),
+  others: z.array(OtherDraftSchema),
+});
+export type BinderDraftPayload = z.infer<typeof BinderDraftPayloadSchema>;
+
+/** Where a proposed draft went: the change request it is now waiting in. */
+export const ProposedDraftPayloadSchema = z.object({
+  organization: z.string(),
+  workspace: z.string(),
+  branch: z.string(),
+  changeNumber: z.number(),
+});
+export type ProposedDraftPayload = z.infer<typeof ProposedDraftPayloadSchema>;

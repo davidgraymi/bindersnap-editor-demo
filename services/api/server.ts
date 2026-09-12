@@ -53,9 +53,19 @@ import {
 } from "./gitea-client/workspaceDocuments";
 import {
   addToBinderChange,
+  commitBinderFiles,
   proposeBinderFileChange,
   type BinderFileOperation,
 } from "./gitea-client/binderFiles";
+import {
+  discardDraft,
+  findCurrentDraft,
+  isDraftBranch,
+  listBinderDrafts,
+  openDraft,
+  readDraftActs,
+  type BinderDraft,
+} from "./gitea-client/drafts";
 import {
   planDocumentRename,
   planFolderRename,
@@ -3787,10 +3797,11 @@ async function handlePublishWorkspaceChange(
       pullNumber,
     });
 
-    // **Two kinds of change legitimately version nothing.** A sign-off change
-    // rewrites `.gitea/CODEOWNERS` — who has to approve what — and a shape
-    // change can be a folder made and nothing filed in it yet. Both are real
-    // acts with nothing to tag.
+    // **Three kinds of change legitimately version nothing.** A sign-off change
+    // rewrites `.gitea/CODEOWNERS` — who has to approve what — a shape change
+    // can be a folder made and nothing filed in it yet, and a draft holds
+    // whatever its author put in it, which may be neither. All are real acts
+    // with nothing to tag.
     //
     // The refusal is still right for everything else: a change that versions
     // nothing is a mistake, and publishing it silently would leave somebody
@@ -3808,7 +3819,9 @@ async function handlePublishWorkspaceChange(
       pullNumber,
     });
     const mayVersionNothing =
-      changeBranch.startsWith("sign-off/") || changeBranch.startsWith("shape/");
+      changeBranch.startsWith("sign-off/") ||
+      changeBranch.startsWith("shape/") ||
+      isDraftBranch(changeBranch);
 
     if (documents.length === 0 && !mayVersionNothing) {
       return json(
@@ -7039,6 +7052,514 @@ async function resolveChangeToJoin(params: {
 }
 
 /**
+ * Where an act's work goes: a draft, an open change request, or neither.
+ *
+ * **Three places, because "propose it now" is not always what somebody means.**
+ * Every act used to open a change request the instant it happened, which put a
+ * half-finished thought in front of three reviewers and wrote the sentence
+ * explaining it on the author's behalf. A draft is the answer git already has:
+ * a branch with commits and no change request. Work lands on it, nothing is
+ * proposed, and the person who did it writes the title when they are ready.
+ *
+ * `null` is the old behaviour and still the default, because an act that names
+ * neither a draft nor a change has to do something and opening one is what
+ * every caller before drafts expected.
+ */
+type WorkTarget =
+  | { kind: "change"; changeNumber: number; branch: string }
+  | { kind: "draft"; branch: string };
+
+/**
+ * Read `draft` and `changeNumber` off a request and say where the work goes.
+ *
+ * `draft` accepts `true` — "the one I am working in, made if there isn't one" —
+ * or a branch name, which is what edit mode sends once it is holding one. A
+ * named branch is checked rather than trusted: it has to be a draft branch, it
+ * has to still be a draft, and it has to be **yours**. Committing onto somebody
+ * else's unproposed work is not a thing one person should be able to do to
+ * another by typing a branch name.
+ */
+async function resolveWorkTarget(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  username: string;
+  changeRaw: string | null;
+  draftRaw: unknown;
+}): Promise<WorkTarget | { error: string } | null> {
+  const { client, org, workspace, username, changeRaw, draftRaw } = params;
+
+  const change = await resolveChangeToJoin({
+    client,
+    org,
+    workspace,
+    raw: changeRaw,
+  });
+  if (change && "error" in change) return change;
+  if (change) {
+    return {
+      kind: "change",
+      changeNumber: change.changeNumber,
+      branch: change.branch,
+    };
+  }
+
+  // Absent in every shape it can be absent in. A multipart form has no nulls —
+  // a field nobody filled in reads back as the empty string — so the JSON
+  // callers and the upload callers arrive here saying "no draft" differently
+  // and both have to mean it. Getting this wrong refused every upload that did
+  // not name a draft, which is most of them.
+  const absent =
+    draftRaw === undefined ||
+    draftRaw === null ||
+    draftRaw === false ||
+    (typeof draftRaw === "string" && draftRaw.trim() === "");
+  if (absent) return null;
+
+  if (draftRaw === true || draftRaw === "true") {
+    const draft = await openDraft({ client, org, workspace, username });
+    return { kind: "draft", branch: draft.branch };
+  }
+
+  if (typeof draftRaw !== "string") {
+    return { error: "That is not a draft." };
+  }
+
+  const branch = draftRaw.trim();
+  if (!isDraftBranch(branch)) {
+    return { error: `"${branch}" is not a draft.` };
+  }
+
+  const mine = await listBinderDrafts({
+    client,
+    org,
+    workspace,
+    owner: username,
+  });
+  if (!mine.some((draft) => draft.branch === branch)) {
+    return {
+      error:
+        "That draft is not yours, or it has already been proposed as a change request.",
+    };
+  }
+
+  return { kind: "draft", branch };
+}
+
+/**
+ * Commit an act's operations wherever the target says.
+ *
+ * The commit is identical either way — a draft and a change request differ in
+ * who is looking at the branch, not in how work reaches it. Answers with a
+ * change number only when there is one, so a caller can tell "this is waiting
+ * on a decision" from "this is still yours".
+ */
+async function applyToWorkTarget(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  target: WorkTarget;
+  operations: readonly BinderFileOperation[];
+  message: string;
+}): Promise<{ branch: string; changeNumber: number | null }> {
+  const { client, org, workspace, target, operations, message } = params;
+
+  if (target.kind === "change") {
+    return addToBinderChange({
+      client,
+      org,
+      workspace,
+      changeNumber: target.changeNumber,
+      operations,
+      message,
+    });
+  }
+
+  await commitBinderFiles({
+    client,
+    org,
+    workspace,
+    branch: target.branch,
+    operations,
+    message,
+  });
+  return { branch: target.branch, changeNumber: null };
+}
+
+/**
+ * The draft a person is working in, and whatever else is unproposed.
+ *
+ * Answers with `null` rather than a 404 when there is no draft: "you are not
+ * editing this binder" is the ordinary state, not a missing resource.
+ *
+ * The acts come back with it because the page that shows a draft shows what is
+ * in it — a draft whose only evidence is a banner saying one exists is a thing
+ * a person is asked to trust rather than read.
+ */
+async function handleBinderDraft(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+): Promise<Response> {
+  // A session, not a subscription. Reading a binder is never gated — a
+  // customer whose subscription lapsed can still see their own unproposed
+  // work, and telling them "you have a draft" is not a thing worth charging
+  // for. The two writes below are gated, which is where the line is.
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { session, client } = auth;
+
+  try {
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    const drafts = await listBinderDrafts({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+    });
+    const mine = drafts.find((draft) => draft.owner === session.username);
+
+    return json(
+      200,
+      await describeDraft({
+        client,
+        org: orgName,
+        workspace: workspaceName,
+        mine: mine ?? null,
+        drafts,
+        username: session.username,
+      }),
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to read a binder's drafts", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to read your draft.");
+  }
+}
+
+/**
+ * Start editing, or carry on where you were.
+ *
+ * Pressing Edit is not a destructive act and must not read like one: the
+ * second press puts a person back in the work they already have rather than
+ * forking it, which is why {@link openDraft} is idempotent.
+ */
+async function handleOpenBinderDraft(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { session, client } = auth;
+
+  try {
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    const mine = await openDraft({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      username: session.username,
+    });
+    const drafts = await listBinderDrafts({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+    });
+
+    logger.info("Binder draft opened", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      branch: mine.branch,
+    });
+
+    return json(
+      201,
+      await describeDraft({
+        client,
+        org: orgName,
+        workspace: workspaceName,
+        mine,
+        drafts,
+        username: session.username,
+      }),
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to open a binder draft", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to start editing.");
+  }
+}
+
+/**
+ * Throw your draft away.
+ *
+ * Only your own, and only while it is still a draft: {@link listBinderDrafts}
+ * has already subtracted every branch a change request sits on, so a proposed
+ * branch is not in the list and cannot be deleted out from under its reviewers.
+ */
+async function handleDiscardBinderDraft(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { session, client } = auth;
+
+  try {
+    const mine = await findCurrentDraft({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      owner: session.username,
+    });
+    if (!mine) {
+      return json(
+        404,
+        { error: "You have no draft in this binder." },
+        baseHeaders,
+      );
+    }
+
+    await discardDraft({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      branch: mine.branch,
+    });
+
+    logger.info("Binder draft discarded", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      branch: mine.branch,
+    });
+
+    return json(200, { discarded: mine.branch }, baseHeaders);
+  } catch (err) {
+    logger.error("Failed to discard a binder draft", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to discard your draft.");
+  }
+}
+
+/**
+ * Propose a draft: open the change request, with the title its author wrote.
+ *
+ * **This is the act the whole draft model exists for.** Until now the server
+ * wrote the title and the body — "Add nursing/hand-hygiene" — which meant the
+ * person who made the change did not own the sentence that explained it to the
+ * people deciding on it. A change request is a request; it is addressed to
+ * colleagues, and the words are the author's.
+ *
+ * The body's first line is the title, which is the convention every change in
+ * the product already follows — `parseChangeTitle` reads it, and the rest
+ * becomes the description shown above the discussion.
+ */
+async function handleProposeBinderDraft(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { session, client } = auth;
+
+  try {
+    const body = ((await req.json().catch(() => null)) ?? {}) as Record<
+      string,
+      unknown
+    >;
+
+    const title = typeof body.title === "string" ? body.title.trim() : "";
+    const description =
+      typeof body.description === "string" ? body.description.trim() : "";
+
+    if (title === "") {
+      return json(
+        400,
+        { error: "A change request needs a title, so people know what it is." },
+        baseHeaders,
+      );
+    }
+
+    const mine = await findCurrentDraft({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      owner: session.username,
+    });
+    if (!mine) {
+      return json(
+        404,
+        { error: "You have no draft in this binder to propose." },
+        baseHeaders,
+      );
+    }
+
+    // A draft with no commits is a branch identical to `main`. Gitea would
+    // refuse the pull request with a message about no differences; this says
+    // the same thing in the language of the thing somebody was doing.
+    const acts = await readDraftActs({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      branch: mine.branch,
+    });
+    if (acts.length === 0) {
+      return json(
+        409,
+        {
+          error:
+            "There is nothing in your draft yet. Make a change to it first.",
+        },
+        baseHeaders,
+      );
+    }
+
+    const change = await createPullRequest({
+      client,
+      owner: orgName,
+      repo: workspaceName,
+      head: mine.branch,
+      base: "main",
+      title,
+      body:
+        description === ""
+          ? title
+          : `${title}
+
+${description}`,
+    });
+
+    if (typeof change.number !== "number") {
+      throw new Error(
+        "Gitea opened the change but did not say which one, so there is nowhere to send you.",
+      );
+    }
+
+    logger.info("Binder draft proposed", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      branch: mine.branch,
+      changeNumber: change.number,
+      acts: acts.length,
+    });
+
+    return json(
+      201,
+      {
+        organization: orgName,
+        workspace: workspaceName,
+        branch: mine.branch,
+        changeNumber: change.number,
+      },
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to propose a binder draft", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to open a change request.",
+    );
+  }
+}
+
+/**
+ * The draft payload both draft routes answer with.
+ *
+ * Other people's drafts are listed without their contents. Knowing somebody is
+ * editing the binder is what stops two people making the same folder twice;
+ * reading what they have not proposed yet is not a thing a draft offers.
+ */
+async function describeDraft(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  mine: BinderDraft | null;
+  drafts: BinderDraft[];
+  username: string;
+}): Promise<Record<string, unknown>> {
+  const { client, org, workspace, mine, drafts, username } = params;
+
+  const acts = mine
+    ? await readDraftActs({ client, org, workspace, branch: mine.branch })
+    : [];
+
+  return {
+    organization: org,
+    workspace,
+    draft: mine
+      ? {
+          branch: mine.branch,
+          owner: mine.owner,
+          updatedAt: mine.updatedAt,
+          acts: acts.map((act) => ({
+            summary: act.summary,
+            sha: act.sha,
+            at: act.at,
+            paths: act.paths,
+          })),
+        }
+      : null,
+    others: drafts
+      .filter((draft) => draft.owner !== username)
+      .map((draft) => ({
+        branch: draft.branch,
+        owner: draft.owner,
+        updatedAt: draft.updatedAt,
+        lastAct: draft.lastAct,
+      })),
+  };
+}
+
+/**
  * The acts that change a binder's shape: folders, and where things are filed.
  *
  * One handler for three routes, because they differ only in how they work out
@@ -7079,19 +7600,21 @@ async function handleBinderShapeChange(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
-    const join = await resolveChangeToJoin({
+    const target = await resolveWorkTarget({
       client,
       org: orgName,
       workspace: workspaceName,
-      raw:
+      username: session.username,
+      changeRaw:
         typeof body.changeNumber === "number"
           ? String(body.changeNumber)
           : typeof body.changeNumber === "string"
             ? body.changeNumber
             : null,
+      draftRaw: body.draft,
     });
-    if (join && "error" in join) {
-      return json(409, { error: join.error }, baseHeaders);
+    if (target && "error" in target) {
+      return json(409, { error: target.error }, baseHeaders);
     }
 
     // **Read the branch this is joining, not `main`.** A folder made five
@@ -7102,7 +7625,7 @@ async function handleBinderShapeChange(
       client,
       org: orgName,
       workspace: workspaceName,
-      ...(join ? { ref: join.branch } : {}),
+      ...(target ? { ref: target.branch } : {}),
     });
 
     const planned = plan({ body, tree });
@@ -7110,12 +7633,12 @@ async function handleBinderShapeChange(
       return json(409, { error: planned.error }, baseHeaders);
     }
 
-    const proposed = join
-      ? await addToBinderChange({
+    const proposed = target
+      ? await applyToWorkTarget({
           client,
           org: orgName,
           workspace: workspaceName,
-          changeNumber: join.changeNumber,
+          target,
           operations: planned.operations,
           message: planned.message,
         })
@@ -7230,6 +7753,7 @@ async function handleReviseWorkspaceDocument(
   const file = parseOptionalFile(form.get("file"));
   const documentPath = parseOptionalString(form.get("documentPath"));
   const joinRaw = parseOptionalString(form.get("changeNumber"));
+  const draftRaw = parseOptionalString(form.get("draft"));
 
   if (!file || !documentPath) {
     return json(
@@ -7315,14 +7839,16 @@ async function handleReviseWorkspaceDocument(
             { kind: "write", path: nextPath, base64Content },
           ];
 
-    const join = await resolveChangeToJoin({
+    const target = await resolveWorkTarget({
       client,
       org: orgName,
       workspace: workspaceName,
-      raw: joinRaw,
+      username: session.username,
+      changeRaw: joinRaw,
+      draftRaw,
     });
-    if (join && "error" in join) {
-      return json(409, { error: join.error }, baseHeaders);
+    if (target && "error" in target) {
+      return json(409, { error: target.error }, baseHeaders);
     }
 
     const branch = buildUploadBranchName(
@@ -7335,17 +7861,17 @@ async function handleReviseWorkspaceDocument(
       docSlug: existing.slugPath,
       canonicalFile: nextPath,
       sourceFilename: file.name,
-      uploadBranch: join ? `change-${join.changeNumber}` : branch,
+      uploadBranch: target ? target.branch : branch,
       uploaderSlug: session.username,
       fileHashSha256: fullHash,
     });
 
-    const proposed = join
-      ? await addToBinderChange({
+    const proposed = target
+      ? await applyToWorkTarget({
           client,
           org: orgName,
           workspace: workspaceName,
-          changeNumber: join.changeNumber,
+          target,
           operations,
           message,
         })
@@ -7429,6 +7955,7 @@ async function handleCreateWorkspaceDocument(
   const name = parseOptionalString(form.get("name"));
   const folder = parseOptionalString(form.get("folder")) || null;
   const joinRaw = parseOptionalString(form.get("changeNumber"));
+  const draftRaw = parseOptionalString(form.get("draft"));
 
   if (!file || !name) {
     return json(400, { error: "file and name are required." }, baseHeaders);
@@ -7529,33 +8056,38 @@ async function handleCreateWorkspaceDocument(
       );
     }
 
-    const join = await resolveChangeToJoin({
+    const target = await resolveWorkTarget({
       client,
       org: orgName,
       workspace: workspaceName,
-      raw: joinRaw,
+      username: session.username,
+      changeRaw: joinRaw,
+      draftRaw,
     });
-    if (join && "error" in join) {
-      return json(409, { error: join.error }, baseHeaders);
+    if (target && "error" in target) {
+      return json(409, { error: target.error }, baseHeaders);
     }
 
     // The address has to be free on the branch this is joining, too. `main`
     // does not know about a policy the same change added five minutes ago, so
     // checking only the record would let one change hold two documents at one
     // address — a collision that appears on publish rather than here.
-    if (join) {
-      const alreadyInChange = await findWorkspaceDocument({
+    if (target) {
+      const alreadyThere = await findWorkspaceDocument({
         client,
         org: orgName,
         workspace: workspaceName,
         documentPath: slugPath,
-        ref: join.branch,
+        ref: target.branch,
       });
-      if (alreadyInChange) {
+      if (alreadyThere) {
         return json(
           409,
           {
-            error: `Change ${join.changeNumber} already files something at "${slugPath}".`,
+            error:
+              target.kind === "change"
+                ? `Change ${target.changeNumber} already files something at "${slugPath}".`
+                : `Your draft already files something at "${slugPath}".`,
           },
           baseHeaders,
         );
@@ -7578,7 +8110,7 @@ async function handleCreateWorkspaceDocument(
       docSlug: slugPath,
       canonicalFile: filePath,
       sourceFilename: file.name,
-      uploadBranch: join ? `change-${join.changeNumber}` : branchName,
+      uploadBranch: target ? target.branch : branchName,
       uploaderSlug: session.username,
       fileHashSha256: fullHash,
     });
@@ -7589,12 +8121,12 @@ async function handleCreateWorkspaceDocument(
 
     // No repository to create and no rules to install: the binder already has
     // a protected `main` and its role teams. That is the point of the level.
-    const proposed = join
-      ? await addToBinderChange({
+    const proposed = target
+      ? await applyToWorkTarget({
           client,
           org: orgName,
           workspace: workspaceName,
-          changeNumber: join.changeNumber,
+          target,
           operations,
           message: commitMessage,
         })
@@ -8626,6 +9158,12 @@ export function createApiServer() {
         const workspaceChangesMatch = pathname.match(
           /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/changes$/,
         );
+        // Singular, because a person has one draft in a binder. The branch is
+        // never in the URL: it carries slashes, it is the server's to name, and
+        // the only draft any of these three verbs acts on is the caller's own.
+        const workspaceDraftMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/draft$/,
+        );
         const workspaceHistoryMatch = pathname.match(
           /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/history$/,
         );
@@ -8875,6 +9413,34 @@ export function createApiServer() {
             baseHeaders,
             workspaceHistoryMatch[1]!,
             workspaceHistoryMatch[2]!,
+          );
+        } else if (workspaceDraftMatch && method === "GET") {
+          response = await handleBinderDraft(
+            req,
+            baseHeaders,
+            workspaceDraftMatch[1]!,
+            workspaceDraftMatch[2]!,
+          );
+        } else if (workspaceDraftMatch && method === "POST") {
+          response = await handleOpenBinderDraft(
+            req,
+            baseHeaders,
+            workspaceDraftMatch[1]!,
+            workspaceDraftMatch[2]!,
+          );
+        } else if (workspaceDraftMatch && method === "DELETE") {
+          response = await handleDiscardBinderDraft(
+            req,
+            baseHeaders,
+            workspaceDraftMatch[1]!,
+            workspaceDraftMatch[2]!,
+          );
+        } else if (workspaceChangesMatch && method === "POST") {
+          response = await handleProposeBinderDraft(
+            req,
+            baseHeaders,
+            workspaceChangesMatch[1]!,
+            workspaceChangesMatch[2]!,
           );
         } else if (workspaceChangesMatch && method === "GET") {
           response = await handleListWorkspaceChanges(
