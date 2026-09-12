@@ -1148,6 +1148,35 @@ export async function renameBinderFolder(
 }
 
 /**
+ * Rename a policy, file it somewhere else, or both.
+ *
+ * Its version history follows it: the identity that the version tags are named
+ * after is a segment of the filename and moves with the file (ADR 0005).
+ */
+export async function renameBinderDocument(
+  org: string,
+  binder: string,
+  documentPath: string,
+  next: { name?: string; folder?: string },
+  changeNumber?: number,
+): Promise<BinderShapeChangePayload> {
+  try {
+    const response = await BindersClient.renameBinderDocument(org, binder, {
+      documentPath,
+      ...(next.name !== undefined ? { name: next.name } : {}),
+      ...(next.folder !== undefined ? { folder: next.folder } : {}),
+      ...(changeNumber ? { changeNumber } : {}),
+    });
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/binders/${org}/${binder}/document-renames`,
+      error,
+    );
+  }
+}
+
+/**
  * The bytes of one document in a binder, at a ref.
  *
  * `ref` is a version tag for a published version, or a change's branch for one
