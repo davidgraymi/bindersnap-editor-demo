@@ -1,5 +1,5 @@
 /**
- * Reading and changing a binder's per-folder sign-off rules.
+ * Reading and changing a binder's sign-off rules.
  *
  * The rules live in `.gitea/CODEOWNERS` on `main`, which is the source of
  * truth — there is no `folder_approvers` table, because a table would shadow a
@@ -121,11 +121,28 @@ export async function proposeSignOffRules(params: {
   org: string;
   workspace: string;
   rules: readonly SignOffRule[];
+  /**
+   * Identity to name, for the rules said in words in the change's body.
+   *
+   * A reviewer approving a permission decision should not have to recognise a
+   * ULID. Optional, because a caller that could not read the tree should still
+   * be able to propose — an unnamed document is said as one rather than
+   * printed raw.
+   */
+  documentNames?: ReadonlyMap<string, string>;
   /** Who is proposing it, for the change's body. */
   author: string;
   now?: Date;
 }): Promise<ProposedSignOffChange> {
-  const { client, org, workspace, rules, author, now = new Date() } = params;
+  const {
+    client,
+    org,
+    workspace,
+    rules,
+    author,
+    documentNames = new Map<string, string>(),
+    now = new Date(),
+  } = params;
 
   const branch = signOffBranchName(now);
   const content = renderCodeowners(org, rules);
@@ -145,7 +162,7 @@ export async function proposeSignOffRules(params: {
     branch,
     filePath: CODEOWNERS_PATH,
     base64Content: Buffer.from(content, "utf8").toString("base64"),
-    message: "Change who signs off on each folder",
+    message: "Change who signs off on this binder",
     // The file may or may not exist yet; `commitBinaryFile` looks before it
     // writes, so this is the one that works either way.
     isNewFile: false,
@@ -157,20 +174,20 @@ export async function proposeSignOffRules(params: {
     repo: workspace,
     head: branch,
     base: "main",
-    title: "Change who signs off on each folder",
+    title: "Change who signs off on this binder",
     // **The first line is the title the app shows**, and the rest is the
     // description under it — `parseChangeTitle` takes the body's first line.
     // So the human name for the change leads, and the explanation follows it
     // rather than becoming the heading.
     body: [
-      "Change who signs off on each folder",
+      "Change who signs off on this binder",
       "",
       `${author} proposed this. These rules decide who has to approve a change`,
-      "to each folder. They take effect only once this change is published,",
-      "and until then the rules already in force are the ones being applied —",
-      "including to this change.",
+      "to each folder and document. They take effect only once this change is",
+      "published, and until then the rules already in force are the ones being",
+      "applied — including to this change.",
       "",
-      describeRules(org, rules),
+      describeRules(org, rules, documentNames),
     ].join("\n"),
   });
 
@@ -193,9 +210,13 @@ export async function proposeSignOffRules(params: {
  * and the diff of a generated regex file is a poor way to see one. Saying it in
  * words means the question can be answered without reading the artefact.
  */
-function describeRules(org: string, rules: readonly SignOffRule[]): string {
+function describeRules(
+  org: string,
+  rules: readonly SignOffRule[],
+  documentNames: ReadonlyMap<string, string>,
+): string {
   if (rules.length === 0) {
-    return "No folder would require its own sign-off. Every change would need only the binder's usual approvals.";
+    return "Nothing in this binder would require its own sign-off. Every change would need only the binder's usual approvals.";
   }
 
   const lines = rules.map((rule) => {
@@ -203,10 +224,34 @@ function describeRules(org: string, rules: readonly SignOffRule[]): string {
       ...rule.teams.map((team) => `${org}/${team}`),
       ...rule.users,
     ].join(", ");
-    const where =
-      rule.folder === "" ? "Everything in this binder" : rule.folder;
-    return `- ${where} — signed off by ${owners}`;
+    return `- ${describeTarget(rule, documentNames)} — signed off by ${owners}`;
   });
 
   return ["Proposed rules:", "", ...lines].join("\n");
+}
+
+/**
+ * What a rule covers, in the reviewer's language.
+ *
+ * A document rule carries an identity, and a reviewer being asked to approve a
+ * permission decision should not have to recognise a ULID — so the caller
+ * passes the names it has. One it cannot name is said as such rather than
+ * printed raw: "a document that is not in this binder" is a fact worth reading
+ * in a change that proposes a rule about it.
+ */
+function describeTarget(
+  rule: SignOffRule,
+  documentNames: ReadonlyMap<string, string>,
+): string {
+  switch (rule.scope) {
+    case "binder":
+      return "Everything in this binder";
+    case "folder":
+      return rule.target;
+    case "document":
+      return (
+        documentNames.get(rule.target) ??
+        "A document that is not in this binder"
+      );
+  }
 }

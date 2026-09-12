@@ -43,6 +43,7 @@ import {
   GiteaApiError,
   type GiteaClient,
 } from "../services/api/gitea-client/client";
+import { codeownersToken } from "../packages/utils/codeowners";
 import { createUserClient, GITEA_ADMIN_USER, GITEA_BOB_USER } from "./helpers";
 
 // One provisioning + change cycle is a few dozen Gitea round trips. The suite
@@ -913,6 +914,104 @@ test.describe("Gitea 28.0.0: block_on_codeowner_reviews", () => {
     expect(merge.ok, `merge refused: ${merge.status} ${merge.message}`).toBe(
       true,
     );
+  });
+
+  test("a rule over one document follows it through a rename", async () => {
+    // **The claim ADR 0005 makes about sign-off, proved against Gitea rather
+    // than asserted.** A per-document rule is written against the identity
+    // segment in the filename rather than against the path, so it keeps
+    // applying when the policy is retitled or refiled. A rule written against
+    // `nursing/hand-hygiene.md` would stop applying the moment somebody renamed
+    // it — and stop *silently*, because Gitea finds no matching rule and lets
+    // the merge through. That is the permissive-by-default failure this whole
+    // file exists to catch.
+    const uid = "01J8XZ4K7MQ9V3B0RN7YHS2E1D";
+    const workspace = await provisionWorkspace(admin, {
+      enableApprovalsWhitelist: true,
+      blockOnCodeownerReviews: true,
+      blockOnOfficialReviewRequests: false,
+      codeownerTeams: [{ suffix: "hand-hygiene", members: [REVIEWER] }],
+      // Written by the generator itself rather than by hand, so this test
+      // cannot drift away from what the product actually commits — which is
+      // where a double-escaping bug would hide.
+      codeowners: (org, repo) =>
+        `${codeownersToken({ scope: "document", target: uid })}  @${org}/${repo}-hand-hygiene\n`,
+    });
+
+    // Filed one place under one name.
+    const first = await openChange(
+      author,
+      workspace,
+      `nursing/hand-hygiene.${uid}.md`,
+      "Hand hygiene policy, v1.\n",
+    );
+    await approve(secondReviewer, workspace, first);
+    await waitForCountedApprovals(admin, workspace, first, 1);
+
+    const blocked = await tryMerge(author, workspace, first);
+    expect(
+      blocked.ok,
+      "the count was met but the document's own owner had not approved",
+    ).toBe(false);
+
+    await approve(reviewer, workspace, first);
+    expect((await tryMerge(author, workspace, first)).ok).toBe(true);
+
+    // Retitled *and* moved to another folder — the two changes that would each
+    // have broken a path-shaped rule on their own.
+    const renamed = await openChangeWithFiles(author, workspace, [
+      {
+        path: `infection-control/hand-hygiene-and-ppe.${uid}.md`,
+        content: "Hand hygiene and PPE policy, v2.\n",
+      },
+    ]);
+    await approve(secondReviewer, workspace, renamed);
+    await waitForCountedApprovals(admin, workspace, renamed, 1);
+
+    const stillBlocked = await tryMerge(author, workspace, renamed);
+    expect(
+      stillBlocked.ok,
+      "the rule stopped applying once the document was renamed and refiled",
+    ).toBe(false);
+
+    await approve(reviewer, workspace, renamed);
+    expect((await tryMerge(author, workspace, renamed)).ok).toBe(true);
+  });
+
+  test("a rule over one document leaves its neighbours alone", async () => {
+    // The other half of the claim, and the one a too-greedy pattern would
+    // break: `.*<uid>.*` without the escaped dots would match far more than the
+    // document it was written for, and demand sign-off on policies nobody
+    // chose. A rule that over-matches is not a safe failure — it is a binder
+    // that cannot publish.
+    const uid = "01J8XZ4K7MQ9V3B0RN7YHS2E1D";
+    const other = "01J9A0B1C2D3E4F5G6H7J8K9M0";
+    const workspace = await provisionWorkspace(admin, {
+      enableApprovalsWhitelist: true,
+      blockOnCodeownerReviews: true,
+      blockOnOfficialReviewRequests: false,
+      codeownerTeams: [{ suffix: "hand-hygiene", members: [REVIEWER] }],
+      codeowners: (org, repo) =>
+        `${codeownersToken({ scope: "document", target: uid })}  @${org}/${repo}-hand-hygiene\n`,
+    });
+
+    const index = await openChange(
+      author,
+      workspace,
+      `nursing/handover.${other}.md`,
+      "Handover policy, v1.\n",
+    );
+
+    // Approved by somebody who is not the hand hygiene owner. If the rule
+    // reached this document, this merge would be blocked.
+    await approve(secondReviewer, workspace, index);
+    await waitForCountedApprovals(admin, workspace, index, 1);
+
+    const merge = await tryMerge(author, workspace, index);
+    expect(
+      merge.ok,
+      `a rule over one document blocked a change to a different one: ${merge.status} ${merge.message}`,
+    ).toBe(true);
   });
 
   test("a rule whose only owner is the author is waived, not unmergeable", async () => {
