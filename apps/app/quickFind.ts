@@ -66,7 +66,7 @@ function describeResult(document: LibraryDocument): string {
   const parts = [formatDocumentName(document.binder)];
   if (document.folder) parts.push(document.folder);
   if (document.latestVersion) parts.push(`v${document.latestVersion.version}`);
-  else if (document.state === "proposed") parts.push("not published yet");
+  else parts.push("no published version");
   return parts.join(" · ");
 }
 

@@ -8,15 +8,12 @@ import type { ListBinderDocuments200DocumentsItemLatestVersion } from './listBin
 import type { ListBinderDocuments200DocumentsItemState } from './listBinderDocuments200DocumentsItemState.ts';
 
 export type ListBinderDocuments200DocumentsItem = {
-  /** @nullable */
-  path: string | null;
+  path: string;
   slugPath: string;
   name: string;
   folder: string;
-  /** @nullable */
-  size: number | null;
-  /** @nullable */
-  sha: string | null;
+  size: number;
+  sha: string;
   state: ListBinderDocuments200DocumentsItemState;
   openChangeCount: number;
   /** @nullable */

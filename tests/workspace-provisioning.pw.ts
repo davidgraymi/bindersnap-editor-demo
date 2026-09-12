@@ -614,7 +614,7 @@ test("a binder with nothing in it lists no documents, and is not an error", asyn
   ).toEqual([]);
 });
 
-test("an unpublished document is listed as proposed, and opens", async () => {
+test("an unpublished document is not in the binder, and still opens", async () => {
   const credentials = buildCredentials();
   const sessionCookie = await signUp(credentials);
   const org = await createOrganization(sessionCookie, `Binder ${randomUUID()}`);
@@ -634,33 +634,31 @@ test("an unpublished document is listed as proposed, and opens", async () => {
   };
 
   // The upload is on a branch with an open change, and nothing reaches main
-  // except a merged, approved change — so this document is not on the record.
-  // It is still in the binder's list, because a binder that silently omits
-  // what somebody just added looks broken in the one moment they are watching.
+  // except a merged, approved change — so this document is not on the record,
+  // and **a binder lists the record**. A list whose job is to answer "what is
+  // in force here" must not mix in things that are not.
   const listed = await listDocuments(sessionCookie, org.name, "clinical");
   expect(listed.status, listed.body).toBe(200);
   const { documents } = JSON.parse(listed.body) as {
-    documents: Array<{
-      slugPath: string;
-      state: string;
-      path: string | null;
-      openChangeCount: number;
-      latestVersion: unknown;
-    }>;
+    documents: Array<{ slugPath: string }>;
   };
-  expect(documents).toHaveLength(1);
-  expect(documents[0]).toMatchObject({
-    slugPath,
-    state: "proposed",
-    // The extension lives in the file, and reading it would cost a tree walk
-    // per proposed document — which is the cost the binder exists to remove.
-    path: null,
-    openChangeCount: 1,
-    latestVersion: null,
-  });
+  expect(documents).toEqual([]);
 
-  // And its page opens, reading the file from the change's own branch. A row
-  // that leads to a 404 would be worse than no row at all.
+  // It is not lost, though: it is a change request, and the binder has one.
+  const changes = await listChanges(
+    sessionCookie,
+    org.name,
+    "clinical",
+    "open",
+  );
+  expect(changes.status, changes.body).toBe(200);
+  expect(
+    (JSON.parse(changes.body) as { changes: unknown[] }).changes,
+  ).toHaveLength(1);
+
+  // And its own page opens, reading the file from the change's branch. A link
+  // into a policy that is in review has to resolve — that is a different
+  // surface from a list of what is in force.
   const detail = await getDocument(
     sessionCookie,
     org.name,
@@ -2980,6 +2978,7 @@ async function readLibrary(
     name: string;
     folder: string;
     state: string;
+    latestVersion: { version: number } | null;
   }>;
   binders: Array<{ organization: string; name: string }>;
   hasMore: boolean;
@@ -3014,21 +3013,40 @@ test("the library is every policy in every binder, across organizations", async 
     (await createWorkspace(sessionCookie, org.name, "Corporate")).status,
   ).toBe(201);
 
-  expect(
-    (
-      await addDocument(sessionCookie, org.name, "clinical", {
-        name: "Infection Control Policy",
-        folder: "nursing",
-      })
-    ).status,
-  ).toBe(201);
-  expect(
-    (
-      await addDocument(sessionCookie, org.name, "corporate", {
-        name: "Expenses Policy",
-      })
-    ).status,
-  ).toBe(201);
+  const token = await createUserToken(
+    credentials.username,
+    credentials.password,
+  );
+  const approver = await addApprover(token, org.name, "clinical");
+
+  for (const [workspace, name, folder] of [
+    ["clinical", "Infection Control Policy", "nursing"],
+    ["corporate", "Expenses Policy", undefined],
+  ] as const) {
+    const added = await addDocument(sessionCookie, org.name, workspace, {
+      name,
+      ...(folder ? { folder } : {}),
+    });
+    expect(added.status, added.body).toBe(201);
+    const { pullRequestNumber } = JSON.parse(added.body) as {
+      pullRequestNumber: number;
+    };
+
+    // **The library lists the record**, so a policy has to reach `main` before
+    // it is in one. Uploaded-and-unpublished used to appear here, mixed in
+    // with what was actually in force.
+    await approveChange(approver.token, org.name, workspace, pullRequestNumber);
+    expect(
+      (
+        await publishChange(
+          sessionCookie,
+          org.name,
+          workspace,
+          pullRequestNumber,
+        )
+      ).status,
+    ).toBe(200);
+  }
 
   const library = await readLibrary(sessionCookie);
   expect(library.binders.map((binder) => binder.name).sort()).toEqual([
@@ -3046,10 +3064,12 @@ test("the library is every policy in every binder, across organizations", async 
     "corporate:expenses-policy",
   ]);
 
-  // Uploaded and not yet published, so they are on the record as proposed
-  // rather than missing from a list somebody is watching.
+  // Every row is on `main`. That is the rule the whole list turns on.
   expect(
-    library.documents.every((document) => document.state === "proposed"),
+    library.documents.every((document) => document.state === "published"),
+  ).toBe(true);
+  expect(
+    library.documents.every((document) => document.latestVersion !== null),
   ).toBe(true);
 });
 
@@ -3063,21 +3083,43 @@ test("the library and quick find answer the same question", async () => {
   expect(
     (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
   ).toBe(201);
-  expect(
-    (
-      await addDocument(sessionCookie, org.name, "clinical", {
-        name: "Infection Control Policy",
-        folder: "nursing",
-      })
-    ).status,
-  ).toBe(201);
-  expect(
-    (
-      await addDocument(sessionCookie, org.name, "clinical", {
-        name: "Expenses Policy",
-      })
-    ).status,
-  ).toBe(201);
+  const token = await createUserToken(
+    credentials.username,
+    credentials.password,
+  );
+  const approver = await addApprover(token, org.name, "clinical");
+
+  // Both onto `main`: the library and quick find each list the record, so a
+  // policy that has not been published is in neither.
+  for (const [name, folder] of [
+    ["Infection Control Policy", "nursing"],
+    ["Expenses Policy", undefined],
+  ] as const) {
+    const added = await addDocument(sessionCookie, org.name, "clinical", {
+      name,
+      ...(folder ? { folder } : {}),
+    });
+    expect(added.status, added.body).toBe(201);
+    const { pullRequestNumber } = JSON.parse(added.body) as {
+      pullRequestNumber: number;
+    };
+    await approveChange(
+      approver.token,
+      org.name,
+      "clinical",
+      pullRequestNumber,
+    );
+    expect(
+      (
+        await publishChange(
+          sessionCookie,
+          org.name,
+          "clinical",
+          pullRequestNumber,
+        )
+      ).status,
+    ).toBe(200);
+  }
 
   // The stored name is the slug — the app formats it for display, the way the
   // binder's own Documents tab does. Asserting the slug here is asserting what
@@ -3119,13 +3161,45 @@ test("a binder somebody cannot see is not in their library", async () => {
       )
     ).status,
   ).toBe(201);
+  const added = await addDocument(ownerCookie, org.name, "investigations", {
+    name: "Case Notes",
+  });
+  expect(added.status, added.body).toBe(201);
+  const { pullRequestNumber } = JSON.parse(added.body) as {
+    pullRequestNumber: number;
+  };
+
+  // Published, because the library lists the record — the owner has to be able
+  // to see it for "the outsider cannot" to mean anything.
+  //
+  // The approver is a second *organization owner* rather than staff: this
+  // binder is deliberately closed to the organization, so somebody in `staff`
+  // cannot see the change, let alone approve it.
+  const approver = buildCredentials();
+  await signUp(approver);
+  expect(
+    (await addOrgPerson(ownerCookie, org.name, approver.username, true)).status,
+  ).toBeLessThan(300);
+  const approverToken = await createUserToken(
+    approver.username,
+    approver.password,
+  );
+  await approveChange(
+    approverToken,
+    org.name,
+    "investigations",
+    pullRequestNumber,
+  );
   expect(
     (
-      await addDocument(ownerCookie, org.name, "investigations", {
-        name: "Case Notes",
-      })
+      await publishChange(
+        ownerCookie,
+        org.name,
+        "investigations",
+        pullRequestNumber,
+      )
     ).status,
-  ).toBe(201);
+  ).toBe(200);
 
   const outsider = buildCredentials();
   const outsiderCookie = await signUp(outsider);

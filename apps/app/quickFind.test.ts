@@ -63,11 +63,9 @@ describe("building rows", () => {
     expect(result?.meta).toBe("Clinical · v3");
   });
 
-  test("a policy nobody has published says so rather than showing a version", () => {
-    const [result] = buildQuickFindResults([
-      policy({ state: "proposed", latestVersion: null }),
-    ]);
-    expect(result?.meta).toBe("Clinical · nursing · not published yet");
+  test("a policy with no version says so rather than showing a blank", () => {
+    const [result] = buildQuickFindResults([policy({ latestVersion: null })]);
+    expect(result?.meta).toBe("Clinical · nursing · no published version");
   });
 
   test("two binders can hold a policy of the same name without colliding", () => {

@@ -159,25 +159,24 @@ export type WorkspaceDocumentState = z.infer<
  * `main` yet. What a row needs is its identity, and it has that either way.
  */
 export const WorkspaceDocumentListEntrySchema = z.object({
-  /**
-   * `clinical/infection-control.pdf` — where the file is, or **null** for a
-   * document that so far exists only inside an open change.
-   *
-   * The extension lives in the file, so learning it for a proposed document
-   * means walking that change's tree — a call per document, which is the cost
-   * the binder model exists to remove. A row does not need it: it is addressed
-   * by `slugPath`, and the document's own page pays for the exact path once.
-   */
-  path: z.string().nullable(),
-  /** `clinical/infection-control` — the document's identity, always known. */
+  /** `clinical/infection-control.01J8XZ4K7M….pdf` — where the file is. */
+  path: z.string(),
+  /** `clinical/infection-control` — the address a link carries. */
   slugPath: z.string(),
   name: z.string(),
   /** `clinical`, or "" at the binder's root. */
   folder: z.string(),
-  /** Null for a proposed document, for the same reason as `path`. */
-  size: z.number().nullable(),
-  /** Null for a proposed document, for the same reason as `path`. */
-  sha: z.string().nullable(),
+  size: z.number(),
+  sha: z.string(),
+  /**
+   * Always `published`, and kept as a field rather than dropped.
+   *
+   * A binder lists what is on `main`, so every row here is on the record. The
+   * document's *own page* still answers `proposed` — a link into a policy that
+   * is in review has to resolve — and the two payloads share a reader, so the
+   * field stays rather than becoming a thing one screen has and the other does
+   * not.
+   */
   state: WorkspaceDocumentStateSchema,
   /** Open changes touching this document. Decides a badge, nothing more. */
   openChangeCount: z.number(),

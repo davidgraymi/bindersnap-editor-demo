@@ -2671,8 +2671,7 @@
                         "type": "object",
                         "properties": {
                           "path": {
-                            "type": "string",
-                            "nullable": true
+                            "type": "string"
                           },
                           "slugPath": {
                             "type": "string"
@@ -2684,12 +2683,10 @@
                             "type": "string"
                           },
                           "size": {
-                            "type": "number",
-                            "nullable": true
+                            "type": "number"
                           },
                           "sha": {
-                            "type": "string",
-                            "nullable": true
+                            "type": "string"
                           },
                           "state": {
                             "type": "string",
@@ -3325,8 +3322,7 @@
                         "type": "object",
                         "properties": {
                           "path": {
-                            "type": "string",
-                            "nullable": true
+                            "type": "string"
                           },
                           "slugPath": {
                             "type": "string"
@@ -3338,12 +3334,10 @@
                             "type": "string"
                           },
                           "size": {
-                            "type": "number",
-                            "nullable": true
+                            "type": "number"
                           },
                           "sha": {
-                            "type": "string",
-                            "nullable": true
+                            "type": "string"
                           },
                           "state": {
                             "type": "string",
@@ -6972,8 +6966,7 @@
                         "type": "object",
                         "properties": {
                           "path": {
-                            "type": "string",
-                            "nullable": true
+                            "type": "string"
                           },
                           "slugPath": {
                             "type": "string"
@@ -6985,12 +6978,10 @@
                             "type": "string"
                           },
                           "size": {
-                            "type": "number",
-                            "nullable": true
+                            "type": "number"
                           },
                           "sha": {
-                            "type": "string",
-                            "nullable": true
+                            "type": "string"
                           },
                           "state": {
                             "type": "string",

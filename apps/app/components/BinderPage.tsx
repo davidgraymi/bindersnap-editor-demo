@@ -6,7 +6,6 @@ import { fetchBinderDocuments } from "../api";
 import type { WorkspaceDocumentListEntry } from "../../../packages/api-schema/schemas/workspaces";
 import { formatDocumentName } from "../documentDisplay";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
-import { StatusChip } from "./StatusChip";
 
 /**
  * ADR 0004's second and third levels made visible: a binder holds documents,
@@ -58,18 +57,15 @@ export function groupByFolder(
 export function describeDocument(document: WorkspaceDocumentListEntry): string {
   const parts: string[] = [];
 
-  // A document nobody has approved yet is not "no published version" — that
-  // reads like something is wrong with it. It is waiting, and saying so is
-  // both kinder and more accurate.
-  if (document.state === "proposed") {
-    parts.push("Not published yet");
-  } else {
-    parts.push(
-      document.latestVersion
-        ? `Version ${document.latestVersion.version}`
-        : "No published version",
-    );
-  }
+  // Every row here is on `main`, so there is no "waiting on a decision" case
+  // left to word: a binder lists the record. A document on the record with no
+  // tag is a real state — filed before versioning, or published by a change
+  // that wrote none — and it is said plainly rather than guessed at.
+  parts.push(
+    document.latestVersion
+      ? `Version ${document.latestVersion.version}`
+      : "No published version",
+  );
 
   if (document.openChangeCount > 0) {
     parts.push(
@@ -170,7 +166,7 @@ export function BinderDocuments({
         <p style={{ color: "var(--bs-text-muted)" }}>
           {isReadOnly
             ? "Nothing filed here yet."
-            : "Nothing filed here yet. Add a policy and it joins the binder once the change is approved."}
+            : "Nothing filed here yet. A policy joins this binder once its change request is published."}
         </p>
       ) : (
         groups.map((group) => (
@@ -201,11 +197,6 @@ export function BinderDocuments({
                       {describeDocument(document)}
                     </span>
                   </span>
-                  {document.state === "proposed" ? (
-                    <StatusChip tone="review" size="sm">
-                      In review
-                    </StatusChip>
-                  ) : null}
                 </button>
               ))}
             </div>

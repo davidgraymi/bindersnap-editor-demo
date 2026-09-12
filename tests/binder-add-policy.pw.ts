@@ -182,7 +182,7 @@ test("the nav's New policy asks which binder, then files into it", async ({
     sessionCookie,
     `Riverbend ${randomUUID().slice(0, 6)}`,
   );
-  await createBinder(sessionCookie, org, "Clinical Policies");
+  const first = await createBinder(sessionCookie, org, "Clinical Policies");
   const second = await createBinder(sessionCookie, org, "Corporate Policies");
 
   await signInBrowser(page, sessionCookie);
@@ -214,18 +214,93 @@ test("the nav's New policy asks which binder, then files into it", async ({
   );
 
   // It landed in the binder that was chosen, not the first one in the list.
-  const documents = await fetch(
-    `${API_BASE_URL}/api/app/binders/${org}/${second}/documents`,
+  //
+  // Asked of that binder's change requests rather than its documents: a binder
+  // lists what is on `main`, and a policy filed a moment ago is not there yet.
+  // The change request is where it is, and naming the right binder is the whole
+  // point of this test.
+  const changes = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${second}/changes?state=open`,
     { headers: { Cookie: `bindersnap_session=${sessionCookie}` } },
   );
-  expect(documents.status).toBe(200);
-  const listed = (await documents.json()) as {
-    documents: Array<{ slugPath: string }>;
+  expect(changes.status).toBe(200);
+  const listed = (await changes.json()) as {
+    changes: Array<{ branchName?: string; title?: string }>;
   };
-  expect(listed.documents.map((document) => document.slugPath)).toContain(
-    "expenses-policy",
+  expect(
+    listed.changes.some(
+      (change) =>
+        (change.branchName ?? "").startsWith("upload/expenses-policy/") ||
+        (change.title ?? "").includes("expenses-policy"),
+    ),
+    JSON.stringify(listed.changes),
+  ).toBe(true);
+
+  // And the binder it was *not* filed into has nothing in flight.
+  const otherChanges = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${first}/changes?state=open`,
+    { headers: { Cookie: `bindersnap_session=${sessionCookie}` } },
   );
+  expect(
+    ((await otherChanges.json()) as { changes: unknown[] }).changes,
+  ).toHaveLength(0);
 });
+
+/**
+ * Approve and publish the one open change in a binder, as somebody else.
+ *
+ * The library lists what is on `main`, so a policy filed a moment ago is not
+ * in it — which is the point of that rule, and means a test about the library
+ * has to get its policies onto the record first. An author cannot approve
+ * their own change, so this signs a second person up and grants them the
+ * binder's reviewer team.
+ */
+async function publishTheOpenChange(
+  sessionCookie: string,
+  org: string,
+  binder: string,
+): Promise<void> {
+  const open = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/changes?state=open`,
+    { headers: authHeaders(sessionCookie) },
+  );
+  const { changes } = (await open.json()) as {
+    changes: Array<{ number: number }>;
+  };
+  expect(changes, "no open change to publish").toHaveLength(1);
+  const number = changes[0]!.number;
+
+  const approver = buildCredentials();
+  const approverCookie = await signUp(approver);
+  // Into the organization, which grants `staff` — the team a binder is already
+  // open to. A binder manufactures no teams of its own, so there is no
+  // per-binder reviewer role to add them to.
+  const added = await fetch(`${API_BASE_URL}/api/app/orgs/${org}/people`, {
+    method: "POST",
+    headers: authHeaders(sessionCookie),
+    body: JSON.stringify({ username: approver.username, owner: false }),
+  });
+  expect(added.status, await added.text()).toBeLessThan(300);
+
+  expect(
+    (
+      await fetch(
+        `${API_BASE_URL}/api/app/binders/${org}/${binder}/changes/${number}/reviews`,
+        {
+          method: "POST",
+          headers: authHeaders(approverCookie),
+          body: JSON.stringify({ event: "APPROVE" }),
+        },
+      )
+    ).status,
+  ).toBe(200);
+
+  const published = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/changes/${number}/publish`,
+    { method: "POST", headers: authHeaders(sessionCookie), body: "{}" },
+  );
+  expect(published.status, await published.text()).toBe(200);
+}
 
 test("the library lists a policy across every binder it can reach", async ({
   page,
@@ -259,6 +334,8 @@ test("the library lists a policy across every binder it can reach", async ({
     await expect(page.locator("h1.doc-header-title").last()).toHaveText(name, {
       timeout: 30_000,
     });
+    // Onto `main`, because the library lists the record and nothing else.
+    await publishTheOpenChange(sessionCookie, org, binder);
   }
 
   await page.goto(`${APP_BASE_URL}/documents`);

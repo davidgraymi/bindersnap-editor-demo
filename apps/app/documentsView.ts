@@ -53,16 +53,16 @@ export function binderKey(document: {
 /**
  * What a row says about where a policy stands.
  *
- * Three states and no more. A published version is the answer to the question
- * a surveyor asks; a policy with changes in flight says so because that is what
- * a reader is about to walk into; and one that has never been published is a
- * different thing from one at v1, not a blank.
+ * Every row is on `main` now — the library lists the record, the same rule the
+ * binder follows — so "not published yet" is no longer a row that can appear
+ * from a policy in flight. It survives for the other way of reaching it: a file
+ * on the record that no change ever tagged.
  */
 export type DocumentRowStatus = "published" | "in_review" | "unpublished";
 
 export function getDocumentRowStatusLabel(status: DocumentRowStatus): string {
   if (status === "in_review") return "In review";
-  return status === "published" ? "Published" : "Not published yet";
+  return status === "published" ? "Published" : "No published version";
 }
 
 export interface DocumentRow {
@@ -80,15 +80,13 @@ export interface DocumentRow {
 }
 
 export function buildDocumentRow(document: LibraryDocument): DocumentRow {
-  // A document that exists only inside an open change has no version and is
-  // not "published with changes in flight" — it has never been on the record.
+  // Changes in flight are what a reader is about to walk into, so they lead.
+  // Otherwise: a tag on record, or a file on record that has none.
   const status: DocumentRowStatus =
-    document.state === "proposed" || document.latestVersion === null
-      ? document.openChangeCount > 0
-        ? "in_review"
-        : "unpublished"
-      : document.openChangeCount > 0
-        ? "in_review"
+    document.openChangeCount > 0
+      ? "in_review"
+      : document.latestVersion === null
+        ? "unpublished"
         : "published";
 
   return {
