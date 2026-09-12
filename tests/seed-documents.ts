@@ -229,16 +229,22 @@ async function renderSeedPdf(document: SeedDocument): Promise<Uint8Array> {
  * Render a document, at its path inside the binder.
  *
  * The path used to be `document.<ext>` at the root of a repository that held
- * one document. A binder holds many, so the document's own slug path is what
- * distinguishes them — `nursing/infection-control.docx`.
+ * one document. A binder holds many, so the document's own address and its
+ * identity are what distinguish them —
+ * `nursing/infection-control.01J8XZ4K7M….docx`.
  */
 export async function renderSeedDocumentFile(
   document: SeedDocument,
   format: SeedDocumentFormat,
   slugPath: string,
+  uid: string,
 ): Promise<SeedDocumentFile> {
+  // `nursing/hand-hygiene.01J8XZ4K7M….md` — the address, then the identity,
+  // then the extension (ADR 0005). The identity is what the version tags are
+  // named after, so a seeded document written without one would publish
+  // nothing at all: the publish guard refuses a content file that has none.
   const extension = canonicalFileNameFor(format).replace(/^document/, "");
-  const path = `${slugPath}${extension}`;
+  const path = `${slugPath}.${uid}${extension}`;
 
   switch (format) {
     case "prosemirror":

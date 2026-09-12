@@ -3,9 +3,10 @@ import { expect, test } from "bun:test";
 import { describeVersionStep, parseRequestedChange } from "./binderChange";
 
 const newDocument = {
-  path: "nursing/hand-hygiene.md",
+  path: "nursing/hand-hygiene.01J8XZ4K7MQ9V3B0RN7YHS2E1D.md",
   slugPath: "nursing/hand-hygiene",
   name: "hand-hygiene",
+  uid: "01J8XZ4K7MQ9V3B0RN7YHS2E1D",
   folder: "nursing",
   size: 10,
   sha: "abc",
@@ -18,20 +19,20 @@ const revision = {
   ...newDocument,
   nextVersion: 3,
   currentVersion: {
-    tag: "nursing/hand-hygiene/v2",
+    tag: "01J8XZ4K7MQ9V3B0RN7YHS2E1D/v2",
     version: 2,
     commitSha: "bbb",
     publishedAt: "",
   },
   versions: [
     {
-      tag: "nursing/hand-hygiene/v2",
+      tag: "01J8XZ4K7MQ9V3B0RN7YHS2E1D/v2",
       version: 2,
       commitSha: "bbb",
       publishedAt: "",
     },
     {
-      tag: "nursing/hand-hygiene/v1",
+      tag: "01J8XZ4K7MQ9V3B0RN7YHS2E1D/v1",
       version: 1,
       commitSha: "aaa",
       publishedAt: "",

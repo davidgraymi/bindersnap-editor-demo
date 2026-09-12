@@ -5,6 +5,14 @@
  * decided in one place — and can be tested without rendering anything.
  */
 
+/**
+ * Re-exported rather than defined here: the API stamps the same title into a
+ * version's tag, so the rule lives in `packages/utils` where both can reach it.
+ * Every screen still imports it from this module, which is where a person
+ * looking for "how is a document's name decided" goes first.
+ */
+export { formatDocumentName } from "../../packages/utils/documentTitle";
+
 import type {
   ChangeReviewer,
   ChangeUser,
@@ -14,46 +22,6 @@ import type {
 
 export type DocumentStatus =
   "published" | "in_review" | "changes_requested" | "approved" | "draft";
-
-/**
- * Initialisms this product's own documents are named after.
- *
- * A slug is lower-case by the time it reaches us, so the casing a person typed
- * is already gone and cannot be recovered — "hipaa-training-policy" title-cased
- * word by word reads "Hipaa Training Policy", which is a machine visibly
- * guessing at the name of a regulation on a page whose whole job is to be
- * trustworthy.
- *
- * This list is a stopgap, not the fix. The fix is storing the title a person
- * typed instead of deriving one from the slug; until a document carries its own
- * name, this at least stops the guess being wrong about the words the ICP uses
- * every day.
- */
-const INITIALISMS = new Set([
-  "cdc",
-  "dpa",
-  "ehr",
-  "hipaa",
-  "hr",
-  "it",
-  "osha",
-  "pdf",
-  "phi",
-  "ppe",
-  "sop",
-]);
-
-/** "quarterly-report" → "Quarterly Report"; "hipaa-training" → "HIPAA Training". */
-export function formatDocumentName(repoName: string): string {
-  return repoName
-    .split("-")
-    .map((word) =>
-      INITIALISMS.has(word.toLowerCase())
-        ? word.toUpperCase()
-        : word.charAt(0).toUpperCase() + word.slice(1),
-    )
-    .join(" ");
-}
 
 export function capitalizeFirst(value: string): string {
   if (!value) return value;

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import {
-  buildDocumentFilePath,
+  buildDocumentDisplayPath,
   buildDocumentSlugPath,
 } from "../../../packages/utils/documentPath";
 import { createBinderDocument, validateUploadFile } from "../api";
@@ -60,8 +60,14 @@ export function AddPolicyModal({
     setError(null);
   }, [file]);
 
-  // Where it will land, worked out by the same function the server commits
+  // Where it will land, worked out by the same functions the server commits
   // with — so the address promised here is the address written.
+  //
+  // The *address*, not the filename: the server also writes a 26-character
+  // identity segment into the name (ADR 0005), minted there because only the
+  // server can mint one. Showing it here would put a blob nobody typed in front
+  // of somebody being asked to confirm where their policy is going, and it is
+  // not a thing they can act on.
   const slugPath = useMemo(
     () => buildDocumentSlugPath(name, folder || null),
     [name, folder],
@@ -69,7 +75,7 @@ export function AddPolicyModal({
   const filePath = useMemo(
     () =>
       file
-        ? buildDocumentFilePath(name, extensionOf(file.name), folder || null)
+        ? buildDocumentDisplayPath(name, extensionOf(file.name), folder || null)
         : "",
     [file, name, folder],
   );

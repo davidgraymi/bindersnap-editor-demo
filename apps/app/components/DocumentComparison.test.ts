@@ -181,6 +181,7 @@ test("a Word document is compared as a document, not as a download", async () =>
     },
     "docx",
     "nursing/infection-control",
+    "01J8XZ4K7MQ9V3B0RN7YHS2E1D",
   );
   const after = await renderSeedDocumentFile(
     {
@@ -194,6 +195,7 @@ test("a Word document is compared as a document, not as a download", async () =>
     },
     "docx",
     "nursing/infection-control",
+    "01J8XZ4K7MQ9V3B0RN7YHS2E1D",
   );
 
   files["v3"] = new Uint8Array(Buffer.from(before.content, "base64"));

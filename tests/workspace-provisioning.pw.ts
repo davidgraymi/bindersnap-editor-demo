@@ -15,6 +15,7 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test } from "@playwright/test";
 
+import { isDocumentUid } from "../packages/utils/documentUid";
 import {
   API_BASE_URL,
   APP_BASE_URL,
@@ -326,6 +327,19 @@ async function addDocument(
   return { status: response.status, body: await response.text() };
 }
 
+/**
+ * The identity the server minted, read back out of the filename it returned.
+ *
+ * Tests assert on it rather than hard-coding one, because it is minted per
+ * upload and only the server knows it (ADR 0005). `documentPath` is the one
+ * place a caller ever sees it.
+ */
+function uidOf(documentPath: string): string {
+  const uid = documentPath.split(".").find(isDocumentUid);
+  expect(uid, `no identity segment in "${documentPath}"`).toBeDefined();
+  return uid!;
+}
+
 test("a document is a file at a path inside the binder", async () => {
   const credentials = buildCredentials();
   const sessionCookie = await signUp(credentials);
@@ -346,8 +360,13 @@ test("a document is a file at a path inside the binder", async () => {
     branch: string;
     pullRequestNumber: number | null;
   };
-  expect(payload.documentPath).toBe("nursing/infection-control.md");
+  // The address is what a person typed; the filename also carries the identity
+  // minted for the document (ADR 0005), which is what its version tags will be
+  // named after for the rest of its life.
   expect(payload.slugPath).toBe("nursing/infection-control");
+  expect(payload.documentPath).toMatch(
+    /^nursing\/infection-control\.[0-9A-HJKMNP-TV-Z]{26}\.md$/,
+  );
   expect(payload.pullRequestNumber).toBeGreaterThan(0);
 
   const token = await createUserToken(
@@ -418,7 +437,7 @@ test("a document cannot be written outside the binder that governs it", async ()
   // meant to type, and committing to one would write outside the binder.
   expect(
     (JSON.parse(escaped.body) as { documentPath: string }).documentPath,
-  ).toBe("etc/escape.md");
+  ).toMatch(/^etc\/escape\.[0-9A-HJKMNP-TV-Z]{26}\.md$/);
 });
 
 test("adding a document where one already lives is refused", async () => {
@@ -609,7 +628,10 @@ test("an unpublished document is listed as proposed, and opens", async () => {
     body: "draft policy text",
   });
   expect(added.status, added.body).toBe(201);
-  const { slugPath } = JSON.parse(added.body) as { slugPath: string };
+  const { slugPath, documentPath } = JSON.parse(added.body) as {
+    slugPath: string;
+    documentPath: string;
+  };
 
   // The upload is on a branch with an open change, and nothing reaches main
   // except a merged, approved change — so this document is not on the record.
@@ -654,7 +676,7 @@ test("an unpublished document is listed as proposed, and opens", async () => {
   };
   expect(detailPayload.state).toBe("proposed");
   expect(detailPayload.ref.startsWith(`upload/${slugPath}/`)).toBe(true);
-  expect(detailPayload.document.path).toBe(`${slugPath}.md`);
+  expect(detailPayload.document.path).toBe(documentPath);
   expect(detailPayload.versions).toEqual([]);
 
   const bytes = await downloadDocument(
@@ -679,9 +701,12 @@ test("publishing turns a proposed document into a published one", async () => {
   const added = await addDocument(sessionCookie, org.name, "clinical", {
     name: "Infection Control",
   });
-  const { pullRequestNumber, slugPath } = JSON.parse(added.body) as {
+  const { pullRequestNumber, slugPath, documentPath } = JSON.parse(
+    added.body,
+  ) as {
     pullRequestNumber: number;
     slugPath: string;
+    documentPath: string;
   };
 
   const token = await createUserToken(
@@ -712,7 +737,7 @@ test("publishing turns a proposed document into a published one", async () => {
   expect(documents[0]).toMatchObject({
     slugPath,
     state: "published",
-    path: `${slugPath}.md`,
+    path: documentPath,
   });
 });
 
@@ -910,9 +935,12 @@ test("publishing a change versions the document and puts it on main", async () =
     folder: "Nursing",
   });
   expect(added.status, added.body).toBe(201);
-  const { pullRequestNumber, slugPath } = JSON.parse(added.body) as {
+  const { pullRequestNumber, slugPath, documentPath } = JSON.parse(
+    added.body,
+  ) as {
     pullRequestNumber: number;
     slugPath: string;
+    documentPath: string;
   };
 
   const token = await createUserToken(
@@ -933,8 +961,9 @@ test("publishing a change versions the document and puts it on main", async () =
   const { tags } = JSON.parse(published.body) as {
     tags: Array<{ tag: string; version: number; commitSha: string }>;
   };
-  // The tag names the document, because a binder's tags are repository-global.
-  expect(tags.map((t) => t.tag)).toEqual([`${slugPath}/v1`]);
+  // The tag names the document by its identity, because a binder's tags are
+  // repository-global and because a rename must not restart the numbering.
+  expect(tags.map((t) => t.tag)).toEqual([`${uidOf(documentPath)}/v1`]);
 
   // And now it is part of the record: on main, and in the binder's list.
   const listed = await listDocuments(sessionCookie, org.name, "clinical");
@@ -960,9 +989,9 @@ test("publishing a change versions the document and puts it on main", async () =
 
   const onMain = await giteaGet<{ path: string }>(
     token,
-    `/repos/${org.name}/clinical/contents/${slugPath}.md?ref=main`,
+    `/repos/${org.name}/clinical/contents/${documentPath}?ref=main`,
   );
-  expect(onMain.path).toBe(`${slugPath}.md`);
+  expect(onMain.path).toBe(documentPath);
 });
 
 test("a published document hands back its bytes, by identity or by path", async () => {
@@ -1030,7 +1059,7 @@ test("a published document hands back its bytes, by identity or by path", async 
     org.name,
     "clinical",
     slugPath,
-    `${slugPath}/v1`,
+    `${uidOf(documentPath)}/v1`,
   );
   expect(atVersion.status, atVersion.body).toBe(200);
   expect(atVersion.body).toBe("wash your hands");
@@ -1123,9 +1152,12 @@ test("approving through the binder counts, and then it publishes", async () => {
   const added = await addDocument(sessionCookie, org.name, "clinical", {
     name: "Infection Control",
   });
-  const { pullRequestNumber, slugPath } = JSON.parse(added.body) as {
+  const { pullRequestNumber, slugPath, documentPath } = JSON.parse(
+    added.body,
+  ) as {
     pullRequestNumber: number;
     slugPath: string;
+    documentPath: string;
   };
 
   const ownerToken = await createUserToken(
@@ -1184,7 +1216,7 @@ test("approving through the binder counts, and then it publishes", async () => {
     (JSON.parse(published.body) as { tags: Array<{ tag: string }> }).tags.map(
       (tag) => tag.tag,
     ),
-  ).toEqual([`${slugPath}/v1`]);
+  ).toEqual([`${uidOf(documentPath)}/v1`]);
 });
 
 test("asking for changes needs words, and an approval does not", async () => {
@@ -1258,9 +1290,11 @@ test("a change left behind by another says so, and can be caught up", async () =
   });
   const firstNumber = (JSON.parse(first.body) as { pullRequestNumber: number })
     .pullRequestNumber;
-  const { pullRequestNumber: secondNumber, slugPath: secondSlug } = JSON.parse(
-    second.body,
-  ) as { pullRequestNumber: number; slugPath: string };
+  const { pullRequestNumber: secondNumber, documentPath: secondPath } =
+    JSON.parse(second.body) as {
+      pullRequestNumber: number;
+      documentPath: string;
+    };
 
   const ownerToken = await createUserToken(
     credentials.username,
@@ -1321,7 +1355,7 @@ test("a change left behind by another says so, and can be caught up", async () =
     (JSON.parse(published.body) as { tags: Array<{ tag: string }> }).tags.map(
       (tag) => tag.tag,
     ),
-  ).toEqual([`${secondSlug}/v1`]);
+  ).toEqual([`${uidOf(secondPath)}/v1`]);
 });
 
 test("the binder names itself, and counts what is in it", async () => {
@@ -1375,9 +1409,12 @@ test("a binder lists its change requests, open and then decided", async () => {
     name: "Infection Control",
     folder: "Nursing",
   });
-  const { pullRequestNumber, slugPath } = JSON.parse(added.body) as {
+  const { pullRequestNumber, slugPath, documentPath } = JSON.parse(
+    added.body,
+  ) as {
     pullRequestNumber: number;
     slugPath: string;
+    documentPath: string;
   };
 
   const open = await listChanges(sessionCookie, org.name, "clinical", "open");
@@ -1580,9 +1617,12 @@ test("a change detail says whether this caller may set its reviewers", async () 
   const added = await addDocument(sessionCookie, org.name, "clinical", {
     name: "Infection Control",
   });
-  const { pullRequestNumber, slugPath } = JSON.parse(added.body) as {
+  const { pullRequestNumber, slugPath, documentPath } = JSON.parse(
+    added.body,
+  ) as {
     pullRequestNumber: number;
     slugPath: string;
+    documentPath: string;
   };
 
   const detail = await getChange(
@@ -1646,9 +1686,12 @@ test("the binder's history answers who approved which version", async () => {
     name: "Infection Control",
     folder: "Nursing",
   });
-  const { pullRequestNumber, slugPath } = JSON.parse(added.body) as {
+  const { pullRequestNumber, slugPath, documentPath } = JSON.parse(
+    added.body,
+  ) as {
     pullRequestNumber: number;
     slugPath: string;
+    documentPath: string;
   };
 
   const ownerToken = await createUserToken(
@@ -1850,9 +1893,9 @@ test("an owner's approval counts, although Owners is never granted", async () =>
   const addedDoc = await addDocument(authorCookie, org.name, "clinical", {
     name: "Infection Control",
   });
-  const { pullRequestNumber, slugPath } = JSON.parse(addedDoc.body) as {
+  const { pullRequestNumber, documentPath } = JSON.parse(addedDoc.body) as {
     pullRequestNumber: number;
-    slugPath: string;
+    documentPath: string;
   };
 
   await approveChange(
@@ -1875,7 +1918,7 @@ test("an owner's approval counts, although Owners is never granted", async () =>
     (JSON.parse(published.body) as { tags: Array<{ tag: string }> }).tags.map(
       (tag) => tag.tag,
     ),
-  ).toEqual([`${slugPath}/v1`]);
+  ).toEqual([`${uidOf(documentPath)}/v1`]);
 });
 
 test("a member of staff can approve, and the approval counts", async () => {
@@ -3148,24 +3191,45 @@ test("a binder past Gitea's tag page still knows every version", async () => {
   expect(
     (await createWorkspace(sessionCookie, org.name, "Clinical")).status,
   ).toBe(201);
-  expect(
-    (
-      await addDocument(sessionCookie, org.name, "clinical", {
-        name: "Infection Control Policy",
-        folder: "nursing",
-      })
-    ).status,
-  ).toBe(201);
+  const added = await addDocument(sessionCookie, org.name, "clinical", {
+    name: "Infection Control Policy",
+    folder: "nursing",
+  });
+  expect(added.status, added.body).toBe(201);
+  const { pullRequestNumber, slugPath, documentPath } = JSON.parse(
+    added.body,
+  ) as {
+    pullRequestNumber: number;
+    slugPath: string;
+    documentPath: string;
+  };
 
   const token = await createUserToken(
     credentials.username,
     credentials.password,
   );
 
-  // Well past both page sizes, on documents that do not otherwise exist — the
-  // read has to find them all to report the last one.
+  // The document has to be on `main` before its versions mean anything: a
+  // version tag is grouped by the identity in the tree, so tags naming a
+  // document the binder does not hold are not versions of anything (ADR 0005).
+  const approver = await addApprover(token, org.name, "clinical");
+  await approveChange(approver.token, org.name, "clinical", pullRequestNumber);
+  expect(
+    (
+      await publishChange(
+        sessionCookie,
+        org.name,
+        "clinical",
+        pullRequestNumber,
+      )
+    ).status,
+  ).toBe(200);
+
+  // Well past both page sizes. Publishing wrote v1, so the rest are written
+  // directly — what is under test is the *read*, not thirty-five merges.
+  const uid = uidOf(documentPath);
   const TOTAL = 65;
-  for (let version = 1; version <= TOTAL; version += 1) {
+  for (let version = 2; version <= TOTAL; version += 1) {
     const response = await fetch(
       `${GITEA_URL}/api/v1/repos/${org.name}/clinical/tags`,
       {
@@ -3175,7 +3239,7 @@ test("a binder past Gitea's tag page still knows every version", async () => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          tag_name: `nursing/paged-policy/v${version}`,
+          tag_name: `${uid}/v${version}`,
           target: "main",
           message: `v${version}`,
         }),
@@ -3194,7 +3258,7 @@ test("a binder past Gitea's tag page still knows every version", async () => {
     (await history.json()) as {
       versions: Array<{ slugPath: string; version: number }>;
     }
-  ).versions.filter((entry) => entry.slugPath === "nursing/paged-policy");
+  ).versions.filter((entry) => entry.slugPath === slugPath);
 
   // Every one of them, not the first page.
   expect(versions).toHaveLength(TOTAL);
@@ -3329,14 +3393,15 @@ test("publishing stamps the policy in force onto the version's tag", async () =>
   const ownerToken = await createUserToken(owner.username, owner.password);
   const approver = await addApprover(ownerToken, org.name, "clinical");
 
-  expect(
-    (
-      await addDocument(ownerCookie, org.name, "clinical", {
-        name: "Infection Control Policy",
-        folder: "nursing",
-      })
-    ).status,
-  ).toBe(201);
+  const added = await addDocument(ownerCookie, org.name, "clinical", {
+    name: "Infection Control Policy",
+    folder: "nursing",
+  });
+  expect(added.status, added.body).toBe(201);
+  const { slugPath, documentPath } = JSON.parse(added.body) as {
+    slugPath: string;
+    documentPath: string;
+  };
 
   const listed = await listChanges(ownerCookie, org.name, "clinical", "open");
   const change = (
@@ -3353,8 +3418,21 @@ test("publishing stamps the policy in force onto the version's tag", async () =>
   // Read the tag back the way a clone would.
   const tag = await giteaGet<{ message?: string }>(
     ownerToken,
-    `/repos/${org.name}/clinical/tags/${encodeURIComponent("nursing/infection-control-policy/v1")}`,
+    `/repos/${org.name}/clinical/tags/${encodeURIComponent(
+      `${uidOf(documentPath)}/v1`,
+    )}`,
   );
+
+  // **What the tag name stopped saying, the message says** (ADR 0005). The
+  // tag is a ULID now, so the title and the path are stamped onto the event —
+  // both point-in-time facts a rename would otherwise make unrecoverable.
+  expect(tag.message?.split("\n")[0]).toBe(
+    `Infection Control Policy v1 — ${documentPath}`,
+  );
+  expect(tag.message).toContain(
+    "Title at this version: Infection Control Policy",
+  );
+  expect(tag.message).toContain(`Filed at: ${slugPath}`);
 
   expect(tag.message).toContain("The approval policy in force");
   expect(tag.message).toContain("Approvals required: 1");
@@ -3552,14 +3630,15 @@ test("published sign-off rules gate the folder they name", async () => {
 
   // Now a change to that folder. The bystander's approval meets the count and
   // satisfies no rule.
-  expect(
-    (
-      await addDocument(ownerCookie, org.name, "clinical", {
-        name: "Infection Control Policy",
-        folder: "nursing",
-      })
-    ).status,
-  ).toBe(201);
+  const added = await addDocument(ownerCookie, org.name, "clinical", {
+    name: "Infection Control Policy",
+    folder: "nursing",
+  });
+  expect(added.status, added.body).toBe(201);
+  const { slugPath, documentPath } = JSON.parse(added.body) as {
+    slugPath: string;
+    documentPath: string;
+  };
 
   const listed = await listChanges(ownerCookie, org.name, "clinical", "open");
   expect(listed.status, listed.body).toBe(200);
@@ -3883,9 +3962,12 @@ test("removing somebody takes their access and leaves the record", async () => {
   const added = await addDocument(authorCookie, org.name, "clinical", {
     name: "Infection Control",
   });
-  const { pullRequestNumber, slugPath } = JSON.parse(added.body) as {
+  const { pullRequestNumber, slugPath, documentPath } = JSON.parse(
+    added.body,
+  ) as {
     pullRequestNumber: number;
     slugPath: string;
+    documentPath: string;
   };
 
   await approveChange(reviewer.token, org.name, "clinical", pullRequestNumber);
@@ -3986,6 +4068,7 @@ test("one change across two documents publishes two versions on one commit", asy
   expect(first.status, first.body).toBe(201);
   const firstPayload = JSON.parse(first.body) as {
     branch: string;
+    documentPath: string;
     pullRequestNumber: number;
   };
 
@@ -3995,9 +4078,12 @@ test("one change across two documents publishes two versions on one commit", asy
   );
 
   // Add a second document onto the same branch, the way a person revising two
-  // policies together would.
+  // policies together would. Its filename carries an identity because every
+  // document's does — publish refuses a content file without one, since a file
+  // with no identity has no version series to add to (ADR 0005).
+  const handoverUid = "01J9A0B1C2D3E4F5G6H7J8K9M0";
   const commit = await fetch(
-    `${GITEA_URL}/api/v1/repos/${org.name}/clinical/contents/handover.md`,
+    `${GITEA_URL}/api/v1/repos/${org.name}/clinical/contents/handover.${handoverUid}.md`,
     {
       method: "POST",
       headers: {
@@ -4032,10 +4118,9 @@ test("one change across two documents publishes two versions on one commit", asy
   const { tags } = JSON.parse(published.body) as {
     tags: Array<{ tag: string; commitSha: string }>;
   };
-  expect(tags.map((t) => t.tag).sort()).toEqual([
-    "handover/v1",
-    "infection-control/v1",
-  ]);
+  expect(tags.map((t) => t.tag).sort()).toEqual(
+    [`${handoverUid}/v1`, `${uidOf(firstPayload.documentPath)}/v1`].sort(),
+  );
 
   // Both tags point at the same merge commit. Approvals cover the change, so
   // the two versions share one approval record.
@@ -4053,8 +4138,15 @@ test("a second change to the same document publishes v2, not another v1", async 
   const first = await addDocument(sessionCookie, org.name, "clinical", {
     name: "Infection Control",
   });
-  const firstNumber = (JSON.parse(first.body) as { pullRequestNumber: number })
-    .pullRequestNumber;
+  const {
+    pullRequestNumber: firstNumber,
+    slugPath,
+    documentPath,
+  } = JSON.parse(first.body) as {
+    pullRequestNumber: number;
+    slugPath: string;
+    documentPath: string;
+  };
 
   const ownerToken = await createUserToken(
     credentials.username,
@@ -4071,7 +4163,7 @@ test("a second change to the same document publishes v2, not another v1", async 
   // A revision of a document that already exists. The upload endpoint refuses
   // to create over it — turning that into a proper revision flow is a later
   // step — so the change is built directly, the way that flow eventually will.
-  const branch = `upload/infection-control/${Date.now()}`;
+  const branch = `upload/${slugPath}/${Date.now()}`;
   const branched = await fetch(
     `${GITEA_URL}/api/v1/repos/${org.name}/clinical/branches`,
     {
@@ -4090,10 +4182,10 @@ test("a second change to the same document publishes v2, not another v1", async 
 
   const existing = await giteaGet<{ sha: string }>(
     ownerToken,
-    `/repos/${org.name}/clinical/contents/infection-control.md?ref=main`,
+    `/repos/${org.name}/clinical/contents/${documentPath}?ref=main`,
   );
   const updated = await fetch(
-    `${GITEA_URL}/api/v1/repos/${org.name}/clinical/contents/infection-control.md`,
+    `${GITEA_URL}/api/v1/repos/${org.name}/clinical/contents/${documentPath}`,
     {
       method: "PUT",
       headers: {
@@ -4146,13 +4238,13 @@ test("a second change to the same document publishes v2, not another v1", async 
     (JSON.parse(republished.body) as { tags: Array<{ tag: string }> }).tags.map(
       (t) => t.tag,
     ),
-  ).toEqual(["infection-control/v2"]);
+  ).toEqual([`${uidOf(documentPath)}/v2`]);
 
   const detail = await getDocument(
     sessionCookie,
     org.name,
     "clinical",
-    "infection-control",
+    slugPath,
   );
   const { versions, latestVersion } = JSON.parse(detail.body) as {
     versions: Array<{ version: number }>;
