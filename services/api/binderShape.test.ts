@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
-import { folderKeepPath, planFolderRename, planNewFolder } from "./binderShape";
+import {
+  folderKeepPath,
+  planDocumentRename,
+  planFolderRename,
+  planNewFolder,
+} from "./binderShape";
+import type { WorkspaceDocumentEntry } from "./gitea-client/workspaceDocuments";
 
 /**
  * Working out what a shape change does, before anything is written.
@@ -13,6 +19,21 @@ import { folderKeepPath, planFolderRename, planNewFolder } from "./binderShape";
 
 const UID = "01J8XZ4K7MQ9V3B0RN7YHS2E1D";
 const OTHER = "01J9A0B1C2D3E4F5G6H7J8K9M0";
+
+function document(
+  overrides: Partial<WorkspaceDocumentEntry> = {},
+): WorkspaceDocumentEntry {
+  return {
+    path: `nursing/hand-hygiene.${UID}.md`,
+    slugPath: "nursing/hand-hygiene",
+    name: "hand-hygiene",
+    uid: UID,
+    folder: "nursing",
+    size: 10,
+    sha: "abc",
+    ...overrides,
+  };
+}
 
 function ok(result: ReturnType<typeof planNewFolder>) {
   expect(result, JSON.stringify(result)).not.toHaveProperty("error");
@@ -174,5 +195,110 @@ describe("renaming a folder", () => {
         existingFolders: ["nursing"],
       }),
     ).toEqual({ error: "This binder has no folder called “missing”." });
+  });
+});
+
+describe("renaming a document", () => {
+  test("keeps the identity, which is what keeps the history", () => {
+    // ADR 0005 in one assertion. Under ADR 0004 this was a new document
+    // starting again at v1, with every tag it had orphaned behind it.
+    const plan = ok(
+      planDocumentRename({
+        document: document(),
+        name: "Hand Hygiene and PPE",
+        paths: [`nursing/hand-hygiene.${UID}.md`],
+      }),
+    );
+    expect(plan.operations).toEqual([
+      {
+        kind: "move",
+        from: `nursing/hand-hygiene.${UID}.md`,
+        to: `nursing/hand-hygiene-and-ppe.${UID}.md`,
+      },
+    ]);
+  });
+
+  test("files it somewhere else, keeping its name", () => {
+    const plan = ok(
+      planDocumentRename({
+        document: document(),
+        folder: "Infection Control",
+        paths: [`nursing/hand-hygiene.${UID}.md`],
+      }),
+    );
+    expect(plan.operations[0]).toMatchObject({
+      to: `infection-control/hand-hygiene.${UID}.md`,
+    });
+    expect(plan.title).toContain("Move");
+  });
+
+  test("moves it to the binder's top level", () => {
+    const plan = ok(
+      planDocumentRename({
+        document: document(),
+        folder: "",
+        paths: [`nursing/hand-hygiene.${UID}.md`],
+      }),
+    );
+    expect(plan.operations[0]).toMatchObject({ to: `hand-hygiene.${UID}.md` });
+  });
+
+  test("keeps the extension, because the bytes are not changing", () => {
+    const plan = ok(
+      planDocumentRename({
+        document: document({ path: `nursing/hand-hygiene.${UID}.pdf` }),
+        name: "Renamed",
+        paths: [],
+      }),
+    );
+    expect(plan.operations[0]).toMatchObject({
+      to: `nursing/renamed.${UID}.pdf`,
+    });
+  });
+
+  test("refuses an address another document already answers to", () => {
+    // A URL has to name one thing, or a link somebody sends is a coin toss.
+    const result = planDocumentRename({
+      document: document(),
+      name: "Handover",
+      paths: [`nursing/hand-hygiene.${UID}.md`, `nursing/handover.${OTHER}.md`],
+    });
+    expect(result).toHaveProperty("error");
+    expect((result as { error: string }).error).toContain("already taken");
+  });
+
+  test("a folder's placeholder is not an address to collide with", () => {
+    const plan = ok(
+      planDocumentRename({
+        document: document(),
+        name: "Gitkeep",
+        paths: [`nursing/hand-hygiene.${UID}.md`, "nursing/.gitkeep"],
+      }),
+    );
+    expect(plan.operations[0]).toMatchObject({
+      to: `nursing/gitkeep.${UID}.md`,
+    });
+  });
+
+  test("refuses a document with no identity", () => {
+    // Renaming it would lose a version history it does not have — the same
+    // refusal publish makes, said where it is still actionable.
+    const result = planDocumentRename({
+      document: document({ uid: null, path: "nursing/NOTES.md" }),
+      name: "Notes",
+      paths: [],
+    });
+    expect(result).toHaveProperty("error");
+    expect((result as { error: string }).error).toContain("not added through");
+  });
+
+  test("refuses a rename that changes nothing", () => {
+    expect(
+      planDocumentRename({
+        document: document(),
+        name: "Hand Hygiene",
+        paths: [],
+      }),
+    ).toEqual({ error: "That is where it already is." });
   });
 });

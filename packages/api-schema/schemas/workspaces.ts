@@ -267,6 +267,13 @@ export const WorkspaceDocumentDetailPayloadSchema = z.object({
   versions: z.array(DocumentVersionSchema),
   latestVersion: DocumentVersionSchema.nullable(),
   /**
+   * The binder's folders, so filing this somewhere else is a choice.
+   *
+   * Offered from the page that acts on it rather than fetched separately: the
+   * tree is already read to resolve the document, so the list is in hand.
+   */
+  folders: z.array(z.string()),
+  /**
    * The open changes touching this document, newest first.
    *
    * The same shape the per-document workspace uses, deliberately: a change is

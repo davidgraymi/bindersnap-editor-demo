@@ -19,5 +19,6 @@ export type GetBinderDocument200 = {
   versions: GetBinderDocument200VersionsItem[];
   /** @nullable */
   latestVersion: GetBinderDocument200LatestVersion;
+  folders: string[];
   openChanges: GetBinderDocument200OpenChangesItem[];
 };

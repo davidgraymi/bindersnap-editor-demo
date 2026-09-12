@@ -11,7 +11,7 @@
  * of twelve policies is twelve moves and exactly one act — a reviewer should
  * see it that way, and it must not be able to half-apply.
  *
- * **A renamed folder keeps every version inside it**, which is the whole reason
+ * **A renamed document keeps every version it had**, which is the whole reason
  * ADR 0005 came first. A document's identity is a segment of its filename and
  * moves with the file, so a policy that lands at a new path is the same policy
  * on its next version rather than a new one starting at v1 with every tag it
@@ -19,9 +19,13 @@
  */
 
 import {
+  buildDocumentFilePath,
   normalizeFolderSegments,
   parseDocumentFilename,
+  slugifyDocumentName,
 } from "../../packages/utils/documentPath";
+
+import type { WorkspaceDocumentEntry } from "./gitea-client/workspaceDocuments";
 
 import type { BinderFileOperation } from "./gitea-client/binderFiles";
 /**
@@ -175,6 +179,84 @@ export function planFolderRename(params: {
     operations,
     title: `Rename ${from} to ${to}`,
     message: `Rename the folder ${from} to ${to}`,
+  };
+}
+
+/**
+ * Rename a document, file it somewhere else, or both.
+ *
+ * **The act ADR 0005 was written for.** The identity segment moves with the
+ * file, so the version tags still match and the policy carries on from the
+ * version it was on — which under ADR 0004 would have restarted at v1 and
+ * orphaned everything published before it.
+ *
+ * Name and folder together, because they are one question — where does this
+ * live and what is it called — and splitting them would make a common act two
+ * change requests.
+ */
+export function planDocumentRename(params: {
+  document: WorkspaceDocumentEntry;
+  /** The new title, or undefined to keep the one it has. */
+  name?: string;
+  /** The new folder, or undefined to keep the one it is in. "" is the root. */
+  folder?: string;
+  /** Every path in the binder, so a collision is caught before it is written. */
+  paths: readonly string[];
+}): ShapeChangeResult {
+  const { document } = params;
+
+  if (document.uid === null) {
+    return {
+      error: `“${document.path}” was not added through Bindersnap, so renaming it would lose its history.`,
+    };
+  }
+
+  const name = params.name === undefined ? document.name : params.name;
+  const slug = slugifyDocumentName(name);
+  if (slug === "") {
+    return {
+      error: "That name has no letters or numbers to make a path from.",
+    };
+  }
+
+  const folder =
+    params.folder === undefined
+      ? document.folder
+      : normalizeFolder(params.folder);
+
+  const extension = parseDocumentFilename(
+    document.path.slice(document.path.lastIndexOf("/") + 1),
+  ).extension;
+  const to = buildDocumentFilePath(
+    name,
+    extension,
+    document.uid,
+    folder || null,
+  );
+
+  if (to === document.path) {
+    return { error: "That is where it already is." };
+  }
+
+  // A URL has to name one thing. Two documents at one address resolve to
+  // whichever came first, which is a link somebody sends being a coin toss.
+  const address = folder === "" ? slug : `${folder}/${slug}`;
+  const collision = params.paths.find(
+    (path) => path !== document.path && addressOf(path) === address,
+  );
+  if (collision) {
+    return {
+      error: `“${address}” is already taken by “${collision}”. Two documents cannot share one address.`,
+    };
+  }
+
+  return {
+    operations: [{ kind: "move", from: document.path, to }],
+    title:
+      folder === document.folder
+        ? `Rename ${document.slugPath} to ${slug}`
+        : `Move ${document.slugPath} to ${address}`,
+    message: `Move ${document.path} to ${to}`,
   };
 }
 

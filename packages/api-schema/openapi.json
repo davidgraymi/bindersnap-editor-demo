@@ -7280,6 +7280,12 @@
                         "publishedAt"
                       ]
                     },
+                    "folders": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "openChanges": {
                       "type": "array",
                       "items": {
@@ -7498,6 +7504,7 @@
                     "ref",
                     "versions",
                     "latestVersion",
+                    "folders",
                     "openChanges"
                   ]
                 }
@@ -7786,6 +7793,91 @@
         "responses": {
           "201": {
             "description": "The change request that would rename the folder",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "branch": {
+                      "type": "string"
+                    },
+                    "changeNumber": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "workspace",
+                    "branch",
+                    "changeNumber"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/document-renames": {
+      "post": {
+        "operationId": "renameBinderDocument",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "documentPath": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "folder": {
+                    "type": "string"
+                  },
+                  "changeNumber": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "documentPath"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The change request that would rename the document",
             "content": {
               "application/json": {
                 "schema": {

@@ -19,6 +19,7 @@ import {
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 import { DocumentPreview } from "./DocumentPreview";
 import { ReviseDocumentModal } from "./ReviseDocumentModal";
+import { RenameDocumentModal } from "./RenameDocumentModal";
 import { useIsReadOnly } from "../readOnlyContext";
 
 /**
@@ -67,6 +68,7 @@ export function BinderDocumentPage({
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [revising, setRevising] = useState(false);
+  const [renaming, setRenaming] = useState(false);
   const isReadOnly = useIsReadOnly();
 
   // Back and forward are how a reader leaves an earlier version, so the page
@@ -265,16 +267,41 @@ export function BinderDocumentPage({
               Only offered on the record: revising an earlier version would
               silently discard everything published since. */}
           {!isReadOnly && isViewingRecord && state !== "proposed" ? (
-            <button
-              type="button"
-              className="bs-btn bs-btn-primary"
-              onClick={() => setRevising(true)}
-            >
-              New version
-            </button>
+            <div className="doc-header-actions">
+              <button
+                type="button"
+                className="bs-btn bs-btn-secondary"
+                onClick={() => setRenaming(true)}
+              >
+                Rename or move
+              </button>
+              <button
+                type="button"
+                className="bs-btn bs-btn-primary"
+                onClick={() => setRevising(true)}
+              >
+                New version
+              </button>
+            </div>
           ) : null}
         </div>
       </header>
+
+      {renaming ? (
+        <RenameDocumentModal
+          org={org}
+          binder={binder}
+          slugPath={document.slugPath}
+          name={document.name}
+          folder={document.folder}
+          folders={detail.folders}
+          onClose={() => setRenaming(false)}
+          onProposed={(changeNumber) => {
+            setRenaming(false);
+            onOpenChange(changeNumber);
+          }}
+        />
+      ) : null}
 
       {revising ? (
         <ReviseDocumentModal
