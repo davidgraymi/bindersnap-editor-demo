@@ -49,6 +49,7 @@ import {
   listChangedDocuments,
   listDocumentVersions,
   listRemovedDocuments,
+  readArchivedDocument,
   listVersionsByDocument,
   listWorkspaceDocuments,
   readWorkspaceTree,
@@ -75,6 +76,7 @@ import {
 import {
   planDocumentArchive,
   planDocumentRename,
+  planDocumentRestore,
   planFolderRename,
   planNewFolder,
   type ShapeChangeResult,
@@ -7938,10 +7940,21 @@ async function handleBinderShapeChange(
   baseHeaders: Headers,
   orgName: string,
   workspaceName: string,
+  /**
+   * Work out the operations.
+   *
+   * **May be async**, because restoring has to read the bytes off a version
+   * tag before it knows what it is writing. Every other act here is a pure
+   * function of the body and the tree; this one is not, and forcing it to be
+   * would mean a second copy of "resolve the binder, check the access, read
+   * the tree, join or open a change" for a single extra read.
+   */
   plan: (context: {
     body: Record<string, unknown>;
     tree: WorkspaceTree;
-  }) => ShapeChangeResult,
+    /** The caller's own client, for a plan that has to read something. */
+    client: GiteaClient;
+  }) => ShapeChangeResult | Promise<ShapeChangeResult>,
 ): Promise<Response> {
   const auth = await requireSubscription(req, baseHeaders);
   if (auth instanceof Response) return auth;
@@ -7991,7 +8004,7 @@ async function handleBinderShapeChange(
       ...(target ? { ref: target.branch } : {}),
     });
 
-    const planned = plan({ body, tree });
+    const planned = await plan({ body, tree, client });
     if ("error" in planned) {
       return json(409, { error: planned.error }, baseHeaders);
     }
@@ -9442,6 +9455,11 @@ export function createApiServer() {
         const workspaceDocumentArchivesMatch = pathname.match(
           /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/document-archives$/,
         );
+        // Bringing one back. Its own act rather than an inverse of the one
+        // above: it writes a file, and what it writes comes out of a tag.
+        const workspaceDocumentRestoresMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/document-restores$/,
+        );
         const workspaceArchiveMatch = pathname.match(
           /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/archive$/,
         );
@@ -9933,6 +9951,42 @@ export function createApiServer() {
               }
 
               return planDocumentArchive({ document });
+            },
+          );
+        } else if (workspaceDocumentRestoresMatch && method === "POST") {
+          return await handleBinderShapeChange(
+            req,
+            baseHeaders,
+            workspaceDocumentRestoresMatch[1]!,
+            workspaceDocumentRestoresMatch[2]!,
+            async ({ body, tree, client }) => {
+              const uid = typeof body.uid === "string" ? body.uid : "";
+              if (uid === "") {
+                return { error: "Name the policy to restore." };
+              }
+
+              // Straight off the version tag the policy last published at. The
+              // bytes are still there because a tag is a ref and git never
+              // collects a commit reachable from one — which is the whole
+              // reason there is no archive branch to read from.
+              const archived = await readArchivedDocument({
+                client,
+                org: workspaceDocumentRestoresMatch[1]!,
+                workspace: workspaceDocumentRestoresMatch[2]!,
+                uid,
+              });
+              if (!archived) {
+                return {
+                  error:
+                    "That policy has no published version to restore from.",
+                };
+              }
+
+              return planDocumentRestore({
+                document: archived.document,
+                base64Content: archived.base64Content,
+                tree,
+              });
             },
           );
         } else if (workspaceArchiveMatch && method === "GET") {

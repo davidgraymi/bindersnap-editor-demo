@@ -8478,6 +8478,96 @@
         }
       }
     },
+    "/api/app/binders/{org}/{binder}/document-restores": {
+      "post": {
+        "operationId": "restoreBinderDocument",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "uid": {
+                    "type": "string"
+                  },
+                  "changeNumber": {
+                    "type": "number"
+                  },
+                  "draft": {
+                    "anyOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "uid"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The change request that would bring it back",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "branch": {
+                      "type": "string"
+                    },
+                    "changeNumber": {
+                      "type": "number",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "workspace",
+                    "branch",
+                    "changeNumber"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/app/binders/{org}/{binder}/archive": {
       "get": {
         "operationId": "getBinderArchive",

@@ -1,7 +1,7 @@
 # Handoff — editing a binder
 
-**Status:** drafts, the tree, edit mode, drag-to-move and archiving are built
-and in review. Restore (§4.2) is next and not started.
+**Status:** everything in §4.1 and §4.2 is built and in review — drafts, the
+tree, edit mode, drag-to-move, archiving and restore. §4.3 is what is left.
 
 This document exists so somebody else can pick the work up without re-deriving
 the decisions. It is not a spec: it says what is built, what was decided and
@@ -198,7 +198,32 @@ second merge that could half-apply.
   are still readable **after** the file has left `main`, and one asserting no
   second branch is made.
 
-**Build on `feat/archive-a-policy`.** It is the tip.
+**[#467 — restore](https://github.com/davidgraymi/bindersnap-editor-demo/pull/467)**
+(`feat/restore-from-the-archive` → `feat/archive-a-policy`)
+
+§3's other half, built as written: an ordinary change, not an undo.
+
+- `readArchivedDocument` in `workspaceDocuments.ts` — the tree at the last
+  version tag, then the blob at that ref. Two calls, no archive branch, and the
+  base64 is never decoded on the way through, so nothing can mangle an encoding
+  it does not touch.
+- `planDocumentRestore` writes the file back **at the filename it left with**,
+  which is what keeps the identity and therefore the history: it returns as
+  v(N+1), not as a new document at v1.
+- **Its old folder if it still exists; the top level if not**, and the act says
+  which. Note that archiving the only policy in a folder empties it, and an
+  empty folder with no `.gitkeep` stops existing — so "the folder is gone" is
+  the common case rather than the edge one.
+- `handleBinderShapeChange`'s `plan` may be async now, and takes the client.
+  Restore is the first act whose operations are not a pure function of the body
+  and the tree; the alternative was a second copy of "resolve the binder, check
+  the access, read the tree, join or open a change" for one extra read.
+- **It proposes.** A policy reappearing on the record without a decision would
+  be the one act in the product that skipped review. The button says
+  "Restore as version 2" so the effect on the history is not a surprise.
+- 6 more tests in `tests/binder-archive.pw.ts`, 6 on the planner.
+
+**Build on `feat/restore-from-the-archive`.** It is the tip.
 
 ---
 
@@ -349,31 +374,25 @@ And one that is deliberate rather than undecided: **a folder being renamed
 cannot be expanded**, because the twisty is replaced by the input. Probably
 right, never tried by anybody but us.
 
-### 4.2 Restore — the other half of archiving
+### 4.2 Archive and restore — built (#466, #467)
 
-Archiving is built (#466). Bringing something back is not, and §3 already says
-how: **an ordinary change.** Read the blob out of the document's last version
-tag, write it back at its old path, propose it. It keeps its identity, so it
-returns as v(N+1) rather than as a new document at v1 — which is honest,
-because it is the same policy coming back.
+Both in review. Two things the customer has not seen an answer to yet, asked in
+the pull requests:
 
-Everything it needs is in place:
+- **Where a restored policy lands when its folder is gone.** Built as: the
+  binder's top level, with the act saying so. It is more common than it sounds
+  — archiving the only policy in a folder empties it, and an empty folder with
+  no `.gitkeep` stops existing.
+- **Whether restoring proposes or publishes.** Built as: proposes, like
+  everything else, with the button saying "Restore as version 2" so the effect
+  on the history is not a surprise.
 
-- The archive list already answers with the `uid` and the `slugPath` the
-  document had when it left.
-- `downloadBinderDocument` already reads a document's bytes at any ref, and a
-  version tag is a ref.
-- `buildDocumentArchivedTag` is already numbered, so a policy restored and
-  archived again gets `archived-2` without anything having to change.
+Neither is settled until they say so. Both are one line to change.
 
-Two things to decide when you get there:
-
-- **Where it lands if its folder is gone.** The binder's top level is the safe
-  answer; asking is the kind one. Lean top level with a line saying so.
-- **Whether the restore re-publishes or only proposes.** Everything else in the
-  product proposes, and there is no reason for this to be the exception — but
-  it does mean a restored policy sits in review, which is worth saying on the
-  button.
+Still open, and nobody has asked for it: **archiving a folder.** It would mean
+archiving everything in it, which is a much larger act than the button would
+look like. A folder is emptied by moving what is in it, and then it is just a
+folder.
 
 ### 4.3 The rest of the customer's list
 
@@ -521,4 +540,5 @@ POST /api/app/binders/{org}/{binder}/folders              make a folder
 POST /api/app/binders/{org}/{binder}/folder-renames       rename or move a folder
 POST /api/app/binders/{org}/{binder}/document-renames     rename or refile a policy
 POST /api/app/binders/{org}/{binder}/document-archives    take a policy off the record
+POST /api/app/binders/{org}/{binder}/document-restores    bring one back, as its next version
 ```
