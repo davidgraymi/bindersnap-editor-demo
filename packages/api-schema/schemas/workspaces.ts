@@ -250,6 +250,16 @@ export const WorkspaceDocumentListPayloadSchema = z.object({
   organization: z.string().optional(),
   workspace: z.string(),
   documents: z.array(WorkspaceDocumentListEntrySchema),
+  /**
+   * Every folder in the binder, nested ones included, whether or not anything
+   * is filed in them.
+   *
+   * **Derived from the documents would be wrong**, which is the bug this
+   * closes: a folder somebody made and had published holds a `.gitkeep` and no
+   * document, so reading the folders off the document rows made it invisible.
+   * "Folders are real, empty or not" is only true if the list says so.
+   */
+  folders: z.array(z.string()),
 });
 export type WorkspaceDocumentListPayload = z.infer<
   typeof WorkspaceDocumentListPayloadSchema

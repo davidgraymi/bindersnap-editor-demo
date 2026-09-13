@@ -7050,11 +7050,18 @@
                           "latestVersion"
                         ]
                       }
+                    },
+                    "folders": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
                     "workspace",
-                    "documents"
+                    "documents",
+                    "folders"
                   ]
                 }
               }
@@ -7745,7 +7752,8 @@
                       "type": "string"
                     },
                     "changeNumber": {
-                      "type": "number"
+                      "type": "number",
+                      "nullable": true
                     }
                   },
                   "required": [
@@ -7828,7 +7836,8 @@
                       "type": "string"
                     },
                     "changeNumber": {
-                      "type": "number"
+                      "type": "number",
+                      "nullable": true
                     }
                   },
                   "required": [
@@ -7913,7 +7922,8 @@
                       "type": "string"
                     },
                     "changeNumber": {
-                      "type": "number"
+                      "type": "number",
+                      "nullable": true
                     }
                   },
                   "required": [

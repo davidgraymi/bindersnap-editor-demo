@@ -9,5 +9,6 @@ export type RenameBinderDocument201 = {
   organization: string;
   workspace: string;
   branch: string;
-  changeNumber: number;
+  /** @nullable */
+  changeNumber: number | null;
 };
