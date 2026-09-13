@@ -10,6 +10,7 @@ function entry(
   return {
     path: `${overrides.slugPath}.md`,
     name: overrides.slugPath.split("/").pop() ?? "",
+    uid: "01J8XZ4K7MQ0R3V6Y9B2C5D8EF",
     size: 0,
     sha: "",
     state: "published",

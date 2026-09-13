@@ -1,7 +1,7 @@
 # Handoff — editing a binder
 
-**Status:** drafts, the tree and edit mode are built and in review. Drag to
-move is the next thing, and is not started.
+**Status:** drafts, the tree, edit mode and drag-to-move are built and in
+review. Archive (§4.2) is next and not started.
 
 This document exists so somebody else can pick the work up without re-deriving
 the decisions. It is not a spec: it says what is built, what was decided and
@@ -138,7 +138,35 @@ nursing/hand-hygiene.01M2DJ….md to nursing/hand-hygiene-and-ppe.01M2DJ….md`
 - `tests/binder-edit-mode.pw.ts` — 8 tests. Plus `apps/app/proposeChange.test.ts`
   and four in `apps/app/binderShell.test.ts`.
 
-**Build on `feat/edit-mode-on-a-draft`.** It is the tip.
+**[#465 — drag to move](https://github.com/davidgraymi/bindersnap-editor-demo/pull/465)**
+(`feat/drag-to-move` → `feat/edit-mode-on-a-draft`)
+
+The customer's last unbuilt sentence: _"Moving a document should be a simple
+drag and drop."_
+
+- `apps/app/binderMove.ts` — `planMove`, `acceptsDrop`, `isManaged`. Pure, 13
+  unit tests. The rules that decide whether a drop does anything, whether the
+  row under the pointer should light up, and whether a row may be picked up at
+  all. Not a substitute for the server's refusals: a rule is here when it is
+  about the drag, and in `binderShape.ts` when it is about the binder.
+- `BinderTreeView` grew a third slot, `rowProps`, for the drag attributes and
+  the drop-target class. The tree still does not know what a drag is.
+- **A root drop zone**, on screen only while something is in the air. Without
+  it the top level is reachable only by dropping on empty space, which is not
+  a target anybody can see — and a full binder has none.
+- **A Move button beside the pencil**, opening a folder picker. Drag and drop
+  needs a pointer, both ends of the move on screen at once, and is unreachable
+  from a keyboard; a binder with forty folders and a scrollbar is the ordinary
+  case, so this is a second route rather than a fallback.
+- **`uid` is on `WorkspaceDocumentListEntry` now.** It was not, so the tree
+  could not tell a policy from a `README.md` Gitea wrote with the repository —
+  and drew a pencil on both. The second one cannot be renamed (no identity
+  segment, nothing for the version tags to be named after) and the server says
+  so after the click. It is not offered now.
+- 6 more tests in `tests/binder-edit-mode.pw.ts`, including a folder dragged
+  onto another taking its contents with it.
+
+**Build on `feat/drag-to-move`.** It is the tip.
 
 ---
 
@@ -266,34 +294,28 @@ document mints a fresh UID. Nothing about archiving disturbs that.
 In this order. Each is its own PR; the customer reviews iteratively and has
 asked not to be handed one large diff.
 
-### 4.1 Drag to move — the rest of edit mode
+### 4.1 Edit mode — built (#464, #465), with three things left undecided
 
-Edit mode is built (#464). What it does not do yet is the one act the customer
-named specifically: _"Moving a document should be a simple drag and drop."_
-
-- Drop a document on a folder → `document-renames` with a new `folder`.
-- Drop a folder on a folder → `folder-renames`.
-
-The planners in `services/api/binderShape.ts` already refuse the cases that
-matter, including the address collision that the path check misses (see §5), so
-this is a UI job: the rows and the plumbing behind them are done. `BinderTree.tsx`
-is rendering-only and has the two slots edit mode uses — add a third for drop
-targets rather than teaching it what a drag means.
-
-Two things still not decided:
+Both PRs are in review. What is still open, in the order it is likely to bite:
 
 - **What edit mode does with a document somebody _else_ has in an open change.**
-  The data is there — `openChangeCount` is on every row — and today edit mode
-  ignores it. A rename that lands on top of somebody's open change is not
-  refused, it just merges badly later.
-- **Renaming a folder you have collapsed.** The twisty is replaced by the input
-  while a name is being typed, so a folder cannot be opened mid-rename. That is
-  deliberate and probably right; it has not been tried by anybody but us.
+  The count is on every row — `openChangeCount` — and edit mode ignores it. A
+  rename that lands on top of somebody's open change is not refused; it merges
+  badly later. The cheapest honest answer is probably a marked row and a
+  sentence, not a refusal.
+- **A binder can list a file this product did not write.** A `README.md` Gitea
+  made with the repository has no identity segment, so it cannot be renamed,
+  moved or versioned. `bootstrapEmptyMainBranch` deletes it on a new binder, so
+  this only reaches binders made before that or by another route — but it does
+  reach them, and the answer "draw it, offer nothing on it" (which is what
+  #465 does) may be worse than not listing it as a policy at all.
+- **The draft bar only recounts after your own acts.** Somebody starting a
+  draft while you are in one shows up on your next act, not immediately.
+  Polling was not worth it for a bar that is advisory; say so if it is not.
 
-A third, smaller: **the draft bar does not say who else is editing unless the
-draft read returns them**, and it is only re-read after your own acts. Somebody
-starting a draft while you are in one appears on your next act, not
-immediately. Polling was not worth it for a bar that is advisory.
+And one that is deliberate rather than undecided: **a folder being renamed
+cannot be expanded**, because the twisty is replaced by the input. Probably
+right, never tried by anybody but us.
 
 ### 4.2 Archive
 

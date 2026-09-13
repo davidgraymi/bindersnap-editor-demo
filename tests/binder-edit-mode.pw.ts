@@ -223,7 +223,7 @@ async function listDocuments(
   draft?: string,
 ): Promise<{
   status: number;
-  documents: Array<{ slugPath: string; name: string }>;
+  documents: Array<{ slugPath: string; name: string; uid: string | null }>;
   folders: string[];
   draft: string | null;
   error?: string;
@@ -239,6 +239,7 @@ async function listDocuments(
     documents: (body.documents ?? []) as Array<{
       slugPath: string;
       name: string;
+      uid: string | null;
     }>,
     folders: (body.folders ?? []) as string[],
     draft: (body.draft ?? null) as string | null,
@@ -495,4 +496,224 @@ test("Discard throws the draft away and leaves the binder as it was", async ({
   );
   const body = (await changes.json()) as { changes: unknown[] };
   expect(body.changes).toHaveLength(0);
+});
+
+// ── moving things ──────────────────────────────────────────────────
+
+/** Make a folder in the binder's draft. */
+async function makeFolder(
+  session: string,
+  org: string,
+  binder: string,
+  folder: string,
+  draft: string,
+): Promise<void> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/folders`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({ folder, draft }),
+    },
+  );
+  expect(
+    response.status,
+    `make ${folder} failed: ${await response.text()}`,
+  ).toBe(201);
+}
+
+/** The act summaries on the draft, newest first. */
+async function draftActs(
+  session: string,
+  org: string,
+  binder: string,
+): Promise<string[]> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/draft`,
+    { headers: authHeaders(session) },
+  );
+  const body = (await response.json()) as {
+    draft: { acts: Array<{ summary: string }> } | null;
+  };
+  return (body.draft?.acts ?? []).map((act) => act.summary);
+}
+
+test("a policy dragged onto a folder is filed there", async ({ page }) => {
+  // The customer's words: "Moving a document should be a simple drag and
+  // drop." This is that sentence, against a real binder.
+  const { session, org, binder } = await provisionBinder();
+  await signInBrowser(page, session);
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+
+  await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page.locator(".draft-bar")).toBeVisible({ timeout: 30_000 });
+
+  const handbook = page
+    .locator(".binder-tree-row")
+    .filter({ hasText: "Staff Handbook" });
+  const nursing = page
+    .locator(".binder-tree-row--folder")
+    .filter({ hasText: "Nursing" });
+
+  await handbook.dragTo(nursing);
+
+  await expect(page.locator(".draft-bar")).toContainText("1 change", {
+    timeout: 30_000,
+  });
+  expect(await draftActs(session, org, binder)).toEqual([
+    "Move Staff Handbook to Nursing",
+  ]);
+
+  // And it is where it says it is, on the draft and not on the record.
+  const draft = await openDraft(session, org, binder);
+  const onDraft = await listDocuments(session, org, binder, draft);
+  expect(onDraft.documents.map((entry) => entry.slugPath)).toContain(
+    "nursing/staff-handbook",
+  );
+  const onRecord = await listDocuments(session, org, binder);
+  expect(onRecord.documents.map((entry) => entry.slugPath)).toContain(
+    "staff-handbook",
+  );
+});
+
+test("a folder dragged onto another takes everything in it", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provisionBinder();
+  const draft = await openDraft(session, org, binder);
+  await makeFolder(session, org, binder, "Clinical", draft);
+
+  await signInBrowser(page, session);
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}?edit=1`);
+  await expect(page.locator(".draft-bar")).toBeVisible({ timeout: 30_000 });
+
+  await page
+    .locator(".binder-tree-row--folder")
+    .filter({ hasText: "Nursing" })
+    .dragTo(
+      page.locator(".binder-tree-row--folder").filter({ hasText: "Clinical" }),
+    );
+
+  await expect(page.locator(".draft-bar")).toContainText("2 changes", {
+    timeout: 30_000,
+  });
+  expect(await draftActs(session, org, binder)).toEqual([
+    "Move the folder Nursing to Clinical / Nursing",
+    "Add the folder Clinical",
+  ]);
+
+  // The policy inside it moved with it, which is the half that would be a
+  // disaster to get wrong.
+  const onDraft = await listDocuments(session, org, binder, draft);
+  expect(onDraft.documents.map((entry) => entry.slugPath)).toContain(
+    "clinical/nursing/hand-hygiene",
+  );
+});
+
+test("a folder cannot be dropped inside itself", async ({ page }) => {
+  // Every file under it would land at a path that is about to stop existing.
+  // Refused in the browser as well as on the server, so the row never lights
+  // up — a drop that is going to fail should not look like one that will work.
+  const { session, org, binder } = await provisionBinder();
+  const draft = await openDraft(session, org, binder);
+  await makeFolder(session, org, binder, "Nursing/Infection Control", draft);
+
+  await signInBrowser(page, session);
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}?edit=1`);
+  await expect(page.locator(".draft-bar")).toBeVisible({ timeout: 30_000 });
+
+  await page
+    .locator(".binder-tree-row--folder")
+    .filter({ hasText: "Nursing" })
+    .first()
+    .dragTo(
+      page
+        .locator(".binder-tree-row--folder")
+        .filter({ hasText: "Infection Control" }),
+    );
+
+  // Still one act — the folder that was made — and no second one.
+  expect(await draftActs(session, org, binder)).toEqual([
+    "Add the folder Nursing / Infection Control",
+  ]);
+});
+
+test("the Move button files something without a pointer", async ({ page }) => {
+  // Drag and drop needs both ends of the move on screen and is unreachable
+  // from a keyboard. A binder with forty folders and a scrollbar is the
+  // ordinary case, so there is a second way and it is not a fallback.
+  const { session, org, binder } = await provisionBinder();
+  await signInBrowser(page, session);
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+
+  await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page.locator(".draft-bar")).toBeVisible({ timeout: 30_000 });
+
+  await page.getByRole("button", { name: "Move Staff Handbook" }).click();
+  await page
+    .getByRole("combobox", { name: "Where it goes" })
+    .selectOption("nursing");
+  await page.getByRole("button", { name: "Move", exact: true }).click();
+
+  await expect(page.locator(".draft-bar")).toContainText("1 change", {
+    timeout: 30_000,
+  });
+  expect(await draftActs(session, org, binder)).toEqual([
+    "Move Staff Handbook to Nursing",
+  ]);
+});
+
+test("a policy dragged out of its folder lands at the top level", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provisionBinder();
+  await signInBrowser(page, session);
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+
+  await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page.locator(".draft-bar")).toBeVisible({ timeout: 30_000 });
+
+  // The root zone only exists while something is in the air, so the drag has
+  // to be driven by hand rather than by `dragTo`.
+  const hygiene = page
+    .locator(".binder-tree-row")
+    .filter({ hasText: "Hand Hygiene" });
+  await hygiene.hover();
+  await page.mouse.down();
+  await page.mouse.move(400, 600, { steps: 10 });
+
+  const zone = page.locator(".binder-tree-root-drop");
+  await expect(zone).toBeVisible();
+  await zone.hover();
+  await page.mouse.up();
+
+  await expect(page.locator(".draft-bar")).toContainText("1 change", {
+    timeout: 30_000,
+  });
+  expect(await draftActs(session, org, binder)).toEqual([
+    "Move Hand Hygiene to the binder’s top level",
+  ]);
+});
+
+test("the binder's list carries each policy's identity", async () => {
+  // Edit mode needs it to know which rows it may offer a pencil on: a file
+  // this product did not write has no identity segment, cannot be renamed, and
+  // must not be drawn as though it can. The list payload did not carry it
+  // until drag-to-move needed it — the rule is unit-tested in
+  // `apps/app/binderMove.test.ts`; this is the half that has to survive a real
+  // tree read.
+  const { session, org, binder } = await provisionBinder();
+
+  const listed = await listDocuments(session, org, binder);
+  const hygiene = listed.documents.find(
+    (entry) => entry.slugPath === "nursing/hand-hygiene",
+  ) as { uid?: string | null } | undefined;
+
+  expect(hygiene).toBeTruthy();
+  // A ULID — 26 characters of Crockford base32, which is what the version tags
+  // are named after.
+  expect(hygiene!.uid).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/);
 });
