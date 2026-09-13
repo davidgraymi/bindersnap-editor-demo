@@ -958,8 +958,6 @@ input {
   flex: 0 0 auto;
   width: auto;
   min-width: 7.5rem;
-  padding: var(--brand-space-2) var(--brand-space-3);
-  font-size: var(--brand-text-ui-sm);
 }
 
 /* One tab's worth of a binder. The shell above it owns the page width and
@@ -1221,60 +1219,16 @@ input {
   outline-offset: 2px;
 }
 
-/* The one coral element on the page: the next action. */
-.doc-header-submit {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--brand-space-1-5);
-  flex-shrink: 0;
-  background: var(--bs-cta-fill);
-  color: var(--brand-on-brand);
-  border: none;
-  border-radius: var(--brand-radius-md);
-  padding: 9px var(--brand-space-4);
-  font-family: var(--brand-font-sans);
-  font-size: var(--brand-text-ui-md);
-  font-weight: var(--brand-weight-semibold);
-  cursor: pointer;
-  transition: background var(--brand-transition-base);
-}
+/* **The header's button is `.bs-btn bs-btn-primary` now**, and there is no
+   `.doc-header-submit` any more. It was a second implementation of a button —
+   13px type and 9px padding against the system's 14px and 13px, so "New
+   folder" and "Edit" sat side by side in one header at 42px and 40.1px. Two
+   pixels is not much to describe and is impossible to unsee. The customer's
+   words: "not every page has to be the same but the padding and style should
+   be the same."
 
-.doc-header-submit:hover {
-  background: var(--bs-cta-fill-hover);
-}
-
-.doc-header-submit:focus-visible {
-  outline: 2px solid var(--brand-coral);
-  outline-offset: 2px;
-}
-
-/* Off, and visibly so. This button is filled coral, which reads as "press
-   this" whatever it is doing — so a Propose with nothing to propose, or an
-   "Open the change request" with no title written yet, looked pressable and
-   did nothing when pressed. `.bs-btn` has carried this rule all along; the
-   header's own button was the one that never got it. */
-.doc-header-submit:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.doc-header-submit:disabled:hover {
-  background: var(--bs-cta-fill);
-}
-
-/* The same button while it is cancelling something. Coral is reserved for the
-   one action a page wants you to take, and "Cancel" is not it. */
-.doc-header-submit--quiet {
-  background: var(--bs-surface-1);
-  color: var(--bs-text-primary);
-  border: 1.5px solid var(--bs-rule);
-  padding: 7.5px var(--brand-space-4);
-}
-
-.doc-header-submit--quiet:hover {
-  background: var(--bs-surface-1);
-  border-color: var(--brand-coral);
-}
+   Its one genuinely useful addition — a disabled state, which `.bs-btn` has
+   always had and this never did — came along for free. */
 
 /* Tabs — four of them, sitting on the header's own rule. */
 .doc-tabs {
@@ -3524,9 +3478,10 @@ input {
     flex-wrap: nowrap;
   }
 
-  .doc-header-submit {
+  /* On a phone the header's actions are stacked, so the primary one fills the
+     row rather than floating at one end of it. */
+  .doc-header-actions .bs-btn {
     width: 100%;
-    justify-content: center;
   }
 
   /* The rail costs 56px of a 375px screen. Narrow the gutter, shrink the
@@ -4522,23 +4477,6 @@ input {
   gap: var(--brand-space-2);
 }
 
-.create-document-input {
-  padding: var(--brand-space-3);
-  background: var(--bs-surface-1);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-md);
-  color: var(--bs-text-primary);
-  font-family: var(--brand-font-sans);
-  font-size: var(--brand-text-body);
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.create-document-input:focus {
-  outline: 2px solid var(--brand-coral);
-  outline-offset: 1px;
-}
-
 .create-document-file-summary {
   margin: 0;
   color: var(--bs-text-secondary);
@@ -4560,20 +4498,42 @@ input {
   gap: var(--brand-space-2);
 }
 
+/* The file picker is a field like any other, and the last one that was not.
+   It keeps its dashed edge — a thing you drop onto reads differently from a
+   thing you type into, and that is a distinction worth drawing — but the box
+   is `.bs-input`'s, so it lines up with the name and the folder under it
+   rather than standing 7px taller for no reason anybody could name.
+
+   The browser's own "Choose File" button is left alone. Restyling it means
+   `::file-selector-button` and a different answer in every engine, and it is
+   the one control in the product a person already recognises from every other
+   site they have ever uploaded anything to. */
 .upload-file-input {
-  padding: var(--brand-space-3);
-  border: 1px dashed var(--bs-rule);
-  border-radius: var(--brand-radius-md);
+  box-sizing: border-box;
+  width: 100%;
+  padding: 13px 18px;
+  border: 1.5px dashed var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
   background: var(--bs-surface-1);
   cursor: pointer;
-  font-size: var(--brand-text-sm);
+  font-family: var(--brand-font-sans);
+  font-size: 15px;
+  line-height: 1.4;
   color: var(--bs-text-secondary);
-  width: 100%;
+  transition:
+    border-color var(--brand-transition-base),
+    background var(--brand-transition-base);
 }
 
 .upload-file-input:hover {
   border-color: var(--brand-coral);
   background: var(--bs-coral-glow);
+}
+
+.upload-file-input:focus-visible {
+  outline: none;
+  border-color: var(--brand-coral);
+  box-shadow: 0 0 0 4px var(--bs-coral-dim);
 }
 
 .upload-validation-error {
@@ -4926,7 +4886,11 @@ input {
   gap: var(--brand-space-2);
   width: 260px;
   max-width: 100%;
-  height: 36px;
+  /* 32px, the same as the icon buttons it sits beside — `--brand-space-8`,
+     which is what they are sized from. The search box was 36px and they were
+     32px, which is the only row left in the product where two controls in one
+     line disagreed about how tall a control is. */
+  height: var(--brand-space-8);
   padding: 0 var(--brand-space-2-5) 0 12px;
   background: var(--bs-surface-1);
   border: 1.5px solid var(--bs-rule);

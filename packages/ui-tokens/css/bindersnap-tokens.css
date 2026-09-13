@@ -518,7 +518,12 @@ body::after {
   letter-spacing: 0.01em;
   padding: 13px 24px;
   border-radius: var(--brand-radius-md);
-  border: none;
+  /* **Transparent, not absent.** A border takes up room whether or not it is
+     visible, so a filled button with `border: none` beside an outlined one
+     with `border: 1.5px` is two pixels shorter — which is what "New folder"
+     and "Edit" looked like sitting next to each other in the binder's header.
+     Every variant now has the same box and differs only in what it paints. */
+  border: 1.5px solid transparent;
   cursor: pointer;
   text-decoration: none;
   transition:
@@ -561,9 +566,20 @@ body::after {
   flex-shrink: 0;
 }
 
-/* Sizes — default is unmodified */
+/* ── Sizes ──
+   Two, and the rule is that **a row uses one of them**. A control's size is
+   not a matter of how important it is — a narrow select and a quiet button say
+   that perfectly well on their own — it is a matter of what it is sitting next
+   to. Three heights in one line is what the customer was looking at when they
+   said "the padding and style should be the same".
+
+   Pinned by `min-height` rather than by padding, because a button, an input
+   and a select are given three different line boxes by the browser and no
+   amount of matching padding makes them agree. Height is the thing that has to
+   match, so height is the thing that is stated. */
 .bs-btn--sm {
-  padding: var(--brand-space-2) var(--brand-space-4);
+  min-height: 32px;
+  padding: var(--brand-space-1-5) var(--brand-space-4);
   font-size: var(--brand-text-ui-sm);
 }
 .bs-btn--lg {
@@ -649,23 +665,79 @@ body::after {
   transform: scaleX(1);
 }
 
-/* ── Form input ── */
+/* ── Form controls ──
+   One class for a text box, a picker and a text area, because they are one
+   kind of thing: a field somebody fills in. There used to be two — this and a
+   `.create-document-input` that had grown up separately in the app — and the
+   customer could see it: "the padding and style should be the same."
+
+   **A native `<select>` will not agree with an `<input>` on its own height.**
+   The browser gives it its own line box and its own arrow, so the same
+   padding and the same font produce two different boxes stacked in one form.
+   `appearance: none` takes the browser's drawing away, `line-height` pins what
+   is left, and the arrow is drawn back on as a background so it is ours to
+   position. That is the whole of why this rule is longer than it looks like it
+   should be. */
 .bs-input {
   width: 100%;
+  box-sizing: border-box;
   font-family: var(--brand-font-sans);
   font-size: 15px;
   font-weight: var(--brand-weight-regular);
+  /* Pinned rather than inherited: an input, a select and a textarea are given
+     three different defaults, and the difference is exactly the mismatch this
+     rule exists to remove. */
+  line-height: 1.4;
   color: var(--bs-text-primary);
   background: var(--bs-surface-1); /* ← was hardcoded #ffffff */
   border: 1.5px solid var(--bs-rule);
   border-radius: var(--brand-radius-lg);
-  padding: 15px 18px;
+  padding: 13px 18px;
   outline: none;
+  appearance: none;
   transition:
     border-color var(--brand-transition-base),
     box-shadow var(--brand-transition-base),
     background var(--brand-transition-base),
     color var(--brand-transition-base);
+}
+
+/* The arrow, drawn rather than delegated. A chevron the same weight as the
+   ones in the tree, in the same muted ink, inlined so it costs no request and
+   cannot go missing. Right padding makes room for it so a long option does not
+   run underneath. */
+select.bs-input {
+  padding-right: 44px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2378716c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  cursor: pointer;
+}
+
+/* A text area is the same field, taller. Resizing stays, because the one thing
+   a person writing a change request wants is more room. */
+textarea.bs-input {
+  resize: vertical;
+  min-height: 6rem;
+}
+
+/* The dense field, for a control sitting inside a row of other controls rather
+   than in a form — a role on a person's line, say. A named size like
+   `.bs-btn--sm` and exactly as tall, so a select and a button in one line are
+   one line. The alternative is what was there before: three paddings invented
+   in three places, each of which then has to remember to leave room for the
+   arrow. */
+.bs-input--sm {
+  min-height: 32px;
+  font-size: var(--brand-text-ui-sm);
+  border-radius: var(--brand-radius-md);
+  padding: var(--brand-space-1) 12px;
+}
+
+select.bs-input--sm {
+  padding-right: 28px;
+  background-position: right 9px center;
+  background-size: 12px 12px;
 }
 .bs-input::placeholder {
   color: var(--bs-text-faint);

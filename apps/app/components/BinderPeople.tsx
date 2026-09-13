@@ -342,7 +342,7 @@ function PersonRow({
 
       {canManage && !fixed ? (
         <select
-          className="bs-input binder-role-select"
+          className="bs-input bs-input--sm binder-role-select"
           value={level}
           disabled={busy}
           aria-label={`What ${person.fullName || person.login} can do here`}
@@ -405,7 +405,7 @@ function AddPersonForm({
   return (
     <div className="org-group-add">
       <select
-        className="bs-input org-group-select"
+        className="bs-input bs-input--sm org-group-select"
         value={username}
         disabled={busy || candidates.length === 0}
         onChange={(event) => setUsername(event.target.value)}
@@ -424,7 +424,7 @@ function AddPersonForm({
       </select>
 
       <select
-        className="bs-input binder-role-select"
+        className="bs-input bs-input--sm binder-role-select"
         value={level}
         disabled={busy}
         onChange={(event) => setLevel(event.target.value)}
@@ -557,7 +557,7 @@ function BinderGroups({
       {canManage ? (
         <div className="org-group-add">
           <select
-            className="bs-input org-group-select"
+            className="bs-input bs-input--sm org-group-select"
             value={adding}
             disabled={busy || candidates.length === 0}
             onChange={(event) => setAdding(event.target.value)}

@@ -232,7 +232,7 @@ function OrgPersonRow({
 
         {canManage ? (
           <select
-            className="bs-input binder-role-select"
+            className="bs-input bs-input--sm binder-role-select"
             value={person.isOwner ? "owner" : "member"}
             disabled={busy || lastOwner}
             aria-label={`What ${name} can do in ${org}`}

@@ -183,7 +183,7 @@ export function AddPolicyModal({
             <span className="bs-label">What it is called</span>
             <input
               id="add-policy-name"
-              className="create-document-input"
+              className="bs-input"
               type="text"
               value={name}
               onChange={(event) => {
@@ -199,7 +199,7 @@ export function AddPolicyModal({
             <span className="bs-label">Folder — optional</span>
             <input
               id="add-policy-folder"
-              className="create-document-input"
+              className="bs-input"
               type="text"
               value={folder}
               onChange={(event) => {
