@@ -6589,11 +6589,26 @@ async function handleBinderGroup(
   }
 }
 
+/**
+ * The binder's contents — on `main`, or on the draft you are editing it in.
+ *
+ * **Edit mode has to see what it has done.** Every act in a draft commits to
+ * that branch and nothing else, so a list read from `main` would show a folder
+ * that is not made yet and a policy under the name it no longer has. A person
+ * renaming three things in a row would watch all three snap back.
+ *
+ * Your own draft only, which is the rule the whole draft model rests on:
+ * knowing somebody is editing is what stops two people making the same folder
+ * twice, and reading what they have not proposed is not what a draft offers.
+ * {@link resolveOwnDraftBranch} is where that is enforced — a `?draft=` naming
+ * somebody else's branch is refused rather than served.
+ */
 async function handleListWorkspaceDocuments(
   req: Request,
   baseHeaders: Headers,
   orgName: string,
   workspaceName: string,
+  draftRaw: string | null,
 ): Promise<Response> {
   const auth = await requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
@@ -6608,15 +6623,32 @@ async function handleListWorkspaceDocuments(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
+    const draft = await resolveOwnDraftBranch({
+      client: auth.client,
+      org: orgName,
+      workspace: workspaceName,
+      username: auth.session.username,
+      draftRaw,
+    });
+    // 409 rather than 404: the binder is there and readable, and what failed
+    // is the claim about the draft. A discarded draft reaching here is the
+    // ordinary case — a tab left open, or a stale link — so the page can drop
+    // out of edit mode on this and ask again for `main`.
+    if (draft && "error" in draft) {
+      return json(409, { error: draft.error }, baseHeaders);
+    }
+
     return json(
       200,
       {
         organization: orgName,
         workspace: workspaceName,
+        draft: draft ? draft.branch : null,
         ...(await readBinderDocuments({
           client: auth.client,
           org: orgName,
           workspace: workspaceName,
+          ...(draft ? { ref: draft.branch } : {}),
         })),
       },
       baseHeaders,
@@ -6657,8 +6689,15 @@ async function readBinderDocuments(params: {
   client: GiteaClient;
   org: string;
   workspace: string;
+  /**
+   * Read the tree here instead of on `main` — a draft, while it is being
+   * edited. The open changes and the tags are read the same either way: a
+   * version tag belongs to a published version and an open change is open
+   * whichever branch you are looking from, so neither moves with the ref.
+   */
+  ref?: string;
 }): Promise<{ documents: WorkspaceDocumentListEntry[]; folders: string[] }> {
-  const { client, org, workspace } = params;
+  const { client, org, workspace, ref } = params;
 
   // **The whole tree, not only its documents.** A folder with nothing filed in
   // it yet is a `.gitkeep` and no document, so reading documents alone made an
@@ -6666,7 +6705,7 @@ async function readBinderDocuments(params: {
   // and the binder showed no sign of it. The tree read is the same call
   // either way; it was only the folders being thrown away.
   const [tree, openChanges, tags] = await Promise.all([
-    readWorkspaceTree({ client, org, workspace }),
+    readWorkspaceTree({ client, org, workspace, ...(ref ? { ref } : {}) }),
     listPullRequests({ client, owner: org, repo: workspace, state: "open" }),
     listAllTags({ client, owner: org, repo: workspace }),
   ]);
@@ -7113,21 +7152,62 @@ async function resolveWorkTarget(params: {
     };
   }
 
+  if (draftRaw === true || draftRaw === "true") {
+    const draft = await openDraft({ client, org, workspace, username });
+    return { kind: "draft", branch: draft.branch };
+  }
+
+  const named = await resolveOwnDraftBranch({
+    client,
+    org,
+    workspace,
+    username,
+    draftRaw,
+  });
+  if (named === null) return null;
+  if ("error" in named) return named;
+  return { kind: "draft", branch: named.branch };
+}
+
+/**
+ * The draft branch a request named, checked for still being yours.
+ *
+ * **Checked rather than trusted, and that is the whole of this function.** A
+ * branch name is a string somebody can type. Committing onto another person's
+ * unproposed work — or reading it — is not a thing one colleague should be
+ * able to do to another by guessing a name, and "other people's drafts are
+ * visible; their contents are not" is the rule the binder is built on.
+ *
+ * Three conditions, in the order they get cheaper to be wrong about: it has to
+ * be shaped like a draft branch, it has to still be a draft (a proposed one is
+ * a change request and has reviewers), and it has to be yours.
+ *
+ * Deliberately does **not** understand `true`. Opening a draft is a write, and
+ * the read that shows a binder at its draft must not create one — a person who
+ * follows a stale `?edit=1` link should be told they are not editing, not
+ * silently put back into an edit they had discarded.
+ */
+async function resolveOwnDraftBranch(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  username: string;
+  draftRaw: unknown;
+}): Promise<{ branch: string } | { error: string } | null> {
+  const { client, org, workspace, username, draftRaw } = params;
+
   // Absent in every shape it can be absent in. A multipart form has no nulls —
   // a field nobody filled in reads back as the empty string — so the JSON
   // callers and the upload callers arrive here saying "no draft" differently
   // and both have to mean it. Getting this wrong refused every upload that did
   // not name a draft, which is most of them.
-  const absent =
+  if (
     draftRaw === undefined ||
     draftRaw === null ||
     draftRaw === false ||
-    (typeof draftRaw === "string" && draftRaw.trim() === "");
-  if (absent) return null;
-
-  if (draftRaw === true || draftRaw === "true") {
-    const draft = await openDraft({ client, org, workspace, username });
-    return { kind: "draft", branch: draft.branch };
+    (typeof draftRaw === "string" && draftRaw.trim() === "")
+  ) {
+    return null;
   }
 
   if (typeof draftRaw !== "string") {
@@ -7152,7 +7232,7 @@ async function resolveWorkTarget(params: {
     };
   }
 
-  return { kind: "draft", branch };
+  return { branch };
 }
 
 /**
@@ -8910,7 +8990,8 @@ export function createApiServer() {
     idleTimeout: 30,
     async fetch(req) {
       const startMs = Date.now();
-      const { pathname } = new URL(req.url);
+      const url = new URL(req.url);
+      const { pathname } = url;
       const method = req.method;
       const origin = requestOrigin(req);
       const clientIp = requestClientIp(req);
@@ -9319,6 +9400,7 @@ export function createApiServer() {
             baseHeaders,
             workspaceDocumentsMatch[1]!,
             workspaceDocumentsMatch[2]!,
+            url.searchParams.get("draft"),
           );
         } else if (workspaceChangeReviewMatch && method === "POST") {
           response = await handleWorkspaceChangeReview(

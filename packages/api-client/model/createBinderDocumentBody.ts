@@ -11,4 +11,5 @@ export type CreateBinderDocumentBody = {
   name: string;
   folder?: string;
   changeNumber?: string;
+  draft?: string;
 };

@@ -11,4 +11,6 @@ export type ListBinderDocuments200 = {
   workspace: string;
   documents: ListBinderDocuments200DocumentsItem[];
   folders: string[];
+  /** @nullable */
+  draft?: string | null;
 };

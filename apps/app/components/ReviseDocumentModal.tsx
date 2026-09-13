@@ -83,7 +83,7 @@ export function ReviseDocumentModal({
         binder,
         file,
         slugPath,
-        changeNumber ?? undefined,
+        changeNumber ? { changeNumber } : undefined,
       );
       onProposed(proposed.pullRequestNumber ?? 0);
     } catch (err) {

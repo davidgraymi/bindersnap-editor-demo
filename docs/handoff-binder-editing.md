@@ -1,7 +1,7 @@
 # Handoff — editing a binder
 
-**Status:** drafts and the tree are built and in review. Edit mode is next and
-not started.
+**Status:** drafts, the tree and edit mode are built and in review. Drag to
+move is the next thing, and is not started.
 
 This document exists so somebody else can pick the work up without re-deriving
 the decisions. It is not a spec: it says what is built, what was decided and
@@ -97,7 +97,48 @@ it.
   folder holding only a `.gitkeep` has none.
 - `tests/binder-tree.pw.ts` — 5 tests.
 
-**Build on `feat/binder-is-a-tree`.** It is the tip.
+**[#463 — edit mode](https://github.com/davidgraymi/bindersnap-editor-demo/pull/463)**
+(`feat/edit-mode-on-a-draft` → `docs/handoff-binder-editing`)
+
+The customer's sentence, built: _"an edit button that puts the user in edit
+mode and then allows all these edits to happen on a branch. That way we can
+save everything continuously and when they are ready open a CR."_
+
+- **The app client knows about drafts.** `fetchBinderDraft`, `openBinderDraft`,
+  `discardBinderDraft`, `proposeBinderDraft` in `apps/app/api.ts`. The five
+  acts now take an `ActTarget` — `{changeNumber}` or `{draft}` — in place of a
+  bare `changeNumber`, because they are alternatives rather than a list.
+  Registry paths and a regenerated client for all four draft routes: #461
+  shipped them server-only, so `packages/api-schema/registry.ts` had never
+  heard of them.
+- **`GET .../documents?draft=<branch>`** reads the tree at your own draft.
+  Without it every rename appeared to snap back — the act is on the branch and
+  the list was reading `main`. Refused for anybody else's draft, which is
+  `resolveOwnDraftBranch` in `services/api/server.ts`; a draft that has been
+  discarded answers 409 and the page leaves edit mode on it.
+- **`?edit=1` and `?edit=propose`** — `editModeFromSearch` in
+  `apps/app/binderShell.ts`. A route, per §4.1's lean: it survives a reload and
+  it is linkable. `?edit=1` with no draft drops back out rather than opening
+  one, because a read must not create.
+- **The draft bar** (`BinderDraftBar.tsx`), listing the acts, with Propose and
+  Discard. **Inline rename** in the tree, blur or Enter to commit, Escape to
+  cancel — `BinderTreeView` grew a `renderRowLabel` slot alongside
+  `renderRowActions`, and a row that fills it stops being a button for as long
+  as it does. **The propose page** (`ProposeChangePage.tsx`), description
+  prefilled from the acts, title deliberately not.
+- New folder and Add a policy go into the draft while you are editing, and hide
+  the "Put it in" change picker: a draft is already the answer.
+- **The acts are written for a person now.** `planDocumentRename` wrote `Move
+nursing/hand-hygiene.01M2DJ….md to nursing/hand-hygiene-and-ppe.01M2DJ….md`
+  — which stopped being an internal string the moment a draft read back as its
+  commits and prefilled a change request with them. All four planners in
+  `services/api/binderShape.ts` now say "Rename Hand Hygiene to Hand Hygiene
+  And PPE", "Add the folder Nursing". This changed three assertions in
+  `tests/binder-drafts.pw.ts`.
+- `tests/binder-edit-mode.pw.ts` — 8 tests. Plus `apps/app/proposeChange.test.ts`
+  and four in `apps/app/binderShell.test.ts`.
+
+**Build on `feat/edit-mode-on-a-draft`.** It is the tip.
 
 ---
 
@@ -225,36 +266,34 @@ document mints a fresh UID. Nothing about archiving disturbs that.
 In this order. Each is its own PR; the customer reviews iteratively and has
 asked not to be handed one large diff.
 
-### 4.1 Edit mode
+### 4.1 Drag to move — the rest of edit mode
 
-**The app client does not know about drafts yet.** `createBinderDocument`,
-`reviseBinderDocument`, `createBinderFolder`, `renameBinderFolder` and
-`renameBinderDocument` in `apps/app/api.ts` all take `changeNumber` and none
-take `draft`. The server accepts `draft: true` (open or resume mine) or
-`draft: "<branch>"` (a named draft, checked for ownership). Start there.
+Edit mode is built (#463). What it does not do yet is the one act the customer
+named specifically: _"Moving a document should be a simple drag and drop."_
 
-Then:
+- Drop a document on a folder → `document-renames` with a new `folder`.
+- Drop a folder on a folder → `folder-renames`.
 
-- **An Edit button on the binder**, next to New folder / Add a policy. Pressing
-  it `POST`s to `.../draft` and puts the page in edit mode.
-- **A draft bar** — persistent while editing. What is in the draft, as the list
-  of acts the server already returns. **Propose** and **Discard**.
-- **Inline rename.** Click the name, it becomes an input, blur or Enter commits
-  through `POST .../document-renames` or `.../folder-renames` with
-  `draft: true`. `renderRowActions` is the slot for the pencil.
-- **Drag to move.** Drop a document on a folder → `document-renames` with a new
-  `folder`. Drop a folder on a folder → `folder-renames`. The planners in
-  `services/api/binderShape.ts` already refuse the cases that matter, including
-  the address collision that the path check misses (see §5).
-- **The propose page.** Title and description, prefilled from the acts.
-  `POST .../changes`.
+The planners in `services/api/binderShape.ts` already refuse the cases that
+matter, including the address collision that the path check misses (see §5), so
+this is a UI job: the rows and the plumbing behind them are done. `BinderTree.tsx`
+is rendering-only and has the two slots edit mode uses — add a third for drop
+targets rather than teaching it what a drag means.
 
-Two things to decide when you get there, neither settled:
+Two things still not decided:
 
-- What edit mode does with a document that somebody _else_ has in an open
-  change. The data is there — `openChangeCount` is on every row.
-- Whether edit mode is a route (`?edit=1`) or component state. A route survives
-  a reload and is linkable; state is simpler. Lean route.
+- **What edit mode does with a document somebody _else_ has in an open change.**
+  The data is there — `openChangeCount` is on every row — and today edit mode
+  ignores it. A rename that lands on top of somebody's open change is not
+  refused, it just merges badly later.
+- **Renaming a folder you have collapsed.** The twisty is replaced by the input
+  while a name is being typed, so a folder cannot be opened mid-rename. That is
+  deliberate and probably right; it has not been tried by anybody but us.
+
+A third, smaller: **the draft bar does not say who else is editing unless the
+draft read returns them**, and it is only re-read after your own acts. Somebody
+starting a draft while you are in one appears on your next act, not
+immediately. Polling was not worth it for a bar that is advisory.
 
 ### 4.2 Archive
 
@@ -280,7 +319,17 @@ Still outstanding, in no fixed order:
 4. **A sign-off rule that covers the sign-off rules themselves.** A fourth
    scope matching `.gitea/CODEOWNERS`. See `packages/utils/codeowners.ts`,
    which already has `SignOffScope = "binder" | "folder" | "document"`.
-5. **Two sign-off changes at once.** Currently refused —
+5. **`formatDocumentName` title-cases the joining words.** "Hand Hygiene and
+   PPE" comes back as "Hand Hygiene **And** PPE", in the tree, in the change
+   request, and in the version tag. `packages/utils/documentTitle.ts` is the
+   one rule that turns a slug back into a heading and it splits on `-` and
+   capitalises every word. The fix is a stop-list ("and", "of", "for", "the",
+   "in", "to"), but it changes what every title stamped from here on says while
+   the ones already written keep the old spelling — so it is a decision about
+   the record rather than about wording, and it wants an answer before a
+   customer has a year of tags. Asserted as-is in `binderShape.test.ts` so the
+   test says what the product does rather than what it should do.
+6. **Two sign-off changes at once.** Currently refused —
    `services/api/server.ts` around the `sign-off/` prefix check: _"Two would
    leave competing versions of the rules in review, and whichever merged last
    would silently win."_ The customer said _"Maybe this is fine, but it seems
@@ -298,6 +347,14 @@ are about the environment, not the code.
 bind-mounted and reload; `services/api` builds into the image. Any server change
 needs `bun run down && bun run up` before an integration test will see it. This
 will otherwise look like your fix did nothing.
+
+**A fresh worktree needs `bun install` before the stack will come up.** The
+seed container mounts this worktree at `/workspace` and nothing above it, so
+module resolution cannot walk up to the main checkout's `node_modules` the way
+it does on the host. It fails at seed with `Cannot find package 'docx' from
+'/workspace/tests/seed-documents.ts'`, which reads like a broken dependency and
+is not one. `bun run down` can surface it later rather than sooner, because it
+removes the `app-node-modules` volume on the way out.
 
 **Never run `docker compose` directly**, and never edit the ports in `.env`.
 Use `bun run up` / `down` / `stack status`. A raw `docker compose down` from a
@@ -365,6 +422,8 @@ bun run format        # before every commit
 Binder routes added by this work:
 
 ```
+GET    /api/app/binders/{org}/{binder}/documents?draft=<branch>
+                                                 the binder as it stands in your draft
 GET    /api/app/binders/{org}/{binder}/draft      your draft, its acts, who else is editing
 POST   /api/app/binders/{org}/{binder}/draft      start editing, or resume
 DELETE /api/app/binders/{org}/{binder}/draft      discard yours
