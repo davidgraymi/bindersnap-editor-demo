@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   folderKeepPath,
+  planDocumentArchive,
   planDocumentRename,
   planFolderRename,
   planNewFolder,
@@ -427,5 +428,39 @@ describe("what a folder act says it did", () => {
       }),
     );
     expect(plan.message).toBe("Move the folder Nursing to Clinical / Nursing");
+  });
+});
+
+describe("archiving a document", () => {
+  test("takes the file off the record and nothing else", () => {
+    // One removal. Every version tag still points at the commit that held the
+    // file, git never collects a commit reachable from a ref, and the bytes
+    // stay readable from a bare clone at every version it reached. There is no
+    // second branch to write to and no copy to make.
+    const plan = ok(planDocumentArchive({ document: document() }));
+    expect(plan.operations).toEqual([
+      { kind: "remove", path: `nursing/hand-hygiene.${UID}.md` },
+    ]);
+  });
+
+  test("says what it did in the customer's word", () => {
+    // "Delete has connotations." It is also the wrong word: nothing is
+    // destroyed, which is exactly what delete would have promised.
+    const plan = ok(planDocumentArchive({ document: document() }));
+    expect(plan.message).toBe("Archive Hand Hygiene");
+    expect(plan.title).toBe(plan.message);
+  });
+
+  test("refuses a file with no identity, because that would be a deletion", () => {
+    // Not about the tag. A file this product did not write has no version tags
+    // at all, so removing it from `main` leaves no ref pointing at the commit
+    // that held it — the one case where "archive" would be a lie.
+    const result = planDocumentArchive({
+      document: document({ uid: null, path: "README.md" }),
+    });
+    expect(result).toHaveProperty("error");
+    expect((result as { error: string }).error).toContain(
+      "would be a deletion",
+    );
   });
 });

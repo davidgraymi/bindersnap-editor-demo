@@ -13,6 +13,7 @@ import type {
   WorkspaceOverviewPayload,
 } from "../../../packages/api-schema/schemas/workspaces";
 import {
+  archiveFromSearch,
   binderTabFromSearch,
   buildBinderUrl,
   changeViewFromSearch,
@@ -25,6 +26,7 @@ import { parseRequestedChange } from "../binderChange";
 import { formatDocumentName } from "../documentDisplay";
 import { AddPolicyModal } from "./AddPolicyModal";
 import { NewFolderModal } from "./NewFolderModal";
+import { BinderArchive } from "./BinderArchive";
 import { BinderDraftBar } from "./BinderDraftBar";
 import { ProposeChangePage } from "./ProposeChangePage";
 import { BinderChangePage } from "./BinderChangePage";
@@ -108,6 +110,9 @@ export function BinderShell({
   const [editMode, setEditMode] = useState<BinderEditMode>(() =>
     editModeFromSearch(window.location.search),
   );
+  const [archive, setArchive] = useState(() =>
+    archiveFromSearch(window.location.search),
+  );
 
   /**
    * Your draft in this binder, and whose else is open.
@@ -129,6 +134,7 @@ export function BinderShell({
       setOpenChange(parseRequestedChange(window.location.search));
       setChangeView(changeViewFromSearch(window.location.search));
       setEditMode(editModeFromSearch(window.location.search));
+      setArchive(archiveFromSearch(window.location.search));
     };
     window.addEventListener("popstate", handler);
     return () => window.removeEventListener("popstate", handler);
@@ -192,6 +198,21 @@ export function BinderShell({
   const goToEdit = (next: BinderEditMode) => {
     moveTo(buildBinderUrl({ org, binder, edit: next }));
     setEditMode(next);
+    setArchive(false);
+  };
+
+  /**
+   * The archive, and back out of it.
+   *
+   * Leaving edit mode on the way in. The archive is a view of the record —
+   * what this binder held — and there is nothing on it to edit; carrying a
+   * draft bar over it would offer Propose above a page with no acts on it.
+   * Coming back out lands on the binder, not back in the edit.
+   */
+  const goToArchive = (open: boolean) => {
+    moveTo(buildBinderUrl({ org, binder, archive: open }));
+    setArchive(open);
+    setEditMode("off");
   };
 
   const leaveEditMode = () => {
@@ -257,6 +278,7 @@ export function BinderShell({
     setTab(next);
     setOpenChange(null);
     setEditMode("off");
+    setArchive(false);
     setDraft(null);
   };
 
@@ -348,7 +370,10 @@ export function BinderShell({
               not the documents *list*. That page has a primary act of its own —
               "New version" — and two filled buttons on one screen is two
               answers to "what is this page for". */}
-          {isReadOnly || activeTab !== "documents" || documentPath ? null : (
+          {isReadOnly ||
+          activeTab !== "documents" ||
+          documentPath ||
+          archive ? null : (
             <div className="doc-header-actions">
               {/* **Edit is the filled button when you are not editing.** The
                   customer asked for one: "an edit button that puts the user in
@@ -428,7 +453,7 @@ export function BinderShell({
         </p>
       ) : null}
 
-      {draft?.draft && editMode !== "off" && !documentPath ? (
+      {draft?.draft && editMode !== "off" && !documentPath && !archive ? (
         <BinderDraftBar
           acts={draft.draft.acts}
           others={draft.others.map((other) => other.owner)}
@@ -482,6 +507,12 @@ export function BinderShell({
         />
       ) : activeTab === "settings" ? (
         <BinderSettings org={org} binder={binder} />
+      ) : archive ? (
+        <BinderArchive
+          org={org}
+          binder={binder}
+          onBack={() => goToArchive(false)}
+        />
       ) : editMode === "proposing" && draft?.draft ? (
         <ProposeChangePage
           org={org}
@@ -509,6 +540,7 @@ export function BinderShell({
           reloadKey={reloadKey}
           onEdited={refreshDraft}
           onDraftLost={leaveEditMode}
+          onOpenArchive={() => goToArchive(true)}
         />
       )}
 

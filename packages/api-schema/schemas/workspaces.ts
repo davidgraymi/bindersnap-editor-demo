@@ -281,6 +281,16 @@ export const WorkspaceDocumentListPayloadSchema = z.object({
    * tinguishable from one it did.
    */
   draft: z.string().nullable().optional(),
+  /**
+   * How many policies this binder has taken off the record.
+   *
+   * A count rather than the list, because the names of archived documents live
+   * in tag messages this read has no reason to parse. It is here so the binder
+   * can offer a way into the archive without a fourth call on every page load
+   * — and it is free, since the same tag read already answers every row's
+   * version.
+   */
+  archivedCount: z.number().optional(),
 });
 export type WorkspaceDocumentListPayload = z.infer<
   typeof WorkspaceDocumentListPayloadSchema
@@ -998,6 +1008,48 @@ export const OrganizationPeoplePayloadSchema = z.object({
 export type OrganizationPeoplePayload = z.infer<
   typeof OrganizationPeoplePayloadSchema
 >;
+
+/**
+ * A document this binder has taken off the record.
+ *
+ * **Read from its tags, because nothing else remembers it.** An archived
+ * document is not in the tree, so the name and the folder it had are
+ * point-in-time facts only the version stamp recorded. Fields are nullable
+ * where the answer genuinely may not exist — a policy archived before the
+ * `archived-<n>` tag existed has no date and no count, and saying so is better
+ * than inventing one.
+ */
+export const ArchivedDocumentSchema = z.object({
+  /** The identity its version tags are named after. Also how it is restored. */
+  uid: z.string(),
+  /** What it was called when it left — or the identity, if no tag says. */
+  title: z.string(),
+  /** Where it was filed when it left, if a stamp recorded it. */
+  slugPath: z.string().nullable(),
+  /** The last version it published. Its versions are all still readable. */
+  lastVersion: z.number(),
+  lastPublishedAt: z.string().nullable(),
+  /** When it was archived, if an `archived-<n>` tag recorded it. */
+  archivedAt: z.string().nullable(),
+  /** How many times it has been archived. Null for one that left before the tag. */
+  archivings: z.number().nullable(),
+});
+export type ArchivedDocument = z.infer<typeof ArchivedDocumentSchema>;
+
+/**
+ * The binder's archive.
+ *
+ * Derived at read time from two things that already exist — every UID with a
+ * version tag, minus every UID on `main` — rather than stored. ADR 0004 allows
+ * a derived index only if it is rebuildable from Gitea and droppable without
+ * loss, and a set difference over two live reads is both by construction.
+ */
+export const BinderArchivePayloadSchema = z.object({
+  organization: z.string(),
+  workspace: z.string(),
+  documents: z.array(ArchivedDocumentSchema),
+});
+export type BinderArchivePayload = z.infer<typeof BinderArchivePayloadSchema>;
 
 /**
  * One act on a draft.

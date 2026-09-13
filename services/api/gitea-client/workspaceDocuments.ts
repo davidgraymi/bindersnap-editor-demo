@@ -1,4 +1,5 @@
 import {
+  buildDocumentArchivedTag,
   buildDocumentVersionTag,
   documentUidFromVersionTag,
   parseDocumentFilename,
@@ -271,6 +272,15 @@ export interface DocumentVersion {
 export interface GitTag {
   name?: string;
   commit?: { sha?: string; created?: string };
+  /**
+   * The annotated tag's message — the version stamp, or the archive stamp.
+   *
+   * Read by the archive and by nothing else. An archived document is not on
+   * `main`, so the tree cannot say what it was called or where it was filed;
+   * its tags are the whole of what is left. `readVersionStamp` recovers the
+   * two labelled lines that were written for this.
+   */
+  message?: string;
 }
 
 /**
@@ -419,6 +429,87 @@ export async function listChangedDocuments(params: {
   }
 
   return documents.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+/**
+ * The documents a change **takes off** the record, which is the other half.
+ *
+ * {@link listChangedDocuments} skips exactly these statuses, because a file
+ * that is not in the merged tree must not be given a version tag — publishing
+ * a v5 of something that is no longer there is the bug that filter exists to
+ * prevent. Archiving needs the same read from the other side: the removals are
+ * what get an `<uid>/archived-<n>` tag.
+ *
+ * **A rename is a removal plus an addition** — Gitea reports it as `deleted`
+ * and `added`, which is the spelling `ABSENT_STATUSES` was pinned to against a
+ * running server. So this alone would call every rename an archiving. The
+ * caller subtracts: a UID that is also in the added half moved, and only a UID
+ * that is absent from the merged tree entirely was archived. That subtraction
+ * is the whole reason this answers entries rather than a boolean.
+ */
+export async function listRemovedDocuments(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  pullNumber: number;
+}): Promise<WorkspaceDocumentEntry[]> {
+  const { client, org, workspace, pullNumber } = params;
+
+  const files = (await unwrap(
+    client.GET("/repos/{owner}/{repo}/pulls/{index}/files", {
+      params: { path: { owner: org, repo: workspace, index: pullNumber } },
+    }),
+  )) as ChangedFile[];
+
+  const seen = new Set<string>();
+  const documents: WorkspaceDocumentEntry[] = [];
+
+  for (const file of files ?? []) {
+    if (!ABSENT_STATUSES.has((file.status ?? "").toLowerCase())) continue;
+
+    const entry = toDocumentEntry({ path: file.filename ?? "", type: "blob" });
+    if (!entry) continue;
+
+    const key = entry.uid ?? entry.slugPath;
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    documents.push(entry);
+  }
+
+  return documents.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+/**
+ * Record a document being archived: a tag naming the act, on the merge commit.
+ *
+ * Deliberately the same primitive and the same publish as a version tag, so
+ * the two cannot half-apply — `refs/tags/<uid>/v3` and
+ * `refs/tags/<uid>/archived-1` are both files under one ref directory, and
+ * writing them in one pass is what makes the audit atomic with the merge by
+ * construction rather than by a webhook holding two writes together.
+ */
+export async function createDocumentArchivedTag(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  uid: string;
+  /** 1 the first time, 2 after a restore — each archiving is its own fact. */
+  sequence: number;
+  target: string;
+  message: string;
+}): Promise<{ tag: string; commitSha: string }> {
+  const { client, org, workspace, uid, sequence, target, message } = params;
+  const tagName = buildDocumentArchivedTag(uid, sequence);
+
+  const tag = (await unwrap(
+    client.POST("/repos/{owner}/{repo}/tags", {
+      params: { path: { owner: org, repo: workspace } },
+      body: { tag_name: tagName, target, message },
+    }),
+  )) as GitTag;
+
+  return { tag: tagName, commitSha: tag?.commit?.sha ?? "" };
 }
 
 /**

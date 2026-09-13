@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FolderInput, Pencil } from "lucide-react";
+import { Archive, FolderInput, Pencil } from "lucide-react";
 import { useIsReadOnly } from "../readOnlyContext";
 
 import {
+  archiveBinderDocument,
   fetchBinderDocuments,
   renameBinderDocument,
   renameBinderFolder,
@@ -58,6 +59,8 @@ interface BinderDocumentsProps {
    * this list is not the thing that knows the answer.
    */
   onDraftLost?: () => void;
+  /** Open the archive — what this binder has taken off the record. */
+  onOpenArchive?: () => void;
 }
 
 /** "Version 3 · 1 open change", or what is true of it so far. */
@@ -122,12 +125,14 @@ export function BinderDocuments({
   reloadKey = 0,
   onEdited,
   onDraftLost,
+  onOpenArchive,
 }: BinderDocumentsProps) {
   const isReadOnly = useIsReadOnly();
   const [documents, setDocuments] = useState<
     WorkspaceDocumentListEntry[] | null
   >(null);
   const [folders, setFolders] = useState<string[]>([]);
+  const [archivedCount, setArchivedCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<Renaming | null>(null);
   const [actError, setActError] = useState<string | null>(null);
@@ -155,6 +160,7 @@ export function BinderDocuments({
         // the list from the rows would hide one somebody made, had approved
         // and had published.
         setFolders(payload.folders);
+        setArchivedCount(payload.archivedCount ?? 0);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -291,6 +297,24 @@ export function BinderDocuments({
               { draft },
             ),
       "Unable to move that.",
+    );
+  };
+
+  /**
+   * Take a policy off the record.
+   *
+   * No confirmation dialog, deliberately. The act goes into the draft like
+   * every other act, the bar names it, and Discard undoes the lot — the draft
+   * *is* the undo, and a modal asking "are you sure" in front of something
+   * already reversible is ceremony that teaches people to click through
+   * warnings.
+   */
+  const archiveDocument = async (node: BinderTreeNode) => {
+    if (!draft || node.kind !== "document") return;
+    await runAct(
+      () =>
+        archiveBinderDocument(org, binder, node.document.slugPath, { draft }),
+      "Unable to archive that.",
     );
   };
 
@@ -496,6 +520,27 @@ export function BinderDocuments({
                           aria-hidden="true"
                         />
                       </button>
+                      {/* **Documents only.** Archiving a folder would mean
+                          archiving everything in it, which is a different and
+                          much larger act than the one this button looks like
+                          — and not one anybody has asked for. A folder is
+                          emptied by moving what is in it, and then it is a
+                          folder somebody can rename or leave. */}
+                      {node.kind === "document" ? (
+                        <button
+                          type="button"
+                          className="binder-tree-action"
+                          aria-label={`Archive ${label}`}
+                          disabled={committing}
+                          onClick={() => void archiveDocument(node)}
+                        >
+                          <Archive
+                            size={14}
+                            strokeWidth={1.6}
+                            aria-hidden="true"
+                          />
+                        </button>
+                      ) : null}
                     </>
                   );
                 },
@@ -530,6 +575,24 @@ export function BinderDocuments({
         >
           Drop here to move it to the binder’s top level
         </div>
+      ) : null}
+
+      {/* The way into the archive, and gone when there is nothing in it: a
+          binder that has never archived anything should not carry a link to an
+          empty page. Under the tree rather than in the header, because it is
+          about what this binder *held* — a question somebody asks after
+          failing to find something, not before. */}
+      {archivedCount > 0 && onOpenArchive ? (
+        <button
+          type="button"
+          className="binder-archive-link"
+          onClick={onOpenArchive}
+        >
+          <Archive size={14} strokeWidth={1.5} aria-hidden="true" />
+          {archivedCount === 1
+            ? "1 archived policy"
+            : `${archivedCount} archived policies`}
+        </button>
       ) : null}
 
       {moving ? (
