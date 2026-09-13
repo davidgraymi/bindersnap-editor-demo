@@ -97,7 +97,7 @@ it.
   folder holding only a `.gitkeep` has none.
 - `tests/binder-tree.pw.ts` — 5 tests.
 
-**[#463 — edit mode](https://github.com/davidgraymi/bindersnap-editor-demo/pull/463)**
+**[#464 — edit mode](https://github.com/davidgraymi/bindersnap-editor-demo/pull/464)**
 (`feat/edit-mode-on-a-draft` → `docs/handoff-binder-editing`)
 
 The customer's sentence, built: _"an edit button that puts the user in edit
@@ -268,7 +268,7 @@ asked not to be handed one large diff.
 
 ### 4.1 Drag to move — the rest of edit mode
 
-Edit mode is built (#463). What it does not do yet is the one act the customer
+Edit mode is built (#464). What it does not do yet is the one act the customer
 named specifically: _"Moving a document should be a simple drag and drop."_
 
 - Drop a document on a folder → `document-renames` with a new `folder`.
