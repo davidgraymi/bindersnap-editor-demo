@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
 
-import { fetchBinderSettings, setBinderRules } from "../api";
+import { fetchBinderSettings, renameBinder, setBinderRules } from "../api";
 import type { WorkspaceSettingsPayload } from "../../../packages/api-schema/schemas/workspaces";
 import { describeBinderRules } from "../binderSettings";
+import { formatDocumentName } from "../documentDisplay";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
 /**
@@ -24,9 +25,22 @@ import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 interface BinderSettingsProps {
   org: string;
   binder: string;
+  /**
+   * The binder's new address, once it has one.
+   *
+   * The page this sits on is addressed by the name that just stopped being the
+   * binder's, so somebody above has to move it. Old links keep working — Gitea
+   * answers a redirect from the old name — but the address bar should say what
+   * the binder is called now.
+   */
+  onRenamed?: (binder: string) => void;
 }
 
-export function BinderSettings({ org, binder }: BinderSettingsProps) {
+export function BinderSettings({
+  org,
+  binder,
+  onRenamed,
+}: BinderSettingsProps) {
   // The same fold every other editable surface uses: a delinquent organization
   // draws no controls, by the one flag that already decides whether controls
   // exist.
@@ -37,6 +51,8 @@ export function BinderSettings({ org, binder }: BinderSettingsProps) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [name, setName] = useState(() => formatDocumentName(binder));
+  const [renaming, setRenaming] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -101,8 +117,77 @@ export function BinderSettings({ org, binder }: BinderSettingsProps) {
     }
   }
 
+  async function rename() {
+    const next = name.trim();
+    if (next === "" || renaming) return;
+
+    setRenaming(true);
+    setNotice(null);
+    try {
+      const renamed = await renameBinder(org, binder, next);
+      // The page is addressed by the name it just stopped having, so somebody
+      // has to move it. Old links keep working — Gitea redirects — but the
+      // address bar should say what the binder is called now.
+      onRenamed?.(renamed.workspace);
+    } catch (err: unknown) {
+      setNotice(
+        err instanceof Error && err.message.trim() !== ""
+          ? err.message
+          : "Unable to rename this binder.",
+      );
+      setRenaming(false);
+    }
+  }
+
   return (
     <div className="binder-pane">
+      {canEdit ? (
+        <section className="binder-settings-section">
+          <h2 className="doc-rail-title">What this binder is called</h2>
+
+          <div className="binder-rename">
+            <input
+              className="bs-input"
+              type="text"
+              value={name}
+              disabled={renaming}
+              aria-label="What this binder is called"
+              onChange={(event) => {
+                setName(event.target.value);
+                setNotice(null);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void rename();
+                }
+              }}
+            />
+            <button
+              type="button"
+              className="bs-btn bs-btn-secondary"
+              disabled={
+                renaming ||
+                name.trim() === "" ||
+                name.trim() === formatDocumentName(binder)
+              }
+              onClick={() => void rename()}
+            >
+              {renaming ? "Renaming…" : "Rename"}
+            </button>
+          </div>
+
+          {/* The thing somebody hesitating over this actually wants to know.
+              It is true because Gitea answers a redirect from the old name,
+              which was checked against the version this runs on rather than
+              assumed. */}
+          <p className="doc-rail-note">
+            Links to the old name keep working. Nothing filed in the binder
+            moves, and no version changes.
+          </p>
+        </section>
+      ) : null}
+
       <section className="binder-settings-section">
         <h2 className="doc-rail-title">The rules</h2>
 

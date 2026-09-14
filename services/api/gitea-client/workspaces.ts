@@ -577,3 +577,40 @@ export async function provisionOrganization(
 
   return { organization };
 }
+
+/**
+ * Give a binder a new name.
+ *
+ * **A binder is a Gitea repository (ADR 0004), so its name is the repository's
+ * name and renaming one is `PATCH /repos/{owner}/{repo}`.** There is no second
+ * display name to change instead: a binder carries only its slug, and every
+ * screen derives what it is called from that.
+ *
+ * **Old links keep working, and that is Gitea's doing rather than ours.**
+ * Verified against the Gitea this product runs on (1.28.0+dev, 2026-09-14) by
+ * renaming a repository and asking for the old name: both the API and the web
+ * UI answer `301` pointing at the new one. `fetch` follows a redirect by
+ * default, so every read this product makes against an old binder name
+ * resolves too — a colleague's bookmark does not break the day somebody
+ * corrects a spelling.
+ *
+ * The redirect holds until something else claims the old name, which is the
+ * usual caveat and the reason a rename is still worth being deliberate about.
+ */
+export async function renameWorkspaceRepo(params: {
+  client: GiteaClient;
+  org: string;
+  /** The name it has now. */
+  name: string;
+  /** The name it should have. Already slugged by the caller. */
+  to: string;
+}): Promise<void> {
+  const { client, org, name, to } = params;
+
+  await unwrap(
+    client.PATCH("/repos/{owner}/{repo}", {
+      params: { path: { owner: org, repo: name } },
+      body: { name: to },
+    }),
+  );
+}

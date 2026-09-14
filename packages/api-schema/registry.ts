@@ -1289,6 +1289,53 @@ registry.registerPath({
   },
 });
 
+/**
+ * Give a binder a new name.
+ *
+ * **Renaming one changes every URL that points at it**, because a binder is a
+ * Gitea repository and its name is the repository's. Gitea answers `301` from
+ * the old name, so a colleague's bookmark still resolves — which is what makes
+ * this safe to offer rather than a thing to warn people away from.
+ *
+ * Its own path rather than part of the settings, because it is not a setting:
+ * every other write under `settings` leaves the address alone and this one
+ * does not.
+ */
+registry.registerPath({
+  method: "post",
+  path: "/api/app/binders/{org}/{binder}/name",
+  operationId: "renameBinder",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({ org: z.string(), binder: z.string() }),
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z.object({
+            /** What to call it. Slugged by the same rule a new binder is. */
+            name: z.string(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Its new address, and the one it answered to before",
+      content: {
+        "application/json": {
+          schema: z.object({
+            organization: z.string(),
+            workspace: z.string(),
+            previous: z.string(),
+          }),
+        },
+      },
+    },
+  },
+});
+
 registry.registerPath({
   method: "get",
   path: "/api/app/binders/{org}/{binder}/archive",

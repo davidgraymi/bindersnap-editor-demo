@@ -506,7 +506,21 @@ export function BinderShell({
           onOpenChange={openChangeNumber}
         />
       ) : activeTab === "settings" ? (
-        <BinderSettings org={org} binder={binder} />
+        <BinderSettings
+          org={org}
+          binder={binder}
+          onRenamed={(renamed) => {
+            // A new address for the same binder. Replace rather than push:
+            // going Back to a name the binder no longer has is a redirect at
+            // best and a 404 once somebody reuses it.
+            window.history.replaceState(
+              {},
+              "",
+              buildBinderUrl({ org, binder: renamed, tab: "settings" }),
+            );
+            window.dispatchEvent(new PopStateEvent("popstate"));
+          }}
+        />
       ) : archive ? (
         <BinderArchive
           org={org}
