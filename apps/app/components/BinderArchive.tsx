@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Archive } from "lucide-react";
 
-import { fetchBinderArchive } from "../api";
+import { fetchBinderArchive, restoreBinderDocument } from "../api";
 import type { BinderArchivePayload } from "../../../packages/api-schema/schemas/workspaces";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
@@ -25,6 +25,14 @@ interface BinderArchiveProps {
   org: string;
   binder: string;
   onBack: () => void;
+  /**
+   * Where a restore goes — the change request it opened.
+   *
+   * **It proposes rather than acting**, which is why this is a navigation and
+   * not a refresh: a policy reappearing on the record without a decision would
+   * be the one act in this product that skipped review.
+   */
+  onProposed: (changeNumber: number) => void;
 }
 
 /** "Archived 3 March 2026", or nothing when no tag recorded the date. */
@@ -58,9 +66,34 @@ function describeArchived(
   return parts.join(" · ");
 }
 
-export function BinderArchive({ org, binder, onBack }: BinderArchiveProps) {
+export function BinderArchive({
+  org,
+  binder,
+  onBack,
+  onProposed,
+}: BinderArchiveProps) {
   const [payload, setPayload] = useState<BinderArchivePayload | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Which row is mid-restore, so only its own button says so. */
+  const [restoring, setRestoring] = useState<string | null>(null);
+
+  const restore = async (uid: string) => {
+    setRestoring(uid);
+    setError(null);
+    try {
+      const proposed = await restoreBinderDocument(org, binder, uid);
+      // Never null: this screen names no draft, so the server opened a change
+      // request — the same reading every other non-draft caller makes.
+      onProposed(proposed.changeNumber ?? 0);
+    } catch (err) {
+      setError(
+        err instanceof Error && err.message.trim() !== ""
+          ? err.message
+          : "Unable to restore that policy.",
+      );
+      setRestoring(null);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -100,6 +133,12 @@ export function BinderArchive({ org, binder, onBack }: BinderArchiveProps) {
           published is unchanged and still readable — archiving removes the file
           from the binder and nothing else.
         </p>
+        {/* The one thing restoring does that is not obvious: it waits. */}
+        <p className="propose-lede">
+          Restoring one opens a change request. It rejoins the binder once that
+          is approved and published, at the next version after the one it left
+          on.
+        </p>
       </div>
 
       {error ? (
@@ -129,6 +168,21 @@ export function BinderArchive({ org, binder, onBack }: BinderArchiveProps) {
                   {describeArchived(entry)}
                 </span>
               </span>
+              {/* It comes back as the next version, not as a new policy at v1
+                  — the identity is a segment of the filename and this restores
+                  that filename, so the history is unbroken across the gap.
+                  Said on the button, because "what happens to its history" is
+                  the question somebody hesitating here actually has. */}
+              <button
+                type="button"
+                className="bs-btn bs-btn-secondary archive-restore"
+                disabled={restoring !== null}
+                onClick={() => void restore(entry.uid)}
+              >
+                {restoring === entry.uid
+                  ? "Opening a change…"
+                  : `Restore as version ${entry.lastVersion + 1}`}
+              </button>
             </div>
           ))}
         </div>

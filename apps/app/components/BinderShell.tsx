@@ -512,6 +512,10 @@ export function BinderShell({
           org={org}
           binder={binder}
           onBack={() => goToArchive(false)}
+          onProposed={(changeNumber) => {
+            loadOverview();
+            openChangeNumber(changeNumber);
+          }}
         />
       ) : editMode === "proposing" && draft?.draft ? (
         <ProposeChangePage

@@ -54,6 +54,8 @@ import type {
   ReplyToBinderChangeDiscussionBody,
   ResolveBinderChangeDiscussion200,
   ResolveBinderChangeDiscussionBody,
+  RestoreBinderDocument201,
+  RestoreBinderDocumentBody,
   ReviewBinderChange200,
   ReviewBinderChangeBody,
   ReviseBinderDocument201,
@@ -1122,6 +1124,41 @@ export const archiveBinderDocument = async (org: string,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(archiveBinderDocumentBody)
+  }
+);}
+
+
+export type restoreBinderDocumentResponse201 = {
+  data: RestoreBinderDocument201
+  status: 201
+}
+
+export type restoreBinderDocumentResponseSuccess = (restoreBinderDocumentResponse201) & {
+  headers: Headers;
+};
+;
+
+export type restoreBinderDocumentResponse = (restoreBinderDocumentResponseSuccess)
+
+export const getRestoreBinderDocumentUrl = (org: string,
+    binder: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/document-restores`
+}
+
+export const restoreBinderDocument = async (org: string,
+    binder: string,
+    restoreBinderDocumentBody: RestoreBinderDocumentBody, options?: Parameters<typeof customFetch>[1]): Promise<restoreBinderDocumentResponse> => {
+
+  return customFetch<restoreBinderDocumentResponse>(getRestoreBinderDocumentUrl(org,binder),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(restoreBinderDocumentBody)
   }
 );}
 

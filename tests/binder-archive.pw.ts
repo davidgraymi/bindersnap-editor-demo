@@ -504,3 +504,202 @@ test("the archive has a way in, and only once there is something in it", async (
   await page.getByRole("button", { name: /Back to the binder/ }).click();
   await expect(page).toHaveURL(new RegExp(`/${org}/${binder}$`));
 });
+
+// ── bringing one back ──────────────────────────────────────────────
+
+/** Archive a policy and publish it, so there is something to restore. */
+async function archiveAndPublish(
+  session: string,
+  org: string,
+  binder: string,
+  documentPath: string,
+): Promise<void> {
+  const proposed = await archive(session, org, binder, documentPath);
+  const { changeNumber } = (await proposed.json()) as { changeNumber: number };
+  await approveAndPublish(session, org, binder, changeNumber);
+}
+
+async function restore(
+  session: string,
+  org: string,
+  binder: string,
+  uid: string,
+): Promise<Response> {
+  return fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/document-restores`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({ uid }),
+    },
+  );
+}
+
+test("a restored policy comes back on its next version, not at v1", async () => {
+  // The reason ADR 0005 had to come first. The identity is a segment of the
+  // filename, the restore writes that filename, so the version tags still
+  // match and the policy carries on across the gap rather than restarting with
+  // every tag it had orphaned behind it.
+  const { session, org, binder } = await provisionBinder();
+  await archiveAndPublish(session, org, binder, "nursing/hand-hygiene");
+
+  const [entry] = await readArchive(session, org, binder);
+  expect(entry!.lastVersion).toBe(1);
+
+  const proposed = await restore(session, org, binder, entry!.uid);
+  const body = await proposed.text();
+  expect(proposed.status, body).toBe(201);
+  await approveAndPublish(session, org, binder, JSON.parse(body).changeNumber);
+
+  // Back in the binder, at v2, and out of the archive.
+  const documents = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/documents`,
+    { headers: authHeaders(session) },
+  );
+  const listed = (await documents.json()) as {
+    documents: Array<{
+      slugPath: string;
+      uid: string;
+      latestVersion: { version: number } | null;
+    }>;
+    archivedCount: number;
+  };
+  // **Found by identity, not by address.** It is the same policy, and that is
+  // the whole claim — but it does not necessarily come back to the same place:
+  // `nursing` held only this one, so archiving it emptied the folder and the
+  // folder went with it. Where it lands is the next test's business.
+  const back = listed.documents.find((document) => document.uid === entry!.uid);
+  expect(back).toBeTruthy();
+  expect(back!.latestVersion?.version).toBe(2);
+  expect(listed.archivedCount).toBe(0);
+  expect(await readArchive(session, org, binder)).toEqual([]);
+});
+
+test("the bytes come back, because a tag still points at them", async () => {
+  // There is no archive branch to read from. The file is recovered from the
+  // commit its last version tag points at, which git has kept for exactly this
+  // reason — and the content has to survive the round trip byte for byte.
+  const { session, org, binder } = await provisionBinder();
+  await archiveAndPublish(session, org, binder, "nursing/hand-hygiene");
+
+  const [entry] = await readArchive(session, org, binder);
+  const proposed = await restore(session, org, binder, entry!.uid);
+  const { changeNumber } = (await proposed.json()) as { changeNumber: number };
+  await approveAndPublish(session, org, binder, changeNumber);
+
+  // At the top level, because `nursing` held only this policy and went with it.
+  const raw = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/raw/hand-hygiene`,
+    {
+      headers: {
+        Cookie: `bindersnap_session=${session}`,
+        Origin: APP_BASE_URL,
+      },
+    },
+  );
+  expect(raw.status, await raw.clone().text()).toBe(200);
+  expect(await raw.text()).toBe("# Hand Hygiene\n\nThe policy text.\n");
+});
+
+test("it lands at the top level when its folder has gone", async () => {
+  // Silently making the folder again would be a second act nobody asked for,
+  // and would resurrect a filing decision somebody deliberately undid.
+  const { session, org, binder } = await provisionBinder();
+  await archiveAndPublish(session, org, binder, "nursing/hand-hygiene");
+
+  // `nursing` held only that policy, so archiving it emptied the folder — and
+  // an empty folder with no `.gitkeep` stops existing.
+  const [entry] = await readArchive(session, org, binder);
+  const proposed = await restore(session, org, binder, entry!.uid);
+  const body = await proposed.text();
+  expect(proposed.status, body).toBe(201);
+  await approveAndPublish(session, org, binder, JSON.parse(body).changeNumber);
+
+  const documents = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/documents`,
+    { headers: authHeaders(session) },
+  );
+  const listed = (await documents.json()) as {
+    documents: Array<{ slugPath: string }>;
+  };
+  expect(listed.documents.map((document) => document.slugPath)).toContain(
+    "hand-hygiene",
+  );
+});
+
+test("archived, restored and archived again is three separate facts", async () => {
+  // A single `<uid>/archived` tag would make the second archiving either a
+  // failure or a lie. Each is its own date and its own change.
+  const { session, org, binder } = await provisionBinder();
+  await archiveAndPublish(session, org, binder, "nursing/hand-hygiene");
+
+  const [first] = await readArchive(session, org, binder);
+  const proposed = await restore(session, org, binder, first!.uid);
+  const { changeNumber } = (await proposed.json()) as { changeNumber: number };
+  await approveAndPublish(session, org, binder, changeNumber);
+
+  // It came back at the top level, because its folder went with it.
+  await archiveAndPublish(session, org, binder, "hand-hygiene");
+
+  const [again] = await readArchive(session, org, binder);
+  expect(again!.uid).toBe(first!.uid);
+  expect(again!.archivings).toBe(2);
+  // The version it left on the second time, which is not the one it left on
+  // the first.
+  expect(again!.lastVersion).toBe(2);
+});
+
+test("restoring something the binder already holds is refused", async () => {
+  const { session, org, binder } = await provisionBinder();
+
+  const documents = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/documents`,
+    { headers: authHeaders(session) },
+  );
+  const listed = (await documents.json()) as {
+    documents: Array<{ slugPath: string; uid: string }>;
+  };
+  const present = listed.documents.find(
+    (document) => document.slugPath === "nursing/hand-hygiene",
+  )!;
+
+  const refused = await restore(session, org, binder, present.uid);
+  expect(refused.status).toBe(409);
+  expect((await refused.json()).error).toContain("already in this binder");
+});
+
+test("Restore opens a change request rather than putting it straight back", async ({
+  page,
+}) => {
+  // Everything else in this product proposes, and a policy reappearing on the
+  // record without a decision would be the one act that skipped review.
+  const { session, org, binder } = await provisionBinder();
+  await archiveAndPublish(session, org, binder, "nursing/hand-hygiene");
+
+  await signInBrowser(page, session);
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}?archive=1`);
+
+  await expect(page.getByText("Hand Hygiene")).toBeVisible({ timeout: 30_000 });
+  // The button says what it will do to the history, because that is the
+  // question somebody hesitating over it actually has.
+  const restoreButton = page.getByRole("button", {
+    name: "Restore as version 2",
+  });
+  await expect(restoreButton).toBeVisible();
+  await restoreButton.click();
+
+  // Straight to the change request it opened.
+  await expect(page).toHaveURL(/tab=changes&change=\d+/, { timeout: 30_000 });
+
+  // And nothing is back in the binder until that is published.
+  const documents = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/documents`,
+    { headers: authHeaders(session) },
+  );
+  const listed = (await documents.json()) as {
+    documents: Array<{ slugPath: string }>;
+  };
+  expect(listed.documents.map((document) => document.slugPath)).not.toContain(
+    "nursing/hand-hygiene",
+  );
+});

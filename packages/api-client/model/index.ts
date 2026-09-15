@@ -353,6 +353,8 @@ export * from './resolveBinderChangeDiscussion200ThreadsItemEventsItemActor.ts';
 export * from './resolveBinderChangeDiscussion200ThreadsItemOrigin.ts';
 export * from './resolveBinderChangeDiscussion200ThreadsItemResolvedBy.ts';
 export * from './resolveBinderChangeDiscussionBody.ts';
+export * from './restoreBinderDocument201.ts';
+export * from './restoreBinderDocumentBody.ts';
 export * from './reviewBinderChange200.ts';
 export * from './reviewBinderChangeBody.ts';
 export * from './reviewBinderChangeBodyEvent.ts';

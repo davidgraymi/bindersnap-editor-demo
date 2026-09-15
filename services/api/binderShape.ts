@@ -26,7 +26,10 @@ import {
 } from "../../packages/utils/documentPath";
 import { formatDocumentName } from "../../packages/utils/documentTitle";
 
-import type { WorkspaceDocumentEntry } from "./gitea-client/workspaceDocuments";
+import type {
+  WorkspaceDocumentEntry,
+  WorkspaceTree,
+} from "./gitea-client/workspaceDocuments";
 
 import type { BinderFileOperation } from "./gitea-client/binderFiles";
 /**
@@ -332,6 +335,90 @@ export function planDocumentArchive(params: {
     operations: [{ kind: "remove", path: document.path }],
     title: said,
     message: said,
+  };
+}
+
+/**
+ * Bring an archived document back.
+ *
+ * **An ordinary change, which is the whole design.** There is no undo stack and
+ * no archive branch to pull from: the file is written back out of the bytes its
+ * last version tag still points at, and it goes through review like anything
+ * else that changes what is in force. A policy quietly reappearing on the
+ * record because somebody clicked "restore" is exactly the thing every other
+ * act in this product refuses to do.
+ *
+ * **It keeps its identity, so it comes back as v(N+1)** rather than as a new
+ * document starting at v1. That is honest — it is the same policy returning,
+ * and its history is unbroken across the gap. It is also automatic: the
+ * identity is a segment of the filename (ADR 0005) and the filename is the one
+ * this restores.
+ *
+ * **Where it lands when its folder is gone.** Back where it was if that folder
+ * still exists; the binder's top level if it does not. The alternative is
+ * silently making the folder again, which is a second act nobody asked for and
+ * which would resurrect a filing decision somebody deliberately undid. The
+ * caller says which happened, so the screen can too.
+ */
+export function planDocumentRestore(params: {
+  /** The document as it stood at its last published version. */
+  document: WorkspaceDocumentEntry;
+  /**
+   * Its bytes, base64, straight off the version tag.
+   *
+   * Never decoded on the way through: Gitea answers base64 and the contents
+   * API wants base64 back, so nothing here can mangle an encoding it does not
+   * touch.
+   */
+  base64Content: string;
+  /** What the binder holds now — `main`, or the draft this is going into. */
+  tree: WorkspaceTree;
+}): ShapeChangeResult & { landedAt?: string } {
+  const { document, base64Content, tree } = params;
+
+  if (document.uid === null) {
+    return {
+      error: "That document has no identity, so it cannot be restored.",
+    };
+  }
+
+  if (tree.documents.some((entry) => entry.uid === document.uid)) {
+    return { error: "That policy is already in this binder." };
+  }
+
+  // Its folder, if the binder still has one. Inferred from the paths rather
+  // than only from `tree.folders`, because a folder holding nothing but other
+  // folders is never named by the tree read.
+  const folderExists =
+    document.folder === "" ||
+    tree.folders.includes(document.folder) ||
+    tree.paths.some((path) => path.startsWith(`${document.folder}/`));
+
+  const folder = folderExists ? document.folder : "";
+  const name = document.path.slice(document.path.lastIndexOf("/") + 1);
+  const to = folder === "" ? name : `${folder}/${name}`;
+  const address = folder === "" ? document.name : `${folder}/${document.name}`;
+
+  // A policy filed at that address in the meantime. Two documents at one
+  // address resolve to whichever came first, which is a link somebody sends
+  // being a coin toss — the same refusal a rename makes, for the same reason.
+  const collision = tree.paths.find((path) => addressOf(path) === address);
+  if (collision) {
+    return {
+      error: `“${address}” is already taken by “${collision}”. Rename that one first, or this policy would come back to an address it has to share.`,
+    };
+  }
+
+  const title = formatDocumentName(document.name);
+  const said = folderExists
+    ? `Restore ${title}`
+    : `Restore ${title} to the binder’s top level`;
+
+  return {
+    operations: [{ kind: "write", path: to, base64Content }],
+    title: said,
+    message: said,
+    landedAt: folder,
   };
 }
 

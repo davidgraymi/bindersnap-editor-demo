@@ -1240,6 +1240,55 @@ registry.registerPath({
   },
 });
 
+/**
+ * Bring an archived policy back.
+ *
+ * **An ordinary change, and deliberately not an undo.** The file is written
+ * back out of the bytes its last version tag still points at, and it goes
+ * through review like anything else that changes what is in force — a policy
+ * quietly reappearing on the record is the thing every other act here refuses
+ * to do.
+ *
+ * It keeps its identity, so it returns as v(N+1) rather than as a new document
+ * at v1. That is honest: it is the same policy, and its history is unbroken
+ * across the gap.
+ */
+registry.registerPath({
+  method: "post",
+  path: "/api/app/binders/{org}/{binder}/document-restores",
+  operationId: "restoreBinderDocument",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({ org: z.string(), binder: z.string() }),
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z.object({
+            /**
+             * The policy's identity, which is what the archive lists it by.
+             *
+             * Not a path: an archived document has no path on `main`, and the
+             * one it had may since have been taken by something else.
+             */
+            uid: z.string(),
+            changeNumber: z.number().optional(),
+            draft: z.union([z.boolean(), z.string()]).optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "The change request that would bring it back",
+      content: {
+        "application/json": { schema: BinderShapeChangePayloadSchema },
+      },
+    },
+  },
+});
+
 registry.registerPath({
   method: "get",
   path: "/api/app/binders/{org}/{binder}/archive",

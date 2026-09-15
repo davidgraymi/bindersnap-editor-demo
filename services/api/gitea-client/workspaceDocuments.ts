@@ -481,6 +481,73 @@ export async function listRemovedDocuments(params: {
 }
 
 /**
+ * A document as it was at its last published version, bytes and all.
+ *
+ * **This is what makes restoring possible without an archive branch.** An
+ * archived document is not on `main`, but every version it published has a tag,
+ * a tag is a ref, and git never collects a commit reachable from one — so the
+ * file is still there, at the commit that held it, exactly as it was. Reading
+ * it back is two calls: the tree at the tag, then the blob.
+ *
+ * The tree at the tag, rather than the path out of the tag message, because a
+ * tree read is the same rule every other page resolves a document by. Parsing a
+ * path out of prose to then go and fetch it is a second way of answering a
+ * question that already has one.
+ *
+ * Null when the document has no version tag, which means it never published —
+ * and something that never published was never on the record and cannot be
+ * restored to it.
+ */
+export async function readArchivedDocument(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  /** The identity. Its version tags are named after it, and it survives both. */
+  uid: string;
+}): Promise<{
+  document: WorkspaceDocumentEntry;
+  base64Content: string;
+  version: number;
+  tag: string;
+} | null> {
+  const { client, org, workspace, uid } = params;
+
+  const versions = await listDocumentVersions({ client, org, workspace, uid });
+  const latest = versions[0];
+  if (!latest) return null;
+
+  const tree = await readWorkspaceTree({
+    client,
+    org,
+    workspace,
+    ref: latest.tag,
+  });
+  const document = tree.documents.find((entry) => entry.uid === uid);
+  if (!document) return null;
+
+  const file = (await unwrap(
+    client.GET("/repos/{owner}/{repo}/contents/{filepath}", {
+      params: {
+        path: { owner: org, repo: workspace, filepath: document.path },
+        query: { ref: latest.tag },
+      },
+    }),
+  )) as { content?: string };
+
+  // Gitea answers base64 already, which is also what the contents API wants on
+  // the way back in — so the bytes are never decoded here at all. Nothing can
+  // mangle an encoding it never touches.
+  if (typeof file.content !== "string" || file.content === "") return null;
+
+  return {
+    document,
+    base64Content: file.content,
+    version: latest.version,
+    tag: latest.tag,
+  };
+}
+
+/**
  * Record a document being archived: a tag naming the act, on the merge commit.
  *
  * Deliberately the same primitive and the same publish as a version tag, so

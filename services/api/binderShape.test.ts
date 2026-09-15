@@ -4,10 +4,14 @@ import {
   folderKeepPath,
   planDocumentArchive,
   planDocumentRename,
+  planDocumentRestore,
   planFolderRename,
   planNewFolder,
 } from "./binderShape";
-import type { WorkspaceDocumentEntry } from "./gitea-client/workspaceDocuments";
+import type {
+  WorkspaceDocumentEntry,
+  WorkspaceTree,
+} from "./gitea-client/workspaceDocuments";
 
 /**
  * Working out what a shape change does, before anything is written.
@@ -462,5 +466,116 @@ describe("archiving a document", () => {
     expect((result as { error: string }).error).toContain(
       "would be a deletion",
     );
+  });
+});
+
+describe("restoring an archived document", () => {
+  /** What the binder holds now. The archived document is not in it. */
+  function tree(overrides: Partial<WorkspaceTree> = {}): WorkspaceTree {
+    return {
+      documents: [],
+      folders: ["nursing"],
+      paths: ["nursing/.gitkeep"],
+      ...overrides,
+    };
+  }
+
+  test("comes back at the filename it left with, so it keeps its identity", () => {
+    // ADR 0005 in one assertion again, from the other direction: the identity
+    // is a segment of the filename, this restores the filename, so the version
+    // tags still match and the policy carries on rather than restarting at v1.
+    const plan = ok(
+      planDocumentRestore({
+        document: document(),
+        base64Content: "SGVsbG8=",
+        tree: tree(),
+      }),
+    );
+    expect(plan.operations).toEqual([
+      {
+        kind: "write",
+        path: `nursing/hand-hygiene.${UID}.md`,
+        base64Content: "SGVsbG8=",
+      },
+    ]);
+    expect(plan.message).toBe("Restore Hand Hygiene");
+  });
+
+  test("lands at the top level when its folder is gone, and says so", () => {
+    // The alternative is silently making the folder again, which is a second
+    // act nobody asked for and which resurrects a filing decision somebody
+    // deliberately undid.
+    const plan = ok(
+      planDocumentRestore({
+        document: document(),
+        base64Content: "SGVsbG8=",
+        tree: tree({ folders: [], paths: [] }),
+      }),
+    );
+    expect(plan.operations[0]).toMatchObject({
+      path: `hand-hygiene.${UID}.md`,
+    });
+    expect(plan.message).toBe("Restore Hand Hygiene to the binder’s top level");
+  });
+
+  test("a folder holding only other folders is still a folder", () => {
+    // `clinical` is never named by a tree read when it holds nothing but
+    // `clinical/nursing`, and a restore that ignored that would move a policy
+    // to the top level for a reason nobody could see.
+    const plan = ok(
+      planDocumentRestore({
+        document: document({
+          folder: "clinical",
+          path: `clinical/hand-hygiene.${UID}.md`,
+          slugPath: "clinical/hand-hygiene",
+        }),
+        base64Content: "SGVsbG8=",
+        tree: tree({ folders: [], paths: ["clinical/nursing/.gitkeep"] }),
+      }),
+    );
+    expect(plan.operations[0]).toMatchObject({
+      path: `clinical/hand-hygiene.${UID}.md`,
+    });
+  });
+
+  test("refuses when something else has taken its address", () => {
+    // Two documents at one address resolve to whichever came first, which is a
+    // link somebody sends being a coin toss. The same refusal a rename makes.
+    const result = planDocumentRestore({
+      document: document(),
+      base64Content: "SGVsbG8=",
+      tree: tree({ paths: [`nursing/hand-hygiene.${OTHER}.md`] }),
+    });
+    expect(result).toHaveProperty("error");
+    expect((result as { error: string }).error).toContain("already taken");
+  });
+
+  test("refuses one that is already in the binder", () => {
+    // Not archived, so there is nothing to bring back — and writing it again
+    // would propose a change that changes nothing.
+    const result = planDocumentRestore({
+      document: document(),
+      base64Content: "SGVsbG8=",
+      tree: tree({ documents: [document()] }),
+    });
+    expect(result).toEqual({ error: "That policy is already in this binder." });
+  });
+
+  test("a policy renamed since it left comes back under its last name", () => {
+    // Its last published version is what is restored, so the name on that
+    // version is the name it returns with — which is also the name the archive
+    // listed it under, so nothing surprises anybody.
+    const plan = ok(
+      planDocumentRestore({
+        document: document({
+          name: "hand-hygiene-and-ppe",
+          path: `nursing/hand-hygiene-and-ppe.${UID}.md`,
+          slugPath: "nursing/hand-hygiene-and-ppe",
+        }),
+        base64Content: "SGVsbG8=",
+        tree: tree(),
+      }),
+    );
+    expect(plan.message).toBe("Restore Hand Hygiene And PPE");
   });
 });

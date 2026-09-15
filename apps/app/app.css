@@ -7924,3 +7924,11 @@ input {
   outline-offset: 2px;
   border-radius: var(--brand-radius-sm);
 }
+
+/* The way back. Quiet, because the page is a record first and a control
+   second — somebody opens the archive to find out what happened to a policy
+   far more often than to bring one back. */
+.archive-restore {
+  margin-left: auto;
+  flex-shrink: 0;
+}
