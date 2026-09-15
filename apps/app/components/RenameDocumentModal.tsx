@@ -102,7 +102,7 @@ export function RenameDocumentModal({
             <span className="bs-label">What it is called</span>
             <input
               id="rename-document-name"
-              className="create-document-input"
+              className="bs-input"
               type="text"
               value={nextName}
               onChange={(event) => {
@@ -121,7 +121,7 @@ export function RenameDocumentModal({
             <span className="bs-label">Folder</span>
             <select
               id="rename-document-folder"
-              className="create-document-input"
+              className="bs-input"
               value={nextFolder}
               disabled={submitting}
               onChange={(event) => {

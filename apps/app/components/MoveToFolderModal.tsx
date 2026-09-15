@@ -74,7 +74,7 @@ export function MoveToFolderModal({
               <span className="bs-label">Where it goes</span>
               <select
                 id="move-to-folder"
-                className="create-document-input"
+                className="bs-input"
                 value={folder}
                 autoFocus
                 onChange={(event) => setFolder(event.target.value)}

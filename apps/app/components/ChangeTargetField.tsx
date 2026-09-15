@@ -80,7 +80,7 @@ export function ChangeTargetField({
       <span className="bs-label">Put it in</span>
       <select
         id="change-target"
-        className="create-document-input"
+        className="bs-input"
         value={value === null ? "" : String(value)}
         disabled={disabled}
         onChange={(event) =>

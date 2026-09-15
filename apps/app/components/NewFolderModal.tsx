@@ -89,7 +89,7 @@ export function NewFolderModal({
             <span className="bs-label">What to call it</span>
             <input
               id="new-folder-name"
-              className="create-document-input"
+              className="bs-input"
               type="text"
               value={folder}
               onChange={(event) => {
