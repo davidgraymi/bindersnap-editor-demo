@@ -7877,3 +7877,50 @@ input {
   background: var(--bs-coral-dim);
   color: var(--bs-text-primary);
 }
+
+/* ── The archive ───────────────────────────────────────────────────────────
+   What a binder has taken off the record. Rows are not buttons: there is
+   nowhere to go yet — an archived policy has no page, because a page is drawn
+   from a file on `main` and this one is not there. Restoring it is the next
+   thing to build. */
+
+.docs-list-item--static {
+  cursor: default;
+}
+
+.docs-list-item--static:hover {
+  background: transparent;
+}
+
+.archive-head {
+  display: grid;
+  gap: var(--brand-space-2);
+  justify-items: start;
+}
+
+/* The way in, under the tree. Quiet, and gone when the archive is empty — a
+   binder that has never archived anything should not carry a link to nothing. */
+.binder-archive-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  align-self: start;
+  padding: var(--brand-space-2) 0;
+  border: none;
+  background: transparent;
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-ui-sm);
+  color: var(--bs-text-muted);
+  cursor: pointer;
+}
+
+.binder-archive-link:hover {
+  color: var(--bs-text-primary);
+  text-decoration: underline;
+}
+
+.binder-archive-link:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 2px;
+  border-radius: var(--brand-radius-sm);
+}

@@ -13,4 +13,5 @@ export type ListBinderDocuments200 = {
   folders: string[];
   /** @nullable */
   draft?: string | null;
+  archivedCount?: number;
 };

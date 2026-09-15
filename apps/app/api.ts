@@ -11,6 +11,7 @@ import * as AdminClient from "../../packages/api-client/admin/admin";
 import * as OrganizationsClient from "../../packages/api-client/organizations/organizations";
 import * as BindersClient from "../../packages/api-client/workspaces/workspaces";
 import type {
+  BinderArchivePayload,
   BinderDraftPayload,
   BinderShapeChangePayload,
   CreatedWorkspaceDocumentPayload,
@@ -1320,6 +1321,52 @@ export async function proposeBinderDraft(
   } catch (error) {
     handlePaymentRequired(`/api/app/binders/${org}/${binder}/changes`, error);
   }
+}
+
+/**
+ * Take a policy off the record.
+ *
+ * **Archive, not delete, and the word is accurate rather than only kinder.**
+ * The file leaves `main` and nothing else happens to it: every version tag
+ * still points at the commit that held it, so the bytes stay readable at every
+ * version the policy reached. Like any other act on a binder it is proposed
+ * rather than done — into your draft while you are editing, or into a change
+ * request of its own.
+ */
+export async function archiveBinderDocument(
+  org: string,
+  binder: string,
+  documentPath: string,
+  target?: ActTarget,
+): Promise<BinderShapeChangePayload> {
+  try {
+    const response = await BindersClient.archiveBinderDocument(org, binder, {
+      documentPath,
+      ...jsonTarget(target),
+    });
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/binders/${org}/${binder}/document-archives`,
+      error,
+    );
+  }
+}
+
+/**
+ * Everything this binder has taken off the record.
+ *
+ * Not a table: the server works it out at read time as every identity with a
+ * version tag, minus every identity on `main`. Which is why it is a page of
+ * its own rather than a flag on the documents list — the question is about the
+ * tags, not about the tree.
+ */
+export async function fetchBinderArchive(
+  org: string,
+  binder: string,
+): Promise<BinderArchivePayload> {
+  const response = await BindersClient.getBinderArchive(org, binder);
+  return response.data;
 }
 
 /**

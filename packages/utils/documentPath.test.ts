@@ -4,7 +4,10 @@ import {
   buildDocumentDisplayPath,
   buildDocumentFilePath,
   buildDocumentSlugPath,
+  buildDocumentArchivedTag,
   buildDocumentVersionTag,
+  archivedSequenceFromTag,
+  documentUidFromArchivedTag,
   documentUidFromVersionTag,
   MAX_DOCUMENT_SLUG_LENGTH,
   MAX_FOLDER_DEPTH,
@@ -199,5 +202,40 @@ test("a tag that is not ours reads back as nothing, rather than as v0", () => {
   ]) {
     expect(documentUidFromVersionTag(notOurs)).toBeNull();
     expect(versionFromTag(notOurs)).toBeNull();
+  }
+});
+
+// ── archiving ──────────────────────────────────────────────────────
+
+test("an archived tag names the document and which archiving it was", () => {
+  // Numbered because archiving is not final: a policy can be archived,
+  // restored and archived again, and each is a separate fact about a separate
+  // date. A single `<uid>/archived` would make the second one a lie.
+  expect(buildDocumentArchivedTag(UID, 1)).toBe(`${UID}/archived-1`);
+  expect(buildDocumentArchivedTag(UID, 3)).toBe(`${UID}/archived-3`);
+  expect(documentUidFromArchivedTag(`${UID}/archived-1`)).toBe(UID);
+  expect(archivedSequenceFromTag(`${UID}/archived-3`)).toBe(3);
+});
+
+test("a version tag and an archived tag do not read as each other", () => {
+  // They live in one ref directory — `refs/tags/<uid>/v3` and
+  // `refs/tags/<uid>/archived-1` are both files under it — and every reader
+  // walks the whole tag list. Each must recognise only its own.
+  expect(versionFromTag(`${UID}/archived-1`)).toBeNull();
+  expect(documentUidFromVersionTag(`${UID}/archived-1`)).toBeNull();
+  expect(documentUidFromArchivedTag(`${UID}/v4`)).toBeNull();
+  expect(archivedSequenceFromTag(`${UID}/v4`)).toBeNull();
+});
+
+test("an archived tag nobody here wrote reads back as nothing", () => {
+  for (const notOurs of [
+    "archived-1",
+    `${UID}/archived`,
+    `${UID}/archived-x`,
+    `clinical/${UID}/archived-1`,
+    "clinical/infection-control/archived-1",
+  ]) {
+    expect(documentUidFromArchivedTag(notOurs)).toBeNull();
+    expect(archivedSequenceFromTag(notOurs)).toBeNull();
   }
 });

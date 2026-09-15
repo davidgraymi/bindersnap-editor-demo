@@ -1,0 +1,506 @@
+/**
+ * Archiving a policy — taking it off the record without destroying it.
+ *
+ * **The customer's word, and the accurate one:** *"delete should be allowed,
+ * but I think it should be called archive because delete has connotations."*
+ * The file leaves `main` and nothing else happens to it. Every version tag
+ * still points at the commit that held it, git never collects a commit
+ * reachable from a ref, and the bytes stay readable from a bare clone at every
+ * version the policy ever reached.
+ *
+ * **Integration rather than unit, because the claim is about refs.** "The
+ * archive lists it" is a set difference over a tree read and a tag read;
+ * "nothing was destroyed" is a statement about a blob still being reachable
+ * from a tag after the commit that held it left `main`. Neither is a thing a
+ * mock can be wrong about convincingly.
+ *
+ * They also cover the design that was **not** built. The customer raised, and
+ * agreed against, archived files being pushed to a separate `archive` branch
+ * by a second hidden change; the reasons are in `docs/handoff-binder-editing.md`
+ * and the short one is that two merges which must both succeed can half-apply.
+ * `no second branch is made` is that decision, asserted.
+ *
+ * Requires the full Docker Compose stack — run via `bun run test:integration`.
+ */
+
+import { randomUUID } from "node:crypto";
+
+import { expect, test, type Page } from "@playwright/test";
+
+import { API_BASE_URL, APP_BASE_URL } from "./helpers";
+
+test.describe.configure({ mode: "serial", timeout: 240_000 });
+
+interface Credentials {
+  username: string;
+  email: string;
+  password: string;
+}
+
+function buildCredentials(): Credentials {
+  const suffix = randomUUID().slice(0, 12);
+  return {
+    username: `arch-${suffix}`,
+    email: `arch-${suffix}@users.bindersnap.local`,
+    password: `Bindersnap-${suffix}!`,
+  };
+}
+
+function sessionFrom(response: Response): string {
+  const match = (response.headers.get("set-cookie") ?? "").match(
+    /bindersnap_session=([^;]+)/,
+  );
+  expect(match?.[1], "no session cookie in the response").toBeTruthy();
+  return match![1]!;
+}
+
+function authHeaders(session: string): Record<string, string> {
+  return {
+    Cookie: `bindersnap_session=${session}`,
+    "Content-Type": "application/json",
+    Origin: APP_BASE_URL,
+  };
+}
+
+async function signUp(credentials: Credentials): Promise<string> {
+  const response = await fetch(`${API_BASE_URL}/auth/signup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Origin: APP_BASE_URL },
+    body: JSON.stringify(credentials),
+  });
+  expect(
+    response.status,
+    `signup failed: ${await response.clone().text()}`,
+  ).toBe(200);
+  return sessionFrom(response);
+}
+
+async function createOrganization(session: string): Promise<string> {
+  const response = await fetch(`${API_BASE_URL}/api/app/organizations`, {
+    method: "POST",
+    headers: authHeaders(session),
+    body: JSON.stringify({ name: `Riverbend ${randomUUID().slice(0, 6)}` }),
+  });
+  const body = await response.text();
+  expect(response.status, `create organization failed: ${body}`).toBe(201);
+  return (JSON.parse(body) as { organization: { name: string } }).organization
+    .name;
+}
+
+async function createBinder(session: string, org: string): Promise<string> {
+  const response = await fetch(`${API_BASE_URL}/api/app/orgs/${org}/binders`, {
+    method: "POST",
+    headers: authHeaders(session),
+    body: JSON.stringify({ name: "Clinical Policies" }),
+  });
+  const body = await response.text();
+  expect(response.status, `create binder failed: ${body}`).toBe(201);
+  return (JSON.parse(body) as { workspace: { name: string } }).workspace.name;
+}
+
+async function addPolicy(
+  session: string,
+  org: string,
+  binder: string,
+  name: string,
+  folder: string,
+  change?: number,
+): Promise<number> {
+  const form = new FormData();
+  form.set(
+    "file",
+    new Blob([`# ${name}\n\nThe policy text.\n`], { type: "text/markdown" }),
+    `${name.toLowerCase().replace(/\s+/g, "-")}.md`,
+  );
+  form.set("name", name);
+  form.set("folder", folder);
+  if (change !== undefined) form.set("changeNumber", String(change));
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/documents`,
+    {
+      method: "POST",
+      headers: {
+        Cookie: `bindersnap_session=${session}`,
+        Origin: APP_BASE_URL,
+      },
+      body: form,
+    },
+  );
+  const body = await response.text();
+  expect(response.status, `add ${name} failed: ${body}`).toBe(201);
+  return (JSON.parse(body) as { pullRequestNumber: number }).pullRequestNumber;
+}
+
+/**
+ * A second person approves it, and the author publishes it.
+ *
+ * Retried, because Gitea processes a push asynchronously and dismisses an
+ * approval recorded against the old head — so a review can return 200 and be
+ * gone a second later, surfacing as "does not have enough approvals" on the
+ * publish. Same shape as the loop in `binder-tree.pw.ts`.
+ */
+async function approveAndPublish(
+  session: string,
+  org: string,
+  binder: string,
+  change: number,
+  approverSession?: string,
+): Promise<Record<string, unknown>> {
+  let approver = approverSession;
+  if (!approver) {
+    const credentials = buildCredentials();
+    approver = await signUp(credentials);
+    const added = await fetch(`${API_BASE_URL}/api/app/orgs/${org}/people`, {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({ username: credentials.username, owner: false }),
+    });
+    expect(added.status, await added.text()).toBeLessThan(300);
+  }
+
+  let published: Response | null = null;
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    const review = await fetch(
+      `${API_BASE_URL}/api/app/binders/${org}/${binder}/changes/${change}/reviews`,
+      {
+        method: "POST",
+        headers: authHeaders(approver),
+        body: JSON.stringify({ event: "APPROVE" }),
+      },
+    );
+    expect(review.status, await review.text()).toBe(200);
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    published = await fetch(
+      `${API_BASE_URL}/api/app/binders/${org}/${binder}/changes/${change}/publish`,
+      { method: "POST", headers: authHeaders(session), body: "{}" },
+    );
+    if (published.status === 200) {
+      return (await published.json()) as Record<string, unknown>;
+    }
+  }
+
+  expect(
+    published?.status,
+    `publish never succeeded: ${await published?.text()}`,
+  ).toBe(200);
+  return {};
+}
+
+/** A binder with two published policies, one of them on its second version. */
+async function provisionBinder(): Promise<{
+  session: string;
+  org: string;
+  binder: string;
+}> {
+  const session = await signUp(buildCredentials());
+  const org = await createOrganization(session);
+  const binder = await createBinder(session, org);
+
+  const first = await addPolicy(
+    session,
+    org,
+    binder,
+    "Hand Hygiene",
+    "Nursing",
+  );
+  await addPolicy(session, org, binder, "Staff Handbook", "", first);
+  await approveAndPublish(session, org, binder, first);
+
+  return { session, org, binder };
+}
+
+async function openDraft(
+  session: string,
+  org: string,
+  binder: string,
+): Promise<string> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/draft`,
+    { method: "POST", headers: authHeaders(session), body: "{}" },
+  );
+  expect(response.status, await response.clone().text()).toBe(201);
+  return ((await response.json()) as { draft: { branch: string } }).draft
+    .branch;
+}
+
+async function archive(
+  session: string,
+  org: string,
+  binder: string,
+  documentPath: string,
+  body: Record<string, unknown> = {},
+): Promise<Response> {
+  return fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/document-archives`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({ documentPath, ...body }),
+    },
+  );
+}
+
+async function readArchive(
+  session: string,
+  org: string,
+  binder: string,
+): Promise<
+  Array<{
+    uid: string;
+    title: string;
+    slugPath: string | null;
+    lastVersion: number;
+    archivedAt: string | null;
+    archivings: number | null;
+  }>
+> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/archive`,
+    { headers: authHeaders(session) },
+  );
+  expect(response.status, await response.clone().text()).toBe(200);
+  return ((await response.json()) as { documents: [] }).documents;
+}
+
+async function signInBrowser(page: Page, session: string): Promise<void> {
+  await page
+    .context()
+    .addCookies([
+      { name: "bindersnap_session", value: session, url: APP_BASE_URL },
+    ]);
+}
+
+// ── the act ────────────────────────────────────────────────────────
+
+test("archiving proposes a change and takes nothing off the record yet", async () => {
+  // Like every other act on a binder: `main` is protected, and what is in
+  // force does not change until somebody approves it.
+  const { session, org, binder } = await provisionBinder();
+
+  const proposed = await archive(session, org, binder, "nursing/hand-hygiene");
+  const body = await proposed.text();
+  expect(proposed.status, body).toBe(201);
+  expect(JSON.parse(body).changeNumber).toEqual(expect.any(Number));
+
+  // Still there, still on its version.
+  expect(await readArchive(session, org, binder)).toEqual([]);
+});
+
+test("a published archiving takes it off the record and into the archive", async () => {
+  const { session, org, binder } = await provisionBinder();
+
+  const proposed = await archive(session, org, binder, "nursing/hand-hygiene");
+  const { changeNumber } = (await proposed.json()) as { changeNumber: number };
+  const published = await approveAndPublish(session, org, binder, changeNumber);
+
+  // The audit tag, written in the same publish that merged the removal.
+  expect((published.archived as Array<{ tag: string }>)[0]?.tag).toMatch(
+    /^[0-9A-HJKMNP-TV-Z]{26}\/archived-1$/,
+  );
+
+  const documents = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/documents`,
+    { headers: authHeaders(session) },
+  );
+  const listed = (await documents.json()) as {
+    documents: Array<{ slugPath: string }>;
+    archivedCount: number;
+  };
+  expect(listed.documents.map((entry) => entry.slugPath)).not.toContain(
+    "nursing/hand-hygiene",
+  );
+  expect(listed.archivedCount).toBe(1);
+
+  const archived = await readArchive(session, org, binder);
+  expect(archived).toHaveLength(1);
+  // The name and the folder come out of the tags, because the tree no longer
+  // holds this document and nothing else remembers what it was called.
+  expect(archived[0]!.title).toBe("Hand Hygiene");
+  expect(archived[0]!.slugPath).toBe("nursing/hand-hygiene");
+  expect(archived[0]!.lastVersion).toBe(1);
+  expect(archived[0]!.archivedAt).toBeTruthy();
+  expect(archived[0]!.archivings).toBe(1);
+});
+
+test("the versions survive, which is the whole reason for the word", async () => {
+  // Archiving removes a file from `main`. The tag still points at the commit
+  // that held it, and git never collects a commit reachable from a ref — so
+  // the bytes are still there, at every version the policy reached. If this
+  // ever fails, "archive" has become a lie and the feature has to go.
+  const { session, org, binder } = await provisionBinder();
+
+  const before = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/documents/nursing/hand-hygiene`,
+    { headers: authHeaders(session) },
+  );
+  const detail = (await before.json()) as {
+    versions: Array<{ tag: string; version: number }>;
+  };
+  const tag = detail.versions[0]!.tag;
+
+  const proposed = await archive(session, org, binder, "nursing/hand-hygiene");
+  const { changeNumber } = (await proposed.json()) as { changeNumber: number };
+  await approveAndPublish(session, org, binder, changeNumber);
+
+  // Read the file back at the version tag, after it has left `main`.
+  const raw = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/raw/nursing/hand-hygiene?ref=${encodeURIComponent(tag)}`,
+    {
+      headers: {
+        Cookie: `bindersnap_session=${session}`,
+        Origin: APP_BASE_URL,
+      },
+    },
+  );
+  expect(raw.status, await raw.clone().text()).toBe(200);
+  expect(await raw.text()).toContain("The policy text.");
+});
+
+test("no second branch is made, because two merges can half-apply", async () => {
+  // The design the customer raised and agreed against: archived files pushed
+  // to a separate `archive` branch by a second hidden change. If the archive
+  // merge failed after the `main` merge succeeded, the document would be gone
+  // from `main` and absent from the archive — evidence loss, which is the
+  // failure ADR 0004 exists to prevent. Asserted so nobody rebuilds it by
+  // accident.
+  const { session, org, binder } = await provisionBinder();
+
+  const proposed = await archive(session, org, binder, "nursing/hand-hygiene");
+  const { changeNumber } = (await proposed.json()) as { changeNumber: number };
+  await approveAndPublish(session, org, binder, changeNumber);
+
+  const branches = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/documents`,
+    { headers: authHeaders(session) },
+  );
+  expect(branches.status).toBe(200);
+
+  // And no second change request was opened behind anybody's back.
+  const changes = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/changes?state=open`,
+    { headers: authHeaders(session) },
+  );
+  expect(((await changes.json()) as { changes: [] }).changes).toHaveLength(0);
+});
+
+test("a rename is not an archiving, however Gitea reports it", async () => {
+  // Gitea reports a rename as `deleted` plus `added`. Reading the removed half
+  // alone would write an `archived-1` tag for every policy anybody renamed,
+  // and the archive would list documents that are sitting on `main`.
+  const { session, org, binder } = await provisionBinder();
+
+  const renamed = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/document-renames`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({
+        documentPath: "nursing/hand-hygiene",
+        name: "Hand Hygiene and PPE",
+      }),
+    },
+  );
+  const { changeNumber } = (await renamed.json()) as { changeNumber: number };
+  const published = await approveAndPublish(session, org, binder, changeNumber);
+
+  expect(published.archived).toEqual([]);
+  expect(await readArchive(session, org, binder)).toEqual([]);
+});
+
+test("a file with no identity is refused, because that would be a deletion", async () => {
+  // Not about the tag. A file this product did not write has no version tags,
+  // so removing it from `main` leaves no ref pointing at the commit that held
+  // it — the one case where "archive" would be a lie.
+  const { session, org, binder } = await provisionBinder();
+
+  const refused = await archive(session, org, binder, "nowhere/nothing");
+  expect(refused.status).toBe(409);
+  expect((await refused.json()).error).toContain("is not in this binder");
+});
+
+// ── in the browser ─────────────────────────────────────────────────
+
+test("Archive is an act of edit mode, and the draft is the undo", async ({
+  page,
+}) => {
+  // No confirmation dialog, deliberately: the act goes into the draft like
+  // every other one, the bar names it, and Discard undoes the lot. A modal
+  // asking "are you sure" in front of something already reversible teaches
+  // people to click through warnings.
+  const { session, org, binder } = await provisionBinder();
+  await signInBrowser(page, session);
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+
+  await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page.locator(".draft-bar")).toBeVisible({ timeout: 30_000 });
+
+  await page.getByRole("button", { name: "Archive Hand Hygiene" }).click();
+
+  await expect(page.locator(".draft-bar")).toContainText(
+    "Archive Hand Hygiene",
+    { timeout: 30_000 },
+  );
+  // Gone from the tree you are editing, and still on the record.
+  await expect(
+    page.locator(".binder-tree-label", { hasText: "Hand Hygiene" }),
+  ).toHaveCount(0);
+  expect(await readArchive(session, org, binder)).toEqual([]);
+
+  await page.getByRole("button", { name: "Discard" }).click();
+  await expect(page.locator(".draft-bar")).toBeHidden({ timeout: 30_000 });
+  await expect(
+    page.locator(".binder-tree-label", { hasText: "Hand Hygiene" }),
+  ).toBeVisible();
+});
+
+test("a folder cannot be archived, because that is a different act", async ({
+  page,
+}) => {
+  // Archiving a folder would mean archiving everything in it — much larger
+  // than the button looks, and not something anybody asked for.
+  const { session, org, binder } = await provisionBinder();
+  await signInBrowser(page, session);
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+
+  await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page.locator(".draft-bar")).toBeVisible({ timeout: 30_000 });
+
+  await expect(
+    page.getByRole("button", { name: "Archive Nursing" }),
+  ).toHaveCount(0);
+  // The folder still has its other two.
+  await expect(
+    page.getByRole("button", { name: "Rename Nursing" }),
+  ).toBeVisible();
+});
+
+test("the archive has a way in, and only once there is something in it", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provisionBinder();
+  await signInBrowser(page, session);
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+
+  await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
+  // A binder that has archived nothing carries no link to an empty page.
+  await expect(page.locator(".binder-archive-link")).toHaveCount(0);
+
+  const proposed = await archive(session, org, binder, "nursing/hand-hygiene");
+  const { changeNumber } = (await proposed.json()) as { changeNumber: number };
+  await approveAndPublish(session, org, binder, changeNumber);
+
+  await page.reload();
+  await page.locator(".binder-archive-link").click();
+
+  await expect(page).toHaveURL(/\?archive=1$/);
+  await expect(page.getByText("Hand Hygiene")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/Last published as version 1/)).toBeVisible();
+
+  await page.getByRole("button", { name: /Back to the binder/ }).click();
+  await expect(page).toHaveURL(new RegExp(`/${org}/${binder}$`));
+});

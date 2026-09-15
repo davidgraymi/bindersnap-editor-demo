@@ -7,6 +7,8 @@
 import type {
   AddBinderPerson200,
   AddBinderPersonBody,
+  ArchiveBinderDocument201,
+  ArchiveBinderDocumentBody,
   CreateBinder201,
   CreateBinderBody,
   CreateBinderChangeDiscussion201,
@@ -18,6 +20,7 @@ import type {
   DiscardBinderDraft200,
   DownloadBinderDocumentParams,
   GetBinder200,
+  GetBinderArchive200,
   GetBinderChange200,
   GetBinderDocument200,
   GetBinderDraft200,
@@ -1082,6 +1085,75 @@ export const discardBinderDraft = async (org: string,
   {
     ...options,
     method: 'DELETE'
+
+
+  }
+);}
+
+
+export type archiveBinderDocumentResponse201 = {
+  data: ArchiveBinderDocument201
+  status: 201
+}
+
+export type archiveBinderDocumentResponseSuccess = (archiveBinderDocumentResponse201) & {
+  headers: Headers;
+};
+;
+
+export type archiveBinderDocumentResponse = (archiveBinderDocumentResponseSuccess)
+
+export const getArchiveBinderDocumentUrl = (org: string,
+    binder: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/document-archives`
+}
+
+export const archiveBinderDocument = async (org: string,
+    binder: string,
+    archiveBinderDocumentBody: ArchiveBinderDocumentBody, options?: Parameters<typeof customFetch>[1]): Promise<archiveBinderDocumentResponse> => {
+
+  return customFetch<archiveBinderDocumentResponse>(getArchiveBinderDocumentUrl(org,binder),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(archiveBinderDocumentBody)
+  }
+);}
+
+
+export type getBinderArchiveResponse200 = {
+  data: GetBinderArchive200
+  status: 200
+}
+
+export type getBinderArchiveResponseSuccess = (getBinderArchiveResponse200) & {
+  headers: Headers;
+};
+;
+
+export type getBinderArchiveResponse = (getBinderArchiveResponseSuccess)
+
+export const getGetBinderArchiveUrl = (org: string,
+    binder: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/archive`
+}
+
+export const getBinderArchive = async (org: string,
+    binder: string, options?: Parameters<typeof customFetch>[1]): Promise<getBinderArchiveResponse> => {
+
+  return customFetch<getBinderArchiveResponse>(getGetBinderArchiveUrl(org,binder),
+  {
+    ...options,
+    method: 'GET'
 
 
   }

@@ -52,6 +52,21 @@ export function editModeFromSearch(search: string): BinderEditMode {
 }
 
 /**
+ * Whether the address is asking for the archive rather than the binder.
+ *
+ * Its own key rather than a seventh tab. The archive is a view of the
+ * Documents tab — what this binder *held* — and the tab row is a map of the
+ * product; adding a rarely-visited destination to it costs every page a wider
+ * header to bring one most people never open a single click nearer.
+ *
+ * Addressable all the same, because "the archived infection control policy" is
+ * a thing somebody sends a colleague.
+ */
+export function archiveFromSearch(search: string): boolean {
+  return new URLSearchParams(search).get("archive") === "1";
+}
+
+/**
  * `/{org}/{binder}`, `?tab=changes`, or `?tab=changes&change=3`.
  *
  * Documents carries no `tab` at all: the binder's own address should be the
@@ -66,8 +81,18 @@ export function buildBinderUrl(params: {
   view?: DocumentChangeView;
   /** Editing the binder's contents, or writing up the draft to propose it. */
   edit?: BinderEditMode;
+  /** The archive — what this binder has taken off the record. */
+  archive?: boolean;
 }): string {
-  const { org, binder, tab = "documents", change, view, edit = "off" } = params;
+  const {
+    org,
+    binder,
+    tab = "documents",
+    change,
+    view,
+    edit = "off",
+    archive = false,
+  } = params;
   const query = new URLSearchParams();
 
   if (tab !== "documents") query.set("tab", tab);
@@ -75,6 +100,7 @@ export function buildBinderUrl(params: {
   // address stays the short one.
   if (edit === "editing") query.set("edit", "1");
   if (edit === "proposing") query.set("edit", "propose");
+  if (archive) query.set("archive", "1");
   if (change !== undefined) query.set("change", String(change));
   // The discussion is where a decision is made, so it is the screen a bare
   // change link opens and the one that needs no name.
