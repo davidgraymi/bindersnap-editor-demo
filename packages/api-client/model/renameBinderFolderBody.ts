@@ -9,4 +9,5 @@ export type RenameBinderFolderBody = {
   from: string;
   to: string;
   changeNumber?: number;
+  draft?: boolean | string;
 };

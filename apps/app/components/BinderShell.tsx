@@ -2,12 +2,22 @@ import { useCallback, useEffect, useState } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
 import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
 
-import { fetchBinder } from "../api";
-import type { WorkspaceOverviewPayload } from "../../../packages/api-schema/schemas/workspaces";
+import {
+  discardBinderDraft,
+  fetchBinder,
+  fetchBinderDraft,
+  openBinderDraft,
+} from "../api";
+import type {
+  BinderDraftPayload,
+  WorkspaceOverviewPayload,
+} from "../../../packages/api-schema/schemas/workspaces";
 import {
   binderTabFromSearch,
   buildBinderUrl,
   changeViewFromSearch,
+  editModeFromSearch,
+  type BinderEditMode,
   type BinderTab,
 } from "../binderShell";
 import type { DocumentChangeView } from "../routes";
@@ -15,6 +25,8 @@ import { parseRequestedChange } from "../binderChange";
 import { formatDocumentName } from "../documentDisplay";
 import { AddPolicyModal } from "./AddPolicyModal";
 import { NewFolderModal } from "./NewFolderModal";
+import { BinderDraftBar } from "./BinderDraftBar";
+import { ProposeChangePage } from "./ProposeChangePage";
 import { BinderChangePage } from "./BinderChangePage";
 import { BinderChanges } from "./BinderChanges";
 import { BinderHistory } from "./BinderHistory";
@@ -93,12 +105,30 @@ export function BinderShell({
   const [changeView, setChangeView] = useState<DocumentChangeView>(() =>
     changeViewFromSearch(window.location.search),
   );
+  const [editMode, setEditMode] = useState<BinderEditMode>(() =>
+    editModeFromSearch(window.location.search),
+  );
+
+  /**
+   * Your draft in this binder, and whose else is open.
+   *
+   * Held by the shell rather than by the documents list because the bar spans
+   * the page and the propose screen replaces it — three components asking the
+   * same question would answer it three times and disagree between renders.
+   */
+  const [draft, setDraft] = useState<BinderDraftPayload | null>(null);
+  const [startingEdit, setStartingEdit] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
+  // Bumped to make the documents list re-read the binder after an act that
+  // happened somewhere other than in the tree — a modal, in practice.
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const handler = () => {
       setTab(binderTabFromSearch(window.location.search));
       setOpenChange(parseRequestedChange(window.location.search));
       setChangeView(changeViewFromSearch(window.location.search));
+      setEditMode(editModeFromSearch(window.location.search));
     };
     window.addEventListener("popstate", handler);
     return () => window.removeEventListener("popstate", handler);
@@ -124,10 +154,110 @@ export function BinderShell({
     return loadOverview();
   }, [loadOverview]);
 
+  /**
+   * Read the draft whenever the address says we are editing.
+   *
+   * **A read, so it never starts one.** Landing on `?edit=1` from a reload or
+   * a stale link has to find the draft that is there, not conjure a new one:
+   * somebody who discarded their work and pressed Back would otherwise be put
+   * straight back into an empty edit they had just thrown away. No draft means
+   * the address is wrong about this binder, and the answer is to leave edit
+   * mode rather than to invent a state to match it.
+   */
+  useEffect(() => {
+    if (editMode === "off") {
+      setDraft(null);
+      return;
+    }
+
+    let cancelled = false;
+    fetchBinderDraft(org, binder)
+      .then((payload) => {
+        if (cancelled) return;
+        if (payload.draft) setDraft(payload);
+        else leaveEditMode();
+      })
+      .catch(() => {
+        if (!cancelled) leaveEditMode();
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // `leaveEditMode` is stable for the life of a binder: it closes over org,
+    // binder and the setters, all of which are in this list already.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [org, binder, editMode]);
+
+  const goToEdit = (next: BinderEditMode) => {
+    moveTo(buildBinderUrl({ org, binder, edit: next }));
+    setEditMode(next);
+  };
+
+  const leaveEditMode = () => {
+    setDraft(null);
+    setDraftError(null);
+    goToEdit("off");
+  };
+
+  /**
+   * Start editing, or carry on where you were.
+   *
+   * Idempotent on the server, which is what lets this be an ordinary button:
+   * the second press resumes rather than forks, so nothing here has to ask
+   * first whether a draft already exists.
+   */
+  const startEditing = async () => {
+    setStartingEdit(true);
+    setDraftError(null);
+    try {
+      setDraft(await openBinderDraft(org, binder));
+      goToEdit("editing");
+    } catch (err) {
+      setDraftError(
+        err instanceof Error && err.message.trim() !== ""
+          ? err.message
+          : "Unable to start editing this binder.",
+      );
+    } finally {
+      setStartingEdit(false);
+    }
+  };
+
+  const discard = async () => {
+    setStartingEdit(true);
+    try {
+      await discardBinderDraft(org, binder);
+      leaveEditMode();
+    } catch (err) {
+      setDraftError(
+        err instanceof Error && err.message.trim() !== ""
+          ? err.message
+          : "Unable to discard your draft.",
+      );
+    } finally {
+      setStartingEdit(false);
+    }
+  };
+
+  /** Re-read the draft, so the bar counts the act that just landed. */
+  const refreshDraft = () => {
+    fetchBinderDraft(org, binder)
+      .then((payload) => {
+        if (payload.draft) setDraft(payload);
+        else leaveEditMode();
+      })
+      // The act itself succeeded; failing to recount it is not worth throwing
+      // somebody out of the edit they are in the middle of.
+      .catch(() => undefined);
+  };
+
   const goTo = (next: BinderTab) => {
     moveTo(buildBinderUrl({ org, binder, tab: next }));
     setTab(next);
     setOpenChange(null);
+    setEditMode("off");
+    setDraft(null);
   };
 
   const openChangeNumber = (
@@ -220,20 +350,51 @@ export function BinderShell({
               answers to "what is this page for". */}
           {isReadOnly || activeTab !== "documents" || documentPath ? null : (
             <div className="doc-header-actions">
-              <button
-                className="bs-btn bs-btn-secondary"
-                type="button"
-                onClick={() => setAddingFolder(true)}
-              >
-                New folder
-              </button>
-              <button
-                className="doc-header-submit"
-                type="button"
-                onClick={() => setAdding(true)}
-              >
-                Add a policy
-              </button>
+              {/* **Edit is the filled button when you are not editing.** The
+                  customer asked for one: "an edit button that puts the user in
+                  edit mode and then allows all these edits to happen on a
+                  branch". Rearranging a binder — renaming, refiling, making
+                  folders — is the work this page is for, and adding one policy
+                  is the narrower act. While editing it is gone: the draft bar
+                  below carries Propose, which is the only thing left that
+                  finishes anything, and two filled buttons are two answers to
+                  "what is this page for". */}
+              {editMode === "off" ? (
+                <>
+                  <button
+                    className="bs-btn bs-btn-secondary"
+                    type="button"
+                    onClick={() => setAdding(true)}
+                  >
+                    Add a policy
+                  </button>
+                  <button
+                    className="doc-header-submit"
+                    type="button"
+                    onClick={() => void startEditing()}
+                    disabled={startingEdit}
+                  >
+                    {startingEdit ? "Opening your draft…" : "Edit"}
+                  </button>
+                </>
+              ) : editMode === "editing" ? (
+                <>
+                  <button
+                    className="bs-btn bs-btn-secondary"
+                    type="button"
+                    onClick={() => setAddingFolder(true)}
+                  >
+                    New folder
+                  </button>
+                  <button
+                    className="bs-btn bs-btn-secondary"
+                    type="button"
+                    onClick={() => setAdding(true)}
+                  >
+                    Add a policy
+                  </button>
+                </>
+              ) : null}
             </div>
           )}
         </div>
@@ -256,6 +417,26 @@ export function BinderShell({
           ))}
         </nav>
       </header>
+
+      {/* Between the header and whatever is under it, because it is about the
+          binder rather than about the list: the propose screen replaces the
+          tree and the bar stays put above it, which is what makes "you are
+          editing" a state rather than a property of one pane. */}
+      {draftError ? (
+        <p className="app-inline-error" role="alert">
+          {draftError}
+        </p>
+      ) : null}
+
+      {draft?.draft && editMode !== "off" && !documentPath ? (
+        <BinderDraftBar
+          acts={draft.draft.acts}
+          others={draft.others.map((other) => other.owner)}
+          busy={startingEdit}
+          onPropose={() => goToEdit("proposing")}
+          onDiscard={() => void discard()}
+        />
+      ) : null}
 
       {openChange !== null ? (
         <BinderChangePage
@@ -301,12 +482,33 @@ export function BinderShell({
         />
       ) : activeTab === "settings" ? (
         <BinderSettings org={org} binder={binder} />
+      ) : editMode === "proposing" && draft?.draft ? (
+        <ProposeChangePage
+          org={org}
+          binder={binder}
+          acts={draft.draft.acts}
+          onCancel={() => goToEdit("editing")}
+          onProposed={(changeNumber) => {
+            // Straight to the change request. The draft is a change request
+            // now — it has reviewers, a number and somewhere to be discussed —
+            // and leaving somebody on the tree they were editing would show
+            // them a binder that still looks unproposed.
+            setDraft(null);
+            setEditMode("off");
+            loadOverview();
+            openChangeNumber(changeNumber);
+          }}
+        />
       ) : (
         <BinderDocuments
           org={org}
           binder={binder}
           onOpenDocument={onOpenDocument}
           activeDocument={documentPath ?? null}
+          draft={editMode === "off" ? null : (draft?.draft?.branch ?? null)}
+          reloadKey={reloadKey}
+          onEdited={refreshDraft}
+          onDraftLost={leaveEditMode}
         />
       )}
 
@@ -314,11 +516,20 @@ export function BinderShell({
         <NewFolderModal
           org={org}
           binder={binder}
+          draft={draft?.draft?.branch}
           onClose={() => setAddingFolder(false)}
           onProposed={(changeNumber) => {
             setAddingFolder(false);
             loadOverview();
-            openChangeNumber(changeNumber);
+            // Null means it went into the draft, where there is no change
+            // request to send anybody to: the folder is in the tree already,
+            // so stay on it and let the bar count one act more.
+            if (changeNumber === null) {
+              setReloadKey((key) => key + 1);
+              refreshDraft();
+            } else {
+              openChangeNumber(changeNumber);
+            }
           }}
         />
       ) : null}
@@ -327,10 +538,18 @@ export function BinderShell({
         <AddPolicyModal
           org={org}
           binder={binder}
+          draft={draft?.draft?.branch}
           onClose={() => setAdding(false)}
           onAdded={(changeNumber) => {
             setAdding(false);
             loadOverview();
+            // Into the draft: the policy is in the tree, nothing has been
+            // proposed, and there is nowhere to navigate to.
+            if (changeNumber === null) {
+              setReloadKey((key) => key + 1);
+              refreshDraft();
+              return;
+            }
             // **Straight to the change request, not to the document.** What
             // just happened is that a change request was opened — the policy
             // is not in the binder and the binder's own list says so by not

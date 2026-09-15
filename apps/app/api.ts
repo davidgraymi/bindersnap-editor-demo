@@ -11,6 +11,7 @@ import * as AdminClient from "../../packages/api-client/admin/admin";
 import * as OrganizationsClient from "../../packages/api-client/organizations/organizations";
 import * as BindersClient from "../../packages/api-client/workspaces/workspaces";
 import type {
+  BinderDraftPayload,
   BinderShapeChangePayload,
   CreatedWorkspaceDocumentPayload,
   BinderGroupsPayload,
@@ -30,6 +31,7 @@ import type {
   WorkspaceDocumentDetailPayload,
   WorkspaceDocumentListPayload,
   WorkspaceSummary,
+  ProposedDraftPayload,
 } from "../../packages/api-schema/schemas/workspaces";
 
 // Import generated types
@@ -935,12 +937,43 @@ export async function fetchBinderSettings(
   return response.data;
 }
 
+/**
+ * The binder's contents — on the record, or as they stand in your own draft.
+ *
+ * Edit mode passes its draft branch because it has to see what it has just
+ * done: a folder made a second ago exists on that branch and nowhere else,
+ * and a list read from `main` would snap every rename back.
+ */
 export async function fetchBinderDocuments(
   org: string,
   binder: string,
+  draft?: string,
 ): Promise<WorkspaceDocumentListPayload> {
-  const response = await BindersClient.listBinderDocuments(org, binder);
+  const response = await BindersClient.listBinderDocuments(
+    org,
+    binder,
+    draft ? { draft } : undefined,
+  );
   return response.data;
+}
+
+/**
+ * Where an act's work goes.
+ *
+ * Three answers, and the default is the one every caller had before drafts
+ * existed: `undefined` opens a change request of its own. A `changeNumber`
+ * joins one already open — the change is the unit of approval, so policies
+ * that belong together are decided together (ADR 0004 §4). A `draft` puts it
+ * in work nobody has been asked to look at yet.
+ *
+ * One object rather than a fourth and fifth positional argument: they are
+ * alternatives, not a list, and `(org, binder, path, next, undefined, branch)`
+ * is not a call anybody can read.
+ */
+export interface ActTarget {
+  changeNumber?: number;
+  /** A draft branch, or `true` for the one you are working in. */
+  draft?: string | true;
 }
 
 export async function fetchBinderDocument(
@@ -1053,15 +1086,15 @@ export async function createBinderDocument(
   file: File,
   name: string,
   folder?: string,
-  /** An open change to put it in, instead of opening one of its own. */
-  changeNumber?: number,
+  /** An open change or a draft to put it in, instead of opening one. */
+  target?: ActTarget,
 ): Promise<CreatedWorkspaceDocumentPayload> {
   try {
     const response = await BindersClient.createBinderDocument(org, binder, {
       file,
       name,
       ...(folder ? { folder } : {}),
-      ...(changeNumber ? { changeNumber: String(changeNumber) } : {}),
+      ...multipartTarget(target),
     });
     return response.data;
   } catch (error) {
@@ -1082,14 +1115,14 @@ export async function reviseBinderDocument(
   binder: string,
   file: File,
   documentPath: string,
-  /** An open change to put it in, instead of opening one of its own. */
-  changeNumber?: number,
+  /** An open change or a draft to put it in, instead of opening one. */
+  target?: ActTarget,
 ): Promise<CreatedWorkspaceDocumentPayload> {
   try {
     const response = await BindersClient.reviseBinderDocument(org, binder, {
       file,
       documentPath,
-      ...(changeNumber ? { changeNumber: String(changeNumber) } : {}),
+      ...multipartTarget(target),
     });
     return response.data;
   } catch (error) {
@@ -1111,12 +1144,12 @@ export async function createBinderFolder(
   org: string,
   binder: string,
   folder: string,
-  changeNumber?: number,
+  target?: ActTarget,
 ): Promise<BinderShapeChangePayload> {
   try {
     const response = await BindersClient.createBinderFolder(org, binder, {
       folder,
-      ...(changeNumber ? { changeNumber } : {}),
+      ...jsonTarget(target),
     });
     return response.data;
   } catch (error) {
@@ -1130,13 +1163,13 @@ export async function renameBinderFolder(
   binder: string,
   from: string,
   to: string,
-  changeNumber?: number,
+  target?: ActTarget,
 ): Promise<BinderShapeChangePayload> {
   try {
     const response = await BindersClient.renameBinderFolder(org, binder, {
       from,
       to,
-      ...(changeNumber ? { changeNumber } : {}),
+      ...jsonTarget(target),
     });
     return response.data;
   } catch (error) {
@@ -1158,14 +1191,14 @@ export async function renameBinderDocument(
   binder: string,
   documentPath: string,
   next: { name?: string; folder?: string },
-  changeNumber?: number,
+  target?: ActTarget,
 ): Promise<BinderShapeChangePayload> {
   try {
     const response = await BindersClient.renameBinderDocument(org, binder, {
       documentPath,
       ...(next.name !== undefined ? { name: next.name } : {}),
       ...(next.folder !== undefined ? { folder: next.folder } : {}),
-      ...(changeNumber ? { changeNumber } : {}),
+      ...jsonTarget(target),
     });
     return response.data;
   } catch (error) {
@@ -1173,6 +1206,119 @@ export async function renameBinderDocument(
       `/api/app/binders/${org}/${binder}/document-renames`,
       error,
     );
+  }
+}
+
+/**
+ * An {@link ActTarget} as a JSON body's two optional fields.
+ *
+ * Absent stays absent rather than becoming `null`: the server reads a missing
+ * `draft` as "open a change request", and an explicit null would have to mean
+ * the same thing in a second way.
+ */
+function jsonTarget(target?: ActTarget): {
+  changeNumber?: number;
+  draft?: string | boolean;
+} {
+  if (!target) return {};
+  return {
+    ...(target.changeNumber ? { changeNumber: target.changeNumber } : {}),
+    ...(target.draft ? { draft: target.draft } : {}),
+  };
+}
+
+/**
+ * The same, for the two acts that upload a file.
+ *
+ * **Every multipart field is a string**, which is why `true` goes over as
+ * `"true"` — there are no booleans and no nulls in a form, and a field nobody
+ * filled in arrives as the empty string. The server reads it back with that in
+ * mind; this is the other half of the same convention.
+ */
+function multipartTarget(target?: ActTarget): {
+  changeNumber?: string;
+  draft?: string;
+} {
+  if (!target) return {};
+  return {
+    ...(target.changeNumber
+      ? { changeNumber: String(target.changeNumber) }
+      : {}),
+    ...(target.draft ? { draft: String(target.draft) } : {}),
+  };
+}
+
+/**
+ * Your draft in this binder, what is in it, and who else is editing.
+ *
+ * A read, so it never starts one: `draft` comes back null when you are not
+ * editing, which is the ordinary state rather than a missing thing.
+ */
+export async function fetchBinderDraft(
+  org: string,
+  binder: string,
+): Promise<BinderDraftPayload> {
+  const response = await BindersClient.getBinderDraft(org, binder);
+  return response.data;
+}
+
+/**
+ * Start editing this binder, or carry on where you were.
+ *
+ * Idempotent by design — pressing Edit twice resumes rather than forks, so
+ * this is safe to call without first asking whether a draft exists.
+ */
+export async function openBinderDraft(
+  org: string,
+  binder: string,
+): Promise<BinderDraftPayload> {
+  try {
+    const response = await BindersClient.openBinderDraft(org, binder);
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(`/api/app/binders/${org}/${binder}/draft`, error);
+  }
+}
+
+/**
+ * Throw your draft away.
+ *
+ * Only ever your own, and only while it is still a draft: once a change
+ * request sits on the branch it is not a draft any more and the server refuses
+ * — deleting it would take somebody's review with it.
+ */
+export async function discardBinderDraft(
+  org: string,
+  binder: string,
+): Promise<void> {
+  try {
+    await BindersClient.discardBinderDraft(org, binder);
+  } catch (error) {
+    handlePaymentRequired(`/api/app/binders/${org}/${binder}/draft`, error);
+  }
+}
+
+/**
+ * Propose your draft: open the change request, in your own words.
+ *
+ * The title is the author's. A change request is a request — it is addressed
+ * to colleagues, and the server writing "Add nursing/hand-hygiene" on somebody
+ * else's behalf is not the sentence they would have written.
+ */
+export async function proposeBinderDraft(
+  org: string,
+  binder: string,
+  title: string,
+  description: string,
+): Promise<ProposedDraftPayload> {
+  try {
+    const response = await BindersClient.proposeBinderDraft(org, binder, {
+      title,
+      ...(description.trim() === "" ? {} : { description }),
+    });
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(`/api/app/binders/${org}/${binder}/changes`, error);
   }
 }
 

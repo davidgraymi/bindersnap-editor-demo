@@ -10,4 +10,5 @@ export type ReviseBinderDocumentBody = {
   file: Blob;
   documentPath: string;
   changeNumber?: string;
+  draft?: string;
 };

@@ -31,6 +31,27 @@ export function binderTabFromSearch(search: string): BinderTab {
 }
 
 /**
+ * Whether the binder is being edited, and which screen of editing.
+ *
+ * **In the address rather than in a component's memory**, for the reason every
+ * other state in this file is: a reload should not throw the work away. Edit
+ * mode is a draft on the server, so it survives a refresh whatever the page
+ * remembers — putting it in the URL is what lets the page find its way back to
+ * it, and lets somebody keep a tab open on the binder they are rearranging.
+ *
+ * Proposing is a value of the same key rather than a second one, because "am I
+ * editing" has one answer: the propose screen is reached from edit mode, is
+ * left back into it, and cannot be true while `edit` is not.
+ */
+export type BinderEditMode = "off" | "editing" | "proposing";
+
+export function editModeFromSearch(search: string): BinderEditMode {
+  const raw = new URLSearchParams(search).get("edit");
+  if (raw === "propose") return "proposing";
+  return raw === "1" ? "editing" : "off";
+}
+
+/**
  * `/{org}/{binder}`, `?tab=changes`, or `?tab=changes&change=3`.
  *
  * Documents carries no `tab` at all: the binder's own address should be the
@@ -43,11 +64,17 @@ export function buildBinderUrl(params: {
   change?: number;
   /** Which screen of that change: its discussion, the file, or the compare. */
   view?: DocumentChangeView;
+  /** Editing the binder's contents, or writing up the draft to propose it. */
+  edit?: BinderEditMode;
 }): string {
-  const { org, binder, tab = "documents", change, view } = params;
+  const { org, binder, tab = "documents", change, view, edit = "off" } = params;
   const query = new URLSearchParams();
 
   if (tab !== "documents") query.set("tab", tab);
+  // Not editing is the ordinary state, so it says nothing — the binder's own
+  // address stays the short one.
+  if (edit === "editing") query.set("edit", "1");
+  if (edit === "proposing") query.set("edit", "propose");
   if (change !== undefined) query.set("change", String(change));
   // The discussion is where a decision is made, so it is the screen a bare
   // change link opens and the one that needs no name.

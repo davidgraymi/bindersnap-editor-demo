@@ -199,7 +199,7 @@ test("work goes into a draft, and nothing is proposed", async () => {
   const payload = await readDraft(session, org, binder);
   expect(payload.draft?.branch).toBe(result.branch);
   expect(payload.draft?.acts.map((act) => act.summary)).toEqual([
-    "Add the folder nursing",
+    "Add the folder Nursing",
   ]);
   expect(payload.draft?.acts[0]?.paths).toEqual(["nursing/.gitkeep"]);
 });
@@ -222,9 +222,9 @@ test("several acts accumulate on one draft", async () => {
   // One draft, three acts — not three drafts and not three change requests.
   // Newest first, the way Gitea returns commits.
   expect(payload.draft?.acts.map((act) => act.summary)).toEqual([
-    "Add the folder estates",
-    "Add the folder pharmacy",
-    "Add the folder nursing",
+    "Add the folder Estates",
+    "Add the folder Pharmacy",
+    "Add the folder Nursing",
   ]);
 });
 
@@ -402,6 +402,6 @@ test("a draft in flight is visible to the people it is not", async () => {
   expect(seen.others).toHaveLength(1);
   expect(seen.others[0]).toMatchObject({
     owner: credentials.username,
-    lastAct: "Add the folder nursing",
+    lastAct: "Add the folder Nursing",
   });
 });

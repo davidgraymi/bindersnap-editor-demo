@@ -10,4 +10,5 @@ export type RenameBinderDocumentBody = {
   name?: string;
   folder?: string;
   changeNumber?: number;
+  draft?: boolean | string;
 };

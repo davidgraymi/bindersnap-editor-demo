@@ -60,6 +60,8 @@ import {
   ProposedSignOffChangeSchema,
   SignOffRulesRequestSchema,
   BinderShapeChangePayloadSchema,
+  BinderDraftPayloadSchema,
+  ProposedDraftPayloadSchema,
   WorkspaceHistoryPayloadSchema,
   WorkspaceSettingsPayloadSchema,
   WorkspaceOverviewPayloadSchema,
@@ -809,7 +811,17 @@ registry.registerPath({
   path: "/api/app/binders/{org}/{binder}/documents",
   operationId: "listBinderDocuments",
   tags: ["workspaces"],
-  request: { params: z.object({ org: z.string(), binder: z.string() }) },
+  request: {
+    params: z.object({ org: z.string(), binder: z.string() }),
+    /**
+     * Read the binder as it stands in your own draft, rather than on `main`.
+     *
+     * Edit mode has to see what it has just done — a folder made a second ago
+     * is not on `main` and never will be until the change request publishes.
+     * Your own draft only; naming somebody else's is refused.
+     */
+    query: z.object({ draft: z.string().optional() }),
+  },
   responses: {
     200: {
       description: "The binder's documents",
@@ -894,6 +906,14 @@ registry.registerPath({
              * policies filed together can be approved and published together.
              */
             changeNumber: z.string().optional(),
+            /**
+             * Put this in a draft instead: `true` for the one you are working
+             * in, or a draft's branch name.
+             *
+             * A multipart field is always a string, so `"true"` is what the
+             * boolean looks like on the way in.
+             */
+            draft: z.string().optional(),
           }),
         },
       },
@@ -937,6 +957,14 @@ registry.registerPath({
             documentPath: z.string(),
             /** An open change request to put this in, instead of opening one. */
             changeNumber: z.string().optional(),
+            /**
+             * Put this in a draft instead: `true` for the one you are working
+             * in, or a draft's branch name.
+             *
+             * A multipart field is always a string, so `"true"` is what the
+             * boolean looks like on the way in.
+             */
+            draft: z.string().optional(),
           }),
         },
       },
@@ -970,6 +998,12 @@ registry.registerPath({
             folder: z.string(),
             /** An open change request to put it in, instead of opening one. */
             changeNumber: z.number().optional(),
+            /**
+             * Put this in a draft instead: `true` for the one you are working
+             * in, or a draft's branch name. Nothing is proposed to anybody
+             * until the draft is.
+             */
+            draft: z.union([z.boolean(), z.string()]).optional(),
           }),
         },
       },
@@ -1001,6 +1035,12 @@ registry.registerPath({
             /** A new name, or a path — renaming and moving are one act. */
             to: z.string(),
             changeNumber: z.number().optional(),
+            /**
+             * Put this in a draft instead: `true` for the one you are working
+             * in, or a draft's branch name. Nothing is proposed to anybody
+             * until the draft is.
+             */
+            draft: z.union([z.boolean(), z.string()]).optional(),
           }),
         },
       },
@@ -1035,6 +1075,12 @@ registry.registerPath({
             /** A new folder, or absent to leave it where it is. "" is the root. */
             folder: z.string().optional(),
             changeNumber: z.number().optional(),
+            /**
+             * Put this in a draft instead: `true` for the one you are working
+             * in, or a draft's branch name. Nothing is proposed to anybody
+             * until the draft is.
+             */
+            draft: z.union([z.boolean(), z.string()]).optional(),
           }),
         },
       },
@@ -1045,6 +1091,105 @@ registry.registerPath({
       description: "The change request that would rename the document",
       content: {
         "application/json": { schema: BinderShapeChangePayloadSchema },
+      },
+    },
+  },
+});
+
+/**
+ * A draft is a branch with commits and no change request — work in progress
+ * that has been proposed to nobody. Singular, because a person has one draft
+ * in a binder: "resume where I was" has a single answer, and a picker between
+ * four half-finished drafts is a filing problem nobody asked for.
+ *
+ * The branch is never in the URL. It carries slashes, it is the server's to
+ * name, and the only draft any of these verbs acts on is the caller's own.
+ */
+registry.registerPath({
+  method: "get",
+  path: "/api/app/binders/{org}/{binder}/draft",
+  operationId: "getBinderDraft",
+  tags: ["workspaces"],
+  request: { params: z.object({ org: z.string(), binder: z.string() }) },
+  responses: {
+    200: {
+      description:
+        "Your draft and what is in it, plus who else is editing. `draft` is null when you are not.",
+      content: {
+        "application/json": { schema: BinderDraftPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/app/binders/{org}/{binder}/draft",
+  operationId: "openBinderDraft",
+  tags: ["workspaces"],
+  request: { params: z.object({ org: z.string(), binder: z.string() }) },
+  responses: {
+    201: {
+      description:
+        "Editing started — or resumed, because pressing Edit twice must not fork your work",
+      content: {
+        "application/json": { schema: BinderDraftPayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "delete",
+  path: "/api/app/binders/{org}/{binder}/draft",
+  operationId: "discardBinderDraft",
+  tags: ["workspaces"],
+  request: { params: z.object({ org: z.string(), binder: z.string() }) },
+  responses: {
+    200: {
+      description: "The draft branch that was thrown away",
+      content: {
+        "application/json": {
+          schema: z.object({ discarded: z.string() }),
+        },
+      },
+    },
+  },
+});
+
+/**
+ * Propose your draft: open the change request, with the title you wrote.
+ *
+ * The title is the author's, not the server's. A change request is a request —
+ * it is addressed to colleagues, and the sentence explaining it should be the
+ * words of the person asking. The body's first line is the title and the rest
+ * is the description, which is the convention every change in the product
+ * already follows.
+ */
+registry.registerPath({
+  method: "post",
+  path: "/api/app/binders/{org}/{binder}/changes",
+  operationId: "proposeBinderDraft",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({ org: z.string(), binder: z.string() }),
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z.object({
+            title: z.string(),
+            description: z.string().optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "The change request the draft is now waiting in",
+      content: {
+        "application/json": { schema: ProposedDraftPayloadSchema },
       },
     },
   },

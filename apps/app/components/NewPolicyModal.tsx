@@ -62,8 +62,11 @@ export function NewPolicyModal({ onClose, onAdded }: NewPolicyModalProps) {
         org={chosen.owner}
         binder={chosen.name}
         onClose={onClose}
+        // Never null: null is what an act put into a draft answers with, and
+        // this route names no draft — it is reached from the top nav, before
+        // any binder is even in scope.
         onAdded={(changeNumber) =>
-          onAdded(chosen.owner, chosen.name, changeNumber)
+          onAdded(chosen.owner, chosen.name, changeNumber ?? 0)
         }
       />
     );

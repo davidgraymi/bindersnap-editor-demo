@@ -1248,6 +1248,20 @@ input {
   outline-offset: 2px;
 }
 
+/* Off, and visibly so. This button is filled coral, which reads as "press
+   this" whatever it is doing — so a Propose with nothing to propose, or an
+   "Open the change request" with no title written yet, looked pressable and
+   did nothing when pressed. `.bs-btn` has carried this rule all along; the
+   header's own button was the one that never got it. */
+.doc-header-submit:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.doc-header-submit:disabled:hover {
+  background: var(--bs-cta-fill);
+}
+
 /* The same button while it is cancelling something. Coral is reserved for the
    one action a page wants you to take, and "Cancel" is not it. */
 .doc-header-submit--quiet {
@@ -7647,4 +7661,183 @@ input {
   gap: var(--brand-space-1);
   padding-right: var(--brand-space-3);
   flex-shrink: 0;
+}
+
+/* ── Editing a binder ──────────────────────────────────────────────────────
+   A draft is a branch: what is on it is committed and on nobody's desk. The
+   bar is how that state is visible at all — without it, edit mode looks
+   exactly like editing the binder itself, which is the one thing it is not.
+
+   Sits between the header and the pane, spanning both, because it is about
+   the binder rather than about the list under it. */
+
+.draft-bar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--brand-space-4);
+  flex-wrap: wrap;
+  padding: var(--brand-space-4);
+  /* The dimmed coral the product already uses for "this is in flight", so the
+     bar reads as the same family of thing as a change awaiting a decision. */
+  background: var(--bs-coral-dim);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-xl);
+}
+
+.draft-bar-body {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--brand-space-3);
+  min-width: 0;
+}
+
+.draft-bar-icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding-top: 2px;
+  color: var(--bs-text-secondary);
+}
+
+.draft-bar-spin {
+  animation: bs-spin 0.6s linear infinite;
+}
+
+.draft-bar-text {
+  display: grid;
+  gap: var(--brand-space-2);
+  min-width: 0;
+}
+
+.draft-bar-title {
+  margin: 0;
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-semibold);
+  color: var(--bs-text-primary);
+}
+
+/* The acts, as a list rather than a count. Each line is a commit subject the
+   planner wrote in plain language, so this is already an account of the work
+   — and it is the same text that prefills the change request. */
+.draft-bar-acts {
+  margin: 0;
+  padding-left: var(--brand-space-4);
+  display: grid;
+  gap: var(--brand-space-1);
+  font-size: var(--brand-text-ui-sm);
+  color: var(--bs-text-secondary);
+}
+
+.draft-bar-note {
+  margin: 0;
+  font-size: var(--brand-text-ui-sm);
+  color: var(--bs-text-muted);
+}
+
+.draft-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* Quiet, and not beside the filled button by accident: discarding is the one
+   irreversible thing on this bar. */
+.draft-bar-discard {
+  color: var(--bs-text-secondary);
+}
+
+/* A row that has stopped being a button, because there is an input in it. The
+   padding has to match `.binder-tree-main` exactly or the row jumps the moment
+   somebody starts typing. */
+.binder-tree-main--inert {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  flex: 1;
+  min-width: 0;
+  padding: var(--brand-space-2-5) var(--brand-space-4);
+}
+
+.binder-tree-rename {
+  /* Wide enough for a policy title, not the width of the row. A box spanning
+     to the far edge reads as a form somebody has been dropped into; Finder
+     sizes it to the name, and the name is what is being changed. */
+  flex: 0 1 22rem;
+  min-width: 0;
+  font: inherit;
+  font-size: 14.5px;
+  color: var(--bs-text-primary);
+  background: var(--bs-surface-1);
+  border: 1.5px solid var(--brand-coral);
+  border-radius: var(--brand-radius-sm);
+  padding: 2px var(--brand-space-2);
+}
+
+.binder-tree-rename:focus {
+  outline: none;
+}
+
+/* The pencil. Faint until the row is under the pointer — a tree of forty rows
+   each carrying a lit button is a tree nobody can read. */
+.binder-tree-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--brand-space-1-5);
+  border: none;
+  border-radius: var(--brand-radius-sm);
+  background: transparent;
+  color: var(--bs-text-muted);
+  cursor: pointer;
+  opacity: 0.45;
+  transition: opacity var(--brand-transition-fast);
+}
+
+.binder-tree-row:hover .binder-tree-action,
+.binder-tree-action:focus-visible {
+  opacity: 1;
+}
+
+.binder-tree-action:hover:not(:disabled) {
+  background: var(--bs-surface-2);
+  color: var(--bs-text-primary);
+}
+
+.binder-tree-action:disabled {
+  cursor: not-allowed;
+}
+
+.binder-tree-action:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: -2px;
+}
+
+/* ── Proposing a draft ──────────────────────────────────────────────────── */
+
+.propose-page {
+  max-width: 42rem;
+}
+
+.propose-title {
+  margin: 0;
+  font-family: var(--brand-font-serif);
+  font-size: 22px;
+  font-weight: var(--brand-weight-semibold);
+  letter-spacing: var(--brand-tracking-snug);
+  color: var(--bs-text-primary);
+}
+
+.propose-lede {
+  margin: 0;
+  font-size: var(--brand-text-sm);
+  color: var(--bs-text-secondary);
+}
+
+.propose-description {
+  resize: vertical;
+  min-height: 8rem;
+  line-height: 1.55;
 }

@@ -62,9 +62,12 @@ export function RenameDocumentModal({
         binder,
         slugPath,
         { name: nextName.trim(), folder: nextFolder },
-        changeNumber ?? undefined,
+        changeNumber ? { changeNumber } : undefined,
       );
-      onProposed(proposed.changeNumber);
+      // Never null: null is what an act put into a draft answers with, and
+      // this screen names no draft — the same reason the revise modal reads
+      // its number the same way.
+      onProposed(proposed.changeNumber ?? 0);
     } catch (err) {
       setError(
         err instanceof Error && err.message.trim() !== ""
