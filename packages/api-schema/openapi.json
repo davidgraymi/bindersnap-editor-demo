@@ -2699,6 +2699,10 @@
                           "name": {
                             "type": "string"
                           },
+                          "uid": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "folder": {
                             "type": "string"
                           },
@@ -2756,6 +2760,7 @@
                           "path",
                           "slugPath",
                           "name",
+                          "uid",
                           "folder",
                           "size",
                           "sha",
@@ -3350,6 +3355,10 @@
                           "name": {
                             "type": "string"
                           },
+                          "uid": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "folder": {
                             "type": "string"
                           },
@@ -3407,6 +3416,7 @@
                           "path",
                           "slugPath",
                           "name",
+                          "uid",
                           "folder",
                           "size",
                           "sha",
@@ -7079,6 +7089,10 @@
                           "name": {
                             "type": "string"
                           },
+                          "uid": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "folder": {
                             "type": "string"
                           },
@@ -7127,6 +7141,7 @@
                           "path",
                           "slugPath",
                           "name",
+                          "uid",
                           "folder",
                           "size",
                           "sha",

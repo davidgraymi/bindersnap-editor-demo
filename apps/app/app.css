@@ -7841,3 +7841,39 @@ input {
   min-height: 8rem;
   line-height: 1.55;
 }
+
+/* ── Dragging a row ────────────────────────────────────────────────────────
+   Folders take drops; policies do not, because there is no "inside" a file to
+   be. A row that lights up for a drop it cannot honour is worse than one that
+   never lights up, so the highlight is driven by the same rule that decides
+   whether the drop would do anything. */
+
+.binder-tree-row--dragging {
+  opacity: 0.4;
+}
+
+.binder-tree-row--drop {
+  background: var(--bs-coral-dim);
+  /* Inset, so the ring does not move the row and shift everything under it by
+     two pixels at the moment somebody is aiming at it. */
+  box-shadow: inset 0 0 0 2px var(--brand-coral);
+}
+
+/* The way out of a folder. Only on screen while something is in the air —
+   a permanent strip under every binder would be furniture explaining a
+   gesture nobody is making. */
+.binder-tree-root-drop {
+  padding: var(--brand-space-4);
+  border: 1.5px dashed var(--bs-rule);
+  border-radius: var(--brand-radius-xl);
+  text-align: center;
+  font-size: var(--brand-text-ui-sm);
+  color: var(--bs-text-muted);
+}
+
+.binder-tree-root-drop--over {
+  border-color: var(--brand-coral);
+  border-style: solid;
+  background: var(--bs-coral-dim);
+  color: var(--bs-text-primary);
+}
