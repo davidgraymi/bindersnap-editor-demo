@@ -37,6 +37,7 @@ import {
   listOrganizationWorkspaces,
   provisionWorkspace,
   readWorkspaceAccess,
+  renameWorkspaceRepo,
   recomputeApprovalsWhitelist,
 } from "./gitea-client/workspaces";
 import {
@@ -8713,6 +8714,125 @@ async function handleCreateWorkspace(
   }
 }
 
+/**
+ * Give a binder a new name.
+ *
+ * **The customer's ask, and the thing that made it worth checking first:** a
+ * binder is a Gitea repository, so renaming one changes every URL that points
+ * at it. Gitea answers `301` from the old name — verified against the version
+ * this runs on, see {@link renameWorkspaceRepo} — so a colleague's bookmark
+ * still resolves rather than 404ing, which is what makes this safe to offer
+ * rather than something to warn people away from.
+ *
+ * **Slugged by the same rule a new binder is.** A binder carries no display
+ * name of its own; every screen derives what it is called from the slug, so
+ * "Clinical Policies" has to become `clinical-policies` here exactly as it
+ * would at creation, or a renamed binder would read differently from a new one
+ * with the same name.
+ *
+ * Admin only, and the same admin the settings tab already asks about — the
+ * page draws the field from `canManage`, and this is the half that enforces it.
+ */
+async function handleRenameBinder(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { client, session } = auth;
+
+  try {
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    const access = await readWorkspaceAccess({
+      client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!access.admin) {
+      return json(
+        403,
+        { error: "Only a binder administrator can rename it." },
+        baseHeaders,
+      );
+    }
+
+    const payload = await readJson<{ name?: unknown }>(req);
+    const requested =
+      typeof payload?.name === "string" ? payload.name.trim() : "";
+    if (!requested) {
+      return json(400, { error: "A binder needs a name." }, baseHeaders);
+    }
+
+    const name = slugifyOrganizationName(requested);
+    if (!name) {
+      return json(
+        400,
+        { error: "That name has no letters or numbers Gitea can use." },
+        baseHeaders,
+      );
+    }
+
+    if (name === workspaceName) {
+      return json(
+        409,
+        { error: "That is the name it already has." },
+        baseHeaders,
+      );
+    }
+
+    // Checked before the rename rather than after: Gitea would refuse it, but
+    // "a binder named clinical-policies already exists" is a sentence somebody
+    // can act on and Gitea's is not.
+    const taken = await findWorkspaceRepo({ client, org: orgName, name });
+    if (taken) {
+      return json(
+        409,
+        { error: `This organization already has a binder called "${name}".` },
+        baseHeaders,
+      );
+    }
+
+    await renameWorkspaceRepo({
+      client,
+      org: orgName,
+      name: workspaceName,
+      to: name,
+    });
+
+    logger.info("Binder renamed", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      to: name,
+    });
+
+    return json(
+      200,
+      { organization: orgName, workspace: name, previous: workspaceName },
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to rename a binder", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to rename this binder.");
+  }
+}
+
 async function handleListOrganizations(
   req: Request,
   baseHeaders: Headers,
@@ -9460,6 +9580,12 @@ export function createApiServer() {
         const workspaceDocumentRestoresMatch = pathname.match(
           /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/document-restores$/,
         );
+        // A binder's own name. Not under `settings`, because it is not a
+        // setting — it changes the binder's address, and every other write
+        // under that path leaves the address alone.
+        const workspaceNameMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/name$/,
+        );
         const workspaceArchiveMatch = pathname.match(
           /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/archive$/,
         );
@@ -9988,6 +10114,13 @@ export function createApiServer() {
                 tree,
               });
             },
+          );
+        } else if (workspaceNameMatch && method === "POST") {
+          response = await handleRenameBinder(
+            req,
+            baseHeaders,
+            workspaceNameMatch[1]!,
+            workspaceNameMatch[2]!,
           );
         } else if (workspaceArchiveMatch && method === "GET") {
           response = await handleBinderArchive(

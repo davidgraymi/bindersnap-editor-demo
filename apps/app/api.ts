@@ -1387,6 +1387,26 @@ export async function restoreBinderDocument(
 }
 
 /**
+ * Give a binder a new name.
+ *
+ * Answers with its new address, which the caller has to navigate to: the page
+ * it is on is addressed by the old one. Old links keep working — Gitea
+ * redirects — but the address bar should say what the binder is called now.
+ */
+export async function renameBinder(
+  org: string,
+  binder: string,
+  name: string,
+): Promise<{ organization: string; workspace: string; previous: string }> {
+  try {
+    const response = await BindersClient.renameBinder(org, binder, { name });
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(`/api/app/binders/${org}/${binder}/name`, error);
+  }
+}
+
+/**
  * Everything this binder has taken off the record.
  *
  * Not a table: the server works it out at read time as every identity with a

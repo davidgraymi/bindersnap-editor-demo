@@ -325,6 +325,8 @@ export * from './removeOrganizationPerson200.ts';
 export * from './removeOrganizationPerson200GroupsItem.ts';
 export * from './removeOrganizationPerson200GroupsItemMembersItem.ts';
 export * from './removeOrganizationPerson200PeopleItem.ts';
+export * from './renameBinder200.ts';
+export * from './renameBinderBody.ts';
 export * from './renameBinderDocument201.ts';
 export * from './renameBinderDocumentBody.ts';
 export * from './renameBinderFolder201.ts';
