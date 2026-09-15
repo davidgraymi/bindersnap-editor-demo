@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Binder · History — Bindersnap design</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" />
+    <link rel="stylesheet" href="./binder.css" />
+    <script src="./shell.js"></script>
+  </head>
+  <body>
+    <script>
+      /*
+       * What this binder has published, and who approved it. The audit trail
+       * is the product, so this is the page a surveyor is shown — and the one
+       * that shipped as a bare spine floating on the page with no container,
+       * no way to narrow it, and no way to take it away with you.
+       *
+       * Three things added, all of them things a surveyor asks for:
+       * a date range, a filter by policy, and Export. The export is the honest
+       * reason this page exists; it was not on it.
+       *
+       * The spine stays. It is the right shape for a record read in time
+       * order, and it is the one idiom here that no other screen wanted.
+       */
+      const page = shell({ binder: 'Clinical', section: 'history' });
+      const I = window.bsIcon;
+
+      const entry = ({ v, doc, folder, when, who, approvers, change }) => `
+        <li class="bs-spine-item">
+          <span class="bs-knot bs-knot--ok"><span class="bs-ver">${v}</span></span>
+          <div class="bs-comment">
+            <div class="bs-comment-head">
+              <span class="bs-comment-who">${doc}</span>
+              <span class="bs-comment-when">${folder}</span>
+              <span class="bs-section-spacer"></span>
+              <span class="bs-comment-when">${when}</span>
+            </div>
+            <div class="bs-comment-body" style="padding: var(--brand-space-1-5) var(--brand-space-2); font-size: var(--brand-text-ui-md)">
+              <p>
+                Published by ${who} · approved by ${approvers} ·
+                <a href="./change.html" style="color: var(--bs-coral-text)">${change}</a>
+              </p>
+            </div>
+          </div>
+        </li>`;
+
+      page.innerHTML = `
+        <div class="bs-pagehead">
+          <div class="bs-pagehead-body">
+            <h1 class="bs-title">History</h1>
+            <p class="bs-subtitle">
+              Every version this binder has published, with who approved it and
+              when. This is the record a surveyor asks for.
+            </p>
+          </div>
+          <div class="bs-pagehead-actions">
+            <button type="button" class="bs-btn bs-btn-secondary">
+              <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v9m0 0 3.5-3.5M9 11 5.5 7.5M3 13v2h12v-2"/></svg>
+              Export
+            </button>
+          </div>
+        </div>
+
+        <div class="bs-panel" style="margin-bottom: var(--brand-space-3)">
+          <div class="bs-panel-bar">
+            <select class="bs-input bs-input--sm" style="width: 200px" aria-label="Policy">
+              <option>Every policy</option>
+              <option>Infection Control Policy</option>
+            </select>
+            <select class="bs-input bs-input--sm" style="width: 168px" aria-label="When">
+              <option>All time</option>
+              <option>This year</option>
+              <option>Last 90 days</option>
+            </select>
+            <span class="bs-panel-bar-spacer"></span>
+            <span style="color: var(--bs-text-muted); font-size: var(--brand-text-ui-md)">
+              5 published versions
+            </span>
+          </div>
+        </div>
+
+        <ol class="bs-spine" style="gap: var(--brand-space-1)">
+          ${entry({ v: 'v1', doc: 'Patient Grievance Policy', folder: 'Administrative', when: 'Sep 15, 1:03 PM', who: 'Alice', approvers: 'Bob Okafor', change: 'Change 7' })}
+          ${entry({ v: 'v1', doc: 'Medication Administration Policy', folder: 'Nursing', when: 'Sep 15, 1:02 PM', who: 'Alice', approvers: 'Bob Okafor', change: 'Change 5' })}
+          ${entry({ v: 'v1', doc: 'Infection Control Policy', folder: 'Nursing', when: 'Sep 15, 1:02 PM', who: 'Alice', approvers: 'Bob Okafor', change: 'Change 3' })}
+          ${entry({ v: 'v2', doc: 'HIPAA Training Policy', folder: 'Training', when: 'Sep 15, 1:02 PM', who: 'Bob', approvers: 'Alice Lundgren', change: 'Change 2' })}
+          ${entry({ v: 'v1', doc: 'HIPAA Training Policy', folder: 'Training', when: 'Sep 15, 1:02 PM', who: 'Bob', approvers: 'Alice Lundgren', change: 'Change 1' })}
+        </ol>`;
+    </script>
+  </body>
+</html>

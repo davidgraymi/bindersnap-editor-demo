@@ -1,0 +1,1529 @@
+/*
+ * The binder design system — proposed.
+ *
+ * This file is the mockups' stylesheet AND the build spec. Every class here is
+ * a class we would ship; the screens beside it are that class rendered with
+ * real content. It imports the real tokens rather than restating their hex
+ * values, so a mockup cannot drift from the product's palette.
+ *
+ * The problem it answers: the six binder tabs each invented their own
+ * containers, headings and label style, so walking between them read as
+ * walking between web sites. There are exactly THREE content containers here
+ * and ONE heading scale, and every screen is built from them.
+ *
+ *   .bs-panel       a bordered card of rows        — lists: the tree, changes,
+ *                                                    people, versions, rules
+ *   .bs-fields      a form block                   — settings, propose, modals
+ *   .bs-note        a tinted explanatory block     — empty states, consequences
+ *
+ * Read `docs/design/binder-screens-spec.md` for the reasoning.
+ */
+
+@import url("../../../../packages/ui-tokens/css/bindersnap-tokens.css");
+
+/* ══════════════════════════════════════════════════════════════════════════
+   0 · Reset and page ground
+   ══════════════════════════════════════════════════════════════════════════ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bs-page-bg);
+  color: var(--bs-text-primary);
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-sm);
+  line-height: var(--brand-leading-normal);
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   1 · The shell — top bar and the two-level sidebar
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.bs-shell {
+  display: grid;
+  grid-template-columns: 236px minmax(0, 1fr);
+  grid-template-rows: 60px minmax(0, 1fr);
+  grid-template-areas:
+    "brand top"
+    "side  main";
+  min-height: 100vh;
+}
+
+.bs-topbar {
+  grid-area: top;
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  padding: 0 var(--brand-space-4) 0 var(--brand-space-3);
+  border-bottom: 1px solid var(--bs-rule);
+  background: var(--bs-nav-bg);
+  backdrop-filter: blur(8px);
+}
+
+.bs-brandbar {
+  grid-area: brand;
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  padding-left: var(--brand-space-3);
+  border-bottom: 1px solid var(--bs-rule);
+  border-right: 1px solid var(--bs-rule);
+  background: var(--bs-nav-bg);
+}
+
+.bs-brandmark {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--brand-radius-md);
+  background: var(--brand-coral);
+  color: var(--brand-on-brand);
+}
+
+.bs-wordmark {
+  font-family: var(--brand-font-serif);
+  font-size: 15px;
+  font-weight: var(--brand-weight-semibold);
+  letter-spacing: var(--brand-tracking-snug);
+}
+
+/* The organization is a control, not a title: it changes what everything
+   below it means, so it sits at the top of the bar and says so. */
+.bs-orgswitch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+  height: 32px;
+  padding: 0 var(--brand-space-1-5) 0 var(--brand-space-1);
+  border: 1px solid transparent;
+  border-radius: var(--brand-radius-md);
+  background: none;
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-medium);
+}
+
+.bs-orgswitch:hover {
+  border-color: var(--bs-rule);
+  background: var(--bs-surface-1);
+}
+
+.bs-topbar-spacer {
+  flex: 1;
+}
+
+/* One search, on every page, opened by ⌘K. A button, not a field — pressing
+   it opens the overlay. */
+.bs-search {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+  width: 280px;
+  height: 34px;
+  padding: 0 var(--brand-space-1) 0 var(--brand-space-1-5);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-1);
+  color: var(--bs-text-faint);
+  font-size: var(--brand-text-ui-md);
+  text-align: left;
+}
+
+.bs-search span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bs-kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-sm);
+  color: var(--bs-text-muted);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-ui-xs);
+}
+
+.bs-iconbtn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: var(--brand-radius-md);
+  background: none;
+  color: var(--bs-text-muted);
+}
+
+.bs-iconbtn:hover {
+  border-color: var(--bs-rule);
+  background: var(--bs-surface-1);
+  color: var(--bs-text-primary);
+}
+
+.bs-avatar {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-coral-dim);
+  color: var(--bs-coral-text);
+  font-size: var(--brand-text-ui-xs);
+  font-weight: var(--brand-weight-semibold);
+  letter-spacing: 0.02em;
+}
+
+.bs-avatar--violet {
+  background: var(--bs-avatar-tone-violet-bg);
+  color: var(--bs-avatar-tone-violet-fg);
+}
+.bs-avatar--teal {
+  background: var(--bs-avatar-tone-teal-bg);
+  color: var(--bs-avatar-tone-teal-fg);
+}
+.bs-avatar--info {
+  background: var(--bs-status-info-bg);
+  color: var(--bs-status-info-fg);
+}
+.bs-avatar--sm {
+  width: 22px;
+  height: 22px;
+  font-size: 9.5px;
+}
+.bs-avatar--lg {
+  width: 34px;
+  height: 34px;
+  font-size: var(--brand-text-ui-sm);
+}
+
+/* ── The sidebar ──────────────────────────────────────────────────────────
+   Two levels in one column. The global level never moves. The binder level
+   appears below it when you are inside a binder and disappears when you
+   leave — which is what lets a binder page keep its own name for its H1
+   instead of spending it on the binder it is already visibly inside. */
+
+.bs-side {
+  grid-area: side;
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-3);
+  padding: var(--brand-space-2) var(--brand-space-1-5) var(--brand-space-2);
+  border-right: 1px solid var(--bs-rule);
+  background: var(--bs-nav-bg);
+  overflow-y: auto;
+}
+
+.bs-side-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+/* Sentence case, Geist, muted. The uppercase mono eyebrow is a marketing
+   device and it had colonised every in-app section label in the product. */
+.bs-side-label {
+  padding: 0 var(--brand-space-1-5) var(--brand-space-0-5);
+  color: var(--bs-text-faint);
+  font-size: var(--brand-text-ui-xs);
+  font-weight: var(--brand-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.bs-side-item {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  width: 100%;
+  min-height: 32px;
+  padding: 0 var(--brand-space-1-5);
+  border: none;
+  border-radius: var(--brand-radius-md);
+  background: none;
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-medium);
+  text-align: left;
+  transition: background var(--brand-transition-fast);
+}
+
+.bs-side-item:hover {
+  background: var(--bs-surface-2);
+}
+
+.bs-side-item svg {
+  flex-shrink: 0;
+  color: var(--bs-text-muted);
+}
+
+.bs-side-item--on {
+  background: var(--bs-surface-2);
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.bs-side-item--on svg {
+  color: var(--bs-coral-text);
+}
+
+.bs-side-item-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A count is a number of things to deal with. Versions and people do not get
+   one; open changes do. */
+.bs-side-count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-surface-3);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-xs);
+  font-weight: var(--brand-weight-semibold);
+  text-align: center;
+}
+
+.bs-side-item--on .bs-side-count {
+  background: var(--bs-coral-dim);
+  color: var(--bs-coral-text);
+}
+
+/* The binder you are in, named once, at the top of its own section. This is
+   the whole of the "which binder" answer — no H1 repeats it. */
+.bs-side-binder {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+  padding: var(--brand-space-1) var(--brand-space-1-5) var(--brand-space-1-5);
+  border-top: 1px solid var(--bs-rule-warm);
+  margin-top: var(--brand-space-1);
+}
+
+.bs-side-binder-mark {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--brand-radius-sm);
+  background: var(--bs-coral-dim);
+  color: var(--bs-coral-text);
+}
+
+.bs-side-binder-name {
+  overflow: hidden;
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bs-side-spacer {
+  flex: 1;
+}
+
+.bs-side-user {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  padding: var(--brand-space-1) var(--brand-space-1-5);
+  border-top: 1px solid var(--bs-rule);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-medium);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   2 · The page — one box, one title, one place the eye starts
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.bs-main {
+  grid-area: main;
+  overflow-y: auto;
+}
+
+.bs-page {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--brand-space-4) var(--brand-space-5) var(--brand-space-12);
+}
+
+.bs-pagehead {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--brand-space-3);
+  margin-bottom: var(--brand-space-4);
+}
+
+.bs-pagehead-body {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Where you are, in the words a person would use. Sentence case, Geist —
+   the old `nursing / Infection Control Policy` was monospace, which reads as
+   a file path to anybody who has seen a terminal. */
+.bs-crumbs {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+  margin-bottom: var(--brand-space-1);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+}
+
+.bs-crumbs a {
+  color: var(--bs-text-muted);
+  text-decoration: none;
+}
+
+.bs-crumbs a:hover {
+  color: var(--bs-coral-text);
+  text-decoration: underline;
+}
+
+.bs-crumbs-sep {
+  color: var(--bs-text-faint);
+}
+
+/* Exactly one per screen. Lora 26 is the page's loudest element and nothing
+   inside the page may outrank it. */
+.bs-title {
+  margin: 0;
+  font-family: var(--brand-font-serif);
+  font-size: 26px;
+  font-weight: var(--brand-weight-semibold);
+  letter-spacing: var(--brand-tracking-snug);
+  line-height: var(--brand-leading-snug);
+}
+
+.bs-subtitle {
+  max-width: var(--brand-measure);
+  margin: var(--brand-space-1) 0 0;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+}
+
+/* The facts about the subject, on the line under its name. */
+.bs-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  margin-top: var(--brand-space-1-5);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+}
+
+.bs-facts-file {
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.bs-pagehead-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--brand-space-1);
+}
+
+/* ── The rail ─────────────────────────────────────────────────────────────
+   Used only where there is live context to put in it: a document and a
+   change request. A rail on a settings page would be furniture. */
+
+.bs-with-rail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 296px;
+  gap: var(--brand-space-4);
+  align-items: start;
+}
+
+.bs-rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-3);
+  position: sticky;
+  top: var(--brand-space-4);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   3 · Section headings — one scale, everywhere
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.bs-section {
+  margin-bottom: var(--brand-space-4);
+}
+
+.bs-section-head {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  min-height: 28px;
+  margin-bottom: var(--brand-space-1-5);
+}
+
+/* Geist, 15/600, sentence case. Never mono, never uppercase, never coral —
+   those three together were the product's loudest "developer tool" signal
+   and they were on every label on every binder tab. */
+.bs-section-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: var(--brand-weight-semibold);
+  letter-spacing: -0.006em;
+}
+
+.bs-section-count {
+  padding: 1px 7px;
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-surface-3);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-xs);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.bs-section-spacer {
+  flex: 1;
+}
+
+.bs-section-note {
+  max-width: var(--brand-measure);
+  margin: 0 0 var(--brand-space-2);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   4 · Container one — the panel. Every list in the binder is this.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.bs-panel {
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+  background: var(--bs-surface-1);
+  overflow: hidden;
+}
+
+/* An optional strip at the top of a panel, for the controls that filter or
+   act on what is in it. It is part of the panel, not floating above it. */
+.bs-panel-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+  min-height: 46px;
+  padding: var(--brand-space-1) var(--brand-space-1-5) var(--brand-space-1)
+    var(--brand-space-2);
+  border-bottom: 1px solid var(--bs-rule-warm);
+  background: var(--bs-surface-2);
+}
+
+.bs-panel-bar-spacer {
+  flex: 1;
+}
+
+.bs-panel-body {
+  padding: var(--brand-space-2);
+}
+
+.bs-panel-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+  padding: var(--brand-space-1-5) var(--brand-space-2);
+  border-top: 1px solid var(--bs-rule-warm);
+  background: var(--bs-surface-2);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+}
+
+/* ── The row ──────────────────────────────────────────────────────────────
+   One height, one hairline, one hover. Every list row in the binder — a
+   folder, a policy, a change, a person, a version, a rule. */
+
+.bs-row {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  width: 100%;
+  min-height: 46px;
+  padding: var(--brand-space-1) var(--brand-space-2);
+  border: none;
+  border-top: 1px solid var(--bs-rule-warm);
+  background: none;
+  text-align: left;
+  transition: background var(--brand-transition-fast);
+}
+
+.bs-row:first-child,
+.bs-panel-bar + .bs-row {
+  border-top: none;
+}
+
+.bs-row:hover {
+  background: var(--brand-mockup-highlight);
+}
+
+.bs-row--tall {
+  min-height: 60px;
+  align-items: flex-start;
+  padding-top: var(--brand-space-1-5);
+  padding-bottom: var(--brand-space-1-5);
+}
+
+.bs-row--on {
+  background: var(--bs-coral-glow);
+  box-shadow: inset 2px 0 0 var(--brand-coral);
+}
+
+.bs-row-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 18px;
+  color: var(--bs-text-faint);
+}
+
+.bs-row-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.bs-row-name {
+  display: block;
+  overflow: hidden;
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-sm);
+  font-weight: var(--brand-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bs-row-meta {
+  display: block;
+  margin-top: 1px;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+}
+
+.bs-row-right {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   5 · The tree — the binder's contents, and the surface you edit
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.bs-tree-row {
+  --indent: 0px;
+  padding-left: calc(var(--brand-space-2) + var(--indent));
+}
+
+.bs-tree-row[data-depth="1"] {
+  --indent: 22px;
+}
+.bs-tree-row[data-depth="2"] {
+  --indent: 44px;
+}
+
+.bs-twisty {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: var(--brand-radius-sm);
+  background: none;
+  color: var(--bs-text-muted);
+}
+
+.bs-twisty:hover {
+  background: var(--bs-surface-3);
+}
+
+.bs-tree-row--folder .bs-row-name {
+  font-weight: var(--brand-weight-semibold);
+}
+
+.bs-tree-row--folder .bs-row-icon {
+  color: var(--bs-coral-text);
+}
+
+/* ── Row actions ──────────────────────────────────────────────────────────
+   Three near-invisible 14px glyphs at the far right is what shipped. They
+   are a real target now — 28px, a visible affordance, and they stay legible
+   without hover so a keyboard can find them. */
+
+.bs-rowacts {
+  display: flex;
+  flex-shrink: 0;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--brand-transition-fast);
+}
+
+.bs-row:hover .bs-rowacts,
+.bs-row:focus-within .bs-rowacts {
+  opacity: 1;
+}
+
+.bs-rowact {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: var(--brand-radius-sm);
+  background: none;
+  color: var(--bs-text-muted);
+}
+
+.bs-rowact:hover {
+  border-color: var(--bs-rule);
+  background: var(--bs-surface-1);
+  color: var(--bs-text-primary);
+}
+
+.bs-rowact--danger:hover {
+  border-color: var(--bs-status-danger-border);
+  background: var(--bs-status-danger-bg);
+  color: var(--bs-status-danger-fg);
+}
+
+/* A row being renamed. The field is the row — no dialog, no page move. */
+.bs-rename {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 var(--brand-space-1);
+  border: 1.5px solid var(--brand-coral);
+  border-radius: var(--brand-radius-sm);
+  background: var(--bs-surface-1);
+  box-shadow: 0 0 0 3px var(--bs-coral-dim);
+  color: var(--bs-text-primary);
+  font: inherit;
+  font-weight: var(--brand-weight-medium);
+}
+
+.bs-rename-hint {
+  flex-shrink: 0;
+  color: var(--bs-text-faint);
+  font-size: var(--brand-text-ui-sm);
+}
+
+/* A row you have moved, renamed or added in this draft. Quiet — it marks the
+   work, it does not celebrate it. */
+.bs-row--dirty .bs-row-name::after {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-left: 7px;
+  border-radius: var(--brand-radius-full);
+  background: var(--brand-coral);
+  vertical-align: middle;
+}
+
+/* A policy somebody else has open in a change. Renaming it here lands on
+   their work, so the row says so before you touch it. */
+.bs-row--contested .bs-row-meta {
+  color: var(--bs-status-warn-fg);
+}
+
+.bs-drop {
+  margin: var(--brand-space-1) var(--brand-space-2) 0;
+  padding: var(--brand-space-1-5);
+  border: 1.5px dashed var(--bs-coral-border);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-coral-glow);
+  color: var(--bs-coral-text);
+  font-size: var(--brand-text-ui-md);
+  text-align: center;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   6 · Container two — fields. Every form in the binder is this.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.bs-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-2-5);
+  max-width: 560px;
+}
+
+.bs-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-0-5);
+}
+
+/* Geist 13/600 sentence case. What shipped was coral uppercase monospace —
+   `WHAT YOU ARE ASKING FOR` — which is a section eyebrow from the marketing
+   site standing in for a form label. */
+.bs-field-label {
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.bs-field-optional {
+  margin-left: var(--brand-space-0-5);
+  color: var(--bs-text-faint);
+  font-weight: var(--brand-weight-regular);
+}
+
+.bs-field-hint {
+  margin: 0;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+}
+
+.bs-input {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 var(--brand-space-1-5);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-1);
+  color: var(--bs-text-primary);
+  font: inherit;
+  transition:
+    border-color var(--brand-transition-fast),
+    box-shadow var(--brand-transition-fast);
+}
+
+.bs-input:focus {
+  border-color: var(--brand-coral);
+  box-shadow: 0 0 0 3px var(--bs-coral-dim);
+  outline: none;
+}
+
+.bs-input::placeholder {
+  color: var(--bs-text-faint);
+}
+
+textarea.bs-input {
+  min-height: 104px;
+  padding: var(--brand-space-1);
+  resize: vertical;
+}
+
+select.bs-input {
+  appearance: none;
+  padding-right: var(--brand-space-4);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'><path d='M3 4.5L6 7.5L9 4.5' stroke='%2378716c' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right var(--brand-space-1-5) center;
+}
+
+.bs-input--sm {
+  min-height: 32px;
+  font-size: var(--brand-text-ui-md);
+}
+
+/* A row of controls uses ONE size — #468's rule, restated here because the
+   settings tab broke it by putting Rename on its own line under the field. */
+.bs-field-row {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+}
+
+/* A choice somebody made, not a switch that is on or off. Both answers are
+   spelled out, and the cost of each is on the option rather than discovered
+   afterwards. */
+.bs-choice {
+  display: flex;
+  gap: var(--brand-space-1-5);
+  padding: var(--brand-space-1-5);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-1);
+  cursor: pointer;
+}
+
+.bs-choice + .bs-choice {
+  margin-top: var(--brand-space-1);
+}
+
+.bs-choice--on {
+  border-color: var(--bs-coral-border);
+  background: var(--bs-coral-glow);
+}
+
+.bs-choice input {
+  align-self: flex-start;
+  margin-top: 2px;
+  width: 15px;
+  height: 15px;
+  accent-color: var(--brand-coral);
+}
+
+.bs-choice-name {
+  display: block;
+  font-size: var(--brand-text-sm);
+  font-weight: var(--brand-weight-medium);
+}
+
+.bs-choice-note {
+  display: block;
+  margin-top: 1px;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+}
+
+/* A real drop target, and the file input behind it. What shipped was the
+   browser's own `Choose File / No file chosen`, on the product's primary
+   act. */
+.bs-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--brand-space-0-5);
+  padding: var(--brand-space-4) var(--brand-space-2);
+  border: 1.5px dashed var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-2);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+  text-align: center;
+  cursor: pointer;
+}
+
+.bs-dropzone:hover {
+  border-color: var(--bs-coral-border);
+  background: var(--bs-coral-glow);
+}
+
+.bs-dropzone svg {
+  color: var(--bs-text-faint);
+}
+
+.bs-dropzone-lead {
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-sm);
+  font-weight: var(--brand-weight-medium);
+}
+
+.bs-dropzone--filled {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  padding: var(--brand-space-1-5);
+  border-style: solid;
+  border-color: var(--bs-green-border);
+  background: var(--bs-status-ok-bg);
+  text-align: left;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   7 · Container three — the note. Empty states and consequences only.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.bs-note {
+  max-width: var(--brand-measure);
+  padding: var(--brand-space-2);
+  border: 1px solid var(--bs-rule-warm);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-2);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+}
+
+.bs-note p {
+  margin: 0 0 var(--brand-space-1);
+}
+
+.bs-note p:last-child {
+  margin-bottom: 0;
+}
+
+.bs-note-lead {
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-sm);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.bs-note--warn {
+  border-color: var(--bs-status-warn-border);
+  background: var(--bs-status-warn-bg);
+  color: var(--bs-status-warn-fg);
+}
+
+.bs-note--danger {
+  border-color: var(--bs-status-danger-border);
+  background: var(--bs-status-danger-bg);
+  color: var(--bs-status-danger-fg);
+}
+
+/* An empty panel says what the thing is, once, and disappears the moment
+   there is one of them. */
+.bs-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--brand-space-1);
+  padding: var(--brand-space-5) var(--brand-space-3);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+}
+
+.bs-empty-lead {
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-body);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.bs-empty p {
+  max-width: var(--brand-measure);
+  margin: 0;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   8 · Buttons, chips and status
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Buttons and inputs are NOT redefined here ──────────────────────────
+   `.bs-btn`, `.bs-btn--sm`, `.bs-btn-primary`, `.bs-btn-secondary`,
+   `.bs-input` and `.bs-input--sm` already exist in the token file and were
+   deliberately unified in PR #468 — two sizes, each pinned by height, with a
+   test that walks the product and fails when a row mixes them. Forking them
+   for a mockup would make the mockup lie about what it costs to build.
+
+   Three additions, all of which are genuinely missing: */
+
+/* Approving is the most consequential act in the product, so it is a filled
+   button — and it is green, because green means approval here and nothing
+   else. It shipped as a ghost pill while a solid coral "Add a policy", an act
+   with no relationship to the change being reviewed, sat above it. */
+.bs-btn--approve {
+  background: var(--brand-green-dark);
+  color: var(--brand-on-brand);
+}
+
+.bs-btn--approve:hover:not(:disabled) {
+  background: var(--brand-green-darker);
+}
+
+/* Tertiary. For an act that is real but must not compete — Discard beside
+   Propose, "2 archived policies" under the tree. */
+.bs-btn--quiet {
+  background: none;
+  border-color: transparent;
+  color: var(--bs-text-muted);
+}
+
+.bs-btn--quiet:hover:not(:disabled) {
+  background: var(--bs-surface-2);
+  color: var(--bs-text-primary);
+}
+
+.bs-btn--block {
+  width: 100%;
+}
+
+/* Two or three mutually exclusive views of one list. Inside the panel bar,
+   not floating above the panel. */
+.bs-segmented {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-1);
+}
+
+.bs-seg {
+  min-height: 28px;
+  padding: 0 var(--brand-space-1-5);
+  border: none;
+  border-radius: var(--brand-radius-sm);
+  background: none;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-medium);
+}
+
+.bs-seg--on {
+  background: var(--bs-surface-3);
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-semibold);
+}
+
+/* The one place monospace survives in the binder: a version number and a
+   filename are machine text and read better fixed-width. */
+/* ── Status ────────────────────────────────────────────────────────────────
+   `.bs-status` and its seven tones already exist in the token file, and this
+   does NOT introduce a second vocabulary — the tone names below are the
+   shipped ones (`--working`, `--review`, `--waiting`, `--approved`,
+   `--published`, `--changes`, `--declined`, `--withdrawn`).
+
+   What it proposes is one amendment to the shipped rule: **drop the uppercase
+   monospace.** `READY TO PUBLISH` reads as machine output; "Ready to publish"
+   reads as an answer. It is the single loudest developer-tool signal left in
+   the binder and it is on every row of every list. A pill radius and a border
+   carry the chip just as well as the letterspacing did.
+
+   Applied here as an override so the mockups show the proposal. In the build
+   it is an edit to `bindersnap-tokens.css`, not a new class. */
+.bs-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px var(--brand-space-1);
+  border: 1px solid transparent;
+  border-radius: var(--brand-radius-full);
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-ui-sm);
+  font-weight: var(--brand-weight-medium);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.bs-status--approved,
+.bs-status--published {
+  border-color: var(--bs-status-ok-border);
+}
+.bs-status--review {
+  border-color: var(--bs-status-warn-border);
+}
+.bs-status--waiting {
+  border-color: var(--bs-status-info-border);
+}
+.bs-status--changes {
+  border-color: var(--bs-status-danger-border);
+}
+.bs-status--working {
+  border-color: var(--bs-rule);
+}
+
+.bs-ver {
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-ui-sm);
+  font-weight: var(--brand-weight-medium);
+}
+
+.bs-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--brand-radius-full);
+  background: currentColor;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   9 · The draft bar — what editing looks like
+   ══════════════════════════════════════════════════════════════════════════
+   It shipped as a tall coral box between the tabs and the tree, which pushed
+   the work down the page and spent the screen's one coral element on a
+   status message. It is a sticky footer now: always reachable, never in the
+   way, and the page above it is the binder you came to edit. */
+
+.bs-draftbar {
+  position: sticky;
+  bottom: 0;
+  z-index: var(--brand-z-sticky, 50);
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  margin: var(--brand-space-3) calc(var(--brand-space-5) * -1) 0;
+  padding: var(--brand-space-1-5) var(--brand-space-5);
+  border-top: 1px solid var(--bs-coral-border-soft);
+  background: var(--bs-surface-1);
+  box-shadow: var(--bs-shadow-md);
+}
+
+.bs-draftbar-mark {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-coral-dim);
+  color: var(--bs-coral-text);
+}
+
+.bs-draftbar-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.bs-draftbar-title {
+  margin: 0;
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.bs-draftbar-note {
+  margin: 0;
+  overflow: hidden;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The acts are the change request's description, so they are reviewable
+   before you propose — a disclosure, not a wall. */
+.bs-draftbar-toggle {
+  border: none;
+  background: none;
+  color: var(--bs-coral-text);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-medium);
+  text-decoration: underline;
+}
+
+.bs-draftacts {
+  margin: 0 calc(var(--brand-space-5) * -1);
+  padding: var(--brand-space-1-5) var(--brand-space-5);
+  border-top: 1px solid var(--bs-rule-warm);
+  background: var(--bs-surface-2);
+}
+
+.bs-draftacts ol {
+  margin: 0;
+  padding-left: var(--brand-space-3);
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-ui-md);
+}
+
+.bs-draftacts li {
+  padding: 2px 0;
+}
+
+/* Continuous save, said where the eye already is. */
+.bs-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--bs-status-ok-fg);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-medium);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   10 · The change request — timeline and decision
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.bs-approval {
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-1);
+}
+
+.bs-meter {
+  display: flex;
+  gap: 3px;
+}
+
+.bs-meter span {
+  flex: 1;
+  height: 5px;
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-surface-3);
+}
+
+.bs-meter span.is-in {
+  background: var(--brand-green);
+}
+
+.bs-spine {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0 0 0 var(--brand-space-4);
+  border-left: 1.5px solid var(--bs-rule);
+  list-style: none;
+}
+
+.bs-spine-item {
+  position: relative;
+  padding: var(--brand-space-1-5) 0;
+}
+
+.bs-knot {
+  position: absolute;
+  top: var(--brand-space-1-5);
+  left: calc(var(--brand-space-4) * -1 - 14px);
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-page-bg);
+  color: var(--bs-text-muted);
+}
+
+.bs-knot--ok {
+  border-color: var(--bs-green-border);
+  background: var(--bs-status-ok-bg);
+  color: var(--bs-status-ok-fg);
+}
+
+.bs-event {
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-ui-md);
+  line-height: 28px;
+}
+
+.bs-event strong {
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.bs-comment {
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-1);
+}
+
+.bs-comment-head {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+  padding: var(--brand-space-1-5) var(--brand-space-2);
+  border-bottom: 1px solid var(--bs-rule-warm);
+}
+
+.bs-comment-who {
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.bs-comment-when {
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+}
+
+.bs-comment-body {
+  max-width: var(--brand-measure);
+  padding: var(--brand-space-2);
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-sm);
+}
+
+.bs-comment-body p {
+  margin: 0;
+}
+
+.bs-comment-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+  padding: var(--brand-space-1) var(--brand-space-2);
+  border-top: 1px solid var(--bs-rule-warm);
+}
+
+.bs-unresolved {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--bs-coral-text);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-medium);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   11 · Modals
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.bs-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  background: var(--brand-scrim-soft);
+}
+
+.bs-modal {
+  width: 520px;
+  max-width: calc(100vw - 48px);
+  border-radius: var(--brand-radius-xl);
+  background: var(--bs-surface-1);
+  box-shadow: var(--bs-elevation-modal);
+  overflow: hidden;
+}
+
+.bs-modal-head {
+  padding: var(--brand-space-3) var(--brand-space-3) 0;
+}
+
+.bs-modal-title {
+  margin: 0;
+  font-family: var(--brand-font-serif);
+  font-size: 19px;
+  font-weight: var(--brand-weight-semibold);
+  letter-spacing: var(--brand-tracking-snug);
+}
+
+.bs-modal-body {
+  padding: var(--brand-space-2-5) var(--brand-space-3);
+}
+
+.bs-modal-body .bs-fields {
+  max-width: none;
+}
+
+.bs-modal-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+  padding: var(--brand-space-2) var(--brand-space-3);
+  border-top: 1px solid var(--bs-rule-warm);
+  background: var(--bs-surface-2);
+}
+
+.bs-modal-foot-spacer {
+  flex: 1;
+}
+
+.bs-modal-foot-note {
+  flex: 1;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   12 · Settings sub-navigation
+   ══════════════════════════════════════════════════════════════════════════
+   Settings holds four things people ask about separately — who is here, who
+   signs off, what the rules are, what it is called. A left index inside the
+   page keeps them separate without spending four sidebar entries on
+   configuration somebody visits twice a year. */
+
+.bs-subnav {
+  display: grid;
+  grid-template-columns: 188px minmax(0, 1fr);
+  gap: var(--brand-space-5);
+  align-items: start;
+}
+
+.bs-subnav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  position: sticky;
+  top: var(--brand-space-4);
+}
+
+.bs-subnav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+  min-height: 32px;
+  padding: 0 var(--brand-space-1-5);
+  border: none;
+  border-radius: var(--brand-radius-md);
+  background: none;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-medium);
+  text-align: left;
+}
+
+.bs-subnav-item:hover {
+  background: var(--bs-surface-2);
+  color: var(--bs-text-primary);
+}
+
+.bs-subnav-item--on {
+  background: var(--bs-surface-2);
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-semibold);
+  box-shadow: inset 2px 0 0 var(--brand-coral);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   13 · The document preview
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.bs-doc {
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+  background: var(--bs-surface-1);
+  overflow: hidden;
+}
+
+.bs-doc-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  min-height: 46px;
+  padding: 0 var(--brand-space-1-5) 0 var(--brand-space-2);
+  border-bottom: 1px solid var(--bs-rule-warm);
+  background: var(--bs-surface-2);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+}
+
+.bs-doc-name {
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.bs-doc-prose {
+  max-width: var(--brand-measure);
+  padding: var(--brand-space-5) var(--brand-space-5) var(--brand-space-6);
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-body);
+  line-height: var(--brand-leading-relaxed);
+}
+
+.bs-doc-prose h1 {
+  margin: 0 0 var(--brand-space-3);
+  font-family: var(--brand-font-serif);
+  font-size: 24px;
+  font-weight: var(--brand-weight-semibold);
+  color: var(--bs-text-primary);
+}
+
+.bs-doc-prose h2 {
+  margin: var(--brand-space-4) 0 var(--brand-space-1);
+  font-family: var(--brand-font-serif);
+  font-size: 17px;
+  font-weight: var(--brand-weight-semibold);
+  color: var(--bs-text-primary);
+}
+
+.bs-doc-prose p {
+  margin: 0 0 var(--brand-space-2);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   14 · Mockup-only chrome — never ships
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.mk-caption {
+  padding: var(--brand-space-1-5) var(--brand-space-2);
+  border-bottom: 1px dashed var(--bs-coral-border);
+  background: var(--bs-coral-glow);
+  color: var(--bs-coral-text);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-ui-sm);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}

@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Binder · Documents — Bindersnap design</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" />
+    <link rel="stylesheet" href="./binder.css" />
+    <script src="./shell.js"></script>
+  </head>
+  <body>
+    <script>
+      /*
+       * The binder, being read.
+       *
+       * The H1 is "Documents", not "Clinical" — the sidebar already says which
+       * binder you are in, and spending the page's one title on it is what
+       * left a policy and a change request with two titles each.
+       *
+       * One filled button: Edit. Adding a policy is the narrower act and sits
+       * beside it in outline; the customer asked for edit mode to be the way
+       * you change a binder, so it is the emphatic control.
+       */
+      const page = shell({ binder: 'Clinical', section: 'documents' });
+      const I = window.bsIcon;
+
+      const row = ({ depth = 0, kind, name, meta, right = '' }) => `
+        <button type="button" class="bs-row bs-tree-row ${kind === 'folder' ? 'bs-tree-row--folder' : ''}" data-depth="${depth}">
+          ${kind === 'folder'
+            ? `<span class="bs-twisty">${I('chevron', 14)}</span>
+               <span class="bs-row-icon">
+                 <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2 5a1 1 0 0 1 1-1h3.4l1.3 1.6H15a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5Z"/></svg>
+               </span>`
+            : `<span class="bs-twisty"></span>
+               <span class="bs-row-icon">
+                 <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M5 2h5l3 3v11H5V2Z"/><path d="M10 2v3h3"/></svg>
+               </span>`}
+          <span class="bs-row-body">
+            <span class="bs-row-name">${name}</span>
+          </span>
+          <span class="bs-row-right">${meta ? `<span>${meta}</span>` : ''}${right}</span>
+        </button>`;
+
+      page.innerHTML = `
+        <div class="bs-pagehead">
+          <div class="bs-pagehead-body">
+            <h1 class="bs-title">Policies</h1>
+            <p class="bs-subtitle">
+              Clinical and administrative policies — one set of rules, one set of people.
+            </p>
+          </div>
+          <div class="bs-pagehead-actions">
+            <button type="button" class="bs-btn bs-btn-secondary">Add a policy</button>
+            <button type="button" class="bs-btn bs-btn-primary">
+              <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.2 2.8a1.7 1.7 0 0 1 2.4 2.4L6 13.8l-3.2.8.8-3.2 8.6-8.6Z"/></svg>
+              Edit
+            </button>
+          </div>
+        </div>
+
+        <div class="bs-panel">
+          <!-- The controls that act on the list live in the list's own bar.
+               Floating them on the page above it is what made five tabs read
+               as five layouts. -->
+          <div class="bs-panel-bar">
+            <input class="bs-input bs-input--sm" style="width: 240px" type="search"
+                   placeholder="Filter this binder…" />
+            <span class="bs-panel-bar-spacer"></span>
+            <span style="color: var(--bs-text-muted); font-size: var(--brand-text-ui-md)">
+              4 policies in 3 folders
+            </span>
+            <span class="bs-segmented">
+              <button type="button" class="bs-seg bs-seg--on">Folders</button>
+              <button type="button" class="bs-seg">Flat</button>
+            </span>
+          </div>
+
+          ${row({ kind: 'folder', name: 'Administrative', meta: '1 policy' })}
+          ${row({ depth: 1, kind: 'doc', name: 'Patient Grievance Policy', meta: '', right: `<span class="bs-ver">v1</span><span class="bs-status bs-status--review"><span class="bs-dot"></span>1 open change</span>` })}
+
+          ${row({ kind: 'folder', name: 'Nursing', meta: '2 policies' })}
+          ${row({ depth: 1, kind: 'doc', name: 'Infection Control Policy', meta: '', right: `<span class="bs-ver">v1</span><span class="bs-status bs-status--review"><span class="bs-dot"></span>1 open change</span>` })}
+          ${row({ depth: 1, kind: 'doc', name: 'Medication Administration Policy', meta: '', right: `<span class="bs-ver">v1</span><span class="bs-status bs-status--changes"><span class="bs-dot"></span>Changes asked for</span>` })}
+
+          ${row({ kind: 'folder', name: 'Training', meta: '1 policy' })}
+          ${row({ depth: 1, kind: 'doc', name: 'HIPAA Training Policy', meta: 'Published Sep 15 by Bob', right: `<span class="bs-ver">v2</span><span class="bs-status bs-status--approved">On record</span>` })}
+
+          <!-- The archive, where it is asked about: after failing to find
+               something, not before. Gone when the archive is empty. -->
+          <div class="bs-panel-foot">
+            <svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2 4h14v3H2V4Zm1 3v8h12V7M7 10h4"/></svg>
+            <button type="button" class="bs-btn bs-btn--quiet bs-btn--sm" style="min-height: 22px; padding: 0">
+              2 archived policies
+            </button>
+          </div>
+        </div>`;
+    </script>
+  </body>
+</html>

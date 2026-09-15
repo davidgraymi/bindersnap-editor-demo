@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Binder screens — Bindersnap design</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" />
+    <link rel="stylesheet" href="./binder.css" />
+    <style>
+      body { padding: 48px 40px 96px; }
+      .sheet { max-width: 1240px; margin: 0 auto; }
+      .lede { max-width: var(--brand-measure); }
+      .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; margin-top: 40px; }
+      .frame { display: block; border: 1px solid var(--bs-rule); border-radius: var(--brand-radius-lg); background: var(--bs-surface-1); overflow: hidden; text-decoration: none; color: inherit; transition: box-shadow var(--brand-transition-base), transform var(--brand-transition-fast); }
+      .frame:hover { transform: translateY(-3px); box-shadow: var(--bs-shadow-lg); }
+      .frame-head { display: flex; align-items: baseline; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--bs-rule-warm); }
+      .frame-name { font-size: 15px; font-weight: 600; }
+      .frame-note { flex: 1; color: var(--bs-text-muted); font-size: 12.5px; }
+      /* A live 1440×940 render, scaled down. Not a screenshot: a thumbnail
+         that cannot go stale is worth more than one that is 0.7 MB of PNG in
+         the repository. */
+      .frame-clip { position: relative; height: 392px; overflow: hidden; background: var(--bs-page-bg); }
+      .frame-clip iframe { position: absolute; top: 0; left: 0; width: 1440px; height: 940px; border: 0; transform: scale(.4166); transform-origin: top left; pointer-events: none; }
+      .group { margin-top: 56px; }
+    </style>
+  </head>
+  <body>
+    <div class="sheet">
+      <p class="bs-crumbs" style="margin-bottom: 10px">
+        Bindersnap · design phase · September 2026
+      </p>
+      <h1 class="bs-title" style="font-size: 34px">The binder, redrawn</h1>
+      <p class="bs-subtitle lede" style="font-size: 15px">
+        Nine screens for the content the binder's tabs used to hold. The
+        sidebar you already have carries binder navigation; every page under it
+        is built from one container grammar, one heading scale and one row.
+        Read
+        <a href="../../binder-screens-spec.md" style="color: var(--bs-coral-text)">binder-screens-spec.md</a>
+        for the decisions and the build order.
+      </p>
+
+      <div class="group">
+        <div class="bs-section-head">
+          <h2 class="bs-section-title">Reading and editing the binder</h2>
+        </div>
+        <div class="grid" id="g1"></div>
+      </div>
+
+      <div class="group">
+        <div class="bs-section-head">
+          <h2 class="bs-section-title">Changes, and one policy</h2>
+        </div>
+        <div class="grid" id="g2"></div>
+      </div>
+
+      <div class="group">
+        <div class="bs-section-head">
+          <h2 class="bs-section-title">The record, and the rules</h2>
+        </div>
+        <div class="grid" id="g3"></div>
+      </div>
+    </div>
+
+    <script>
+      const GROUPS = {
+        g1: [
+          ['documents', 'Policies', 'The binder being read. One title, and it belongs to the page.'],
+          ['documents-editing', 'Policies, editing', 'Rename in place, drag to refile. The draft bar is a sticky footer.'],
+          ['add-policy', 'Add a policy', 'A real dropzone, not the browser’s Choose File.'],
+          ['propose', 'Propose your changes', 'The draft becomes a change request — and you can see what is in it.'],
+        ],
+        g2: [
+          ['changes', 'Change requests', 'The filter lives in the list’s own bar.'],
+          ['change', 'One change request', 'The change owns the title; the decision owns the rail.'],
+          ['document', 'One policy', 'Preview and rail — and no second headline above it.'],
+        ],
+        g3: [
+          ['history', 'History', 'The record a surveyor asks for, with a way to take it away.'],
+          ['settings-people', 'Settings · People', 'Four container idioms on one screen became one.'],
+          ['settings-rules', 'Settings · Rules', 'Sign-off, approval and the binder’s name, in one grammar.'],
+        ],
+      };
+
+      for (const [id, items] of Object.entries(GROUPS)) {
+        document.getElementById(id).innerHTML = items
+          .map(
+            ([file, name, note]) => `
+              <a class="frame" href="./${file}.html">
+                <div class="frame-head">
+                  <span class="frame-name">${name}</span>
+                  <span class="frame-note">${note}</span>
+                </div>
+                <div class="frame-clip">
+                  <iframe src="./${file}.html" title="${name}" scrolling="no"></iframe>
+                </div>
+              </a>`,
+          )
+          .join('');
+      }
+    </script>
+  </body>
+</html>

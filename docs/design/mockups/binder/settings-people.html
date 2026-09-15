@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Binder · Settings, people — Bindersnap design</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" />
+    <link rel="stylesheet" href="./binder.css" />
+    <script src="./shell.js"></script>
+  </head>
+  <body>
+    <script>
+      /*
+       * Settings, holding the four things people ask about separately: who is
+       * here, who signs off, what the rules are, and what the binder is
+       * called.
+       *
+       * They were three top-level tabs — People, Sign-off rules, Settings —
+       * beside Documents and Change requests, which said a thing somebody
+       * edits twice a year is a peer of the thing they open every morning.
+       * The page's own index keeps them separate without spending sidebar
+       * entries on them.
+       *
+       * The People page itself had four container idioms on one screen: a
+       * fieldset with a legend on its border, a card of rows, an add form
+       * floating loose on the paper, and a full-bleed group row. One panel
+       * grammar now, and the add form is the panel's own footer.
+       */
+      const page = shell({ binder: 'Clinical', section: 'settings' });
+      const I = window.bsIcon;
+
+      const nav = (on) => `
+        <nav class="bs-subnav-list" aria-label="Binder settings">
+          ${[
+            ['People', 'people'],
+            ['Sign-off rules', 'rules'],
+            ['How changes are approved', 'approval'],
+            ['Name and description', 'name'],
+          ]
+            .map(
+              ([label, key]) => `<button type="button" class="bs-subnav-item${
+                key === on ? ' bs-subnav-item--on' : ''
+              }">${label}</button>`,
+            )
+            .join('')}
+        </nav>`;
+
+      const person = ({ ini, tone, name, why, role, fixed }) => `
+        <div class="bs-row">
+          <span class="bs-avatar bs-avatar--sm ${tone}">${ini}</span>
+          <span class="bs-row-body">
+            <span class="bs-row-name">${name}</span>
+            <span class="bs-row-meta">${why}</span>
+          </span>
+          <span class="bs-row-right">
+            ${
+              fixed
+                ? `<span class="bs-status bs-status--working">${role}</span>`
+                : `<select class="bs-input bs-input--sm" style="width: 124px" aria-label="Role for ${name}">
+                     <option ${role === 'Admin' ? 'selected' : ''}>Admin</option>
+                     <option ${role === 'Editor' ? 'selected' : ''}>Editor</option>
+                     <option ${role === 'Reviewer' ? 'selected' : ''}>Reviewer</option>
+                   </select>
+                   <button type="button" class="bs-rowact bs-rowact--danger" aria-label="Remove ${name}" style="opacity:1">
+                     <svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5 5l8 8M13 5l-8 8"/></svg>
+                   </button>`
+            }
+          </span>
+        </div>`;
+
+      page.innerHTML = `
+        <div class="bs-pagehead">
+          <div class="bs-pagehead-body">
+            <h1 class="bs-title">Settings</h1>
+            <p class="bs-subtitle">
+              One set of rules, one set of people — this is where both are set.
+            </p>
+          </div>
+        </div>
+
+        <div class="bs-subnav">
+          ${nav('people')}
+
+          <div>
+            <!-- The question that changes what the list below it means, so it
+                 is asked above it. Both answers spelled out: a state that is
+                 off is still a state the customer chose. -->
+            <section class="bs-section">
+              <div class="bs-section-head">
+                <h2 class="bs-section-title">Who can see this binder</h2>
+              </div>
+              <div class="bs-fields">
+                <label class="bs-choice">
+                  <input type="radio" name="vis" />
+                  <span>
+                    <span class="bs-choice-name">Everyone at Riverside Health</span>
+                    <span class="bs-choice-note">
+                      They can read it and comment on changes — and approve
+                      them, because reading a change is what approving one
+                      costs.
+                    </span>
+                  </span>
+                </label>
+                <label class="bs-choice bs-choice--on">
+                  <input type="radio" name="vis" checked />
+                  <span>
+                    <span class="bs-choice-name">Only the people below</span>
+                    <span class="bs-choice-note">
+                      These people and groups, and nobody else.
+                    </span>
+                  </span>
+                </label>
+              </div>
+            </section>
+
+            <section class="bs-section">
+              <div class="bs-section-head">
+                <h2 class="bs-section-title">People</h2>
+                <span class="bs-section-count">4</span>
+              </div>
+
+              <div class="bs-panel">
+                ${person({ ini: 'AL', tone: '', name: 'Alice Lundgren', why: 'Through Owners — every binder in the organization', role: 'Admin', fixed: true })}
+                ${person({ ini: 'BO', tone: 'bs-avatar--teal', name: 'Bob Okafor', why: 'Added to this binder', role: 'Editor' })}
+                ${person({ ini: 'CM', tone: 'bs-avatar--violet', name: 'Carol Mendes', why: 'Added to this binder · also in Clinical Admins', role: 'Editor' })}
+                ${person({ ini: 'DW', tone: 'bs-avatar--info', name: 'Dan Whitfield', why: 'Added to this binder', role: 'Reviewer' })}
+
+                <!-- The add form is the panel's footer, not a row of controls
+                     floating on the page below it. -->
+                <div class="bs-panel-foot">
+                  <select class="bs-input bs-input--sm" style="flex:1" aria-label="Who to add">
+                    <option>Add somebody from Riverside Health…</option>
+                  </select>
+                  <select class="bs-input bs-input--sm" style="width: 124px" aria-label="Role">
+                    <option>Reviewer</option>
+                    <option>Editor</option>
+                    <option>Admin</option>
+                  </select>
+                  <button type="button" class="bs-btn bs-btn--sm bs-btn-secondary" disabled>Add</button>
+                </div>
+              </div>
+            </section>
+
+            <section class="bs-section">
+              <div class="bs-section-head">
+                <h2 class="bs-section-title">Groups with access</h2>
+                <span class="bs-section-spacer"></span>
+                <button type="button" class="bs-btn bs-btn--sm bs-btn-secondary">Grant a group</button>
+              </div>
+              <div class="bs-panel">
+                <div class="bs-row">
+                  <span class="bs-row-icon">${I('people', 15)}</span>
+                  <span class="bs-row-body">
+                    <span class="bs-row-name">Clinical Admins</span>
+                    <span class="bs-row-meta">Nobody in it yet — a group with no members grants nothing</span>
+                  </span>
+                  <span class="bs-row-right">
+                    <span class="bs-status bs-status--working">Admin</span>
+                    <button type="button" class="bs-rowact bs-rowact--danger" style="opacity:1" aria-label="Revoke Clinical Admins">
+                      <svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5 5l8 8M13 5l-8 8"/></svg>
+                    </button>
+                  </span>
+                </div>
+                <div class="bs-row">
+                  <span class="bs-row-icon">${I('people', 15)}</span>
+                  <span class="bs-row-body">
+                    <span class="bs-row-name">Infection Control</span>
+                    <span class="bs-row-meta">3 people · also signs off on anything filed in Nursing</span>
+                  </span>
+                  <span class="bs-row-right">
+                    <span class="bs-status bs-status--working">Reviewer</span>
+                    <button type="button" class="bs-rowact bs-rowact--danger" style="opacity:1" aria-label="Revoke Infection Control">
+                      <svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5 5l8 8M13 5l-8 8"/></svg>
+                    </button>
+                  </span>
+                </div>
+              </div>
+              <p class="bs-section-note" style="margin-top: var(--brand-space-1-5)">
+                A group is one object across every binder it reaches, so a
+                role that comes from one is changed where the group is —
+                not here. That is why those rows have a label instead of a
+                dropdown.
+              </p>
+            </section>
+          </div>
+        </div>`;
+    </script>
+  </body>
+</html>

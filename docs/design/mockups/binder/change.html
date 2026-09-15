@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Binder · One change request — Bindersnap design</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" />
+    <link rel="stylesheet" href="./binder.css" />
+    <script src="./shell.js"></script>
+  </head>
+  <body>
+    <script>
+      /*
+       * One change request — the screen that was worst, and the most fixable.
+       *
+       * What it looked like: the binder's own Lora title above it, then the
+       * change's Lora title, so two H1s competed; a stale-branch warning
+       * rendered ABOVE the "All changes" link, so the first sentence on the
+       * page was about a state you had not been told you were in; and a
+       * broken approval meter overlapping the wrapping title in the top
+       * right corner.
+       *
+       * What it is now: the change owns the page's one title. Everything
+       * about the DECISION — who is waiting, what is proposed, what happens
+       * when you publish, and the two buttons — is in the rail, in one place,
+       * fixed. The main column is the conversation and nothing else.
+       *
+       * The decision moved out of the floating pill and into the rail for one
+       * reason: the pill had to float because it was the only home the
+       * decision had. Given a sticky rail it is always on screen anyway, and
+       * it stops covering the comment somebody is reading in order to decide.
+       */
+      const page = shell({ binder: 'Clinical', section: 'changes' });
+      const I = window.bsIcon;
+
+      page.innerHTML = `
+        <div class="bs-pagehead">
+          <div class="bs-pagehead-body">
+            <nav class="bs-crumbs">
+              <a href="./changes.html">Change requests</a>
+              <span class="bs-crumbs-sep">/</span>
+              <span>Change 4</span>
+            </nav>
+            <h1 class="bs-title">
+              Monthly audits, fourteen-day training, and point-of-care rub placement.
+            </h1>
+            <div class="bs-facts">
+              <span class="bs-avatar bs-avatar--sm bs-avatar--violet">AL</span>
+              <span>Alice opened this on Sep 15</span>
+              <span class="bs-crumbs-sep">·</span>
+              <span>Infection Control Policy</span>
+              <span class="bs-crumbs-sep">·</span>
+              <span>becomes <span class="bs-ver">v2</span> when published</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="bs-with-rail">
+          <!-- ── The conversation ──────────────────────────────────────── -->
+          <div>
+            <!-- The author's own words, first, because the reviewer's first
+                 question is "what are you asking me for". -->
+            <div class="bs-section">
+              <p style="max-width: var(--brand-measure); margin: 0; color: var(--bs-text-secondary); font-size: var(--brand-text-body); line-height: var(--brand-leading-relaxed)">
+                Three things the survey flagged in March. Audits move from
+                quarterly to monthly, new staff get fourteen days rather than
+                thirty, and the rub goes at the point of care instead of by the
+                door.
+              </p>
+            </div>
+
+            <div class="bs-section">
+              <div class="bs-section-head">
+                <h2 class="bs-section-title">Conversation</h2>
+                <span class="bs-section-count">1 unresolved</span>
+                <span class="bs-section-spacer"></span>
+                <button type="button" class="bs-btn bs-btn--sm bs-btn--quiet">
+                  Newest first
+                </button>
+              </div>
+
+              <ol class="bs-spine">
+                <li class="bs-spine-item">
+                  <span class="bs-knot">
+                    <svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9h11M10 5l4 4-4 4"/></svg>
+                  </span>
+                  <p class="bs-event"><strong>Alice</strong> opened this change request · Sep 15, 1:02 PM</p>
+                </li>
+
+                <li class="bs-spine-item">
+                  <span class="bs-knot">
+                    <svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M3 4h12v8H7l-4 3V4Z"/></svg>
+                  </span>
+                  <div class="bs-comment">
+                    <div class="bs-comment-head">
+                      <span class="bs-avatar bs-avatar--sm bs-avatar--teal">BO</span>
+                      <span class="bs-comment-who">Bob Okafor</span>
+                      <span class="bs-comment-when">Sep 15</span>
+                      <span class="bs-section-spacer"></span>
+                      <span class="bs-unresolved"><span class="bs-dot"></span>Unresolved</span>
+                    </div>
+                    <div class="bs-comment-body">
+                      <p>
+                        Fourteen days is tighter than the staffing agency's own
+                        onboarding. Can we actually hold agency nurses to it, or
+                        are we writing a rule we will fail our own audit on?
+                      </p>
+                    </div>
+                    <div class="bs-comment-foot">
+                      <button type="button" class="bs-btn bs-btn--sm bs-btn--quiet">React</button>
+                      <span class="bs-section-spacer"></span>
+                      <button type="button" class="bs-btn bs-btn--sm bs-btn--quiet">Resolve</button>
+                      <button type="button" class="bs-btn bs-btn--sm bs-btn-secondary">Reply</button>
+                    </div>
+                  </div>
+                </li>
+
+                <li class="bs-spine-item">
+                  <span class="bs-knot">
+                    <svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9a6 6 0 0 1 10-4.4M15 9a6 6 0 0 1-10 4.4M13 2v3h-3M5 16v-3h3"/></svg>
+                  </span>
+                  <p class="bs-event">
+                    <strong>Alice</strong> updated the proposed version (update 2)
+                    · Sep 15 · earlier approvals were reset ·
+                    <a href="#" style="color: var(--bs-coral-text)">compare</a>
+                  </p>
+                </li>
+
+                <li class="bs-spine-item">
+                  <span class="bs-knot">
+                    <span class="bs-avatar bs-avatar--sm">AL</span>
+                  </span>
+                  <div class="bs-comment">
+                    <div class="bs-comment-body" style="padding-bottom: 0">
+                      <textarea class="bs-input" placeholder="Answer Bob, or raise something else…"></textarea>
+                    </div>
+                    <div class="bs-comment-foot">
+                      <span class="bs-section-spacer"></span>
+                      <button type="button" class="bs-btn bs-btn--sm bs-btn-secondary">Comment</button>
+                    </div>
+                  </div>
+                </li>
+              </ol>
+            </div>
+          </div>
+
+          <!-- ── The decision ──────────────────────────────────────────────
+               Everything you need in order to decide, in one sticky column,
+               in the same order on every change: what is proposed, who is
+               waiting, what is in the way, and the two buttons. -->
+          <aside class="bs-rail">
+            <div class="bs-panel">
+              <div class="bs-panel-bar">
+                <span class="bs-section-title" style="font-size: var(--brand-text-ui-md)">Proposed version</span>
+              </div>
+              <div class="bs-panel-body">
+                <p style="margin: 0 0 var(--brand-space-1); font-size: var(--brand-text-ui-md); color: var(--bs-text-muted)">
+                  <span class="bs-doc-name">infection-control-policy.docx</span><br />
+                  Update 2 of 2 · Sep 15
+                </p>
+                <div style="display: flex; gap: var(--brand-space-1)">
+                  <button type="button" class="bs-btn bs-btn--sm bs-btn-secondary" style="flex:1; justify-content:center">Open</button>
+                  <button type="button" class="bs-btn bs-btn--sm bs-btn-secondary" style="flex:1; justify-content:center">Compare</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="bs-panel">
+              <div class="bs-panel-bar">
+                <span class="bs-section-title" style="font-size: var(--brand-text-ui-md)">Approvals</span>
+                <span class="bs-panel-bar-spacer"></span>
+                <span style="font-size: var(--brand-text-ui-md); color: var(--bs-text-muted)">0 of 1</span>
+              </div>
+              <div class="bs-panel-body bs-approval">
+                <span class="bs-meter"><span></span></span>
+                <p style="margin:0; font-size: var(--brand-text-ui-md); color: var(--bs-status-warn-fg)">
+                  1 more approval needed before this can be published.
+                </p>
+              </div>
+              <div class="bs-row" style="min-height: 40px">
+                <span class="bs-avatar bs-avatar--sm bs-avatar--teal">BO</span>
+                <span class="bs-row-body"><span class="bs-row-name">Bob Okafor</span></span>
+                <span class="bs-row-right">
+                  <span class="bs-status bs-status--working">Asked a question</span>
+                </span>
+              </div>
+              <div class="bs-panel-foot">
+                <button type="button" class="bs-btn bs-btn--sm bs-btn--quiet" style="padding:0; min-height:22px">
+                  ${I('plus', 13)} Add a reviewer
+                </button>
+              </div>
+            </div>
+
+            <!-- Why you cannot publish yet, said before you press the thing
+                 that would refuse. What shipped put this at the very top of
+                 the page, above the link back to the list. -->
+            <div class="bs-note bs-note--warn">
+              <p class="bs-note-lead" style="color: inherit">The binder has moved on since this was written.</p>
+              <p style="color: inherit">
+                Updating it will pull in everything published since — your
+                reviewers will need to look again.
+              </p>
+              <button type="button" class="bs-btn bs-btn--sm bs-btn-secondary" style="margin-top: var(--brand-space-1)">
+                Bring up to date
+              </button>
+            </div>
+
+            <div class="bs-panel">
+              <div class="bs-panel-body" style="display: flex; flex-direction: column; gap: var(--brand-space-1)">
+                <!-- Green, filled, and the most prominent control on the page.
+                     Putting your name on a policy permanently is the most
+                     consequential act in the product; it shipped as a ghost
+                     pill while a solid coral "Add a policy" — an act with no
+                     relationship to this change — sat above it. -->
+                <button type="button" class="bs-btn bs-btn--approve bs-btn--block">
+                  <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5 7.5 13 14 5"/></svg>
+                  Approve
+                </button>
+                <button type="button" class="bs-btn bs-btn-secondary bs-btn--block">Ask for changes</button>
+                <p style="margin: var(--brand-space-0-5) 0 0; font-size: var(--brand-text-ui-md); color: var(--bs-text-muted); text-align: center">
+                  Your approval is recorded against
+                  <span class="bs-ver">v2</span> permanently.
+                </p>
+              </div>
+            </div>
+          </aside>
+        </div>`;
+    </script>
+  </body>
+</html>
