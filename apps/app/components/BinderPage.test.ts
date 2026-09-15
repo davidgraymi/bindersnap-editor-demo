@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { describeDocument, groupByFolder } from "./BinderPage";
+import { describeDocument } from "./BinderPage";
 import type { WorkspaceDocumentListEntry } from "../../../packages/api-schema/schemas/workspaces";
 
 function entry(
@@ -19,31 +19,8 @@ function entry(
   };
 }
 
-test("root-level documents lead, then folders alphabetically", () => {
-  // A binder nobody has filed yet is the ordinary starting state, and burying
-  // those under an empty heading would make a new binder look broken.
-  const groups = groupByFolder([
-    entry({ slugPath: "nursing/handover", folder: "nursing" }),
-    entry({ slugPath: "admissions", folder: "" }),
-    entry({ slugPath: "administrative/grievance", folder: "administrative" }),
-  ]);
-
-  expect(groups.map((group) => group.folder)).toEqual([
-    "",
-    "administrative",
-    "nursing",
-  ]);
-});
-
-test("documents in one folder stay together", () => {
-  const groups = groupByFolder([
-    entry({ slugPath: "nursing/handover", folder: "nursing" }),
-    entry({ slugPath: "nursing/infection", folder: "nursing" }),
-  ]);
-
-  expect(groups).toHaveLength(1);
-  expect(groups[0]?.documents).toHaveLength(2);
-});
+// Grouping moved to `binderTree.ts` and is tested there. What stayed here is
+// the sentence under a row, which is this file's own.
 
 test("a document says which version it is at", () => {
   expect(

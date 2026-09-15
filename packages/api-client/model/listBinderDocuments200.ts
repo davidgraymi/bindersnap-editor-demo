@@ -10,4 +10,5 @@ export type ListBinderDocuments200 = {
   organization?: string;
   workspace: string;
   documents: ListBinderDocuments200DocumentsItem[];
+  folders: string[];
 };

@@ -115,7 +115,8 @@ test("the bottom bar does not sit on top of the last row of content", async ({
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
   await page.waitForTimeout(400);
 
-  const lastRow = page.locator(".docs-list-item-name").last();
+  // The binder's documents are a tree now, so the last row is a tree label.
+  const lastRow = page.locator(".binder-tree-label").last();
   await expect(lastRow).toBeVisible();
 
   const [rowBottom, barTop] = await Promise.all([
