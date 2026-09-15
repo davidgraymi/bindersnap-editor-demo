@@ -5,8 +5,9 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type CreateBinderFolderBody = {
-  folder: string;
-  changeNumber?: number;
-  draft?: boolean | string;
+export type ProposeBinderDraft201 = {
+  organization: string;
+  workspace: string;
+  branch: string;
+  changeNumber: number;
 };

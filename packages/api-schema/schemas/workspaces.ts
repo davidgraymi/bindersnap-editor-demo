@@ -260,6 +260,16 @@ export const WorkspaceDocumentListPayloadSchema = z.object({
    * "Folders are real, empty or not" is only true if the list says so.
    */
   folders: z.array(z.string()),
+  /**
+   * The draft this list was read at, or null for the record on `main`.
+   *
+   * Echoed back so edit mode can tell "the binder as you have edited it" from
+   * "the binder as it stands" without trusting what it asked for. A draft
+   * discarded in another tab answers 409 and this never arrives; a stale
+   * `?draft=` that the server declined to honour would otherwise be indis-
+   * tinguishable from one it did.
+   */
+  draft: z.string().nullable().optional(),
 });
 export type WorkspaceDocumentListPayload = z.infer<
   typeof WorkspaceDocumentListPayloadSchema

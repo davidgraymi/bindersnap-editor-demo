@@ -4222,6 +4222,83 @@
             }
           }
         }
+      },
+      "post": {
+        "operationId": "proposeBinderDraft",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "title"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The change request the draft is now waiting in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "branch": {
+                      "type": "string"
+                    },
+                    "changeNumber": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "workspace",
+                    "branch",
+                    "changeNumber"
+                  ]
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/app/orgs/{org}/people": {
@@ -6964,6 +7041,14 @@
             "required": true,
             "name": "binder",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "draft",
+            "in": "query"
           }
         ],
         "responses": {
@@ -7056,6 +7141,10 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "draft": {
+                      "type": "string",
+                      "nullable": true
                     }
                   },
                   "required": [
@@ -7111,6 +7200,9 @@
                     "type": "string"
                   },
                   "changeNumber": {
+                    "type": "string"
+                  },
+                  "draft": {
                     "type": "string"
                   }
                 },
@@ -7636,6 +7728,9 @@
                   },
                   "changeNumber": {
                     "type": "string"
+                  },
+                  "draft": {
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -7725,6 +7820,16 @@
                   },
                   "changeNumber": {
                     "type": "number"
+                  },
+                  "draft": {
+                    "anyOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
                   }
                 },
                 "required": [
@@ -7808,6 +7913,16 @@
                   },
                   "changeNumber": {
                     "type": "number"
+                  },
+                  "draft": {
+                    "anyOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
                   }
                 },
                 "required": [
@@ -7895,6 +8010,16 @@
                   },
                   "changeNumber": {
                     "type": "number"
+                  },
+                  "draft": {
+                    "anyOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
                   }
                 },
                 "required": [
@@ -7931,6 +8056,312 @@
                     "workspace",
                     "branch",
                     "changeNumber"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/binders/{org}/{binder}/draft": {
+      "get": {
+        "operationId": "getBinderDraft",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Your draft and what is in it, plus who else is editing. `draft` is null when you are not.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "draft": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "branch": {
+                          "type": "string"
+                        },
+                        "owner": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "acts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "summary": {
+                                "type": "string"
+                              },
+                              "sha": {
+                                "type": "string"
+                              },
+                              "at": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "paths": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "summary",
+                              "sha",
+                              "at",
+                              "paths"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "branch",
+                        "owner",
+                        "updatedAt",
+                        "acts"
+                      ]
+                    },
+                    "others": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "branch": {
+                            "type": "string"
+                          },
+                          "owner": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "lastAct": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "branch",
+                          "owner",
+                          "updatedAt",
+                          "lastAct"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "workspace",
+                    "draft",
+                    "others"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "openBinderDraft",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Editing started — or resumed, because pressing Edit twice must not fork your work",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "draft": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "branch": {
+                          "type": "string"
+                        },
+                        "owner": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "acts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "summary": {
+                                "type": "string"
+                              },
+                              "sha": {
+                                "type": "string"
+                              },
+                              "at": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "paths": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "summary",
+                              "sha",
+                              "at",
+                              "paths"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "branch",
+                        "owner",
+                        "updatedAt",
+                        "acts"
+                      ]
+                    },
+                    "others": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "branch": {
+                            "type": "string"
+                          },
+                          "owner": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "lastAct": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "branch",
+                          "owner",
+                          "updatedAt",
+                          "lastAct"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "workspace",
+                    "draft",
+                    "others"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "discardBinderDraft",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The draft branch that was thrown away",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "discarded": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "discarded"
                   ]
                 }
               }

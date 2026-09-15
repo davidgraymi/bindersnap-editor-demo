@@ -35,6 +35,18 @@ export interface BinderTreeViewProps {
   activeDocument?: string | null;
   /** Drawn on every row, to the right of the name. Edit mode fills this in. */
   renderRowActions?: (node: BinderTreeNode) => React.ReactNode;
+  /**
+   * Drawn instead of the row's name **and instead of its click target**, when
+   * it answers with anything but null.
+   *
+   * Both, deliberately. Inline rename puts a text input where the name is, and
+   * an input inside a button is a control you cannot click into — every
+   * keystroke would open the document or shut the folder. So a row that
+   * answers here stops being a button for as long as it does, and the caller
+   * owns what happens in it. Same principle as {@link renderRowActions}: the
+   * tree draws, and whoever is showing it decides what a row means.
+   */
+  renderRowLabel?: (node: BinderTreeNode) => React.ReactNode | null;
   /** What a document row says under its name. */
   describeDocument: (node: BinderTreeNode) => string;
 }
@@ -49,6 +61,7 @@ export function BinderTreeView({
   onOpenDocument,
   activeDocument = null,
   renderRowActions,
+  renderRowLabel,
   describeDocument,
 }: BinderTreeViewProps) {
   return (
@@ -63,6 +76,7 @@ export function BinderTreeView({
           onOpenDocument={onOpenDocument}
           activeDocument={activeDocument}
           renderRowActions={renderRowActions}
+          renderRowLabel={renderRowLabel}
           describeDocument={describeDocument}
         />
       ))}
@@ -89,9 +103,17 @@ function FolderRow({
   collapsed,
   onToggleFolder,
   renderRowActions,
+  renderRowLabel,
   ...rest
 }: Omit<TreeRowProps, "node"> & { folder: BinderTreeFolder }) {
   const isOpen = !collapsed.has(folder.path);
+  const instead = renderRowLabel?.(folder) ?? null;
+
+  const icon = (
+    <span className="binder-tree-icon" aria-hidden="true">
+      <Folder size={16} strokeWidth={1.4} />
+    </span>
+  );
 
   return (
     <>
@@ -99,38 +121,47 @@ function FolderRow({
         className="binder-tree-row binder-tree-row--folder"
         style={{ paddingLeft: depth * INDENT }}
       >
-        <button
-          type="button"
-          className="binder-tree-main"
-          onClick={() => onToggleFolder(folder.path)}
-          aria-expanded={isOpen}
-        >
-          <span className="binder-tree-twisty" aria-hidden="true">
-            {isOpen ? (
-              <ChevronDown size={14} strokeWidth={1.6} />
-            ) : (
-              <ChevronRight size={14} strokeWidth={1.6} />
-            )}
-          </span>
-          <span className="binder-tree-icon" aria-hidden="true">
-            <Folder size={16} strokeWidth={1.4} />
-          </span>
-          {/* Titled the way a document is, not left as the slug the binder
-              stores. Somebody typed "Estates and Facilities"; showing them
-              `estates-and-facilities` is the storage format leaking into the
-              page, and it reads as a different kind of thing from the
-              documents underneath it. */}
-          <span className="binder-tree-label">
-            {formatDocumentName(folder.name)}
-          </span>
-          {/* What a shut folder is hiding, counted all the way down — a
-              collapsed folder saying nothing is a folder nobody opens. */}
-          <span className="binder-tree-count">
-            {folder.documentCount === 1
-              ? "1 policy"
-              : `${folder.documentCount} policies`}
-          </span>
-        </button>
+        {instead ? (
+          <div className="binder-tree-main binder-tree-main--inert">
+            {/* The twisty goes while a name is being typed: collapsing is not
+                what the triangle means to somebody mid-rename, and the blank
+                keeps the left edge straight. */}
+            <span className="binder-tree-twisty" aria-hidden="true" />
+            {icon}
+            {instead}
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="binder-tree-main"
+            onClick={() => onToggleFolder(folder.path)}
+            aria-expanded={isOpen}
+          >
+            <span className="binder-tree-twisty" aria-hidden="true">
+              {isOpen ? (
+                <ChevronDown size={14} strokeWidth={1.6} />
+              ) : (
+                <ChevronRight size={14} strokeWidth={1.6} />
+              )}
+            </span>
+            {icon}
+            {/* Titled the way a document is, not left as the slug the binder
+                stores. Somebody typed "Estates and Facilities"; showing them
+                `estates-and-facilities` is the storage format leaking into the
+                page, and it reads as a different kind of thing from the
+                documents underneath it. */}
+            <span className="binder-tree-label">
+              {formatDocumentName(folder.name)}
+            </span>
+            {/* What a shut folder is hiding, counted all the way down — a
+                collapsed folder saying nothing is a folder nobody opens. */}
+            <span className="binder-tree-count">
+              {folder.documentCount === 1
+                ? "1 policy"
+                : `${folder.documentCount} policies`}
+            </span>
+          </button>
+        )}
 
         {renderRowActions ? (
           <span className="binder-tree-actions">
@@ -152,6 +183,7 @@ function FolderRow({
               collapsed={collapsed}
               onToggleFolder={onToggleFolder}
               renderRowActions={renderRowActions}
+              renderRowLabel={renderRowLabel}
               {...rest}
             />
           ))
@@ -166,35 +198,50 @@ function DocumentRow({
   onOpenDocument,
   activeDocument,
   renderRowActions,
+  renderRowLabel,
   describeDocument,
 }: Omit<TreeRowProps, "node"> & { node: BinderTreeNode }) {
   if (node.kind !== "document") return null;
   const { document } = node;
   const isActive = activeDocument === document.slugPath;
+  const instead = renderRowLabel?.(node) ?? null;
+
+  /* A document has nothing to twist open, but it lines up with the folders
+     above it — a ragged left edge is what makes a tree read as a list of
+     unrelated things. */
+  const lead = (
+    <>
+      <span className="binder-tree-twisty" aria-hidden="true" />
+      <span className="binder-tree-icon" aria-hidden="true">
+        <FileText size={16} strokeWidth={1.4} />
+      </span>
+    </>
+  );
 
   return (
     <div
       className={`binder-tree-row${isActive ? " binder-tree-row--active" : ""}`}
       style={{ paddingLeft: depth * INDENT }}
     >
-      <button
-        type="button"
-        className="binder-tree-main"
-        onClick={() => onOpenDocument(document.slugPath)}
-        aria-current={isActive ? "page" : undefined}
-      >
-        {/* A document has nothing to twist open, but it lines up with the
-            folders above it — a ragged left edge is what makes a tree read as
-            a list of unrelated things. */}
-        <span className="binder-tree-twisty" aria-hidden="true" />
-        <span className="binder-tree-icon" aria-hidden="true">
-          <FileText size={16} strokeWidth={1.4} />
-        </span>
-        <span className="binder-tree-label">
-          {formatDocumentName(document.name)}
-        </span>
-        <span className="binder-tree-meta">{describeDocument(node)}</span>
-      </button>
+      {instead ? (
+        <div className="binder-tree-main binder-tree-main--inert">
+          {lead}
+          {instead}
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="binder-tree-main"
+          onClick={() => onOpenDocument(document.slugPath)}
+          aria-current={isActive ? "page" : undefined}
+        >
+          {lead}
+          <span className="binder-tree-label">
+            {formatDocumentName(document.name)}
+          </span>
+          <span className="binder-tree-meta">{describeDocument(node)}</span>
+        </button>
+      )}
 
       {renderRowActions ? (
         <span className="binder-tree-actions">{renderRowActions(node)}</span>

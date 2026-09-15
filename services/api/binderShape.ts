@@ -24,6 +24,7 @@ import {
   parseDocumentFilename,
   slugifyDocumentName,
 } from "../../packages/utils/documentPath";
+import { formatDocumentName } from "../../packages/utils/documentTitle";
 
 import type { WorkspaceDocumentEntry } from "./gitea-client/workspaceDocuments";
 
@@ -88,8 +89,8 @@ export function planNewFolder(params: {
     operations: [
       { kind: "write", path: folderKeepPath(folder), base64Content: "" },
     ],
-    title: `Add the folder ${folder}`,
-    message: `Add the folder ${folder}`,
+    title: `Add the folder ${describeFolder(folder)}`,
+    message: `Add the folder ${describeFolder(folder)}`,
   };
 }
 
@@ -175,11 +176,21 @@ export function planFolderRename(params: {
     operations.push({ kind: "move", from: path, to: moved });
   }
 
-  return {
-    operations,
-    title: `Rename ${from} to ${to}`,
-    message: `Rename the folder ${from} to ${to}`,
-  };
+  // Titled, for the same reason a document rename is: this sentence is read by
+  // the people being asked to approve it, and `infection-control` is the
+  // storage format rather than anything anybody typed.
+  const said =
+    parentOf(from) === parentOf(to)
+      ? `Rename the folder ${describeFolder(from)} to ${describeFolder(to)}`
+      : `Move the folder ${describeFolder(from)} to ${describeFolder(to)}`;
+
+  return { operations, title: said, message: said };
+}
+
+/** `clinical/nursing` → `clinical`; a top-level folder has no parent. */
+function parentOf(folder: string): string {
+  const cut = folder.lastIndexOf("/");
+  return cut === -1 ? "" : folder.slice(0, cut);
 }
 
 /**
@@ -250,14 +261,36 @@ export function planDocumentRename(params: {
     };
   }
 
+  // **Said the way the person who did it would say it.** These two strings
+  // stopped being an internal detail the moment drafts existed: the commit
+  // subject is what a draft reads back as, and it is what prefills the change
+  // request an author sends to colleagues. `Move
+  // nursing/hand-hygiene.01M2DJ….md to nursing/hand-hygiene-and-ppe.01M2DJ….md`
+  // put a 26-character identity segment — a thing nobody typed and nobody can
+  // act on — in front of the people being asked to approve a rename.
+  const was = formatDocumentName(document.name);
+  const now = formatDocumentName(slug);
+  const renamed = slug !== document.name;
+  const refiled = folder !== document.folder;
+  const where =
+    folder === "" ? "the binder’s top level" : describeFolder(folder);
+
+  const said = renamed
+    ? refiled
+      ? `Rename ${was} to ${now} and move it to ${where}`
+      : `Rename ${was} to ${now}`
+    : `Move ${was} to ${where}`;
+
   return {
     operations: [{ kind: "move", from: document.path, to }],
-    title:
-      folder === document.folder
-        ? `Rename ${document.slugPath} to ${slug}`
-        : `Move ${document.slugPath} to ${address}`,
-    message: `Move ${document.path} to ${to}`,
+    title: said,
+    message: said,
   };
+}
+
+/** `clinical/infection-control` → `Clinical / Infection Control`. */
+function describeFolder(folder: string): string {
+  return folder.split("/").map(formatDocumentName).join(" / ");
 }
 
 /**

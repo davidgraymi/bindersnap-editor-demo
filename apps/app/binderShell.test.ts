@@ -4,6 +4,7 @@ import {
   binderTabFromSearch,
   buildBinderUrl,
   changeViewFromSearch,
+  editModeFromSearch,
 } from "./binderShell";
 
 // ── the tab in the address bar ─────────────────────────────────────
@@ -95,4 +96,40 @@ test("another screen names itself", () => {
       view: "compare",
     }),
   ).toBe("/riverside/clinical?tab=changes&change=3&view=compare");
+});
+
+// ── editing the binder ─────────────────────────────────────────────
+
+test("a binder nobody is editing says nothing about editing", () => {
+  expect(editModeFromSearch("")).toBe("off");
+  expect(editModeFromSearch("?tab=changes")).toBe("off");
+  expect(buildBinderUrl({ org: "riverside", binder: "clinical" })).toBe(
+    "/riverside/clinical",
+  );
+  expect(
+    buildBinderUrl({ org: "riverside", binder: "clinical", edit: "off" }),
+  ).toBe("/riverside/clinical");
+});
+
+test("edit mode is in the address, so a reload lands back in it", () => {
+  expect(editModeFromSearch("?edit=1")).toBe("editing");
+  expect(
+    buildBinderUrl({ org: "riverside", binder: "clinical", edit: "editing" }),
+  ).toBe("/riverside/clinical?edit=1");
+});
+
+test("writing the change request up is its own address", () => {
+  expect(editModeFromSearch("?edit=propose")).toBe("proposing");
+  expect(
+    buildBinderUrl({ org: "riverside", binder: "clinical", edit: "proposing" }),
+  ).toBe("/riverside/clinical?edit=propose");
+});
+
+test("an edit value nobody set is not editing, rather than half-editing", () => {
+  // A mangled link should show the binder. Reading anything truthy as "edit"
+  // would put somebody into a draft they never asked for.
+  expect(editModeFromSearch("?edit=")).toBe("off");
+  expect(editModeFromSearch("?edit=yes")).toBe("off");
+  expect(editModeFromSearch("?edit=true")).toBe("off");
+  expect(editModeFromSearch("?edit=0")).toBe("off");
 });

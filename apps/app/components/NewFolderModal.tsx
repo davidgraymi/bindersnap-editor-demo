@@ -20,13 +20,23 @@ import { ChangeTargetField } from "./ChangeTargetField";
 interface NewFolderModalProps {
   org: string;
   binder: string;
+  /**
+   * The draft this goes into, when the binder is being edited.
+   *
+   * Set, and there is no question left to ask: the folder joins the work in
+   * hand and nothing is proposed to anybody until the draft is. Unset, and
+   * this is the old behaviour — a change request, opened now.
+   */
+  draft?: string;
   onClose: () => void;
-  onProposed: (changeNumber: number) => void;
+  /** Null when the folder went into a draft, which has no change request. */
+  onProposed: (changeNumber: number | null) => void;
 }
 
 export function NewFolderModal({
   org,
   binder,
+  draft,
   onClose,
   onProposed,
 }: NewFolderModalProps) {
@@ -45,7 +55,7 @@ export function NewFolderModal({
         org,
         binder,
         folder.trim(),
-        changeNumber ?? undefined,
+        draft ? { draft } : changeNumber ? { changeNumber } : undefined,
       );
       onProposed(proposed.changeNumber);
     } catch (err) {
@@ -99,13 +109,15 @@ export function NewFolderModal({
             inside a folder.
           </p>
 
-          <ChangeTargetField
-            org={org}
-            binder={binder}
-            value={changeNumber}
-            onChange={setChangeNumber}
-            disabled={submitting}
-          />
+          {draft ? null : (
+            <ChangeTargetField
+              org={org}
+              binder={binder}
+              value={changeNumber}
+              onChange={setChangeNumber}
+              disabled={submitting}
+            />
+          )}
 
           {error ? (
             <p className="upload-error-message" role="alert">
@@ -114,8 +126,9 @@ export function NewFolderModal({
           ) : null}
 
           <p className="add-policy-note">
-            A binder&rsquo;s folders are part of its record, so this is a change
-            request like any other. The folder appears once it is published.
+            {draft
+              ? "This goes into your draft. Nobody is asked to look at it until you propose it."
+              : "A binder’s folders are part of its record, so this is a change request like any other. The folder appears once it is published."}
           </p>
 
           <div className="upload-modal-actions">
@@ -125,7 +138,11 @@ export function NewFolderModal({
               onClick={() => void handleSubmit()}
               disabled={folder.trim() === "" || submitting}
             >
-              {submitting ? "Opening a change…" : "Add folder"}
+              {submitting
+                ? draft
+                  ? "Adding…"
+                  : "Opening a change…"
+                : "Add folder"}
             </button>
             <button
               type="button"

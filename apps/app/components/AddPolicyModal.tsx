@@ -21,6 +21,14 @@ import { ChangeTargetField } from "./ChangeTargetField";
 interface AddPolicyModalProps {
   org: string;
   binder: string;
+  /**
+   * The draft this goes into, when the binder is being edited.
+   *
+   * Set, and the policy joins the work in hand rather than opening a change
+   * request of its own — which is the whole point of edit mode: four acts, one
+   * request, and the author's own words on it.
+   */
+  draft?: string;
   onClose: () => void;
   /**
    * The change request the policy is now in.
@@ -30,8 +38,12 @@ interface AddPolicyModalProps {
    * and the binder's own list says so by not carrying it. Landing on the
    * document made the act look finished; landing on the change shows what
    * actually happened and what has to happen next.
+   *
+   * **Null when it went into a draft**, where there is no change request to
+   * send anybody to — the binder stays where it is and the draft bar counts
+   * one act more.
    */
-  onAdded: (changeNumber: number) => void;
+  onAdded: (changeNumber: number | null) => void;
 }
 
 /** `Infection_Control_Policy_v3.docx` → `Infection Control Policy v3`. */
@@ -54,6 +66,7 @@ function extensionOf(fileName: string): string {
 export function AddPolicyModal({
   org,
   binder,
+  draft,
   onClose,
   onAdded,
 }: AddPolicyModalProps) {
@@ -121,9 +134,9 @@ export function AddPolicyModal({
         file,
         name.trim(),
         folder.trim() || undefined,
-        changeNumber ?? undefined,
+        draft ? { draft } : changeNumber ? { changeNumber } : undefined,
       );
-      onAdded(created.pullRequestNumber ?? 0);
+      onAdded(created.pullRequestNumber);
     } catch (err) {
       setError(
         err instanceof Error && err.message.trim() !== ""
@@ -198,13 +211,17 @@ export function AddPolicyModal({
             />
           </label>
 
-          <ChangeTargetField
-            org={org}
-            binder={binder}
-            value={changeNumber}
-            onChange={setChangeNumber}
-            disabled={submitting}
-          />
+          {/* Not while editing: a draft is already the answer to "where does
+              this go", and offering a change request as well would be two. */}
+          {draft ? null : (
+            <ChangeTargetField
+              org={org}
+              binder={binder}
+              value={changeNumber}
+              onChange={setChangeNumber}
+              disabled={submitting}
+            />
+          )}
 
           {/* Where it lands, before they commit to it. Folders nest as deep as
               anyone wants, and a customer who types one is entitled to see
@@ -225,9 +242,11 @@ export function AddPolicyModal({
               the whole product makes, said where somebody is about to make a
               change rather than only in the marketing. */}
           <p className="add-policy-note">
-            {changeNumber === null
-              ? "This opens a change request. The policy joins the binder once it is approved and published."
-              : "This goes into that change request. The policy joins the binder once the change is approved and published."}
+            {draft
+              ? "This goes into your draft. Nobody is asked to look at it until you propose it."
+              : changeNumber === null
+                ? "This opens a change request. The policy joins the binder once it is approved and published."
+                : "This goes into that change request. The policy joins the binder once the change is approved and published."}
           </p>
 
           <div className="upload-modal-actions">

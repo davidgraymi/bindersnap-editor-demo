@@ -302,3 +302,130 @@ describe("renaming a document", () => {
     ).toEqual({ error: "That is where it already is." });
   });
 });
+
+describe("what an act says it did", () => {
+  // **These are not internal strings any more.** The commit subject is what a
+  // draft reads back as, and what prefills the change request an author sends
+  // to colleagues — so it is read by the people deciding, and it has to be in
+  // their language. It used to be `Move nursing/hand-hygiene.01M2DJ….md to
+  // nursing/hand-hygiene-and-ppe.01M2DJ….md`.
+
+  test("a rename names the policy, not the file it is kept in", () => {
+    const plan = ok(
+      planDocumentRename({
+        document: document(),
+        name: "Hand Hygiene and PPE",
+        paths: [`nursing/hand-hygiene.${UID}.md`],
+      }),
+    );
+    // "And" rather than "and": `formatDocumentName` title-cases every word,
+    // including the joining ones. That is the rule the tree already draws with
+    // and the one the version tags are stamped with, so this says what the
+    // product actually says rather than what it should eventually say. Noted
+    // in the handoff as outstanding — fixing it changes every title stamped
+    // from here on, which is a decision about the record, not about wording.
+    expect(plan.message).toBe("Rename Hand Hygiene to Hand Hygiene And PPE");
+    // The title and the subject are one sentence: the act is the same act
+    // whether it goes into a draft or opens a change request of its own.
+    expect(plan.title).toBe(plan.message);
+    expect(plan.message).not.toContain(UID);
+  });
+
+  test("refiling says where it went, in the folder's own words", () => {
+    const plan = ok(
+      planDocumentRename({
+        document: document(),
+        folder: "Infection Control",
+        paths: [`nursing/hand-hygiene.${UID}.md`],
+      }),
+    );
+    expect(plan.message).toBe("Move Hand Hygiene to Infection Control");
+  });
+
+  test("the top level has a name, because “move it to ” does not", () => {
+    const plan = ok(
+      planDocumentRename({
+        document: document(),
+        folder: "",
+        paths: [`nursing/hand-hygiene.${UID}.md`],
+      }),
+    );
+    expect(plan.message).toBe("Move Hand Hygiene to the binder’s top level");
+  });
+
+  test("renaming and refiling at once is one sentence, not two acts", () => {
+    const plan = ok(
+      planDocumentRename({
+        document: document(),
+        name: "Hand Hygiene and PPE",
+        folder: "Clinical/Infection Control",
+        paths: [`nursing/hand-hygiene.${UID}.md`],
+      }),
+    );
+    expect(plan.message).toBe(
+      "Rename Hand Hygiene to Hand Hygiene And PPE and move it to Clinical / Infection Control",
+    );
+  });
+
+  test("an initialism survives the round trip through the slug", () => {
+    // `formatDocumentName` is the same rule the version tags are stamped with,
+    // so a policy called PPE is called PPE in the change request too.
+    const plan = ok(
+      planDocumentRename({
+        document: document(),
+        name: "PPE Guidance",
+        paths: [`nursing/hand-hygiene.${UID}.md`],
+      }),
+    );
+    expect(plan.message).toBe("Rename Hand Hygiene to PPE Guidance");
+  });
+});
+
+describe("what a folder act says it did", () => {
+  // Same reason as a document's: this is the sentence on the change request,
+  // and `infection-control` is the storage format rather than the name
+  // somebody typed. Half a change request in titles and half in slugs reads
+  // worse than either alone.
+
+  test("making a folder names it the way the tree will", () => {
+    const plan = ok(
+      planNewFolder({ folder: "Infection Control", existingFolders: [] }),
+    );
+    expect(plan.message).toBe("Add the folder Infection Control");
+  });
+
+  test("a nested folder says where it went", () => {
+    const plan = ok(
+      planNewFolder({ folder: "clinical/nursing", existingFolders: [] }),
+    );
+    expect(plan.message).toBe("Add the folder Clinical / Nursing");
+  });
+
+  test("renaming in place is a rename", () => {
+    const plan = ok(
+      planFolderRename({
+        from: "infection-control",
+        to: "Clinical Governance",
+        paths: ["infection-control/handover.md"],
+        existingFolders: ["infection-control"],
+      }),
+    );
+    expect(plan.message).toBe(
+      "Rename the folder Infection Control to Clinical Governance",
+    );
+  });
+
+  test("moving under another folder is a move, not a rename", () => {
+    // The name has not changed; where it lives has. Calling both "rename"
+    // would tell a reviewer the wrong thing about what they are approving.
+    const plan = ok(
+      planFolderRename({
+        from: "nursing",
+        to: "clinical/nursing",
+        paths: ["nursing/handover.md"],
+        existingFolders: ["nursing"],
+      }),
+    );
+    expect(plan.message).toBe("Move the folder Nursing to Clinical / Nursing");
+  });
+});
