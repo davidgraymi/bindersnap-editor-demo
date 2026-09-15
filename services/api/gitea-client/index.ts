@@ -2,6 +2,7 @@ export * from "./client";
 export * from "./auth";
 export * from "./discussions";
 export * from "./documents";
+export * from "./drafts";
 export * from "./orgs";
 export * from "./pullRequests";
 export * from "./reactions";
