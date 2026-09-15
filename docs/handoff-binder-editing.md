@@ -2,9 +2,9 @@
 
 **Status:** §4.1 and §4.2 are built and in review — drafts, the tree, edit
 mode, drag-to-move, archiving and restore. So is most of §4.3: form controls
-(#468) and the page shell (#469). What is left there is renaming a binder, the
-sign-off rule that covers the sign-off rules, and two wording calls that are
-the customer's.
+(#468), the page shell (#469) and renaming a binder (#470). What is left there
+is the sign-off rule that covers the sign-off rules, the empty-state copy, and
+two wording calls that are the customer's.
 
 This document exists so somebody else can pick the work up without re-deriving
 the decisions. It is not a spec: it says what is built, what was decided and
@@ -271,7 +271,28 @@ on it.
   holds four rules now. Each was verified by reintroducing the defect and
   watching the test name it.
 
-**Build on `fix/pages-share-a-shape`.** It is the tip.
+**[#470 — rename a binder](https://github.com/davidgraymi/bindersnap-editor-demo/pull/470)**
+(`feat/rename-a-binder` → `fix/pages-share-a-shape`)
+
+§4.3's first item, and the check it asked for is answered.
+
+- **Gitea redirects.** Verified against the version this runs on
+  (1.28.0+dev, 2026-09-14) by renaming a repository and asking for the old
+  name: `301` from both the API and the web UI, pointing at the new one. `fetch`
+  follows a redirect by default, so this product's own reads against an old
+  binder name resolve too. That is what makes "links to the old name keep
+  working" a fact on the settings page rather than a hope, and there is a test
+  that fails if it ever stops being true.
+- `POST .../name`, admin only, slugged by the same rule a new binder is —
+  a binder carries no display name, so the slug _is_ the name.
+- The field is on the Settings tab, and it is not drawn at all for somebody who
+  cannot use it.
+- After a rename the address bar is **replaced**, not pushed: going Back to a
+  name the binder no longer has is a redirect at best and a 404 once somebody
+  reuses it.
+- `tests/binder-rename.pw.ts` — 8 tests.
+
+**Build on `feat/rename-a-binder`.** It is the tip.
 
 ---
 
@@ -446,9 +467,10 @@ folder.
 
 Still outstanding, in no fixed order:
 
-1. **Rename a binder.** A binder is a Gitea repository; renaming one changes
-   every URL that points at it. Worth checking whether Gitea redirects the old
-   name before promising it in the UI.
+1. ~~**Rename a binder.**~~ Done in #470. Gitea does redirect — checked, not
+   assumed — so the promise in the UI is safe to make. The redirect holds until
+   something else claims the old name, which is the usual caveat and is not
+   surfaced anywhere; say if it should be.
 2. ~~**Form controls.**~~ Done in #468. Two sizes, each pinned by height, and
    a test that walks the product and fails when a row mixes them.
 3. ~~**Page shell.**~~ Done in #469: one box, one title size, and nothing
@@ -534,6 +556,13 @@ filenames differ while the address a link resolves by does not. `planFolderRenam
 checks both; a path-only check passes and leaves a link resolving to whichever
 came first.
 
+**`quick-find-scope.pw.ts` needs a freshly seeded instance.** It searches "cl"
+and expects the seeded Clinical binder and its policies in a capped result
+list, so an instance that has accumulated a few hundred binders from repeated
+test runs pushes them off the end and the test fails for a reason that has
+nothing to do with the change in front of you. `bun run up --fresh` before
+believing it. Cost half an hour of looking for a regression that was not there.
+
 **Measure the product; do not review the stylesheet.** Both design PRs found
 things that were invisible in the CSS and obvious in a browser: two buttons two
 pixels apart, four page widths, a heading on a placeholder outranking the page.
@@ -597,6 +626,7 @@ Binder routes added by this work:
 GET    /api/app/binders/{org}/{binder}/documents?draft=<branch>
                                                  the binder as it stands in your draft
 GET    /api/app/binders/{org}/{binder}/archive    what this binder has taken off the record
+POST   /api/app/binders/{org}/{binder}/name       give the binder a new name (admin only)
 GET    /api/app/binders/{org}/{binder}/draft      your draft, its acts, who else is editing
 POST   /api/app/binders/{org}/{binder}/draft      start editing, or resume
 DELETE /api/app/binders/{org}/{binder}/draft      discard yours

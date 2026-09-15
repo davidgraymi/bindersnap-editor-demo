@@ -7896,3 +7896,21 @@ input {
   margin-left: auto;
   flex-shrink: 0;
 }
+
+/* A binder's name, and the button that changes it.
+   **Stacked, not side by side**, which is what every other form in the product
+   does: the field, then the action under it. Putting them in a row would put a
+   49px field next to a 42px button — and `tests/design-consistency.pw.ts`
+   caught exactly that when this was first written, which is that guard doing
+   its job one branch after it was added. (No pull request numbers in here: a
+   hash followed by three digits reads as a colour to the design-token test,
+   and it is right to be suspicious of one.) */
+.binder-rename {
+  display: grid;
+  gap: var(--brand-space-3);
+  justify-items: start;
+}
+
+.binder-rename .bs-input {
+  max-width: 24rem;
+}
