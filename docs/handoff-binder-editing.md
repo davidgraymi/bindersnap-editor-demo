@@ -1,7 +1,7 @@
 # Handoff — editing a binder
 
 **Status:** §4.1, §4.2 and all of §4.3 bar the writing are **merged** into
-`feat/adr4-documents-as-files` — everything up to and including #470. #471 is
+`feat/adr4-documents-as-files` — everything up to and including #470. #472 is
 the one still open. What is left is the empty-state copy, the "two sign-off
 changes at once" judgement, and two wording calls that are the customer's.
 
@@ -79,7 +79,7 @@ These sit on the integration branch `feat/adr4-documents-as-files`, not on
 
 ### In review
 
-Only #471 — see below. Everything else on this page has landed.
+Only #472 — see below. Everything else on this page has landed.
 
 ### What each of them did
 
@@ -307,7 +307,7 @@ on it.
   reuses it.
 - `tests/binder-rename.pw.ts` — 8 tests.
 
-**[#471 — a rule over the rules](https://github.com/davidgraymi/bindersnap-editor-demo/pull/471)**
+**[#472 — a rule over the rules](https://github.com/davidgraymi/bindersnap-editor-demo/pull/472)**
 (`feat/sign-off-on-the-rules` → `feat/rename-a-binder`)
 
 §4.3's fourth item: `SignOffScope` gains `rules`, matching `.gitea/CODEOWNERS`.
@@ -530,7 +530,7 @@ Still outstanding, in no fixed order:
    should decide whether it is meant to be that way.
 
 4. ~~**A sign-off rule that covers the sign-off rules themselves.**~~ Done in
-   #471.
+   #472.
 5. **`formatDocumentName` title-cases the joining words.** "Hand Hygiene and
    PPE" comes back as "Hand Hygiene **And** PPE", in the tree, in the change
    request, and in the version tag. `packages/utils/documentTitle.ts` is the
