@@ -1,8 +1,10 @@
 # Handoff — editing a binder
 
 **Status:** §4.1 and §4.2 are built and in review — drafts, the tree, edit
-mode, drag-to-move, archiving and restore. §4.3 has started: form controls are
-one system now (#468), which the page shell was waiting on.
+mode, drag-to-move, archiving and restore. So is most of §4.3: form controls
+(#468) and the page shell (#469). What is left there is renaming a binder, the
+sign-off rule that covers the sign-off rules, and two wording calls that are
+the customer's.
 
 This document exists so somebody else can pick the work up without re-deriving
 the decisions. It is not a spec: it says what is built, what was decided and
@@ -250,7 +252,26 @@ on it.
   row and the heights. Verified by putting the old 36px search box back and
   watching it fail.
 
-**Build on `fix/form-controls-are-one-system`.** It is the tip.
+**[#469 — the page shell](https://github.com/davidgraymi/bindersnap-editor-demo/pull/469)**
+(`fix/pages-share-a-shape` → `fix/form-controls-are-one-system`)
+
+§4.3's third item, which the one above it was blocking.
+
+- **One page box.** There were four — `.docw-page` at 1054px, `.docs-page` and
+  `.home-page` at 880px, `.app-page-shell` at 1040px — so walking from Home to
+  Documents to Activity moved the content column sideways by up to 87px and no
+  two pages started in the same place. Plus six responsive overrides at four
+  breakpoints, disagreeing. One box now, two steps.
+- **One page-title size.** 26px was four of six; the library was 28px and
+  activity 20px.
+- **Nothing inside a page outranks it.** The activity log had a 42px serif
+  headline on a placeholder card under a 26px page title, which is what "less
+  editorial and more useful tool" looks like in one CSS rule.
+- `tests/design-controls.pw.ts` became `tests/design-consistency.pw.ts` and
+  holds four rules now. Each was verified by reintroducing the defect and
+  watching the test name it.
+
+**Build on `fix/pages-share-a-shape`.** It is the tip.
 
 ---
 
@@ -430,14 +451,18 @@ Still outstanding, in no fixed order:
    name before promising it in the UI.
 2. ~~**Form controls.**~~ Done in #468. Two sizes, each pinned by height, and
    a test that walks the product and fails when a row mixes them.
-3. **Page shell — next.** The customer chose the direction already: _"We need
-   less editorial and more useful tool. Not every page has to be the same but
-   the padding and style should be the same. Ultimately I just want the tool to
-   work intuitively."_ Sidebar and top nav are liked; page content needs the
-   work. The controls it sits on are done (#468), and the same trick is
-   available: measure the product in a browser and let a test hold the answer,
-   rather than deciding by screenshot. Page padding and heading sizes are the
-   obvious next measurement.
+3. ~~**Page shell.**~~ Done in #469: one box, one title size, and nothing
+   inside a page louder than the page. What is _not_ done is the copy — the
+   activity log still says "The audit trail is on deck" on a card that does
+   nothing, and the empty states across the product are still written in
+   marketing voice. That is a writing job rather than a layout one, and it
+   wants the customer's ear more than ours.
+
+   Also left alone: **billing renders outside the app shell entirely** — its
+   own full-page layout, no sidebar, no top nav. That may be deliberate for a
+   payments surface. It is the one page the shell tests skip, and somebody
+   should decide whether it is meant to be that way.
+
 4. **A sign-off rule that covers the sign-off rules themselves.** A fourth
    scope matching `.gitea/CODEOWNERS`. See `packages/utils/codeowners.ts`,
    which already has `SignOffScope = "binder" | "folder" | "document"`.
@@ -508,6 +533,14 @@ this reason; getting it wrong refused every upload that did not name a draft.
 filenames differ while the address a link resolves by does not. `planFolderRename`
 checks both; a path-only check passes and leaves a link resolving to whichever
 came first.
+
+**Measure the product; do not review the stylesheet.** Both design PRs found
+things that were invisible in the CSS and obvious in a browser: two buttons two
+pixels apart, four page widths, a heading on a placeholder outranking the page.
+`tests/design-consistency.pw.ts` is the pattern — walk the screens, measure,
+fail naming the element and the number. Every rule in it was checked by putting
+the defect back and watching it fail. A rule you have not seen fail is a rule
+you do not have.
 
 **The dev server serves a stale copy of the design tokens.** `apps/app/app.css`
 `@import`s `packages/ui-tokens/css/bindersnap-tokens.css`, and the app container

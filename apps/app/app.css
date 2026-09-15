@@ -622,13 +622,36 @@ input {
    The page is 1080px of content on paper, not a stack of cards. The header
    never changes as you move between tabs, so you always know which document
    you are looking at. */
-.docw-page {
+/* ── The box every page sits in ──
+   One column, one gutter, one place a page begins. There were three of these —
+   `.docw-page` on the binder and the organization, `.docs-page` on the library
+   and `.app-page-shell` on activity — at 1054px, 880px and 1040px wide, so
+   walking from Home to Documents to Activity moved the content sideways by up
+   to 87px and no two pages started in the same place. The customer's words:
+   "not every page has to be the same but the padding and style should be the
+   same."
+
+   1080px of content plus the gutter that keeps it off the edge, which is what
+   four of the six pages already were. `width: 100%` is load-bearing: without
+   it the auto margins make this a fit-content box, so the column width — and
+   with it the whole page — is decided by whatever the active tab happens to
+   render.
+
+   The three class names stay, because they carry other things: a grid here, a
+   list layout there. What they no longer carry is three answers to "how wide
+   is a page". */
+.app-page-shell,
+.docw-page,
+.docs-page,
+.home-page {
   width: 100%;
-  /* 1080px of content, plus the gutter that keeps it off the edge. */
   max-width: calc(1080px + var(--brand-space-8) * 2);
   margin: 0 auto;
   padding: var(--brand-space-8) var(--brand-space-8) var(--brand-space-16);
   box-sizing: border-box;
+}
+
+.docw-page {
   display: grid;
   gap: var(--brand-space-5);
   align-content: start;
@@ -1043,12 +1066,29 @@ input {
   flex: 1;
 }
 
-.doc-header-title {
+/* ── What a page is called ──
+   One size, because it is one kind of thing: the name of the page you are on.
+   There were three — 26px on the binder and the organization, 28px on the
+   library, 20px on activity — so the heading changed size as you walked
+   between them, which reads as three products rather than one.
+
+   26px is what four of the six pages already used, and it is the one that sits
+   under a row of tabs without shouting over them. Margins stay with each page,
+   because how far a heading is from what follows it is a property of what
+   follows it. */
+.doc-header-title,
+.docs-title,
+.activity-heading,
+.home-greeting {
   font-family: var(--brand-font-serif);
   font-size: 26px;
   font-weight: var(--brand-weight-semibold);
   letter-spacing: var(--brand-tracking-snug);
+  line-height: var(--brand-leading-tight);
   color: var(--bs-text-primary);
+}
+
+.doc-header-title {
   margin: 0;
 }
 
@@ -3463,7 +3503,13 @@ input {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .docw-page {
+  /* Below the full column the gutter narrows, and every page narrows with it.
+     One step for all three boxes, rather than the three overrides at three
+     breakpoints that were here disagreeing with each other. */
+  .app-page-shell,
+  .docw-page,
+  .docs-page,
+  .home-page {
     padding: var(--brand-space-5) var(--brand-space-5) var(--brand-space-12);
   }
 
@@ -4814,8 +4860,10 @@ input {
 
   /* The bar floats over the page, so the last row of content needs somewhere
      to end that is not underneath it. */
+  .app-page-shell,
   .docw-page,
-  .app-page-shell {
+  .docs-page,
+  .home-page {
     padding-bottom: calc(
       72px + env(safe-area-inset-bottom, 0px) + var(--brand-space-8)
     );
@@ -5597,17 +5645,6 @@ input {
   min-height: 100%;
 }
 
-.app-page-shell {
-  /* `width: 100%` is load-bearing. Without it the auto margins make this a
-     fit-content box, so the column width — and with it the whole page — was
-     decided by whatever the active tab happened to render. */
-  width: 100%;
-  max-width: 1040px;
-  margin: 0 auto;
-  padding: var(--brand-space-8) var(--brand-space-8) var(--brand-space-12);
-  box-sizing: border-box;
-}
-
 @media (max-width: 640px) {
   /* On a phone `.app-shell` stops being a fixed-height flex column, so its
      scrolling children must stop claiming a share of it — otherwise
@@ -5624,7 +5661,13 @@ input {
     overflow: visible;
   }
 
-  .app-page-shell {
+  /* On a phone the gutter is as narrow as it goes. What the page ends in is
+     set by the navigation bar floating over it — see the clearance rule — not
+     here. */
+  .app-page-shell,
+  .docw-page,
+  .docs-page,
+  .home-page {
     padding: var(--brand-space-5) var(--brand-space-4) var(--brand-space-10);
   }
 }
@@ -5656,8 +5699,9 @@ input {
   color: var(--bs-text-primary);
 }
 
+/* A page's own name, so it is the page-title size like every other page's. */
 .admin-pro-header-copy h1 {
-  font-size: var(--brand-text-h2);
+  font-size: 26px;
   line-height: var(--brand-leading-tight);
 }
 
@@ -5997,10 +6041,6 @@ input {
     display: none;
   }
 
-  .app-page-shell {
-    padding: var(--brand-space-5);
-  }
-
   .app-nav-search-wrap {
     flex: 0 1 140px;
   }
@@ -6040,10 +6080,6 @@ input {
 
   .app-topnav-nav {
     margin-left: var(--brand-space-3);
-  }
-
-  .app-page-shell {
-    padding: var(--brand-space-4);
   }
 }
 
@@ -6147,20 +6183,7 @@ input {
    HOME — the reader's queue of change requests
    ═════════════════════════════════════════════════════════════ */
 
-.home-page {
-  width: 100%;
-  max-width: 880px;
-  margin: 0 auto;
-  padding: var(--brand-space-10) 0 var(--brand-space-16);
-  box-sizing: border-box;
-}
-
 .home-greeting {
-  font-family: var(--brand-font-serif);
-  font-size: 28px;
-  font-weight: var(--brand-weight-semibold);
-  letter-spacing: var(--brand-tracking-snug);
-  color: var(--bs-text-primary);
   margin: 0 0 var(--brand-space-1);
 }
 
@@ -6366,12 +6389,6 @@ input {
   max-width: 52ch;
 }
 
-@media (max-width: 768px) {
-  .home-page {
-    padding: var(--brand-space-6) var(--brand-space-5) var(--brand-space-12);
-  }
-}
-
 @media (max-width: 640px) {
   .home-row {
     flex-wrap: wrap;
@@ -6409,9 +6426,6 @@ input {
 
 .activity-heading {
   margin: 0;
-  font-family: var(--brand-font-serif);
-  font-size: 20px;
-  line-height: 1.2;
 }
 
 .activity-subtitle {
@@ -6471,10 +6485,15 @@ input {
   gap: var(--brand-space-3);
 }
 
+/* Below the page's own title, not above it. This was `--brand-text-h2` — a
+   landing-page size, up to 42px — inside a page whose name is 26px, so the
+   heading on a placeholder card outranked the heading on the page. "We need
+   less editorial and more useful tool" is what that looks like in one rule. */
 .activity-placeholder-title {
   margin: var(--brand-space-2) 0 0;
   font-family: var(--brand-font-serif);
-  font-size: var(--brand-text-h2);
+  font-size: var(--brand-text-h3);
+  font-weight: var(--brand-weight-semibold);
   line-height: var(--brand-leading-tight);
 }
 
@@ -6520,20 +6539,7 @@ input {
    a time, narrowed by people, and nothing else to set.
    ══════════════════════════════════════════════════════════════ */
 
-.docs-page {
-  width: 100%;
-  max-width: 880px;
-  margin: 0 auto;
-  padding: var(--brand-space-10) 0 var(--brand-space-16);
-  box-sizing: border-box;
-}
-
 .docs-title {
-  font-family: var(--brand-font-serif);
-  font-size: 28px;
-  font-weight: var(--brand-weight-semibold);
-  letter-spacing: var(--brand-tracking-snug);
-  color: var(--bs-text-primary);
   margin: 0 0 var(--brand-space-5);
 }
 
@@ -6871,12 +6877,6 @@ input {
 
   .activity-preview-grid {
     grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 768px) {
-  .docs-page {
-    padding: var(--brand-space-6) var(--brand-space-5) var(--brand-space-12);
   }
 }
 

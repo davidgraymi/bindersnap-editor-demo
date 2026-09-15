@@ -1,5 +1,13 @@
 /**
- * Controls in one row are one size.
+ * The design system, measured in a browser rather than reviewed in a diff.
+ *
+ * Two rules so far, both of which the customer noticed before we did:
+ * **controls in one row are one size**, and **every page has the same shape**.
+ * Neither is a thing you can check by reading a stylesheet — the rules looked
+ * fine both times — and both failures read as sloppiness at a glance while
+ * being nearly invisible in review.
+ *
+ * ── Controls in one row are one size ──
  *
  * **The customer could see this, which is how it got written down:** *"Inputs,
  * selects and buttons are not one system — the 'Put it in' dropdown is visibly
@@ -261,4 +269,143 @@ test("the fields in a form are one size, picker included", async ({ page }) => {
   ).toBe(1);
 
   await expectOneSizePerRow(page, "the add-a-policy form");
+});
+
+/**
+ * Every page begins in the same place, at the same width, under a heading of
+ * the same size.
+ *
+ * **This is what "the padding and style should be the same" measures to.**
+ * There were three page boxes — 1054px, 880px and 1040px — and three heading
+ * sizes, so walking from Home to Documents to Activity moved the content
+ * sideways by up to 87px and resized the title twice. Nothing was broken;
+ * everything was slightly different, which is worse, because it reads as three
+ * products rather than one.
+ *
+ * The binder's heading sits lower than the rest and that is not a fault: it is
+ * a level deeper and has a breadcrumb above it. So the top of the heading is
+ * not compared — the left edge, the width and the type size are.
+ */
+test("every page begins in the same place, at the same size", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await page
+    .context()
+    .addCookies([
+      { name: "bindersnap_session", value: session, url: APP_BASE_URL },
+    ]);
+  await page.setViewportSize({ width: 1280, height: 900 });
+
+  const screens: Array<[string, string]> = [
+    ["home", `${APP_BASE_URL}/home`],
+    ["the library", `${APP_BASE_URL}/documents`],
+    ["the review queue", `${APP_BASE_URL}/changes`],
+    ["the binder", `${APP_BASE_URL}/${org}/${binder}`],
+    ["the organization", `${APP_BASE_URL}/${org}`],
+    ["the activity log", `${APP_BASE_URL}/activity`],
+  ];
+
+  const shapes: Array<{ where: string; shape: Record<string, unknown> }> = [];
+
+  for (const [where, url] of screens) {
+    await page.goto(url);
+    await page.waitForLoadState("networkidle");
+
+    const shape = await page.evaluate(() => {
+      const main = document.querySelector(".app-main");
+      const root = main?.firstElementChild as HTMLElement | undefined;
+      if (!root) return null;
+      const box = root.getBoundingClientRect();
+      const heading = main!.querySelector(
+        ".doc-header-title, .docs-title, .activity-heading",
+      );
+      return {
+        left: Math.round(box.left),
+        width: Math.round(box.width),
+        padding: getComputedStyle(root).padding,
+        headingSize: heading ? getComputedStyle(heading).fontSize : null,
+      };
+    });
+
+    expect(shape, `${where} rendered no page inside the shell`).not.toBeNull();
+    shapes.push({ where, shape: shape as Record<string, unknown> });
+  }
+
+  // Compared against the first rather than against a number written here: what
+  // matters is that they agree, and pinning the value would make this a test
+  // of a decision rather than of consistency.
+  const [first, ...rest] = shapes;
+  for (const other of rest) {
+    expect(
+      other.shape,
+      `${other.where} is not the same shape as ${first!.where}`,
+    ).toEqual(first!.shape);
+  }
+});
+
+/**
+ * Nothing inside a page is bigger than the page's own name.
+ *
+ * **A hierarchy that inverts reads as a brochure, not a tool**, which is the
+ * whole of the customer's direction: *"We need less editorial and more useful
+ * tool."* The activity log had a 42px serif headline on a placeholder card
+ * sitting under a 26px page title — the loudest thing on the page was the part
+ * that does nothing yet.
+ *
+ * Measured rather than judged: the page's own heading is found, then every
+ * other heading on the page, and any that is larger fails by name. Equal is
+ * allowed — two things of the same rank is a layout decision. Larger is not.
+ */
+test("no heading on a page outranks the page's own title", async ({ page }) => {
+  const { session, org, binder } = await provision();
+  await page
+    .context()
+    .addCookies([
+      { name: "bindersnap_session", value: session, url: APP_BASE_URL },
+    ]);
+  await page.setViewportSize({ width: 1280, height: 900 });
+
+  const screens: Array<[string, string]> = [
+    ["home", `${APP_BASE_URL}/home`],
+    ["the library", `${APP_BASE_URL}/documents`],
+    ["the review queue", `${APP_BASE_URL}/changes`],
+    ["the binder", `${APP_BASE_URL}/${org}/${binder}`],
+    ["the organization", `${APP_BASE_URL}/${org}`],
+    ["the activity log", `${APP_BASE_URL}/activity`],
+  ];
+
+  for (const [where, url] of screens) {
+    await page.goto(url);
+    await page.waitForLoadState("networkidle");
+
+    const louder = await page.evaluate(() => {
+      const main = document.querySelector(".app-main");
+      if (!main) return null;
+      const title = main.querySelector(
+        ".doc-header-title, .docs-title, .activity-heading, .home-greeting",
+      );
+      if (!title) return [];
+      const titleSize = parseFloat(getComputedStyle(title).fontSize);
+
+      return Array.from(main.querySelectorAll("h1, h2, h3, h4"))
+        .filter((heading) => heading !== title)
+        .map((heading) => ({
+          text: (heading.textContent ?? "").trim().slice(0, 40),
+          cls: (heading as HTMLElement).className,
+          size: parseFloat(getComputedStyle(heading).fontSize),
+        }))
+        .filter((heading) => heading.size > titleSize);
+    });
+
+    expect(louder, `${where} rendered no page inside the shell`).not.toBeNull();
+    expect(
+      louder,
+      `On ${where}, something inside the page is louder than the page:\n` +
+        (louder ?? [])
+          .map((h) => `      ${h.size}px — ${h.cls || "?"} — “${h.text}”`)
+          .join("\n") +
+        "\n",
+    ).toEqual([]);
+  }
 });
