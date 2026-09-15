@@ -112,7 +112,7 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
             "is my organization in good shape", so the list comes first. */}
         {tab === "binders" && !isReadOnly ? (
           <button
-            className={`doc-header-submit${creating ? " doc-header-submit--quiet" : ""}`}
+            className={`bs-btn ${creating ? "bs-btn-secondary" : "bs-btn-primary"}`}
             type="button"
             onClick={() => setCreating((open) => !open)}
           >

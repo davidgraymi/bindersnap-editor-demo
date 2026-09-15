@@ -1,7 +1,8 @@
 # Handoff — editing a binder
 
-**Status:** everything in §4.1 and §4.2 is built and in review — drafts, the
-tree, edit mode, drag-to-move, archiving and restore. §4.3 is what is left.
+**Status:** §4.1 and §4.2 are built and in review — drafts, the tree, edit
+mode, drag-to-move, archiving and restore. §4.3 has started: form controls are
+one system now (#468), which the page shell was waiting on.
 
 This document exists so somebody else can pick the work up without re-deriving
 the decisions. It is not a spec: it says what is built, what was decided and
@@ -223,7 +224,33 @@ second merge that could half-apply.
   "Restore as version 2" so the effect on the history is not a surprise.
 - 6 more tests in `tests/binder-archive.pw.ts`, 6 on the planner.
 
-**Build on `feat/restore-from-the-archive`.** It is the tip.
+**[#468 — form controls](https://github.com/davidgraymi/bindersnap-editor-demo/pull/468)**
+(`fix/form-controls-are-one-system` → `feat/restore-from-the-archive`)
+
+§4.3's second item, which §4.3 itself says to do first because the shell sits
+on it.
+
+- **One control class.** `.create-document-input` is gone; everything is
+  `.bs-input`. There were two implementations with different type sizes,
+  borders, radii and padding, so a field's height depended on which screen it
+  was on.
+- **A `<select>` matches an `<input>` now**, which it cannot be made to do with
+  padding alone — the browser draws it its own way. `appearance: none`, a
+  pinned `line-height`, and the chevron drawn back on as an inline background.
+  That was the customer's named example.
+- **One button implementation.** `.doc-header-submit` is gone; it was 13px type
+  and 9px padding against `.bs-btn`'s 14px and 13px, so "New folder" and "Edit"
+  sat side by side in the binder's header at 42px and 40.1px. `.bs-btn` also
+  gained a transparent border, so a filled variant and an outlined one have the
+  same box rather than differing by the two pixels the border takes up.
+- **Two sizes, each pinned by `min-height`**, and a rule: _a row uses one of
+  them._ `.bs-input--sm` is exactly `.bs-btn--sm`'s 32px.
+- **`tests/design-controls.pw.ts` is the guard.** It walks eight screens, finds
+  every row holding more than one control, measures them, and fails naming the
+  row and the heights. Verified by putting the old 36px search box back and
+  watching it fail.
+
+**Build on `fix/form-controls-are-one-system`.** It is the tip.
 
 ---
 
@@ -401,14 +428,16 @@ Still outstanding, in no fixed order:
 1. **Rename a binder.** A binder is a Gitea repository; renaming one changes
    every URL that points at it. Worth checking whether Gitea redirects the old
    name before promising it in the UI.
-2. **Form controls.** Inputs, selects and buttons are not one system — the "Put
-   it in" dropdown is visibly a different height from the text inputs above it.
-   Flagged in #457 and #458 and still true.
-3. **Page shell.** The customer chose the direction already: _"We need less
-   editorial and more useful tool. Not every page has to be the same but the
-   padding and style should be the same. Ultimately I just want the tool to
+2. ~~**Form controls.**~~ Done in #468. Two sizes, each pinned by height, and
+   a test that walks the product and fails when a row mixes them.
+3. **Page shell — next.** The customer chose the direction already: _"We need
+   less editorial and more useful tool. Not every page has to be the same but
+   the padding and style should be the same. Ultimately I just want the tool to
    work intuitively."_ Sidebar and top nav are liked; page content needs the
-   work. Do form controls first — the shell sits on them.
+   work. The controls it sits on are done (#468), and the same trick is
+   available: measure the product in a browser and let a test hold the answer,
+   rather than deciding by screenshot. Page padding and heading sizes are the
+   obvious next measurement.
 4. **A sign-off rule that covers the sign-off rules themselves.** A fourth
    scope matching `.gitea/CODEOWNERS`. See `packages/utils/codeowners.ts`,
    which already has `SignOffScope = "binder" | "folder" | "document"`.
@@ -479,6 +508,16 @@ this reason; getting it wrong refused every upload that did not name a draft.
 filenames differ while the address a link resolves by does not. `planFolderRename`
 checks both; a path-only check passes and leaves a link resolving to whichever
 came first.
+
+**The dev server serves a stale copy of the design tokens.** `apps/app/app.css`
+`@import`s `packages/ui-tokens/css/bindersnap-tokens.css`, and the app container
+bundles three stylesheets that each inline it. Editing the token file
+re-bundles some of them and not others, so the last one loaded can be minutes
+old — which looks exactly like a CSS rule that does not work: the class is on
+the element, the served bundle contains the rule, and the computed style is the
+old value. Cost an hour. `bun run down && bun run up` before you believe a
+token change has failed. Editing `app.css` itself does **not** reliably
+invalidate them.
 
 **A publish may now write two kinds of tag.** Version tags for what the change
 added or changed, and `<uid>/archived-<n>` for what it removed. Both go in one

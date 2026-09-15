@@ -107,7 +107,7 @@ export function BinderDraftBar({
         </button>
         <button
           type="button"
-          className="doc-header-submit"
+          className="bs-btn bs-btn-primary"
           onClick={onPropose}
           disabled={busy || acts.length === 0}
         >

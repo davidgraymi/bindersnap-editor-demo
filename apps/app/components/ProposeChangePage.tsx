@@ -89,7 +89,7 @@ export function ProposeChangePage({
           <span className="bs-label">What you are asking for</span>
           <input
             id="propose-title"
-            className="create-document-input"
+            className="bs-input"
             type="text"
             value={title}
             onChange={(event) => {
@@ -106,7 +106,7 @@ export function ProposeChangePage({
           <span className="bs-label">Why — optional</span>
           <textarea
             id="propose-description"
-            className="create-document-input propose-description"
+            className="bs-input propose-description"
             value={description}
             rows={8}
             onChange={(event) => {
@@ -134,7 +134,7 @@ export function ProposeChangePage({
         <div className="upload-modal-actions">
           <button
             type="button"
-            className="doc-header-submit"
+            className="bs-btn bs-btn-primary"
             onClick={() => void handleSubmit()}
             disabled={title.trim() === "" || submitting}
           >

@@ -394,7 +394,7 @@ export function BinderShell({
                     Add a policy
                   </button>
                   <button
-                    className="doc-header-submit"
+                    className="bs-btn bs-btn-primary"
                     type="button"
                     onClick={() => void startEditing()}
                     disabled={startingEdit}
