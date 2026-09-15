@@ -186,6 +186,17 @@ export const WorkspaceDocumentListEntrySchema = z.object({
   /** `clinical/infection-control` — the address a link carries. */
   slugPath: z.string(),
   name: z.string(),
+  /**
+   * The document's identity (ADR 0005), or null for a file this product did
+   * not write — a `README.md` Gitea made with the repository, say.
+   *
+   * **Here because edit mode has to know what it may offer.** A file with no
+   * identity cannot be renamed or moved: the version tags are named after the
+   * identity, so a rename would orphan a history it never had, and the server
+   * refuses it. Without this the tree drew a pencil and a move button on every
+   * row and found out which ones were real by being told off after the click.
+   */
+  uid: z.string().nullable(),
   /** `clinical`, or "" at the binder's root. */
   folder: z.string(),
   size: z.number(),

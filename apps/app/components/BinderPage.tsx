@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pencil } from "lucide-react";
+import { FolderInput, Pencil } from "lucide-react";
 import { useIsReadOnly } from "../readOnlyContext";
 
 import {
@@ -8,10 +8,22 @@ import {
   renameBinderFolder,
 } from "../api";
 import type { WorkspaceDocumentListEntry } from "../../../packages/api-schema/schemas/workspaces";
-import { buildBinderTree, type BinderTreeNode } from "../binderTree";
+import {
+  buildBinderTree,
+  folderPaths,
+  type BinderTreeNode,
+} from "../binderTree";
+import {
+  acceptsDrop,
+  isManaged,
+  planMove,
+  type DragSubject,
+  type MovePlan,
+} from "../binderMove";
 import { formatDocumentName } from "../documentDisplay";
 import { useCollapsedFolders } from "../useCollapsedFolders";
 import { BinderTreeView } from "./BinderTree";
+import { MoveToFolderModal } from "./MoveToFolderModal";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
 /**
@@ -120,6 +132,14 @@ export function BinderDocuments({
   const [renaming, setRenaming] = useState<Renaming | null>(null);
   const [actError, setActError] = useState<string | null>(null);
   const [committing, setCommitting] = useState(false);
+  /** What is under the pointer mid-drag, and where it would land. */
+  const [dragging, setDragging] = useState<DragSubject | null>(null);
+  const [over, setOver] = useState<string | null>(null);
+  /** The row whose "Move" button was pressed — the keyboard path. */
+  const [moving, setMoving] = useState<{
+    subject: DragSubject;
+    label: string;
+  } | null>(null);
   const { collapsed, toggle } = useCollapsedFolders(org, binder);
 
   const load = useCallback(() => {
@@ -166,7 +186,11 @@ export function BinderDocuments({
   // commit to once the draft is gone, and leaving it on screen would offer a
   // rename that silently does nothing.
   useEffect(() => {
-    if (!draft) setRenaming(null);
+    if (draft) return;
+    setRenaming(null);
+    setDragging(null);
+    setOver(null);
+    setMoving(null);
   }, [draft]);
 
   const tree = useMemo(
@@ -174,56 +198,174 @@ export function BinderDocuments({
     [documents, folders],
   );
 
-  /**
-   * Commit a rename into the draft, then re-read the binder from it.
-   *
-   * Continuous save: there is no Save button and the act is committed the
-   * moment the input is left. The reload is not optional — the server
-   * normalises what was typed into a path segment, and the row has to end up
-   * saying what was actually written rather than what was asked for.
-   */
-  const commitRename = async (target: Renaming, typed: string) => {
-    const next = typed.trim();
-    setRenaming(null);
-    if (!draft || next === "" || next === target.label) return;
+  // Read off the tree rather than off `folders`, so the picker offers the
+  // intermediate levels the tree inferred — a folder holding only other
+  // folders is never named by the tree read and is a real destination.
+  const everyFolder = useMemo(() => folderPaths(tree), [tree]);
 
+  /**
+   * Do one act against the draft, then re-read the binder from it.
+   *
+   * Continuous save: there is no Save button, and the act is committed the
+   * moment the input is left or the row is dropped. The reload is not
+   * optional — the server normalises what was typed into a path segment and
+   * refuses collisions this side cannot see, so the tree has to end up saying
+   * what was actually written rather than what was asked for.
+   */
+  const runAct = async (act: () => Promise<unknown>, failed: string) => {
     setCommitting(true);
     setActError(null);
-
     try {
-      if (target.kind === "folder") {
-        // A folder's new address is its parent plus the new name: renaming and
-        // moving are one act on the server, and a rename is the case where the
-        // parent does not change.
-        const cut = target.path.lastIndexOf("/");
-        const parent = cut === -1 ? "" : target.path.slice(0, cut);
-        await renameBinderFolder(
-          org,
-          binder,
-          target.path,
-          parent === "" ? next : `${parent}/${next}`,
-          { draft },
-        );
-      } else {
-        await renameBinderDocument(
-          org,
-          binder,
-          target.slugPath,
-          { name: next },
-          { draft },
-        );
-      }
+      await act();
       onEdited?.();
       load();
     } catch (err) {
       setActError(
         err instanceof Error && err.message.trim() !== ""
           ? err.message
-          : "Unable to rename that.",
+          : failed,
       );
     } finally {
       setCommitting(false);
     }
+  };
+
+  const commitRename = async (target: Renaming, typed: string) => {
+    const next = typed.trim();
+    setRenaming(null);
+    if (!draft || next === "" || next === target.label) return;
+
+    await runAct(() => {
+      if (target.kind === "folder") {
+        // A folder's new address is its parent plus the new name: renaming and
+        // moving are one act on the server, and a rename is the case where the
+        // parent does not change.
+        const cut = target.path.lastIndexOf("/");
+        const parent = cut === -1 ? "" : target.path.slice(0, cut);
+        return renameBinderFolder(
+          org,
+          binder,
+          target.path,
+          parent === "" ? next : `${parent}/${next}`,
+          { draft },
+        );
+      }
+      return renameBinderDocument(
+        org,
+        binder,
+        target.slugPath,
+        { name: next },
+        { draft },
+      );
+    }, "Unable to rename that.");
+  };
+
+  /**
+   * Land a drop, or a pick from the move screen — they are the same act.
+   *
+   * A plan of `null` is the ordinary answer and says nothing: dropping a policy
+   * back in the folder it came from is a drag somebody thought better of, and
+   * it should not cost a commit or a line in the change request saying a policy
+   * moved to where it already was.
+   */
+  const commitMove = async (plan: MovePlan) => {
+    setDragging(null);
+    setOver(null);
+    setMoving(null);
+    if (!draft || plan === null) return;
+
+    if (plan.kind === "refused") {
+      setActError(plan.why);
+      return;
+    }
+
+    await runAct(
+      () =>
+        plan.kind === "folder"
+          ? renameBinderFolder(org, binder, plan.from, plan.to, { draft })
+          : renameBinderDocument(
+              org,
+              binder,
+              plan.slugPath,
+              { folder: plan.folder },
+              { draft },
+            ),
+      "Unable to move that.",
+    );
+  };
+
+  /** What a row is, as something that can be picked up. */
+  const subjectOf = (node: BinderTreeNode): DragSubject =>
+    node.kind === "folder"
+      ? { kind: "folder", path: node.path }
+      : {
+          kind: "document",
+          slugPath: node.document.slugPath,
+          folder: node.document.folder,
+        };
+
+  /**
+   * The drag attributes for one row.
+   *
+   * **Only folders take a drop**, and the root zone below the tree. Dropping a
+   * policy onto another policy has no meaning in a file explorer — there is no
+   * "inside" a file to be — and a row that lights up for a drop it cannot
+   * honour is worse than one that never lights up.
+   */
+  const dragPropsFor = (node: BinderTreeNode) => {
+    const folder = node.kind === "folder" ? node.path : null;
+    const willTake =
+      folder !== null && dragging !== null && acceptsDrop(dragging, folder);
+
+    return {
+      // Not while a name is being typed in it: the row is a text box then, and
+      // selecting a word in it would start a drag instead.
+      draggable: isManaged(node) && !isRenaming(renaming, node) && !committing,
+      className: [
+        willTake && over === folder ? "binder-tree-row--drop" : "",
+        dragging !== null && sameNode(dragging, subjectOf(node))
+          ? "binder-tree-row--dragging"
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" "),
+      onDragStart: (event: React.DragEvent<HTMLDivElement>) => {
+        const subject = subjectOf(node);
+        setDragging(subject);
+        event.dataTransfer.effectAllowed = "move";
+        // Something has to be set or Firefox refuses to start the drag at all.
+        // The address, so a drop into another window is at worst a paste of
+        // where the thing lives rather than a crash.
+        event.dataTransfer.setData(
+          "text/plain",
+          subject.kind === "folder" ? subject.path : subject.slugPath,
+        );
+      },
+      onDragEnd: () => {
+        setDragging(null);
+        setOver(null);
+      },
+      onDragOver: (event: React.DragEvent<HTMLDivElement>) => {
+        if (!willTake) return;
+        // `preventDefault` is what makes an element a drop target at all —
+        // without it the browser refuses the drop and the cursor says so.
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        setOver(folder);
+      },
+      onDragLeave: () => {
+        if (over === folder) setOver(null);
+      },
+      onDrop: (event: React.DragEvent<HTMLDivElement>) => {
+        if (!willTake || dragging === null) return;
+        event.preventDefault();
+        // A row inside a folder is inside that folder's box as well, so a drop
+        // on a nested row would otherwise land twice — once where it was aimed
+        // and once in the folder containing it.
+        event.stopPropagation();
+        void commitMove(planMove(dragging, folder));
+      },
+    };
   };
 
   if (error) {
@@ -284,6 +426,7 @@ export function BinderDocuments({
           describeDocument={describeTreeDocument}
           {...(draft
             ? {
+                rowProps: dragPropsFor,
                 renderRowLabel: (node: BinderTreeNode) => {
                   if (!isRenaming(renaming, node)) return null;
                   const target = renaming!;
@@ -295,42 +438,119 @@ export function BinderDocuments({
                     />
                   );
                 },
-                renderRowActions: (node: BinderTreeNode) =>
-                  isRenaming(renaming, node) ? null : (
-                    <button
-                      type="button"
-                      className="binder-tree-action"
-                      // The name, so a screen reader hears which row's pencil
-                      // this is rather than "Rename" eleven times.
-                      aria-label={`Rename ${formatDocumentName(
-                        node.kind === "folder" ? node.name : node.document.name,
-                      )}`}
-                      disabled={committing}
-                      onClick={() =>
-                        setRenaming(
-                          node.kind === "folder"
-                            ? {
-                                kind: "folder",
-                                path: node.path,
-                                label: formatDocumentName(node.name),
-                              }
-                            : {
-                                kind: "document",
-                                slugPath: node.document.slugPath,
-                                label: formatDocumentName(node.document.name),
-                              },
-                        )
-                      }
-                    >
-                      <Pencil size={14} strokeWidth={1.6} aria-hidden="true" />
-                    </button>
-                  ),
+                renderRowActions: (node: BinderTreeNode) => {
+                  if (isRenaming(renaming, node) || !isManaged(node)) {
+                    return null;
+                  }
+                  // The name on every label, so a screen reader hears which
+                  // row's button this is rather than "Rename" eleven times.
+                  const label = formatDocumentName(
+                    node.kind === "folder" ? node.name : node.document.name,
+                  );
+                  return (
+                    <>
+                      <button
+                        type="button"
+                        className="binder-tree-action"
+                        aria-label={`Rename ${label}`}
+                        disabled={committing}
+                        onClick={() =>
+                          setRenaming(
+                            node.kind === "folder"
+                              ? {
+                                  kind: "folder",
+                                  path: node.path,
+                                  label,
+                                }
+                              : {
+                                  kind: "document",
+                                  slugPath: node.document.slugPath,
+                                  label,
+                                },
+                          )
+                        }
+                      >
+                        <Pencil
+                          size={14}
+                          strokeWidth={1.6}
+                          aria-hidden="true"
+                        />
+                      </button>
+                      {/* **Dragging is the fast path, not the only one.** It
+                          needs a pointer, both ends of the move on screen at
+                          once, and it is unreachable from a keyboard. A binder
+                          with forty folders and a scrollbar is the ordinary
+                          case. */}
+                      <button
+                        type="button"
+                        className="binder-tree-action"
+                        aria-label={`Move ${label}`}
+                        disabled={committing}
+                        onClick={() =>
+                          setMoving({ subject: subjectOf(node), label })
+                        }
+                      >
+                        <FolderInput
+                          size={14}
+                          strokeWidth={1.6}
+                          aria-hidden="true"
+                        />
+                      </button>
+                    </>
+                  );
+                },
               }
             : {})}
         />
       )}
+
+      {/* **Where you drop something to take it out of a folder.** Without it
+          the top level is only reachable by dropping on empty space, which is
+          not a target anybody can see or aim at — and in a full binder there
+          is no empty space. Only while something is being dragged: a permanent
+          strip under every binder would be furniture explaining a gesture
+          nobody is making. */}
+      {draft && dragging !== null && acceptsDrop(dragging, "") ? (
+        <div
+          className={`binder-tree-root-drop${
+            over === "" ? " binder-tree-root-drop--over" : ""
+          }`}
+          onDragOver={(event) => {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "move";
+            setOver("");
+          }}
+          onDragLeave={() => {
+            if (over === "") setOver(null);
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            if (dragging) void commitMove(planMove(dragging, ""));
+          }}
+        >
+          Drop here to move it to the binder’s top level
+        </div>
+      ) : null}
+
+      {moving ? (
+        <MoveToFolderModal
+          subject={moving.subject}
+          label={moving.label}
+          folders={everyFolder}
+          onClose={() => setMoving(null)}
+          onMove={(folder) => void commitMove(planMove(moving.subject, folder))}
+        />
+      ) : null}
     </div>
   );
+}
+
+/** The same row, for marking what is currently in the air. */
+function sameNode(left: DragSubject, right: DragSubject): boolean {
+  if (left.kind !== right.kind) return false;
+  return left.kind === "folder"
+    ? left.path === (right as { path: string }).path
+    : left.slugPath === (right as { slugPath: string }).slugPath;
 }
 
 /** Is this the row whose name has turned into a text box? */

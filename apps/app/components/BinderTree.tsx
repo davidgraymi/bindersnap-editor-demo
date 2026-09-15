@@ -47,8 +47,37 @@ export interface BinderTreeViewProps {
    * tree draws, and whoever is showing it decides what a row means.
    */
   renderRowLabel?: (node: BinderTreeNode) => React.ReactNode | null;
+  /**
+   * Extra attributes for a row's own box — `draggable`, the drag handlers, and
+   * a class while it is a drop target.
+   *
+   * **The tree still does not know what a drag is**, which is the point. It
+   * knows a row is a box that can carry attributes; whether dropping a policy
+   * on a folder files it there, and whether this particular drop is allowed,
+   * are questions about the binder and belong to whoever is showing the tree.
+   * Same contract as the two slots above.
+   */
+  rowProps?: (node: BinderTreeNode) => BinderTreeRowProps | undefined;
   /** What a document row says under its name. */
   describeDocument: (node: BinderTreeNode) => string;
+}
+
+/**
+ * What a row will accept on its outer box.
+ *
+ * Narrow on purpose. A row is not an arbitrary element somebody can put
+ * anything on: it is a tree row, and the only thing outside the tree that has
+ * a legitimate opinion about it is what happens when something is dragged onto
+ * it. `className` is appended to the row's own rather than replacing it.
+ */
+export interface BinderTreeRowProps {
+  className?: string;
+  draggable?: boolean;
+  onDragStart?: (event: React.DragEvent<HTMLDivElement>) => void;
+  onDragEnd?: (event: React.DragEvent<HTMLDivElement>) => void;
+  onDragOver?: (event: React.DragEvent<HTMLDivElement>) => void;
+  onDragLeave?: (event: React.DragEvent<HTMLDivElement>) => void;
+  onDrop?: (event: React.DragEvent<HTMLDivElement>) => void;
 }
 
 /** How far one level is indented, in pixels. */
@@ -62,6 +91,7 @@ export function BinderTreeView({
   activeDocument = null,
   renderRowActions,
   renderRowLabel,
+  rowProps,
   describeDocument,
 }: BinderTreeViewProps) {
   return (
@@ -77,6 +107,7 @@ export function BinderTreeView({
           activeDocument={activeDocument}
           renderRowActions={renderRowActions}
           renderRowLabel={renderRowLabel}
+          rowProps={rowProps}
           describeDocument={describeDocument}
         />
       ))}
@@ -104,10 +135,12 @@ function FolderRow({
   onToggleFolder,
   renderRowActions,
   renderRowLabel,
+  rowProps,
   ...rest
 }: Omit<TreeRowProps, "node"> & { folder: BinderTreeFolder }) {
   const isOpen = !collapsed.has(folder.path);
   const instead = renderRowLabel?.(folder) ?? null;
+  const { className: extra, ...dragProps } = rowProps?.(folder) ?? {};
 
   const icon = (
     <span className="binder-tree-icon" aria-hidden="true">
@@ -118,8 +151,11 @@ function FolderRow({
   return (
     <>
       <div
-        className="binder-tree-row binder-tree-row--folder"
+        className={`binder-tree-row binder-tree-row--folder${
+          extra ? ` ${extra}` : ""
+        }`}
         style={{ paddingLeft: depth * INDENT }}
+        {...dragProps}
       >
         {instead ? (
           <div className="binder-tree-main binder-tree-main--inert">
@@ -184,6 +220,7 @@ function FolderRow({
               onToggleFolder={onToggleFolder}
               renderRowActions={renderRowActions}
               renderRowLabel={renderRowLabel}
+              rowProps={rowProps}
               {...rest}
             />
           ))
@@ -199,12 +236,14 @@ function DocumentRow({
   activeDocument,
   renderRowActions,
   renderRowLabel,
+  rowProps,
   describeDocument,
 }: Omit<TreeRowProps, "node"> & { node: BinderTreeNode }) {
   if (node.kind !== "document") return null;
   const { document } = node;
   const isActive = activeDocument === document.slugPath;
   const instead = renderRowLabel?.(node) ?? null;
+  const { className: extra, ...dragProps } = rowProps?.(node) ?? {};
 
   /* A document has nothing to twist open, but it lines up with the folders
      above it — a ragged left edge is what makes a tree read as a list of
@@ -220,8 +259,11 @@ function DocumentRow({
 
   return (
     <div
-      className={`binder-tree-row${isActive ? " binder-tree-row--active" : ""}`}
+      className={`binder-tree-row${isActive ? " binder-tree-row--active" : ""}${
+        extra ? ` ${extra}` : ""
+      }`}
       style={{ paddingLeft: depth * INDENT }}
+      {...dragProps}
     >
       {instead ? (
         <div className="binder-tree-main binder-tree-main--inert">
