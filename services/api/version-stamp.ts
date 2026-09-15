@@ -17,8 +17,22 @@
  *
  * It is deliberately written as plain sentences rather than as JSON. The
  * audience is a person reading `git tag -n99` or a clone in five years, not a
- * parser: nothing in the product reads this back, and a format nothing parses
- * cannot drift out of step with a parser.
+ * parser.
+ *
+ * **Something does read it back now**, and the sentence that used to be here
+ * said nothing would. {@link readVersionStamp} recovers the title and the path
+ * a version was published at, which the archive needs and cannot get anywhere
+ * else: an archived document is not on `main`, so its tags are the only record
+ * of what it was called. The two labelled lines at the foot of the message
+ * were already written for exactly this — "repeated below the summary in full,
+ * so a tool that only shows the first line and a person reading the whole
+ * message get the same two facts."
+ *
+ * The concern behind the original sentence was drift between a writer and a
+ * parser, and the answer is that they are in this file, ten lines apart, and
+ * tested against each other. Everything else about the message stays prose
+ * nothing parses: the reader takes two labelled lines and ignores the rest,
+ * and a message it cannot read costs a title rather than a page.
  *
  * **ADR 0005 gives it a second job.** A version tag is now named after the
  * document's identity — `01J8XZ4K7MQ9V3B0RN7YHS2E1D/v4` — which is exactly as
@@ -117,4 +131,99 @@ export function buildVersionStamp(policy: PublishedPolicy): string {
 
 function yesNo(value: boolean): string {
   return value ? "yes" : "no";
+}
+
+/**
+ * A document taken off the record, written into an annotated tag at the merge.
+ *
+ * **The blob is already safe; this is the audit line.** A tag is a ref, so
+ * deleting a file from `main` does not touch the tags pointing at the commits
+ * that held it — every archived document's bytes have been permanently
+ * reachable since ADR 0005 gave each version a tag. What no tag recorded was
+ * the act: who took it off the record, when, and under which change. Without
+ * that, "this policy stopped being in force in March" is answerable only by
+ * bisecting the history of `main`.
+ *
+ * Same primitive as a version tag, same publish, same code path — so it is
+ * atomic with the merge by construction rather than by a webhook holding two
+ * writes together.
+ */
+export interface ArchivedDocument {
+  /** What it was called when it was archived. */
+  title: string;
+  /** `nursing/hand-hygiene` — where it was filed when it was archived. */
+  slugPath: string;
+  /** The file that was removed, identity segment included. */
+  path: string;
+  /** The version it was on. Its last, unless it is restored. */
+  lastVersion: number | null;
+  /** Which archiving this is: 1 the first time, 2 after a restore. */
+  sequence: number;
+  archivedBy: string;
+  changeNumber: number;
+}
+
+export function buildArchiveStamp(archived: ArchivedDocument): string {
+  const lines = [
+    // The summary line says what happened to what, because the tag name is a
+    // ULID and says neither.
+    `${archived.title} archived — ${archived.path}`,
+    "",
+    "This document was taken off the record. Its published versions are",
+    "unaffected: every version tag still points at the commit that held it, so",
+    "the file remains readable from a bare clone at any version it reached.",
+    "",
+    `  Last version: ${
+      archived.lastVersion === null ? "none" : `v${archived.lastVersion}`
+    }`,
+    `  Archived by: ${archived.archivedBy}`,
+    `  From change: #${archived.changeNumber}`,
+    archived.sequence > 1
+      ? `  This is archiving number ${archived.sequence} — it was restored and archived again.`
+      : null,
+    "",
+    // The same two labelled lines a version stamp carries, so one reader can
+    // recover the display facts from either kind of tag.
+    `  Title at this version: ${archived.title}`,
+    `  Filed at: ${archived.slugPath}`,
+  ].filter((line): line is string => line !== null);
+
+  return `${lines.join("\n")}\n`;
+}
+
+/** What a stamp says a document was called and where it was filed. */
+export interface StampedIdentity {
+  title: string | null;
+  slugPath: string | null;
+}
+
+/**
+ * Read the title and the path back out of a tag message.
+ *
+ * **The archive has nowhere else to look.** An archived document is not on
+ * `main`, so the tree cannot name it; its tags are the whole of what is left,
+ * and they were given these two lines for this. A version tag written before
+ * those lines existed, or a tag somebody wrote by hand, answers null for both
+ * — which costs a heading and not a page, and is why the caller falls back to
+ * the tag's own summary line rather than to nothing.
+ *
+ * Deliberately narrow: two labelled lines, anchored, whitespace-tolerant,
+ * and the rest of the message ignored. Making this any cleverer is how a
+ * format nothing parses becomes a format one thing parses badly.
+ */
+export function readVersionStamp(message: string): StampedIdentity {
+  return {
+    title: labelled(message, "Title at this version"),
+    slugPath: labelled(message, "Filed at"),
+  };
+}
+
+function labelled(message: string, label: string): string | null {
+  for (const line of message.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith(`${label}:`)) continue;
+    const value = trimmed.slice(label.length + 1).trim();
+    return value === "" ? null : value;
+  }
+  return null;
 }

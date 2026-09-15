@@ -60,6 +60,7 @@ import {
   ProposedSignOffChangeSchema,
   SignOffRulesRequestSchema,
   BinderShapeChangePayloadSchema,
+  BinderArchivePayloadSchema,
   BinderDraftPayloadSchema,
   ProposedDraftPayloadSchema,
   WorkspaceHistoryPayloadSchema,
@@ -1190,6 +1191,67 @@ registry.registerPath({
       description: "The change request the draft is now waiting in",
       content: {
         "application/json": { schema: ProposedDraftPayloadSchema },
+      },
+    },
+  },
+});
+
+/**
+ * Take a document off the record.
+ *
+ * **"Archive", not "delete", and the word is the customer's** — and it is also
+ * the accurate one. The file leaves `main`; every version tag still points at
+ * the commit that held it, and git never collects a commit reachable from a
+ * ref, so the bytes stay readable from a bare clone at every version the
+ * policy reached. Nothing is destroyed.
+ */
+registry.registerPath({
+  method: "post",
+  path: "/api/app/binders/{org}/{binder}/document-archives",
+  operationId: "archiveBinderDocument",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({ org: z.string(), binder: z.string() }),
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z.object({
+            /** The document, by its address. */
+            documentPath: z.string(),
+            changeNumber: z.number().optional(),
+            /**
+             * Put this in a draft instead: `true` for the one you are working
+             * in, or a draft's branch name.
+             */
+            draft: z.union([z.boolean(), z.string()]).optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "The change request that would archive it",
+      content: {
+        "application/json": { schema: BinderShapeChangePayloadSchema },
+      },
+    },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/app/binders/{org}/{binder}/archive",
+  operationId: "getBinderArchive",
+  tags: ["workspaces"],
+  request: { params: z.object({ org: z.string(), binder: z.string() }) },
+  responses: {
+    200: {
+      description:
+        "Everything this binder has taken off the record — every UID with a version tag, minus every UID on `main`",
+      content: {
+        "application/json": { schema: BinderArchivePayloadSchema },
       },
     },
   },

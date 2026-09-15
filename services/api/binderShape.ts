@@ -294,6 +294,48 @@ function describeFolder(folder: string): string {
 }
 
 /**
+ * Take a document off the record.
+ *
+ * **"Archive", not "delete", and the word is the customer's:** *"delete should
+ * be allowed, but I think it should be called archive because delete has
+ * connotations."* They are right, and it is not only a kinder word — it is the
+ * accurate one. The file leaves `main` and nothing else happens to it: every
+ * version tag still points at the commit that held it, git never collects a
+ * commit reachable from a ref, and the bytes stay readable from a bare clone
+ * at every version the policy ever reached. Nothing is destroyed, which is
+ * what "delete" would have promised and what ADR 0004 exists to prevent.
+ *
+ * So the whole act is one removal. The audit line — who, when, under which
+ * change — is a `<uid>/archived-<n>` tag written at the publish that merges
+ * this, in the same transaction as the version tags.
+ *
+ * **Refused for a file with no identity**, and not because of the tag. A file
+ * this product did not write has no version tags at all, so removing it from
+ * `main` really would be a delete: no ref would point at the commit holding
+ * it, and the only trace would be in the history of a branch. That is the one
+ * case where the word would be a lie, so it is not offered.
+ */
+export function planDocumentArchive(params: {
+  document: WorkspaceDocumentEntry;
+}): ShapeChangeResult {
+  const { document } = params;
+
+  if (document.uid === null) {
+    return {
+      error: `“${document.path}” was not added through Bindersnap, so it has no published versions to fall back on. Archiving it would be a deletion.`,
+    };
+  }
+
+  const said = `Archive ${formatDocumentName(document.name)}`;
+
+  return {
+    operations: [{ kind: "remove", path: document.path }],
+    title: said,
+    message: said,
+  };
+}
+
+/**
  * The address a path answers to — its folder and name, with the identity
  * segment and the extension dropped.
  *

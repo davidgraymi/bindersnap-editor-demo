@@ -229,3 +229,56 @@ export function versionFromTag(tag: string): number | null {
   if (!match || !isDocumentUid(match[1]!)) return null;
   return Number(match[2]);
 }
+
+/**
+ * The tag that records a document being archived — `<uid>/archived-3`.
+ *
+ * **A tag, and specifically not a branch.** The customer asked for delete to be
+ * called archive, and raised a design where archived files were pushed to a
+ * separate `archive` branch by a second hidden pull request. That was talked
+ * through and rejected: two merges that must both succeed can half-apply, and
+ * an archive branch that is the only home of an archived document is primary
+ * state with no second source — which ADR 0004 forbids and which can drift
+ * from the tags. Fixing the atomicity with a webhook adds the moving part ADR
+ * 0005 says in as many words not to add.
+ *
+ * None of that is needed, because git has already solved it. A tag is a ref;
+ * deleting a file from `main` does not touch the tags pointing at the commits
+ * that held it, and git never collects a commit reachable from a ref. Every
+ * archived document's blob has therefore been permanently reachable since ADR
+ * 0005. What was missing was only the **audit line** — who archived it, when,
+ * and under which change — and that is this tag, written in the same publish
+ * that merges the removal.
+ *
+ * **The `-<n>` is because archiving is not final.** A policy can be archived,
+ * restored and archived again, and each of those is a separate fact about a
+ * separate date. A single `<uid>/archived` would make the second one either
+ * a failure or a lie.
+ *
+ * `refs/tags/<uid>/v3` and `refs/tags/<uid>/archived-1` coexist: both are
+ * files under one ref directory. {@link versionFromTag} and
+ * {@link documentUidFromVersionTag} are anchored to `/v<digits>$`, so an
+ * archived tag reads as "not a version" rather than as garbage.
+ */
+export function buildDocumentArchivedTag(
+  uid: string,
+  sequence: number,
+): string {
+  return `${uid}/archived-${sequence}`;
+}
+
+/** The document an archived tag belongs to, or null if it is not one of ours. */
+export function documentUidFromArchivedTag(tag: string): string | null {
+  const match = tag.match(/^([^/]+)\/archived-(\d+)$/);
+  if (!match) return null;
+
+  const uid = match[1]!;
+  return isDocumentUid(uid) ? uid : null;
+}
+
+/** Which archiving this tag records — 1 for the first, 2 after a restore. */
+export function archivedSequenceFromTag(tag: string): number | null {
+  const match = tag.match(/^([^/]+)\/archived-(\d+)$/);
+  if (!match || !isDocumentUid(match[1]!)) return null;
+  return Number(match[2]);
+}

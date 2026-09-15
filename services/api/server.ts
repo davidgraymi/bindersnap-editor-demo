@@ -25,6 +25,10 @@ import { slugifyGroupName } from "../../packages/utils/groupName";
 import {
   buildDocumentFilePath,
   buildDocumentSlugPath,
+  archivedSequenceFromTag,
+  documentUidFromArchivedTag,
+  documentUidFromVersionTag,
+  versionFromTag,
 } from "../../packages/utils/documentPath";
 import { formatDocumentName } from "../../packages/utils/documentTitle";
 import { mintDocumentUid } from "../../packages/utils/documentUid";
@@ -39,10 +43,12 @@ import {
   createDocumentVersionTag,
   findPendingDocumentBranch,
   findWorkspaceDocument,
+  createDocumentArchivedTag,
   groupVersionsByDocument,
   listAllTags,
   listChangedDocuments,
   listDocumentVersions,
+  listRemovedDocuments,
   listVersionsByDocument,
   listWorkspaceDocuments,
   readWorkspaceTree,
@@ -67,6 +73,7 @@ import {
   type BinderDraft,
 } from "./gitea-client/drafts";
 import {
+  planDocumentArchive,
   planDocumentRename,
   planFolderRename,
   planNewFolder,
@@ -195,7 +202,11 @@ import {
   readRequestedReviewers,
 } from "./change-assignments";
 import { buildChangeUpdates } from "./change-updates";
-import { buildVersionStamp } from "./version-stamp";
+import {
+  buildArchiveStamp,
+  buildVersionStamp,
+  readVersionStamp,
+} from "./version-stamp";
 
 /**
  * How far back a change's update history is read.
@@ -3797,6 +3808,26 @@ async function handlePublishWorkspaceChange(
       pullNumber,
     });
 
+    // **What this change takes off the record, as against what it moves.**
+    // Gitea reports a rename as `deleted` plus `added`, so the removed half
+    // alone would call every rename an archiving. A UID that is also in the
+    // added half moved; only a UID absent from the merged tree entirely was
+    // archived. Read before the merge, like everything else here, so a failure
+    // changes nothing.
+    const stillHere = new Set(
+      documents.flatMap((document) => (document.uid ? [document.uid] : [])),
+    );
+    const archived = (
+      await listRemovedDocuments({
+        client,
+        org: owner,
+        workspace: workspaceName,
+        pullNumber,
+      })
+    ).filter(
+      (document) => document.uid !== null && !stillHere.has(document.uid),
+    );
+
     // **Three kinds of change legitimately version nothing.** A sign-off change
     // rewrites `.gitea/CODEOWNERS` — who has to approve what — a shape change
     // can be a folder made and nothing filed in it yet, and a draft holds
@@ -3821,7 +3852,14 @@ async function handlePublishWorkspaceChange(
     const mayVersionNothing =
       changeBranch.startsWith("sign-off/") ||
       changeBranch.startsWith("shape/") ||
-      isDraftBranch(changeBranch);
+      isDraftBranch(changeBranch) ||
+      // A fourth, and this one is a fact rather than a branch name: a change
+      // that only archives versions nothing by definition — the document is
+      // leaving the record, not arriving on it. Asked of what the change does
+      // rather than of what its branch is called, because that is the more
+      // reliable question and the branch prefixes are already carrying more
+      // meaning than is comfortable.
+      archived.length > 0;
 
     if (documents.length === 0 && !mayVersionNothing) {
       return json(
@@ -3968,15 +4006,65 @@ async function handlePublishWorkspaceChange(
       );
     }
 
+    // **The audit line for anything taken off the record**, written in this
+    // same pass so it is atomic with the merge by construction rather than by
+    // a webhook holding two writes together. The blob is already safe — every
+    // version tag still points at the commit that held it and git never
+    // collects a commit reachable from a ref — so what this adds is who
+    // archived it, when, and under which change.
+    const archivedTags = [];
+    if (archived.length > 0) {
+      const allTags = await listAllTags({
+        client,
+        owner,
+        repo: workspaceName,
+      });
+
+      for (const document of archived) {
+        const uid = document.uid!;
+        const versions = allTags
+          .map((tag) => tag.name ?? "")
+          .filter((name) => documentUidFromVersionTag(name) === uid)
+          .map((name) => versionFromTag(name) ?? 0);
+        // Archived, restored, archived again: each is its own fact about its
+        // own date, so the tag is numbered rather than overwritten.
+        const sequence =
+          allTags.filter(
+            (tag) => documentUidFromArchivedTag(tag.name ?? "") === uid,
+          ).length + 1;
+
+        archivedTags.push(
+          await createDocumentArchivedTag({
+            client,
+            org: owner,
+            workspace: workspaceName,
+            uid,
+            sequence,
+            target: "main",
+            message: buildArchiveStamp({
+              title: formatDocumentName(document.name),
+              slugPath: document.slugPath,
+              path: document.path,
+              lastVersion: versions.length === 0 ? null : Math.max(...versions),
+              sequence,
+              archivedBy: session.username,
+              changeNumber: pullNumber,
+            }),
+          }),
+        );
+      }
+    }
+
     logger.info("Workspace change published", {
       username: session.username,
       organization: owner,
       workspace: workspaceName,
       pullNumber,
       tags: tags.map((tag) => tag.tag),
+      archived: archivedTags.map((tag) => tag.tag),
     });
 
-    return json(200, { ok: true, tags }, baseHeaders);
+    return json(200, { ok: true, tags, archived: archivedTags }, baseHeaders);
   } catch (err) {
     logger.error("Failed to publish a workspace change", {
       username: session.username,
@@ -6603,6 +6691,168 @@ async function handleBinderGroup(
  * {@link resolveOwnDraftBranch} is where that is enforced — a `?draft=` naming
  * somebody else's branch is refused rather than served.
  */
+/**
+ * Everything this binder has taken off the record.
+ *
+ * **A set difference, not a table.** ADR 0004 allows a derived index only if
+ * it is rebuildable from Gitea and droppable without loss, and this is derived
+ * in the strictest sense — it is computed, at read time, from two things that
+ * already exist and are already read by other pages:
+ *
+ * > archived = (every UID that has a version tag) − (every UID now on `main`)
+ *
+ * The customer raised, and then agreed against, the other design: archived
+ * files pushed to a separate `archive` branch by a second hidden change. The
+ * reasons it is not built are written down in
+ * `docs/handoff-binder-editing.md`, and the short one is that two merges which
+ * must both succeed can half-apply — leaving a document gone from `main` and
+ * absent from the archive, which is evidence loss, which is the failure ADR
+ * 0004 exists to prevent.
+ *
+ * **What it was called comes out of its own tags**, because nothing else
+ * remembers: an archived document is not in the tree, so the name and the
+ * folder it had are point-in-time facts the version stamp recorded and no
+ * other read can recover. The `archived-<n>` tag adds who and when; a document
+ * archived before that tag existed, or by somebody editing Gitea directly, is
+ * still listed — it just has no audit line, which is honest rather than
+ * invented.
+ */
+async function handleBinderArchive(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+): Promise<Response> {
+  // A read, so a session is enough. An organization whose subscription lapsed
+  // can still see what it archived — that is its own record, and charging for
+  // sight of it is not where the line is.
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { session, client } = auth;
+
+  try {
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    // Two reads, both already implemented and both already needed elsewhere.
+    const [tree, tags] = await Promise.all([
+      readWorkspaceTree({ client, org: orgName, workspace: workspaceName }),
+      listAllTags({ client, owner: orgName, repo: workspaceName }),
+    ]);
+
+    const onRecord = new Set(
+      tree.documents.flatMap((document) =>
+        document.uid ? [document.uid] : [],
+      ),
+    );
+
+    /** Every tag this binder holds, grouped by the document it belongs to. */
+    const byDocument = new Map<
+      string,
+      {
+        versions: Array<{ version: number; message: string; at: string }>;
+        archivings: Array<{ sequence: number; message: string; at: string }>;
+      }
+    >();
+
+    const bucket = (uid: string) => {
+      const existing = byDocument.get(uid);
+      if (existing) return existing;
+      const made = { versions: [], archivings: [] };
+      byDocument.set(uid, made);
+      return made;
+    };
+
+    for (const tag of tags) {
+      const name = tag.name ?? "";
+      const at = tag.commit?.created ?? "";
+      const message = tag.message ?? "";
+
+      const versionUid = documentUidFromVersionTag(name);
+      if (versionUid !== null) {
+        bucket(versionUid).versions.push({
+          version: versionFromTag(name) ?? 0,
+          message,
+          at,
+        });
+        continue;
+      }
+
+      const archivedUid = documentUidFromArchivedTag(name);
+      if (archivedUid !== null) {
+        bucket(archivedUid).archivings.push({
+          sequence: archivedSequenceFromTag(name) ?? 0,
+          message,
+          at,
+        });
+      }
+    }
+
+    const documents = [...byDocument.entries()]
+      // On the record is not archived, whatever its tags say. A document
+      // restored after an archiving has both kinds of tag and is simply back.
+      .filter(([uid, held]) => !onRecord.has(uid) && held.versions.length > 0)
+      .map(([uid, held]) => {
+        const versions = [...held.versions].sort(
+          (left, right) => right.version - left.version,
+        );
+        const archivings = [...held.archivings].sort(
+          (left, right) => right.sequence - left.sequence,
+        );
+        const latest = versions[0]!;
+        const lastArchiving = archivings[0] ?? null;
+
+        // The archiving's own stamp first: it records the name and the folder
+        // as they stood when the document left, which a rename between the
+        // last publish and the archiving would otherwise lose.
+        const stamp = readVersionStamp(
+          lastArchiving?.message || latest.message,
+        );
+
+        return {
+          uid,
+          // Never invented. A tag with no readable stamp — written under ADR
+          // 0004, or by hand — costs a heading, and a heading that says the
+          // identity is more use than one that guesses a name.
+          title: stamp.title ?? uid,
+          slugPath: stamp.slugPath,
+          lastVersion: latest.version,
+          lastPublishedAt: latest.at || null,
+          archivedAt: lastArchiving?.at ?? null,
+          // How many times this policy has been archived. Absent for one that
+          // left before the tag existed, which is not the same as zero.
+          archivings: lastArchiving?.sequence ?? null,
+        };
+      })
+      .sort(
+        (left, right) =>
+          (right.archivedAt ?? "").localeCompare(left.archivedAt ?? "") ||
+          left.title.localeCompare(right.title),
+      );
+
+    return json(
+      200,
+      { organization: orgName, workspace: workspaceName, documents },
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to read a binder's archive", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to read the archive.");
+  }
+}
+
 async function handleListWorkspaceDocuments(
   req: Request,
   baseHeaders: Headers,
@@ -6696,7 +6946,11 @@ async function readBinderDocuments(params: {
    * whichever branch you are looking from, so neither moves with the ref.
    */
   ref?: string;
-}): Promise<{ documents: WorkspaceDocumentListEntry[]; folders: string[] }> {
+}): Promise<{
+  documents: WorkspaceDocumentListEntry[];
+  folders: string[];
+  archivedCount: number;
+}> {
   const { client, org, workspace, ref } = params;
 
   // **The whole tree, not only its documents.** A folder with nothing filed in
@@ -6721,6 +6975,25 @@ async function readBinderDocuments(params: {
     openChanges,
   });
 
+  // **The archive, counted for free from reads already made.** Every identity
+  // with a version tag, minus every identity in this tree — the same set
+  // difference the archive page computes, and the reason there is no table to
+  // keep in step. Here so the binder can offer a way in without a fourth call
+  // on every page load, and left out of the payload as a list because the
+  // names live in tag messages this read does not need.
+  //
+  // At a draft ref it counts the draft: a policy you archived a minute ago is
+  // not in this tree, which is the same thing every other number on that page
+  // does — the tree you are looking at is the draft.
+  const onRecord = new Set(
+    documents.flatMap((document) => (document.uid ? [document.uid] : [])),
+  );
+  const archived = new Set<string>();
+  for (const tag of tags) {
+    const uid = documentUidFromVersionTag(tag.name ?? "");
+    if (uid !== null && !onRecord.has(uid)) archived.add(uid);
+  }
+
   return {
     documents: documents
       .map((document) => ({
@@ -6733,6 +7006,7 @@ async function readBinderDocuments(params: {
       }))
       .sort((left, right) => left.slugPath.localeCompare(right.slugPath)),
     folders: tree.folders,
+    archivedCount: archived.size,
   };
 }
 
@@ -9162,6 +9436,15 @@ export function createApiServer() {
         const workspaceDocumentRenamesMatch = pathname.match(
           /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/document-renames$/,
         );
+        // Taking a document off the record. Named for what it is rather than
+        // for a verb that is not true: the file leaves `main` and its version
+        // tags still point at every commit that held it.
+        const workspaceDocumentArchivesMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/document-archives$/,
+        );
+        const workspaceArchiveMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/archive$/,
+        );
         // The document's path carries slashes — it is a path inside the binder,
         // not one segment — so this captures the rest of the URL.
         const workspaceDocumentMatch = pathname.match(
@@ -9631,6 +9914,33 @@ export function createApiServer() {
                 paths: tree.paths,
               });
             },
+          );
+        } else if (workspaceDocumentArchivesMatch && method === "POST") {
+          return await handleBinderShapeChange(
+            req,
+            baseHeaders,
+            workspaceDocumentArchivesMatch[1]!,
+            workspaceDocumentArchivesMatch[2]!,
+            ({ body, tree }) => {
+              const documentPath =
+                typeof body.documentPath === "string" ? body.documentPath : "";
+              const document =
+                tree.documents.find((entry) => entry.path === documentPath) ??
+                tree.documents.find((entry) => entry.slugPath === documentPath);
+
+              if (!document) {
+                return { error: `"${documentPath}" is not in this binder.` };
+              }
+
+              return planDocumentArchive({ document });
+            },
+          );
+        } else if (workspaceArchiveMatch && method === "GET") {
+          response = await handleBinderArchive(
+            req,
+            baseHeaders,
+            workspaceArchiveMatch[1]!,
+            workspaceArchiveMatch[2]!,
           );
         } else if (workspaceDocumentRevisionsMatch && method === "POST") {
           return await handleReviseWorkspaceDocument(

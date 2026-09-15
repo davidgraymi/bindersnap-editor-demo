@@ -1,7 +1,7 @@
 # Handoff — editing a binder
 
-**Status:** drafts, the tree, edit mode and drag-to-move are built and in
-review. Archive (§4.2) is next and not started.
+**Status:** drafts, the tree, edit mode, drag-to-move and archiving are built
+and in review. Restore (§4.2) is next and not started.
 
 This document exists so somebody else can pick the work up without re-deriving
 the decisions. It is not a spec: it says what is built, what was decided and
@@ -166,7 +166,39 @@ drag and drop."_
 - 6 more tests in `tests/binder-edit-mode.pw.ts`, including a folder dragged
   onto another taking its contents with it.
 
-**Build on `feat/drag-to-move`.** It is the tip.
+**[#466 — archive a policy](https://github.com/davidgraymi/bindersnap-editor-demo/pull/466)**
+(`feat/archive-a-policy` → `feat/drag-to-move`)
+
+§3's decision, built exactly as written — no archive branch, no webhook, no
+second merge that could half-apply.
+
+- `planDocumentArchive` in `binderShape.ts`. One removal, and it refuses a file
+  with no identity: that one really would be a deletion, since no ref would
+  point at the commit holding it.
+- **`<uid>/archived-<n>` written at publish**, in the same pass as the version
+  tags, so the audit line is atomic with the merge by construction.
+  `listRemovedDocuments` is the other half of `listChangedDocuments` — and the
+  caller subtracts the added half, because Gitea reports a rename as `deleted`
+  plus `added` and reading the removals alone would call every rename an
+  archiving.
+- **`GET .../archive`** — the set difference, computed at read time from two
+  reads that already exist. Nothing is stored, so nothing can drift.
+- **`readVersionStamp` in `version-stamp.ts`.** An archived document is not on
+  `main`, so its tags are the only record of what it was called; the two
+  labelled lines at the foot of a version stamp were written for exactly this.
+  It is the first thing in the product to read a tag message back, and the file
+  header used to say nothing ever would — updated, with the reason.
+- An **Archive** button beside Rename and Move, documents only. No confirm
+  dialog: the act goes into the draft, the bar names it, and Discard undoes the
+  lot — the draft _is_ the undo.
+- A quiet link under the tree into the archive, gone when the archive is empty.
+  `archivedCount` rides along on the documents payload, free from the tag read
+  that already answers every row's version.
+- `tests/binder-archive.pw.ts` — 9 tests, including one asserting the versions
+  are still readable **after** the file has left `main`, and one asserting no
+  second branch is made.
+
+**Build on `feat/archive-a-policy`.** It is the tip.
 
 ---
 
@@ -317,11 +349,31 @@ And one that is deliberate rather than undecided: **a folder being renamed
 cannot be expanded**, because the twisty is replaced by the input. Probably
 right, never tried by anybody but us.
 
-### 4.2 Archive
+### 4.2 Restore — the other half of archiving
 
-Per §3. `planDocumentArchive` alongside the other planners in
-`services/api/binderShape.ts`, an `archived-<n>` tag written at publish, an
-`Archive` view in the binder listing tags-minus-main, and restore.
+Archiving is built (#466). Bringing something back is not, and §3 already says
+how: **an ordinary change.** Read the blob out of the document's last version
+tag, write it back at its old path, propose it. It keeps its identity, so it
+returns as v(N+1) rather than as a new document at v1 — which is honest,
+because it is the same policy coming back.
+
+Everything it needs is in place:
+
+- The archive list already answers with the `uid` and the `slugPath` the
+  document had when it left.
+- `downloadBinderDocument` already reads a document's bytes at any ref, and a
+  version tag is a ref.
+- `buildDocumentArchivedTag` is already numbered, so a policy restored and
+  archived again gets `archived-2` without anything having to change.
+
+Two things to decide when you get there:
+
+- **Where it lands if its folder is gone.** The binder's top level is the safe
+  answer; asking is the kind one. Lean top level with a line saying so.
+- **Whether the restore re-publishes or only proposes.** Everything else in the
+  product proposes, and there is no reason for this to be the exception — but
+  it does mean a restored policy sits in review, which is worth saying on the
+  button.
 
 ### 4.3 The rest of the customer's list
 
@@ -409,6 +461,13 @@ filenames differ while the address a link resolves by does not. `planFolderRenam
 checks both; a path-only check passes and leaves a link resolving to whichever
 came first.
 
+**A publish may now write two kinds of tag.** Version tags for what the change
+added or changed, and `<uid>/archived-<n>` for what it removed. Both go in one
+pass in `handlePublishWorkspaceChange`, which is what makes the audit atomic
+with the merge. If you add a third, put it in the same loop rather than in a
+second one — two passes over one merge is the half-apply this design exists to
+avoid.
+
 **Branch prefixes still carry meaning.** `upload/<slugPath>/…` is read to work
 out which document a change is about; `sign-off/…` marks a rules change;
 `shape/…` a folder change; `draft/…` a draft. The publish guard's
@@ -446,6 +505,7 @@ Binder routes added by this work:
 ```
 GET    /api/app/binders/{org}/{binder}/documents?draft=<branch>
                                                  the binder as it stands in your draft
+GET    /api/app/binders/{org}/{binder}/archive    what this binder has taken off the record
 GET    /api/app/binders/{org}/{binder}/draft      your draft, its acts, who else is editing
 POST   /api/app/binders/{org}/{binder}/draft      start editing, or resume
 DELETE /api/app/binders/{org}/{binder}/draft      discard yours
@@ -460,4 +520,5 @@ POST /api/app/binders/{org}/{binder}/document-revisions   a new version
 POST /api/app/binders/{org}/{binder}/folders              make a folder
 POST /api/app/binders/{org}/{binder}/folder-renames       rename or move a folder
 POST /api/app/binders/{org}/{binder}/document-renames     rename or refile a policy
+POST /api/app/binders/{org}/{binder}/document-archives    take a policy off the record
 ```

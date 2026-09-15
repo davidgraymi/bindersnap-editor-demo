@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import {
+  archiveFromSearch,
   binderTabFromSearch,
   buildBinderUrl,
   changeViewFromSearch,
@@ -132,4 +133,30 @@ test("an edit value nobody set is not editing, rather than half-editing", () => 
   expect(editModeFromSearch("?edit=yes")).toBe("off");
   expect(editModeFromSearch("?edit=true")).toBe("off");
   expect(editModeFromSearch("?edit=0")).toBe("off");
+});
+
+// ── the archive ────────────────────────────────────────────────────
+
+test("a binder that is not showing its archive says nothing about it", () => {
+  expect(archiveFromSearch("")).toBe(false);
+  expect(archiveFromSearch("?edit=1")).toBe(false);
+  expect(buildBinderUrl({ org: "riverside", binder: "clinical" })).toBe(
+    "/riverside/clinical",
+  );
+  expect(
+    buildBinderUrl({ org: "riverside", binder: "clinical", archive: false }),
+  ).toBe("/riverside/clinical");
+});
+
+test("the archive has an address, because it is a thing people send", () => {
+  expect(archiveFromSearch("?archive=1")).toBe(true);
+  expect(
+    buildBinderUrl({ org: "riverside", binder: "clinical", archive: true }),
+  ).toBe("/riverside/clinical?archive=1");
+});
+
+test("an archive value nobody set is not the archive", () => {
+  expect(archiveFromSearch("?archive=")).toBe(false);
+  expect(archiveFromSearch("?archive=yes")).toBe(false);
+  expect(archiveFromSearch("?archive=0")).toBe(false);
 });
