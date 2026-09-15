@@ -1354,6 +1354,39 @@ export async function archiveBinderDocument(
 }
 
 /**
+ * Bring an archived policy back.
+ *
+ * **Not an undo.** It is a change like any other, and it waits on the same
+ * decision — a policy reappearing on the record without one would be the
+ * single act in this product that skipped review. Named by identity rather
+ * than by path, because an archived document has no path on `main` and the one
+ * it had may since have been taken.
+ *
+ * It returns as the next version rather than as a new document at v1: the
+ * identity is a segment of the filename and this restores that filename, so
+ * its history is unbroken across the gap.
+ */
+export async function restoreBinderDocument(
+  org: string,
+  binder: string,
+  uid: string,
+  target?: ActTarget,
+): Promise<BinderShapeChangePayload> {
+  try {
+    const response = await BindersClient.restoreBinderDocument(org, binder, {
+      uid,
+      ...jsonTarget(target),
+    });
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/binders/${org}/${binder}/document-restores`,
+      error,
+    );
+  }
+}
+
+/**
  * Everything this binder has taken off the record.
  *
  * Not a table: the server works it out at read time as every identity with a
