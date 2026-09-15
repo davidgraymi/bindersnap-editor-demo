@@ -5042,7 +5042,7 @@ async function handleBinderSignOffRules(
         400,
         {
           error:
-            "Send the rules as a list, each naming the binder, a folder or a document, and the groups or people who sign it off.",
+            "Send the rules as a list, each naming the binder, a folder, a document or the sign-off rules themselves, and the groups or people who sign it off.",
         },
         baseHeaders,
       );
@@ -5158,7 +5158,12 @@ async function handleBinderSignOffRules(
 }
 
 function isSignOffScope(input: unknown): input is SignOffScope {
-  return input === "binder" || input === "folder" || input === "document";
+  return (
+    input === "binder" ||
+    input === "folder" ||
+    input === "document" ||
+    input === "rules"
+  );
 }
 
 /** The request body, or `null` when it is not the shape this route takes. */
