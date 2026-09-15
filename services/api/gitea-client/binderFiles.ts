@@ -88,10 +88,15 @@ export interface ProposedBinderFileChange {
 /**
  * Write a list of operations onto a branch, as one commit.
  *
- * Shared by "open a change for this" and "put this in the change I already
- * have", which differ in everything around the commit and in nothing about it.
+ * Shared by all three of "open a change for this", "put this in the change I
+ * already have", and "put this in the draft I am working in" — which differ in
+ * everything around the commit and in nothing about it.
+ *
+ * Exported because a draft is addressed by its branch and has no change
+ * request to look one up from. That is the whole difference between a draft
+ * and a change: where the work goes is the same commit either way.
  */
-async function commitBinderFiles(params: {
+export async function commitBinderFiles(params: {
   client: GiteaClient;
   org: string;
   workspace: string;
