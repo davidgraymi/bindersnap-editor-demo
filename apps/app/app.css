@@ -7538,3 +7538,113 @@ input {
   gap: var(--brand-space-2);
   flex-wrap: wrap;
 }
+
+/* ── The binder as a tree ──────────────────────────────────────────────────
+   A file explorer, not a list of headings: folders nest, and the indent is
+   what says so. One bordered card holds the whole tree, so a deep binder
+   reads as one object rather than as a stack of boxes. */
+
+.binder-tree {
+  background: var(--bs-surface-1);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-xl);
+  overflow: hidden;
+}
+
+.binder-tree-row {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  border-top: 1px solid var(--bs-rule-warm);
+  box-sizing: border-box;
+}
+
+.binder-tree-row:first-child {
+  border-top: none;
+}
+
+.binder-tree-row:hover {
+  background: var(--bs-surface-2);
+}
+
+.binder-tree-row--active {
+  background: var(--bs-coral-dim);
+}
+
+/* The row's own hit area. A whole row is the target — a name you have to aim
+   at is the difference between a tree you skim and one you squint at. */
+.binder-tree-main {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  flex: 1;
+  min-width: 0;
+  padding: var(--brand-space-2-5) var(--brand-space-4);
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.binder-tree-main:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: -2px;
+}
+
+/* The triangle, and the same width of nothing on a document — a ragged left
+   edge is what makes a tree read as a list of unrelated things. */
+.binder-tree-twisty {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--bs-text-muted);
+}
+
+.binder-tree-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  color: var(--bs-text-muted);
+}
+
+.binder-tree-row--folder .binder-tree-icon {
+  color: var(--bs-text-secondary);
+}
+
+.binder-tree-label {
+  font-size: 14.5px;
+  color: var(--bs-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.binder-tree-row--folder .binder-tree-label {
+  font-weight: var(--brand-weight-medium);
+}
+
+/* What a folder holds, and what version a policy is at. Pushed right and
+   quiet: it answers a question a reader has after finding the row, not
+   before. */
+.binder-tree-count,
+.binder-tree-meta {
+  margin-left: auto;
+  padding-left: var(--brand-space-3);
+  font-size: var(--brand-text-ui-sm);
+  color: var(--bs-text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.binder-tree-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+  padding-right: var(--brand-space-3);
+  flex-shrink: 0;
+}

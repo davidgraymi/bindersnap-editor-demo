@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
-import { FileText, Folder } from "lucide-react";
 
 import { fetchBinderDocuments } from "../api";
 import type { WorkspaceDocumentListEntry } from "../../../packages/api-schema/schemas/workspaces";
-import { formatDocumentName } from "../documentDisplay";
+import { buildBinderTree, type BinderTreeNode } from "../binderTree";
+import { useCollapsedFolders } from "../useCollapsedFolders";
+import { BinderTreeView } from "./BinderTree";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
 /**
@@ -16,41 +17,8 @@ interface BinderDocumentsProps {
   org: string;
   binder: string;
   onOpenDocument: (documentPath: string) => void;
-}
-
-interface FolderGroup {
-  folder: string;
-  documents: WorkspaceDocumentListEntry[];
-}
-
-/**
- * Group by folder, root first, then alphabetically.
- *
- * Root-level documents lead because a binder that has not been filed yet is
- * the ordinary starting state, and burying those under an empty heading would
- * make a new binder look broken.
- */
-export function groupByFolder(
-  documents: WorkspaceDocumentListEntry[],
-): FolderGroup[] {
-  const byFolder = new Map<string, WorkspaceDocumentListEntry[]>();
-
-  for (const document of documents) {
-    const existing = byFolder.get(document.folder);
-    if (existing) {
-      existing.push(document);
-    } else {
-      byFolder.set(document.folder, [document]);
-    }
-  }
-
-  return [...byFolder.entries()]
-    .sort(([a], [b]) => {
-      if (a === "") return -1;
-      if (b === "") return 1;
-      return a.localeCompare(b);
-    })
-    .map(([folder, group]) => ({ folder, documents: group }));
+  /** The document open under this binder, so the tree can mark where you are. */
+  activeDocument?: string | null;
 }
 
 /** "Version 3 · 1 open change", or what is true of it so far. */
@@ -81,20 +49,26 @@ export function describeDocument(document: WorkspaceDocumentListEntry): string {
 /**
  * The binder's documents: the tab a binder opens on, and its reason to exist.
  *
- * The folder is a heading rather than a tree you have to expand — a policy
- * manual is read by looking, not by navigating, and a surveyor asking for the
- * infection control policy should see it without opening anything.
+ * A tree rather than a flat list of headings, because folders nest and the
+ * headings pretended they did not — `nursing/infection` sat beside `nursing`
+ * with nothing saying one was inside the other. Nothing starts shut, for the
+ * reason the old list gave and which still holds: a policy manual is read by
+ * looking, not by navigating, and a surveyor asking for the infection control
+ * policy should see it without opening anything.
  */
 export function BinderDocuments({
   org,
   binder,
   onOpenDocument,
+  activeDocument = null,
 }: BinderDocumentsProps) {
   const isReadOnly = useIsReadOnly();
   const [documents, setDocuments] = useState<
     WorkspaceDocumentListEntry[] | null
   >(null);
+  const [folders, setFolders] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const { collapsed, toggle } = useCollapsedFolders(org, binder);
 
   const load = useCallback(() => {
     let cancelled = false;
@@ -102,7 +76,13 @@ export function BinderDocuments({
 
     fetchBinderDocuments(org, binder)
       .then((payload) => {
-        if (!cancelled) setDocuments(payload.documents);
+        if (cancelled) return;
+        setDocuments(payload.documents);
+        // **Folders from the binder, not from the documents.** A folder with
+        // nothing filed in it holds a `.gitkeep` and no document, so deriving
+        // the list from the rows would hide one somebody made, had approved
+        // and had published.
+        setFolders(payload.folders);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -123,9 +103,9 @@ export function BinderDocuments({
     return load();
   }, [load]);
 
-  const groups = useMemo(
-    () => (documents ? groupByFolder(documents) : []),
-    [documents],
+  const tree = useMemo(
+    () => (documents ? buildBinderTree(documents, folders) : []),
+    [documents, folders],
   );
 
   if (error) {
@@ -155,7 +135,7 @@ export function BinderDocuments({
 
   return (
     <div className="binder-pane">
-      {documents.length === 0 ? (
+      {tree.length === 0 ? (
         // Not an error, and not a failure of theirs: a binder somebody just
         // made is empty, which is the ordinary first state.
         //
@@ -169,40 +149,20 @@ export function BinderDocuments({
             : "Nothing filed here yet. A policy joins this binder once its change request is published."}
         </p>
       ) : (
-        groups.map((group) => (
-          <div key={group.folder || "__root"}>
-            {group.folder ? (
-              <h2 className="docs-count">
-                <Folder size={14} strokeWidth={1.4} aria-hidden="true" />{" "}
-                {group.folder}
-              </h2>
-            ) : null}
-
-            <div className="docs-list">
-              {group.documents.map((document) => (
-                <button
-                  type="button"
-                  className="docs-list-item"
-                  key={document.slugPath}
-                  onClick={() => onOpenDocument(document.slugPath)}
-                >
-                  <span className="docs-list-item-icon" aria-hidden="true">
-                    <FileText size={16} strokeWidth={1.4} />
-                  </span>
-                  <span className="docs-list-item-body">
-                    <span className="docs-list-item-name">
-                      {formatDocumentName(document.name)}
-                    </span>
-                    <span className="docs-list-item-meta">
-                      {describeDocument(document)}
-                    </span>
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        ))
+        <BinderTreeView
+          nodes={tree}
+          collapsed={collapsed}
+          onToggleFolder={toggle}
+          onOpenDocument={onOpenDocument}
+          activeDocument={activeDocument}
+          describeDocument={describeTreeDocument}
+        />
       )}
     </div>
   );
+}
+
+/** The tree asks about a node; this list only ever describes documents. */
+function describeTreeDocument(node: BinderTreeNode): string {
+  return node.kind === "document" ? describeDocument(node.document) : "";
 }

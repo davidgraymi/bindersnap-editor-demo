@@ -2386,11 +2386,11 @@ async function readLibrary(params: {
   const rows = (
     await Promise.all(
       binders.map(async (binder) => {
-        const documents = await readBinderDocuments({
+        const { documents } = await readBinderDocuments({
           client,
           org: binder.owner,
           workspace: binder.name,
-        }).catch(() => []);
+        }).catch(() => ({ documents: [], folders: [] }));
 
         return documents.map((document) => ({
           ...document,
@@ -6613,11 +6613,11 @@ async function handleListWorkspaceDocuments(
       {
         organization: orgName,
         workspace: workspaceName,
-        documents: await readBinderDocuments({
+        ...(await readBinderDocuments({
           client: auth.client,
           org: orgName,
           workspace: workspaceName,
-        }),
+        })),
       },
       baseHeaders,
     );
@@ -6657,14 +6657,20 @@ async function readBinderDocuments(params: {
   client: GiteaClient;
   org: string;
   workspace: string;
-}): Promise<WorkspaceDocumentListEntry[]> {
+}): Promise<{ documents: WorkspaceDocumentListEntry[]; folders: string[] }> {
   const { client, org, workspace } = params;
 
-  const [documents, openChanges, tags] = await Promise.all([
-    listWorkspaceDocuments({ client, org, workspace }),
+  // **The whole tree, not only its documents.** A folder with nothing filed in
+  // it yet is a `.gitkeep` and no document, so reading documents alone made an
+  // empty folder invisible — somebody made one, had it approved and published,
+  // and the binder showed no sign of it. The tree read is the same call
+  // either way; it was only the folders being thrown away.
+  const [tree, openChanges, tags] = await Promise.all([
+    readWorkspaceTree({ client, org, workspace }),
     listPullRequests({ client, owner: org, repo: workspace, state: "open" }),
     listAllTags({ client, owner: org, repo: workspace }),
   ]);
+  const documents = tree.documents;
 
   // Joined here rather than inside a fourth call, so the three above stay
   // parallel and a binder still costs three reads whatever it holds.
@@ -6676,16 +6682,19 @@ async function readBinderDocuments(params: {
     openChanges,
   });
 
-  return documents
-    .map((document) => ({
-      ...document,
-      state: "published" as const,
-      openChangeCount: changesByDocument.get(document.slugPath) ?? 0,
-      // A list of policies that does not say which version each one is at
-      // answers none of the questions a list is opened to answer.
-      latestVersion: versionsByDocument.get(document.slugPath)?.[0] ?? null,
-    }))
-    .sort((left, right) => left.slugPath.localeCompare(right.slugPath));
+  return {
+    documents: documents
+      .map((document) => ({
+        ...document,
+        state: "published" as const,
+        openChangeCount: changesByDocument.get(document.slugPath) ?? 0,
+        // A list of policies that does not say which version each one is at
+        // answers none of the questions a list is opened to answer.
+        latestVersion: versionsByDocument.get(document.slugPath)?.[0] ?? null,
+      }))
+      .sort((left, right) => left.slugPath.localeCompare(right.slugPath)),
+    folders: tree.folders,
+  };
 }
 
 /**

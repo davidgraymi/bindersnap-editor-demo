@@ -306,6 +306,7 @@ export function BinderShell({
           org={org}
           binder={binder}
           onOpenDocument={onOpenDocument}
+          activeDocument={documentPath ?? null}
         />
       )}
 
