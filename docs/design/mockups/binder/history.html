@@ -13,36 +13,78 @@
   <body>
     <script>
       /*
-       * What this binder has published, and who approved it. The audit trail
-       * is the product, so this is the page a surveyor is shown — and the one
-       * that shipped as a bare spine floating on the page with no container,
-       * no way to narrow it, and no way to take it away with you.
+       * What this binder has published, and who approved it.
        *
-       * Three things added, all of them things a surveyor asks for:
-       * a date range, a filter by policy, and Export. The export is the honest
-       * reason this page exists; it was not on it.
+       * The version tag on the spine was the thing making this page read as a
+       * jumble, and it was worse than untidy — it was misleading. Five entries
+       * reading v1 · v1 · v1 · v2 · v1 look like a sequence and are five
+       * unrelated documents' first versions. Nothing counts up, because a
+       * version belongs to a document and this timeline belongs to a binder.
        *
-       * The spine stays. It is the right shape for a record read in time
-       * order, and it is the one idiom here that no other screen wanted.
+       * What DOES count up on a binder's timeline is the change request, so
+       * that is the knot now, and it links to the change. Inside each entry
+       * are the versions that change wrote — read straight out of the version
+       * tags on the merge commit, which is where a change publishing several
+       * documents at once already records what it did to each.
+       *
+       * That gives the two histories the page owes, out of one structure:
+       *
+       *   - the binder's — the spine, every change in the order it landed;
+       *   - a document's — the same spine filtered to the changes that wrote
+       *     a version of it, which is what the picker in the bar does. Its
+       *     versions then do count up, because they are one document's.
        */
       const page = shell({ binder: 'Clinical', section: 'history' });
       const I = window.bsIcon;
 
-      const entry = ({ v, doc, folder, when, who, approvers, change }) => `
+      const docIcon = `<svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M5 2h5l3 3v11H5V2Z"/><path d="M10 2v3h3"/></svg>`;
+
+      /* One published change. The knot is its number; the card is what it did.
+         `archived` rows are the other half of the record — a change can take a
+         policy off the record as well as put one on it, and the archive tag is
+         written in the same pass as the version tags. */
+      const entry = ({ n, title, who, approvers, when, versions, archived = [] }) => `
         <li class="bs-spine-item">
-          <span class="bs-knot bs-knot--ok"><span class="bs-ver">${v}</span></span>
+          <a class="bs-knot bs-knot--change" href="./change.html"
+             aria-label="Change ${n}" title="Change ${n}">#${n}</a>
           <div class="bs-comment">
             <div class="bs-comment-head">
-              <span class="bs-comment-who">${doc}</span>
-              <span class="bs-comment-when">${folder}</span>
+              <span class="bs-comment-who">${title}</span>
               <span class="bs-section-spacer"></span>
               <span class="bs-comment-when">${when}</span>
             </div>
-            <div class="bs-comment-body" style="padding: var(--brand-space-1-5) var(--brand-space-2); font-size: var(--brand-text-ui-md)">
-              <p>
-                Published by ${who} · approved by ${approvers} ·
-                <a href="./change.html" style="color: var(--bs-coral-text)">${change}</a>
-              </p>
+            <div style="padding: var(--brand-space-1) 0">
+              ${versions
+                .map(
+                  ([name, folder, v]) => `
+                <div class="bs-versionrow">
+                  <span class="bs-row-icon" style="width:16px">${docIcon}</span>
+                  <a class="bs-versionrow-name" href="./document.html">
+                    ${name} <span class="bs-versionrow-folder">${folder}</span>
+                  </a>
+                  <span class="bs-status bs-status--approved"><span class="bs-ver">${v}</span></span>
+                </div>`,
+                )
+                .join('')}
+              ${archived
+                .map(
+                  ([name, folder]) => `
+                <div class="bs-versionrow">
+                  <span class="bs-row-icon" style="width:16px">
+                    <svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2 4h14v3H2V4Zm1 3v8h12V7M7 10h4"/></svg>
+                  </span>
+                  <span class="bs-versionrow-name" style="color: var(--bs-text-muted); font-weight: 400">
+                    ${name} <span class="bs-versionrow-folder">${folder}</span>
+                  </span>
+                  <span class="bs-status bs-status--working">Archived</span>
+                </div>`,
+                )
+                .join('')}
+            </div>
+            <div class="bs-comment-foot" style="justify-content: flex-start">
+              <span style="color: var(--bs-text-muted); font-size: var(--brand-text-ui-md)">
+                Published by ${who} · approved by ${approvers}
+              </span>
             </div>
           </div>
         </li>`;
@@ -52,23 +94,30 @@
           <div class="bs-pagehead-body">
             <h1 class="bs-title">History</h1>
             <p class="bs-subtitle">
-              Every version this binder has published, with who approved it and
-              when. This is the record a surveyor asks for.
+              Every change this binder has published, and what each one did.
+              This is the record a surveyor asks for.
             </p>
           </div>
           <div class="bs-pagehead-actions">
-            <button type="button" class="bs-btn bs-btn-secondary">
-              <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v9m0 0 3.5-3.5M9 11 5.5 7.5M3 13v2h12v-2"/></svg>
-              Export
+            <button type="button" class="bs-actionbtn bs-actionbtn--lg"
+                    aria-label="Export this history" title="Export">
+              <svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v9m0 0 3.5-3.5M9 11 5.5 7.5M3 13v2h12v-2"/></svg>
             </button>
           </div>
         </div>
 
         <div class="bs-panel" style="margin-bottom: var(--brand-space-3)">
           <div class="bs-panel-bar">
-            <select class="bs-input bs-input--sm" style="width: 200px" aria-label="Policy">
-              <option>Every policy</option>
+            <!-- The whole binder, or one policy. Picking a policy filters the
+                 spine to the changes that wrote a version of it — same
+                 structure, narrower question, and its versions then read as
+                 the sequence they actually are. -->
+            <select class="bs-input bs-input--sm" style="width: 220px" aria-label="Policy">
+              <option>The whole binder</option>
               <option>Infection Control Policy</option>
+              <option>Medication Administration Policy</option>
+              <option>Patient Grievance Policy</option>
+              <option>HIPAA Training Policy</option>
             </select>
             <select class="bs-input bs-input--sm" style="width: 168px" aria-label="When">
               <option>All time</option>
@@ -77,17 +126,39 @@
             </select>
             <span class="bs-panel-bar-spacer"></span>
             <span style="color: var(--bs-text-muted); font-size: var(--brand-text-ui-md)">
-              5 published versions
+              4 changes · 5 versions published
             </span>
           </div>
         </div>
 
-        <ol class="bs-spine" style="gap: var(--brand-space-1)">
-          ${entry({ v: 'v1', doc: 'Patient Grievance Policy', folder: 'Administrative', when: 'Sep 15, 1:03 PM', who: 'Alice', approvers: 'Bob Okafor', change: 'Change 7' })}
-          ${entry({ v: 'v1', doc: 'Medication Administration Policy', folder: 'Nursing', when: 'Sep 15, 1:02 PM', who: 'Alice', approvers: 'Bob Okafor', change: 'Change 5' })}
-          ${entry({ v: 'v1', doc: 'Infection Control Policy', folder: 'Nursing', when: 'Sep 15, 1:02 PM', who: 'Alice', approvers: 'Bob Okafor', change: 'Change 3' })}
-          ${entry({ v: 'v2', doc: 'HIPAA Training Policy', folder: 'Training', when: 'Sep 15, 1:02 PM', who: 'Bob', approvers: 'Alice Lundgren', change: 'Change 2' })}
-          ${entry({ v: 'v1', doc: 'HIPAA Training Policy', folder: 'Training', when: 'Sep 15, 1:02 PM', who: 'Bob', approvers: 'Alice Lundgren', change: 'Change 1' })}
+        <ol class="bs-spine" style="gap: var(--brand-space-1-5)">
+          ${entry({
+            n: 7, title: 'Five-day acknowledgement, and the patient is told they can go elsewhere.',
+            who: 'Alice', approvers: 'Bob Okafor', when: 'Sep 15, 1:03 PM',
+            versions: [['Patient Grievance Policy', 'Administrative', 'v1']],
+          })}
+          ${entry({
+            n: 5, title: 'One-hour reporting, and opioids added to the double-check.',
+            who: 'Alice', approvers: 'Bob Okafor', when: 'Sep 15, 1:02 PM',
+            versions: [['Medication Administration Policy', 'Nursing', 'v1']],
+          })}
+          <!-- One change, three documents, one merge commit — which is the
+               whole reason the binder is the unit of work, and the shape the
+               old page could not draw at all. -->
+          ${entry({
+            n: 3, title: 'Move the infection policies into Nursing and retire the paper forms.',
+            who: 'Alice', approvers: 'Bob Okafor and Priya Raman', when: 'Sep 15, 1:02 PM',
+            versions: [
+              ['Infection Control Policy', 'Nursing', 'v1'],
+              ['Hand Hygiene Policy', 'Nursing', 'v4'],
+            ],
+            archived: [['Paper Chart Retention Policy', 'Administrative']],
+          })}
+          ${entry({
+            n: 2, title: 'Annual refresher moved to the anniversary of hire.',
+            who: 'Bob', approvers: 'Alice Lundgren', when: 'Apr 2, 9:14 AM',
+            versions: [['HIPAA Training Policy', 'Training', 'v2']],
+          })}
         </ol>`;
     </script>
   </body>

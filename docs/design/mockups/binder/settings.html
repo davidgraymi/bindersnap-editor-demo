@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Binder · Settings — Bindersnap design</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" />
+    <link rel="stylesheet" href="./binder.css" />
+    <script src="./shell.js"></script>
+  </head>
+  <body>
+    <script>
+      /*
+       * One settings page, one scroll, six sections — name, description,
+       * people, groups, sign-off rules, approval.
+       *
+       * The secondary navigation is gone. It was solving a problem the page
+       * does not have: this is six short blocks, not six pages, and an index
+       * down the left of a screen you can read in one scroll adds a click to
+       * reach something already visible. It also spent the page's left third
+       * on navigation, which is why the content was crowded into 560px.
+       *
+       * And the explanatory notes under half the controls are gone. Each one
+       * was true and each one was us talking over the customer's own screen:
+       * "Links to the old name keep working", "Who changed it, and when, is
+       * recorded", "A group is one object across every binder it reaches".
+       * A settings page is read by somebody who came to change one thing. The
+       * sentences that survive are the ones that change what you would DO —
+       * a rule that is holding nothing, a group that grants nothing.
+       */
+      const page = shell({ binder: 'Clinical', section: 'settings' });
+      page.classList.add('bs-page--narrow');
+      const I = window.bsIcon;
+
+      const person = ({ ini, tone, name, role, fixed }) => `
+        <div class="bs-row" style="min-height: 44px">
+          <span class="bs-avatar bs-avatar--sm ${tone}">${ini}</span>
+          <span class="bs-row-body"><span class="bs-row-name">${name}</span></span>
+          <span class="bs-row-right">
+            ${
+              fixed
+                ? `<span class="bs-status bs-status--working">${role}</span>`
+                : `<select class="bs-input bs-input--sm" style="width: 124px" aria-label="Role for ${name}">
+                     <option ${role === 'Admin' ? 'selected' : ''}>Admin</option>
+                     <option ${role === 'Editor' ? 'selected' : ''}>Editor</option>
+                     <option ${role === 'Reviewer' ? 'selected' : ''}>Reviewer</option>
+                   </select>
+                   <button type="button" class="bs-rowact bs-rowact--danger" style="opacity:1" aria-label="Remove ${name}">
+                     <svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5 5l8 8M13 5l-8 8"/></svg>
+                   </button>`
+            }
+          </span>
+        </div>`;
+
+      page.innerHTML = `
+        <div class="bs-pagehead">
+          <div class="bs-pagehead-body">
+            <h1 class="bs-title">Settings</h1>
+          </div>
+        </div>
+
+        <!-- Name and description first: it is what the page is called after,
+             it is the shortest block, and it is the thing somebody who opened
+             Settings by accident was looking for. -->
+        <section class="bs-section">
+          <div class="bs-fields">
+            <div class="bs-field">
+              <label class="bs-field-label" for="binder-name">Name</label>
+              <div class="bs-field-row">
+                <input class="bs-input" id="binder-name" value="Clinical" />
+                <button type="button" class="bs-btn bs-btn-secondary" disabled>Rename</button>
+              </div>
+            </div>
+            <div class="bs-field">
+              <label class="bs-field-label" for="binder-desc">
+                Description <span class="bs-field-optional">— optional</span>
+              </label>
+              <textarea class="bs-input" id="binder-desc" style="min-height: 72px">Clinical and administrative policies — one set of rules, one set of people.</textarea>
+            </div>
+          </div>
+        </section>
+
+        <section class="bs-section">
+          <div class="bs-section-head">
+            <h2 class="bs-section-title">Who can see this binder</h2>
+          </div>
+          <div class="bs-fields">
+            <label class="bs-choice">
+              <input type="radio" name="vis" />
+              <span>
+                <span class="bs-choice-name">Everyone at Riverside Health</span>
+                <span class="bs-choice-note">
+                  They can read it and comment on changes — and approve them,
+                  because reading a change is what approving one costs.
+                </span>
+              </span>
+            </label>
+            <label class="bs-choice bs-choice--on">
+              <input type="radio" name="vis" checked />
+              <span>
+                <span class="bs-choice-name">Only the people below</span>
+                <span class="bs-choice-note">These people and groups, and nobody else.</span>
+              </span>
+            </label>
+          </div>
+        </section>
+
+        <section class="bs-section">
+          <div class="bs-section-head">
+            <h2 class="bs-section-title">People</h2>
+            <span class="bs-section-count">4</span>
+          </div>
+          <div class="bs-panel">
+            ${person({ ini: 'AL', tone: '', name: 'Alice Lundgren', role: 'Admin', fixed: true })}
+            ${person({ ini: 'BO', tone: 'bs-avatar--teal', name: 'Bob Okafor', role: 'Editor' })}
+            ${person({ ini: 'CM', tone: 'bs-avatar--violet', name: 'Carol Mendes', role: 'Editor' })}
+            ${person({ ini: 'DW', tone: 'bs-avatar--info', name: 'Dan Whitfield', role: 'Reviewer' })}
+            <div class="bs-panel-foot">
+              <select class="bs-input bs-input--sm" style="flex:1" aria-label="Who to add">
+                <option>Add somebody from Riverside Health…</option>
+              </select>
+              <select class="bs-input bs-input--sm" style="width: 124px" aria-label="Role">
+                <option>Reviewer</option><option>Editor</option><option>Admin</option>
+              </select>
+              <button type="button" class="bs-btn bs-btn--sm bs-btn-secondary" disabled>Add</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="bs-section">
+          <div class="bs-section-head">
+            <h2 class="bs-section-title">Groups</h2>
+            <span class="bs-section-spacer"></span>
+            <!-- Only a binder administrator can do this, and that is Gitea's
+                 answer rather than ours: 'PUT /teams/{id}/repos/{org}/{repo}'
+                 refuses anybody without admin on the repository. The button is
+                 simply not drawn for anyone else, which is the same fold every
+                 other control on this page uses. -->
+            <button type="button" class="bs-btn bs-btn--sm bs-btn-secondary">Grant a group</button>
+          </div>
+          <div class="bs-panel">
+            <div class="bs-row" style="min-height: 44px">
+              <span class="bs-row-icon">${I('people', 15)}</span>
+              <span class="bs-row-body"><span class="bs-row-name">Clinical Admins</span></span>
+              <span class="bs-row-right">
+                <span>0 people</span>
+                <span class="bs-status bs-status--working">Admin</span>
+                <button type="button" class="bs-rowact bs-rowact--danger" style="opacity:1" aria-label="Revoke Clinical Admins">
+                  <svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5 5l8 8M13 5l-8 8"/></svg>
+                </button>
+              </span>
+            </div>
+            <div class="bs-row" style="min-height: 44px">
+              <span class="bs-row-icon">${I('people', 15)}</span>
+              <span class="bs-row-body"><span class="bs-row-name">Infection Control</span></span>
+              <span class="bs-row-right">
+                <span>3 people</span>
+                <span class="bs-status bs-status--working">Reviewer</span>
+                <button type="button" class="bs-rowact bs-rowact--danger" style="opacity:1" aria-label="Revoke Infection Control">
+                  <svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5 5l8 8M13 5l-8 8"/></svg>
+                </button>
+              </span>
+            </div>
+          </div>
+        </section>
+
+        <section class="bs-section">
+          <div class="bs-section-head">
+            <h2 class="bs-section-title">Sign-off rules</h2>
+            <span class="bs-section-count">2</span>
+            <span class="bs-section-spacer"></span>
+            <button type="button" class="bs-btn bs-btn--sm bs-btn-secondary">Add a rule</button>
+          </div>
+          <div class="bs-panel">
+            <div class="bs-row" style="min-height: 44px">
+              <span class="bs-row-icon">
+                <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2 5a1 1 0 0 1 1-1h3.4l1.3 1.6H15a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5Z"/></svg>
+              </span>
+              <span class="bs-row-body">
+                <span class="bs-row-name">Anything filed in Nursing</span>
+                <span class="bs-row-meta">Priya Raman and Tom Vance</span>
+              </span>
+              <span class="bs-row-right">
+                <span class="bs-status bs-status--approved">Enforced</span>
+                <span class="bs-rowacts">
+                  <button type="button" class="bs-rowact" aria-label="Edit rule" title="Edit">
+                    <svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.2 2.8a1.7 1.7 0 0 1 2.4 2.4L6 13.8l-3.2.8.8-3.2 8.6-8.6Z"/></svg>
+                  </button>
+                </span>
+              </span>
+            </div>
+            <div class="bs-row" style="min-height: 44px">
+              <span class="bs-row-icon">
+                <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M5 2h5l3 3v11H5V2Z"/><path d="M10 2v3h3"/></svg>
+              </span>
+              <span class="bs-row-body">
+                <span class="bs-row-name">HIPAA Training Policy</span>
+                <!-- This one survives the cull, because it changes what you
+                     would do: the rule is listed and enforcing nothing, and
+                     nowhere else in the product says so. -->
+                <span class="bs-row-meta">The Compliance group, which has nobody in it</span>
+              </span>
+              <span class="bs-row-right">
+                <span class="bs-status bs-status--review">Holding nothing</span>
+                <span class="bs-rowacts">
+                  <button type="button" class="bs-rowact" aria-label="Edit rule" title="Edit">
+                    <svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.2 2.8a1.7 1.7 0 0 1 2.4 2.4L6 13.8l-3.2.8.8-3.2 8.6-8.6Z"/></svg>
+                  </button>
+                </span>
+              </span>
+            </div>
+            <div class="bs-panel-foot">
+              Changing these rules is itself a change to the binder, so it goes
+              through the same approval your policies do.
+            </div>
+          </div>
+        </section>
+
+        <section class="bs-section">
+          <div class="bs-section-head">
+            <h2 class="bs-section-title">How changes are approved</h2>
+          </div>
+          <div class="bs-panel">
+            <div class="bs-row" style="min-height: 44px">
+              <span class="bs-row-body">
+                <span class="bs-row-name">Approvals needed before publishing</span>
+              </span>
+              <span class="bs-row-right">
+                <select class="bs-input bs-input--sm" style="width: 80px" aria-label="Approvals needed">
+                  <option>1</option><option>2</option><option>3</option>
+                </select>
+              </span>
+            </div>
+            <div class="bs-row" style="min-height: 44px">
+              <span class="bs-row-body">
+                <span class="bs-row-name">A new version clears the approvals already collected</span>
+              </span>
+              <span class="bs-row-right">
+                <input type="checkbox" checked style="accent-color: var(--brand-coral); width: 16px; height: 16px" aria-label="Reset approvals on a new version" />
+              </span>
+            </div>
+            <div class="bs-row" style="min-height: 44px">
+              <span class="bs-row-body">
+                <span class="bs-row-name">Every discussion must be resolved before publishing</span>
+              </span>
+              <span class="bs-row-right">
+                <input type="checkbox" style="accent-color: var(--brand-coral); width: 16px; height: 16px" aria-label="Block on unresolved threads" />
+              </span>
+            </div>
+          </div>
+        </section>`;
+    </script>
+  </body>
+</html>

@@ -169,6 +169,34 @@ button {
   color: var(--bs-text-muted);
 }
 
+/* An act whose icon says it — Download, Export. A word beside a download
+   arrow is the word twice. Sized and bordered like `.bs-btn--sm` so it sits
+   in a row of buttons without breaking the one-row-one-height rule, and it
+   always carries an `aria-label` and a `title`. */
+.bs-actionbtn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1.5px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-1);
+  color: var(--bs-text-secondary);
+  transition:
+    border-color var(--brand-transition-fast),
+    color var(--brand-transition-fast);
+}
+
+.bs-actionbtn:hover {
+  border-color: var(--brand-coral);
+  color: var(--bs-text-primary);
+}
+
+.bs-actionbtn--lg {
+  width: 38px;
+  height: 38px;
+}
+
 .bs-iconbtn:hover {
   border-color: var(--bs-rule);
   background: var(--bs-surface-1);
@@ -313,9 +341,28 @@ button {
   display: flex;
   align-items: center;
   gap: var(--brand-space-1);
-  padding: var(--brand-space-1) var(--brand-space-1-5) var(--brand-space-1-5);
-  border-top: 1px solid var(--bs-rule-warm);
+  width: 100%;
+  min-height: 38px;
   margin-top: var(--brand-space-1);
+  padding: 0 var(--brand-space-1-5);
+  border: none;
+  border-top: 1px solid var(--bs-rule-warm);
+  border-radius: var(--brand-radius-md);
+  background: none;
+  text-align: left;
+}
+
+.bs-side-binder:hover {
+  background: var(--bs-surface-2);
+}
+
+.bs-side-binder--on {
+  background: var(--bs-surface-2);
+}
+
+.bs-side-binder--on .bs-side-binder-mark {
+  background: var(--brand-coral);
+  color: var(--brand-on-brand);
 }
 
 .bs-side-binder-mark {
@@ -329,6 +376,7 @@ button {
 }
 
 .bs-side-binder-name {
+  flex: 1;
   overflow: hidden;
   font-size: var(--brand-text-ui-md);
   font-weight: var(--brand-weight-semibold);
@@ -363,6 +411,15 @@ button {
   max-width: 1120px;
   margin: 0 auto;
   padding: var(--brand-space-4) var(--brand-space-5) var(--brand-space-12);
+}
+
+/* A settings page is a form, and a form wants a measure. At the full 1120px
+   a person's row puts their name at one edge and their role dropdown at the
+   other, 900px of empty paper apart — and a name field either runs to 1120px,
+   which no name needs, or sits at 560px beside panels twice its width and
+   leaves the page visibly ragged. One narrower box, and both agree. */
+.bs-page--narrow {
+  max-width: 860px;
 }
 
 .bs-pagehead {
@@ -620,6 +677,34 @@ button {
   font-size: var(--brand-text-ui-md);
 }
 
+/* What last happened to this policy, in the shape a person reads a file list
+   in: the change that did it, and how long ago. The subject is the change
+   request's title, shortened, and it is a link — so "why is this different
+   from what I remember" is one click from the row that raised it. */
+.bs-row-subject {
+  overflow: hidden;
+  color: var(--bs-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bs-row-subject a {
+  color: var(--bs-text-muted);
+  text-decoration: none;
+}
+
+.bs-row-subject a:hover {
+  color: var(--bs-coral-text);
+  text-decoration: underline;
+}
+
+.bs-row-when {
+  flex-shrink: 0;
+  color: var(--bs-text-faint);
+  font-size: var(--brand-text-ui-md);
+  white-space: nowrap;
+}
+
 .bs-row-right {
   display: flex;
   flex-shrink: 0;
@@ -683,7 +768,17 @@ button {
 }
 
 .bs-row:hover .bs-rowacts,
-.bs-row:focus-within .bs-rowacts {
+.bs-row:focus-within .bs-rowacts,
+/* Mockup only: one row drawn in its hover state, so a still screenshot shows
+   what the actions look like. Not a class that ships. */
+.bs-row--demo-hover .bs-rowacts {
+  opacity: 1;
+}
+
+/* An act that is the whole point of the row it is on — Restore, on an
+   archived policy — is not hidden behind hover. Hover-reveal is for the
+   secondary acts on a row you are reading, never for the only one. */
+.bs-rowacts--always {
   opacity: 1;
 }
 
@@ -770,6 +865,11 @@ button {
   flex-direction: column;
   gap: var(--brand-space-2-5);
   max-width: 560px;
+}
+
+/* Inside a narrow page the fields already have their measure from the page. */
+.bs-page--narrow .bs-fields {
+  max-width: none;
 }
 
 .bs-field {
@@ -1013,6 +1113,16 @@ select.bs-input {
 
    Three additions, all of which are genuinely missing: */
 
+/* **Nothing lifts on hover.** The shipped `.bs-btn:hover` raises the button
+   1px, which reads as playful on a marketing page and as instability in a
+   dense tool — a row of controls that all twitch as the pointer crosses them.
+   Hover is a colour change and nothing else. In the build this is one
+   deletion in `bindersnap-tokens.css`, not an override. */
+.bs-btn:hover:not(:disabled),
+.bs-btn:active:not(:disabled) {
+  transform: none;
+}
+
 /* Approving is the most consequential act in the product, so it is a filled
    button — and it is green, because green means approval here and nothing
    else. It shipped as a ghost pill while a solid coral "Add a policy", an act
@@ -1213,6 +1323,99 @@ select.bs-input {
   padding: 2px 0;
 }
 
+/* ── Which draft you are in ───────────────────────────────────────────────
+   One draft per person per binder was the shipped model, and the customer has
+   asked for several: a branch each, so two unrelated reorganisations do not
+   have to be proposed together. The picker is the only new chrome it needs —
+   the branch name already carries a stamp, so more than one is representable
+   without changing what a draft is. See D8 in the spec: this is a model
+   change, and it is the customer's. */
+.bs-draftpick {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+  min-height: 32px;
+  padding: 0 var(--brand-space-1) 0 var(--brand-space-1-5);
+  border: 1.5px solid var(--bs-coral-border);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-coral-glow);
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.bs-draftpick:hover {
+  border-color: var(--brand-coral);
+}
+
+.bs-draftpick-count {
+  color: var(--bs-text-muted);
+  font-weight: var(--brand-weight-regular);
+}
+
+/* The menu it opens: your drafts, the one you are in marked, and the way to
+   start another. Somebody else's draft is listed and inert — knowing it
+   exists is what stops two people making the same folder twice; reading
+   unproposed work is not something a draft offers. */
+.bs-draftmenu {
+  width: 340px;
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+  background: var(--bs-surface-1);
+  box-shadow: var(--bs-elevation-menu);
+  overflow: hidden;
+}
+
+.bs-draftmenu .bs-row {
+  min-height: 52px;
+}
+
+.bs-draftmenu .bs-row--muted {
+  background: var(--bs-surface-2);
+  pointer-events: none;
+}
+
+.bs-draftmenu .bs-row--muted .bs-row-name {
+  color: var(--bs-text-muted);
+}
+
+/* ── The archive, opened in place ─────────────────────────────────────────
+   It was a page of its own, reachable only from the reading view — so in edit
+   mode, the one place somebody can actually act on what they find, there was
+   no way in and no way back. It is a section of the tree now: the same rows,
+   with Restore where the row actions go. */
+.bs-archived {
+  border-top: 1px solid var(--bs-rule);
+  background: var(--bs-surface-2);
+}
+
+.bs-archived .bs-row-name {
+  color: var(--bs-text-muted);
+  font-weight: var(--brand-weight-regular);
+}
+
+.bs-archived .bs-row-icon {
+  color: var(--bs-text-faint);
+}
+
+.bs-disclose {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+  width: 100%;
+  padding: var(--brand-space-1-5) var(--brand-space-2);
+  border: none;
+  background: none;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-medium);
+  text-align: left;
+}
+
+.bs-disclose:hover {
+  color: var(--bs-text-primary);
+}
+
 /* Continuous save, said where the eye already is. */
 .bs-saved {
   display: inline-flex;
@@ -1283,6 +1486,68 @@ select.bs-input {
   color: var(--bs-status-ok-fg);
 }
 
+/* On the binder's history the knot is the change request that published —
+   numbered, and a link to it. A version tag was there before and it was a
+   lie: five entries reading v1, v1, v1, v2, v1 look like a sequence and are
+   five unrelated documents' first versions. What counts up on a binder's
+   timeline is the change, so that is what sits on the line. */
+.bs-knot--change {
+  left: calc(var(--brand-space-4) * -1 - 17px);
+  width: 34px;
+  border-color: var(--bs-rule);
+  background: var(--bs-surface-1);
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-ui-sm);
+  font-weight: var(--brand-weight-semibold);
+}
+
+a.bs-knot--change {
+  text-decoration: none;
+}
+
+.bs-knot--change:hover {
+  border-color: var(--brand-coral);
+  color: var(--bs-coral-text);
+}
+
+/* And the versions that change wrote, one row each, read out of the tags. A
+   change can publish several documents onto one merge commit, which is the
+   whole reason the binder is the unit — so this row is where the
+   per-document history actually lives. */
+.bs-versionrow {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+  padding: var(--brand-space-1) var(--brand-space-2);
+  border-top: 1px solid var(--bs-rule-warm);
+  font-size: var(--brand-text-ui-md);
+}
+
+.bs-versionrow:first-of-type {
+  border-top: none;
+}
+
+.bs-versionrow-name {
+  flex: 1;
+  text-decoration: none;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+a.bs-versionrow-name:hover {
+  color: var(--bs-coral-text);
+  text-decoration: underline;
+}
+
+.bs-versionrow-folder {
+  color: var(--bs-text-muted);
+  font-weight: var(--brand-weight-regular);
+}
+
 .bs-event {
   color: var(--bs-text-secondary);
   font-size: var(--brand-text-ui-md);
@@ -1292,6 +1557,65 @@ select.bs-input {
 .bs-event strong {
   color: var(--bs-text-primary);
   font-weight: var(--brand-weight-semibold);
+}
+
+/* ── Required, or not ──────────────────────────────────────────────────────
+   On a change request it has to be obvious which reviewers actually hold the
+   publish and which are being kept informed, because the two look identical
+   today and only one of them is why the button is disabled.
+
+   It is real state, not a label we invent. Gitea writes a review request for
+   every `.gitea/CODEOWNERS` rule matching a changed file, from the rule on the
+   BASE branch — so a sign-off rule already puts its owners on the change,
+   automatically, the moment it is opened. Whether that request *blocks* is the
+   part the interface has to read rather than assume:
+
+     - a USER code owner is an official request and blocks the merge;
+     - a TEAM code owner is written and then has its own `official` flag
+       cleared by Gitea (`AddTeamReviewRequest`, still true on 28.0.0), so
+       under the officialness gate it blocks nothing;
+     - on 28.0.0 `blockOnCodeownerReviews` ignores officialness entirely, and
+       under that gate a team code owner does block.
+
+   `RepoBranchProtection` already carries `blockOnOfficialReviewRequests` and
+   `blockOnCodeownerReviews`, so the binder knows which of those two worlds it
+   is in and the rail can say "required" only when it is true. A required
+   marker that is wrong on a compliance product is worse than none. */
+.bs-required {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--bs-status-warn-fg);
+  font-size: var(--brand-text-ui-sm);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.bs-optional {
+  color: var(--bs-text-faint);
+  font-size: var(--brand-text-ui-sm);
+}
+
+/* The state a reviewer is in, as a glyph rather than a sentence in a pill.
+   "Asked a question" spelled out in a chip beside a name is a paragraph
+   doing an icon's job, three times down a rail. */
+.bs-revstate {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-surface-2);
+  color: var(--bs-text-muted);
+}
+
+.bs-revstate--approved {
+  background: var(--bs-status-ok-bg);
+  color: var(--bs-status-ok-fg);
+}
+
+.bs-revstate--changes {
+  background: var(--bs-status-danger-bg);
+  color: var(--bs-status-danger-fg);
 }
 
 .bs-comment {
@@ -1408,57 +1732,7 @@ select.bs-input {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   12 · Settings sub-navigation
-   ══════════════════════════════════════════════════════════════════════════
-   Settings holds four things people ask about separately — who is here, who
-   signs off, what the rules are, what it is called. A left index inside the
-   page keeps them separate without spending four sidebar entries on
-   configuration somebody visits twice a year. */
-
-.bs-subnav {
-  display: grid;
-  grid-template-columns: 188px minmax(0, 1fr);
-  gap: var(--brand-space-5);
-  align-items: start;
-}
-
-.bs-subnav-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  position: sticky;
-  top: var(--brand-space-4);
-}
-
-.bs-subnav-item {
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-1);
-  min-height: 32px;
-  padding: 0 var(--brand-space-1-5);
-  border: none;
-  border-radius: var(--brand-radius-md);
-  background: none;
-  color: var(--bs-text-muted);
-  font-size: var(--brand-text-ui-md);
-  font-weight: var(--brand-weight-medium);
-  text-align: left;
-}
-
-.bs-subnav-item:hover {
-  background: var(--bs-surface-2);
-  color: var(--bs-text-primary);
-}
-
-.bs-subnav-item--on {
-  background: var(--bs-surface-2);
-  color: var(--bs-text-primary);
-  font-weight: var(--brand-weight-semibold);
-  box-shadow: inset 2px 0 0 var(--brand-coral);
-}
-
-/* ══════════════════════════════════════════════════════════════════════════
-   13 · The document preview
+   12 · The document preview
    ══════════════════════════════════════════════════════════════════════════ */
 
 .bs-doc {
@@ -1514,7 +1788,7 @@ select.bs-input {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   14 · Mockup-only chrome — never ships
+   13 · Mockup-only chrome — never ships
    ══════════════════════════════════════════════════════════════════════════ */
 
 .mk-caption {

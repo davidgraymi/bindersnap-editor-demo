@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Binder · Documents — Bindersnap design</title>
+    <title>Binder · Contents — Bindersnap design</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -13,40 +13,54 @@
   <body>
     <script>
       /*
-       * The binder, being read.
+       * The binder, being read. The page is titled with the binder's own name:
+       * a binder IS its contents, so this is the one screen where the binder
+       * is the subject and the title is rightly its own. A policy and a change
+       * request still take the title on their own pages.
        *
-       * The H1 is "Documents", not "Clinical" — the sidebar already says which
-       * binder you are in, and spending the page's one title on it is what
-       * left a policy and a change request with two titles each.
+       * Every row now answers the question a file list is actually opened
+       * with — "what changed, and when" — in the shape somebody already reads
+       * one in: the subject of the change that last touched it, linking to
+       * that change, and how long ago.
        *
-       * One filled button: Edit. Adding a policy is the narrower act and sits
-       * beside it in outline; the customer asked for edit mode to be the way
-       * you change a binder, so it is the emphatic control.
+       * The status pills are gone. Four rows each carrying a coloured chip
+       * made a list of four policies look like a list of four problems, and
+       * "1 open change" is not a property of the policy — it is a property of
+       * a change request, which has its own page and its own sidebar entry
+       * with the count on it.
        */
       const page = shell({ binder: 'Clinical', section: 'documents' });
       const I = window.bsIcon;
 
-      const row = ({ depth = 0, kind, name, meta, right = '' }) => `
-        <button type="button" class="bs-row bs-tree-row ${kind === 'folder' ? 'bs-tree-row--folder' : ''}" data-depth="${depth}">
-          ${kind === 'folder'
-            ? `<span class="bs-twisty">${I('chevron', 14)}</span>
-               <span class="bs-row-icon">
-                 <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2 5a1 1 0 0 1 1-1h3.4l1.3 1.6H15a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5Z"/></svg>
-               </span>`
-            : `<span class="bs-twisty"></span>
-               <span class="bs-row-icon">
-                 <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M5 2h5l3 3v11H5V2Z"/><path d="M10 2v3h3"/></svg>
-               </span>`}
-          <span class="bs-row-body">
-            <span class="bs-row-name">${name}</span>
+      const folderIcon = `<svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2 5a1 1 0 0 1 1-1h3.4l1.3 1.6H15a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5Z"/></svg>`;
+      const docIcon = `<svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M5 2h5l3 3v11H5V2Z"/><path d="M10 2v3h3"/></svg>`;
+
+      const folder = (name, count) => `
+        <button type="button" class="bs-row bs-tree-row bs-tree-row--folder">
+          <span class="bs-twisty">${I('chevron', 14)}</span>
+          <span class="bs-row-icon">${folderIcon}</span>
+          <span class="bs-row-body"><span class="bs-row-name">${name}</span></span>
+          <span class="bs-row-right"><span>${count}</span></span>
+        </button>`;
+
+      /* Name, then what the last change said, then when — the three columns a
+         file list is read in. The subject is the change request's own title,
+         shortened, and it links to that change. */
+      const policy = (name, subject, change, when) => `
+        <button type="button" class="bs-row bs-tree-row" data-depth="1">
+          <span class="bs-twisty"></span>
+          <span class="bs-row-icon">${docIcon}</span>
+          <span class="bs-row-body"><span class="bs-row-name">${name}</span></span>
+          <span class="bs-row-subject" style="flex: 1.4; min-width: 0">
+            <a href="./change.html" title="${subject}">${subject}</a>
           </span>
-          <span class="bs-row-right">${meta ? `<span>${meta}</span>` : ''}${right}</span>
+          <span class="bs-row-when">${when}</span>
         </button>`;
 
       page.innerHTML = `
         <div class="bs-pagehead">
           <div class="bs-pagehead-body">
-            <h1 class="bs-title">Policies</h1>
+            <h1 class="bs-title">Clinical</h1>
             <p class="bs-subtitle">
               Clinical and administrative policies — one set of rules, one set of people.
             </p>
@@ -61,9 +75,6 @@
         </div>
 
         <div class="bs-panel">
-          <!-- The controls that act on the list live in the list's own bar.
-               Floating them on the page above it is what made five tabs read
-               as five layouts. -->
           <div class="bs-panel-bar">
             <input class="bs-input bs-input--sm" style="width: 240px" type="search"
                    placeholder="Filter this binder…" />
@@ -77,18 +88,16 @@
             </span>
           </div>
 
-          ${row({ kind: 'folder', name: 'Administrative', meta: '1 policy' })}
-          ${row({ depth: 1, kind: 'doc', name: 'Patient Grievance Policy', meta: '', right: `<span class="bs-ver">v1</span><span class="bs-status bs-status--review"><span class="bs-dot"></span>1 open change</span>` })}
+          ${folder('Administrative', '1 policy')}
+          ${policy('Patient Grievance Policy', 'Five-day acknowledgement, and the patient is told they can go elsewhere', 7, '2 hours ago')}
 
-          ${row({ kind: 'folder', name: 'Nursing', meta: '2 policies' })}
-          ${row({ depth: 1, kind: 'doc', name: 'Infection Control Policy', meta: '', right: `<span class="bs-ver">v1</span><span class="bs-status bs-status--review"><span class="bs-dot"></span>1 open change</span>` })}
-          ${row({ depth: 1, kind: 'doc', name: 'Medication Administration Policy', meta: '', right: `<span class="bs-ver">v1</span><span class="bs-status bs-status--changes"><span class="bs-dot"></span>Changes asked for</span>` })}
+          ${folder('Nursing', '2 policies')}
+          ${policy('Infection Control Policy', 'Monthly audits, fourteen-day training, and point-of-care rub placement', 3, '3 weeks ago')}
+          ${policy('Medication Administration Policy', 'One-hour reporting, and opioids added to the double-check', 5, '3 weeks ago')}
 
-          ${row({ kind: 'folder', name: 'Training', meta: '1 policy' })}
-          ${row({ depth: 1, kind: 'doc', name: 'HIPAA Training Policy', meta: 'Published Sep 15 by Bob', right: `<span class="bs-ver">v2</span><span class="bs-status bs-status--approved">On record</span>` })}
+          ${folder('Training', '1 policy')}
+          ${policy('HIPAA Training Policy', 'Annual refresher moved to the anniversary of hire', 2, '5 months ago')}
 
-          <!-- The archive, where it is asked about: after failing to find
-               something, not before. Gone when the archive is empty. -->
           <div class="bs-panel-foot">
             <svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2 4h14v3H2V4Zm1 3v8h12V7M7 10h4"/></svg>
             <button type="button" class="bs-btn bs-btn--quiet bs-btn--sm" style="min-height: 22px; padding: 0">

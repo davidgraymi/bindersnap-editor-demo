@@ -1,7 +1,7 @@
 # The binder, redrawn — decision record and build plan
 
 **Design phase. No application code was changed.** The deliverable is this
-document plus ten screens in
+document plus eleven screens in
 [`mockups/binder/`](mockups/binder/index.html), which share one stylesheet —
 [`mockups/binder/binder.css`](mockups/binder/binder.css). That stylesheet is
 the build spec: every class in it is a class we would ship, and it imports the
@@ -14,8 +14,12 @@ defect named below was seen on screen, not inferred from the stylesheet.
 
 Read `AGENTS.md`, ADR [0004](adr/0004-organization-workspace-folder-and-org-billing.md)
 and [0005](adr/0005-document-identity-and-version-tags.md), and
-[`handoff-binder-editing.md`](../handoff-binder-editing.md) first. Nothing here
-reopens a decision recorded in any of them.
+[`handoff-binder-editing.md`](../handoff-binder-editing.md) first.
+
+**Revised 16 Sep 2026** after the customer's review. One decision recorded in
+the handoff is now reopened, at their request and only theirs: §3's "one draft
+per person per binder". See D9. Everything else in those documents still
+holds.
 
 ---
 
@@ -212,8 +216,8 @@ Home
 Change requests   5
 Documents
 Binders
-── ▸ Clinical ─────────
-   Policies        4
+──────────────────────
+▸ Clinical         4      ← the entry AND the binder's contents
    Changes         3
    History
    Settings
@@ -225,13 +229,19 @@ Binders
    Billing
 ```
 
+**There is no "Policies" entry, because the binder's own name is it.** A binder
+is its contents: pressing Clinical opens what is filed in Clinical, the way
+pressing a folder opens the folder. A child entry repeating its parent is a
+second row going to the same place one indent further in — and it sat directly
+under the global "Documents", which is a different list entirely.
+
 Three consequences, all of them the point:
 
 1. **The page's one title belongs to its subject.** A policy is titled
    `Infection Control Policy`. A change request is titled by what it asks for.
    The binder is named once, in the sidebar, where it stays put.
-2. **Four entries, not six.** People and Sign-off rules become sections inside
-   Settings, which keeps its own index so neither is buried. See D5.
+2. **Three entries under the binder, not six tabs.** People and Sign-off rules
+   become sections of one Settings page. See D5.
 3. **A binder is still a place.** It owns a whole labelled section of the
    sidebar, which is a stronger statement of the ADR 0004 level than a tab
    strip was — and it answers the correction
@@ -300,21 +310,37 @@ answer. It is the loudest developer-tool signal left in the binder and it is on
 every row of every list. A pill radius and a tone border carry the chip at
 least as well as the letterspacing did.
 
-### D5 · Settings holds four sections, with its own index
+### D5 · Settings is one page, one scroll, six blocks
 
-People · Sign-off rules · How changes are approved · Name and description.
+Name · description · who can see it · people · groups · sign-off rules ·
+approval.
 
-A left index inside the page, `.bs-subnav`, keeps them separate without
-spending four sidebar entries on configuration somebody visits twice a year.
-This is the same call the 2026-08 workspace redesign made when it merged Team
-and Settings into "Access & approvals" — it just has four things to merge now
-instead of two.
+**No secondary navigation.** An index down the left was solving a problem the
+page does not have: this is six short blocks, not six pages, and an index to
+reach something already visible on screen adds a click to save none. It also
+spent the page's left third on navigation, which is why the content was
+crowded into 560px.
+
+The page is `.bs-page--narrow` (860px) rather than the full 1120px, because a
+settings page is a form and a form wants a measure. At full width a person's
+row puts their name at one edge and their role dropdown at the other with
+900px of paper between, and a name field either runs to 1120px — which no name
+needs — or sits at 560px beside panels twice its width and leaves the page
+visibly ragged.
 
 **"How changes are approved" is drawn with the required-approval count as an
 editable control.** It is not editable today (`BinderSettings.tsx` says so in a
 sentence). Drawing it is deliberate: the section is incoherent without it, and
 it is Gitea branch protection, which the BFF already writes. _Flagged in Open
 questions._
+
+**Most of the explanatory notes are gone.** "Links to the old name keep
+working", "Who changed it, and when, is recorded", "A group is one object
+across every binder it reaches" — each was true, and each was us talking over
+the customer's own screen. A settings page is read by somebody who came to
+change one thing. The sentences that survive are only the ones that change
+what you would **do**: a rule holding nothing, and that changing the rules
+needs an approval.
 
 ### D6 · The decision moves into a rail; the floating pill retires
 
@@ -331,6 +357,38 @@ and nothing else, so the most consequential act gets the most weight without
 taking the page's coral, which belongs to the next step rather than the
 irreversible one.
 
+**Required and optional reviewers are marked, and it is real state rather than
+a label we invent.** Gitea writes a review request for every `.gitea/CODEOWNERS`
+rule matching a changed file, read from the **base** branch — so a sign-off
+rule puts its owners on a change automatically, the moment it opens. Whether
+that request _blocks_ is the part the interface has to read rather than assume:
+
+- a **user** code owner is an official request and blocks the merge;
+- a **team** code owner is written and then has its own `official` flag cleared
+  by Gitea (`AddTeamReviewRequest`, still true on 28.0.0), so under the
+  officialness gate it blocks nothing;
+- on 28.0.0 `blockOnCodeownerReviews` ignores officialness entirely, and under
+  that gate a team code owner does block.
+
+`RepoBranchProtection` already carries `blockOnOfficialReviewRequests` and
+`blockOnCodeownerReviews`, so the binder knows which of those two worlds it is
+in and the rail can say "Required" only when it is true. **A required marker
+that is wrong on a compliance product is worse than no marker**, so this is the
+one place the build must read the flags rather than infer from CODEOWNERS
+alone. The same distinction is drawn on the propose page, where required
+reviewers are listed before the change exists — which is what stops "why is
+Priya on this" being the first reply.
+
+**The author can edit the title and the description.** An icon button beside
+the title, drawn for the author and only while the change is open. A change
+request is open for days and the first thing a reviewer's question produces is
+a better title; once it is published the title is on the merge commit and in
+the version tag, which are the record.
+
+**A reviewer's state is a glyph, not a sentence in a pill.** "Asked a question"
+spelled out in a chip beside a name is a paragraph doing an icon's job, three
+times down one rail. The state lives in the `title` and the accessible name.
+
 ### D7 · Editing: same page, same buttons, quieter chrome, louder targets
 
 The model does not change. Five staging changes:
@@ -343,13 +401,25 @@ The model does not change. Five staging changes:
    policy in the panel bar, next to the tree they act on.
 3. **Row actions are 28px targets** with a visible affordance on hover and a
    reachable focus state. Archive is the only one tinted danger.
-4. **The draft is legible on the tree.** A row you have renamed, moved or added
-   carries a 5px coral dot and a one-line `.bs-row-meta` saying what happened
-   to it. Checking your work becomes looking, not reading.
-5. **A row somebody else has open in a change says so before you touch it** —
-   `.bs-row--contested`. This is the cheapest honest answer to the question
-   §4.1 of the handoff left open ("a marked row and a sentence, not a
-   refusal"), and it costs nothing: `openChangeCount` is already on every row.
+4. **The draft is legible on the tree, and nothing else is.** A row you have
+   touched carries a 5px coral dot. Versions, open-change counts and
+   "moved here from …" notes are all **gone from edit mode**: while you are
+   rearranging a binder the only state that matters is what you have touched,
+   and everything else on the same line is noise to read past to find your own
+   work. What each act actually did is in the draft bar, once, and on the
+   propose page, once.
+5. **One "Add a policy", and it is next to the tree it adds to.** It was in the
+   header _and_ in the bar over the list; two of one control on a screen is one
+   of them in the wrong place, and the wrong one is the one not beside the
+   thing it acts on. The header keeps a single button, and it is the way out.
+6. **The archive opens in the tree, with Restore on the row.** It was a page of
+   its own reachable only from the reading view — so edit mode, the one place
+   somebody can act on what they find, had no way in and no way back. Restore
+   is an ordinary change rather than an undo: the policy returns at the
+   filename it left with, keeping its identity, so the button says
+   "Restore as v3" and the effect on the history is not a surprise. Restore is
+   never hover-revealed: hover-reveal is for the secondary acts on a row you
+   are reading, never for the only one.
 
 And two on the ends of the flow:
 
@@ -361,31 +431,105 @@ And two on the ends of the flow:
   because an author who has been editing for twenty minutes cannot check a
   prefilled paragraph against what they meant to send.
 
-### D8 · History gets a filter and an export
+### D8 · A person can have several drafts, and picks between them
 
-It is the page a surveyor is shown and it had neither, which is the one thing
-the audit-trail-is-the-product claim actually owes. A policy filter, a date
-range, and Export. The spine stays — it is the right shape for a record read in
-time order, and it is the one idiom here no other screen wanted.
+**This reopens a decision, at the customer's request.** The handoff's §3 says
+one draft per person per binder, and that pressing Edit twice resumes rather
+than forks. The reason to change it is good: two unrelated reorganisations
+should not have to be proposed in one change request because the same person
+did both.
+
+It is a small change to make and a real one to decide:
+
+- A draft is already `draft/<username>/<stamp>`, so several per person are
+  representable without changing what a draft is. **The stamp stops being
+  defensive and starts being load-bearing.**
+- `openDraft` must stop resuming the first draft it finds, and
+  `resolveOwnDraftBranch` must take the branch from the request rather than
+  assuming there is one.
+- **A draft needs a name its author wrote**, which it needs anyway: "resume the
+  one from Tuesday" is unanswerable when both are called `draft/alice/…`. That
+  name is also the change request's prefilled title when it is proposed.
+- Everything else in §3 survives unchanged, including the two that matter most:
+  a draft stops being a draft the moment a change request sits on it, and other
+  people's drafts are visible as existing and never as contents.
+
+The picker is the only new chrome. `drafts.html` draws it open.
+
+### D9 · History is the binder's changes, and a document's versions live inside them
+
+The version tag on the spine was what made this page read as a jumble, and it
+was worse than untidy — it was misleading. Five entries reading
+`v1 · v1 · v1 · v2 · v1` look like a sequence and are five unrelated documents'
+first versions. Nothing counts up, because **a version belongs to a document
+and this timeline belongs to a binder.**
+
+What does count up on a binder's timeline is the change request. So:
+
+- **The knot is the change number**, and it links to the change.
+- **Inside each entry are the versions that change wrote** — one row per
+  document, read straight out of the version tags on the merge commit, which is
+  where a change publishing several documents at once already records what it
+  did to each. A change that archived something gets a row for that too; the
+  `<uid>/archived-<n>` tag is written in the same pass.
+- **The two histories come out of one structure.** The binder's is the spine.
+  A document's is the same spine filtered to the changes that wrote a version
+  of it — which is what the picker in the bar does — and _its_ versions then do
+  read as the sequence they are, because they are one document's.
+
+Plus a date range, and **Export as an icon**. Export is the honest reason this
+page exists on an audit product and it was not on it at all.
+
+### D10 · A word is not a label for an act its icon already names
+
+`Download` and `Export` become icon buttons — `.bs-actionbtn`, sized like
+`.bs-btn--sm` so a row of controls stays one height, each with an `aria-label`
+and a `title`. A download arrow with the word "Download" beside it is the word
+twice.
+
+This does **not** generalise to every button. `Approve`, `Propose`, `Rename`,
+`Restore as v3` keep their words, because the icon for each is either ambiguous
+or invented. The test is whether the glyph is one a reader already knows from
+somewhere else.
+
+### D11 · Nothing lifts on hover
+
+The shipped `.bs-btn:hover` raises the button 1px. On a marketing page that
+reads as playful; in a dense tool it reads as instability — a row of controls
+that all twitch as the pointer crosses them. Hover is a colour change and
+nothing else. One deletion in `bindersnap-tokens.css`.
+
+### D12 · A policy's row says what last changed it, and when
+
+The status pills are gone from the contents list. Four rows each carrying a
+coloured chip made a list of four policies look like a list of four problems —
+and "1 open change" is not a property of the policy. It is a property of a
+change request, which has its own page and its own sidebar entry with the
+count already on it.
+
+What replaces them is the question a file list is actually opened with: **the
+subject of the change that last touched this, linking to that change, and how
+long ago.** "3 weeks ago" rather than a timestamp, for the same reason every
+file list does it — the answer wanted is usually "recently" or "not recently".
 
 ---
 
 ## The screens
 
-All ten open from [`mockups/binder/index.html`](mockups/binder/index.html).
+All eleven open from [`mockups/binder/index.html`](mockups/binder/index.html).
 
-| Screen               | File                                                              | What it settles                                                                      |
-| -------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| Policies             | [`documents.html`](mockups/binder/documents.html)                 | The panel + bar grammar; one title; the archive link where it is asked about         |
-| Policies, editing    | [`documents-editing.html`](mockups/binder/documents-editing.html) | D7 entire — sticky draft bar, stable header, real targets, dirty rows, contested row |
-| Add a policy         | [`add-policy.html`](mockups/binder/add-policy.html)               | The dropzone, and the modal grammar                                                  |
-| Propose your changes | [`propose.html`](mockups/binder/propose.html)                     | Sentence-case labels, the acts rail, reviewers chosen before sending                 |
-| Change requests      | [`changes.html`](mockups/binder/changes.html)                     | The filter inside the panel bar; the status sentence on every row                    |
-| One change request   | [`change.html`](mockups/binder/change.html)                       | D6 entire — the decision rail, the warning in it, green Approve                      |
-| One policy           | [`document.html`](mockups/binder/document.html)                   | The rail's three blocks; "who signs this off" where it is read                       |
-| History              | [`history.html`](mockups/binder/history.html)                     | D8 — filter, range, Export, spine kept                                               |
-| Settings · People    | [`settings-people.html`](mockups/binder/settings-people.html)     | Four container idioms become one; the add-form as panel footer                       |
-| Settings · Rules     | [`settings-rules.html`](mockups/binder/settings-rules.html)       | Sign-off, approval and the name, in one grammar; the rename row fixed                |
+| Screen                  | File                                                              | What it settles                                                                |
+| ----------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Clinical (the contents) | [`documents.html`](mockups/binder/documents.html)                 | The panel + bar grammar; the binder's name as the title; D12's row             |
+| Clinical, editing       | [`documents-editing.html`](mockups/binder/documents-editing.html) | D7 entire — sticky draft bar, one header button, real targets, the archive     |
+| Which draft             | [`drafts.html`](mockups/binder/drafts.html)                       | D8 — several drafts, the picker open, somebody else's listed and inert         |
+| Add a policy            | [`add-policy.html`](mockups/binder/add-policy.html)               | The dropzone, and the modal grammar                                            |
+| Propose your changes    | [`propose.html`](mockups/binder/propose.html)                     | Title, description, reviewers — and required reviewers named before it exists  |
+| Change requests         | [`changes.html`](mockups/binder/changes.html)                     | The filter inside the panel bar; the status sentence on every row              |
+| One change request      | [`change.html`](mockups/binder/change.html)                       | D6 entire — the decision rail, required vs optional, green Approve, edit title |
+| One policy              | [`document.html`](mockups/binder/document.html)                   | The rail's three blocks; "who signs this off" where it is read                 |
+| History                 | [`history.html`](mockups/binder/history.html)                     | D9 — the change is the knot, the versions it wrote are inside it               |
+| Settings                | [`settings.html`](mockups/binder/settings.html)                   | D5 — six blocks, one scroll, no secondary navigation, the notes culled         |
 
 Two things the mockups are honest about and a Figma frame would not be: a rule
 that is holding nothing says so **on its own row** rather than in a paragraph
@@ -395,16 +539,38 @@ somewhere else.
 
 ---
 
-## Open questions — the customer's, not ours
+## Answered in review, 16 Sep 2026
 
-1. **"Policies" or "Documents" for the binder's own section?** Drawn as
-   Policies, because two sidebar entries reading "Documents" is a worse map
-   than none, and the product's copy already says policy. ADR 0004's vocabulary
-   is document. One word, changed in one place.
+**Who can grant a group access to a binder?** Binder administrators, and
+nobody else — and it is Gitea's answer rather than ours.
+`PUT /teams/{id}/repos/{org}/{repo}` refuses anyone without admin on the
+repository (`handleBinderGroup`, `services/api/server.ts`). The payload's
+`canManage` is `access.admin`, so the button is simply not drawn for anybody
+else. An organization owner has it everywhere, implicitly, through `Owners`.
+**Correct as built; nothing to change.**
+
+**Does Gitea automatically add CODEOWNERS as reviewers?** Yes. It writes a
+review request for every rule in `.gitea/CODEOWNERS` matching a changed file,
+read from the **base** branch, when the change opens. The nuance that matters
+for the "Required" marker is which of them actually block — see D6. Short
+version: a **user** code owner blocks; a **team** code owner does not under the
+officialness gate (Gitea clears its own `official` flag — still true on 28.0.0)
+and does under 28.0.0's `blockOnCodeownerReviews`. Both flags are already on
+`RepoBranchProtection`, so the rail reads which world the binder is in rather
+than guessing.
+
+---
+
+## Still open — the customer's, not ours
+
+1. **Several drafts per person** (D8) reopens the handoff's §3. Drawn as
+   asked. It is four small server changes and one new field — a draft's name —
+   but it is a model decision, not a presentation one, and it should be
+   confirmed before it is built.
 2. **Should the required-approval count become editable?** Drawn as editable.
-   It is Gitea branch protection and the BFF already writes it, but it is new
-   behaviour rather than a presentation change, and it is the one thing in
-   these ten screens that is.
+   It is Gitea branch protection and the BFF already writes it, but it is the
+   one thing in these eleven screens that is new behaviour rather than a
+   presentation change.
 3. **Does the floating decision pill go?** Drawn as gone, replaced by the
    sticky rail. The pill's survives-scrolling property is the reason
    [`figma-vs-build-review.md`](figma-vs-build-review.md) told us to keep it,
@@ -422,24 +588,40 @@ One branch and one PR each, on `feat/adr4-documents-as-files`, smallest first.
 Each is independently shippable and each leaves the product coherent.
 
 1. **The grammar, and nothing else.** Add `.bs-panel` / `.bs-fields` /
-   `.bs-note` / `.bs-row` / `.bs-section-title` / `.bs-field-label` to
-   `app.css`. Amend `.bs-status` in the token file (D4). No component changes.
-   Reviewable as a stylesheet diff.
-2. **Settings absorbs People and Sign-off rules.** `BinderSettings.tsx` gains
-   `.bs-subnav`; `BinderPeople.tsx` and `BinderSignOff.tsx` become its
-   sections. Rebuild all three on the grammar. Biggest single win: three of the
-   six worst screens, one PR.
-3. **The other three tabs onto the grammar.** Documents, Change requests,
-   History — plus D8's filter and Export. Mostly deletion.
-4. **The sidebar takes the binder** (D1). `AppSidebar.tsx` gains the binder
+   `.bs-note` / `.bs-row` / `.bs-section-title` / `.bs-field-label` /
+   `.bs-actionbtn` to `app.css`. Amend `.bs-status` (D4) and delete the hover
+   lift (D11) in the token file. No component changes — reviewable as a
+   stylesheet diff.
+2. **Settings becomes one page.** `BinderPeople.tsx` and `BinderSignOff.tsx`
+   fold into `BinderSettings.tsx` as sections; all three rebuilt on the
+   grammar; the notes culled (D5). Biggest single win: three of the six worst
+   screens, one PR.
+3. **The contents list and the change list.** Both onto the grammar, plus D12's
+   row — the change subject and the relative time, which needs the last
+   publishing change per document. It is derivable from the tags the row
+   already reads for its version, so no new endpoint; check that before
+   assuming one.
+4. **History** (D9). The knot becomes the change, the version rows move inside
+   it, the filter and the Export icon. The per-document view is the same
+   component with a filter, not a second screen — build it that way or the two
+   will disagree within a month.
+5. **The sidebar takes the binder** (D1). `AppSidebar.tsx` gains the binder
    section; `BinderShell.tsx` loses its `h1`, its subtitle and its tab bar;
    each page grows its own `.bs-pagehead`. Routes are untouched —
    `?tab=people` keeps resolving, it just lands somewhere that draws it
    differently. The small-screen strip is part of this PR, not a follow-up.
-5. **Editing** (D7). The sticky draft bar, the stable header, the row targets,
-   the dirty and contested rows, the dropzone, the propose page.
-6. **The change request** (D6). Largest and last, because it is the only one
-   that wants the rail primitive the four before it will have proved.
+6. **Editing** (D7). The sticky draft bar, one header button, the row targets,
+   the quieter tree, the archive in place with Restore, the dropzone, the
+   propose page.
+7. **Several drafts** (D8), **only once it is confirmed.** Server first, the
+   way #461 did it: `openDraft` stops resuming blindly, a draft gets a name,
+   `resolveOwnDraftBranch` takes the branch from the request. The picker is the
+   last few lines.
+8. **The change request** (D6). Largest and last, because it is the only one
+   that wants the rail primitive the six before it will have proved — and
+   because the required/optional marker must read the two branch-protection
+   flags rather than infer from CODEOWNERS, which is the one place in this
+   plan where being approximately right is worse than not shipping it.
 
 `tests/design-consistency.pw.ts` is where each of these is held: it already
 walks the screens and measures, and every rule in it was checked by

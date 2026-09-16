@@ -59,7 +59,12 @@
               <span class="bs-doc-name">infection-control-policy.docx</span>
               <span>9.4 KB</span>
               <span class="bs-panel-bar-spacer"></span>
-              <button type="button" class="bs-btn bs-btn--sm bs-btn-secondary">Download</button>
+              <!-- The word beside a download arrow is the word twice. Icon
+                   only, with an aria-label and a title, sized like a small
+                   button so it does not break the one-row-one-height rule. -->
+              <button type="button" class="bs-actionbtn" aria-label="Download this version" title="Download">
+                <svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v9m0 0 3.5-3.5M9 11 5.5 7.5M3 13v2h12v-2"/></svg>
+              </button>
             </div>
             <div class="bs-doc-prose">
               <h1>Infection Control Policy</h1>

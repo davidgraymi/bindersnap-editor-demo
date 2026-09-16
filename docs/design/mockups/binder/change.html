@@ -43,8 +43,18 @@
               <span class="bs-crumbs-sep">/</span>
               <span>Change 4</span>
             </nav>
-            <h1 class="bs-title">
-              Monthly audits, fourteen-day training, and point-of-care rub placement.
+            <!-- The title and the description are the author's words, and a
+                 change request is open for days: the first thing a reviewer's
+                 question produces is a better title. Drawn for the author
+                 only, and only while the change is open — once it is
+                 published the title is on the merge commit and in the version
+                 tag, which are the record. -->
+            <h1 class="bs-title" style="display: flex; align-items: flex-start; gap: var(--brand-space-1-5)">
+              <span>Monthly audits, fourteen-day training, and point-of-care rub placement.</span>
+              <button type="button" class="bs-actionbtn" style="margin-top: 3px; flex-shrink: 0"
+                      aria-label="Edit the title and description" title="Edit the title and description">
+                <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.2 2.8a1.7 1.7 0 0 1 2.4 2.4L6 13.8l-3.2.8.8-3.2 8.6-8.6Z"/></svg>
+              </button>
             </h1>
             <div class="bs-facts">
               <span class="bs-avatar bs-avatar--sm bs-avatar--violet">AL</span>
@@ -175,21 +185,76 @@
               </div>
               <div class="bs-panel-body bs-approval">
                 <span class="bs-meter"><span></span></span>
+                <!-- The build's own sentence, kept word for word: it names who
+                     you are waiting on rather than a state. -->
                 <p style="margin:0; font-size: var(--brand-text-ui-md); color: var(--bs-status-warn-fg)">
-                  1 more approval needed before this can be published.
+                  Priya Raman signs off on Nursing and has not looked yet.
                 </p>
               </div>
-              <div class="bs-row" style="min-height: 40px">
-                <span class="bs-avatar bs-avatar--sm bs-avatar--teal">BO</span>
-                <span class="bs-row-body"><span class="bs-row-name">Bob Okafor</span></span>
+              <!-- ── Who actually holds this ────────────────────────────
+                   Required and optional looked identical, and only one of
+                   them is why Approve is unavailable.
+
+                   It is real state rather than a label we invent. Gitea
+                   writes a review request for every '.gitea/CODEOWNERS' rule
+                   matching a changed file, read from the BASE branch — so a
+                   sign-off rule puts its owners on the change automatically,
+                   the moment it opens. Nobody asked them; the binder's rules
+                   did, and the row says so. -->
+              <div class="bs-row" style="min-height: 44px">
+                <span class="bs-avatar bs-avatar--sm bs-avatar--violet">PR</span>
+                <span class="bs-row-body">
+                  <span class="bs-row-name">Priya Raman</span>
+                  <span class="bs-row-meta">Signs off on Nursing</span>
+                </span>
                 <span class="bs-row-right">
-                  <span class="bs-status bs-status--working">Asked a question</span>
+                  <span class="bs-required">
+                    <svg width="12" height="12" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 3v6l4 2M9 16a7 7 0 1 1 0-14 7 7 0 0 1 0 14Z"/></svg>
+                    Required
+                  </span>
+                  <span class="bs-revstate" title="Has not looked yet">
+                    <svg width="13" height="13" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5v4l2.5 1.5M9 16A7 7 0 1 1 9 2a7 7 0 0 1 0 14Z"/></svg>
+                  </span>
                 </span>
               </div>
-              <div class="bs-panel-foot">
+
+              <!-- A chat glyph, not "Asked a question" spelled out in a pill.
+                   A sentence in a chip beside a name is a paragraph doing an
+                   icon's job, three times down one rail. The state is in the
+                   title and the accessible name. -->
+              <div class="bs-row" style="min-height: 44px">
+                <span class="bs-avatar bs-avatar--sm bs-avatar--teal">BO</span>
+                <span class="bs-row-body">
+                  <span class="bs-row-name">Bob Okafor</span>
+                  <span class="bs-row-meta">Asked by Alice</span>
+                </span>
+                <span class="bs-row-right">
+                  <span class="bs-optional">Optional</span>
+                  <span class="bs-revstate bs-revstate--changes" title="Asked a question"
+                        role="img" aria-label="Asked a question">
+                    <svg width="13" height="13" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M3 4h12v8H7l-4 3V4Z"/></svg>
+                  </span>
+                </span>
+              </div>
+
+              <div class="bs-panel-foot" style="display:block">
                 <button type="button" class="bs-btn bs-btn--sm bs-btn--quiet" style="padding:0; min-height:22px">
-                  ${I('plus', 13)} Add a reviewer
+                  ${I('plus', 13)} Ask somebody else to look
                 </button>
+                <!-- The honest caveat, and it is a real one. A CODEOWNERS
+                     entry naming a GROUP is written by Gitea and then has its
+                     own 'official' flag cleared ('AddTeamReviewRequest', still
+                     true on 28.0.0), so under the officialness gate it blocks
+                     nothing. 'blockOnCodeownerReviews' on 28.0.0 ignores
+                     officialness and does enforce it. Both flags are already
+                     on 'RepoBranchProtection', so this rail can read which
+                     world the binder is in rather than guessing — and a
+                     "Required" marker that is wrong on a compliance product
+                     is worse than no marker. -->
+                <p style="margin: var(--brand-space-1) 0 0; font-size: var(--brand-text-ui-md); color: var(--bs-text-muted)">
+                  Required reviewers come from this binder’s sign-off rules and
+                  are asked automatically.
+                </p>
               </div>
             </div>
 

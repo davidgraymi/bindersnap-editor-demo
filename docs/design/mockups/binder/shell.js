@@ -40,13 +40,18 @@ function icon(name, size = 15) {
 /**
  * The binder's own sections, in the sidebar.
  *
- * Four, not six. People and Sign-off rules were tabs of their own beside
+ * Three, not six. People and Sign-off rules were tabs of their own beside
  * Documents, which said a thing somebody edits twice a year is a peer of the
- * thing they open every morning. They are sections inside Settings now, and
- * Settings keeps its own index so neither is buried.
+ * thing they open every morning. They are sections of one Settings page now.
+ *
+ * And there is no "Policies" entry, because **the binder's own name is it.**
+ * A binder is its contents; pressing Clinical goes to what is filed in
+ * Clinical, the way pressing a folder opens the folder. An entry underneath
+ * repeating the parent was a second row that went to the same place, one
+ * indent further in — and it sat directly under the global "Documents",
+ * which is a different list entirely.
  */
 const BINDER_SECTIONS = [
-  { key: 'documents', label: 'Policies', icon: 'doc', count: 4 },
   { key: 'changes', label: 'Changes', icon: 'change', count: 3 },
   { key: 'history', label: 'History', icon: 'history' },
   { key: 'settings', label: 'Settings', icon: 'gear' },
@@ -72,7 +77,8 @@ function item(entry, on) {
 }
 
 function shell({ binder = 'Clinical', section = 'documents' } = {}) {
-  const inBinder = BINDER_SECTIONS.some((s) => s.key === section);
+  const inBinder =
+    section === 'documents' || BINDER_SECTIONS.some((s) => s.key === section);
 
   document.body.innerHTML = `
     <div class="bs-shell">
@@ -108,10 +114,13 @@ function shell({ binder = 'Clinical', section = 'documents' } = {}) {
         ${
           inBinder
             ? `<div class="bs-side-group">
-                 <div class="bs-side-binder">
+                 <button type="button" class="bs-side-binder${
+                   section === 'documents' ? ' bs-side-binder--on' : ''
+                 }" ${section === 'documents' ? 'aria-current="page"' : ''}>
                    <span class="bs-side-binder-mark">${icon('binder', 14)}</span>
                    <span class="bs-side-binder-name">${binder}</span>
-                 </div>
+                   <span class="bs-side-count">4</span>
+                 </button>
                  ${BINDER_SECTIONS.map((e) => item(e, e.key === section)).join('')}
                </div>`
             : ''
