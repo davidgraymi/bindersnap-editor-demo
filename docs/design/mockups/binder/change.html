@@ -119,7 +119,10 @@
                       </p>
                     </div>
                     <div class="bs-comment-foot">
-                      <button type="button" class="bs-btn bs-btn--sm bs-btn--quiet">React</button>
+                      <button type="button" class="bs-rowact" style="opacity: 1"
+                              aria-label="React to this comment" title="React">
+                        <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15.8 7.6a7 7 0 1 0-4.2 7.6"/><path d="M6.4 7.2h.01M11 7.2h.01"/><path d="M6 11a3.6 3.6 0 0 0 4.4 1"/><path d="M14.5 10.5v4M12.5 12.5h4"/></svg>
+                      </button>
                       <span class="bs-section-spacer"></span>
                       <button type="button" class="bs-btn bs-btn--sm bs-btn--quiet">Resolve</button>
                       <button type="button" class="bs-btn bs-btn--sm bs-btn-secondary">Reply</button>
@@ -229,7 +232,6 @@
                   <span class="bs-row-meta">Asked by Alice</span>
                 </span>
                 <span class="bs-row-right">
-                  <span class="bs-optional">Optional</span>
                   <span class="bs-revstate bs-revstate--changes" title="Asked a question"
                         role="img" aria-label="Asked a question">
                     <svg width="13" height="13" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M3 4h12v8H7l-4 3V4Z"/></svg>
@@ -239,7 +241,7 @@
 
               <div class="bs-panel-foot" style="display:block">
                 <button type="button" class="bs-btn bs-btn--sm bs-btn--quiet" style="padding:0; min-height:22px">
-                  ${I('plus', 13)} Ask somebody else to look
+                  ${I('plus', 13)} Reviewer
                 </button>
                 <!-- The honest caveat, and it is a real one. A CODEOWNERS
                      entry naming a GROUP is written by Gitea and then has its
@@ -252,8 +254,8 @@
                      "Required" marker that is wrong on a compliance product
                      is worse than no marker. -->
                 <p style="margin: var(--brand-space-1) 0 0; font-size: var(--brand-text-ui-md); color: var(--bs-text-muted)">
-                  Required reviewers come from this binder’s sign-off rules and
-                  are asked automatically.
+                  Required reviewers come from this binder’s
+                  <a href="./settings.html#sign-off" style="color: var(--bs-coral-text)">sign-off rules</a>.
                 </p>
               </div>
             </div>

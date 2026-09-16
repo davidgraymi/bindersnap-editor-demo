@@ -68,16 +68,18 @@
           <div class="bs-fields">
             <div class="bs-field">
               <label class="bs-field-label" for="binder-name">Name</label>
-              <div class="bs-field-row">
-                <input class="bs-input" id="binder-name" value="Clinical" />
-                <button type="button" class="bs-btn bs-btn-secondary" disabled>Rename</button>
-              </div>
+              <input class="bs-input" id="binder-name" value="Clinical" />
             </div>
             <div class="bs-field">
-              <label class="bs-field-label" for="binder-desc">
-                Description <span class="bs-field-optional">— optional</span>
-              </label>
+              <label class="bs-field-label" for="binder-desc">Description</label>
               <textarea class="bs-input" id="binder-desc" style="min-height: 72px">Clinical and administrative policies — one set of rules, one set of people.</textarea>
+            </div>
+            <!-- One Save for both. A "Rename" button beside the name field
+                 said the name was a different kind of thing from the
+                 description sitting under it — two commits for one edit, and
+                 the second field with no way to commit it at all. -->
+            <div class="bs-field-row">
+              <button type="button" class="bs-btn bs-btn-primary" disabled>Save</button>
             </div>
           </div>
         </section>
@@ -132,13 +134,7 @@
         <section class="bs-section">
           <div class="bs-section-head">
             <h2 class="bs-section-title">Groups</h2>
-            <span class="bs-section-spacer"></span>
-            <!-- Only a binder administrator can do this, and that is Gitea's
-                 answer rather than ours: 'PUT /teams/{id}/repos/{org}/{repo}'
-                 refuses anybody without admin on the repository. The button is
-                 simply not drawn for anyone else, which is the same fold every
-                 other control on this page uses. -->
-            <button type="button" class="bs-btn bs-btn--sm bs-btn-secondary">Grant a group</button>
+            <span class="bs-section-count">2</span>
           </div>
           <div class="bs-panel">
             <div class="bs-row" style="min-height: 44px">
@@ -163,17 +159,34 @@
                 </button>
               </span>
             </div>
+            <!-- The same footer People has. Adding a group and adding a person
+                 are the same act on the same page; they had two shapes, one of
+                 them a button in the section heading pointing at nothing.
+
+                 Only a binder administrator sees it, and that is Gitea's
+                 answer rather than ours: PUT /teams/{id}/repos/{org}/{repo}
+                 refuses anybody without admin on the repository. -->
+            <div class="bs-panel-foot">
+              <select class="bs-input bs-input--sm" style="flex:1" aria-label="Which group">
+                <option>Add a group from Riverside Health…</option>
+              </select>
+              <select class="bs-input bs-input--sm" style="width: 124px" aria-label="Role">
+                <option>Reviewer</option><option>Editor</option><option>Admin</option>
+              </select>
+              <button type="button" class="bs-btn bs-btn--sm bs-btn-secondary" disabled>Add</button>
+            </div>
           </div>
         </section>
 
-        <section class="bs-section">
+        <section class="bs-section" id="sign-off">
           <div class="bs-section-head">
             <h2 class="bs-section-title">Sign-off rules</h2>
             <span class="bs-section-count">2</span>
-            <span class="bs-section-spacer"></span>
-            <button type="button" class="bs-btn bs-btn--sm bs-btn-secondary">Add a rule</button>
           </div>
           <div class="bs-panel">
+            <!-- No "Enforced" pill. A rule that is on this page IS the binder's
+                 rule — saying so on every row is the page repeating its own
+                 title once per line. -->
             <div class="bs-row" style="min-height: 44px">
               <span class="bs-row-icon">
                 <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2 5a1 1 0 0 1 1-1h3.4l1.3 1.6H15a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5Z"/></svg>
@@ -183,10 +196,12 @@
                 <span class="bs-row-meta">Priya Raman and Tom Vance</span>
               </span>
               <span class="bs-row-right">
-                <span class="bs-status bs-status--approved">Enforced</span>
                 <span class="bs-rowacts">
                   <button type="button" class="bs-rowact" aria-label="Edit rule" title="Edit">
                     <svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.2 2.8a1.7 1.7 0 0 1 2.4 2.4L6 13.8l-3.2.8.8-3.2 8.6-8.6Z"/></svg>
+                  </button>
+                  <button type="button" class="bs-rowact bs-rowact--danger" aria-label="Remove rule" title="Remove">
+                    <svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5 5l8 8M13 5l-8 8"/></svg>
                   </button>
                 </span>
               </span>
@@ -197,20 +212,44 @@
               </span>
               <span class="bs-row-body">
                 <span class="bs-row-name">HIPAA Training Policy</span>
-                <!-- This one survives the cull, because it changes what you
-                     would do: the rule is listed and enforcing nothing, and
-                     nowhere else in the product says so. -->
+                <!-- The "Holding nothing" pill is gone with the other one, but
+                     the fact is not: a rule naming a group with no members
+                     waits for nobody and lets the publish through, and this is
+                     the only screen in the product that could ever say so. It
+                     is in the row's own meta line instead of a chip. -->
                 <span class="bs-row-meta">The Compliance group, which has nobody in it</span>
               </span>
               <span class="bs-row-right">
-                <span class="bs-status bs-status--review">Holding nothing</span>
                 <span class="bs-rowacts">
                   <button type="button" class="bs-rowact" aria-label="Edit rule" title="Edit">
                     <svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.2 2.8a1.7 1.7 0 0 1 2.4 2.4L6 13.8l-3.2.8.8-3.2 8.6-8.6Z"/></svg>
                   </button>
+                  <button type="button" class="bs-rowact bs-rowact--danger" aria-label="Remove rule" title="Remove">
+                    <svg width="14" height="14" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5 5l8 8M13 5l-8 8"/></svg>
+                  </button>
                 </span>
               </span>
             </div>
+
+            <!-- The same footer People and Groups have: what it covers, who
+                 signs it off, Add. A rule can cover the whole binder, one
+                 folder or a single document, and the first picker is where
+                 that vocabulary is now visible without opening anything. -->
+            <div class="bs-panel-foot">
+              <select class="bs-input bs-input--sm" style="flex:1" aria-label="What the rule covers">
+                <option>Anything filed in…</option>
+                <option>This whole binder</option>
+                <option>Administrative</option>
+                <option>Nursing</option>
+                <option>Training</option>
+                <option>One policy…</option>
+              </select>
+              <select class="bs-input bs-input--sm" style="flex:1" aria-label="Who signs it off">
+                <option>Signed off by…</option>
+              </select>
+              <button type="button" class="bs-btn bs-btn--sm bs-btn-secondary" disabled>Add</button>
+            </div>
+
             <div class="bs-panel-foot">
               Changing these rules is itself a change to the binder, so it goes
               through the same approval your policies do.

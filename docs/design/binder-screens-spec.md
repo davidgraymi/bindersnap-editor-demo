@@ -292,8 +292,12 @@ The rules that make it hold:
 - **`.bs-field-label`** — Geist 13/600, sentence case. It replaces `.bs-label`
   at all 26 in-app call sites. `.bs-label` stays exactly as it is, on the
   landing page, where it is right.
-- **`.bs-crumbs`** — Geist, muted. `nursing / Infection Control Policy` is
-  monospace today, which reads as a file path.
+- **`.bs-crumbs`** — Geist, muted, and on a **change request only**. It is
+  gone from a policy: the sidebar already says which binder, the folder is not
+  a place you navigate back to, and `nursing / Infection Control Policy` above
+  `Infection Control Policy` was the title twice with a path in front of it.
+  A change request keeps one, because "Change 4" is not a name and the way
+  back to the list is worth a row.
 
 Monospace survives in three places in the binder and nowhere else: a filename,
 a version number (`v2`), and the `⌘K` hint. Those are machine text.
@@ -334,6 +338,31 @@ sentence). Drawing it is deliberate: the section is incoherent without it, and
 it is Gitea branch protection, which the BFF already writes. _Flagged in Open
 questions._
 
+**People, Groups and Sign-off rules are one shape.** Each is a panel of rows
+with a single footer that adds to it: pick the thing, pick the level, Add. They
+had three shapes — People had the footer, Groups had a button in its section
+heading, and Sign-off rules had a different button in _its_ heading. Adding a
+person and adding a group are the same act on the same page and now look like
+it. The rule footer's first picker is also where "a rule can cover the whole
+binder, one folder, or a single document" finally becomes visible without
+opening anything.
+
+**One Save, under the description, for both fields.** A `Rename` button beside
+the name said the name was a different kind of thing from the description
+under it — two commits for one edit, and the second field with no way to commit
+it at all.
+
+**No state pills on a sign-off rule.** A rule that is on this page _is_ the
+binder's rule; an `Enforced` chip on every row is the page repeating its own
+title once per line.
+
+One caveat, recorded because it is a correctness question rather than a
+styling one: `Enforced` and `Holding nothing` were saying different things.
+The second is a real defect — a rule naming a group with **no members** waits
+for nobody and lets the publish through, and this is the only screen in the
+product that could ever say so. The pill is gone; the fact is not. It is the
+row's own meta line now: _"The Compliance group, which has nobody in it."_
+
 **Most of the explanatory notes are gone.** "Links to the old name keep
 working", "Who changed it, and when, is recorded", "A group is one object
 across every binder it reaches" — each was true, and each was us talking over
@@ -370,6 +399,10 @@ that request _blocks_ is the part the interface has to read rather than assume:
 - on 28.0.0 `blockOnCodeownerReviews` ignores officialness entirely, and under
   that gate a team code owner does block.
 
+**Only "Required" is marked.** A reviewer with no marker is one nothing is
+waiting on, which is what "optional" means — printing the word on every other
+row is labelling the absence of a constraint. Same on the propose page.
+
 `RepoBranchProtection` already carries `blockOnOfficialReviewRequests` and
 `blockOnCodeownerReviews`, so the binder knows which of those two worlds it is
 in and the rail can say "Required" only when it is true. **A required marker
@@ -388,6 +421,13 @@ the version tag, which are the record.
 **A reviewer's state is a glyph, not a sentence in a pill.** "Asked a question"
 spelled out in a chip beside a name is a paragraph doing an icon's job, three
 times down one rail. The state lives in the `title` and the accessible name.
+`React` on a comment goes the same way, to the glyph it already is in every
+other product a reader has used.
+
+**The rail names the rules and links to them.** "Required reviewers come from
+this binder's [sign-off rules]" — the answer to "why is Priya on this" is one
+click from the row that raises it, rather than a sentence telling you the
+rules exist and leaving you to find them.
 
 ### D7 · Editing: same page, same buttons, quieter chrome, louder targets
 
@@ -482,15 +522,18 @@ page exists on an audit product and it was not on it at all.
 
 ### D10 · A word is not a label for an act its icon already names
 
-`Download` and `Export` become icon buttons — `.bs-actionbtn`, sized like
-`.bs-btn--sm` so a row of controls stays one height, each with an `aria-label`
-and a `title`. A download arrow with the word "Download" beside it is the word
-twice.
+`Download`, `Export` and `React` become icon buttons — `.bs-actionbtn`, sized
+like `.bs-btn--sm` so a row of controls stays one height, each with an
+`aria-label` and a `title`. A download arrow with the word "Download" beside it
+is the word twice.
 
-This does **not** generalise to every button. `Approve`, `Propose`, `Rename`,
+This does **not** generalise to every button. `Approve`, `Propose`, `Save`,
 `Restore as v3` keep their words, because the icon for each is either ambiguous
 or invented. The test is whether the glyph is one a reader already knows from
 somewhere else.
+
+The same test cuts the other way on labels: `+ Ask somebody else to look` is a
+sentence next to a plus sign that already says "add". It is `+ Reviewer`.
 
 ### D11 · Nothing lifts on hover
 
