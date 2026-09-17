@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   buildArchiveStamp,
   buildVersionStamp,
+  readStampedChange,
   readVersionStamp,
   type ArchivedDocument,
   type PublishedPolicy,
@@ -146,6 +147,14 @@ describe("reading a stamp back", () => {
       title: "Infection Control",
       slugPath: "nursing/infection-control",
     });
+  });
+
+  test("a version stamp says which change it came from", () => {
+    expect(readStampedChange(buildVersionStamp(policy()))).toBe(
+      policy().changeNumber,
+    );
+    // A tag somebody wrote by hand has no such line, and says so with null.
+    expect(readStampedChange("Published nursing/handover v1")).toBeNull();
   });
 
   test("an archive stamp round-trips the same two facts", () => {

@@ -24,14 +24,12 @@ interface BinderChangesProps {
   org: string;
   binder: string;
   onOpenChange: (changeNumber: number) => void;
-  onAddPolicy: () => void;
 }
 
 export function BinderChanges({
   org,
   binder,
   onOpenChange,
-  onAddPolicy,
 }: BinderChangesProps) {
   const [filter, setFilter] = useState<ChangeFilter>("open");
   const [open, setOpen] = useState<WorkspaceChangeSummary[] | null>(null);
@@ -84,7 +82,11 @@ export function BinderChanges({
   }, [org, binder]);
 
   if (error) {
-    return <p className="app-inline-error">{error}</p>;
+    return (
+      <p className="bs-note bs-note--danger" role="alert">
+        {error}
+      </p>
+    );
   }
 
   return (
@@ -111,7 +113,6 @@ export function BinderChanges({
         }}
         onOpenChange={onOpenChange}
         onRetryClosed={() => void loadClosed()}
-        onSubmitVersion={onAddPolicy}
       />
     </div>
   );

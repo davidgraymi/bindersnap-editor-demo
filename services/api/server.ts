@@ -47,6 +47,7 @@ import {
   findWorkspaceDocument,
   createDocumentArchivedTag,
   groupVersionsByDocument,
+  latestChangeByDocument,
   listAllTags,
   listChangedDocuments,
   listDocumentVersions,
@@ -184,6 +185,7 @@ import {
   getPullRequestWithReviews,
   listBranchUpdates,
   listPullRequests,
+  findClosedChanges,
   listPullRequestsWithReviews,
   getPullRequestHeadBranch,
   searchInvolvedChanges,
@@ -6907,6 +6909,7 @@ async function handleListWorkspaceDocuments(
           client: auth.client,
           org: orgName,
           workspace: workspaceName,
+          withLastChange: true,
           ...(draft ? { ref: draft.branch } : {}),
         })),
       },
@@ -6955,6 +6958,12 @@ async function readBinderDocuments(params: {
    * whichever branch you are looking from, so neither moves with the ref.
    */
   ref?: string;
+  /**
+   * Say what last changed each policy. One more read — the titles of the
+   * changes the tags name — so it is asked for by the binder's own list and
+   * not by the library, which reads every binder at once.
+   */
+  withLastChange?: boolean;
 }): Promise<{
   documents: WorkspaceDocumentListEntry[];
   folders: string[];
@@ -6977,12 +6986,31 @@ async function readBinderDocuments(params: {
   // Joined here rather than inside a fourth call, so the three above stay
   // parallel and a binder still costs three reads whatever it holds.
   const versionsByDocument = groupVersionsByDocument(tags, documents);
-  const changesByDocument = await countOpenChangesByDocument({
-    client,
-    org,
-    workspace,
-    openChanges,
-  });
+  const lastChanges = params.withLastChange
+    ? latestChangeByDocument(tags, documents)
+    : new Map<
+        string,
+        { changeNumber: number | null; commitSha: string; publishedAt: string }
+      >();
+  const [changesByDocument, closed] = await Promise.all([
+    countOpenChangesByDocument({ client, org, workspace, openChanges }),
+    // A change that cannot be read costs its rows a subject, not the binder
+    // its list.
+    findClosedChanges({
+      client,
+      owner: org,
+      repo: workspace,
+      numbers: [...lastChanges.values()].flatMap((last) =>
+        last.changeNumber === null ? [] : [last.changeNumber],
+      ),
+      mergeCommits: [...lastChanges.values()].flatMap((last) =>
+        last.changeNumber === null ? [last.commitSha] : [],
+      ),
+    }).catch(() => ({
+      byNumber: new Map<number, string>(),
+      byMergeCommit: new Map<string, { number: number; title: string }>(),
+    })),
+  ]);
 
   // **The archive, counted for free from reads already made.** Every identity
   // with a version tag, minus every identity in this tree — the same set
@@ -7012,6 +7040,20 @@ async function readBinderDocuments(params: {
         // A list of policies that does not say which version each one is at
         // answers none of the questions a list is opened to answer.
         latestVersion: versionsByDocument.get(document.slugPath)?.[0] ?? null,
+        lastChange: (() => {
+          const last = lastChanges.get(document.slugPath);
+          if (!last) return null;
+          const change =
+            last.changeNumber === null
+              ? closed.byMergeCommit.get(last.commitSha)
+              : closed.byNumber.has(last.changeNumber)
+                ? {
+                    number: last.changeNumber,
+                    title: closed.byNumber.get(last.changeNumber)!,
+                  }
+                : undefined;
+          return change ? { ...change, publishedAt: last.publishedAt } : null;
+        })(),
       }))
       .sort((left, right) => left.slugPath.localeCompare(right.slugPath)),
     folders: tree.folders,
