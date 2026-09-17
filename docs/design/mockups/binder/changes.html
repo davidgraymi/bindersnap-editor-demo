@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Binder · Change requests — Bindersnap design</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" />
+    <link rel="stylesheet" href="./binder.css" />
+    <script src="./shell.js"></script>
+  </head>
+  <body>
+    <script>
+      /*
+       * Every revision in flight, and the record of every one decided.
+       *
+       * Unchanged in substance — the list was already one of the two binder
+       * tabs that worked. What changes is that it is now built from the same
+       * panel, the same row and the same section heading as every other
+       * screen, the segmented filter lives inside the panel's own bar rather
+       * than floating above it, and the status sentence the build already
+       * writes well ("Carol Mendes asked for changes") is the row's right
+       * edge on every row instead of only some.
+       */
+      const page = shell({ binder: 'Clinical', section: 'changes' });
+      const I = window.bsIcon;
+
+      const change = ({ title, who, when, docs, status, tone, meter }) => `
+        <button type="button" class="bs-row bs-row--tall">
+          <span class="bs-row-icon" style="margin-top:2px">
+            <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M5 2h5l3 3v11H5V2Z"/><path d="M10 2v3h3"/><path d="M7 9h4M7 12h3"/></svg>
+          </span>
+          <span class="bs-row-body">
+            <span class="bs-row-name" style="white-space:normal">${title}</span>
+            <span class="bs-row-meta">${who} · ${when} · ${docs}</span>
+          </span>
+          <span class="bs-row-right" style="align-items:flex-end;flex-direction:column;gap:5px">
+            <span class="bs-status bs-status--${tone}">${status}</span>
+            <span class="bs-meter" style="width:88px">${meter}</span>
+          </span>
+        </button>`;
+
+      const bars = (inCount, total) =>
+        Array.from({ length: total }, (_, i) =>
+          `<span class="${i < inCount ? 'is-in' : ''}"></span>`).join('');
+
+      page.innerHTML = `
+        <div class="bs-pagehead">
+          <div class="bs-pagehead-body">
+            <h1 class="bs-title">Change requests</h1>
+            <p class="bs-subtitle">
+              Nothing joins this binder except a change that has been approved
+              and published.
+            </p>
+          </div>
+        </div>
+
+        <div class="bs-panel">
+          <div class="bs-panel-bar">
+            <span class="bs-segmented">
+              <button type="button" class="bs-seg bs-seg--on">Open 3</button>
+              <button type="button" class="bs-seg">Decided</button>
+            </span>
+            <span class="bs-panel-bar-spacer"></span>
+            <select class="bs-input bs-input--sm" style="width: 168px" aria-label="Filter by person">
+              <option>Anyone</option>
+              <option>Waiting on me</option>
+              <option>Submitted by me</option>
+            </select>
+          </div>
+
+          ${change({
+            title: 'Five-day acknowledgement, and the patient is told they can go elsewhere.',
+            who: 'Alice', when: 'Sep 15', docs: 'Patient Grievance Policy',
+            status: 'Ready to publish', tone: 'approved', meter: bars(1, 1),
+          })}
+          ${change({
+            title: 'One-hour reporting, opioids added to double-check, and a look-alike clause.',
+            who: 'Alice', when: 'Sep 15', docs: 'Medication Administration Policy',
+            status: 'Carol Mendes asked for changes', tone: 'changes', meter: bars(0, 1),
+          })}
+          ${change({
+            title: 'Monthly audits, fourteen-day training, and point-of-care rub placement.',
+            who: 'Alice', when: 'Sep 15', docs: 'Infection Control Policy',
+            status: '1 more approval needed', tone: 'review', meter: bars(0, 1),
+          })}
+        </div>`;
+    </script>
+  </body>
+</html>

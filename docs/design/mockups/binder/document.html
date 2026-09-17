@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Binder · A policy — Bindersnap design</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" />
+    <link rel="stylesheet" href="./binder.css" />
+    <script src="./shell.js"></script>
+  </head>
+  <body>
+    <script>
+      /*
+       * One policy. The screen that was already closest to right — a preview
+       * and a rail — and the one that paid most for the repeated binder
+       * title: "Clinical" in Lora 26 sat directly above "Infection Control
+       * Policy" in Lora 26, so the page had two headlines and the second one
+       * was the subject.
+       *
+       * The breadcrumb is Geist now. `nursing / Infection Control Policy` was
+       * monospace, which reads as a file path to anybody who has seen a
+       * terminal — and this is the page a surveyor is shown.
+       */
+      const page = shell({ binder: 'Clinical', section: 'documents' });
+      const I = window.bsIcon;
+
+      page.innerHTML = `
+        <div class="bs-pagehead">
+          <div class="bs-pagehead-body">
+            <h1 class="bs-title">Infection Control Policy</h1>
+            <div class="bs-facts">
+              <span class="bs-status bs-status--approved">
+                <span class="bs-ver">v1</span> on record
+              </span>
+              <span>Published Sep 15 · approved by Bob Okafor</span>
+              <span class="bs-crumbs-sep">·</span>
+              <span class="bs-facts-file">infection-control-policy.docx</span>
+            </div>
+          </div>
+          <div class="bs-pagehead-actions">
+            <button type="button" class="bs-btn bs-btn-secondary">Rename or move</button>
+            <button type="button" class="bs-btn bs-btn-primary">New version</button>
+          </div>
+        </div>
+
+        <div class="bs-with-rail">
+          <div class="bs-doc">
+            <div class="bs-doc-bar">
+              <span class="bs-row-icon">
+                <svg width="15" height="15" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M5 2h5l3 3v11H5V2Z"/><path d="M10 2v3h3"/></svg>
+              </span>
+              <span class="bs-doc-name">infection-control-policy.docx</span>
+              <span>9.4 KB</span>
+              <span class="bs-panel-bar-spacer"></span>
+              <!-- The word beside a download arrow is the word twice. Icon
+                   only, with an aria-label and a title, sized like a small
+                   button so it does not break the one-row-one-height rule. -->
+              <button type="button" class="bs-actionbtn" aria-label="Download this version" title="Download">
+                <svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v9m0 0 3.5-3.5M9 11 5.5 7.5M3 13v2h12v-2"/></svg>
+              </button>
+            </div>
+            <div class="bs-doc-prose">
+              <h1>Infection Control Policy</h1>
+              <h2>Purpose</h2>
+              <p>
+                This policy sets out how the clinic prevents and controls the
+                transmission of infection between patients, workforce members,
+                and visitors. It reflects current CDC guidance and the
+                conditions of participation the clinic is surveyed against.
+              </p>
+              <h2>Scope</h2>
+              <p>
+                This policy applies to every workforce member, contractor, and
+                student who provides care, handles specimens, or enters a
+                clinical area. It applies at all sites, including the mobile
+                unit.
+              </p>
+              <h2>Hand Hygiene</h2>
+              <p>
+                Workforce members perform hand hygiene before and after every
+                patient contact, after contact with the patient environment,
+                and after removing gloves.
+              </p>
+            </div>
+          </div>
+
+          <aside class="bs-rail">
+            <!-- The one thing on this page somebody still has to decide.
+                 Everything below it is reference. -->
+            <div class="bs-panel">
+              <div class="bs-panel-bar">
+                <span class="bs-section-title" style="font-size: var(--brand-text-ui-md)">Waiting on a decision</span>
+              </div>
+              <button type="button" class="bs-row bs-row--tall">
+                <span class="bs-row-body">
+                  <span class="bs-row-name" style="white-space: normal">
+                    Monthly audits, fourteen-day training, and point-of-care rub placement.
+                  </span>
+                  <span class="bs-row-meta">Alice · Sep 15 · 1 more approval needed</span>
+                </span>
+              </button>
+              <div class="bs-panel-foot">
+                <button type="button" class="bs-btn bs-btn--sm bs-btn--quiet" style="padding:0;min-height:22px">
+                  Review this change →
+                </button>
+              </div>
+            </div>
+
+            <div class="bs-panel">
+              <div class="bs-panel-bar">
+                <span class="bs-section-title" style="font-size: var(--brand-text-ui-md)">Versions</span>
+              </div>
+              <button type="button" class="bs-row bs-row--on" style="min-height: 40px">
+                <span class="bs-row-body">
+                  <span class="bs-row-name"><span class="bs-ver">v1</span> &nbsp;Sep 15, 2026</span>
+                </span>
+                <span class="bs-row-right"><span class="bs-status bs-status--approved">On record</span></span>
+              </button>
+              <div class="bs-panel-foot">
+                <button type="button" class="bs-btn bs-btn--sm bs-btn--quiet" style="padding:0;min-height:22px">
+                  Full history →
+                </button>
+              </div>
+            </div>
+
+            <!-- Who signs this off, on the page where it is being read. It
+                 was two tabs away, which is where a question about this
+                 policy is least likely to be asked. -->
+            <div class="bs-panel">
+              <div class="bs-panel-bar">
+                <span class="bs-section-title" style="font-size: var(--brand-text-ui-md)">Who signs this off</span>
+              </div>
+              <div class="bs-panel-body" style="display:flex;flex-direction:column;gap:var(--brand-space-1-5)">
+                <p style="margin:0;font-size:var(--brand-text-ui-md);color:var(--bs-text-muted)">
+                  Any one of the binder's three editors, plus the infection
+                  control group, because it is filed in Nursing.
+                </p>
+                <div style="display:flex;gap:4px">
+                  <span class="bs-avatar bs-avatar--sm">AL</span>
+                  <span class="bs-avatar bs-avatar--sm bs-avatar--teal">BO</span>
+                  <span class="bs-avatar bs-avatar--sm bs-avatar--violet">CM</span>
+                  <span class="bs-avatar bs-avatar--sm bs-avatar--info">DW</span>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>`;
+    </script>
+  </body>
+</html>
