@@ -4,12 +4,15 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
+import type { GetBinderHistory200VersionsItemKind } from './getBinderHistory200VersionsItemKind.ts';
 
 export type GetBinderHistory200VersionsItem = {
+  kind: GetBinderHistory200VersionsItemKind;
   slugPath: string;
   name: string;
   folder: string;
-  version: number;
+  /** @nullable */
+  version: number | null;
   tag: string;
   commitSha: string;
   publishedAt: string;

@@ -48,6 +48,7 @@ import {
   createDocumentArchivedTag,
   groupVersionsByDocument,
   latestChangeByDocument,
+  readBinderTimeline,
   listAllTags,
   listChangedDocuments,
   listDocumentVersions,
@@ -4619,12 +4620,9 @@ async function handleWorkspaceHistory(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
-    const [versionsByDocument, closed] = await Promise.all([
-      listVersionsByDocument({
-        client,
-        org: orgName,
-        workspace: workspaceName,
-      }),
+    const [tags, tree, closed] = await Promise.all([
+      listAllTags({ client, owner: orgName, repo: workspaceName }),
+      readWorkspaceTree({ client, org: orgName, workspace: workspaceName }),
       listPullRequestsWithReviews({
         client,
         owner: orgName,
@@ -4642,45 +4640,36 @@ async function handleWorkspaceHistory(
       if (sha) changeByCommit.set(sha, entry);
     }
 
-    const versions = [...versionsByDocument.entries()]
-      .flatMap(([slugPath, documentVersions]) =>
-        documentVersions.map((version) => {
-          const change = changeByCommit.get(version.commitSha) ?? null;
-          const lastSlash = slugPath.lastIndexOf("/");
+    const versions = readBinderTimeline(tags, tree.documents)
+      .map((row) => {
+        const change = changeByCommit.get(row.commitSha) ?? null;
 
-          return {
-            slugPath,
-            name: lastSlash === -1 ? slugPath : slugPath.slice(lastSlash + 1),
-            folder: lastSlash === -1 ? "" : slugPath.slice(0, lastSlash),
-            version: version.version,
-            tag: version.tag,
-            commitSha: version.commitSha,
-            publishedAt: version.publishedAt,
-            changeNumber: change?.pullRequest.number ?? null,
-            changeTitle: change?.pullRequest.title ?? "",
-            submittedBy: change?.pullRequest.user?.login ?? "",
-            // Whose approval actually stood. A dismissed or stale review is
-            // not a sign-off, and this is the page somebody proves that on.
-            approvers: change
-              ? [
-                  ...new Set(
-                    change.reviews
-                      .filter(
-                        (review) =>
-                          (review.state ?? "").toUpperCase() === "APPROVED" &&
-                          review.stale !== true &&
-                          review.dismissed !== true,
-                      )
-                      .map((review) => review.user?.login ?? "")
-                      .filter((login) => login !== ""),
-                  ),
-                ]
-              : [],
-          };
-        }),
-      )
+        return {
+          ...row,
+          changeNumber: change?.pullRequest.number ?? null,
+          changeTitle: change?.pullRequest.title ?? "",
+          submittedBy: change?.pullRequest.user?.login ?? "",
+          // Whose approval actually stood. A dismissed or stale review is
+          // not a sign-off, and this is the page somebody proves that on.
+          approvers: change
+            ? [
+                ...new Set(
+                  change.reviews
+                    .filter(
+                      (review) =>
+                        (review.state ?? "").toUpperCase() === "APPROVED" &&
+                        review.stale !== true &&
+                        review.dismissed !== true,
+                    )
+                    .map((review) => review.user?.login ?? "")
+                    .filter((login) => login !== ""),
+                ),
+              ]
+            : [],
+        };
+      })
       // Newest first, and a binder's documents do not advance together — so
-      // the date is what orders them, with the version breaking a tie between
+      // the date is what orders them, with the address breaking a tie between
       // two published by the same change.
       .sort((left, right) => {
         if (left.publishedAt !== right.publishedAt) {

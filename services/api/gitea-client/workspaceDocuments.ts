@@ -1,12 +1,13 @@
 import {
   buildDocumentArchivedTag,
   buildDocumentVersionTag,
+  documentUidFromArchivedTag,
   documentUidFromVersionTag,
   parseDocumentFilename,
   versionFromTag,
 } from "../../../packages/utils/documentPath";
 
-import { readStampedChange } from "../version-stamp";
+import { readStampedChange, readVersionStamp } from "../version-stamp";
 import { GiteaApiError, unwrap, type GiteaClient } from "./client";
 
 /**
@@ -804,6 +805,78 @@ export async function listVersionsByDocument(params: {
  * calls for a whole binder — which is the property ADR 0004 exists to buy and
  * the one this must not quietly spend.
  */
+/** One thing a change did to one document: published a version, or archived it. */
+export interface BinderTimelineTag {
+  kind: "version" | "archived";
+  /** `nursing/hand-hygiene` — where it was filed when this happened. */
+  slugPath: string;
+  name: string;
+  folder: string;
+  /** The version published, or null for an archiving. */
+  version: number | null;
+  tag: string;
+  commitSha: string;
+  publishedAt: string;
+}
+
+/**
+ * Everything this binder's tags record, as rows a timeline can group.
+ *
+ * **Archived documents are in it, which is the point.** A binder's history has
+ * to answer "what happened to the paper chart retention policy" after somebody
+ * has taken it off the record, and until now the answer was nothing: the rows
+ * were joined to the tree, so a document that is no longer on `main` lost
+ * every version it ever published. A tag's stamp carries the title and the
+ * path as they stood at that publish, so a document off the tree names itself
+ * — and that is point-in-time evidence rather than today's name anyway.
+ *
+ * An archiving is a row too. `<uid>/archived-<n>` is written in the same pass
+ * as the version tags on the same merge commit, so taking a policy off the
+ * record lands on the timeline beside the versions the same change wrote.
+ */
+export function readBinderTimeline(
+  tags: readonly GitTag[],
+  documents: readonly WorkspaceDocumentEntry[],
+): BinderTimelineTag[] {
+  const addressOf = new Map<string, string>();
+  for (const document of documents) {
+    if (document.uid !== null) addressOf.set(document.uid, document.slugPath);
+  }
+
+  const rows: BinderTimelineTag[] = [];
+
+  for (const tag of tags ?? []) {
+    const name = tag.name ?? "";
+    const versionUid = documentUidFromVersionTag(name);
+    const archivedUid = documentUidFromArchivedTag(name);
+    const uid = versionUid ?? archivedUid;
+    const version = versionUid === null ? null : versionFromTag(name);
+    // A tag this app did not write — a release, or something somebody made by
+    // hand. Not a version and not an archiving, so not on the timeline.
+    if (uid === null || (versionUid !== null && version === null)) continue;
+
+    // The tree first, because a document still on the record is named by what
+    // it is called now; the stamp for one that is not.
+    const slugPath =
+      addressOf.get(uid) ?? readVersionStamp(tag.message ?? "").slugPath;
+    if (slugPath === null || slugPath === undefined) continue;
+
+    const cut = slugPath.lastIndexOf("/");
+    rows.push({
+      kind: versionUid === null ? "archived" : "version",
+      slugPath,
+      name: cut === -1 ? slugPath : slugPath.slice(cut + 1),
+      folder: cut === -1 ? "" : slugPath.slice(0, cut),
+      version,
+      tag: name,
+      commitSha: tag.commit?.sha ?? "",
+      publishedAt: tag.commit?.created ?? "",
+    });
+  }
+
+  return rows;
+}
+
 /**
  * The change that published each document's latest version, and when.
  *
