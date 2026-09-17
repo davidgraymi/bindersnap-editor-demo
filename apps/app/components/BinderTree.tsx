@@ -58,8 +58,15 @@ export interface BinderTreeViewProps {
    * Same contract as the two slots above.
    */
   rowProps?: (node: BinderTreeNode) => BinderTreeRowProps | undefined;
-  /** What a document row says under its name. */
-  describeDocument: (node: BinderTreeNode) => string;
+  /**
+   * What a document row says to the right of its name — the change that last
+   * touched it, and when.
+   *
+   * **Beside the row's button, not inside it**, because it links somewhere
+   * else: a link inside a button is a control that cannot be pressed on its
+   * own.
+   */
+  renderDocumentAside?: (node: BinderTreeNode) => React.ReactNode;
 }
 
 /**
@@ -92,7 +99,7 @@ export function BinderTreeView({
   renderRowActions,
   renderRowLabel,
   rowProps,
-  describeDocument,
+  renderDocumentAside,
 }: BinderTreeViewProps) {
   return (
     <div className="binder-tree">
@@ -108,7 +115,7 @@ export function BinderTreeView({
           renderRowActions={renderRowActions}
           renderRowLabel={renderRowLabel}
           rowProps={rowProps}
-          describeDocument={describeDocument}
+          renderDocumentAside={renderDocumentAside}
         />
       ))}
     </div>
@@ -237,7 +244,7 @@ function DocumentRow({
   renderRowActions,
   renderRowLabel,
   rowProps,
-  describeDocument,
+  renderDocumentAside,
 }: Omit<TreeRowProps, "node"> & { node: BinderTreeNode }) {
   if (node.kind !== "document") return null;
   const { document } = node;
@@ -281,9 +288,10 @@ function DocumentRow({
           <span className="binder-tree-label">
             {formatDocumentName(document.name)}
           </span>
-          <span className="binder-tree-meta">{describeDocument(node)}</span>
         </button>
       )}
+
+      {instead || !renderDocumentAside ? null : renderDocumentAside(node)}
 
       {renderRowActions ? (
         <span className="binder-tree-actions">{renderRowActions(node)}</span>

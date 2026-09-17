@@ -717,6 +717,71 @@ export async function updateChangeBranch(params: {
 }
 
 /**
+ * Some closed changes' numbers and titles, found by number or by merge commit.
+ *
+ * **Titles only, and no reviews.** The binder's list says which change last
+ * touched each policy; it needs a subject line per row, not an approval state,
+ * and {@link listPullRequests} reads every change's reviews to derive one.
+ *
+ * Pages through closed changes, most recently updated first, and stops as soon
+ * as everything asked for is found — which for the usual list, where most
+ * policies were last touched recently, is the first page.
+ */
+export async function findClosedChanges(params: {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+  numbers: readonly number[];
+  mergeCommits: readonly string[];
+}): Promise<{
+  byNumber: Map<number, string>;
+  byMergeCommit: Map<string, { number: number; title: string }>;
+}> {
+  const { client, owner, repo } = params;
+  const numbers = new Set(params.numbers);
+  const commits = new Set(params.mergeCommits.filter((sha) => sha !== ""));
+  const byNumber = new Map<number, string>();
+  const byMergeCommit = new Map<string, { number: number; title: string }>();
+  const done = () =>
+    byNumber.size >= numbers.size && byMergeCommit.size >= commits.size;
+  if (done()) return { byNumber, byMergeCommit };
+
+  // Gitea's ceiling per page, and a stop no real binder reaches that keeps a
+  // Gitea which ignores `page` from looping.
+  const PAGE_SIZE = 50;
+  const MAX_PAGES = 40;
+
+  for (let page = 1; page <= MAX_PAGES && !done(); page += 1) {
+    const batch = await unwrap(
+      client.GET("/repos/{owner}/{repo}/pulls", {
+        params: {
+          path: { owner, repo },
+          query: {
+            state: "closed",
+            sort: "recentupdate",
+            page,
+            limit: PAGE_SIZE,
+          },
+        },
+      }),
+    );
+
+    for (const pullRequest of batch ?? []) {
+      const number = pullRequest.number;
+      if (number === undefined) continue;
+      const title = pullRequest.title ?? "";
+      if (numbers.has(number)) byNumber.set(number, title);
+      const sha = pullRequest.merge_commit_sha ?? "";
+      if (commits.has(sha)) byMergeCommit.set(sha, { number, title });
+    }
+
+    if (!batch || batch.length < PAGE_SIZE) break;
+  }
+
+  return { byNumber, byMergeCommit };
+}
+
+/**
  * List pull requests and keep each one's reviews alongside it.
  *
  * `listPullRequests` throws the reviews away once the approval state is

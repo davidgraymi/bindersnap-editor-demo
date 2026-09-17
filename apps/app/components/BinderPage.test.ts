@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { describeDocument } from "./BinderPage";
+import { describeLastChange } from "./BinderPage";
 import type { WorkspaceDocumentListEntry } from "../../../packages/api-schema/schemas/workspaces";
 
 function entry(
@@ -16,53 +16,52 @@ function entry(
     state: "published",
     openChangeCount: 0,
     latestVersion: null,
+    lastChange: null,
     ...overrides,
   };
 }
 
 // Grouping moved to `binderTree.ts` and is tested there. What stayed here is
-// the sentence under a row, which is this file's own.
+// what a row says beside its name, which is this file's own.
 
-test("a document says which version it is at", () => {
+test("a policy's row says what last changed it, and how long ago", () => {
+  const now = Date.parse("2026-09-17T12:00:00Z");
   expect(
-    describeDocument(
+    describeLastChange(
       entry({
         slugPath: "nursing/handover",
         folder: "nursing",
-        latestVersion: {
-          tag: "nursing/handover/v3",
-          version: 3,
-          commitSha: "a",
-          publishedAt: "",
+        lastChange: {
+          number: 4,
+          title: "Monthly audits and fourteen-day training",
+          publishedAt: "2026-08-27T12:00:00Z",
         },
       }),
+      now,
     ),
-  ).toBe("Version 3");
+  ).toEqual({
+    number: 4,
+    subject: "Monthly audits and fourteen-day training",
+    when: "3 weeks ago",
+  });
 });
 
-test("an unpublished document says so rather than showing nothing", () => {
-  // "No version" and "we did not load it" look the same if this is blank.
-  expect(describeDocument(entry({ slugPath: "admissions", folder: "" }))).toBe(
-    "No published version",
-  );
-});
-
-test("open changes are counted alongside the version", () => {
+test("a change with no title is still named, by its number", () => {
   expect(
-    describeDocument(
+    describeLastChange(
       entry({
         slugPath: "admissions",
         folder: "",
-        latestVersion: {
-          tag: "admissions/v1",
-          version: 1,
-          commitSha: "a",
-          publishedAt: "",
-        },
-        openChangeCount: 2,
+        lastChange: { number: 9, title: "", publishedAt: "" },
       }),
-    ),
-  ).toBe("Version 1 · 2 open changes");
+    )?.subject,
+  ).toBe("Change 9");
+});
+
+test("a policy with no recorded change says nothing rather than guessing", () => {
+  expect(
+    describeLastChange(entry({ slugPath: "admissions", folder: "" })),
+  ).toBeNull();
 });
 
 test("a binder lists the record, so every row has a file behind it", () => {
