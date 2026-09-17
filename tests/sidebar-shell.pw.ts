@@ -82,12 +82,10 @@ test("the sidebar did not eat the binder", async ({ page }) => {
   await signInAsAlice(page);
   await page.goto(`${APP_BASE_URL}/riverside-health/clinical`);
 
-  // A binder still has its own six tabs, under the global sidebar.
+  // A binder still has its own tabs, under the global sidebar.
   for (const tab of [
     "Documents",
     "Change requests",
-    "People",
-    "Sign-off rules",
     "History",
     "Settings",
   ] as const) {

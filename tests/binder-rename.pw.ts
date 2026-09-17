@@ -322,15 +322,13 @@ test("renaming from the settings tab moves the address bar with it", async ({
   await signInBrowser(page, session);
   await page.goto(`${APP_BASE_URL}/${org}/${binder}?tab=settings`);
 
-  const field = page.getByRole("textbox", {
-    name: "What this binder is called",
-  });
+  const field = page.getByRole("textbox", { name: "Name", exact: true });
   await expect(field).toBeVisible({ timeout: 30_000 });
   // Titled the way the binder is shown, not left as the slug it is stored as.
   await expect(field).toHaveValue("Clinical Policies");
 
   await field.fill("Clinical Governance");
-  await page.getByRole("button", { name: "Rename", exact: true }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
 
   await expect(page).toHaveURL(
     new RegExp(`/${org}/clinical-governance\\?tab=settings$`),
@@ -366,10 +364,10 @@ test("the rename field is not drawn for somebody who cannot use it", async ({
   await signInBrowser(page, strangerSession);
   await page.goto(`${APP_BASE_URL}/${org}/${binder}?tab=settings`);
 
-  await expect(page.locator(".binder-settings-section").first()).toBeVisible({
+  await expect(page.getByRole("heading", { name: "People" })).toBeVisible({
     timeout: 30_000,
   });
   await expect(
-    page.getByRole("textbox", { name: "What this binder is called" }),
+    page.getByRole("textbox", { name: "Name", exact: true }),
   ).toHaveCount(0);
 });
