@@ -124,7 +124,7 @@ export function BinderArchive({
         <button type="button" className="app-breadcrumb-back" onClick={onBack}>
           ← Back to the binder
         </button>
-        <h2 className="propose-title">Archive</h2>
+        <h1 className="bs-title">Archive</h1>
         {/* The reassurance, once, at the top. It is the question anybody
             opening this page has, and answering it per row would be eleven
             copies of one sentence. */}

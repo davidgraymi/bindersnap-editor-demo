@@ -97,7 +97,8 @@ test("picking a binder opens the binder", async ({ page }) => {
   await expect(page).toHaveURL(/\/riverside-health\/clinical$/, {
     timeout: 30_000,
   });
-  await expect(page.getByRole("tab", { name: "Documents" })).toBeVisible();
+  // The binder's own section of the sidebar is how you know you are in one.
+  await expect(page.locator(".app-sidebar-binder-name")).toHaveText("Clinical");
 });
 
 test("picking a person opens the organization's people", async ({ page }) => {
