@@ -528,16 +528,14 @@ body::after {
   text-decoration: none;
   transition:
     background var(--brand-transition-base),
-    transform var(--brand-transition-fast),
+    border-color var(--brand-transition-base),
     box-shadow var(--brand-transition-base);
   white-space: nowrap;
 }
-.bs-btn:hover:not(:disabled) {
-  transform: translateY(-1px);
-}
-.bs-btn:active:not(:disabled) {
-  transform: translateY(0);
-}
+/* **Nothing lifts on hover.** A button that rose a pixel under the pointer read
+   as playful on a marketing page and as instability in a dense tool — a row of
+   controls that all twitched as the pointer crossed them. Hover is a colour
+   change and nothing else. */
 .bs-btn:focus-visible {
   outline: 2px solid var(--brand-coral);
   outline-offset: 2px;
@@ -788,19 +786,26 @@ select.bs-input--sm {
    Use with <StatusChip tone="…" /> (apps/app/components/StatusChip.tsx)
    or directly as `bs-status bs-status--<tone>`.
 ──────────────────────────────────────────────────────────────── */
+/* Sentence case, Geist, a pill. `READY TO PUBLISH` in uppercase monospace
+   read as machine output on every row of every list; "Ready to publish" reads
+   as an answer. The words are unchanged — only how they are set. */
 .bs-status {
-  display: inline-block;
-  padding: var(--brand-space-1) var(--brand-space-3);
-  font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-xs);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px var(--brand-space-2);
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-ui-sm);
   font-weight: var(--brand-weight-medium);
-  border-radius: var(--brand-radius-sm);
-  text-transform: uppercase;
-  letter-spacing: var(--brand-tracking-wide);
+  line-height: var(--brand-leading-normal);
+  border: 1px solid transparent;
+  border-radius: var(--brand-radius-full);
+  letter-spacing: 0;
+  text-transform: none;
   white-space: nowrap;
 }
 .bs-status--sm {
-  padding: 0 var(--brand-space-2);
+  padding: 0 var(--brand-space-1-5);
   font-size: var(--brand-text-ui-xs);
 }
 .bs-status--working {
@@ -831,12 +836,12 @@ select.bs-input--sm {
 .bs-status--declined {
   background: var(--bs-status-danger-bg);
   color: var(--bs-status-danger-fg);
-  box-shadow: inset 0 0 0 1px var(--bs-status-danger-border);
+  border-color: var(--bs-status-danger-border);
 }
 .bs-status--withdrawn {
   background: var(--bs-surface-2);
   color: var(--bs-text-muted);
-  box-shadow: inset 0 0 0 1px var(--bs-rule);
+  border-color: var(--bs-rule);
 }
 
 /* ═════════════════════════════════════════════════════════════
