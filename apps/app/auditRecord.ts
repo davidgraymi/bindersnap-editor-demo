@@ -81,7 +81,10 @@ function renderVersion(entry: WorkspaceHistoryEntry): string {
   // version is — and nobody reading this record can look either one up, so
   // printing them only invites a question the file cannot answer.
   const facts: [string, string][] = [
-    ["Published", formatTimestamp(entry.publishedAt) || "Unknown"],
+    [
+      entry.kind === "archived" ? "Archived" : "Published",
+      formatTimestamp(entry.publishedAt) || "Unknown",
+    ],
   ];
 
   if (entry.changeNumber !== null) {
@@ -102,11 +105,19 @@ function renderVersion(entry: WorkspaceHistoryEntry): string {
     )
     .join("");
 
+  // A change can take a policy off the record as well as publish one, and the
+  // record has to say so: a policy that simply stopped appearing would read as
+  // an omission in exactly the document that must not have one.
+  const label =
+    entry.kind === "archived"
+      ? "Taken off the record"
+      : `Version ${entry.version}`;
+
   return [
     '<section class="record-version">',
     '<header class="record-version-head">',
-    `<p class="record-version-label">Version ${entry.version}</p>`,
-    `<h2>${escapeHtml(entry.changeTitle || `Version ${entry.version}`)}</h2>`,
+    `<p class="record-version-label">${escapeHtml(label)}</p>`,
+    `<h2>${escapeHtml(entry.changeTitle || label)}</h2>`,
     "</header>",
     `<dl class="record-facts">${factRows}</dl>`,
     '<table class="record-reviews">',
@@ -163,7 +174,11 @@ export function buildAuditRecord(input: AuditRecordInput): AuditRecord {
     .map(([slugPath, entries]) => ({
       slugPath,
       name: entries[0]?.name ?? slugPath,
-      entries: [...entries].sort((a, b) => b.version - a.version),
+      // Newest first. An archiving carries no version, and it is the last
+      // thing that happened to the policy, so it leads.
+      entries: [...entries].sort(
+        (a, b) => (b.version ?? Infinity) - (a.version ?? Infinity),
+      ),
     }))
     .sort((left, right) => left.slugPath.localeCompare(right.slugPath));
 
@@ -174,7 +189,10 @@ export function buildAuditRecord(input: AuditRecordInput): AuditRecord {
       "Policies on record",
       documents.length === 1 ? "1 policy" : `${documents.length} policies`,
     ],
-    ["Published versions", String(versions.length)],
+    [
+      "Published versions",
+      String(versions.filter((entry) => entry.kind === "version").length),
+    ],
     ["Exported", formatTimestamp(generatedAt.toISOString()) || "Unknown"],
   ];
 
