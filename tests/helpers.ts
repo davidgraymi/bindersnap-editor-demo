@@ -524,20 +524,43 @@ export async function expectPublishedVersion(
   );
 }
 
-/** Assert how many changes are waiting on a decision, per the Changes tab. */
+/**
+ * Assert how many changes are waiting on a decision.
+ *
+ * The count is on the sidebar's Changes entry: a binder's screens are a
+ * section of the map now rather than a tab strip on every page it holds.
+ */
 export async function expectOpenChangeCount(
   page: Page,
   count: number,
   timeout = 30_000,
 ): Promise<void> {
-  const tab = page.getByRole("tab", { name: /^Changes/ });
+  const entry = page
+    .locator(".app-sidebar")
+    .getByRole("button", { name: /^Changes/ });
   if (count === 0) {
-    await expect(tab.locator(".doc-tab-count")).toHaveCount(0, { timeout });
+    await expect(entry.locator(".app-sidebar-item-count")).toHaveCount(0, {
+      timeout,
+    });
     return;
   }
-  await expect(tab.locator(".doc-tab-count")).toHaveText(String(count), {
-    timeout,
-  });
+  await expect(entry.locator(".app-sidebar-item-count")).toHaveText(
+    String(count),
+    { timeout },
+  );
+}
+
+/** Open one of the binder's screens from the sidebar's own section of it. */
+export async function openBinderSection(
+  page: Page,
+  section: "Changes" | "History" | "Settings",
+): Promise<void> {
+  const entry = page
+    .locator(".app-sidebar")
+    .getByRole("button", { name: new RegExp(`^${section}`) })
+    .last();
+  await expect(entry).toBeVisible({ timeout: 15_000 });
+  await entry.click();
 }
 
 export async function waitForNoPendingReviews(
