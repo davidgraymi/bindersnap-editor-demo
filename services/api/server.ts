@@ -38,6 +38,7 @@ import {
   provisionWorkspace,
   readWorkspaceAccess,
   renameWorkspaceRepo,
+  describeWorkspaceRepo,
   recomputeApprovalsWhitelist,
 } from "./gitea-client/workspaces";
 import {
@@ -8838,6 +8839,91 @@ async function handleRenameBinder(
   }
 }
 
+/**
+ * Change what a binder says it is for.
+ *
+ * Configuration, not evidence: it is the repository's description, which Gitea
+ * already holds, so this is one PATCH and nothing else. Admin only, for the
+ * same reason renaming is — it is the same field on the same settings page.
+ */
+async function handleDescribeBinder(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { client, session } = auth;
+
+  try {
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    const access = await readWorkspaceAccess({
+      client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!access.admin) {
+      return json(
+        403,
+        { error: "Only a binder administrator can change its description." },
+        baseHeaders,
+      );
+    }
+
+    const payload = await readJson<{ description?: unknown }>(req);
+    if (typeof payload?.description !== "string") {
+      return json(400, { error: "Send a description." }, baseHeaders);
+    }
+
+    const description = payload.description.trim();
+    // Gitea's own limit on a repository description.
+    if (description.length > 2048) {
+      return json(
+        400,
+        { error: "A description can be at most 2048 characters." },
+        baseHeaders,
+      );
+    }
+
+    await describeWorkspaceRepo({
+      client,
+      org: orgName,
+      name: workspaceName,
+      description,
+    });
+
+    logger.info("Binder description changed", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+    });
+
+    return json(200, { description }, baseHeaders);
+  } catch (err) {
+    logger.error("Failed to change a binder's description", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to change this binder's description.",
+    );
+  }
+}
+
 async function handleListOrganizations(
   req: Request,
   baseHeaders: Headers,
@@ -9591,6 +9677,9 @@ export function createApiServer() {
         const workspaceNameMatch = pathname.match(
           /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/name$/,
         );
+        const workspaceDescriptionMatch = pathname.match(
+          /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/description$/,
+        );
         const workspaceArchiveMatch = pathname.match(
           /^\/api\/app\/binders\/([^/]+)\/([^/]+)\/archive$/,
         );
@@ -10126,6 +10215,13 @@ export function createApiServer() {
             baseHeaders,
             workspaceNameMatch[1]!,
             workspaceNameMatch[2]!,
+          );
+        } else if (workspaceDescriptionMatch && method === "POST") {
+          response = await handleDescribeBinder(
+            req,
+            baseHeaders,
+            workspaceDescriptionMatch[1]!,
+            workspaceDescriptionMatch[2]!,
           );
         } else if (workspaceArchiveMatch && method === "GET") {
           response = await handleBinderArchive(

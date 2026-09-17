@@ -614,3 +614,25 @@ export async function renameWorkspaceRepo(params: {
     }),
   );
 }
+
+/**
+ * Say what a binder is for.
+ *
+ * The repository's own description, which is where every screen already reads
+ * it from — so there is no second copy to keep in step.
+ */
+export async function describeWorkspaceRepo(params: {
+  client: GiteaClient;
+  org: string;
+  name: string;
+  description: string;
+}): Promise<void> {
+  const { client, org, name, description } = params;
+
+  await unwrap(
+    client.PATCH("/repos/{owner}/{repo}", {
+      params: { path: { owner: org, repo: name } },
+      body: { description },
+    }),
+  );
+}

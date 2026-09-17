@@ -1301,6 +1301,43 @@ registry.registerPath({
  * every other write under `settings` leaves the address alone and this one
  * does not.
  */
+/**
+ * Say what a binder is for.
+ *
+ * A setting rather than an address, so unlike renaming it moves nothing: the
+ * repository's description, written straight to Gitea.
+ */
+registry.registerPath({
+  method: "post",
+  path: "/api/app/binders/{org}/{binder}/description",
+  operationId: "describeBinder",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({ org: z.string(), binder: z.string() }),
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z.object({
+            /** What the binder is for. Empty clears it. */
+            description: z.string(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "The description the binder has now",
+      content: {
+        "application/json": {
+          schema: z.object({ description: z.string() }),
+        },
+      },
+    },
+  },
+});
+
 registry.registerPath({
   method: "post",
   path: "/api/app/binders/{org}/{binder}/name",
