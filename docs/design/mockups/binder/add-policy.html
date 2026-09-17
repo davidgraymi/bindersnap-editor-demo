@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Binder · Add a policy — Bindersnap design</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" />
+    <link rel="stylesheet" href="./binder.css" />
+    <script src="./shell.js"></script>
+  </head>
+  <body>
+    <script>
+      /*
+       * Adding a policy — the product's primary act, which shipped behind the
+       * browser's own unstyled `Choose File / No file chosen` control.
+       *
+       * A file is dragged onto this product, not browsed for: the policy
+       * manager already has the .docx open in the window behind. So the
+       * dropzone is the control and the file input hides behind it, the name
+       * is derived from the file and shown as editable rather than demanded
+       * before the file is picked, and the folder is a picker of folders that
+       * exist rather than a free-text path.
+       */
+      const page = shell({ binder: 'Clinical', section: 'documents' });
+      const I = window.bsIcon;
+
+      page.innerHTML = `
+        <div class="bs-pagehead">
+          <div class="bs-pagehead-body">
+            <h1 class="bs-title">Policies</h1>
+            <p class="bs-subtitle">
+              Clinical and administrative policies — one set of rules, one set
+              of people.
+            </p>
+          </div>
+          <div class="bs-pagehead-actions">
+            <button type="button" class="bs-btn bs-btn-secondary">Add a policy</button>
+            <button type="button" class="bs-btn bs-btn-secondary">Done</button>
+          </div>
+        </div>
+
+        <div class="bs-panel" style="opacity: .55">
+          <div class="bs-panel-bar">
+            <button type="button" class="bs-btn bs-btn--sm bs-btn-secondary">${I('plus', 14)} New folder</button>
+            <button type="button" class="bs-btn bs-btn--sm bs-btn-secondary">${I('doc', 14)} Add a policy</button>
+          </div>
+          <div class="bs-row"><span class="bs-twisty">${I('chevron', 14)}</span><span class="bs-row-body"><span class="bs-row-name">Administrative</span></span></div>
+          <div class="bs-row"><span class="bs-twisty">${I('chevron', 14)}</span><span class="bs-row-body"><span class="bs-row-name">Nursing</span></span></div>
+          <div class="bs-row"><span class="bs-twisty">${I('chevron', 14)}</span><span class="bs-row-body"><span class="bs-row-name">Training</span></span></div>
+        </div>
+
+        <div class="bs-scrim">
+          <div class="bs-modal">
+            <div class="bs-modal-head">
+              <h2 class="bs-modal-title">Add a policy</h2>
+            </div>
+            <div class="bs-modal-body">
+              <div class="bs-fields">
+                <!-- The file is already chosen, so the zone becomes the
+                     receipt for it rather than disappearing. -->
+                <div class="bs-dropzone bs-dropzone--filled">
+                  <span style="color: var(--bs-status-ok-fg)">
+                    <svg width="20" height="20" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M5 2h5l3 3v11H5V2Z"/><path d="M10 2v3h3"/></svg>
+                  </span>
+                  <span style="flex:1">
+                    <span class="bs-dropzone-lead">hand-hygiene-and-ppe.docx</span>
+                    <span style="display:block; color: var(--bs-text-muted)">Word document · 24 KB</span>
+                  </span>
+                  <button type="button" class="bs-btn bs-btn--sm bs-btn--quiet">Replace</button>
+                </div>
+
+                <div class="bs-field">
+                  <label class="bs-field-label" for="p-name">What it is called</label>
+                  <input class="bs-input" id="p-name" value="Hand Hygiene and PPE" />
+                  <p class="bs-field-hint">
+                    Taken from the file name. This is the name people will look
+                    for it under.
+                  </p>
+                </div>
+
+                <div class="bs-field">
+                  <label class="bs-field-label" for="p-folder">Where it goes</label>
+                  <select class="bs-input" id="p-folder">
+                    <option>Nursing</option>
+                    <option>Administrative</option>
+                    <option>Training</option>
+                    <option>— the top level of the binder —</option>
+                    <option>+ a new folder…</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div class="bs-modal-foot">
+              <span class="bs-modal-foot-note">
+                This goes into your draft. Nobody is asked to look at it until
+                you propose it.
+              </span>
+              <button type="button" class="bs-btn bs-btn--sm bs-btn--quiet">Cancel</button>
+              <button type="button" class="bs-btn bs-btn--sm bs-btn-primary">Add to draft</button>
+            </div>
+          </div>
+        </div>`;
+    </script>
+  </body>
+</html>
