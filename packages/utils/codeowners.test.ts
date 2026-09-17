@@ -504,3 +504,110 @@ describe("validateSignOffRules", () => {
 test("the file goes where Gitea looks for it", () => {
   expect(CODEOWNERS_PATH).toBe(".gitea/CODEOWNERS");
 });
+
+describe("a rule over the sign-off rules themselves", () => {
+  function rules(partial: Partial<SignOffRule> = {}): SignOffRule {
+    return { scope: "rules", target: "", teams: [], users: [], ...partial };
+  }
+
+  test("names one file, and the leading dot is escaped", () => {
+    // `.` is the metacharacter that looks harmless: unescaped, the pattern
+    // would also match `xgitea/CODEOWNERS`. Nothing lives there, but this is
+    // the class of near miss this module exists to be careful about.
+    expect(rulePattern(rules())).toBe("\\.gitea/CODEOWNERS");
+
+    const compiled = compiledFor(rules());
+    expect(compiled.test(CODEOWNERS_PATH)).toBe(true);
+    expect(compiled.test("xgitea/CODEOWNERS")).toBe(false);
+  });
+
+  test("matches nothing else, because Gitea anchors both ends", () => {
+    const compiled = compiledFor(rules());
+    for (const near of [
+      `${CODEOWNERS_PATH}.bak`,
+      ".gitea/CODEOWNERS/nested.md",
+      ".gitea/workflows/build.yml",
+      "nursing/hand-hygiene.md",
+      "CODEOWNERS",
+    ]) {
+      expect(compiled.test(near), `matched ${near}`).toBe(false);
+    }
+  });
+
+  test("survives being written and read back", () => {
+    // The round trip is what the settings page depends on: a rule it cannot
+    // recognise is shown as unreadable, which would make this scope look
+    // broken the first time somebody saved one.
+    const rendered = renderCodeowners(ORG, [
+      rules({ teams: ["governance"] }),
+      folder("nursing", { teams: ["infection-control"] }),
+    ]);
+    const parsed = parseCodeowners(ORG, rendered);
+
+    expect(parsed.unreadable).toEqual([]);
+    expect(parsed.rules).toEqual([
+      { scope: "rules", target: "", teams: ["governance"], users: [] },
+      {
+        scope: "folder",
+        target: "nursing",
+        teams: ["infection-control"],
+        users: [],
+      },
+    ]);
+  });
+
+  test("is not mistaken for a folder rule, or the other way round", () => {
+    // Both are read out of the same file by the same parser, and a folder
+    // called `.gitea` is a thing somebody could make.
+    expect(ruleFromPattern("\\.gitea/CODEOWNERS")).toEqual({
+      scope: "rules",
+      target: "",
+    });
+    expect(ruleFromPattern("\\.gitea/.*")).toEqual({
+      scope: "folder",
+      target: ".gitea",
+    });
+  });
+
+  test("carries no target, because there is one set of rules", () => {
+    const result = validateSignOffRules({
+      org: ORG,
+      rules: [rules({ target: "nursing", teams: ["governance"] })],
+      knownTeams: ["governance"],
+    });
+    expect(result.ok).toBe(false);
+    expect(result.problems.join(" ")).toContain("one set of rules");
+  });
+
+  test("still needs somebody on it", () => {
+    const result = validateSignOffRules({
+      org: ORG,
+      rules: [rules()],
+      knownTeams: ["governance"],
+    });
+    expect(result.ok).toBe(false);
+    expect(result.problems.join(" ")).toContain(
+      "the sign-off rules themselves",
+    );
+  });
+
+  test("passes validation when it names a group that exists", () => {
+    const result = validateSignOffRules({
+      org: ORG,
+      rules: [rules({ teams: ["governance"] })],
+      knownTeams: ["governance"],
+    });
+    expect(result.problems).toEqual([]);
+    expect(result.ok).toBe(true);
+  });
+
+  test("two of them is still two rules over one thing", () => {
+    const result = validateSignOffRules({
+      org: ORG,
+      rules: [rules({ teams: ["governance"] }), rules({ teams: ["owners"] })],
+      knownTeams: ["governance", "owners"],
+    });
+    expect(result.ok).toBe(false);
+    expect(result.problems.join(" ")).toContain("two sign-off rules");
+  });
+});

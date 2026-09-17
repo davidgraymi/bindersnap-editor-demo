@@ -604,15 +604,20 @@ export type WorkspaceRules = z.infer<typeof WorkspaceRulesSchema>;
 /** Something in a binder, and who has to sign off on a change to it. */
 export const SignOffRuleSchema = z.object({
   /**
-   * How much a rule covers — the three answers a customer actually gives to
-   * "what has to be signed off?": everything here, this drawer, this policy.
+   * How much a rule covers.
+   *
+   * Three are the answers a customer gives to "what has to be signed off?":
+   * everything here, this drawer, this policy. `rules` is the fourth and is
+   * about the rules themselves — without it, anybody who can open a change
+   * request can propose rewriting who signs things off, and a gate with a door
+   * beside it is not a gate.
    */
-  scope: z.enum(["binder", "folder", "document"]),
+  scope: z.enum(["binder", "folder", "document", "rules"]),
   /**
-   * What the scope names: "" for the binder, a folder path for a folder, and
-   * for a document its **identity** rather than its path (ADR 0005) — so the
-   * rule follows the policy through a retitle or a move instead of silently
-   * ceasing to apply.
+   * What the scope names: "" for the binder and "" for the rules, a folder path
+   * for a folder, and for a document its **identity** rather than its path
+   * (ADR 0005) — so the rule follows the policy through a retitle or a move
+   * instead of silently ceasing to apply.
    */
   target: z.string(),
   /** Group handles. The preferred form: a group's membership can change
