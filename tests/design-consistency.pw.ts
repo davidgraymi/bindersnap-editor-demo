@@ -200,6 +200,35 @@ async function provision(): Promise<{
   return { session, org, binder };
 }
 
+/**
+ * Wait for the real shell, not the skeleton that stands in for it.
+ *
+ * **`networkidle` is not "the app has rendered".** While `/auth/me` is in
+ * flight, `App.tsx` renders `WorkspaceSkeleton`, whose markup is deliberately
+ * the shape of the real thing — `.app-shell`, `.app-topnav`, `.app-main`, and
+ * a `.home-page` inside it with the same padding. What it does **not** have is
+ * a sidebar or a heading, and both of those are what these tests measure.
+ *
+ * So a measurement taken during that window reports a page 1144px wide
+ * starting at x=65 — the page box at its own max-width, because there is no
+ * 220px sidebar constraining it — with `headingSize: null`. Which is exactly
+ * the shape CI reported when this flaked: the numbers were not a layout
+ * regression, they were the skeleton.
+ *
+ * It never reproduced locally because the window is a few milliseconds
+ * against a warm API; CI is slower and cold, so it lands in it perhaps one run
+ * in three, on whichever screen happens to be slowest that time. That is why
+ * the failures moved between "the organization" and "the review queue" across
+ * retries rather than naming one page.
+ *
+ * `.app-shell--skeleton` is the one class that tells the two apart, so this
+ * waits for a shell that does not carry it.
+ */
+async function settleOnRealShell(page: Page): Promise<void> {
+  await page.locator(".app-shell:not(.app-shell--skeleton)").waitFor();
+  await page.waitForLoadState("networkidle");
+}
+
 test("every row of controls in the product is one size", async ({ page }) => {
   const { session, org, binder } = await provision();
   await page
@@ -222,9 +251,10 @@ test("every row of controls in the product is one size", async ({ page }) => {
 
   for (const [where, url] of screens) {
     await page.goto(url);
-    // Every one of these pages loads something. Waiting for the shell alone
-    // would measure a skeleton, which has no controls to disagree.
-    await page.waitForLoadState("networkidle");
+    // Every one of these pages loads something, and the skeleton that stands
+    // in while it does has no controls to disagree — so wait for both the
+    // real shell and the data.
+    await settleOnRealShell(page);
     await expectOneSizePerRow(page, where);
   }
 });
@@ -310,7 +340,13 @@ test("every page begins in the same place, at the same size", async ({
 
   for (const [where, url] of screens) {
     await page.goto(url);
-    await page.waitForLoadState("networkidle");
+    await settleOnRealShell(page);
+    // And the page's own heading, because it is one of the four things
+    // measured below and a route can still be a render behind its shell.
+    await page
+      .locator(".doc-header-title, .docs-title, .activity-heading")
+      .first()
+      .waitFor();
 
     const shape = await page.evaluate(() => {
       const main = document.querySelector(".app-main");
@@ -377,7 +413,7 @@ test("no heading on a page outranks the page's own title", async ({ page }) => {
 
   for (const [where, url] of screens) {
     await page.goto(url);
-    await page.waitForLoadState("networkidle");
+    await settleOnRealShell(page);
 
     const louder = await page.evaluate(() => {
       const main = document.querySelector(".app-main");
