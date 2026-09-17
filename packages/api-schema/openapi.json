@@ -6597,7 +6597,8 @@
                                 "enum": [
                                   "binder",
                                   "folder",
-                                  "document"
+                                  "document",
+                                  "rules"
                                 ]
                               },
                               "target": {
@@ -6839,7 +6840,8 @@
                           "enum": [
                             "binder",
                             "folder",
-                            "document"
+                            "document",
+                            "rules"
                           ]
                         },
                         "target": {

@@ -12,4 +12,5 @@ export const ProposeBinderSignOffRulesBodyRulesItemScope = {
   binder: 'binder',
   folder: 'folder',
   document: 'document',
+  rules: 'rules',
 } as const;

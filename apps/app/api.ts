@@ -33,6 +33,7 @@ import type {
   WorkspaceDocumentListPayload,
   WorkspaceSummary,
   ProposedDraftPayload,
+  SignOffRuleView,
 } from "../../packages/api-schema/schemas/workspaces";
 
 // Import generated types
@@ -687,7 +688,7 @@ export async function proposeBinderSignOff(
   org: string,
   binder: string,
   rules: Array<{
-    scope: "binder" | "folder" | "document";
+    scope: SignOffRuleView["scope"];
     target: string;
     teams: string[];
     users: string[];

@@ -3783,6 +3783,109 @@ test("published sign-off rules gate the folder they name", async () => {
   expect(released.status, released.body).toBe(200);
 });
 
+test("a sign-off rule over the rules gates a change to the rules", async () => {
+  // **The gate on the gate.** Every other rule on the page says who signs off
+  // on some part of the binder. Without this one, the page itself is the
+  // weakest thing on it: anybody who can open a change request can propose
+  // deleting every rule, and the only thing in the way is the ordinary
+  // approval count. A binder that demands the Infection Control group approve
+  // its nursing policies, and one approval from anybody to approve removing
+  // that demand, has a gate with a door beside it.
+  const owner = buildCredentials();
+  const ownerCookie = await signUp(owner);
+  const org = await createOrganization(ownerCookie, `Binder ${randomUUID()}`);
+  expect(
+    (await createWorkspace(ownerCookie, org.name, "Clinical")).status,
+  ).toBe(201);
+
+  const ownerToken = await createUserToken(owner.username, owner.password);
+  const signer = await addApprover(ownerToken, org.name, "clinical");
+  const bystander = await addApprover(ownerToken, org.name, "clinical");
+
+  const group = await createGroup(
+    ownerCookie,
+    org.name,
+    "Governance",
+    "reviewer",
+  );
+  expect(group.status, group.body).toBe(201);
+  expect(
+    (
+      await addToGroup(
+        ownerCookie,
+        org.name,
+        "governance",
+        signer.credentials.username,
+      )
+    ).status,
+  ).toBe(200);
+
+  // Put a rule over the rules in force, alongside an ordinary folder rule for
+  // it to be protecting.
+  const proposed = await proposeSignOff(ownerCookie, org.name, "clinical", [
+    { scope: "rules", target: "", teams: ["governance"] },
+    { scope: "folder", target: "nursing", teams: ["governance"] },
+  ]);
+  expect(proposed.status, proposed.body).toBe(201);
+  const first = (JSON.parse(proposed.body) as { changeNumber: number })
+    .changeNumber;
+
+  await approveChange(bystander.token, org.name, "clinical", first);
+  expect(
+    (await publishChange(ownerCookie, org.name, "clinical", first)).status,
+    "the first rules change could not be published — nothing was protecting it yet",
+  ).toBe(200);
+
+  const inForce = await readSettings(ownerCookie, org.name, "clinical");
+  expect(inForce.signOff.rules).toContainEqual({
+    scope: "rules",
+    target: "",
+    teams: ["governance"],
+    users: [],
+  });
+  expect(inForce.signOff.unreadable).toEqual([]);
+
+  // Now somebody proposes taking the rules away. This is the change the scope
+  // exists to hold.
+  const second = await proposeSignOff(ownerCookie, org.name, "clinical", [
+    { scope: "folder", target: "nursing", teams: ["governance"] },
+  ]);
+  expect(second.status, second.body).toBe(201);
+  const removal = (JSON.parse(second.body) as { changeNumber: number })
+    .changeNumber;
+
+  // The bystander's approval meets the count and satisfies no rule.
+  await approveChange(bystander.token, org.name, "clinical", removal);
+  const blocked = await publishChange(
+    ownerCookie,
+    org.name,
+    "clinical",
+    removal,
+  );
+  expect(
+    blocked.status,
+    `the rules were changed without the group that governs them: ${blocked.body}`,
+  ).not.toBe(200);
+
+  // A member of the named group approves, and it goes through — because this
+  // is a gate, not a lock.
+  await approveChange(signer.token, org.name, "clinical", removal);
+  const released = await publishChange(
+    ownerCookie,
+    org.name,
+    "clinical",
+    removal,
+  );
+  expect(released.status, released.body).toBe(200);
+
+  const after = await readSettings(ownerCookie, org.name, "clinical");
+  expect(
+    after.signOff.rules.some(
+      (rule: { scope: string }) => rule.scope === "rules",
+    ),
+  ).toBe(false);
+});
+
 test("a sign-off rule over one document gates that document and no other", async () => {
   // The scope the folder test above cannot reach. A rule over one policy is
   // written against its identity rather than its path (ADR 0005), so it keeps

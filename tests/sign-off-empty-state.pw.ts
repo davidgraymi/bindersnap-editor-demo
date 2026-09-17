@@ -38,9 +38,11 @@ test("with no rules, the page says what a rule is", async ({ page }) => {
     "adds a second requirement to one part of it",
   );
   await expect(empty).toContainText("signs off on anything filed in nursing");
-  // And what a rule may cover, which is no longer only a folder.
+  // And what a rule may cover, which is no longer only a folder — and now
+  // includes the rules themselves, which is the one scope somebody would never
+  // guess was available.
   await expect(empty).toContainText(
-    "this whole binder, one folder, or a single document",
+    "this whole binder, one folder, a single document, or these rules themselves",
   );
 });
 

@@ -1,10 +1,9 @@
 # Handoff — editing a binder
 
-**Status:** §4.1 and §4.2 are built and in review — drafts, the tree, edit
-mode, drag-to-move, archiving and restore. So is most of §4.3: form controls
-(#468), the page shell (#469) and renaming a binder (#470). What is left there
-is the sign-off rule that covers the sign-off rules, the empty-state copy, and
-two wording calls that are the customer's.
+**Status:** §4.1, §4.2 and all of §4.3 bar the writing are **merged** into
+`feat/adr4-documents-as-files` — everything up to and including #470. #472 is
+the one still open. What is left is the empty-state copy, the "two sign-off
+changes at once" judgement, and two wording calls that are the customer's.
 
 This document exists so somebody else can pick the work up without re-deriving
 the decisions. It is not a spec: it says what is built, what was decided and
@@ -65,11 +64,27 @@ request exist and reviewers hear about it.
 | #458 | A change request is the unit of work and can hold more than one act                                          |
 | #459 | Folders can be made and renamed. **Folders are real, empty or not** — an empty one is a committed `.gitkeep` |
 | #460 | A policy can be renamed and filed somewhere else, keeping its identity                                       |
+| #461 | A draft is a branch with commits and no change request; the author writes the title                          |
+| #462 | A binder reads like a file explorer, not a list of headings                                                  |
+| #464 | An Edit button puts the binder on a branch; rename in place, propose when ready                              |
+| #465 | Drag to move, with a keyboard route beside it                                                                |
+| #466 | Archive — a set difference over tags, no archive branch                                                      |
+| #467 | Restore, as an ordinary change, at v(N+1)                                                                    |
+| #468 | One control system, with a test that measures the running product                                            |
+| #469 | One page shape, one title size, nothing louder than the page                                                 |
+| #470 | A binder can be renamed; Gitea redirects, checked not assumed                                                |
 
 These sit on the integration branch `feat/adr4-documents-as-files`, not on
 `main`.
 
 ### In review
+
+Only #472 — see below. Everything else on this page has landed.
+
+### What each of them did
+
+Kept because the reasoning is the point, not the status. #461 and #462 are the
+two the rest were built on.
 
 **[#461 — drafts](https://github.com/davidgraymi/bindersnap-editor-demo/pull/461)**
 (`feat/drafts-before-change-requests` → `feat/adr4-documents-as-files`)
@@ -292,7 +307,36 @@ on it.
   reuses it.
 - `tests/binder-rename.pw.ts` — 8 tests.
 
-**Build on `feat/rename-a-binder`.** It is the tip.
+**[#472 — a rule over the rules](https://github.com/davidgraymi/bindersnap-editor-demo/pull/472)**
+(`feat/sign-off-on-the-rules` → `feat/rename-a-binder`)
+
+§4.3's fourth item: `SignOffScope` gains `rules`, matching `.gitea/CODEOWNERS`.
+
+- Without it, every rule on the sign-off page was only as strong as the
+  binder's ordinary approval count — anybody who could open a change request
+  could propose deleting the lot. A gate with a door beside it.
+- The pattern is `\.gitea/CODEOWNERS`, escaped by `escapeRegex` and anchored by
+  Gitea at both ends, so it names one file and nothing that looks like it.
+- **Proved against real Gitea**, not just rendered: a change that removes the
+  rules is approved by somebody outside the group (meeting the count), the
+  publish is refused, the group approves, and it goes through.
+- The picker option is last in the list — rarest to choose, worst to land on by
+  accident.
+- 8 more unit tests, 1 integration test.
+
+Also fixed on the way: the sign-off rule row was two 49px selects beside a 32px
+button. `tests/design-consistency.pw.ts` had not caught it because the row is
+only drawn once somebody presses "Add a rule" — **a guard only sees what the
+page renders**, which is worth remembering when adding screens to it. The test
+presses the button now.
+
+**Build on `feat/sign-off-on-the-rules`** while it is open; on
+`feat/adr4-documents-as-files` once it lands.
+
+**When it lands, your local commits are the pre-squash originals.** The whole
+stack above was squash-merged while the branch after it was being written, and
+`git rebase --onto origin/feat/adr4-documents-as-files <old-base>` is the fix —
+the note in §5 is there because it happened.
 
 ---
 
@@ -485,9 +529,8 @@ Still outstanding, in no fixed order:
    payments surface. It is the one page the shell tests skip, and somebody
    should decide whether it is meant to be that way.
 
-4. **A sign-off rule that covers the sign-off rules themselves.** A fourth
-   scope matching `.gitea/CODEOWNERS`. See `packages/utils/codeowners.ts`,
-   which already has `SignOffScope = "binder" | "folder" | "document"`.
+4. ~~**A sign-off rule that covers the sign-off rules themselves.**~~ Done in
+   #472.
 5. **`formatDocumentName` title-cases the joining words.** "Hand Hygiene and
    PPE" comes back as "Hand Hygiene **And** PPE", in the tree, in the change
    request, and in the version tag. `packages/utils/documentTitle.ts` is the

@@ -227,6 +227,20 @@ test("every row of controls in the product is one size", async ({ page }) => {
     await page.waitForLoadState("networkidle");
     await expectOneSizePerRow(page, where);
   }
+
+  // **A row that only exists once somebody presses something.** The sign-off
+  // editor draws no rule row until a rule is added, so walking the page alone
+  // measured nothing — and a 49px select beside a 32px button sat there
+  // unnoticed until somebody opened it by hand. A guard only sees what the
+  // page renders, which is worth remembering when adding screens to the list
+  // above.
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}?tab=sign-off`);
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("button", { name: "Add a rule" }).click();
+  await expect(
+    page.getByRole("combobox", { name: "What has to be signed off" }),
+  ).toBeVisible({ timeout: 30_000 });
+  await expectOneSizePerRow(page, "a sign-off rule being written");
 });
 
 test("the fields in a form are one size, picker included", async ({ page }) => {

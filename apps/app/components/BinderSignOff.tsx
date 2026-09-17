@@ -14,11 +14,16 @@ import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 /**
  * Who has to sign off on what.
  *
- * **Three scopes, one control.** A rule covers the whole binder, one folder, or
- * one document, and those are the three answers a customer actually gives to
- * "what has to be signed off?" — so the picker asks it once, with the folders
- * and the documents grouped under headings, rather than making somebody choose
- * a mode before they can choose a thing.
+ * **Four scopes, one control.** A rule covers the whole binder, one folder or
+ * one document — the three answers a customer actually gives to "what has to
+ * be signed off?" — so the picker asks it once, with the folders and the
+ * documents grouped under headings, rather than making somebody choose a mode
+ * before they can choose a thing.
+ *
+ * The fourth is this page itself. Without it, every rule here is only as strong
+ * as the binder's ordinary approval count: anybody who can open a change
+ * request can propose deleting the lot. It sits last in the list because it is
+ * the rarest thing to choose and the worst thing to land on by accident.
  *
  * **The customer never sees `.gitea/CODEOWNERS` and never hears "code owner".**
  * They see a sentence: "Nursing must be signed off by Infection Control." There
@@ -63,7 +68,11 @@ function targetValue(rule: {
   scope: SignOffRuleView["scope"];
   target: string;
 }) {
-  return rule.scope === "binder" ? "binder" : `${rule.scope}:${rule.target}`;
+  // The two scopes that name one thing carry no target, so their value is the
+  // scope alone.
+  return rule.scope === "binder" || rule.scope === "rules"
+    ? rule.scope
+    : `${rule.scope}:${rule.target}`;
 }
 
 function parseTargetValue(value: string): {
@@ -71,6 +80,7 @@ function parseTargetValue(value: string): {
   target: string;
 } {
   if (value === "binder") return { scope: "binder", target: "" };
+  if (value === "rules") return { scope: "rules", target: "" };
   const at = value.indexOf(":");
   const scope = value.slice(0, at);
   return {
@@ -254,8 +264,9 @@ export function BinderSignOff({
               subject.
             </p>
             <p className="doc-rail-note">
-              A rule can cover this whole binder, one folder, or a single
-              document, and a change that lands under two rules needs both.
+              A rule can cover this whole binder, one folder, a single document,
+              or these rules themselves — and a change that lands under two
+              rules needs both.
             </p>
           </div>
         ) : (
@@ -315,8 +326,9 @@ export function BinderSignOff({
                   and the feature was invisible to somebody looking straight at
                   it. A control's vocabulary belongs beside the control. */}
               <p className="doc-rail-note">
-                A rule can cover this whole binder, one folder, or a single
-                document.
+                A rule can cover this whole binder, one folder, a single
+                document, or these rules themselves — so that changing who signs
+                things off needs a sign-off too.
               </p>
 
               {/* **Why the picker is short, when it is.** A document rule is
@@ -481,6 +493,11 @@ export function describeTarget(
         ? formatDocumentName(match.name)
         : "A document that is no longer in this binder";
     }
+    case "rules":
+      // Said as what it governs rather than as the file it is. Nobody picking
+      // from this list is thinking about `.gitea/CODEOWNERS`; they are
+      // thinking about who is allowed to change the rules.
+      return "Who signs things off in this binder";
   }
 }
 
@@ -519,13 +536,14 @@ function RuleEditor({
   // retarget it at whichever folder happens to sort first.
   const missing =
     rule.scope !== "binder" &&
+    rule.scope !== "rules" &&
     !folders.includes(rule.target) &&
     !documents.some((entry) => entry.uid === rule.target);
 
   return (
     <div className="org-group-add">
       <select
-        className="bs-input org-group-select"
+        className="bs-input bs-input--sm org-group-select"
         value={current}
         disabled={busy}
         aria-label="What has to be signed off"
@@ -534,6 +552,12 @@ function RuleEditor({
         }
       >
         <option value="binder">Everything in this binder</option>
+        {/* **The rules about the rules.** Last in the list rather than first,
+            because it is the rarest thing to choose and the most confusing
+            thing to land on by accident — but present, because without it
+            anybody who can open a change request can propose removing every
+            other rule on this page. */}
+        <option value="rules">Who signs things off in this binder</option>
 
         {missing ? (
           <option value={current}>{describeTarget(rule, documents)}</option>
@@ -566,7 +590,7 @@ function RuleEditor({
       <span className="docs-list-item-meta">must be signed off by</span>
 
       <select
-        className="bs-input org-group-select"
+        className="bs-input bs-input--sm org-group-select"
         value={rule.teams[0] ?? ""}
         disabled={busy}
         aria-label="Which group"

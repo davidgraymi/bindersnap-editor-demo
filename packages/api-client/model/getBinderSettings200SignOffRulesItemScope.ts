@@ -12,4 +12,5 @@ export const GetBinderSettings200SignOffRulesItemScope = {
   binder: 'binder',
   folder: 'folder',
   document: 'document',
+  rules: 'rules',
 } as const;

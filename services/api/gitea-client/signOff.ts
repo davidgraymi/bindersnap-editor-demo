@@ -253,5 +253,10 @@ function describeTarget(
         documentNames.get(rule.target) ??
         "A document that is not in this binder"
       );
+    case "rules":
+      // Said as what it does rather than as the file it is. A reviewer reading
+      // a change that proposes this is being asked to approve who may change
+      // who signs things off, and `.gitea/CODEOWNERS` does not say that.
+      return "Who signs things off in this binder";
   }
 }
