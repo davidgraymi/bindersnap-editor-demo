@@ -38,6 +38,14 @@ interface ChangeReviewersProps {
    * change in the list, so the page that already loaded it says so.
    */
   openThreadAuthors: ReadonlySet<string>;
+  /**
+   * The reviewers this change is actually held for.
+   *
+   * **Only "Required" is marked.** A reviewer with no marker is one nothing is
+   * waiting on, which is what optional means; printing the word on every other
+   * row is labelling the absence of a constraint.
+   */
+  requiredReviewers?: readonly string[];
   /** Whether this reader may change who has to sign the change off. */
   canManage: boolean;
   /** Refetch the change: reviewers are server state, not local state. */
@@ -85,6 +93,7 @@ export function ChangeReviewers({
   reviewers,
   currentUser,
   openThreadAuthors,
+  requiredReviewers = [],
   canManage: canManageProp,
   onChanged,
 }: ChangeReviewersProps) {
@@ -107,6 +116,11 @@ export function ChangeReviewers({
   const reviewerLogins = useMemo(
     () => new Set(reviewers.map((reviewer) => reviewer.login)),
     [reviewers],
+  );
+
+  const required = useMemo(
+    () => new Set(requiredReviewers.map((login) => login.toLowerCase())),
+    [requiredReviewers],
   );
 
   // The people who can review this are overwhelmingly the people already on
@@ -253,14 +267,10 @@ export function ChangeReviewers({
 
   return (
     <div className="rev-reviewers" ref={sectionRef}>
-      <h3 className="rev-reviewers-label">Reviewers</h3>
-
       {reviewers.length === 0 ? (
-        <p className="rev-reviewers-empty">
-          Nobody has been asked to review this yet.
-        </p>
+        <p className="bs-empty">Nobody has been asked to review this yet.</p>
       ) : (
-        <ul className="rev-reviewer-list">
+        <ul className="bs-row-list rev-reviewer-list">
           {reviewers.map((reviewer) => {
             const status = resolveReviewerDisplayStatus(
               reviewer,
@@ -273,9 +283,14 @@ export function ChangeReviewers({
                 : getReviewerDisplayName(reviewer);
 
             return (
-              <li className="rev-reviewer" key={reviewer.login}>
-                <PersonAvatar person={reviewer} size="md" />
-                <span className="rev-reviewer-name">{name}</span>
+              <li className="bs-row rev-reviewer" key={reviewer.login}>
+                <PersonAvatar person={reviewer} size="sm" />
+                <span className="bs-row-body">
+                  <span className="bs-row-name">{name}</span>
+                  {required.has(reviewer.login.toLowerCase()) ? (
+                    <span className="bs-required">Required</span>
+                  ) : null}
+                </span>
                 <span
                   className={`rev-reviewer-mark rev-reviewer-mark--${status}`}
                   title={getReviewerStatusLabel(status)}
@@ -324,7 +339,7 @@ export function ChangeReviewers({
             onClick={() => (picking ? closePicker() : setPicking(true))}
           >
             <Plus size={11} strokeWidth={2} aria-hidden="true" />
-            Add reviewer
+            Reviewer
           </button>
 
           {picking ? (

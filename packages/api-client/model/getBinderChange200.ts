@@ -6,6 +6,7 @@
  */
 import type { GetBinderChange200Change } from './getBinderChange200Change.ts';
 import type { GetBinderChange200DocumentsItem } from './getBinderChange200DocumentsItem.ts';
+import type { GetBinderChange200RequiredReviewers } from './getBinderChange200RequiredReviewers.ts';
 
 export type GetBinderChange200 = {
   organization: string;
@@ -16,4 +17,5 @@ export type GetBinderChange200 = {
   blockOnUnresolvedThreads: boolean;
   unresolvedThreadCount: number;
   canManage: boolean;
+  requiredReviewers: GetBinderChange200RequiredReviewers;
 };

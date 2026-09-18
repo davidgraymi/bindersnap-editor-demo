@@ -408,6 +408,95 @@ test("every page begins in the same place, at the same size", async ({
 });
 
 /**
+ * Nothing holds content on a binder screen except the three containers.
+ *
+ * **This is the rule that makes the grammar still true a year from now**, and
+ * it is the one the redesign exists for: six tabs were built one at a time and
+ * each invented its own container, so walking Documents → People → Sign-off
+ * rules → Settings crossed four container idioms in four clicks. The
+ * customer's words: *"the content it renders … looks like a different web
+ * page."*
+ *
+ * So a binder screen's content root may hold only three things —
+ * `.bs-panel` (a list), `.bs-fields` (a form), `.bs-note` (a consequence) —
+ * plus the chrome that is not content: the page's own head, a section that
+ * groups them, the spine, the draft bar, the rail layout.
+ *
+ * Checked at the content root rather than at every depth, which is where the
+ * idioms actually diverged: a panel containing a bespoke row is a detail, and
+ * a bespoke box sitting beside a panel is the defect.
+ */
+test("nothing but the three containers holds content in a binder", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await page
+    .context()
+    .addCookies([
+      { name: "bindersnap_session", value: session, url: APP_BASE_URL },
+    ]);
+  await page.setViewportSize({ width: 1280, height: 900 });
+
+  /** Chrome, not content: these group the containers or title the page. */
+  const ALLOWED = [
+    "bs-panel",
+    "bs-fields",
+    "bs-note",
+    "bs-section",
+    "bs-pagehead",
+    "bs-crumbs",
+    "bs-spine",
+    "bs-with-rail",
+    "bs-rail",
+    "bs-draftbar",
+    "bs-empty",
+    "bs-section-note",
+    "binder-strip",
+    "change-main",
+  ];
+
+  const screens: Array<[string, string]> = [
+    ["the binder", `${APP_BASE_URL}/${org}/${binder}`],
+    ["its change requests", `${APP_BASE_URL}/${org}/${binder}?tab=changes`],
+    ["its history", `${APP_BASE_URL}/${org}/${binder}?tab=history`],
+    ["its settings", `${APP_BASE_URL}/${org}/${binder}?tab=settings`],
+  ];
+
+  for (const [where, url] of screens) {
+    await page.goto(url);
+    await settleOnRealShell(page);
+    await page.locator(".app-main h1").first().waitFor();
+
+    const strays = await page.evaluate((allowed) => {
+      const root = document.querySelector(".binder-pane");
+      if (!root) return null;
+
+      return (Array.from(root.children) as HTMLElement[])
+        .filter((child) => {
+          // An element with nothing in it holds no content by definition.
+          if ((child.textContent ?? "").trim() === "") return false;
+          return !allowed.some((name) => child.classList.contains(name));
+        })
+        .map((child) => ({
+          tag: child.tagName.toLowerCase(),
+          cls: child.className,
+          text: (child.textContent ?? "").trim().slice(0, 40),
+        }));
+    }, ALLOWED);
+
+    expect(strays, `${where} rendered no binder page`).not.toBeNull();
+    expect(
+      strays,
+      `On ${where}, something outside the three containers holds content:\n` +
+        (strays ?? [])
+          .map((s) => `      ${s.tag}.${s.cls} — “${s.text}”`)
+          .join("\n") +
+        "\n",
+    ).toEqual([]);
+  }
+});
+
+/**
  * The marketing eyebrow never appears inside the app.
  *
  * `.bs-label` is coral, uppercase, monospace, wide-tracked — the landing
