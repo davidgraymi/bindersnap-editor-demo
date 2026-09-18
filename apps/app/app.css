@@ -7376,11 +7376,8 @@ button.bs-knot {
 }
 
 .binder-tree-actions {
-  display: flex;
   align-items: center;
-  gap: var(--brand-space-1);
   padding-right: var(--brand-space-1-5);
-  flex-shrink: 0;
 }
 
 .bs-input.binder-filter {
@@ -7525,39 +7522,19 @@ button.bs-knot {
   outline: none;
 }
 
-/* The pencil. Faint until the row is under the pointer — a tree of forty rows
-   each carrying a lit button is a tree nobody can read. */
-.binder-tree-action {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--brand-space-1-5);
-  border: none;
-  border-radius: var(--brand-radius-sm);
-  background: transparent;
-  color: var(--bs-text-muted);
-  cursor: pointer;
-  opacity: 0.45;
-  transition: opacity var(--brand-transition-fast);
-}
-
-.binder-tree-row:hover .binder-tree-action,
-.binder-tree-action:focus-visible {
-  opacity: 1;
-}
-
-.binder-tree-action:hover:not(:disabled) {
-  background: var(--bs-surface-2);
-  color: var(--bs-text-primary);
-}
-
-.binder-tree-action:disabled {
-  cursor: not-allowed;
-}
-
-.binder-tree-action:focus-visible {
-  outline: 2px solid var(--brand-coral);
-  outline-offset: -2px;
+/* A row you have touched in this draft. Quiet — it marks the work, it does
+   not celebrate it — and it is the only state edit mode draws, because while
+   you are rearranging a binder the only thing that matters is what you have
+   changed. */
+.binder-tree-row--dirty .binder-tree-label::after {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-left: 7px;
+  border-radius: var(--brand-radius-full);
+  background: var(--brand-coral);
+  vertical-align: middle;
 }
 
 /* ── Proposing a draft ──────────────────────────────────────────────────── */
@@ -8283,6 +8260,10 @@ a.bs-row:focus-visible {
 
 .bs-row:hover .bs-rowacts,
 .bs-row:focus-within .bs-rowacts,
+/* The tree draws its own row rather than using `.bs-row` directly, and its
+   rows carry these too. */
+.binder-tree-row:hover .bs-rowacts,
+.binder-tree-row:focus-within .bs-rowacts,
 .bs-rowacts--always {
   opacity: 1;
 }
@@ -8506,5 +8487,272 @@ a.bs-row:focus-visible {
     color: var(--bs-text-muted);
     font-size: var(--brand-text-ui-xs);
     font-weight: var(--brand-weight-semibold);
+  }
+}
+
+/* ── Editing: the draft bar, and the archive in the tree ───────────────────
+   The bar shipped as a tall coral box between the tabs and the tree, which
+   pushed the work down the page and spent the screen's one coral element on a
+   status message. It is a sticky footer now: always reachable, never in the
+   way, and the page above it is the binder you came to edit. */
+
+.bs-draftbar {
+  position: sticky;
+  bottom: var(--brand-space-3);
+  z-index: var(--brand-z-raised);
+  margin-top: var(--brand-space-3);
+  border: 1px solid var(--bs-coral-border-soft);
+  border-radius: var(--brand-radius-lg);
+  background: var(--bs-surface-1);
+  box-shadow: var(--bs-shadow-lg);
+  overflow: hidden;
+}
+
+.bs-draftbar-row {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  padding: var(--brand-space-1-5) var(--brand-space-2);
+}
+
+.bs-draftbar-mark {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-coral-dim);
+  color: var(--bs-coral-text);
+}
+
+.bs-draftbar-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.bs-draftbar-title {
+  margin: 0;
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.bs-draftbar-note {
+  margin: 0;
+  overflow: hidden;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The acts are the change request's description, so they have to be
+   reviewable before it is sent — as a disclosure, not as a wall. */
+.bs-draftbar-toggle {
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--bs-coral-text);
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-medium);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.bs-draftacts {
+  max-height: 40vh;
+  padding: var(--brand-space-1-5) var(--brand-space-2);
+  border-top: 1px solid var(--bs-rule-warm);
+  background: var(--bs-surface-2);
+  overflow-y: auto;
+}
+
+.bs-draftacts ol {
+  margin: 0;
+  padding-left: var(--brand-space-3);
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-ui-md);
+}
+
+.bs-draftacts li {
+  padding: 2px 0;
+}
+
+/* Continuous save, said where the eye already is. */
+.bs-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--bs-status-ok-fg);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-medium);
+}
+
+/* The archive, opened in the tree rather than on a page of its own — edit
+   mode is the one place somebody can act on what they find there, and it had
+   no way in and no way back. */
+.bs-archived {
+  border-top: 1px solid var(--bs-rule);
+  background: var(--bs-surface-2);
+}
+
+.bs-archived .binder-tree-label {
+  color: var(--bs-text-muted);
+  font-weight: var(--brand-weight-regular);
+}
+
+.bs-disclose {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+  width: 100%;
+  padding: var(--brand-space-1-5) var(--brand-space-2);
+  border: none;
+  background: none;
+  color: var(--bs-text-muted);
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-medium);
+  text-align: left;
+  cursor: pointer;
+}
+
+.bs-disclose:hover {
+  color: var(--bs-text-primary);
+}
+
+@media (max-width: 768px) {
+  /* The acts run off the row on a phone; the count and the two buttons are
+     what has to survive. */
+  .bs-draftbar-note {
+    display: none;
+  }
+}
+
+/* ── Adding a policy ───────────────────────────────────────────────────────
+   A real drop target, and the file input behind it. What shipped was the
+   browser's own `Choose File / No file chosen` on the product's primary act —
+   and a policy manager drags the .docx in from the window behind, which that
+   control gives them nothing to aim at. */
+
+.bs-hidden-file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.bs-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--brand-space-0-5);
+  width: 100%;
+  padding: var(--brand-space-5) var(--brand-space-3);
+  border: 1.5px dashed var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-2);
+  color: var(--bs-text-muted);
+  font: inherit;
+  font-size: var(--brand-text-ui-md);
+  text-align: center;
+  cursor: pointer;
+}
+
+.bs-dropzone:hover:not(:disabled),
+.bs-dropzone--over {
+  border-color: var(--bs-coral-border);
+  background: var(--bs-coral-glow);
+}
+
+.bs-dropzone:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 2px;
+}
+
+.bs-dropzone svg {
+  color: var(--bs-text-faint);
+}
+
+.bs-dropzone-lead {
+  display: block;
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-sm);
+  font-weight: var(--brand-weight-medium);
+}
+
+/* The file is chosen, so the zone becomes the receipt for it rather than
+   disappearing — there is no other place the answer to "which file?" lives. */
+.bs-dropzone--filled {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  padding: var(--brand-space-1-5);
+  border-style: solid;
+  border-color: var(--bs-green-border);
+  background: var(--bs-status-ok-bg);
+  text-align: left;
+  cursor: default;
+}
+
+.bs-dropzone-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  color: var(--bs-status-ok-fg);
+}
+
+.bs-dropzone--filled .bs-dropzone-icon svg {
+  color: var(--bs-status-ok-fg);
+}
+
+.bs-dropzone-file {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── A page with a rail ────────────────────────────────────────────────────
+   Used only where there is live context to put in it — what a propose step is
+   sending, what a change request needs to be decided. A rail on a settings
+   page would be furniture. */
+
+.bs-with-rail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 296px;
+  gap: var(--brand-space-4);
+  align-items: start;
+}
+
+.bs-with-rail > .bs-fields {
+  max-width: none;
+}
+
+.bs-rail {
+  position: sticky;
+  top: var(--brand-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-3);
+}
+
+/* A sentence in a row wraps rather than being cut. */
+.bs-row-name--wrap {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .bs-with-rail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .bs-rail {
+    position: static;
   }
 }

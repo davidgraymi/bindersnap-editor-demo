@@ -121,7 +121,15 @@ async function fileAPolicy(page: Page, name: string, folder: string) {
   // The modal suggests a name from the file. Typing over it is what a person
   // does, and it is the field the document's identity comes from.
   await page.locator("#add-policy-name").fill(name);
-  await page.locator("#add-policy-folder").fill(folder);
+  // The folder is a picker of the folders that exist, plus the way to make
+  // one — which is what a binder's first policy needs. Empty means the
+  // binder's top level, which is what the picker already says.
+  if (folder !== "") {
+    await page
+      .locator("#add-policy-folder")
+      .selectOption({ label: "A new folder…" });
+    await page.locator("#add-policy-new-folder").fill(folder);
+  }
 
   await page.getByRole("button", { name: "Add policy", exact: true }).click();
 }

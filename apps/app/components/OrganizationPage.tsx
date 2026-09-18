@@ -196,7 +196,7 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
           }}
         >
           <label className="app-field">
-            <span className="bs-label">New binder</span>
+            <span className="bs-field-label">New binder</span>
             <input
               className="bs-input"
               name="binder-name"
@@ -214,7 +214,7 @@ export function OrganizationPage({ org, onOpenBinder }: OrganizationPageProps) {
             discover the wrong answer a week later. One radio pair, and it
             never needs to be touched again. */}
           <fieldset className="org-visibility-choice">
-            <legend className="bs-label">Who can see it?</legend>
+            <legend className="bs-field-label">Who can see it?</legend>
             <label className="org-choice">
               <input
                 type="radio"

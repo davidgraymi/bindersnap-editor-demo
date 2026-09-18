@@ -207,7 +207,7 @@ function FolderRow({
         )}
 
         {renderRowActions ? (
-          <span className="binder-tree-actions">
+          <span className="bs-rowacts binder-tree-actions">
             {renderRowActions(folder)}
           </span>
         ) : null}
@@ -294,7 +294,9 @@ function DocumentRow({
       {instead || !renderDocumentAside ? null : renderDocumentAside(node)}
 
       {renderRowActions ? (
-        <span className="binder-tree-actions">{renderRowActions(node)}</span>
+        <span className="bs-rowacts binder-tree-actions">
+          {renderRowActions(node)}
+        </span>
       ) : null}
     </div>
   );

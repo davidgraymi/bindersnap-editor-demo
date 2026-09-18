@@ -340,11 +340,11 @@ test("Edit opens a draft, and the address says so", async ({ page }) => {
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
   // Nothing about drafts until somebody asks for one.
-  await expect(page.locator(".draft-bar")).toBeHidden();
+  await expect(page.locator(".bs-draftbar")).toBeHidden();
 
   await page.getByRole("button", { name: "Edit", exact: true }).click();
 
-  const bar = page.locator(".draft-bar");
+  const bar = page.locator(".bs-draftbar");
   await expect(bar).toBeVisible({ timeout: 30_000 });
   await expect(bar).toContainText("Nothing in your draft yet");
   // In the address, so a reload lands back in the same work.
@@ -368,7 +368,7 @@ test("a rename in the tree lands in the draft, and the row keeps it", async ({
   // draft is opened through the button, the way a person would.
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Edit", exact: true }).click();
-  await expect(page.locator(".draft-bar")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   await page.getByRole("button", { name: "Rename Hand Hygiene" }).click();
   const box = page.getByRole("textbox", { name: "New name" });
@@ -381,7 +381,7 @@ test("a rename in the tree lands in the draft, and the row keeps it", async ({
   await expect(
     page.locator(".binder-tree-label", { hasText: "Hand Hygiene And PPE" }),
   ).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator(".draft-bar")).toContainText("1 change");
+  await expect(page.locator(".bs-draftbar")).toContainText("1 change");
 
   // And the record is untouched, which is the half a screenshot cannot show.
   const onRecord = await listDocuments(session, org, binder);
@@ -399,7 +399,7 @@ test("Escape leaves the name alone", async ({ page }) => {
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Edit", exact: true }).click();
-  await expect(page.locator(".draft-bar")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   await page.getByRole("button", { name: "Rename Staff Handbook" }).click();
   const box = page.getByRole("textbox", { name: "New name" });
@@ -409,7 +409,7 @@ test("Escape leaves the name alone", async ({ page }) => {
   await expect(
     page.locator(".binder-tree-label", { hasText: "Staff Handbook" }),
   ).toBeVisible();
-  await expect(page.locator(".draft-bar")).toContainText(
+  await expect(page.locator(".bs-draftbar")).toContainText(
     "Nothing in your draft yet",
   );
 });
@@ -423,13 +423,13 @@ test("Propose opens the change request, with the words the author wrote", async 
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Edit", exact: true }).click();
-  await expect(page.locator(".draft-bar")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   await page.getByRole("button", { name: "Rename Hand Hygiene" }).click();
   const box = page.getByRole("textbox", { name: "New name" });
   await box.fill("Hand Hygiene and PPE");
   await box.press("Enter");
-  await expect(page.locator(".draft-bar")).toContainText("1 change", {
+  await expect(page.locator(".bs-draftbar")).toContainText("1 change", {
     timeout: 30_000,
   });
 
@@ -470,19 +470,19 @@ test("Discard throws the draft away and leaves the binder as it was", async ({
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Edit", exact: true }).click();
-  await expect(page.locator(".draft-bar")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   await page.getByRole("button", { name: "Rename Hand Hygiene" }).click();
   const box = page.getByRole("textbox", { name: "New name" });
   await box.fill("Hand Hygiene and PPE");
   await box.press("Enter");
-  await expect(page.locator(".draft-bar")).toContainText("1 change", {
+  await expect(page.locator(".bs-draftbar")).toContainText("1 change", {
     timeout: 30_000,
   });
 
   await page.getByRole("button", { name: "Discard" }).click();
 
-  await expect(page.locator(".draft-bar")).toBeHidden({ timeout: 30_000 });
+  await expect(page.locator(".bs-draftbar")).toBeHidden({ timeout: 30_000 });
   await expect(page).toHaveURL(new RegExp(`/${org}/${binder}$`));
   await expect(
     page.locator(".binder-tree-label", { hasText: "Hand Hygiene" }),
@@ -547,7 +547,7 @@ test("a policy dragged onto a folder is filed there", async ({ page }) => {
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Edit", exact: true }).click();
-  await expect(page.locator(".draft-bar")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   const handbook = page
     .locator(".binder-tree-row")
@@ -558,7 +558,7 @@ test("a policy dragged onto a folder is filed there", async ({ page }) => {
 
   await handbook.dragTo(nursing);
 
-  await expect(page.locator(".draft-bar")).toContainText("1 change", {
+  await expect(page.locator(".bs-draftbar")).toContainText("1 change", {
     timeout: 30_000,
   });
   expect(await draftActs(session, org, binder)).toEqual([
@@ -586,7 +586,7 @@ test("a folder dragged onto another takes everything in it", async ({
 
   await signInBrowser(page, session);
   await page.goto(`${APP_BASE_URL}/${org}/${binder}?edit=1`);
-  await expect(page.locator(".draft-bar")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   await page
     .locator(".binder-tree-row--folder")
@@ -595,7 +595,7 @@ test("a folder dragged onto another takes everything in it", async ({
       page.locator(".binder-tree-row--folder").filter({ hasText: "Clinical" }),
     );
 
-  await expect(page.locator(".draft-bar")).toContainText("2 changes", {
+  await expect(page.locator(".bs-draftbar")).toContainText("2 changes", {
     timeout: 30_000,
   });
   expect(await draftActs(session, org, binder)).toEqual([
@@ -621,7 +621,7 @@ test("a folder cannot be dropped inside itself", async ({ page }) => {
 
   await signInBrowser(page, session);
   await page.goto(`${APP_BASE_URL}/${org}/${binder}?edit=1`);
-  await expect(page.locator(".draft-bar")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   await page
     .locator(".binder-tree-row--folder")
@@ -649,7 +649,7 @@ test("the Move button files something without a pointer", async ({ page }) => {
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Edit", exact: true }).click();
-  await expect(page.locator(".draft-bar")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   await page.getByRole("button", { name: "Move Staff Handbook" }).click();
   await page
@@ -657,7 +657,7 @@ test("the Move button files something without a pointer", async ({ page }) => {
     .selectOption("nursing");
   await page.getByRole("button", { name: "Move", exact: true }).click();
 
-  await expect(page.locator(".draft-bar")).toContainText("1 change", {
+  await expect(page.locator(".bs-draftbar")).toContainText("1 change", {
     timeout: 30_000,
   });
   expect(await draftActs(session, org, binder)).toEqual([
@@ -674,7 +674,7 @@ test("a policy dragged out of its folder lands at the top level", async ({
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Edit", exact: true }).click();
-  await expect(page.locator(".draft-bar")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   // The root zone only exists while something is in the air, so the drag has
   // to be driven by hand rather than by `dragTo`.
@@ -690,7 +690,7 @@ test("a policy dragged out of its folder lands at the top level", async ({
   await zone.hover();
   await page.mouse.up();
 
-  await expect(page.locator(".draft-bar")).toContainText("1 change", {
+  await expect(page.locator(".bs-draftbar")).toContainText("1 change", {
     timeout: 30_000,
   });
   expect(await draftActs(session, org, binder)).toEqual([

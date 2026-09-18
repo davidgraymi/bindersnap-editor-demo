@@ -86,7 +86,7 @@ export function NewFolderModal({
 
         <div className="create-document-form">
           <label htmlFor="new-folder-name" className="create-document-field">
-            <span className="bs-label">What to call it</span>
+            <span className="bs-field-label">What to call it</span>
             <input
               id="new-folder-name"
               className="bs-input"

@@ -76,79 +76,109 @@ export function ProposeChangePage({
   };
 
   return (
-    <section className="binder-pane propose-page">
-      <h1 className="bs-title">Propose your changes</h1>
-      <p className="propose-lede">
-        {acts.length === 1
-          ? "One change, going to the people who sign this binder off."
-          : `${acts.length} changes, going to the people who sign this binder off.`}
-      </p>
-
-      <div className="create-document-form">
-        <label htmlFor="propose-title" className="create-document-field">
-          <span className="bs-label">What you are asking for</span>
-          <input
-            id="propose-title"
-            className="bs-input"
-            type="text"
-            value={title}
-            onChange={(event) => {
-              setTitle(event.target.value);
-              setError(null);
-            }}
-            placeholder="Reorganise the nursing policies"
-            disabled={submitting}
-            autoFocus
-          />
-        </label>
-
-        <label htmlFor="propose-description" className="create-document-field">
-          <span className="bs-label">Why — optional</span>
-          <textarea
-            id="propose-description"
-            className="bs-input propose-description"
-            value={description}
-            rows={8}
-            onChange={(event) => {
-              setDescription(event.target.value);
-              setError(null);
-            }}
-            disabled={submitting}
-          />
-        </label>
-
-        {/* Written down because it is what somebody about to press the button
-            is actually unsure of: the acts are already committed, and this
-            adds the request around them rather than doing the work again. */}
-        <p className="add-policy-note">
-          Your draft becomes a change request. Nothing joins the binder until it
-          is approved and published.
-        </p>
-
-        {error ? (
-          <p className="upload-error-message" role="alert">
-            {error}
+    <section className="binder-pane">
+      <div className="bs-pagehead">
+        <div className="bs-pagehead-body">
+          <h1 className="bs-title">Propose your changes</h1>
+          <p className="bs-subtitle">
+            {acts.length === 1
+              ? "One change, going to the people who sign this binder off."
+              : `${acts.length} changes, going to the people who sign this binder off.`}{" "}
+            Nothing joins the binder until it is approved and published.
           </p>
-        ) : null}
-
-        <div className="upload-modal-actions">
-          <button
-            type="button"
-            className="bs-btn bs-btn-primary"
-            onClick={() => void handleSubmit()}
-            disabled={title.trim() === "" || submitting}
-          >
-            {submitting ? "Opening a change…" : "Open the change request"}
-          </button>
-          <button
-            type="button"
-            className="bs-btn bs-btn-secondary"
-            onClick={onCancel}
-            disabled={submitting}
-          >
-            Back to editing
-          </button>
         </div>
+      </div>
+
+      <div className="bs-with-rail">
+        <div className="bs-fields">
+          <div className="bs-field">
+            <label className="bs-field-label" htmlFor="propose-title">
+              What you are asking for
+            </label>
+            <input
+              id="propose-title"
+              className="bs-input"
+              type="text"
+              value={title}
+              onChange={(event) => {
+                setTitle(event.target.value);
+                setError(null);
+              }}
+              placeholder="Reorganise the nursing policies"
+              disabled={submitting}
+              autoFocus
+            />
+          </div>
+
+          <div className="bs-field">
+            <label className="bs-field-label" htmlFor="propose-description">
+              Why
+              <span className="bs-field-optional">optional</span>
+            </label>
+            <textarea
+              id="propose-description"
+              className="bs-input propose-description"
+              value={description}
+              rows={8}
+              onChange={(event) => {
+                setDescription(event.target.value);
+                setError(null);
+              }}
+              disabled={submitting}
+            />
+          </div>
+
+          {error ? (
+            <p className="bs-note bs-note--danger" role="alert">
+              {error}
+            </p>
+          ) : null}
+
+          <div className="bs-field-row">
+            <button
+              type="button"
+              className="bs-btn bs-btn-primary"
+              onClick={() => void handleSubmit()}
+              disabled={title.trim() === "" || submitting}
+            >
+              {submitting ? "Opening a change…" : "Open the change request"}
+            </button>
+            <button
+              type="button"
+              className="bs-btn bs-btn--quiet"
+              onClick={onCancel}
+              disabled={submitting}
+            >
+              Back to editing
+            </button>
+          </div>
+        </div>
+
+        {/* **What is actually in the envelope**, beside the form rather than
+            summarised in the prefilled description. Somebody who has been
+            editing for twenty minutes cannot check a paragraph against what
+            they meant to send; they can check a list. Oldest first, because
+            this is a narrative and a narrative runs forwards. */}
+        <aside className="bs-rail" aria-label="What you are sending">
+          <div className="bs-panel">
+            <div className="bs-panel-bar">
+              <h2 className="bs-panel-bar-title">
+                {acts.length === 1 ? "1 change" : `${acts.length} changes`}
+              </h2>
+            </div>
+            <ol className="bs-row-list">
+              {[...acts].reverse().map((act) => (
+                <li className="bs-row" key={act.sha}>
+                  <span className="bs-row-body">
+                    <span className="bs-row-name bs-row-name--wrap">
+                      {act.summary}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </aside>
       </div>
     </section>
   );
