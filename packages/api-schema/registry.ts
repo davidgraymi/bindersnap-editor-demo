@@ -1446,6 +1446,48 @@ registry.registerPath({
   },
 });
 
+/**
+ * Rewrite what a change is asking for.
+ *
+ * Its author's, and only while it is open: once it is published the title is
+ * on the merge commit and in the version tag, which are the record.
+ */
+registry.registerPath({
+  method: "patch",
+  path: "/api/app/binders/{org}/{binder}/changes/{changeNumber}",
+  operationId: "editBinderChange",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({
+      org: z.string(),
+      binder: z.string(),
+      changeNumber: z.string(),
+    }),
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z.object({
+            title: z.string(),
+            /** What they are asking for, and why. Empty clears it. */
+            body: z.string(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "The change, as it now reads",
+      content: {
+        "application/json": {
+          schema: z.object({ title: z.string(), body: z.string() }),
+        },
+      },
+    },
+  },
+});
+
 registry.registerPath({
   method: "post",
   path: "/api/app/binders/{org}/{binder}/changes/{changeNumber}/update",

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { WorkspaceChangeDetailPayload } from "../../../packages/api-schema/schemas/workspaces";
 import {
   downloadBinderDocument,
+  editBinderChange,
   fetchBinderChange,
   updateBinderChange,
 } from "../api";
@@ -39,6 +40,8 @@ interface BinderChangePageProps {
   onOpenDocument: (slugPath: string) => void;
   /** Something about the change moved: the binder's own counts have too. */
   onChanged: () => void;
+  /** Where the required reviewers come from, for the reader who asks. */
+  onOpenSignOffRules: () => void;
 }
 
 function triggerBrowserDownload(blob: Blob, fileName: string): void {
@@ -63,6 +66,7 @@ export function BinderChangePage({
   onBackToChanges,
   onOpenDocument,
   onChanged,
+  onOpenSignOffRules,
 }: BinderChangePageProps) {
   const [detail, setDetail] = useState<WorkspaceChangeDetailPayload | null>(
     null,
@@ -160,7 +164,9 @@ export function BinderChangePage({
   if (error) {
     return (
       <div className="binder-pane">
-        <p className="app-inline-error">{error}</p>
+        <p className="bs-note bs-note--danger" role="alert">
+          {error}
+        </p>
         <p>
           <button
             className="bs-btn bs-btn-secondary"
@@ -187,67 +193,81 @@ export function BinderChangePage({
 
   const isOpen = detail.change.state === "open";
 
+  /**
+   * What the page has to say before it can be acted on, if anything.
+   *
+   * **Not above the way back.** The stale-branch banner used to render before
+   * the crumbs, so the first sentence on the page was about a state nobody had
+   * told you you were in. It is drawn inside the review now, where the reader
+   * has the change's own name first.
+   */
+  const behind =
+    detail.isBehind && isOpen ? (
+      <div className="bs-note bs-note--warn change-behind" role="status">
+        <p>
+          <strong>The binder has moved on since this change was made.</strong>{" "}
+          Updating it pulls in everything published since. Approvals already
+          given are dismissed, because they were for different content.
+        </p>
+        <button
+          className="bs-btn bs-btn--sm bs-btn-secondary"
+          type="button"
+          disabled={catchingUp}
+          onClick={() => void runCatchUp()}
+        >
+          {catchingUp ? "Bringing up to date…" : "Bring up to date"}
+        </button>
+      </div>
+    ) : null;
+
   return (
     <div className="binder-pane">
-      {/* A binder's change can fall behind: `main` moved on after it branched
-          off, and the binder refuses the merge however many approvals it has.
-          Said here, above the review, because until it is fixed nothing below
-          can finish — and because bringing it up to date dismisses the
-          approvals already given. */}
-      {detail.isBehind && isOpen ? (
-        <div className="change-behind" role="status">
-          <div>
-            <strong>The binder has moved on since this change was made.</strong>{" "}
-            Updating it will pull in everything published since. Approvals
-            already given are dismissed, because they were for different
-            content.
-          </div>
-          <button
-            className="bs-btn bs-btn-secondary"
-            type="button"
-            disabled={catchingUp}
-            onClick={() => void runCatchUp()}
-          >
-            {catchingUp ? "Bringing up to date…" : "Bring up to date"}
-          </button>
-        </div>
-      ) : null}
-
       {catchUpError ? (
-        <p className="vault-pr-error" role="alert">
+        <p className="bs-note bs-note--danger" role="alert">
           {catchUpError}
         </p>
       ) : null}
 
-      {/* Which documents this change is about. A change is the unit of
-          approval and may version several, so when it does, the file screens
-          below need to be told which one they are showing. */}
-      {documents.length > 1 ? (
-        <section className="change-documents">
-          <h2 className="doc-rail-title">
-            This change publishes {documents.length} documents
-          </h2>
-          <div className="docs-list">
-            {documents.map((document) => (
-              <button
-                className={`docs-list-item${document.slugPath === shown?.slugPath ? " docs-list-item--active" : ""}`}
-                type="button"
-                key={document.slugPath}
-                onClick={() => setViewing(document.slugPath)}
-              >
-                <span className="docs-list-item-body">
-                  <span className="docs-list-item-name">
-                    {describeVersionStep(document, !isOpen)}
-                  </span>
-                  <span className="docs-list-item-meta">{document.path}</span>
-                </span>
-              </button>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
       <DocumentChangeDetail
+        banner={behind}
+        documentPicker={
+          documents.length > 1 ? (
+            /* A change is the unit of approval and may version several
+               documents, so when it does, the file screens need to be told
+               which one they are showing. */
+            <div className="bs-panel">
+              <div className="bs-panel-bar">
+                <h2 className="bs-panel-bar-title">
+                  This change publishes {documents.length} documents
+                </h2>
+              </div>
+              <ul className="bs-row-list">
+                {documents.map((document) => (
+                  <li key={document.slugPath}>
+                    <button
+                      className={`bs-row${document.slugPath === shown?.slugPath ? " bs-row--on" : ""}`}
+                      type="button"
+                      onClick={() => setViewing(document.slugPath)}
+                    >
+                      <span className="bs-row-body">
+                        <span className="bs-row-name">
+                          {describeVersionStep(document, !isOpen)}
+                        </span>
+                        <span className="bs-row-meta">{document.path}</span>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null
+        }
+        requiredReviewers={detail.requiredReviewers.users}
+        onOpenSignOffRules={onOpenSignOffRules}
+        onEditSubject={async (subject) => {
+          await editBinderChange(org, binder, changeNumber, subject);
+          await load();
+        }}
         scope={scope}
         currentUser={currentUser}
         isAnonymous={false}
@@ -305,7 +325,7 @@ export function BinderChangePage({
       {shown ? (
         <p className="change-open-document">
           <button
-            className="doc-rail-card-link"
+            className="bs-linkbtn"
             type="button"
             onClick={() => onOpenDocument(shown.slugPath)}
           >

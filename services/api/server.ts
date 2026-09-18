@@ -168,6 +168,7 @@ import {
   type WorkspaceRepo,
 } from "./gitea-client/repos";
 import { proposeSignOffRules, readSignOffRules } from "./gitea-client/signOff";
+import { requiredReviewersFor } from "./requiredReviewers";
 import {
   validateSignOffRules,
   type SignOffRule,
@@ -195,6 +196,7 @@ import {
   updateChangeBranch,
   removePullReviewers,
   requestPullReviewers,
+  setPullRequestSubject,
   setPullRequestAssignees,
   submitReview,
   type PullRequestWithApprovalState,
@@ -764,6 +766,48 @@ async function readRequiredApprovals(
     return protection?.requiredApprovals ?? 0;
   } catch (err) {
     logger.error("Failed to read required approvals", {
+      owner,
+      repo,
+      branch,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
+
+/**
+ * Which review requests this binder's protection actually holds the merge for.
+ *
+ * Read with the service account for the same reason the approval count is: the
+ * whitelists on the same object are admin-only, and the reviewers who need to
+ * know whether they are blocking are precisely the ones who cannot read it.
+ * Only the two booleans come back.
+ *
+ * Null when it cannot be read, and the caller then marks nobody required — a
+ * "Required" that is wrong on a compliance product is worse than none.
+ */
+async function readSignOffGate(
+  owner: string,
+  repo: string,
+  branch = "main",
+): Promise<{ officialBlocks: boolean; codeownersBlock: boolean } | null> {
+  const client = createPrivilegedGiteaClient();
+  if (!client) return null;
+
+  try {
+    const protection = await getRepoBranchProtection(
+      client,
+      owner,
+      repo,
+      branch,
+    );
+    if (!protection) return null;
+    return {
+      officialBlocks: protection.blockOnOfficialReviewRequests,
+      codeownersBlock: protection.blockOnCodeownerReviews,
+    };
+  } catch (err) {
+    logger.error("Failed to read a binder's sign-off gate", {
       owner,
       repo,
       branch,
@@ -4145,6 +4189,8 @@ async function handleWorkspaceChangeDetail(
       reviewSettings,
       discussions,
       access,
+      signOff,
+      gate,
     ] = await Promise.all([
       getPullRequestWithReviews({
         client,
@@ -4167,6 +4213,14 @@ async function handleWorkspaceChangeDetail(
         pullNumber,
       }),
       readWorkspaceAccess({ client, org: orgName, name: workspaceName }),
+      // The rules as they stand on the base branch, which is where Gitea reads
+      // them from when it decides who to ask.
+      readSignOffRules({
+        client,
+        org: orgName,
+        workspace: workspaceName,
+      }).catch(() => ({ exists: false, rules: [], unreadable: [] })),
+      readSignOffGate(orgName, workspaceName),
     ]);
 
     // The version each document reaches if this is published. One call per
@@ -4203,6 +4257,13 @@ async function handleWorkspaceChangeDetail(
         blockOnUnresolvedThreads: reviewSettings.blockOnUnresolvedThreads,
         unresolvedThreadCount: discussions.unresolvedCount,
         canManage: access.push,
+        // Who this change is actually held for, out of the people its rules
+        // named. Read rather than guessed: see `requiredReviewers.ts`.
+        requiredReviewers: requiredReviewersFor({
+          rules: signOff.rules,
+          paths: documents.map((document) => document.path),
+          gate,
+        }),
       },
       baseHeaders,
     );
@@ -4215,6 +4276,104 @@ async function handleWorkspaceChangeDetail(
       error: err instanceof Error ? err.message : String(err),
     });
     return responseFromError(err, baseHeaders, "Unable to read the change.");
+  }
+}
+
+/**
+ * Rewrite what a change is asking for.
+ *
+ * **The author's, and only while it is open.** A change request is open for
+ * days and the first thing a reviewer's question produces is a better title;
+ * once it is published the title is on the merge commit and in the version
+ * tag, which are the record and are not ours to edit afterwards.
+ *
+ * A binder administrator may also fix one — the same people who can rename the
+ * binder — because a change whose author has left is a title nobody can
+ * correct.
+ */
+async function handleWorkspaceChangeEdit(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+  pullNumber: number,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { client, session } = auth;
+
+  try {
+    const [entry, access] = await Promise.all([
+      getPullRequestWithReviews({
+        client,
+        owner: orgName,
+        repo: workspaceName,
+        pullNumber,
+      }),
+      readWorkspaceAccess({ client, org: orgName, name: workspaceName }),
+    ]);
+
+    if (entry.pullRequest.state !== "open") {
+      return json(
+        409,
+        {
+          error:
+            "This change has been decided. Its title is on the record now and cannot be rewritten.",
+        },
+        baseHeaders,
+      );
+    }
+
+    const isAuthor =
+      (entry.pullRequest.user?.login ?? "").toLowerCase() ===
+      session.username.toLowerCase();
+    if (!isAuthor && !access.admin) {
+      return json(
+        403,
+        { error: "Only the author can rewrite this change." },
+        baseHeaders,
+      );
+    }
+
+    const payload = await readJson<{ title?: unknown; body?: unknown }>(req);
+    const title =
+      typeof payload?.title === "string" ? payload.title.trim() : "";
+    const body = typeof payload?.body === "string" ? payload.body : "";
+    if (title === "") {
+      return json(
+        400,
+        { error: "A change request needs a title." },
+        baseHeaders,
+      );
+    }
+
+    await setPullRequestSubject({
+      client,
+      owner: orgName,
+      repo: workspaceName,
+      pullNumber,
+      title,
+      body,
+    });
+
+    logger.info("Change request rewritten", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      pullNumber,
+    });
+
+    return json(200, { title, body }, baseHeaders);
+  } catch (err) {
+    logger.error("Failed to rewrite a change request", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      pullNumber,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to edit this change.");
   }
 }
 
@@ -10099,6 +10258,14 @@ export function createApiServer() {
             workspaceChangeUpdateMatch[1]!,
             workspaceChangeUpdateMatch[2]!,
             Number.parseInt(workspaceChangeUpdateMatch[3] ?? "", 10),
+          );
+        } else if (workspaceChangeMatch && method === "PATCH") {
+          response = await handleWorkspaceChangeEdit(
+            req,
+            baseHeaders,
+            workspaceChangeMatch[1]!,
+            workspaceChangeMatch[2]!,
+            Number.parseInt(workspaceChangeMatch[3] ?? "", 10),
           );
         } else if (workspaceChangeMatch && method === "GET") {
           response = await handleWorkspaceChangeDetail(

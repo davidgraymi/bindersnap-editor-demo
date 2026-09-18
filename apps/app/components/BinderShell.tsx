@@ -507,6 +507,7 @@ export function BinderShell({
           view={changeView}
           onViewChange={(next) => openChangeNumber(openChange, next)}
           onBackToChanges={() => goTo("changes")}
+          onOpenSignOffRules={() => goTo("sign-off")}
           onOpenDocument={onOpenDocument}
           onChanged={loadOverview}
         />

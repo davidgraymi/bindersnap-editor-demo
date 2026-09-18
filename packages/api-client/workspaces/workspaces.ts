@@ -21,6 +21,8 @@ import type {
   DescribeBinderBody,
   DiscardBinderDraft200,
   DownloadBinderDocumentParams,
+  EditBinderChange200,
+  EditBinderChangeBody,
   GetBinder200,
   GetBinderArchive200,
   GetBinderChange200,
@@ -1303,6 +1305,43 @@ export const getBinderChange = async (org: string,
     method: 'GET'
 
 
+  }
+);}
+
+
+export type editBinderChangeResponse200 = {
+  data: EditBinderChange200
+  status: 200
+}
+
+export type editBinderChangeResponseSuccess = (editBinderChangeResponse200) & {
+  headers: Headers;
+};
+;
+
+export type editBinderChangeResponse = (editBinderChangeResponseSuccess)
+
+export const getEditBinderChangeUrl = (org: string,
+    binder: string,
+    changeNumber: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/changes/${changeNumber}`
+}
+
+export const editBinderChange = async (org: string,
+    binder: string,
+    changeNumber: string,
+    editBinderChangeBody: EditBinderChangeBody, options?: Parameters<typeof customFetch>[1]): Promise<editBinderChangeResponse> => {
+
+  return customFetch<editBinderChangeResponse>(getEditBinderChangeUrl(org,binder,changeNumber),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(editBinderChangeBody)
   }
 );}
 
