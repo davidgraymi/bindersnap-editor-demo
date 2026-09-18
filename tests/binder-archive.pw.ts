@@ -436,11 +436,11 @@ test("Archive is an act of edit mode, and the draft is the undo", async ({
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Edit", exact: true }).click();
-  await expect(page.locator(".draft-bar")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   await page.getByRole("button", { name: "Archive Hand Hygiene" }).click();
 
-  await expect(page.locator(".draft-bar")).toContainText(
+  await expect(page.locator(".bs-draftbar")).toContainText(
     "Archive Hand Hygiene",
     { timeout: 30_000 },
   );
@@ -451,7 +451,7 @@ test("Archive is an act of edit mode, and the draft is the undo", async ({
   expect(await readArchive(session, org, binder)).toEqual([]);
 
   await page.getByRole("button", { name: "Discard" }).click();
-  await expect(page.locator(".draft-bar")).toBeHidden({ timeout: 30_000 });
+  await expect(page.locator(".bs-draftbar")).toBeHidden({ timeout: 30_000 });
   await expect(
     page.locator(".binder-tree-label", { hasText: "Hand Hygiene" }),
   ).toBeVisible();
@@ -468,7 +468,7 @@ test("a folder cannot be archived, because that is a different act", async ({
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Edit", exact: true }).click();
-  await expect(page.locator(".draft-bar")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   await expect(
     page.getByRole("button", { name: "Archive Nursing" }),
@@ -534,6 +534,54 @@ async function restore(
     },
   );
 }
+
+test("the archive opens in the tree, and Restore goes into the draft", async ({
+  page,
+}) => {
+  // **It was a page of its own, reachable only from the reading view** — so
+  // edit mode, the one place somebody can act on what they find there, had no
+  // way in and no way back. It is a section of the tree now, and restoring is
+  // an ordinary act of the draft like every other.
+  const { session, org, binder } = await provisionBinder();
+  await archiveAndPublish(session, org, binder, "nursing/hand-hygiene");
+
+  await signInBrowser(page, session);
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
+
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
+
+  // Editing offers the archive in place; the link to the page of its own is
+  // for reading, so it is not drawn twice.
+  await expect(page.locator(".binder-archive-link")).toHaveCount(0);
+  const disclosure = page.getByRole("button", { name: /^Archived · / });
+  await expect(disclosure).toBeVisible();
+  await disclosure.click();
+
+  // **"Restore as v2", not "Restore".** It comes back at the filename it left
+  // with, so it keeps its identity and rejoins as its next version — which is
+  // the question somebody hesitating here actually has.
+  const restoreButton = page.getByRole("button", { name: "Restore as v2" });
+  await expect(restoreButton).toBeVisible({ timeout: 30_000 });
+  await restoreButton.click();
+
+  // Into the draft, and on the tree, and still not on the record.
+  await expect(page.locator(".bs-draftbar")).toContainText("Restore", {
+    timeout: 30_000,
+  });
+  await expect(
+    page.locator(".binder-tree-label", { hasText: "Hand Hygiene" }),
+  ).toBeVisible({ timeout: 30_000 });
+  expect((await readArchive(session, org, binder)).length).toBe(1);
+
+  // And the draft is the undo, here as everywhere else.
+  await page.getByRole("button", { name: "Discard" }).click();
+  await expect(page.locator(".bs-draftbar")).toBeHidden({ timeout: 30_000 });
+  await expect(
+    page.locator(".binder-tree-label", { hasText: "Hand Hygiene" }),
+  ).toHaveCount(0);
+});
 
 test("a restored policy comes back on its next version, not at v1", async () => {
   // The reason ADR 0005 had to come first. The identity is a segment of the

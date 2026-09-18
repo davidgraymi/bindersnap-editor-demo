@@ -389,9 +389,14 @@ export function BinderShell({
                 ? { title: "Settings" }
                 : {
                     title: binderName,
-                    ...(overview?.workspace.description
-                      ? { subtitle: overview.workspace.description }
-                      : {}),
+                    ...(editMode === "editing"
+                      ? {
+                          subtitle:
+                            "Rename in place, drag to refile, make a folder. Everything you do is saved to your draft, and nobody is asked to look until you propose it.",
+                        }
+                      : overview?.workspace.description
+                        ? { subtitle: overview.workspace.description }
+                        : {}),
                   };
 
   return (
@@ -417,12 +422,18 @@ export function BinderShell({
               not "add a policy". */}
           {isReadOnly || activeTab !== "documents" ? null : (
             <div className="bs-pagehead-actions">
-              {/* **Edit is the filled button when you are not editing.** The
-                  customer asked for one: "an edit button that puts the user in
-                  edit mode and then allows all these edits to happen on a
-                  branch". Rearranging a binder — renaming, refiling, making
-                  folders — is the work this page is for, and adding one policy
-                  is the narrower act. */}
+              {/* **The same buttons in the same slots.** Reading, the header
+                  offers Add a policy and Edit; editing, it offers the way
+                  out. What it must never do is change what the primary slot
+                  means the moment the control beside it is pressed, which is
+                  what "[Add a policy] [Edit]" becoming "[New folder] [Add a
+                  policy]" did.
+
+                  While editing there is one button and it is the way out:
+                  New folder and Add a policy have moved into the bar over the
+                  tree they act on. Two of one control on a screen is one of
+                  them in the wrong place, and the wrong one is the one that
+                  is not beside the thing it adds to. */}
               {editMode === "off" ? (
                 <>
                   <button
@@ -442,22 +453,13 @@ export function BinderShell({
                   </button>
                 </>
               ) : editMode === "editing" ? (
-                <>
-                  <button
-                    className="bs-btn bs-btn-secondary"
-                    type="button"
-                    onClick={() => setAddingFolder(true)}
-                  >
-                    New folder
-                  </button>
-                  <button
-                    className="bs-btn bs-btn-secondary"
-                    type="button"
-                    onClick={() => setAdding(true)}
-                  >
-                    Add a policy
-                  </button>
-                </>
+                <button
+                  className="bs-btn bs-btn-secondary"
+                  type="button"
+                  onClick={leaveEditMode}
+                >
+                  Done
+                </button>
               ) : null}
             </div>
           )}
@@ -494,16 +496,6 @@ export function BinderShell({
         <p className="bs-note bs-note--danger" role="alert">
           {draftError}
         </p>
-      ) : null}
-
-      {draft?.draft && editMode !== "off" && !documentPath && !archive ? (
-        <BinderDraftBar
-          acts={draft.draft.acts}
-          others={draft.others.map((other) => other.owner)}
-          busy={startingEdit}
-          onPropose={() => goToEdit("proposing")}
-          onDiscard={() => void discard()}
-        />
       ) : null}
 
       {openChange !== null ? (
@@ -592,13 +584,31 @@ export function BinderShell({
           onOpenDocument={onOpenDocument}
           activeDocument={documentPath ?? null}
           draft={editMode === "off" ? null : (draft?.draft?.branch ?? null)}
+          draftActs={draft?.draft?.acts ?? []}
           reloadKey={reloadKey}
           onEdited={refreshDraft}
           onDraftLost={leaveEditMode}
           onOpenArchive={() => goToArchive(true)}
           onOpenChange={openChangeNumber}
+          onAddPolicy={() => setAdding(true)}
+          onNewFolder={() => setAddingFolder(true)}
         />
       )}
+
+      {/* Last in the page, and sticky to the bottom of the viewport: it is
+          reachable at any scroll depth and never between you and the tree.
+          Not on the propose screen — that step owns its own page, and a
+          disabled Propose above a Propose button is two of one control with
+          the nearer one dead. */}
+      {draft?.draft && editMode === "editing" && !documentPath && !archive ? (
+        <BinderDraftBar
+          acts={draft.draft.acts}
+          others={draft.others.map((other) => other.owner)}
+          busy={startingEdit}
+          onPropose={() => goToEdit("proposing")}
+          onDiscard={() => void discard()}
+        />
+      ) : null}
 
       {addingFolder ? (
         <NewFolderModal

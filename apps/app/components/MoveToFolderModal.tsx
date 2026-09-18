@@ -71,7 +71,7 @@ export function MoveToFolderModal({
             </p>
           ) : (
             <label htmlFor="move-to-folder" className="create-document-field">
-              <span className="bs-label">Where it goes</span>
+              <span className="bs-field-label">Where it goes</span>
               <select
                 id="move-to-folder"
                 className="bs-input"

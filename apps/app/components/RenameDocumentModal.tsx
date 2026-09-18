@@ -99,7 +99,7 @@ export function RenameDocumentModal({
             htmlFor="rename-document-name"
             className="create-document-field"
           >
-            <span className="bs-label">What it is called</span>
+            <span className="bs-field-label">What it is called</span>
             <input
               id="rename-document-name"
               className="bs-input"
@@ -118,7 +118,7 @@ export function RenameDocumentModal({
             htmlFor="rename-document-folder"
             className="create-document-field"
           >
-            <span className="bs-label">Folder</span>
+            <span className="bs-field-label">Folder</span>
             <select
               id="rename-document-folder"
               className="bs-input"

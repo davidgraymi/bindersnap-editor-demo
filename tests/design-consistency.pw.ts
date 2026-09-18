@@ -302,11 +302,11 @@ test("the fields in a form are one size, picker included", async ({ page }) => {
 
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
   await page.getByRole("button", { name: "Add a policy" }).click();
-  // The picker only exists once the binder has an open change, so waiting for
-  // it is also what proves it rendered.
-  await expect(page.locator(".create-document-modal select")).toBeVisible({
-    timeout: 30_000,
-  });
+  // **Wait for the picker that loads, not for the first one drawn.** "Put it
+  // in" only exists once the binder has an open change and is filled from a
+  // read; the folder picker is drawn immediately. Waiting for the wrong one
+  // measures a form that is still one field short.
+  await expect(page.locator("#change-target")).toBeVisible({ timeout: 30_000 });
 
   const heights = await page
     .locator(
@@ -405,6 +405,62 @@ test("every page begins in the same place, at the same size", async ({
       `${other.where} is not the same shape as ${first!.where}`,
     ).toEqual(first!.shape);
   }
+});
+
+/**
+ * The marketing eyebrow never appears inside the app.
+ *
+ * `.bs-label` is coral, uppercase, monospace, wide-tracked — the landing
+ * page's section eyebrow, which is right where it is. It had **26 call sites
+ * in the app**, standing in for ordinary form labels: `WHAT YOU ARE ASKING
+ * FOR`, `CHOOSE FILE`, `WHO CAN SEE THIS BINDER?`. Uppercase monospace coral
+ * is the loudest "developer tool" signal the product has, and it was on the
+ * labels of every form somebody fills in.
+ *
+ * `.bs-field-label` replaces it: Geist, sentence case, the weight of a label
+ * rather than of a banner. This is the rule that keeps the eyebrow on the
+ * landing page, where it belongs.
+ */
+test("the marketing eyebrow never labels a field in the app", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await page
+    .context()
+    .addCookies([
+      { name: "bindersnap_session", value: session, url: APP_BASE_URL },
+    ]);
+  await page.setViewportSize({ width: 1280, height: 900 });
+
+  const screens: Array<[string, string]> = [
+    ["the binder", `${APP_BASE_URL}/${org}/${binder}`],
+    ["its settings", `${APP_BASE_URL}/${org}/${binder}?tab=settings`],
+    ["the organization", `${APP_BASE_URL}/${org}`],
+    ["the organization's people", `${APP_BASE_URL}/${org}?tab=people`],
+    ["the library", `${APP_BASE_URL}/documents`],
+  ];
+
+  for (const [where, url] of screens) {
+    await page.goto(url);
+    await settleOnRealShell(page);
+
+    const eyebrows = await page
+      .locator(".app-main .bs-label")
+      .evaluateAll((elements) =>
+        elements.map((element) => (element.textContent ?? "").trim()),
+      );
+
+    expect(eyebrows, `${where} labels something with the eyebrow`).toEqual([]);
+  }
+
+  // And the modal that carries the product's primary act, which is where the
+  // loudest of them was.
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await page.getByRole("button", { name: "Add a policy" }).click();
+  await expect(page.locator(".create-document-modal")).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(page.locator(".create-document-modal .bs-label")).toHaveCount(0);
 });
 
 /**
