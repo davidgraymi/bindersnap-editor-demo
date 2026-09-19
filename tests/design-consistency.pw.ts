@@ -673,3 +673,77 @@ test("no heading on a page outranks the page's own title", async ({ page }) => {
     ).toEqual([]);
   }
 });
+
+/**
+ * A menu is never clipped by the thing it opens from.
+ *
+ * **The customer could not use the reviewer search:** *"when I click the
+ * button to add a reviewer the search is clipped to the 'Approvals' squircle
+ * making it very difficult to use."* A `.bs-panel` is rounded by
+ * `overflow: hidden`, and an absolutely positioned popover inside one is cut
+ * to whatever slice of panel happens to sit below its button — which on the
+ * change request's rail was about twenty pixels.
+ *
+ * It is the kind of failure a stylesheet diff cannot show: both rules are
+ * correct on their own, and it is only their meeting that breaks. So this
+ * opens the picker for real and measures what is actually on the screen —
+ * every edge inside the viewport, and the search box hit-testable at its own
+ * centre rather than merely present in the DOM.
+ */
+test("a popover is not clipped by the panel it opens from", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await page
+    .context()
+    .addCookies([
+      { name: "bindersnap_session", value: session, url: APP_BASE_URL },
+    ]);
+  await page.setViewportSize({ width: 1280, height: 900 });
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}?tab=changes&change=1`);
+  await settleOnRealShell(page);
+
+  const add = page.locator(".rev-reviewers-add");
+  await add.waitFor();
+  await add.click();
+
+  const measured = await page.evaluate(() => {
+    const picker = document.querySelector(".rev-picker");
+    const input = document.querySelector(".rev-picker-input");
+    if (!picker || !input) return null;
+
+    const box = picker.getBoundingClientRect();
+    const field = input.getBoundingClientRect();
+    const centre = document.elementFromPoint(
+      field.left + field.width / 2,
+      field.top + field.height / 2,
+    );
+
+    return {
+      offscreen:
+        box.left < 0 ||
+        box.top < 0 ||
+        box.right > window.innerWidth ||
+        box.bottom > window.innerHeight,
+      height: Math.round(box.height),
+      fieldHeight: Math.round(field.height),
+      // Clipped by an ancestor and the point belongs to whatever covers it.
+      reachable: centre === input || input.contains(centre),
+    };
+  });
+
+  expect(measured, "the reviewer picker never opened").not.toBeNull();
+  expect(
+    measured!.offscreen,
+    "the reviewer picker opened partly off the screen",
+  ).toBe(false);
+  expect(
+    measured!.height,
+    `the reviewer picker is ${measured!.height}px tall — its own search box is ${measured!.fieldHeight}px, so it is being cut off`,
+  ).toBeGreaterThan(measured!.fieldHeight);
+  expect(
+    measured!.reachable,
+    "the reviewer picker's search box cannot be clicked at its own centre",
+  ).toBe(true);
+});
