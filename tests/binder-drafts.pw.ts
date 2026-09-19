@@ -180,8 +180,11 @@ test("work goes into a draft, and nothing is proposed", async () => {
     changeNumber: number | null;
   };
   expect(result.changeNumber).toBeNull();
+  // To the millisecond (D8): starting a second draft is a deliberate act now,
+  // and two in one second is a double-click rather than a collision worth an
+  // error.
   expect(result.branch).toMatch(
-    new RegExp(`^draft/${credentials.username}/\\d{14}$`),
+    new RegExp(`^draft/${credentials.username}/\\d{17}$`),
   );
 
   // And the binder's changes list is still empty, which is the claim that
