@@ -717,42 +717,89 @@ test("a popover is not clipped by the panel it opens from", async ({
   await add.waitFor();
   await add.click();
 
-  const measured = await page.evaluate(() => {
-    const picker = document.querySelector(".rev-picker");
-    const input = document.querySelector(".rev-picker-input");
-    if (!picker || !input) return null;
+  const measured = await measurePopover(
+    page,
+    ".rev-picker",
+    ".rev-picker-input",
+  );
+  assertNotClipped(measured, "the reviewer picker");
 
-    const box = picker.getBoundingClientRect();
-    const field = input.getBoundingClientRect();
-    const centre = document.elementFromPoint(
-      field.left + field.width / 2,
-      field.top + field.height / 2,
-    );
+  // **The same rule, on the other popover that lives inside a panel.** One
+  // instance is a bug fixed; two is a rule, and the draft picker sits in the
+  // tree's own bar — another `.bs-panel`, another squircle.
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await settleOnRealShell(page);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const pick = page.locator(".bs-draftpick");
+  await pick.waitFor({ timeout: 30_000 });
+  await pick.click();
 
-    return {
-      offscreen:
-        box.left < 0 ||
-        box.top < 0 ||
-        box.right > window.innerWidth ||
-        box.bottom > window.innerHeight,
-      height: Math.round(box.height),
-      fieldHeight: Math.round(field.height),
-      // Clipped by an ancestor and the point belongs to whatever covers it.
-      reachable: centre === input || input.contains(centre),
-    };
-  });
+  assertNotClipped(
+    await measurePopover(page, ".bs-draftmenu", ".bs-draftmenu-pick"),
+    "the draft picker",
+  );
+});
 
-  expect(measured, "the reviewer picker never opened").not.toBeNull();
-  expect(
-    measured!.offscreen,
-    "the reviewer picker opened partly off the screen",
-  ).toBe(false);
+/** What is actually on the screen, rather than what is in the DOM. */
+async function measurePopover(
+  page: Page,
+  popover: string,
+  inner: string,
+): Promise<{
+  offscreen: boolean;
+  height: number;
+  fieldHeight: number;
+  reachable: boolean;
+} | null> {
+  // **Visible, not merely present.** Both popovers are placed by measuring
+  // their button after paint, and render `visibility: hidden` until they know
+  // where they go — so measuring the instant after the click hit-tests through
+  // them to whatever is behind, which looks exactly like being clipped.
+  await page.locator(popover).waitFor({ state: "visible", timeout: 30_000 });
+
+  return page.evaluate(
+    ([popoverSelector, innerSelector]) => {
+      const picker = document.querySelector(popoverSelector!);
+      const input = document.querySelector(innerSelector!);
+      if (!picker || !input) return null;
+
+      const box = picker.getBoundingClientRect();
+      const field = input.getBoundingClientRect();
+      const centre = document.elementFromPoint(
+        field.left + field.width / 2,
+        field.top + field.height / 2,
+      );
+
+      return {
+        offscreen:
+          box.left < 0 ||
+          box.top < 0 ||
+          box.right > window.innerWidth ||
+          box.bottom > window.innerHeight,
+        height: Math.round(box.height),
+        fieldHeight: Math.round(field.height),
+        // Clipped by an ancestor and the point belongs to whatever covers it.
+        reachable: centre === input || input.contains(centre),
+      };
+    },
+    [popover, inner] as const,
+  );
+}
+
+function assertNotClipped(
+  measured: Awaited<ReturnType<typeof measurePopover>>,
+  what: string,
+): void {
+  expect(measured, `${what} never opened`).not.toBeNull();
+  expect(measured!.offscreen, `${what} opened partly off the screen`).toBe(
+    false,
+  );
   expect(
     measured!.height,
-    `the reviewer picker is ${measured!.height}px tall — its own search box is ${measured!.fieldHeight}px, so it is being cut off`,
+    `${what} is ${measured!.height}px tall — what is inside it is ${measured!.fieldHeight}px, so it is being cut off`,
   ).toBeGreaterThan(measured!.fieldHeight);
   expect(
     measured!.reachable,
-    "the reviewer picker's search box cannot be clicked at its own centre",
+    `${what} cannot be clicked at its own centre`,
   ).toBe(true);
-});
+}

@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   Archive,
   Check,
@@ -74,6 +81,14 @@ interface BinderDocumentsProps {
    * this list is not the thing that knows the answer.
    */
   onDraftLost?: () => void;
+  /**
+   * The draft picker, rendered into the tree's own bar.
+   *
+   * Passed in rather than built here: which drafts you have and how to move
+   * between them is the shell's state — it owns the address, and the address
+   * is what carries which draft is being edited.
+   */
+  draftPicker?: ReactNode;
   /** Open the archive — what this binder has taken off the record. */
   onOpenArchive?: () => void;
   /** Open a change request — the one a row says last touched its policy. */
@@ -152,6 +167,7 @@ export function BinderDocuments({
   onOpenDocument,
   activeDocument = null,
   draft = null,
+  draftPicker = null,
   reloadKey = 0,
   onEdited,
   onDraftLost,
@@ -604,6 +620,10 @@ export function BinderDocuments({
         <div className="bs-panel-bar">
           {draft ? (
             <>
+              {/* **Which of your drafts this is**, and the way to the others.
+                  In the list's own bar because it is a fact about the tree
+                  below it, not about the binder. */}
+              {draftPicker}
               {/* Beside the tree they add to, and in the same two slots
                   whichever you press first. */}
               <button

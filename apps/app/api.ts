@@ -1260,16 +1260,25 @@ function multipartTarget(target?: ActTarget): {
 }
 
 /**
- * Your draft in this binder, what is in it, and who else is editing.
+ * Your drafts in this binder, what is in the one you are in, and who else is
+ * editing.
  *
  * A read, so it never starts one: `draft` comes back null when you are not
  * editing, which is the ordinary state rather than a missing thing.
+ *
+ * `branch` says which of yours you are in. Unsaid means the newest, which is
+ * what this meant when a person could only have one.
  */
 export async function fetchBinderDraft(
   org: string,
   binder: string,
+  branch?: string,
 ): Promise<BinderDraftPayload> {
-  const response = await BindersClient.getBinderDraft(org, binder);
+  const response = await BindersClient.getBinderDraft(
+    org,
+    binder,
+    branch ? { draft: branch } : undefined,
+  );
   return response.data;
 }
 
@@ -1278,13 +1287,41 @@ export async function fetchBinderDraft(
  *
  * Idempotent by design — pressing Edit twice resumes rather than forks, so
  * this is safe to call without first asking whether a draft exists.
+ *
+ * **`name` makes it a different act**: start *another* draft, called that. A
+ * deliberate fork, from the picker, with a sentence attached — which is how
+ * several drafts stay a thing somebody chose rather than something that
+ * happens to them.
  */
 export async function openBinderDraft(
   org: string,
   binder: string,
+  name?: string,
 ): Promise<BinderDraftPayload> {
   try {
-    const response = await BindersClient.openBinderDraft(org, binder);
+    const response = await BindersClient.openBinderDraft(
+      org,
+      binder,
+      name ? { name } : {},
+    );
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(`/api/app/binders/${org}/${binder}/draft`, error);
+  }
+}
+
+/** Call one of your drafts something else. */
+export async function renameBinderDraft(
+  org: string,
+  binder: string,
+  branch: string,
+  name: string,
+): Promise<BinderDraftPayload> {
+  try {
+    const response = await BindersClient.renameBinderDraft(org, binder, {
+      draft: branch,
+      name,
+    });
     return response.data;
   } catch (error) {
     handlePaymentRequired(`/api/app/binders/${org}/${binder}/draft`, error);
@@ -1292,18 +1329,26 @@ export async function openBinderDraft(
 }
 
 /**
- * Throw your draft away.
+ * Throw a draft away.
  *
  * Only ever your own, and only while it is still a draft: once a change
  * request sits on the branch it is not a draft any more and the server refuses
  * — deleting it would take somebody's review with it.
+ *
+ * `branch` says which, because a person may have several and discarding the
+ * wrong one is not recoverable.
  */
 export async function discardBinderDraft(
   org: string,
   binder: string,
+  branch?: string,
 ): Promise<void> {
   try {
-    await BindersClient.discardBinderDraft(org, binder);
+    await BindersClient.discardBinderDraft(
+      org,
+      binder,
+      branch ? { draft: branch } : undefined,
+    );
   } catch (error) {
     handlePaymentRequired(`/api/app/binders/${org}/${binder}/draft`, error);
   }
@@ -1321,11 +1366,14 @@ export async function proposeBinderDraft(
   binder: string,
   title: string,
   description: string,
+  /** Which draft. The newest when unsaid. */
+  branch?: string,
 ): Promise<ProposedDraftPayload> {
   try {
     const response = await BindersClient.proposeBinderDraft(org, binder, {
       title,
       ...(description.trim() === "" ? {} : { description }),
+      ...(branch ? { draft: branch } : {}),
     });
     return response.data;
   } catch (error) {

@@ -29,6 +29,15 @@ import { AppIcon } from "./AppIcon";
  */
 
 interface BinderDraftBarProps {
+  /**
+   * What this draft is called.
+   *
+   * Named rather than "your draft", because a person may have several (D8) and
+   * "3 changes in your draft" is ambiguous the moment there are two. It is
+   * also the sentence they wrote about the work, said back to them beside the
+   * count of it.
+   */
+  name: string;
   /** Newest first, the way the server returns them. */
   acts: readonly DraftAct[];
   /** Somebody else is editing this binder too. Named, not counted. */
@@ -40,6 +49,7 @@ interface BinderDraftBarProps {
 }
 
 export function BinderDraftBar({
+  name,
   acts,
   others,
   busy = false,
@@ -65,12 +75,12 @@ export function BinderDraftBar({
               the missing button would have. */}
           <p className="bs-draftbar-title">
             {busy
-              ? "Saving to your draft…"
+              ? `Saving to \u201c${name}\u201d\u2026`
               : acts.length === 0
-                ? "You are editing. Nothing in your draft yet."
+                ? `You are editing \u201c${name}\u201d. Nothing in it yet.`
                 : acts.length === 1
-                  ? "1 change in your draft"
-                  : `${acts.length} changes in your draft`}
+                  ? `1 change in \u201c${name}\u201d`
+                  : `${acts.length} changes in \u201c${name}\u201d`}
           </p>
 
           {/* The acts themselves, not a count of them — the planners write

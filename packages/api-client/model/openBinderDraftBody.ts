@@ -5,8 +5,6 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type ProposeBinderDraftBody = {
-  title: string;
-  description?: string;
-  draft?: string;
+export type OpenBinderDraftBody = {
+  name?: string;
 };

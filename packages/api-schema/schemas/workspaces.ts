@@ -1145,17 +1145,53 @@ export type OtherDraft = z.infer<typeof OtherDraftSchema>;
  * contents: knowing somebody is editing is what stops two people making the
  * same folder twice, and reading unproposed work is not what a draft offers.
  */
+/**
+ * One of your drafts, as the picker lists it.
+ *
+ * Its name, how much is in it and when it was last touched — "Reorganise
+ * nursing · 3 changes · edited 4 minutes ago". The acts themselves are only on
+ * the draft you are in, because only one is on screen at a time.
+ */
+export const OwnDraftSchema = z.object({
+  branch: z.string(),
+  /** What its author called it, or its date when it was made before names. */
+  name: z.string(),
+  updatedAt: z.string().nullable(),
+  /** How many acts are in it. What the picker's "3 changes" counts. */
+  actCount: z.number(),
+  lastAct: z.string().nullable(),
+});
+export type OwnDraft = z.infer<typeof OwnDraftSchema>;
+
 export const BinderDraftPayloadSchema = z.object({
   organization: z.string(),
   workspace: z.string(),
   draft: z
     .object({
       branch: z.string(),
+      name: z.string(),
+      /**
+       * Whether a person wrote the name, or it took the date it was started.
+       *
+       * The propose screen prefills its title from the name only when somebody
+       * wrote one: a draft called "Reorganise nursing" has already said what
+       * the work is for, and "Draft of 19 September" has said nothing.
+       */
+      named: z.boolean(),
       owner: z.string(),
       updatedAt: z.string().nullable(),
       acts: z.array(DraftActSchema),
     })
     .nullable(),
+  /**
+   * Every draft of yours in this binder, newest first.
+   *
+   * What the picker picks between. One per person was the old model; the
+   * customer asked for several, because two unrelated reorganisations should
+   * not have to be approved or refused together just because the same person
+   * did both.
+   */
+  drafts: z.array(OwnDraftSchema),
   others: z.array(OtherDraftSchema),
 });
 export type BinderDraftPayload = z.infer<typeof BinderDraftPayloadSchema>;

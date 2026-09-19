@@ -6,6 +6,7 @@ import {
   fetchBinder,
   fetchBinderDraft,
   openBinderDraft,
+  renameBinderDraft,
 } from "../api";
 import type {
   BinderDraftPayload,
@@ -16,6 +17,7 @@ import {
   binderTabFromSearch,
   buildBinderUrl,
   changeViewFromSearch,
+  draftFromSearch,
   editModeFromSearch,
   type BinderEditMode,
   type BinderTab,
@@ -27,6 +29,7 @@ import { AddPolicyModal } from "./AddPolicyModal";
 import { NewFolderModal } from "./NewFolderModal";
 import { BinderArchive } from "./BinderArchive";
 import { BinderDraftBar } from "./BinderDraftBar";
+import { BinderDraftPicker } from "./BinderDraftPicker";
 import { ProposeChangePage } from "./ProposeChangePage";
 import { BinderChangePage } from "./BinderChangePage";
 import { BinderChanges } from "./BinderChanges";
@@ -130,6 +133,17 @@ export function BinderShell({
   const [archive, setArchive] = useState(() =>
     archiveFromSearch(window.location.search),
   );
+  /**
+   * Which of your drafts is being edited, from the address.
+   *
+   * Null means "whichever is newest", which is what a bare `?edit=1` meant
+   * when a person could only have one. The server decides in the end: a branch
+   * that is not yours, or one proposed since the link was made, falls back
+   * rather than failing.
+   */
+  const [draftBranch, setDraftBranch] = useState<string | null>(() =>
+    draftFromSearch(window.location.search),
+  );
 
   /**
    * Your draft in this binder, and whose else is open.
@@ -151,6 +165,7 @@ export function BinderShell({
       setOpenChange(parseRequestedChange(window.location.search));
       setChangeView(changeViewFromSearch(window.location.search));
       setEditMode(editModeFromSearch(window.location.search));
+      setDraftBranch(draftFromSearch(window.location.search));
       setArchive(archiveFromSearch(window.location.search));
     };
     window.addEventListener("popstate", handler);
@@ -212,7 +227,7 @@ export function BinderShell({
     }
 
     let cancelled = false;
-    fetchBinderDraft(org, binder)
+    fetchBinderDraft(org, binder, draftBranch ?? undefined)
       .then((payload) => {
         if (cancelled) return;
         if (payload.draft) setDraft(payload);
@@ -228,11 +243,15 @@ export function BinderShell({
     // `leaveEditMode` is stable for the life of a binder: it closes over org,
     // binder and the setters, all of which are in this list already.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [org, binder, editMode]);
+  }, [org, binder, editMode, draftBranch]);
 
-  const goToEdit = (next: BinderEditMode) => {
-    moveTo(buildBinderUrl({ org, binder, edit: next }));
+  const goToEdit = (
+    next: BinderEditMode,
+    branch: string | null = draftBranch,
+  ) => {
+    moveTo(buildBinderUrl({ org, binder, edit: next, draft: branch }));
     setEditMode(next);
+    setDraftBranch(next === "off" ? null : branch);
     setArchive(false);
   };
 
@@ -267,8 +286,9 @@ export function BinderShell({
     setStartingEdit(true);
     setDraftError(null);
     try {
-      setDraft(await openBinderDraft(org, binder));
-      goToEdit("editing");
+      const payload = await openBinderDraft(org, binder);
+      setDraft(payload);
+      goToEdit("editing", payload.draft?.branch ?? null);
     } catch (err) {
       setDraftError(
         err instanceof Error && err.message.trim() !== ""
@@ -280,11 +300,70 @@ export function BinderShell({
     }
   };
 
+  /**
+   * Start another draft, called something.
+   *
+   * A deliberate fork, and the name is what makes it one: a second draft with
+   * no name is the state this whole change exists to avoid, because "resume
+   * the one from Tuesday" has no answer when both are dates.
+   */
+  const startAnother = async (name: string) => {
+    setStartingEdit(true);
+    setDraftError(null);
+    try {
+      const payload = await openBinderDraft(org, binder, name);
+      setDraft(payload);
+      goToEdit("editing", payload.draft?.branch ?? null);
+    } catch (err) {
+      setDraftError(
+        err instanceof Error && err.message.trim() !== ""
+          ? err.message
+          : "Unable to start another draft.",
+      );
+    } finally {
+      setStartingEdit(false);
+    }
+  };
+
+  /** Move to another of your drafts. The address is what carries it. */
+  const switchDraft = (branch: string) => {
+    setDraft(null);
+    goToEdit("editing", branch);
+  };
+
+  const renameDraft = async (branch: string, name: string) => {
+    setStartingEdit(true);
+    setDraftError(null);
+    try {
+      setDraft(await renameBinderDraft(org, binder, branch, name));
+    } catch (err) {
+      setDraftError(
+        err instanceof Error && err.message.trim() !== ""
+          ? err.message
+          : "Unable to rename your draft.",
+      );
+    } finally {
+      setStartingEdit(false);
+    }
+  };
+
+  /**
+   * Throw this draft away, and land in another of yours if there is one.
+   *
+   * Leaving edit mode after discarding the only draft is right; doing it when
+   * two more are open would make the picker's own Discard read as "stop
+   * editing", which is a different act.
+   */
   const discard = async () => {
     setStartingEdit(true);
     try {
-      await discardBinderDraft(org, binder);
-      leaveEditMode();
+      const gone = draft?.draft?.branch;
+      await discardBinderDraft(org, binder, gone);
+      const left = (draft?.drafts ?? []).filter(
+        (entry) => entry.branch !== gone,
+      );
+      if (left.length > 0) switchDraft(left[0]!.branch);
+      else leaveEditMode();
     } catch (err) {
       setDraftError(
         err instanceof Error && err.message.trim() !== ""
@@ -298,7 +377,7 @@ export function BinderShell({
 
   /** Re-read the draft, so the bar counts the act that just landed. */
   const refreshDraft = () => {
-    fetchBinderDraft(org, binder)
+    fetchBinderDraft(org, binder, draft?.draft?.branch ?? undefined)
       .then((payload) => {
         if (payload.draft) setDraft(payload);
         else leaveEditMode();
@@ -591,6 +670,11 @@ export function BinderShell({
         <ProposeChangePage
           org={org}
           binder={binder}
+          draft={draft.draft.branch}
+          /* Only a name somebody wrote. A draft started by pressing Edit takes
+             the date it was made, and "Draft of 19 September" is not a sentence
+             to put in front of reviewers as what a change is for. */
+          name={draft.draft.named ? draft.draft.name : ""}
           acts={draft.draft.acts}
           onCancel={() => goToEdit("editing")}
           onProposed={(changeNumber) => {
@@ -611,6 +695,19 @@ export function BinderShell({
           onOpenDocument={openDocument}
           activeDocument={documentPath ?? null}
           draft={editMode === "off" ? null : (draft?.draft?.branch ?? null)}
+          draftPicker={
+            draft?.draft && editMode === "editing" ? (
+              <BinderDraftPicker
+                drafts={draft.drafts}
+                others={draft.others}
+                current={draft.draft.branch}
+                busy={startingEdit}
+                onSwitch={switchDraft}
+                onStart={startAnother}
+                onRename={renameDraft}
+              />
+            ) : null
+          }
           draftActs={draft?.draft?.acts ?? []}
           reloadKey={reloadKey}
           onEdited={refreshDraft}
@@ -629,6 +726,7 @@ export function BinderShell({
           the nearer one dead. */}
       {draft?.draft && editMode === "editing" && !documentPath && !archive ? (
         <BinderDraftBar
+          name={draft.draft.name}
           acts={draft.draft.acts}
           others={draft.others.map((other) => other.owner)}
           busy={startingEdit}
