@@ -427,12 +427,13 @@ export function AppShell({
                   : {})}
                 currentUser={currentUsername}
                 onBinderChange={setSidebarBinder}
-                onOpenDocument={(documentPath) =>
+                onOpenDocument={(documentPath, version) =>
                   onNavigate({
                     kind: "binderDocument",
                     org: route.org,
                     binder: route.binder,
                     documentPath,
+                    ...(version == null ? {} : { version }),
                   })
                 }
                 onOpenBinder={() =>
