@@ -2883,7 +2883,10 @@ async function handleChangeUpdates(
     return json(
       200,
       {
-        updates: buildChangeUpdates(commits),
+        // Dated from when the change opened, so the acts a draft was built
+        // out of are the submission rather than seven "updated the proposed
+        // version" entries in a discussion nobody has joined yet.
+        updates: buildChangeUpdates(commits, pullRequest.created_at ?? null),
         resetsApprovals: branchProtection?.dismissStaleApprovals ?? false,
       },
       baseHeaders,
