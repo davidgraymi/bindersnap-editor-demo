@@ -7364,6 +7364,7 @@ async function handleWorkspaceDocumentDetail(
   orgName: string,
   workspaceName: string,
   documentPath: string,
+  draftRaw: string | null,
 ): Promise<Response> {
   const auth = await requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
@@ -7378,7 +7379,23 @@ async function handleWorkspaceDocumentDetail(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
-    let ref = "main";
+    // **A policy renamed a moment ago is only at that name in the draft.**
+    // Clicking a row in the tree while editing opened this on `main`, where
+    // the new address has never existed, and the answer was that the document
+    // does not exist — of a document sitting on screen. Your own draft only,
+    // which is the rule every draft-aware read here follows.
+    const draft = await resolveOwnDraftBranch({
+      client: auth.client,
+      org: orgName,
+      workspace: workspaceName,
+      username: auth.session.username,
+      draftRaw,
+    });
+    if (draft && "error" in draft) {
+      return json(409, { error: draft.error }, baseHeaders);
+    }
+
+    let ref = draft ? draft.branch : "main";
     let state: "published" | "proposed" = "published";
 
     // One read of the tree answers both "which document is this" and "what
@@ -7388,6 +7405,7 @@ async function handleWorkspaceDocumentDetail(
       client: auth.client,
       org: orgName,
       workspace: workspaceName,
+      ...(draft ? { ref: draft.branch } : {}),
     });
 
     let document =
@@ -10349,6 +10367,7 @@ export function createApiServer() {
             workspaceDocumentMatch[1]!,
             workspaceDocumentMatch[2]!,
             decodeURIComponent(workspaceDocumentMatch[3]!),
+            url.searchParams.get("draft"),
           );
         } else if (workspaceOverviewMatch && method === "GET") {
           response = await handleWorkspaceOverview(

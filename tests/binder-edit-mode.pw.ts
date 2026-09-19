@@ -717,3 +717,142 @@ test("the binder's list carries each policy's identity", async () => {
   // are named after.
   expect(hygiene!.uid).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/);
 });
+
+/**
+ * A policy renamed in a draft still opens.
+ *
+ * **The customer hit this on a document sitting in front of them:** *"While
+ * editing a binder if I rename a document and then click on it to open it an
+ * error pops up that the document doesn't exist. This should not be the case.
+ * There should be a branch with this document."*
+ *
+ * There is, and that was the whole of it: the tree in edit mode shows the
+ * draft's names, and the page it opened asked `main` — which has never heard
+ * of the new address, and said so.
+ */
+test("a policy renamed in a draft opens at the name it was renamed to", async () => {
+  const { session, org, binder } = await provisionBinder();
+  const draft = await openDraft(session, org, binder);
+
+  await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/document-renames`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({
+        documentPath: "nursing/hand-hygiene",
+        name: "Hand Hygiene and PPE",
+        draft,
+      }),
+    },
+  );
+
+  const address = `${API_BASE_URL}/api/app/binders/${org}/${binder}/documents/nursing%2Fhand-hygiene-and-ppe`;
+
+  // On `main` that address does not exist, and saying so is correct.
+  const onRecord = await fetch(address, { headers: authHeaders(session) });
+  expect(onRecord.status).toBe(404);
+
+  const inDraft = await fetch(`${address}?draft=${encodeURIComponent(draft)}`, {
+    headers: authHeaders(session),
+  });
+  expect(inDraft.status, await inDraft.clone().text()).toBe(200);
+  const body = (await inDraft.json()) as {
+    document: { slugPath: string };
+    ref: string;
+  };
+  expect(body.document.slugPath).toBe("nursing/hand-hygiene-and-ppe");
+  // Read on the branch that holds it, so the file behind it reads too.
+  expect(body.ref).toBe(draft);
+});
+
+/** And in the browser, which is where it was reported. */
+test("clicking a renamed policy in the tree opens it, not an error", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provisionBinder();
+  await signInBrowser(page, session);
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+
+  await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
+
+  await page.getByRole("button", { name: "Rename Hand Hygiene" }).click();
+  const box = page.getByRole("textbox", { name: "New name" });
+  await box.fill("Hand Hygiene and PPE");
+  await box.press("Enter");
+
+  const row = page.locator(".binder-tree-label", {
+    hasText: "Hand Hygiene And PPE",
+  });
+  await expect(row).toBeVisible({ timeout: 30_000 });
+  await row.click();
+
+  // The document's own page, under the name it was just given.
+  await expect(page.locator(".app-main h1")).toHaveText(
+    "Hand Hygiene And PPE",
+    {
+      timeout: 30_000,
+    },
+  );
+  await expect(page.locator(".app-main")).not.toContainText("No such document");
+  // Still editing, which is also the way back to what they were doing.
+  expect(page.url()).toContain("edit=1");
+});
+
+/**
+ * Comparing a change that renamed the policy it changed.
+ *
+ * **Also reported:** *"When I click compare on a renamed document an error
+ * pops up saying the document doesn't exist."* The comparison reads two refs —
+ * the proposed version on the change's branch, and the version it replaces on
+ * the base — and a rename gives one document two addresses. The base has never
+ * heard of the new one.
+ *
+ * The identity is what is the same at both refs (ADR 0005), and it rides in
+ * the filename, so the file operations address the document by its path rather
+ * than by where it is filed.
+ */
+test("the version a rename replaces is still readable at the base", async () => {
+  const { session, org, binder } = await provisionBinder();
+  const draft = await openDraft(session, org, binder);
+
+  await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/document-renames`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({
+        documentPath: "nursing/hand-hygiene",
+        name: "Hand Hygiene and PPE",
+        draft,
+      }),
+    },
+  );
+
+  const [renamed] = (await listDocuments(session, org, binder, draft)).documents
+    .filter((entry) => entry.slugPath === "nursing/hand-hygiene-and-ppe")
+    .map((entry) => entry.uid);
+  expect(renamed).toBeTruthy();
+
+  // The file path, which carries the identity — what the change page sends.
+  const onDraft = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/documents/nursing%2Fhand-hygiene-and-ppe?draft=${encodeURIComponent(draft)}`,
+    { headers: authHeaders(session) },
+  );
+  const { document } = (await onDraft.json()) as {
+    document: { path: string };
+  };
+
+  // Asked at `main`, where the policy is still called Hand Hygiene. The
+  // address is unknown there and the identity is not.
+  const atBase = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/raw/${document.path
+      .split("/")
+      .map(encodeURIComponent)
+      .join("/")}?ref=main`,
+    { headers: authHeaders(session) },
+  );
+  expect(atBase.status, await atBase.clone().text()).toBe(200);
+});

@@ -113,9 +113,16 @@ export function BinderChangePage({
       kind: "binder",
       org,
       binder,
-      documentPath: shown?.slugPath ?? "",
+      // **The file path, which carries the identity — not the address.** The
+      // file operations on a change read at two refs: the proposed version on
+      // the change's branch, and the version it replaces on the base. A change
+      // that renames a policy has two different addresses for one document,
+      // and the base ref has never heard of the new one. The identity is the
+      // thing that is the same at both (ADR 0005), and it rides in the
+      // filename.
+      documentPath: shown?.path ?? shown?.slugPath ?? "",
     }),
-    [org, binder, shown?.slugPath],
+    [org, binder, shown?.path, shown?.slugPath],
   );
 
   const record = useMemo(
@@ -154,7 +161,15 @@ export function BinderChangePage({
     try {
       const blob =
         loaded ??
-        (await downloadBinderDocument(org, binder, shown.slugPath, gitRef));
+        // By identity, for the same reason the scope is: a download of the
+        // version this change replaces is a read at a ref that does not know
+        // the new name.
+        (await downloadBinderDocument(
+          org,
+          binder,
+          shown.path || shown.slugPath,
+          gitRef,
+        ));
       triggerBrowserDownload(blob, downloadFileName(shown));
     } finally {
       setDownloadingRef(null);

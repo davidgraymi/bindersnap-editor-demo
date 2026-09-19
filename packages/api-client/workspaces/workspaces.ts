@@ -28,6 +28,7 @@ import type {
   GetBinderArchiveParams,
   GetBinderChange200,
   GetBinderDocument200,
+  GetBinderDocumentParams,
   GetBinderDraft200,
   GetBinderHistory200,
   GetBinderPeople200,
@@ -782,19 +783,28 @@ export type getBinderDocumentResponse = (getBinderDocumentResponseSuccess)
 
 export const getGetBinderDocumentUrl = (org: string,
     binder: string,
-    documentPath: string,) => {
+    documentPath: string,
+    params?: GetBinderDocumentParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/app/binders/${org}/${binder}/documents/${documentPath}`
+  return stringifiedParams.length > 0 ? `/api/app/binders/${org}/${binder}/documents/${documentPath}?${stringifiedParams}` : `/api/app/binders/${org}/${binder}/documents/${documentPath}`
 }
 
 export const getBinderDocument = async (org: string,
     binder: string,
-    documentPath: string, options?: Parameters<typeof customFetch>[1]): Promise<getBinderDocumentResponse> => {
+    documentPath: string,
+    params?: GetBinderDocumentParams, options?: Parameters<typeof customFetch>[1]): Promise<getBinderDocumentResponse> => {
 
-  return customFetch<getBinderDocumentResponse>(getGetBinderDocumentUrl(org,binder,documentPath),
+  return customFetch<getBinderDocumentResponse>(getGetBinderDocumentUrl(org,binder,documentPath,params),
   {
     ...options,
     method: 'GET'

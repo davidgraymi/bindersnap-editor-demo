@@ -157,6 +157,24 @@ export function BinderShell({
     return () => window.removeEventListener("popstate", handler);
   }, []);
 
+  /**
+   * Open a document, staying in edit mode if that is where it was opened from.
+   *
+   * **A policy renamed a moment ago is only at that name in the draft.** The
+   * tree in edit mode shows the draft's names, and clicking one used to leave
+   * edit mode on the way — so the page it landed on asked `main` for an
+   * address `main` has never heard of, and said the document did not exist.
+   * Keeping `?edit=1` on the address keeps the draft, and is also the way back
+   * to what somebody was doing.
+   */
+  const openDocument = (documentPath: string, version?: number | null) => {
+    if (editMode === "editing" && draft?.draft) {
+      moveTo(`/${org}/${binder}/${documentPath}?edit=1`);
+      return;
+    }
+    onOpenDocument(documentPath, version);
+  };
+
   const loadOverview = useCallback(() => {
     let cancelled = false;
     fetchBinder(org, binder)
@@ -513,7 +531,7 @@ export function BinderShell({
           onViewChange={(next) => openChangeNumber(openChange, next)}
           onBackToChanges={() => goTo("changes")}
           onOpenSignOffRules={() => goTo("sign-off")}
-          onOpenDocument={onOpenDocument}
+          onOpenDocument={openDocument}
           onChanged={loadOverview}
         />
       ) : documentPath ? (
@@ -521,6 +539,9 @@ export function BinderShell({
           org={org}
           binder={binder}
           documentPath={documentPath}
+          /* Opened from the tree while editing, so it is read where the name
+             it was clicked under actually exists. */
+          draft={editMode === "off" ? null : (draft?.draft?.branch ?? null)}
           onOpenBinder={onOpenBinder}
           onOpenChange={openChangeNumber}
         />
@@ -534,7 +555,7 @@ export function BinderShell({
         <BinderHistory
           org={org}
           binder={binder}
-          onOpenDocument={onOpenDocument}
+          onOpenDocument={openDocument}
           onOpenChange={openChangeNumber}
         />
       ) : activeTab === "settings" ? (
@@ -587,7 +608,7 @@ export function BinderShell({
         <BinderDocuments
           org={org}
           binder={binder}
-          onOpenDocument={onOpenDocument}
+          onOpenDocument={openDocument}
           activeDocument={documentPath ?? null}
           draft={editMode === "off" ? null : (draft?.draft?.branch ?? null)}
           draftActs={draft?.draft?.acts ?? []}

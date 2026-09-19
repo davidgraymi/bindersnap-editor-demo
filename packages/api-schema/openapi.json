@@ -7379,6 +7379,14 @@
             "required": true,
             "name": "documentPath",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "draft",
+            "in": "query"
           }
         ],
         "responses": {
