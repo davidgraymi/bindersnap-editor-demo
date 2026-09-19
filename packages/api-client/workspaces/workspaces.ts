@@ -25,6 +25,7 @@ import type {
   EditBinderChangeBody,
   GetBinder200,
   GetBinderArchive200,
+  GetBinderArchiveParams,
   GetBinderChange200,
   GetBinderDocument200,
   GetBinderDraft200,
@@ -1252,18 +1253,27 @@ export type getBinderArchiveResponseSuccess = (getBinderArchiveResponse200) & {
 export type getBinderArchiveResponse = (getBinderArchiveResponseSuccess)
 
 export const getGetBinderArchiveUrl = (org: string,
-    binder: string,) => {
+    binder: string,
+    params?: GetBinderArchiveParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/app/binders/${org}/${binder}/archive`
+  return stringifiedParams.length > 0 ? `/api/app/binders/${org}/${binder}/archive?${stringifiedParams}` : `/api/app/binders/${org}/${binder}/archive`
 }
 
 export const getBinderArchive = async (org: string,
-    binder: string, options?: Parameters<typeof customFetch>[1]): Promise<getBinderArchiveResponse> => {
+    binder: string,
+    params?: GetBinderArchiveParams, options?: Parameters<typeof customFetch>[1]): Promise<getBinderArchiveResponse> => {
 
-  return customFetch<getBinderArchiveResponse>(getGetBinderArchiveUrl(org,binder),
+  return customFetch<getBinderArchiveResponse>(getGetBinderArchiveUrl(org,binder,params),
   {
     ...options,
     method: 'GET'
