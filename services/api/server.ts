@@ -6881,6 +6881,7 @@ async function handleBinderArchive(
   baseHeaders: Headers,
   orgName: string,
   workspaceName: string,
+  draftRaw: string | null,
 ): Promise<Response> {
   // A read, so a session is enough. An organization whose subscription lapsed
   // can still see what it archived — that is its own record, and charging for
@@ -6900,11 +6901,63 @@ async function handleBinderArchive(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
+    // **Read where the count was counted.** The set difference below is
+    // against a tree, and the binder's own list counts the archive at the
+    // draft's ref while it is being edited — so reading this one from `main`
+    // said "Archived · 1 policy" on the tree and then listed nothing, because
+    // the policy archived a moment ago is still on `main` and always will be
+    // until the change is published. Two reads of one question, answered from
+    // two branches.
+    const draft = await resolveOwnDraftBranch({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      username: session.username,
+      draftRaw,
+    });
+    // 409 rather than 404: the binder is readable and what failed is the claim
+    // about the draft, which the page can drop out of edit mode on.
+    if (draft && "error" in draft) {
+      return json(409, { error: draft.error }, baseHeaders);
+    }
+
     // Two reads, both already implemented and both already needed elsewhere.
-    const [tree, tags] = await Promise.all([
-      readWorkspaceTree({ client, org: orgName, workspace: workspaceName }),
+    //
+    // Three while a draft is open, and the third earns itself: a policy
+    // archived in a draft has no `archived-<n>` tag yet — that is written when
+    // the change publishes — so the only stamp is its last version's, and a
+    // binder whose tags predate the stamp has nothing to read a name out of.
+    // `main` still holds the file, under the name it had an act ago, which is
+    // better evidence than printing a 26-character identity at somebody.
+    const [tree, tags, onMain] = await Promise.all([
+      readWorkspaceTree({
+        client,
+        org: orgName,
+        workspace: workspaceName,
+        ...(draft ? { ref: draft.branch } : {}),
+      }),
       listAllTags({ client, owner: orgName, repo: workspaceName }),
+      draft
+        ? readWorkspaceTree({
+            client,
+            org: orgName,
+            workspace: workspaceName,
+          }).catch(() => null)
+        : Promise.resolve(null),
     ]);
+
+    /** What `main` calls each identity, for the fallback above. */
+    const namedOnMain = new Map<string, { name: string; slugPath: string }>();
+    for (const document of onMain?.documents ?? []) {
+      if (document.uid) {
+        namedOnMain.set(document.uid, {
+          // The same rendering the tree gives every other row, so a policy
+          // reads the same in the archive as it did a moment ago in the list.
+          name: formatDocumentName(document.name),
+          slugPath: document.slugPath,
+        });
+      }
+    }
 
     const onRecord = new Set(
       tree.documents.flatMap((document) =>
@@ -6975,13 +7028,16 @@ async function handleBinderArchive(
           lastArchiving?.message || latest.message,
         );
 
+        // The stamp first — it is point-in-time evidence of what the policy
+        // was called when it left. `main` second, which only ever answers
+        // while a draft is being read. The identity last, and never invented:
+        // a heading that says the identity is more use than one that guesses.
+        const named = namedOnMain.get(uid) ?? null;
+
         return {
           uid,
-          // Never invented. A tag with no readable stamp — written under ADR
-          // 0004, or by hand — costs a heading, and a heading that says the
-          // identity is more use than one that guesses a name.
-          title: stamp.title ?? uid,
-          slugPath: stamp.slugPath,
+          title: stamp.title ?? named?.name ?? uid,
+          slugPath: stamp.slugPath || (named?.slugPath ?? ""),
           lastVersion: latest.version,
           lastPublishedAt: latest.at || null,
           archivedAt: lastArchiving?.at ?? null,
@@ -10427,6 +10483,7 @@ export function createApiServer() {
             baseHeaders,
             workspaceArchiveMatch[1]!,
             workspaceArchiveMatch[2]!,
+            url.searchParams.get("draft"),
           );
         } else if (workspaceDocumentRevisionsMatch && method === "POST") {
           return await handleReviseWorkspaceDocument(

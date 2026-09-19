@@ -1463,15 +1463,25 @@ export async function describeBinder(
  * Everything this binder has taken off the record.
  *
  * Not a table: the server works it out at read time as every identity with a
- * version tag, minus every identity on `main`. Which is why it is a page of
+ * version tag, minus every identity on the tree. Which is why it is a page of
  * its own rather than a flag on the documents list — the question is about the
  * tags, not about the tree.
+ *
+ * `draft` takes the difference against your own draft instead of `main`, so a
+ * policy archived a moment ago is in the answer. Without it the binder counted
+ * the archive from the draft and listed it from `main`, and the two disagreed
+ * by exactly the policy somebody had just archived.
  */
 export async function fetchBinderArchive(
   org: string,
   binder: string,
+  draft?: string,
 ): Promise<BinderArchivePayload> {
-  const response = await BindersClient.getBinderArchive(org, binder);
+  const response = await BindersClient.getBinderArchive(
+    org,
+    binder,
+    draft ? { draft } : undefined,
+  );
   return response.data;
 }
 
