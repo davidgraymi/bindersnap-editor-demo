@@ -1946,10 +1946,14 @@ input {
    something about it — "← All changes" is the only way back out.
    ---------------------------------------------------------------- */
 
+/* **No measure of its own.** 820px was right when this was one column of
+   comments; with the decision in a rail beside it (D6) that cap was spent on
+   the rail, leaving the reading column 508px on a 1440px screen — a page two
+   thirds empty with the discussion squeezed into the rest. The page's width
+   is `.app-page-shell`'s, like every other screen's. */
 .change-detail {
   display: grid;
   gap: var(--brand-space-5);
-  max-width: 820px;
 }
 
 .rev-back {
@@ -2040,28 +2044,22 @@ input {
    hold a distinction the product never enforced.
    ------------------------------------------------------------------ */
 
+/* **Reviewers stack as rows**, the way the mockup draws them and the way the
+   grammar (D2) says a list of people reads. Wrapped inline they were chips,
+   and "+ Reviewer" became the last chip on the row — flush against the
+   panel's border, with nothing around it. */
 .rev-reviewers {
-  position: relative;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--brand-space-2) var(--brand-space-5);
+  display: grid;
 }
 
 .rev-reviewer-list {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--brand-space-2) var(--brand-space-5);
+  display: grid;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .rev-reviewer {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--brand-space-1-5);
   font-size: var(--brand-text-ui-sm);
   color: var(--bs-text-muted);
 }
@@ -2104,18 +2102,35 @@ input {
   color: var(--bs-coral-text);
 }
 
-.rev-reviewers-anchor {
-  position: relative;
+/* The foot carries the button and the caveat under it, stacked. */
+.rev-reviewers-foot {
+  display: grid;
+  justify-items: start;
+  gap: var(--brand-space-1);
 }
 
+/* Quiet, and flush left with the note beneath it — the padding is the foot's,
+   which is the point: it used to have none at all. */
+.rev-reviewers-add {
+  gap: var(--brand-space-1);
+  padding: 0;
+  min-height: 22px;
+}
+
+/* **Fixed, because the panel it lives in is a squircle.** `overflow: hidden`
+   is what rounds a `.bs-panel`'s corners, and it clipped this menu to the few
+   pixels of panel below the button — a search box you could not read your own
+   typing in. Floating it takes it out of that box entirely; the component
+   measures the button and sets `left`/`top`, and follows it on scroll. */
 .rev-picker {
-  position: absolute;
+  position: fixed;
   z-index: var(--brand-z-overlay);
-  top: calc(100% + var(--brand-space-2));
-  left: 0;
-  width: min(320px, 80vw);
+  width: min(320px, calc(100vw - 16px));
+  max-height: 320px;
+  overflow-y: auto;
   display: grid;
   gap: var(--brand-space-2);
+  align-content: start;
   padding: var(--brand-space-3);
   background: var(--bs-surface-1);
   border: 1px solid var(--bs-rule);
@@ -2700,20 +2715,6 @@ input {
 
 .rev-btn--ghost:hover:not(:disabled),
 .rev-btn--ghost:focus-visible {
-  border-color: var(--bs-text-faint);
-}
-
-.rev-btn--pill {
-  padding: 5px var(--brand-space-3);
-  font-size: var(--brand-text-ui-sm);
-  border-radius: var(--brand-radius-full);
-  background: var(--bs-surface-1);
-  color: var(--bs-text-primary);
-  border: 1.5px solid var(--bs-rule);
-}
-
-.rev-btn--pill:hover:not(:disabled),
-.rev-btn--pill:focus-visible {
   border-color: var(--bs-text-faint);
 }
 
