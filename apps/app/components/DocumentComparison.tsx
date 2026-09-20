@@ -55,8 +55,6 @@ type ComparisonState =
       status: "rendered";
       html: string;
       segments: DiffSegment[];
-      /** Set for a PDF: both originals, for reading side by side. */
-      originals: { beforeUrl: string; afterUrl: string } | null;
       /** A scanned PDF has no text layer, so there is nothing to compare. */
       empty: boolean;
     }
@@ -132,7 +130,6 @@ export function DocumentComparison({
               ),
             ),
             segments: diffWords(left.text, right.text),
-            originals: null,
             empty: false,
           });
           return;
@@ -162,7 +159,6 @@ export function DocumentComparison({
             status: "rendered",
             html: sanitizeHtml(diffRenderedHtml(leftHtml, rightHtml)),
             segments: diffWords(htmlToText(leftHtml), htmlToText(rightHtml)),
-            originals: null,
             empty: leftHtml.trim() === "" && rightHtml.trim() === "",
           });
           return;
@@ -174,9 +170,9 @@ export function DocumentComparison({
             extractPdfBlocks(after),
           ]);
           if (cancelled) return;
-          const beforeUrl = URL.createObjectURL(before);
-          const afterUrl = URL.createObjectURL(after);
-          objectUrls.push(beforeUrl, afterUrl);
+          // **No object URLs for a PDF any more.** They existed to feed two
+          // `<iframe>`s side by side, and two PDF viewers in half a column
+          // each are two documents nobody can read.
           setState({
             status: "rendered",
             html: sanitizeHtml(
@@ -189,7 +185,6 @@ export function DocumentComparison({
               blocksToText(leftBlocks),
               blocksToText(rightBlocks),
             ),
-            originals: { beforeUrl, afterUrl },
             empty: leftBlocks.length === 0 && rightBlocks.length === 0,
           });
           return;
@@ -411,7 +406,7 @@ export function DocumentComparison({
         {state.status === "rendered" && state.empty ? (
           <p className="doc-preview-note">
             {kind === "pdf"
-              ? "Neither of these PDFs carries a text layer — they are scans of paper. Both files are below, side by side."
+              ? "Neither of these PDFs carries a text layer — they are scans of paper, so there are no words to mark up. Save them to read them."
               : "Neither version has any text in it to compare."}
           </p>
         ) : null}
@@ -424,26 +419,35 @@ export function DocumentComparison({
         ) : null}
       </div>
 
-      {state.status === "rendered" && state.originals ? (
-        <details className="doc-compare-originals">
-          <summary>Read both PDFs side by side</summary>
-          <div className="doc-compare-columns">
-            <figure>
-              <figcaption>{base.label}</figcaption>
-              <iframe
-                src={state.originals.beforeUrl}
-                title={`${base.label} of ${fileName ?? "the document"}`}
-              />
-            </figure>
-            <figure>
-              <figcaption>{headLabel}</figcaption>
-              <iframe
-                src={state.originals.afterUrl}
-                title={`This change to ${fileName ?? "the document"}`}
-              />
-            </figure>
-          </div>
-        </details>
+      {/* **Saved, rather than squinted at.** This was a disclosure holding two
+          `<iframe>`s of the originals, which put two PDF viewers in half a
+          column each — both far too small to read, which is the opposite of
+          what somebody opens a comparison for. The marked-up text above is the
+          answer to "what changed". The only other question a PDF raises is
+          "let me read the actual pages", and the answer to that is a copy of
+          the file, in the reader that renders it properly. */}
+      {kind === "pdf" ? (
+        <div className="doc-compare-actions">
+          <span className="doc-compare-actions-note">
+            To read the pages themselves rather than what changed in them:
+          </span>
+          <button
+            className="bs-btn bs-btn--sm bs-btn-secondary"
+            type="button"
+            onClick={() => onDownload(base.ref)}
+          >
+            <Download size={14} strokeWidth={1.5} aria-hidden="true" />
+            {base.label}
+          </button>
+          <button
+            className="bs-btn bs-btn--sm bs-btn-secondary"
+            type="button"
+            onClick={() => onDownload(headRef)}
+          >
+            <Download size={14} strokeWidth={1.5} aria-hidden="true" />
+            {headLabel}
+          </button>
+        </div>
       ) : null}
     </section>
   );
