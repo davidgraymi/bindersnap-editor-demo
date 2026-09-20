@@ -7,12 +7,15 @@ import {
   History,
   Home,
   Library,
+  PanelLeftClose,
+  PanelLeftOpen,
   Settings,
   Users,
 } from "lucide-react";
 
 import type { BinderTab } from "../binderShell";
 import type { AppRoute, OrganizationTab } from "../routes";
+import { useCollapsedSidebar } from "../useCollapsedSidebar";
 
 /**
  * The map of the product, always on screen.
@@ -95,6 +98,8 @@ export function AppSidebar({
   changeCount = null,
   onNavigate,
 }: AppSidebarProps) {
+  const { collapsed, toggle } = useCollapsedSidebar();
+
   // The org-scoped entries have nowhere to point until we know which
   // organization is on screen. Rendered muted and inert rather than hidden:
   // a map that changes shape as you walk around it is not a map.
@@ -240,10 +245,16 @@ export function AppSidebar({
           disabled ? " app-sidebar-item--muted" : ""
         }`}
         aria-current={active ? "page" : undefined}
+        // Collapsed, the icon is the whole of the row, so the name has to be
+        // reachable some other way. The label stays in the DOM and is hidden
+        // in CSS rather than removed — a screen reader still reads the same
+        // navigation whichever width it is at — and the title puts it back for
+        // a pointer.
+        title={collapsed ? entry.label : undefined}
         onClick={() => entry.route && onNavigate(entry.route)}
       >
         <Icon size={15} strokeWidth={1.75} aria-hidden="true" />
-        {entry.label}
+        <span className="app-sidebar-item-label">{entry.label}</span>
         {typeof entry.count === "number" && entry.count > 0 ? (
           <span className="app-sidebar-item-count">{entry.count}</span>
         ) : null}
@@ -260,7 +271,9 @@ export function AppSidebar({
       .join("") || currentUsername.slice(0, 2).toUpperCase();
 
   return (
-    <aside className="app-sidebar">
+    <aside
+      className={`app-sidebar${collapsed ? " app-sidebar--collapsed" : ""}`}
+    >
       <nav className="app-sidebar-section" aria-label="Your work">
         {work.map(renderEntry)}
       </nav>
@@ -311,11 +324,32 @@ export function AppSidebar({
         <span className="app-sidebar-user-avatar" aria-hidden="true">
           {initials}
         </span>
-        <span>
+        <span className="app-sidebar-user-label">
           <span className="app-sidebar-user-name">
             {currentUserFullName || currentUsername}
           </span>
         </span>
+        {/* **In the foot, at the far end**, which is where a control that acts
+            on the panel itself belongs — not among the destinations, which are
+            about where you are going rather than about the furniture. The
+            glyph is the state it will produce, the way every panel toggle
+            behaves. */}
+        <button
+          type="button"
+          className="app-sidebar-collapse"
+          aria-expanded={!collapsed}
+          aria-label={
+            collapsed ? "Expand the navigation" : "Collapse the navigation"
+          }
+          title={collapsed ? "Expand" : "Collapse"}
+          onClick={toggle}
+        >
+          {collapsed ? (
+            <PanelLeftOpen size={15} strokeWidth={1.75} aria-hidden="true" />
+          ) : (
+            <PanelLeftClose size={15} strokeWidth={1.75} aria-hidden="true" />
+          )}
+        </button>
       </div>
     </aside>
   );

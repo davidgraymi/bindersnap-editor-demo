@@ -8821,3 +8821,84 @@ a.bs-row:focus-visible {
   flex: 1;
   min-width: 0;
 }
+
+/* ── The navigation, down to its icons ─────────────────────────────────────
+   A control rather than a breakpoint: reading a long policy on a laptop wants
+   the page and not the map, and moving around the product wants the map, and
+   which of those somebody is doing changes through the day. */
+
+.app-sidebar--collapsed {
+  width: 56px;
+}
+
+/* The names go, and nothing else moves. Hidden rather than removed, so a
+   screen reader reads the same navigation at either width — the icons alone
+   are not a navigation anybody can hear. */
+.app-sidebar--collapsed .app-sidebar-item-label,
+.app-sidebar--collapsed .app-sidebar-item-count,
+.app-sidebar--collapsed .app-sidebar-label,
+.app-sidebar--collapsed .app-sidebar-binder-name,
+.app-sidebar--collapsed .app-sidebar-user-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* A row with one thing in it centres it, rather than leaving the icon where
+   the text used to start. */
+.app-sidebar--collapsed .app-sidebar-item,
+.app-sidebar--collapsed .app-sidebar-binder {
+  justify-content: center;
+  padding: 0;
+}
+
+.app-sidebar--collapsed .app-sidebar-section {
+  padding-left: var(--brand-space-1);
+  padding-right: var(--brand-space-1);
+}
+
+/* The label rows are the only thing that leaves a gap when emptied, because
+   the group names are what they hold. */
+.app-sidebar--collapsed .app-sidebar-label {
+  margin: 0;
+}
+
+.app-sidebar--collapsed .app-sidebar-user {
+  flex-direction: column;
+  gap: var(--brand-space-2);
+  padding: var(--brand-space-3) var(--brand-space-1);
+}
+
+/* Acts on the panel rather than going anywhere, so it sits in the foot at the
+   far end rather than among the destinations. */
+.app-sidebar-collapse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--brand-radius-md);
+  background: transparent;
+  color: var(--bs-text-faint);
+  cursor: pointer;
+  transition:
+    color var(--brand-transition-base),
+    background var(--brand-transition-base);
+}
+
+.app-sidebar-collapse:hover,
+.app-sidebar-collapse:focus-visible {
+  color: var(--bs-text-primary);
+  background: var(--bs-surface-2);
+}
+
+.app-sidebar--collapsed .app-sidebar-collapse {
+  margin-left: 0;
+}
