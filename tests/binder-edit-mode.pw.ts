@@ -789,13 +789,13 @@ test("clicking a renamed policy in the tree opens it, not an error", async ({
   await expect(row).toBeVisible({ timeout: 30_000 });
   await row.click();
 
-  // The document's own page, under the name it was just given.
-  await expect(page.locator(".app-main h1")).toHaveText(
-    "Hand Hygiene And PPE",
-    {
-      timeout: 30_000,
-    },
-  );
+  // The document's own page, under the name it was just given. The page's own
+  // heading, not the one inside the policy: a rendered Markdown policy opens
+  // with its own `# Hand Hygiene`, so once the preview lands there are two and
+  // `.app-main h1` is a strict-mode violation rather than an assertion.
+  await expect(
+    page.locator(".app-main h1:not(.doc-preview-prose h1)"),
+  ).toHaveText("Hand Hygiene And PPE", { timeout: 30_000 });
   await expect(page.locator(".app-main")).not.toContainText("No such document");
   // Still editing, which is also the way back to what they were doing.
   expect(page.url()).toContain("edit=1");
