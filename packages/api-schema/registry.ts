@@ -853,11 +853,25 @@ registry.registerPath({
      * an address `main` has never heard of — and was told, of a document
      * sitting on screen, that it does not exist. Your own draft only.
      */
-    query: z.object({ draft: z.string().optional() }),
+    query: z.object({
+      draft: z.string().optional(),
+      /**
+       * Read it on a change request's branch.
+       *
+       * **A change request is a branch, and a document on it has an address.**
+       * The proposed version used to be readable only inside the change's own
+       * page, in a panel beside the discussion — half a column wide, headed by
+       * the change's title rather than the document's, at a URL that said
+       * nothing about which document it was. This is the binder at another
+       * ref, which is what every other git front end does.
+       */
+      change: z.string().optional(),
+    }),
   },
   responses: {
     200: {
-      description: "One document, with its published versions",
+      description:
+        "One document, with its published versions — on the record, in your draft, or on a change's branch",
       content: {
         "application/json": { schema: WorkspaceDocumentDetailPayloadSchema },
       },

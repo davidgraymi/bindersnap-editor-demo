@@ -152,8 +152,27 @@ export function buildDocumentUrl(params: {
   binder: string;
   documentPath: string;
   version: number | null;
+  /**
+   * Read it on a change request's branch.
+   *
+   * A change request is a branch, and a document on it has an address. Never
+   * with `version`: one asks for a version on the record and the other for
+   * what a change proposes, and an address claiming both is a question with
+   * no answer.
+   */
+  change?: number | null;
 }): string {
-  const { org, binder, documentPath, version } = params;
+  const { org, binder, documentPath, version, change = null } = params;
   const base = `/${org}/${binder}/${documentPath}`;
+  if (change !== null) return `${base}?change=${change}`;
   return version === null ? base : `${base}?version=${version}`;
+}
+
+/**
+ * Which change request the address is asking to read this document on.
+ *
+ * Null for the record, which is what every link that does not name one means.
+ */
+export function parseRequestedChangeRef(search: string): number | null {
+  return parsePositiveIntParam(search, "change");
 }

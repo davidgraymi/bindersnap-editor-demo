@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
 import { Columns2, Download, FileText, Pencil } from "lucide-react";
 
 import type { ChangeUpdate, RepoBranchProtection } from "../api";
 import {
-  downloadDocument,
   listChangeUpdates,
   publishDocument,
   submitDocumentReview,
@@ -26,7 +25,6 @@ import {
 import type { DocumentChangeView } from "../routes";
 import { ChangeReviewers } from "./ChangeReviewers";
 import { DocumentComparison } from "./DocumentComparison";
-import { DocumentPreview } from "./DocumentPreview";
 import { ReviewTimeline } from "./ReviewTimeline";
 
 interface DocumentChangeDetailProps {
@@ -69,6 +67,17 @@ interface DocumentChangeDetailProps {
    * "nothing changed" about a change that plainly did something.
    */
   documentMove?: string | null;
+  /**
+   * Open this document at its own address, on this change's branch.
+   *
+   * **A change request is a branch, and a document on it has an address.**
+   * Reading the proposed version used to happen here, in a panel beside the
+   * discussion: half a column wide, under a heading naming the change rather
+   * than the document, at a URL that said nothing about which document it was.
+   * It is the binder at another ref, which is what every other git front end
+   * does and what a reader already knows how to use.
+   */
+  onOpenOnBranch?: (() => void) | null;
   /**
    * What this change is about, when it is **not** a document.
    *
@@ -262,6 +271,7 @@ export function DocumentChangeDetail({
   nextVersion,
   documentCount = 1,
   documentMove = null,
+  onOpenOnBranch = null,
   subject = null,
   documentName,
   fileName,
@@ -301,12 +311,6 @@ export function DocumentChangeDetail({
 
   const prNum = change.number;
   const isSubmitting = actionState.status === "submitting";
-
-  // Stable so the preview loads the file once per ref rather than per render.
-  const loadFile = useCallback(
-    (gitRef: string) => downloadDocument(scope, gitRef),
-    [scope],
-  );
 
   // The updates are their own call: the Changes tab lists changes, and a list
   // has no use for the history inside each one. A failure costs the update
@@ -477,7 +481,8 @@ export function DocumentChangeDetail({
             <button
               className="rev-btn rev-btn--ghost"
               type="button"
-              onClick={() => onViewChange("preview")}
+              disabled={!onOpenOnBranch}
+              onClick={() => onOpenOnBranch?.()}
             >
               Read the proposed version
             </button>
@@ -494,55 +499,11 @@ export function DocumentChangeDetail({
     );
   }
 
-  if (view === "preview") {
-    return (
-      <article className="change-detail">
-        <button className="rev-back" type="button" onClick={onBackToList}>
-          ← All changes
-        </button>
-        <h1 className="bs-title rev-title">{change.summary}</h1>
-        <section className="rev-file-view">
-          {proposed.ref ? (
-            <>
-              <p className="rev-file-note">
-                The file exactly as submitted
-                {proposed.updateLabel ? `, ${proposed.updateLabel}` : ""}.
-              </p>
-              <DocumentPreview
-                loadFile={loadFile}
-                gitRef={proposed.ref}
-                fileName={fileName}
-                downloading={downloading}
-                onDownload={(loaded) => onDownload(proposed.ref!, loaded)}
-              />
-            </>
-          ) : (
-            <p className="vault-pr-notice">
-              This change has no branch on record, so the submitted file cannot
-              be shown.
-            </p>
-          )}
-          <div className="rev-file-actions">
-            <button
-              className="rev-btn rev-btn--ghost"
-              type="button"
-              disabled={!proposed.ref || comparisonBase === null}
-              onClick={() => onViewChange("compare")}
-            >
-              Compare with {comparisonBase?.label ?? "the last version"}
-            </button>
-            <button
-              className="rev-btn rev-btn--ghost"
-              type="button"
-              onClick={() => onViewChange("discussion")}
-            >
-              Back to the review
-            </button>
-          </div>
-        </section>
-      </article>
-    );
-  }
+  // **There is no in-page preview any anymore.** Reading what a change
+  // proposes happens at the document's own address on the change's branch —
+  // `/{org}/{binder}/{path}?change=N` — where it has its own title and the
+  // whole width of the page. `?view=preview` still parses, and the change page
+  // sends it there rather than 404ing a link somebody saved.
 
   // **The author's, and while it is open.** The server refuses anybody else,
   // and a button that fails is worse than one that is not there.
@@ -716,7 +677,9 @@ export function DocumentChangeDetail({
           currentUsername={currentUser}
           blockOnUnresolvedThreads={blockOnUnresolvedThreads}
           onOpenUpdate={
-            proposed.ref === null ? null : () => onViewChange("preview")
+            proposed.ref === null || !onOpenOnBranch
+              ? null
+              : () => onOpenOnBranch()
           }
           onSummaryChange={(next) => {
             setUnresolvedCount((prev) =>
@@ -772,8 +735,8 @@ export function DocumentChangeDetail({
                 <button
                   className="bs-btn bs-btn--sm bs-btn-secondary"
                   type="button"
-                  disabled={!proposed.ref}
-                  onClick={() => onViewChange("preview")}
+                  disabled={!proposed.ref || !onOpenOnBranch}
+                  onClick={() => onOpenOnBranch?.()}
                 >
                   Open
                 </button>

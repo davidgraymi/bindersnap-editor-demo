@@ -45,6 +45,19 @@ interface BinderDocumentPageProps {
    * where the name it was clicked under exists. Null on the record.
    */
   draft?: string | null;
+  /**
+   * The change request this document is being read on, from `?change=`.
+   *
+   * **A change request is a branch, and a document on it has an address.** The
+   * proposed version used to be readable only inside the change's own page, in
+   * a panel beside the discussion — half a column wide, headed by the change's
+   * title rather than the document's, at a URL that said nothing about which
+   * document it was. Here it is the document's own page, read at another ref,
+   * which is what every other git front end does.
+   */
+  change?: number | null;
+  /** Back to the change this is being read on. */
+  onBackToChange?: ((changeNumber: number) => void) | null;
   onOpenBinder: () => void;
   /** Open one of this document's open changes, on the binder. */
   onOpenChange: (changeNumber: number) => void;
@@ -67,6 +80,8 @@ export function BinderDocumentPage({
   binder,
   documentPath,
   draft = null,
+  change = null,
+  onBackToChange = null,
   onOpenBinder,
   onOpenChange,
 }: BinderDocumentPageProps) {
@@ -98,7 +113,13 @@ export function BinderDocumentPage({
     setDetail(null);
     setError(null);
 
-    fetchBinderDocument(org, binder, documentPath, draft ?? undefined)
+    fetchBinderDocument(
+      org,
+      binder,
+      documentPath,
+      draft ?? undefined,
+      change ?? undefined,
+    )
       .then((payload) => {
         if (!cancelled) setDetail(payload);
       })
@@ -114,7 +135,7 @@ export function BinderDocumentPage({
     return () => {
       cancelled = true;
     };
-  }, [org, binder, documentPath, draft]);
+  }, [org, binder, documentPath, draft, change]);
 
   const viewing = useMemo(
     () =>
@@ -209,6 +230,29 @@ export function BinderDocumentPage({
 
   return (
     <div className="binder-pane">
+      {/* **Which branch you are reading, said before anything on it.** The
+          page is the document's own — its title, its full width — and what
+          makes it a *proposal* rather than the record is a fact about the ref,
+          which nothing else on the page carries. It links back to the change,
+          because somebody who came here to read came here to decide. */}
+      {change !== null ? (
+        <div className="bs-note bs-note--warn doc-on-change" role="status">
+          <span>
+            <strong>This is what change {change} proposes.</strong> It is not on
+            the record until the change is approved and published.
+          </span>
+          {onBackToChange ? (
+            <button
+              type="button"
+              className="bs-btn bs-btn--sm bs-btn-secondary"
+              onClick={() => onBackToChange(change)}
+            >
+              Back to change {change}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
       <header className="bs-pagehead">
         <div className="bs-pagehead-body">
           <h1 className="bs-title">{formatDocumentName(document.name)}</h1>

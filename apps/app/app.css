@@ -8920,3 +8920,14 @@ a.bs-row:focus-visible {
   flex-shrink: 0;
   gap: var(--brand-space-2);
 }
+
+/* Which branch a document is being read on, said before anything on it. The
+   page is the document's own — its title, its full width — and what makes it a
+   proposal rather than the record is a fact about the ref. */
+.doc-on-change {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--brand-space-3);
+}

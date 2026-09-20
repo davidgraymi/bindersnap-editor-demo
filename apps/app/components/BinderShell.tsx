@@ -24,6 +24,7 @@ import {
 } from "../binderShell";
 import type { DocumentChangeView } from "../routes";
 import { parseRequestedChange } from "../binderChange";
+import { buildDocumentUrl } from "../binderDocument";
 import { formatDocumentName } from "../documentDisplay";
 import { AddPolicyModal } from "./AddPolicyModal";
 import { NewFolderModal } from "./NewFolderModal";
@@ -600,7 +601,27 @@ export function BinderShell({
         </p>
       ) : null}
 
-      {openChange !== null ? (
+      {/* **A document path wins over a change number**, and that order is the
+          whole of this change. An address naming a document is asking for that
+          document; `?change=` says which ref to read it at, the way `?draft=`
+          and `?version=` do. The other way round, `/{org}/{binder}/{path}
+          ?change=7` rendered the change's page and the path was ignored. */}
+      {documentPath ? (
+        <BinderDocumentPage
+          org={org}
+          binder={binder}
+          documentPath={documentPath}
+          /* Reading what a change proposes, at the document's own address on
+             that change's branch. */
+          change={openChange}
+          onBackToChange={openChangeNumber}
+          /* Opened from the tree while editing, so it is read where the name
+             it was clicked under actually exists. */
+          draft={editMode === "off" ? null : (draft?.draft?.branch ?? null)}
+          onOpenBinder={onOpenBinder}
+          onOpenChange={openChangeNumber}
+        />
+      ) : openChange !== null ? (
         <BinderChangePage
           org={org}
           binder={binder}
@@ -611,18 +632,20 @@ export function BinderShell({
           onBackToChanges={() => goTo("changes")}
           onOpenSignOffRules={() => goTo("sign-off")}
           onOpenDocument={openDocument}
+          /* The document's own address, on this change's branch — the binder
+             at another ref rather than a panel inside the change. */
+          onOpenOnBranch={(slugPath) =>
+            moveTo(
+              buildDocumentUrl({
+                org,
+                binder,
+                documentPath: slugPath,
+                version: null,
+                change: openChange,
+              }),
+            )
+          }
           onChanged={loadOverview}
-        />
-      ) : documentPath ? (
-        <BinderDocumentPage
-          org={org}
-          binder={binder}
-          documentPath={documentPath}
-          /* Opened from the tree while editing, so it is read where the name
-             it was clicked under actually exists. */
-          draft={editMode === "off" ? null : (draft?.draft?.branch ?? null)}
-          onOpenBinder={onOpenBinder}
-          onOpenChange={openChangeNumber}
         />
       ) : activeTab === "changes" ? (
         <BinderChanges

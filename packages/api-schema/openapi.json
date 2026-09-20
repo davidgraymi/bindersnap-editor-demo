@@ -7390,11 +7390,19 @@
             "required": false,
             "name": "draft",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "change",
+            "in": "query"
           }
         ],
         "responses": {
           "200": {
-            "description": "One document, with its published versions",
+            "description": "One document, with its published versions — on the record, in your draft, or on a change's branch",
             "content": {
               "application/json": {
                 "schema": {

@@ -1222,3 +1222,145 @@ test("a change that only revises a document reports no move", async () => {
   };
   expect(documents[0]?.previousSlugPath).toBeNull();
 });
+
+// ── A document on a change's branch ────────────────────────────────────────
+
+/**
+ * **A change request is a branch, and a document on it has an address.**
+ *
+ * Reading what a change proposes used to happen inside the change's own page,
+ * in a panel beside the discussion: half a column wide, under a heading naming
+ * the change rather than the document, at a URL that said nothing about which
+ * document it was. It is the binder at another ref, which is what every other
+ * git front end does and what a reader already knows how to use.
+ */
+test("a document reads at its own address on a change's branch", async () => {
+  const { session, org, binder } = await provisionBinder();
+  const draft = await openDraft(session, org, binder);
+
+  const form = new FormData();
+  form.set(
+    "file",
+    new Blob(["# Hand Hygiene\n\nProposed wording.\n"], {
+      type: "text/markdown",
+    }),
+    "hand-hygiene.md",
+  );
+  form.set("documentPath", "nursing/hand-hygiene");
+  form.set("draft", draft);
+  await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/document-revisions`,
+    {
+      method: "POST",
+      headers: {
+        Origin: APP_BASE_URL,
+        Cookie: `bindersnap_session=${session}`,
+      },
+      body: form,
+    },
+  );
+
+  const proposed = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/changes`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({ title: "Reword hand hygiene", draft }),
+    },
+  );
+  const { changeNumber } = (await proposed.json()) as { changeNumber: number };
+
+  const address = `${API_BASE_URL}/api/app/binders/${org}/${binder}/documents/nursing%2Fhand-hygiene`;
+
+  const onChange = await fetch(`${address}?change=${changeNumber}`, {
+    headers: authHeaders(session),
+  });
+  expect(onChange.status, await onChange.clone().text()).toBe(200);
+  const onChangeBody = (await onChange.json()) as {
+    ref: string;
+    state: string;
+  };
+  // Read on the change's branch, so the bytes behind it are the proposed ones.
+  expect(onChangeBody.ref).not.toBe("main");
+
+  // **And it is still a published policy.** "Proposed" means the document is
+  // not on the record at all, which is a question about its version tags
+  // rather than about which branch is being read — printing "this policy is
+  // not in the binder yet" over a policy at v1 is false.
+  expect(onChangeBody.state).toBe("published");
+
+  const onRecord = await fetch(address, { headers: authHeaders(session) });
+  expect(((await onRecord.json()) as { ref: string }).ref).toBe("main");
+});
+
+/** A change nobody opened is not a ref, and asking for one falls back. */
+test("a document asked for on a change that is not there reads the record", async () => {
+  const { session, org, binder } = await provisionBinder();
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/documents/nursing%2Fhand-hygiene?change=9999`,
+    { headers: authHeaders(session) },
+  );
+  expect(response.status, await response.clone().text()).toBe(200);
+  expect(((await response.json()) as { ref: string }).ref).toBe("main");
+});
+
+/** In the browser: the document's own page, not a panel in the change's. */
+test("Open on a change lands on the document's own page", async ({ page }) => {
+  const { session, org, binder } = await provisionBinder();
+  await signInBrowser(page, session);
+
+  const form = new FormData();
+  form.set(
+    "file",
+    new Blob(["# Hand Hygiene\n\nProposed wording.\n"], {
+      type: "text/markdown",
+    }),
+    "hand-hygiene.md",
+  );
+  form.set("documentPath", "nursing/hand-hygiene");
+  const revised = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/document-revisions`,
+    {
+      method: "POST",
+      headers: {
+        Origin: APP_BASE_URL,
+        Cookie: `bindersnap_session=${session}`,
+      },
+      body: form,
+    },
+  );
+  const body = (await revised.json()) as {
+    changeNumber?: number;
+    pullRequestNumber?: number;
+  };
+  const number = body.changeNumber ?? body.pullRequestNumber;
+
+  await page.goto(
+    `${APP_BASE_URL}/${org}/${binder}?tab=changes&change=${number}`,
+  );
+  await page.getByRole("button", { name: "Open", exact: true }).click();
+
+  // The document's address, and the document's own name as the page's title.
+  await expect(page).toHaveURL(
+    new RegExp(`/${org}/${binder}/nursing/hand-hygiene\\?change=${number}$`),
+    { timeout: 30_000 },
+  );
+  // The page's own heading, not the `# Hand Hygiene` inside the policy.
+  await expect(
+    page.locator(".app-main h1:not(.doc-preview-prose h1)"),
+  ).toHaveText("Hand Hygiene", { timeout: 30_000 });
+  // Which branch you are reading, said before anything on it.
+  await expect(page.locator(".doc-on-change")).toContainText(
+    `This is what change ${number} proposes`,
+  );
+
+  // A link somebody saved to the old in-page preview lands there too.
+  await page.goto(
+    `${APP_BASE_URL}/${org}/${binder}?tab=changes&change=${number}&view=preview`,
+  );
+  await expect(page).toHaveURL(
+    new RegExp(`/${org}/${binder}/nursing/hand-hygiene\\?change=${number}$`),
+    { timeout: 30_000 },
+  );
+});

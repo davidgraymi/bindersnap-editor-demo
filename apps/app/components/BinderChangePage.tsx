@@ -38,6 +38,13 @@ interface BinderChangePageProps {
   onViewChange: (view: DocumentChangeView) => void;
   onBackToChanges: () => void;
   onOpenDocument: (slugPath: string) => void;
+  /**
+   * Open a document at its own address, on this change's branch.
+   *
+   * A change request is a branch, and a document on it has an address — so
+   * "read what this proposes" is a navigation rather than a panel.
+   */
+  onOpenOnBranch: (slugPath: string) => void;
   /** Something about the change moved: the binder's own counts have too. */
   onChanged: () => void;
   /** Where the required reviewers come from, for the reader who asks. */
@@ -67,6 +74,7 @@ export function BinderChangePage({
   onOpenDocument,
   onChanged,
   onOpenSignOffRules,
+  onOpenOnBranch,
 }: BinderChangePageProps) {
   const [detail, setDetail] = useState<WorkspaceChangeDetailPayload | null>(
     null,
@@ -124,6 +132,21 @@ export function BinderChangePage({
     }),
     [org, binder, shown?.path, shown?.slugPath],
   );
+
+  /**
+   * An address still asking for the old in-page preview.
+   *
+   * **There is no in-page preview any more** — reading what a change proposes
+   * happens at the document's own address on the change's branch, where it
+   * has its own title and the whole width of the page. A link somebody saved
+   * lands there rather than on a view that no longer exists.
+   */
+  useEffect(() => {
+    if (view === "preview" && shown) onOpenOnBranch(shown.slugPath);
+    // `onOpenOnBranch` is a navigation closure over org and binder, both of
+    // which change only by unmounting this page.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, shown?.slugPath]);
 
   const record = useMemo(
     () =>
@@ -326,6 +349,7 @@ export function BinderChangePage({
         /* A rename is a change even when not a word of the document changed,
            and the comparison cannot show it. */
         documentMove={shown ? describeMove(shown) : null}
+        onOpenOnBranch={shown ? () => onOpenOnBranch(shown.slugPath) : null}
         // A change that touches no document is a change to this binder's
         // sign-off rules — the one kind that goes through review and versions
         // nothing. Saying so replaces the version wording and the file panel,

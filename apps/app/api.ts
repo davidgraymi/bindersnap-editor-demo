@@ -990,12 +990,23 @@ export async function fetchBinderDocument(
    * was clicked under exists.
    */
   draft?: string,
+  /**
+   * Read it on a change request's branch.
+   *
+   * A change request is a branch, and a document on it has an address — so
+   * reading the proposed version is the binder at another ref rather than a
+   * panel inside the change's page.
+   */
+  change?: number,
 ): Promise<WorkspaceDocumentDetailPayload> {
   const response = await BindersClient.getBinderDocument(
     org,
     binder,
     documentPath,
-    draft ? { draft } : undefined,
+    {
+      ...(draft ? { draft } : {}),
+      ...(change ? { change: String(change) } : {}),
+    },
   );
   return response.data;
 }

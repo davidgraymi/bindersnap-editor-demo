@@ -52,6 +52,15 @@ export type AppRoute =
        * record, which is what every other link to a document means.
        */
       version?: number;
+      /**
+       * Read it on a change request's branch, rather than on the record.
+       *
+       * **A change request is a branch, and a document on it has an address.**
+       * Reading a proposed version used to happen inside the change's own page
+       * — half a column wide, under a heading naming the change rather than
+       * the document. This is the binder at another ref.
+       */
+      change?: number;
     };
 export type DocumentChangeView = "discussion" | "preview" | "compare";
 /** The organization's own tabs. Binders is the one it opens on. */
@@ -224,6 +233,7 @@ export function routeToPath(route: AppRoute): string {
         binder: route.binder,
         documentPath: route.documentPath,
         version: route.version ?? null,
+        change: route.change ?? null,
       });
     case "home":
     case "workspace":
