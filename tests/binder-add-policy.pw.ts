@@ -344,7 +344,13 @@ test("the library lists a policy across every binder it can reach", async ({
 
   await page.goto(`${APP_BASE_URL}/documents`);
 
-  await expect(page.getByRole("heading", { name: "Policies" })).toBeVisible();
+  // **Exact**, because this is the page's own title. Substring matching also
+  // catches the rail heading of every binder whose name ends in "policies",
+  // so the assertion passed until the stack had two of them and then failed
+  // on a strict-mode violation about data the test never created.
+  await expect(
+    page.getByRole("heading", { name: "Policies", exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: clinical, exact: false }),
   ).toBeVisible();
