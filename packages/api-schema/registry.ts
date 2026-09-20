@@ -821,7 +821,18 @@ registry.registerPath({
      * is not on `main` and never will be until the change request publishes.
      * Your own draft only; naming somebody else's is refused.
      */
-    query: z.object({ draft: z.string().optional() }),
+    query: z.object({
+      draft: z.string().optional(),
+      /**
+       * Read the binder as a change request would leave it.
+       *
+       * A document read on a change's branch puts the binder's contents in
+       * the navigation beside it, and a tree pinned to `main` there would
+       * list a policy under the name the change renamed it away from — and
+       * lead to an address that does not exist on the branch being read.
+       */
+      change: z.string().optional(),
+    }),
   },
   responses: {
     200: {

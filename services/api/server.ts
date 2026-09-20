@@ -7106,6 +7106,7 @@ async function handleListWorkspaceDocuments(
   orgName: string,
   workspaceName: string,
   draftRaw: string | null,
+  changeRaw: string | null,
 ): Promise<Response> {
   const auth = await requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
@@ -7135,6 +7136,26 @@ async function handleListWorkspaceDocuments(
       return json(409, { error: draft.error }, baseHeaders);
     }
 
+    // **The binder as a change request would leave it.** Reading a document on
+    // a change's branch puts its contents in the navigation beside it, and a
+    // tree pinned to `main` there would list the policy under the name the
+    // change renamed it away from — and lead to an address that does not exist
+    // on the branch you are reading.
+    const changeNumber = Number.parseInt(changeRaw ?? "", 10);
+    const onChange =
+      !draft && Number.isFinite(changeNumber) && changeNumber > 0
+        ? await getPullRequestWithReviews({
+            client: auth.client,
+            owner: orgName,
+            repo: workspaceName,
+            pullNumber: changeNumber,
+          })
+            .then((entry) => entry.pullRequest.branchName || null)
+            .catch(() => null)
+        : null;
+
+    const ref = draft ? draft.branch : onChange;
+
     return json(
       200,
       {
@@ -7146,7 +7167,7 @@ async function handleListWorkspaceDocuments(
           org: orgName,
           workspace: workspaceName,
           withLastChange: true,
-          ...(draft ? { ref: draft.branch } : {}),
+          ...(ref ? { ref } : {}),
         })),
       },
       baseHeaders,
@@ -10564,6 +10585,7 @@ export function createApiServer() {
             workspaceDocumentsMatch[1]!,
             workspaceDocumentsMatch[2]!,
             url.searchParams.get("draft"),
+            url.searchParams.get("change"),
           );
         } else if (workspaceChangeReviewMatch && method === "POST") {
           response = await handleWorkspaceChangeReview(

@@ -1364,3 +1364,106 @@ test("Open on a change lands on the document's own page", async ({ page }) => {
     { timeout: 30_000 },
   );
 });
+
+// ── The binder's contents beside the policy you are reading ────────────────
+
+/**
+ * **So you can keep moving while you read.**
+ *
+ * *"I'm thinking about how GitHub opens a file and puts the filesystem in the
+ * left navbar. I like that because you can continue to navigate while you
+ * read."* A policy manual is read by looking rather than by navigating, and
+ * going back to the list to open the next policy is the clunk.
+ *
+ * Only while a policy is open: every other binder screen draws the tree
+ * itself, and two trees on one page is one too many.
+ */
+test("the binder's contents sit beside an open policy, and not elsewhere", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provisionBinder();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
+  // The binder's own page has the tree, so the navigation does not repeat it.
+  await expect(page.locator(".app-sidebar-tree-item")).toHaveCount(0);
+
+  await page.locator(".binder-tree-label", { hasText: "Hand Hygiene" }).click();
+  await expect(
+    page.locator(".app-main h1:not(.doc-preview-prose h1)"),
+  ).toHaveText("Hand Hygiene", { timeout: 30_000 });
+
+  // Both policies are there, and the one being read is marked.
+  const rows = page.locator(".app-sidebar-tree-item");
+  await expect(rows).toHaveCount(2, { timeout: 30_000 });
+  await expect(
+    page.locator(".app-sidebar-tree-item.app-sidebar-item--active"),
+  ).toHaveText("Hand Hygiene");
+
+  // And it navigates, which is the whole point of it being there.
+  await page
+    .locator(".app-sidebar-tree-item", { hasText: "Staff Handbook" })
+    .click();
+  await expect(page).toHaveURL(
+    new RegExp(`/${org}/${binder}/staff-handbook$`),
+    {
+      timeout: 30_000,
+    },
+  );
+});
+
+/**
+ * Reading a change's branch navigates that branch.
+ *
+ * A tree pinned to `main` beside a policy read on a change would list it under
+ * the name the change renamed it away from — and lead to an address that does
+ * not exist on the branch being read.
+ */
+test("the contents beside a change's policy are the change's", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provisionBinder();
+  const draft = await openDraft(session, org, binder);
+
+  await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/document-renames`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({
+        documentPath: "nursing/hand-hygiene",
+        name: "Hand Hygiene and PPE",
+        draft,
+      }),
+    },
+  );
+  const proposed = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/changes`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({ title: "Rename hand hygiene", draft }),
+    },
+  );
+  const { changeNumber } = (await proposed.json()) as { changeNumber: number };
+
+  await signInBrowser(page, session);
+  await page.goto(
+    `${APP_BASE_URL}/${org}/${binder}/nursing/hand-hygiene-and-ppe?change=${changeNumber}`,
+  );
+
+  // The branch's name for it, which `main` has never heard of.
+  await expect(
+    page.locator(".app-sidebar-tree-item", { hasText: "Hand Hygiene And PPE" }),
+  ).toBeVisible({ timeout: 30_000 });
+
+  // And a row leads somewhere that exists on the branch being read.
+  await page
+    .locator(".app-sidebar-tree-item", { hasText: "Staff Handbook" })
+    .click();
+  await expect(page).toHaveURL(
+    new RegExp(`/${org}/${binder}/staff-handbook\\?change=${changeNumber}$`),
+    { timeout: 30_000 },
+  );
+});
