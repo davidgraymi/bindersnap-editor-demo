@@ -9527,6 +9527,10 @@
                                 "publishedAt"
                               ]
                             }
+                          },
+                          "previousSlugPath": {
+                            "type": "string",
+                            "nullable": true
                           }
                         },
                         "required": [
@@ -9539,7 +9543,8 @@
                           "sha",
                           "nextVersion",
                           "currentVersion",
-                          "versions"
+                          "versions",
+                          "previousSlugPath"
                         ]
                       }
                     },

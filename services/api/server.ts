@@ -4233,6 +4233,23 @@ async function handleWorkspaceChangeDetail(
       readSignOffGate(orgName, workspaceName),
     ]);
 
+    // **Where each document is filed on the base**, so a change that renamed
+    // or moved one can say so. The identity survives a rename and the address
+    // does not (ADR 0005), so this is the address the same identity has on the
+    // branch this change would land on. A read that fails costs the sentence
+    // and not the page: nothing below it is a gate.
+    const onBase = await readWorkspaceTree({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      ref: entry.pullRequest.base?.ref || "main",
+    }).catch(() => null);
+    const baseAddresses = new Map<string, string>(
+      (onBase?.documents ?? []).flatMap((document) =>
+        document.uid ? [[document.uid, document.slugPath] as const] : [],
+      ),
+    );
+
     // The version each document reaches if this is published. One call per
     // document the change touches — which is a handful, on a page about one
     // change, and it is the difference between "Publish" and "Publish v4".
@@ -4244,11 +4261,16 @@ async function handleWorkspaceChangeDetail(
           workspace: workspaceName,
           uid: document.uid,
         });
+        const was = document.uid ? baseAddresses.get(document.uid) : undefined;
         return {
           ...document,
           nextVersion: nextVersionFrom(versions),
           currentVersion: versions[0] ?? null,
           versions,
+          // Null when it is filed where it always was, and for a document
+          // being added — which has no "was" to report.
+          previousSlugPath:
+            was !== undefined && was !== document.slugPath ? was : null,
         };
       }),
     );

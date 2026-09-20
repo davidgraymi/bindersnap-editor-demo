@@ -7,7 +7,7 @@ import {
   fetchBinderChange,
   updateBinderChange,
 } from "../api";
-import { describeVersionStep } from "../binderChange";
+import { describeChangedDocument, describeMove } from "../binderChange";
 import { downloadFileName } from "../binderDocument";
 import type { ChangeScope } from "../changeScope";
 import { resolveComparisonBase } from "../documentComparison";
@@ -247,32 +247,52 @@ export function BinderChangePage({
         banner={behind}
         documentPicker={
           documents.length > 1 ? (
-            /* A change is the unit of approval and may version several
-               documents, so when it does, the file screens need to be told
-               which one they are showing. */
-            <div className="bs-panel">
+            /* **What this change does, document by document.** A change is the
+               unit of approval and routinely touches several, and this panel
+               was a picker rather than an answer: it showed the raw filename,
+               identity segment and all, and left the one thing a reviewer
+               wants — what happens to each — to a version string in the
+               header that changed as you clicked. */
+            <div className="bs-panel change-does">
               <div className="bs-panel-bar">
-                <h2 className="bs-panel-bar-title">
-                  This change publishes {documents.length} documents
-                </h2>
+                <h2 className="bs-panel-bar-title">What this change does</h2>
+                <span className="bs-panel-bar-spacer" />
+                <span className="binder-count">
+                  {documents.length} documents
+                </span>
               </div>
               <ul className="bs-row-list">
-                {documents.map((document) => (
-                  <li key={document.slugPath}>
-                    <button
-                      className={`bs-row${document.slugPath === shown?.slugPath ? " bs-row--on" : ""}`}
-                      type="button"
-                      onClick={() => setViewing(document.slugPath)}
-                    >
-                      <span className="bs-row-body">
-                        <span className="bs-row-name">
-                          {describeVersionStep(document, !isOpen)}
+                {documents.map((document) => {
+                  const facts = describeChangedDocument(document, !isOpen);
+                  const on = document.slugPath === shown?.slugPath;
+
+                  return (
+                    <li key={document.slugPath}>
+                      <button
+                        className={`bs-row${on ? " bs-row--on" : ""}`}
+                        type="button"
+                        aria-current={on ? "true" : undefined}
+                        onClick={() => setViewing(document.slugPath)}
+                      >
+                        <span className="bs-row-body">
+                          <span className="bs-row-name">{facts.title}</span>
+                          {/* The address, not the file path: the identity
+                              segment is a thing the server mints and nobody
+                              reads. */}
+                          <span className="bs-row-meta">{facts.address}</span>
                         </span>
-                        <span className="bs-row-meta">{document.path}</span>
-                      </span>
-                    </button>
-                  </li>
-                ))}
+                        <span className="bs-row-right">
+                          {facts.move ? (
+                            <span className="bs-status bs-status--working">
+                              {facts.move}
+                            </span>
+                          ) : null}
+                          <span className="bs-ver">{facts.effect}</span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ) : null
@@ -295,6 +315,17 @@ export function BinderChangePage({
         blockOnUnresolvedThreads={detail.blockOnUnresolvedThreads}
         canManageAssignments={detail.canManage}
         nextVersion={shown?.nextVersion ?? 1}
+        /* **How many documents this change touches**, which decides whether
+           the header may claim a version. "becomes v2 when published" sits
+           under the change's own title, so with several documents it is a
+           sentence about the change carrying a fact about whichever row
+           happened to be selected — and it changed as you clicked between
+           them. With more than one, the versions belong on the rows that own
+           them and the header says nothing about any. */
+        documentCount={documents.length}
+        /* A rename is a change even when not a word of the document changed,
+           and the comparison cannot show it. */
+        documentMove={shown ? describeMove(shown) : null}
         // A change that touches no document is a change to this binder's
         // sign-off rules — the one kind that goes through review and versions
         // nothing. Saying so replaces the version wording and the file panel,

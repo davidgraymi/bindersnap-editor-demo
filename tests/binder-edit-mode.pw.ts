@@ -1127,3 +1127,98 @@ test("proposing sends the draft it was asked to send", async () => {
   expect(drafts.map((entry) => entry.branch)).not.toContain(first);
   expect(drafts).toHaveLength(1);
 });
+
+/**
+ * A change request that renamed a document says so.
+ *
+ * **A rename is a change even when not a word of the document changed**, and
+ * the comparison cannot show it: the identity survives a rename and the
+ * address does not (ADR 0005), so both versions read identically and the
+ * screen reported "nothing changed" about a change that plainly did
+ * something. The change knows, because the same identity is filed somewhere
+ * else on the branch it would land on.
+ */
+test("a change that renames a document reports where it was", async () => {
+  const { session, org, binder } = await provisionBinder();
+  const draft = await openDraft(session, org, binder);
+
+  await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/document-renames`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({
+        documentPath: "nursing/hand-hygiene",
+        name: "Hand Hygiene and PPE",
+        draft,
+      }),
+    },
+  );
+
+  const proposed = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/changes`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({ title: "Rename hand hygiene", draft }),
+    },
+  );
+  const { changeNumber } = (await proposed.json()) as { changeNumber: number };
+
+  const detail = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/changes/${changeNumber}`,
+    { headers: authHeaders(session) },
+  );
+  expect(detail.status, await detail.clone().text()).toBe(200);
+  const { documents } = (await detail.json()) as {
+    documents: Array<{ slugPath: string; previousSlugPath: string | null }>;
+  };
+
+  const renamed = documents.find(
+    (entry) => entry.slugPath === "nursing/hand-hygiene-and-ppe",
+  );
+  expect(renamed, "the renamed document is not in the change").toBeTruthy();
+  expect(renamed!.previousSlugPath).toBe("nursing/hand-hygiene");
+});
+
+/** A document filed where it always was has no "was" to report. */
+test("a change that only revises a document reports no move", async () => {
+  const { session, org, binder } = await provisionBinder();
+
+  const form = new FormData();
+  form.set(
+    "file",
+    new Blob(["# Hand Hygiene\n\nRewritten.\n"], { type: "text/markdown" }),
+    "hand-hygiene.md",
+  );
+  form.set("documentPath", "nursing/hand-hygiene");
+  const revised = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/document-revisions`,
+    {
+      method: "POST",
+      headers: {
+        Origin: APP_BASE_URL,
+        Cookie: `bindersnap_session=${session}`,
+      },
+      body: form,
+    },
+  );
+  const body = (await revised.json()) as {
+    changeNumber?: number;
+    pullRequestNumber?: number;
+  };
+  const number = body.changeNumber ?? body.pullRequestNumber;
+  expect(
+    number,
+    `revising opened no change: ${JSON.stringify(body)}`,
+  ).toBeTruthy();
+
+  const detail = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/changes/${number}`,
+    { headers: authHeaders(session) },
+  );
+  const { documents } = (await detail.json()) as {
+    documents: Array<{ previousSlugPath: string | null }>;
+  };
+  expect(documents[0]?.previousSlugPath).toBeNull();
+});

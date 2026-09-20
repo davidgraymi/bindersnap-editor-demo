@@ -370,6 +370,20 @@ export const WorkspaceChangedDocumentSchema =
      * comparing it with itself.
      */
     versions: z.array(DocumentVersionSchema),
+    /**
+     * Where this document is filed on the branch the change would land on,
+     * when that is somewhere else.
+     *
+     * **A rename is a change even when not a word of the document changed**,
+     * and the comparison could not say so: the identity survives a rename and
+     * the address does not (ADR 0005), so two versions of a renamed policy
+     * read identically and the page reported "nothing changed" about a change
+     * that plainly did something.
+     *
+     * Null when it is filed where it always was, and for a document being
+     * added — which has no "was".
+     */
+    previousSlugPath: z.string().nullable(),
   });
 export type WorkspaceChangedDocument = z.infer<
   typeof WorkspaceChangedDocumentSchema
