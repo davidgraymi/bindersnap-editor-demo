@@ -61,6 +61,14 @@ export type AppRoute =
        * the document. This is the binder at another ref.
        */
       change?: number;
+      /**
+       * The branch to read it on.
+       *
+       * A file lives on a branch, which is why every code host addresses one
+       * by ref. `change` rides along when there is one, so a reader who
+       * arrived from a change keeps the way back.
+       */
+      ref?: string;
     };
 export type DocumentChangeView = "discussion" | "preview" | "compare";
 /** The organization's own tabs. Binders is the one it opens on. */
@@ -234,6 +242,7 @@ export function routeToPath(route: AppRoute): string {
         documentPath: route.documentPath,
         version: route.version ?? null,
         change: route.change ?? null,
+        ref: route.ref ?? null,
       });
     case "home":
     case "workspace":

@@ -25,7 +25,7 @@ import {
 } from "../binderShell";
 import type { DocumentChangeView } from "../routes";
 import { parseRequestedChange } from "../binderChange";
-import { buildDocumentUrl } from "../binderDocument";
+import { buildDocumentUrl, parseRequestedRef } from "../binderDocument";
 import { formatDocumentName } from "../documentDisplay";
 import { AddPolicyModal } from "./AddPolicyModal";
 import { NewFolderModal } from "./NewFolderModal";
@@ -149,6 +149,10 @@ export function BinderShell({
   const [draftBranch, setDraftBranch] = useState<string | null>(() =>
     draftFromSearch(window.location.search),
   );
+  /** The branch a document is being read on, from `?ref=`. */
+  const [documentRefFromSearch, setDocumentRef] = useState<string | null>(() =>
+    parseRequestedRef(window.location.search),
+  );
 
   /**
    * Your draft in this binder, and whose else is open.
@@ -171,6 +175,7 @@ export function BinderShell({
       setChangeView(changeViewFromSearch(window.location.search));
       setEditMode(editModeFromSearch(window.location.search));
       setDraftBranch(draftFromSearch(window.location.search));
+      setDocumentRef(parseRequestedRef(window.location.search));
       setArchive(archiveFromSearch(window.location.search));
     };
     window.addEventListener("popstate", handler);
@@ -480,7 +485,14 @@ export function BinderShell({
       // The active row is the address, not what the read happened to return:
       // the read is slower than the click, and a tree that marks the row a
       // moment late reads as a tree that marks the wrong one.
-      contents: contents ? { ...contents, active: documentPath ?? null } : null,
+      contents: contents
+        ? {
+            ...contents,
+            active: documentPath ?? null,
+            // Clicking through the explorer stays on the branch being read.
+            ref: documentRefFromSearch,
+          }
+        : null,
     });
     // Reporting is the effect; the shell above clears it when the route
     // leaves the binder, so there is nothing to undo here.
@@ -492,6 +504,7 @@ export function BinderShell({
     overview?.openChangeCount,
     contents,
     documentPath,
+    documentRefFromSearch,
     onBinderChange,
   ]);
 
@@ -664,6 +677,9 @@ export function BinderShell({
           documentPath={documentPath}
           /* Reading what a change proposes, at the document's own address on
              that change's branch. */
+          /* The branch the address names, which is what the page reads at.
+             The change is where the reader came from. */
+          documentRef={documentRefFromSearch}
           change={openChange}
           onBackToChange={openChangeNumber}
           /* Opened from the tree while editing, so it is read where the name
@@ -685,7 +701,10 @@ export function BinderShell({
           onOpenDocument={openDocument}
           /* The document's own address, on this change's branch — the binder
              at another ref rather than a panel inside the change. */
-          onOpenOnBranch={(slugPath) =>
+          /* **The branch, not the change.** A file lives on a branch, which
+             is the address every code host gives it; the change rides along
+             so the reader keeps the way back to where they came from. */
+          onOpenOnBranch={(slugPath, branch) =>
             moveTo(
               buildDocumentUrl({
                 org,
@@ -693,6 +712,7 @@ export function BinderShell({
                 documentPath: slugPath,
                 version: null,
                 change: openChange,
+                ref: branch,
               }),
             )
           }

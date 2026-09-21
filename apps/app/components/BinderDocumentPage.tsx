@@ -56,6 +56,18 @@ interface BinderDocumentPageProps {
    * which is what every other git front end does.
    */
   change?: number | null;
+  /**
+   * The branch this is being read on.
+   *
+   * **A file lives on a branch, and that is what the page reads at.** `change`
+   * is not the ref — it is where the reader came from, and it buys the way
+   * back and nothing else.
+   */
+  /**
+   * The branch this is being read on. Named `documentRef` in the component
+   * because `ref` is React's own prop and cannot be one of ours.
+   */
+  documentRef?: string | null;
   /** Back to the change this is being read on. */
   onBackToChange?: ((changeNumber: number) => void) | null;
   onOpenBinder: () => void;
@@ -81,6 +93,7 @@ export function BinderDocumentPage({
   documentPath,
   draft = null,
   change = null,
+  documentRef = null,
   onBackToChange = null,
   onOpenBinder,
   onOpenChange,
@@ -119,6 +132,7 @@ export function BinderDocumentPage({
       documentPath,
       draft ?? undefined,
       change ?? undefined,
+      documentRef ?? undefined,
     )
       .then((payload) => {
         if (!cancelled) setDetail(payload);
@@ -135,7 +149,7 @@ export function BinderDocumentPage({
     return () => {
       cancelled = true;
     };
-  }, [org, binder, documentPath, draft, change]);
+  }, [org, binder, documentPath, draft, change, documentRef]);
 
   const viewing = useMemo(
     () =>
@@ -235,13 +249,22 @@ export function BinderDocumentPage({
           makes it a *proposal* rather than the record is a fact about the ref,
           which nothing else on the page carries. It links back to the change,
           because somebody who came here to read came here to decide. */}
-      {change !== null ? (
+      {/* **Which branch, said before anything on it.** The page is the
+          document's own — its title, its full width — and what makes it a
+          proposal rather than the record is a fact about the ref, which
+          nothing else on the page carries. The change number is where the
+          reader came from rather than what is being read, so it buys the way
+          back and nothing else. */}
+      {documentRef || change !== null ? (
         <div className="bs-note bs-note--warn doc-on-change" role="status">
           <span>
-            <strong>This is what change {change} proposes.</strong> It is not on
-            the record until the change is approved and published.
+            <strong>
+              You are reading the branch{" "}
+              <code className="bs-filename">{documentRef ?? detail.ref}</code>.
+            </strong>{" "}
+            Nothing on it is on the record until it is approved and published.
           </span>
-          {onBackToChange ? (
+          {change !== null && onBackToChange ? (
             <button
               type="button"
               className="bs-btn bs-btn--sm bs-btn-secondary"

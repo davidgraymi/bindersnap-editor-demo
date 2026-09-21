@@ -212,6 +212,7 @@ import {
   readRequestedReviewers,
 } from "./change-assignments";
 import { buildChangeUpdates } from "./change-updates";
+import type { DraftNameRecord } from "./draft-names";
 import {
   defaultDraftName,
   describeUnnamedDraft,
@@ -7423,6 +7424,7 @@ async function handleWorkspaceDocumentDetail(
   documentPath: string,
   draftRaw: string | null,
   changeRaw: string | null,
+  refRaw: string | null,
 ): Promise<Response> {
   const auth = await requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
@@ -7435,6 +7437,54 @@ async function handleWorkspaceDocumentDetail(
     });
     if (!workspace) {
       return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    /**
+     * The branch the address names, read directly.
+     *
+     * **A file lives on a branch, and that is the address it should have** —
+     * *"When I open a file in a PR on GitHub… it goes to the file on the
+     * commit that it was made on. Similarly we should navigate to the branch
+     * view instead of the change view."* A change request is one thing that
+     * happens to a branch; the branch is the thing the file is on.
+     *
+     * **Somebody else's draft is refused here**, which is the one rule a raw
+     * ref would otherwise walk straight through. Gitea lets every
+     * collaborator read every branch in the repository, and the product's rule
+     * is narrower: other people's drafts are visible as existing and never as
+     * contents. So a `draft/` branch goes through the same ownership check
+     * every other draft read uses, and anything else is an ordinary branch
+     * anybody who can read the binder may read.
+     */
+    const askedRef = (refRaw ?? "").trim();
+    let onRef: string | null = null;
+    if (askedRef !== "") {
+      // **Only an unproposed draft is private.** The moment a change request
+      // sits on a branch it stops being a draft and becomes the thing every
+      // reviewer is being asked to read — `listBinderDrafts` already subtracts
+      // those, so a branch still in that list is somebody's work in progress
+      // and a branch that has left it is a change request.
+      const unproposed = isDraftBranch(askedRef)
+        ? await listBinderDrafts({
+            client: auth.client,
+            org: orgName,
+            workspace: workspaceName,
+          })
+        : [];
+      const stillADraft = unproposed.find((entry) => entry.branch === askedRef);
+
+      if (stillADraft && stillADraft.owner !== auth.session.username) {
+        return json(
+          409,
+          {
+            error:
+              "That draft is not yours. Other people's drafts are visible as existing and never as contents.",
+          },
+          baseHeaders,
+        );
+      }
+
+      onRef = askedRef;
     }
 
     /**
@@ -7482,7 +7532,9 @@ async function handleWorkspaceDocumentDetail(
 
     // A draft is yours and a change is everybody's, so a request naming both
     // is answered with the draft — the one that had to be checked.
-    const readAt = draft ? draft.branch : onChange;
+    // A draft is yours, a ref is explicit, and a change is a lookup. The most
+    // specific claim the caller made wins.
+    const readAt = draft ? draft.branch : (onRef ?? onChange);
     let ref = readAt ?? "main";
     // **Not decided by the ref.** "Proposed" means the document is not on the
     // record at all, which is a question about its version tags rather than
@@ -7495,12 +7547,31 @@ async function handleWorkspaceDocumentDetail(
     // One read of the tree answers both "which document is this" and "what
     // folders could it be moved to", so the page that offers a move has the
     // list without a second call.
-    const tree = await readWorkspaceTree({
-      client: auth.client,
-      org: orgName,
-      workspace: workspaceName,
-      ...(readAt ? { ref: readAt } : {}),
-    });
+    // **A ref that is not there is said plainly.** Gitea answers a missing
+    // branch with `sha not found [no-such-branch]`, which is its vocabulary
+    // and not a sentence anybody following a stale link can act on.
+    const tree = readAt
+      ? await readWorkspaceTree({
+          client: auth.client,
+          org: orgName,
+          workspace: workspaceName,
+          ref: readAt,
+        }).catch(() => null)
+      : await readWorkspaceTree({
+          client: auth.client,
+          org: orgName,
+          workspace: workspaceName,
+        });
+
+    if (!tree) {
+      return json(
+        404,
+        {
+          error: `This binder has no branch called "${readAt}". It may have been published or discarded since that link was made.`,
+        },
+        baseHeaders,
+      );
+    }
 
     let document =
       tree.documents.find((entry) => entry.path === documentPath) ??
@@ -8526,7 +8597,7 @@ async function describeDraft(params: {
         giteaRepoId,
         ownDrafts.map((draft) => draft.branch),
       )
-      .catch(() => new Map<string, { name: string }>()),
+      .catch(() => new Map<string, DraftNameRecord>()),
     Promise.all(
       ownDrafts.map(async (draft) => {
         const acts = await readDraftActs({
@@ -10780,6 +10851,7 @@ export function createApiServer() {
             decodeURIComponent(workspaceDocumentMatch[3]!),
             url.searchParams.get("draft"),
             url.searchParams.get("change"),
+            url.searchParams.get("ref"),
           );
         } else if (workspaceOverviewMatch && method === "GET") {
           response = await handleWorkspaceOverview(

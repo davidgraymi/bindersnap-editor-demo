@@ -1005,6 +1005,13 @@ export async function fetchBinderDocument(
    * panel inside the change's page.
    */
   change?: number,
+  /**
+   * Read it on a branch, named.
+   *
+   * A file lives on a branch, which is why every code host addresses one by
+   * ref. Somebody else's draft is refused by the server.
+   */
+  ref?: string,
 ): Promise<WorkspaceDocumentDetailPayload> {
   const response = await BindersClient.getBinderDocument(
     org,
@@ -1013,6 +1020,7 @@ export async function fetchBinderDocument(
     {
       ...(draft ? { draft } : {}),
       ...(change ? { change: String(change) } : {}),
+      ...(ref ? { ref } : {}),
     },
   );
   return response.data;

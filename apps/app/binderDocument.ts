@@ -161,11 +161,45 @@ export function buildDocumentUrl(params: {
    * no answer.
    */
   change?: number | null;
+  /**
+   * The branch to read it on.
+   *
+   * **A file lives on a branch, and that is the address it should have.** A
+   * change request is one thing that happens to a branch; the branch is the
+   * thing the file is on, which is why every code host addresses a file by
+   * ref. `change` rides along when there is one, so a reader who arrived from
+   * a change has the way back — it says where you came from, not what to read.
+   */
+  ref?: string | null;
 }): string {
-  const { org, binder, documentPath, version, change = null } = params;
+  const {
+    org,
+    binder,
+    documentPath,
+    version,
+    change = null,
+    ref = null,
+  } = params;
   const base = `/${org}/${binder}/${documentPath}`;
-  if (change !== null) return `${base}?change=${change}`;
-  return version === null ? base : `${base}?version=${version}`;
+
+  const query = new URLSearchParams();
+  if (ref) query.set("ref", ref);
+  if (change !== null) query.set("change", String(change));
+  // A version is about the record, so it never travels with a branch: one
+  // asks for what was published and the other for what is proposed, and an
+  // address claiming both is a question with no answer.
+  if (!ref && change === null && version !== null) {
+    query.set("version", String(version));
+  }
+
+  const search = query.toString();
+  return search === "" ? base : `${base}?${search}`;
+}
+
+/** Which branch the address is asking to read this document on. */
+export function parseRequestedRef(search: string): string | null {
+  const raw = new URLSearchParams(search).get("ref")?.trim() ?? "";
+  return raw === "" ? null : raw;
 }
 
 /**

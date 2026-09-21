@@ -877,6 +877,19 @@ registry.registerPath({
        * ref, which is what every other git front end does.
        */
       change: z.string().optional(),
+      /**
+       * Read it on a branch, named.
+       *
+       * **A file lives on a branch, and that is the address it should have.**
+       * A change request is one thing that happens to a branch; the branch is
+       * the thing the file is on, which is why every code host addresses a
+       * file by ref rather than by pull request.
+       *
+       * Somebody else's draft is refused: Gitea lets every collaborator read
+       * every branch, and the product's rule is narrower — other people's
+       * drafts are visible as existing and never as contents.
+       */
+      ref: z.string().optional(),
     }),
   },
   responses: {
