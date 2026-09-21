@@ -1378,7 +1378,7 @@ test("Open on a change lands on the document's own page", async ({ page }) => {
  * Only while a policy is open: every other binder screen draws the tree
  * itself, and two trees on one page is one too many.
  */
-test("the binder's contents sit beside an open policy, and not elsewhere", async ({
+test("the binder's files sit in a panel beside an open policy", async ({
   page,
 }) => {
   const { session, org, binder } = await provisionBinder();
@@ -1386,8 +1386,8 @@ test("the binder's contents sit beside an open policy, and not elsewhere", async
 
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
-  // The binder's own page has the tree, so the navigation does not repeat it.
-  await expect(page.locator(".app-sidebar-tree-item")).toHaveCount(0);
+  // The binder's own page has the tree, so the explorer does not repeat it.
+  await expect(page.locator(".app-explorer-item")).toHaveCount(0);
 
   await page.locator(".binder-tree-label", { hasText: "Hand Hygiene" }).click();
   await expect(
@@ -1395,15 +1395,15 @@ test("the binder's contents sit beside an open policy, and not elsewhere", async
   ).toHaveText("Hand Hygiene", { timeout: 30_000 });
 
   // Both policies are there, and the one being read is marked.
-  const rows = page.locator(".app-sidebar-tree-item");
+  const rows = page.locator(".app-explorer-item");
   await expect(rows).toHaveCount(2, { timeout: 30_000 });
-  await expect(
-    page.locator(".app-sidebar-tree-item.app-sidebar-item--active"),
-  ).toHaveText("Hand Hygiene");
+  await expect(page.locator(".app-explorer-item--active")).toHaveText(
+    "Hand Hygiene",
+  );
 
   // And it navigates, which is the whole point of it being there.
   await page
-    .locator(".app-sidebar-tree-item", { hasText: "Staff Handbook" })
+    .locator(".app-explorer-item", { hasText: "Staff Handbook" })
     .click();
   await expect(page).toHaveURL(
     new RegExp(`/${org}/${binder}/staff-handbook$`),
@@ -1455,15 +1455,86 @@ test("the contents beside a change's policy are the change's", async ({
 
   // The branch's name for it, which `main` has never heard of.
   await expect(
-    page.locator(".app-sidebar-tree-item", { hasText: "Hand Hygiene And PPE" }),
+    page.locator(".app-explorer-item", { hasText: "Hand Hygiene And PPE" }),
   ).toBeVisible({ timeout: 30_000 });
 
   // And a row leads somewhere that exists on the branch being read.
   await page
-    .locator(".app-sidebar-tree-item", { hasText: "Staff Handbook" })
+    .locator(".app-explorer-item", { hasText: "Staff Handbook" })
     .click();
   await expect(page).toHaveURL(
     new RegExp(`/${org}/${binder}/staff-handbook\\?change=${changeNumber}$`),
     { timeout: 30_000 },
   );
+});
+
+/**
+ * **The files are a panel of their own, and the policy gets the rest.**
+ *
+ * *"Move the file explorer out of the side navigation bar into its own side
+ * navigation bar exactly like GitHub's… When you are viewing a document it
+ * should take up the entire screen width to the right of the left navigation
+ * bar."*
+ *
+ * Two panels answer two questions: the map of the product barely changes, and
+ * a binder's contents change every time you open a different binder.
+ */
+test("a policy is read beside its own file panel, at the page's full width", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provisionBinder();
+  await signInBrowser(page, session);
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/nursing/hand-hygiene`);
+  await expect(page.locator(".app-explorer")).toBeVisible({ timeout: 30_000 });
+
+  const measured = await page.evaluate(() => {
+    const box = (selector: string) => {
+      const element = document.querySelector(selector);
+      return element
+        ? {
+            left: Math.round(element.getBoundingClientRect().left),
+            width: Math.round(element.getBoundingClientRect().width),
+          }
+        : null;
+    };
+    return {
+      nav: box(".app-sidebar"),
+      explorer: box(".app-explorer"),
+      page: box(".docw-page"),
+      window: window.innerWidth,
+    };
+  });
+
+  // The explorer sits beside the map rather than inside it.
+  expect(measured.explorer!.left).toBe(
+    measured.nav!.left + measured.nav!.width,
+  );
+
+  // And the policy takes what is left, rather than the page measure a list
+  // or a form is capped at.
+  const remaining =
+    measured.window - measured.explorer!.left - measured.explorer!.width;
+  expect(measured.page!.width).toBeGreaterThan(remaining - 40);
+
+  // The map is still the map: its own entries are untouched by any of this.
+  await expect(
+    page.locator(".app-sidebar-item", { hasText: "Binders" }),
+  ).toBeVisible();
+});
+
+/** On a binder's own screens the page draws the tree, so the panel is absent. */
+test("the file panel is only there while a policy is open", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provisionBinder();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".app-explorer")).toBeHidden();
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}?tab=changes`);
+  await expect(page.locator(".app-explorer")).toBeHidden();
 });

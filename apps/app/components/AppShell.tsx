@@ -14,6 +14,7 @@ import { BindersnapLogoMark } from "./BindersnapLogoMark";
 import { DocumentsPage } from "./DocumentsPage";
 import { ReviewQueuePage } from "./ReviewQueuePage";
 import { AppSidebar, type SidebarBinder } from "./AppSidebar";
+import { BinderExplorer } from "./BinderExplorer";
 import { AppBottomNav } from "./AppBottomNav";
 import { useDefaultOrganization } from "../useOrganizationDisplayName";
 import { NewPolicyModal } from "./NewPolicyModal";
@@ -377,6 +378,19 @@ export function AppShell({
           currentUserFullName={user?.fullName ?? ""}
           onNavigate={onNavigate}
         />
+
+        {/* **The binder's files, in a panel of their own.** Two different
+            questions deserve two panels: the map of the product barely
+            changes, and a binder's contents change every time you open a
+            different binder. It also lets the file list be as wide as a
+            filename needs while the map stays narrow. Only while a policy is
+            open — every other binder screen draws its own tree in the page. */}
+        {sidebarBinder?.contents ? (
+          <BinderExplorer
+            binder={{ ...sidebarBinder, contents: sidebarBinder.contents }}
+            onNavigate={onNavigate}
+          />
+        ) : null}
 
         {/* Main content area */}
         <div className="app-main-area">
