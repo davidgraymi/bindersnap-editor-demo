@@ -44,7 +44,7 @@ import {
 } from "../binderMove";
 import { formatAge, formatDocumentName } from "../documentDisplay";
 import { buildBinderUrl } from "../binderShell";
-import { useCollapsedFolders } from "../useCollapsedFolders";
+import { useOpenFolders } from "../useOpenFolders";
 import { BinderTreeView } from "./BinderTree";
 import { MoveToFolderModal } from "./MoveToFolderModal";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
@@ -195,7 +195,7 @@ export function BinderDocuments({
     subject: DragSubject;
     label: string;
   } | null>(null);
-  const { collapsed, toggle } = useCollapsedFolders(org, binder);
+  const { isOpen, toggle } = useOpenFolders(org, binder, activeDocument);
   /** What the bar's filter holds. Empty is the whole binder. */
   const [filter, setFilter] = useState("");
   /** The archive, once somebody has opened it in the tree. */
@@ -709,7 +709,7 @@ export function BinderDocuments({
         ) : (
           <BinderTreeView
             nodes={shown}
-            collapsed={needle === "" ? collapsed : NOTHING_SHUT}
+            isFolderOpen={needle === "" ? isOpen : EVERYTHING_OPEN}
             onToggleFolder={toggle}
             onOpenDocument={onOpenDocument}
             activeDocument={activeDocument}
@@ -943,7 +943,7 @@ export function BinderDocuments({
 }
 
 /** Nothing shut: a filter opens every folder on the way to a match. */
-const NOTHING_SHUT: ReadonlySet<string> = new Set();
+const EVERYTHING_OPEN = () => true;
 
 /** The same row, for marking what is currently in the air. */
 function sameNode(left: DragSubject, right: DragSubject): boolean {

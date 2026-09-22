@@ -13,12 +13,12 @@ import { formatDocumentName } from "../documentDisplay";
  * is a cosmetic complaint. At two hundred it is the difference between a
  * filing system and a list of strings.
  *
- * **Open by default, and collapsing is remembered.** The old comment on this
- * list was right about the reason — a policy manual is read by looking, and a
- * surveyor asking for the infection control policy should see it without
- * opening anything — so nothing starts shut. What changes is that a person
- * with twelve departments can now shut the eleven they are not working in, and
- * find them shut when they come back.
+ * **Shut by default, and opening is remembered.** A binder of forty policies
+ * in eight departments arrived as a wall of all forty when every folder
+ * started open, which is not what a filing cabinet looks like. A reader opens
+ * the drawer they want, and finds it open when they come back — and the
+ * folders holding the policy on screen are opened for them, so the tree always
+ * contains the thing being read. See `useOpenFolders`.
  *
  * Rendering only: which folders are open, and what a click means, belong to
  * whatever is showing the tree. That is what lets edit mode reuse this without
@@ -27,8 +27,14 @@ import { formatDocumentName } from "../documentDisplay";
 
 export interface BinderTreeViewProps {
   nodes: readonly BinderTreeNode[];
-  /** Folder paths that are shut. Absent means open, so a new folder is open. */
-  collapsed: ReadonlySet<string>;
+  /**
+   * Whether a folder is open, asked per row.
+   *
+   * A question rather than a set, because a filtered tree answers "yes" to
+   * every folder without having to name them: a filter that found a policy
+   * inside a shut folder has found nothing anybody can see.
+   */
+  isFolderOpen: (path: string) => boolean;
   onToggleFolder: (path: string) => void;
   onOpenDocument: (slugPath: string) => void;
   /** Marked as where you are — the document open under this binder. */
@@ -92,7 +98,7 @@ const INDENT = 20;
 
 export function BinderTreeView({
   nodes,
-  collapsed,
+  isFolderOpen,
   onToggleFolder,
   onOpenDocument,
   activeDocument = null,
@@ -108,7 +114,7 @@ export function BinderTreeView({
           key={node.kind === "folder" ? `f:${node.path}` : node.document.path}
           node={node}
           depth={0}
-          collapsed={collapsed}
+          isFolderOpen={isFolderOpen}
           onToggleFolder={onToggleFolder}
           onOpenDocument={onOpenDocument}
           activeDocument={activeDocument}
@@ -138,14 +144,14 @@ function TreeRow({ node, depth, ...rest }: TreeRowProps) {
 function FolderRow({
   folder,
   depth,
-  collapsed,
+  isFolderOpen,
   onToggleFolder,
   renderRowActions,
   renderRowLabel,
   rowProps,
   ...rest
 }: Omit<TreeRowProps, "node"> & { folder: BinderTreeFolder }) {
-  const isOpen = !collapsed.has(folder.path);
+  const isOpen = isFolderOpen(folder.path);
   const instead = renderRowLabel?.(folder) ?? null;
   const { className: extra, ...dragProps } = rowProps?.(folder) ?? {};
 
@@ -223,7 +229,7 @@ function FolderRow({
               }
               node={child}
               depth={depth + 1}
-              collapsed={collapsed}
+              isFolderOpen={isFolderOpen}
               onToggleFolder={onToggleFolder}
               renderRowActions={renderRowActions}
               renderRowLabel={renderRowLabel}

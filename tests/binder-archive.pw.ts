@@ -27,7 +27,7 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { API_BASE_URL, APP_BASE_URL } from "./helpers";
+import { API_BASE_URL, APP_BASE_URL, openTreeFolder } from "./helpers";
 
 test.describe.configure({ mode: "serial", timeout: 240_000 });
 
@@ -441,6 +441,8 @@ test("Archive is an act of edit mode, and the draft is the undo", async ({
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
+  // Folders start shut, so the policy is reached the way a person reaches it.
+  await openTreeFolder(page, "Nursing");
   await page.getByRole("button", { name: "Archive Hand Hygiene" }).click();
 
   await expect(page.locator(".bs-draftbar")).toContainText(
@@ -455,6 +457,7 @@ test("Archive is an act of edit mode, and the draft is the undo", async ({
 
   await page.getByRole("button", { name: "Discard" }).click();
   await expect(page.locator(".bs-draftbar")).toBeHidden({ timeout: 30_000 });
+  await openTreeFolder(page, "Nursing");
   await expect(
     page.locator(".binder-tree-label", { hasText: "Hand Hygiene" }),
   ).toBeVisible();
@@ -569,7 +572,9 @@ test("the archive opens in the tree, and Restore goes into the draft", async ({
   await expect(restoreButton).toBeVisible({ timeout: 30_000 });
   await restoreButton.click();
 
-  // Into the draft, and on the tree, and still not on the record.
+  // Into the draft, and on the tree, and still not on the record. At the
+  // binder's top level — archiving the only policy in Nursing took the folder
+  // with it, and the draft bar says so: "to the binder's top level".
   await expect(page.locator(".bs-draftbar")).toContainText("Restore", {
     timeout: 30_000,
   });

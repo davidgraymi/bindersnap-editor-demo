@@ -137,7 +137,11 @@ export function AppSidebar({
   changeCount = null,
   onNavigate,
 }: AppSidebarProps) {
-  const { collapsed, toggle } = useCollapsedSidebar();
+  // A policy open in the page is three panels wide — the map, the binder's
+  // files, and the policy — and the map is the one nobody is reading.
+  const { collapsed, toggle } = useCollapsedSidebar(
+    route.kind === "binderDocument",
+  );
 
   // The org-scoped entries have nowhere to point until we know which
   // organization is on screen. Rendered muted and inert rather than hidden:

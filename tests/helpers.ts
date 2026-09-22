@@ -563,6 +563,26 @@ export async function openBinderSection(
   await entry.click();
 }
 
+/**
+ * Open a folder in the binder's own tree, if it is not already open.
+ *
+ * Folders start shut — a filing cabinet with the drawers closed — so a test
+ * that wants a policy filed inside one has to open the drawer first, the same
+ * way a person does. Idempotent, because the folders holding the document on
+ * screen open themselves.
+ */
+export async function openTreeFolder(page: Page, name: string): Promise<void> {
+  const folder = page
+    .locator(".binder-tree")
+    .getByRole("button", { name: new RegExp(`^${name}`) })
+    .first();
+  await expect(folder).toBeVisible({ timeout: 30_000 });
+  if ((await folder.getAttribute("aria-expanded")) === "false") {
+    await folder.click();
+  }
+  await expect(folder).toHaveAttribute("aria-expanded", "true");
+}
+
 export async function waitForNoPendingReviews(
   page: Page,
   cardSearchText: string,
