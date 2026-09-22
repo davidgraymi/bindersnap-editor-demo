@@ -100,17 +100,25 @@ export function ChangeRow({ change, onOpen, action = null }: ChangeRowProps) {
           {facts.standing}
         </span>
 
-        {/* Only when there is a conversation to join. A zero beside every row
-            is a column of zeroes. */}
-        {comments > 0 ? (
-          <span
-            className="change-row-comments"
-            title={comments === 1 ? "1 comment" : `${comments} comments`}
-          >
-            <MessageSquare size={13} strokeWidth={1.75} aria-hidden="true" />
-            {comments}
-          </span>
-        ) : null}
+        {/* **The slot is always here; what goes in it is not.** A count that
+            appeared on some rows and not others pushed the standing left on
+            exactly those rows, so a list read straight down zig-zagged — the
+            customer: *"keep the rows aligned, so make these columns static so
+            that the status doesn't shift left or right."* Empty rather than a
+            zero: a zero beside every row is still a column of zeroes. */}
+        <span
+          className="change-row-comments"
+          {...(comments > 0
+            ? { title: comments === 1 ? "1 comment" : `${comments} comments` }
+            : { "aria-hidden": true })}
+        >
+          {comments > 0 ? (
+            <>
+              <MessageSquare size={13} strokeWidth={1.75} aria-hidden="true" />
+              {comments}
+            </>
+          ) : null}
+        </span>
 
         {action}
       </span>

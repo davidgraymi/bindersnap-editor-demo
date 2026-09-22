@@ -292,12 +292,21 @@ function HomeChangeRowItem({
         {row.standing}
       </span>
 
-      {row.commentCount > 0 ? (
-        <span className="change-row-comments">
-          <MessageSquare size={13} strokeWidth={1.75} aria-hidden="true" />
-          {row.commentCount}
-        </span>
-      ) : null}
+      {/* Always the slot, only sometimes the count — the same static column
+          the change list keeps, for the same reason: home stacks these rows
+          too, and a standing that sits in a different place on every other
+          row is a list nobody can scan. */}
+      <span
+        className="change-row-comments"
+        aria-hidden={row.commentCount === 0}
+      >
+        {row.commentCount > 0 ? (
+          <>
+            <MessageSquare size={13} strokeWidth={1.75} aria-hidden="true" />
+            {row.commentCount}
+          </>
+        ) : null}
+      </span>
 
       {row.action ? (
         <button
