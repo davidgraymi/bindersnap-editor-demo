@@ -8929,6 +8929,137 @@ a.bs-row:focus-visible {
 
 /* Past a certain size, finding a policy by eye is slower than typing three
    letters of its name. */
+/* **Which version of the binder these rows are addresses on.** It was a
+   warning strip over the page naming a branch — git vocabulary at a reader of
+   a policy manual, stating a fact and offering no act. GitHub puts the same
+   control at the top of the file list, which is where the rows it governs
+   are. */
+.app-explorer-version {
+  padding: var(--brand-space-1) var(--brand-space-2) 0;
+}
+
+.app-explorer-versionbtn {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  width: 100%;
+  min-height: 30px;
+  padding: 0 var(--brand-space-2);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-1);
+  color: var(--bs-text-primary);
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-ui-sm);
+  font-weight: var(--brand-weight-medium);
+  text-align: left;
+  cursor: pointer;
+}
+
+.app-explorer-versionbtn:hover,
+.app-explorer-versionbtn:focus-visible {
+  background: var(--bs-surface-2);
+}
+
+/* The chevron sits at the far end whatever the name is. */
+.app-explorer-versionbtn > svg:last-child {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--bs-text-faint);
+}
+
+.app-explorer-versionname {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-explorer-versionicon {
+  flex-shrink: 0;
+  color: var(--bs-text-faint);
+}
+
+/* The record is the approved state, and wears the approved colour. */
+.app-explorer-versionicon--record {
+  color: var(--bs-status-ok-fg);
+}
+
+/* Fixed, because the panel it sits in scrolls — a menu laid out inside a
+   scrolling box is a menu cut off at the fold. */
+.app-explorer-versionmenu {
+  position: fixed;
+  z-index: var(--brand-z-overlay);
+  display: grid;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: var(--brand-space-1);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+  background: var(--bs-surface-1);
+  box-shadow: var(--bs-elevation-menu);
+}
+
+.app-explorer-versionhead {
+  margin: 0;
+  padding: var(--brand-space-1-5) var(--brand-space-2);
+  color: var(--bs-text-faint);
+  font-size: var(--brand-text-ui-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.app-explorer-versionitem {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  width: 100%;
+  padding: var(--brand-space-1-5) var(--brand-space-2);
+  border: none;
+  border-radius: var(--brand-radius-md);
+  background: transparent;
+  color: var(--bs-text-primary);
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-ui-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.app-explorer-versionitem:hover,
+.app-explorer-versionitem:focus-visible {
+  background: var(--bs-surface-2);
+}
+
+.app-explorer-versionitem--on {
+  background: var(--bs-surface-2);
+}
+
+.app-explorer-versionitem > svg:last-child {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--bs-coral-text);
+}
+
+.app-explorer-versiontext {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.app-explorer-versionlabel {
+  font-weight: var(--brand-weight-medium);
+}
+
+/* What the proposal is asking for. One line: a change's title can be a
+   sentence, and a menu row that wraps to three is a menu you cannot scan. */
+.app-explorer-versiondetail {
+  overflow: hidden;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .app-explorer-filter {
   padding: var(--brand-space-2) var(--brand-space-2) 0;
 }

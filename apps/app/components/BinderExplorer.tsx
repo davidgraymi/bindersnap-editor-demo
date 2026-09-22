@@ -1,7 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Check,
   ChevronDown,
   ChevronRight,
+  CircleCheck,
+  FilePen,
   FileText,
   Folder,
   PanelLeftClose,
@@ -15,6 +18,7 @@ import {
   type BinderTreeNode,
 } from "../binderTree";
 import { formatDocumentName } from "../documentDisplay";
+import { currentRef, type ReadableRef } from "../documentRefs";
 import { useOpenFolders } from "../useOpenFolders";
 import { useRememberedToggle } from "../useRememberedToggle";
 import type { SidebarBinder, SidebarBinderContents } from "./AppSidebar";
@@ -36,6 +40,12 @@ import type { SidebarBinder, SidebarBinderContents } from "./AppSidebar";
  *   departments is navigable rather than a wall. Shut is where a folder
  *   starts, open is remembered per binder, and the folders holding the policy
  *   on screen are opened for you — the same hook the binder's own tree uses.
+ * - **Which version of the binder this is a view of**, at the top, where
+ *   GitHub puts the same control. The rows below are addresses on one version
+ *   — the record, or somebody's proposal — and a panel that does not say which
+ *   is a panel you cannot trust. It replaced a warning strip over the page
+ *   naming a branch, which said the same thing in git and offered no way out
+ *   of it. See `documentRefs.ts`.
  * - **A filter**, because past a certain size finding a policy by eye is
  *   slower than typing three letters of its name.
  * - **The panel itself shuts**, for the reader who wants the page and not the
@@ -196,6 +206,27 @@ export function BinderExplorer({ binder, onNavigate }: BinderExplorerProps) {
         </button>
       </div>
 
+      {contents.reading && contents.reading.refs.length > 0 ? (
+        <VersionPicker
+          refs={contents.reading.refs}
+          onPick={(picked) => {
+            if (picked.current) return;
+            onNavigate({
+              kind: "binderDocument",
+              org: binder.org,
+              binder: binder.binder,
+              // **By the address that carries the identity**, not the name on
+              // screen. A change that renames this policy holds it under
+              // another name, and a picker that could get you there but not
+              // back is worse than no picker.
+              documentPath: contents.reading!.address,
+              ...(picked.ref ? { ref: picked.ref } : {}),
+              ...(picked.change !== null ? { change: picked.change } : {}),
+            });
+          }}
+        />
+      ) : null}
+
       <div className="app-explorer-filter">
         <input
           className="bs-input bs-input--sm"
@@ -222,5 +253,167 @@ export function BinderExplorer({ binder, onNavigate }: BinderExplorerProps) {
         )}
       </div>
     </aside>
+  );
+}
+
+/** How wide the menu is, and how much room it wants below its button. */
+const MENU_WIDTH = 264;
+const MENU_MAX_HEIGHT = 300;
+
+/**
+ * Which version of the binder the rows below are addresses on.
+ *
+ * **It floats rather than being laid out**, for the reason the draft picker
+ * gives about panel corners: this panel scrolls, and a menu laid out inside a
+ * scrolling box is a menu cut off at the fold.
+ */
+function VersionPicker({
+  refs,
+  onPick,
+}: {
+  refs: readonly ReadableRef[];
+  onPick: (picked: ReadableRef) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const [at, setAt] = useState<{ left: number; top: number } | null>(null);
+
+  const on = currentRef(refs);
+
+  // Every other menu in the product closes on Escape and on a click
+  // elsewhere, and one that only closes by its own button is a trap.
+  useEffect(() => {
+    if (!open) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Node &&
+        boxRef.current &&
+        !boxRef.current.contains(target)
+      ) {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [open]);
+
+  /** Keep the menu on its button as the panel scrolls under it. */
+  useEffect(() => {
+    if (!open) return;
+
+    const place = () => {
+      const button = buttonRef.current;
+      if (!button) return;
+      const rect = button.getBoundingClientRect();
+      const width = Math.min(MENU_WIDTH, window.innerWidth - 16);
+      const below = window.innerHeight - rect.bottom;
+      setAt({
+        left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
+        top:
+          below < MENU_MAX_HEIGHT && rect.top > below
+            ? Math.max(8, rect.top - MENU_MAX_HEIGHT - 8)
+            : rect.bottom + 6,
+      });
+    };
+
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open]);
+
+  return (
+    <div className="app-explorer-version" ref={boxRef}>
+      <button
+        type="button"
+        ref={buttonRef}
+        className="app-explorer-versionbtn"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((was) => !was)}
+      >
+        <RefIcon refOn={on} />
+        <span className="app-explorer-versionname">{on.label}</span>
+        <ChevronDown size={13} strokeWidth={1.75} aria-hidden="true" />
+      </button>
+
+      {open && at ? (
+        <div
+          className="app-explorer-versionmenu"
+          role="menu"
+          style={{ left: at.left, top: at.top, width: MENU_WIDTH }}
+        >
+          {/* **Named for what it answers**, which is not "branch". A reader of
+              a policy manual has no reason to know that a change request is a
+              branch — that is a fact about where the record is kept. */}
+          <p className="app-explorer-versionhead">What you are reading</p>
+          {refs.map((entry) => (
+            <button
+              key={`${entry.change ?? "record"}:${entry.ref ?? ""}`}
+              type="button"
+              role="menuitem"
+              className={`app-explorer-versionitem${
+                entry.current ? " app-explorer-versionitem--on" : ""
+              }`}
+              onClick={() => {
+                setOpen(false);
+                onPick(entry);
+              }}
+            >
+              <RefIcon refOn={entry} />
+              <span className="app-explorer-versiontext">
+                <span className="app-explorer-versionlabel">{entry.label}</span>
+                <span className="app-explorer-versiondetail">
+                  {entry.detail}
+                </span>
+              </span>
+              {entry.current ? (
+                <Check size={14} strokeWidth={2} aria-hidden="true" />
+              ) : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The record, or a proposal — the two glyphs a change row already uses.
+ *
+ * Borrowed deliberately: somebody who has read the change list has been
+ * taught that a tick is on the record and a document-with-a-pen is something
+ * still being proposed, and teaching it twice with two sets of icons is how a
+ * product stops meaning anything.
+ */
+function RefIcon({ refOn }: { refOn: ReadableRef }) {
+  return refOn.ref === null && refOn.change === null ? (
+    <CircleCheck
+      className="app-explorer-versionicon app-explorer-versionicon--record"
+      size={14}
+      strokeWidth={1.6}
+      aria-hidden="true"
+    />
+  ) : (
+    <FilePen
+      className="app-explorer-versionicon"
+      size={14}
+      strokeWidth={1.6}
+      aria-hidden="true"
+    />
   );
 }

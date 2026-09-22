@@ -1364,9 +1364,28 @@ test("Open on a change lands on the document's own page", async ({ page }) => {
   await expect(
     page.locator(".app-main h1:not(.doc-preview-prose h1)"),
   ).toHaveText("Hand Hygiene", { timeout: 30_000 });
-  // Which branch you are reading, said before anything on it.
+  // Which version you are reading, said by the file panel — the customer, of
+  // GitHub: *"a branch selector in the file explorer so that it's clear what
+  // branch the user is viewing"*. It names the change, not a git object.
+  const version = page.locator(".app-explorer-versionbtn");
+  await expect(version).toHaveText(new RegExp(`Change #${number}`), {
+    timeout: 30_000,
+  });
+  // And it is a way somewhere, not a notice: the record is one click off.
+  await version.click();
+  await expect(
+    page.getByRole("menuitem", { name: /On the record/ }),
+  ).toBeVisible();
+  // Nothing in the menu says "branch", which is the word the strip used.
+  await expect(page.locator(".app-explorer-versionmenu")).not.toContainText(
+    "branch",
+  );
+  await page.keyboard.press("Escape");
+
+  // The way back to the change stays, because it is where the reader came
+  // from rather than a fact about the version.
   await expect(page.locator(".doc-on-change")).toContainText(
-    "You are reading the branch",
+    `Back to change ${number}`,
   );
 
   // A link somebody saved to the old in-page preview lands there too.
@@ -1741,8 +1760,10 @@ test("Open on a change lands on the branch, and browsing stays there", async ({
   // The branch is the address, and the change rides along as the way back.
   await expect(page).toHaveURL(/[?&]ref=/, { timeout: 30_000 });
   await expect(page).toHaveURL(new RegExp(`[?&]change=${number}`));
-  await expect(page.locator(".doc-on-change")).toContainText(
-    "You are reading the branch",
+  // The file panel names the version its rows are addresses on.
+  await expect(page.locator(".app-explorer-versionbtn")).toHaveText(
+    new RegExp(`Change #${number}`),
+    { timeout: 30_000 },
   );
 
   // And browsing the branch's files stays on the branch.

@@ -40,6 +40,7 @@ import { BinderSettings } from "./BinderSettings";
 import { BinderDocumentPage } from "./BinderDocumentPage";
 import { BinderDocuments } from "./BinderPage";
 import type { SidebarBinder } from "./AppSidebar";
+import type { DocumentRefView } from "../documentRefs";
 import { SkeletonLine } from "./Skeleton";
 
 /**
@@ -118,6 +119,14 @@ export function BinderShell({
   const [contents, setContents] = useState<SidebarBinder["contents"] | null>(
     null,
   );
+  /**
+   * Which version of this document is on screen, told by the page reading it.
+   *
+   * The open changes touching a document come back with the document, so only
+   * that read knows them — and the control offering them lives at the top of
+   * the file panel, which is up in the shell. Straight through.
+   */
+  const [reading, setReading] = useState<DocumentRefView | null>(null);
   const [adding, setAdding] = useState(false);
   const [addingFolder, setAddingFolder] = useState(false);
 
@@ -441,6 +450,7 @@ export function BinderShell({
   useEffect(() => {
     if (!documentPath) {
       setContents(null);
+      setReading(null);
       return;
     }
 
@@ -488,6 +498,7 @@ export function BinderShell({
             active: documentPath ?? null,
             // Clicking through the explorer stays on the branch being read.
             ref: documentRefFromSearch,
+            reading,
           }
         : null,
     });
@@ -500,6 +511,7 @@ export function BinderShell({
     activeTab,
     overview?.openChangeCount,
     contents,
+    reading,
     documentPath,
     documentRefFromSearch,
     onBinderChange,
@@ -679,6 +691,7 @@ export function BinderShell({
           documentRef={documentRefFromSearch}
           change={openChange}
           onBackToChange={openChangeNumber}
+          onRefsChange={setReading}
           /* Opened from the tree while editing, so it is read where the name
              it was clicked under actually exists. */
           draft={editMode === "off" ? null : (draft?.draft?.branch ?? null)}
