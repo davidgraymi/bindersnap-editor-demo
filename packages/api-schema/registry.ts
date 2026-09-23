@@ -845,6 +845,15 @@ registry.registerPath({
       /** File path or identity — a URL may carry either. */
       documentPath: z.string(),
     }),
+    /**
+     * Read it in your own draft rather than on `main`.
+     *
+     * A policy renamed while editing is at that name on the draft branch and
+     * nowhere else, so opening it from the tree in edit mode asked `main` for
+     * an address `main` has never heard of — and was told, of a document
+     * sitting on screen, that it does not exist. Your own draft only.
+     */
+    query: z.object({ draft: z.string().optional() }),
   },
   responses: {
     200: {

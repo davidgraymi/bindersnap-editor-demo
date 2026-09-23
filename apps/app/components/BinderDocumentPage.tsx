@@ -37,6 +37,14 @@ interface BinderDocumentPageProps {
   binder: string;
   /** From the URL. May carry the extension, or the identity without it. */
   documentPath: string;
+  /**
+   * The draft this was opened from, when the binder is being edited.
+   *
+   * A policy renamed a moment ago is at that name on the draft branch and
+   * nowhere else, so a page opened from the tree in edit mode has to be read
+   * where the name it was clicked under exists. Null on the record.
+   */
+  draft?: string | null;
   onOpenBinder: () => void;
   /** Open one of this document's open changes, on the binder. */
   onOpenChange: (changeNumber: number) => void;
@@ -58,6 +66,7 @@ export function BinderDocumentPage({
   org,
   binder,
   documentPath,
+  draft = null,
   onOpenBinder,
   onOpenChange,
 }: BinderDocumentPageProps) {
@@ -89,7 +98,7 @@ export function BinderDocumentPage({
     setDetail(null);
     setError(null);
 
-    fetchBinderDocument(org, binder, documentPath)
+    fetchBinderDocument(org, binder, documentPath, draft ?? undefined)
       .then((payload) => {
         if (!cancelled) setDetail(payload);
       })
@@ -105,7 +114,7 @@ export function BinderDocumentPage({
     return () => {
       cancelled = true;
     };
-  }, [org, binder, documentPath]);
+  }, [org, binder, documentPath, draft]);
 
   const viewing = useMemo(
     () =>
@@ -122,10 +131,14 @@ export function BinderDocumentPage({
   // resolved.
   const resolvedPath = detail?.document.slugPath ?? documentPath;
 
+  // By the path the server resolved, which carries the identity — so a ref
+  // that knows this document under another name still finds the file.
+  const fileAddress = detail?.document.path ?? resolvedPath;
+
   const loadFile = useCallback(
     (gitRef: string) =>
-      downloadBinderDocument(org, binder, resolvedPath, gitRef),
-    [org, binder, resolvedPath],
+      downloadBinderDocument(org, binder, fileAddress, gitRef),
+    [org, binder, fileAddress],
   );
 
   const selectVersion = (version: number | null) => {

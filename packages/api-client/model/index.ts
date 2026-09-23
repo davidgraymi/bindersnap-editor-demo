@@ -188,6 +188,7 @@ export * from './getBinderDocument200OpenChangesItemReviewsItemState.ts';
 export * from './getBinderDocument200OpenChangesItemUser.ts';
 export * from './getBinderDocument200State.ts';
 export * from './getBinderDocument200VersionsItem.ts';
+export * from './getBinderDocumentParams.ts';
 export * from './getBinderDraft200.ts';
 export * from './getBinderDraft200Draft.ts';
 export * from './getBinderDraft200DraftActsItem.ts';

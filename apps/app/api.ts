@@ -982,11 +982,20 @@ export async function fetchBinderDocument(
   org: string,
   binder: string,
   documentPath: string,
+  /**
+   * Read it in your own draft rather than on `main`.
+   *
+   * A policy renamed while editing is only at that name on the draft branch,
+   * so a page opened from the tree in edit mode has to ask where the name it
+   * was clicked under exists.
+   */
+  draft?: string,
 ): Promise<WorkspaceDocumentDetailPayload> {
   const response = await BindersClient.getBinderDocument(
     org,
     binder,
     documentPath,
+    draft ? { draft } : undefined,
   );
   return response.data;
 }
