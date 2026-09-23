@@ -6748,19 +6748,28 @@ button.bs-knot {
   mix-blend-mode: difference;
 }
 
-.doc-compare-originals {
-  padding: var(--brand-space-4) var(--brand-space-5);
+/* Two ways to read the file itself, under the comparison of what changed in
+   it. It replaced a disclosure holding two `<iframe>`s of the originals, which
+   put two PDF viewers in half a column each — both too small to read. */
+.doc-compare-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--brand-space-2);
+  padding: var(--brand-space-3) var(--brand-space-5);
   border-top: 1px solid var(--bs-rule-warm);
 }
 
-.doc-compare-originals summary {
-  font-size: var(--brand-text-sm);
-  color: var(--bs-text-muted);
-  cursor: pointer;
+/* `.bs-btn` sets no gap, so an icon and its word sit flush without one. */
+.doc-compare-actions .bs-btn {
+  gap: var(--brand-space-1);
 }
 
-.doc-compare-originals .doc-compare-columns {
-  margin-top: var(--brand-space-4);
+.doc-compare-actions-note {
+  flex: 1;
+  min-width: 16ch;
+  font-size: var(--brand-text-ui-md);
+  color: var(--bs-text-muted);
 }
 
 .doc-compare-fallback {
