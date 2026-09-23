@@ -8819,9 +8819,19 @@ a.bs-row:focus-visible {
 }
 
 /* **A word, not a pill.** A pill says "this is unusual"; on every row of
-   every list it says nothing while taking the eye first. */
+   every list it says nothing while taking the eye first.
+
+   **And a column, not a word that floats.** It is as wide as the longest
+   standing there is — "Changes requested" — whichever one a row happens to
+   be in, so every dot in a stack of rows sits at the same place and the
+   list reads straight down. */
 .change-standing {
   display: inline-flex;
+  /* A floor rather than a fixture: if a longer standing is ever written, or
+     somebody reads at a larger text size, the column gives way instead of
+     printing one word on top of the next. */
+  flex: 0 0 auto;
+  min-width: 148px;
   align-items: center;
   gap: var(--brand-space-1-5);
   font-size: var(--brand-text-ui-md);
@@ -8850,13 +8860,27 @@ a.bs-row:focus-visible {
   background: var(--brand-green);
 }
 
+/* Wide enough for the icon and three digits, and that wide whether or not
+   there is a conversation on the row: a column that appears and disappears
+   is what was shoving the standing sideways. Tabular figures so 2 and 11 put
+   the icon in the same place. */
 .change-row-comments {
   display: inline-flex;
+  flex: 0 0 auto;
+  min-width: 44px;
   align-items: center;
   gap: var(--brand-space-1);
   font-size: var(--brand-text-ui-md);
   color: var(--bs-text-faint);
   font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 640px) {
+  /* On a phone the title wants the width more than the column wants to line
+     up, and an empty slot has nothing to line up anyway. */
+  .change-row-comments:empty {
+    display: none;
+  }
 }
 
 /* ── The binder's files, in a panel of their own ───────────────────────────

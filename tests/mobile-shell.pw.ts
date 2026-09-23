@@ -108,13 +108,17 @@ test("the bottom bar does not sit on top of the last row of content", async ({
     timeout: 30_000,
   });
 
+  // **The tree before the scroll.** The binder's contents are fetched after
+  // the shell paints, so scrolling to `document.body.scrollHeight` while they
+  // are still in flight scrolls to the bottom of a page that has not got its
+  // rows yet — and then measures the row that arrives afterwards against a
+  // bar it was never scrolled past.
+  const lastRow = page.locator(".binder-tree-label").last();
+  await expect(lastRow).toBeVisible({ timeout: 30_000 });
+
   // Scroll to the end and check the last policy clears the bar.
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
   await page.waitForTimeout(400);
-
-  // The binder's documents are a tree now, so the last row is a tree label.
-  const lastRow = page.locator(".binder-tree-label").last();
-  await expect(lastRow).toBeVisible();
 
   const [rowBottom, barTop] = await Promise.all([
     lastRow.evaluate((el) => el.getBoundingClientRect().bottom),
