@@ -1775,6 +1775,13 @@ test("the file panel opens and shuts folders, filters, and hides itself", async 
   const files = page.locator(".app-explorer-item");
   await expect(files).toHaveCount(2);
 
+  // **A folder looks like a folder.** The row carried a triangle and nothing
+  // else, so the only thing telling a shut folder from a policy was a 13px
+  // twisty. Two glyphs now: the twisty, and the folder.
+  await expect(
+    page.locator(".app-explorer-folder", { hasText: "Nursing" }).locator("svg"),
+  ).toHaveCount(2);
+
   // **Folders shut.** Without that a long binder is a wall rather than
   // something you navigate.
   await page.locator(".app-explorer-folder", { hasText: "Nursing" }).click();

@@ -3,6 +3,7 @@ import {
   ChevronDown,
   ChevronRight,
   FileText,
+  Folder,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -161,7 +162,16 @@ export function BinderExplorer({ binder, onNavigate }: BinderExplorerProps) {
           ) : (
             <ChevronRight size={13} strokeWidth={1.75} aria-hidden="true" />
           )}
-          {formatDocumentName(node.name)}
+          {/* **A folder looks like a folder.** Every row carried a glyph
+              except this one, so a shut folder was a word with a triangle
+              beside it and a policy was a word with a page beside it — the
+              two kinds of row were told apart by a 13px triangle alone. The
+              same icon the binder's own tree draws, because they are the same
+              tree. */}
+          <Folder size={14} strokeWidth={1.6} aria-hidden="true" />
+          <span className="app-explorer-name">
+            {formatDocumentName(node.name)}
+          </span>
         </button>
         {open
           ? node.children.map((child) => renderNode(child, depth + 1))
