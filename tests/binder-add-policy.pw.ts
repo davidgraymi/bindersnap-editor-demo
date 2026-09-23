@@ -22,7 +22,12 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { API_BASE_URL, APP_BASE_URL, openBinderSection } from "./helpers";
+import {
+  API_BASE_URL,
+  APP_BASE_URL,
+  openBinderSection,
+  openTreeFolder,
+} from "./helpers";
 
 // Signup, an organization, two binders and several page loads on a stack that
 // may be cold. The suite default is nowhere near enough.
@@ -121,7 +126,15 @@ async function fileAPolicy(page: Page, name: string, folder: string) {
   // The modal suggests a name from the file. Typing over it is what a person
   // does, and it is the field the document's identity comes from.
   await page.locator("#add-policy-name").fill(name);
-  await page.locator("#add-policy-folder").fill(folder);
+  // The folder is a picker of the folders that exist, plus the way to make
+  // one — which is what a binder's first policy needs. Empty means the
+  // binder's top level, which is what the picker already says.
+  if (folder !== "") {
+    await page
+      .locator("#add-policy-folder")
+      .selectOption({ label: "A new folder…" });
+    await page.locator("#add-policy-new-folder").fill(folder);
+  }
 
   await page.getByRole("button", { name: "Add policy", exact: true }).click();
 }
@@ -336,7 +349,16 @@ test("the library lists a policy across every binder it can reach", async ({
 
   await page.goto(`${APP_BASE_URL}/documents`);
 
-  await expect(page.getByRole("heading", { name: "Policies" })).toBeVisible();
+  // **Exact**, because this is the page's own title. Substring matching also
+  // catches the rail heading of every binder whose name ends in "policies",
+  // so the assertion passed until the stack had two of them and then failed
+  // on a strict-mode violation about data the test never created.
+  // **Named for the entry that opens it.** It was "Policies" while the
+  // navigation said "Documents", so the page a reader arrived at was not the
+  // page they had clicked.
+  await expect(
+    page.getByRole("heading", { name: "Documents", exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: clinical, exact: false }),
   ).toBeVisible();
@@ -383,6 +405,9 @@ test("the binder's tabs still work once a document is open", async ({
   // clicking it in that list, which is the journey this test is about.
   await publishTheOpenChange(sessionCookie, org, binder);
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  // It was filed in Nursing, and folders start shut — so the drawer is opened
+  // first, the same way a person reaches it.
+  await openTreeFolder(page, "Nursing");
   await page
     .getByRole("button", { name: "Hand Hygiene Policy" })
     .click({ timeout: 30_000 });

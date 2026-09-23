@@ -274,7 +274,7 @@ export function AdminSubscriptionManagementPage({
 
           <form className="admin-pro-lookup-form" onSubmit={handleLookupSubmit}>
             <label className="app-field" htmlFor="admin-pro-username">
-              <span className="bs-label">Username</span>
+              <span className="bs-field-label">Username</span>
               <div className="admin-pro-input-wrap">
                 <Search
                   className="admin-pro-input-icon"

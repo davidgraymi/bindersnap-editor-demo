@@ -159,3 +159,16 @@ export function ancestorFolders(folder: string): string[] {
   const parts = folder.split("/");
   return parts.map((_, index) => parts.slice(0, index + 1).join("/"));
 }
+
+/**
+ * The folders an address is inside — `nursing/infection/handover` is inside
+ * `nursing` and `nursing/infection`.
+ *
+ * The document's own last segment is not a folder, which is the whole
+ * difference between this and {@link ancestorFolders}: handing a document's
+ * address to that one claims a folder exists that never did.
+ */
+export function foldersHolding(slugPath: string): string[] {
+  const cut = slugPath.lastIndexOf("/");
+  return cut === -1 ? [] : ancestorFolders(slugPath.slice(0, cut));
+}

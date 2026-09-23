@@ -1,15 +1,5 @@
-import { CircleCheck, CircleSlash, FilePen, Undo2 } from "lucide-react";
-
 import type { ChangeRecord } from "../documentDisplay";
-import {
-  capitalizeFirst,
-  describeChangeOutcome,
-  describeChangeStanding,
-  formatShortDate,
-  getChangeStateBadgeClass,
-  getChangeStateLabel,
-} from "../documentDisplay";
-import { ApprovalMeter } from "./ApprovalMeter";
+import { ChangeRow } from "./ChangeRow";
 import { SkeletonGroup, SkeletonLine, SkeletonShape } from "./Skeleton";
 
 export type ChangeFilter = "open" | "closed";
@@ -39,107 +29,41 @@ interface DocumentChangesProps {
 }
 
 /**
- * The icon carries the outcome, so the list reads before it is read.
+ * One change in the list.
  *
- * Not git glyphs. A branch-fork and a merge-arrow are precise to anyone who
- * has used GitHub and unreadable to everyone else, and the reader here is a
- * compliance manager. A document-with-a-pen for a change somebody is still
- * proposing, and a tick for one that is published, say the same thing without
- * the vocabulary lesson.
+ * **It used to say far too much.** The row carried the title, who submitted it
+ * and when, what it would become — "becomes v4 when published", which a binder
+ * cannot promise because one change can touch three documents — and a pill
+ * holding an approval count *and* a sentence naming who was holding it up. The
+ * customer's words: *"That is WAYYY too much text."*
+ *
+ * It is `ChangeRow` now, the same component Home and the review queue use, so
+ * a change reads the same wherever it is listed and the three cannot drift
+ * apart again.
  */
-function ChangeIcon({ change }: { change: ChangeRecord }) {
-  const props = { size: 16, strokeWidth: 1.5, "aria-hidden": true } as const;
-
-  if (change.outcome === "published") {
-    return (
-      <CircleCheck
-        className="change-row-icon change-row-icon--published"
-        {...props}
-      />
-    );
-  }
-  if (change.outcome === "declined") {
-    return (
-      <CircleSlash
-        className="change-row-icon change-row-icon--declined"
-        {...props}
-      />
-    );
-  }
-  if (change.outcome === "withdrawn") {
-    return (
-      <Undo2
-        className="change-row-icon change-row-icon--withdrawn"
-        {...props}
-      />
-    );
-  }
-  return (
-    <FilePen className="change-row-icon change-row-icon--open" {...props} />
-  );
-}
-
-function ChangeRow({
+function BinderChangeRow({
   change,
-  nextVersion,
-  describeSubject,
   onOpenChange,
 }: {
   change: ChangeRecord;
-  nextVersion?: number;
-  describeSubject?: (changeNumber: number) => string | null;
   onOpenChange: (pullNumber: number) => void;
 }) {
-  const submitter = capitalizeFirst(change.submittedBy || "someone");
-  const submitted = change.submittedAt
-    ? formatShortDate(change.submittedAt)
-    : null;
-  const outcome = describeChangeOutcome(change);
-  // The standing pill says where an open change stands and who it waits on, so
-  // the badge is left with the one thing it does not cover: how a closed change
-  // ended. The row's old "Waiting on …" line is inside the pill now.
-  const showStateBadge = describeChangeStanding(change) === null;
-  const subject = describeSubject?.(change.number) ?? null;
-
   return (
-    <li className="change-row">
-      <button
-        className="bs-row bs-row--tall change-row-btn"
-        type="button"
-        onClick={() => onOpenChange(change.number)}
-      >
-        <span className="bs-row-icon">
-          <ChangeIcon change={change} />
-        </span>
-        <span className="bs-row-body">
-          <span className="bs-row-name change-row-title">{change.summary}</span>
-          {/* No "#8". The number is Gitea's pull-request id — a GitHub habit
-              that means nothing to a compliance manager and reads like it
-              ought to. What identifies a change to the person reading the row
-              is its title, who sent it and when, all of which are here. The
-              number still addresses the change in the URL. */}
-          <span className="bs-row-meta">
-            Submitted by {submitter}
-            {submitted ? ` on ${submitted}` : ""}
-            {subject
-              ? ` · ${subject}`
-              : change.open && nextVersion !== undefined
-                ? ` · becomes v${nextVersion} when published`
-                : ""}
-          </span>
-          {outcome ? <span className="bs-row-meta">{outcome}</span> : null}
-        </span>
-        <span className="bs-row-right change-row-side">
-          {showStateBadge ? (
-            <span className={getChangeStateBadgeClass(change)}>
-              {getChangeStateLabel(change)}
-            </span>
-          ) : (
-            <ApprovalMeter change={change} />
-          )}
-        </span>
-      </button>
-    </li>
+    <ChangeRow
+      change={{
+        number: change.number,
+        title: change.summary,
+        submittedBy: change.submittedBy,
+        submittedAt: change.submittedAt,
+        updatedAt: change.updatedAt,
+        commentCount: change.commentCount,
+        outcome: change.outcome,
+        approvalCount: change.approvalCount,
+        requiredApprovals: change.requiredApprovals,
+        isRejected: change.isRejected,
+      }}
+      onOpen={() => onOpenChange(change.number)}
+    />
   );
 }
 
@@ -237,11 +161,9 @@ export function DocumentChanges({
       ) : (
         <ul className="bs-row-list">
           {rows.map((change) => (
-            <ChangeRow
+            <BinderChangeRow
               key={change.number}
               change={change}
-              nextVersion={nextVersion}
-              describeSubject={describeSubject}
               onOpenChange={onOpenChange}
             />
           ))}

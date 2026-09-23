@@ -11,6 +11,8 @@ import {
   hasEnoughApprovals,
   parseChangeTitle,
 } from "./documentDisplay";
+import type { ChangeStandingTone } from "./changeRow";
+import { describeChangeMeta, describeChangeStandingWord } from "./changeRow";
 
 /**
  * Home is a list of change requests, not a list of documents.
@@ -35,7 +37,17 @@ export interface HomeChangeRow {
   kind: HomeChangeKind;
   /** The one meta sentence under the title, after the document name. */
   meta: string;
-  pillLabel: string;
+  /**
+   * Where it stands, in one word.
+   *
+   * **Not a pill, and not a sentence.** It read "all approvals in · becomes v2
+   * when you publish" beside a pill saying "Ready to publish" — the same fact
+   * three times, and the customer counted: *"That is WAYYY too much text."*
+   */
+  standing: string;
+  tone: ChangeStandingTone;
+  /** How many comments are on it. */
+  commentCount: number;
   /** The button on the right of a "Waiting on you" row, when there is one. */
   action: "Review" | "Publish" | null;
 }
@@ -51,7 +63,8 @@ export interface HomeDecidedRow {
   title: string;
   outcome: HomeDecidedOutcome;
   meta: string;
-  pillLabel: string;
+  standing: string;
+  tone: ChangeStandingTone;
 }
 
 /** A workspace document paired with the closed changes fetched for it. */
@@ -207,53 +220,6 @@ function describeChangeSubject(
   return formatDocumentName(leaf);
 }
 
-function describeOpenChange(
-  document: HomeOpenDocument,
-  change: HomeOpenDocument["pendingPRs"][number],
-  kind: HomeChangeKind,
-  username: string,
-  now: number,
-): string {
-  const submittedAt = change.created_at ?? change.created;
-  const progress = describeApprovalProgress(change);
-
-  if (kind === "ready_to_publish") {
-    const becomes = nextVersionOf(change);
-    // A change whose document cannot be identified from its branch still has
-    // every approval it needs — it just cannot be told what version it becomes,
-    // and inventing "v1" is the bug this replaced.
-    return becomes === null
-      ? "all approvals in · ready to publish"
-      : `all approvals in · becomes v${becomes} when you publish`;
-  }
-
-  if (kind === "needs_review") {
-    const submitted = `${submitterName(change)} submitted ${formatWhen(submittedAt, now)}`;
-    return progress ? `${submitted} · ${progress}` : submitted;
-  }
-
-  const waiting = awaitingReviewerNames(change).filter(
-    (name) => name.toLowerCase() !== username.toLowerCase(),
-  );
-  const isMine = change.user?.login === username;
-  const submitted = isMine
-    ? `submitted ${formatWhen(submittedAt, now)}`
-    : `${submitterName(change)} submitted ${formatWhen(submittedAt, now)}`;
-
-  return waiting.length > 0
-    ? `waiting on ${formatNameList(waiting)} · ${submitted}`
-    : submitted;
-}
-
-function pillFor(
-  change: PullRequestWithApprovalState,
-  kind: HomeChangeKind,
-): string {
-  if (kind === "needs_review") return "Needs your review";
-  if (kind === "ready_to_publish") return "Ready to publish";
-  return describeApprovalProgress(change) ?? "In review";
-}
-
 /**
  * Every open change the reader is part of, newest first, already sentenced.
  *
@@ -287,8 +253,26 @@ export function buildOpenChangeRows(
         number: change.number,
         title: parseChangeTitle(change.body, change.user?.login ?? ""),
         kind,
-        meta: describeOpenChange(document, change, kind, username, now),
-        pillLabel: pillFor(change, kind),
+        meta: describeChangeMeta(
+          {
+            number: change.number,
+            submittedBy: change.user?.login ?? "",
+            submittedAt: change.created_at ?? change.created ?? "",
+            updatedAt: change.updated_at ?? undefined,
+            approvalCount: 0,
+            requiredApprovals: null,
+          },
+          now,
+        ),
+        ...describeChangeStandingWord({
+          number: change.number,
+          submittedBy: change.user?.login ?? "",
+          submittedAt: change.created_at ?? change.created ?? "",
+          approvalCount: change.approvalCount ?? 0,
+          requiredApprovals: change.requiredApprovals ?? null,
+          isRejected: change.isRejected ?? false,
+        }),
+        commentCount: (change as { comments?: number }).comments ?? 0,
         action:
           kind === "needs_review"
             ? "Review"
@@ -392,10 +376,10 @@ export function buildDecidedChangeRows(
         title: parseChangeTitle(change.body, change.submittedBy),
         outcome: change.outcome === "published" ? "published" : "closed",
         meta: describeDecision(change, username),
-        pillLabel:
-          change.outcome === "published" && change.publishedVersion !== null
-            ? `Published as v${change.publishedVersion} · ${closedOn}`
-            : `Closed · ${closedOn}`,
+        // One word. The date it closed is already in `meta`, and repeating it
+        // inside the standing was the same fact twice on one row.
+        standing: change.outcome === "published" ? "Published" : "Closed",
+        tone: change.outcome === "published" ? "published" : "closed",
         decidedAt: toTime(change.closedAt ?? change.submittedAt),
       });
     }

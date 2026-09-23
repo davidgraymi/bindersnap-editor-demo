@@ -1,14 +1,35 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Archive, FolderInput, Pencil } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import {
+  Archive,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  FileText,
+  FolderInput,
+  Pencil,
+} from "lucide-react";
 import { useIsReadOnly } from "../readOnlyContext";
 
 import {
   archiveBinderDocument,
+  fetchBinderArchive,
   fetchBinderDocuments,
   renameBinderDocument,
   renameBinderFolder,
+  restoreBinderDocument,
 } from "../api";
-import type { WorkspaceDocumentListEntry } from "../../../packages/api-schema/schemas/workspaces";
+import type {
+  BinderArchivePayload,
+  DraftAct,
+  WorkspaceDocumentListEntry,
+} from "../../../packages/api-schema/schemas/workspaces";
 import {
   buildBinderTree,
   folderPaths,
@@ -23,7 +44,7 @@ import {
 } from "../binderMove";
 import { formatAge, formatDocumentName } from "../documentDisplay";
 import { buildBinderUrl } from "../binderShell";
-import { useCollapsedFolders } from "../useCollapsedFolders";
+import { useOpenFolders } from "../useOpenFolders";
 import { BinderTreeView } from "./BinderTree";
 import { MoveToFolderModal } from "./MoveToFolderModal";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
@@ -60,10 +81,29 @@ interface BinderDocumentsProps {
    * this list is not the thing that knows the answer.
    */
   onDraftLost?: () => void;
+  /**
+   * The draft picker, rendered into the tree's own bar.
+   *
+   * Passed in rather than built here: which drafts you have and how to move
+   * between them is the shell's state — it owns the address, and the address
+   * is what carries which draft is being edited.
+   */
+  draftPicker?: ReactNode;
   /** Open the archive — what this binder has taken off the record. */
   onOpenArchive?: () => void;
   /** Open a change request — the one a row says last touched its policy. */
   onOpenChange?: (changeNumber: number) => void;
+  /**
+   * What is in the draft, so the tree can mark the rows you have touched.
+   *
+   * **Checking your work should be looking, not reading.** Which rows a draft
+   * has changed existed only as a list of sentences in the bar, so the tree —
+   * the thing that was actually rearranged — said nothing about it.
+   */
+  draftActs?: readonly DraftAct[];
+  /** Add to the tree. In its own bar, beside the thing it adds to. */
+  onAddPolicy?: () => void;
+  onNewFolder?: () => void;
 }
 
 /**
@@ -127,11 +167,15 @@ export function BinderDocuments({
   onOpenDocument,
   activeDocument = null,
   draft = null,
+  draftPicker = null,
   reloadKey = 0,
   onEdited,
   onDraftLost,
   onOpenArchive,
   onOpenChange,
+  draftActs = [],
+  onAddPolicy,
+  onNewFolder,
 }: BinderDocumentsProps) {
   const isReadOnly = useIsReadOnly();
   const [documents, setDocuments] = useState<
@@ -151,9 +195,15 @@ export function BinderDocuments({
     subject: DragSubject;
     label: string;
   } | null>(null);
-  const { collapsed, toggle } = useCollapsedFolders(org, binder);
+  const { isOpen, toggle } = useOpenFolders(org, binder, activeDocument);
   /** What the bar's filter holds. Empty is the whole binder. */
   const [filter, setFilter] = useState("");
+  /** The archive, once somebody has opened it in the tree. */
+  const [archived, setArchived] = useState<
+    BinderArchivePayload["documents"] | null
+  >(null);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [restoring, setRestoring] = useState<string | null>(null);
 
   const load = useCallback(() => {
     let cancelled = false;
@@ -196,6 +246,38 @@ export function BinderDocuments({
     return load();
   }, [load]);
 
+  /**
+   * The archive, read when it is opened rather than with the tree.
+   *
+   * It is a section somebody opens on purpose, and most edits never touch it,
+   * so the binder does not pay for the read on every visit.
+   */
+  useEffect(() => {
+    if (!archiveOpen || archived !== null) return;
+
+    let cancelled = false;
+    // **At the draft's ref while editing**, because that is where the count
+    // beside this section was counted. A policy archived a moment ago is off
+    // the draft's tree and still on `main`, so reading from `main` listed
+    // nothing under a heading that said one thing was in there.
+    fetchBinderArchive(org, binder, draft ?? undefined)
+      .then((payload) => {
+        if (!cancelled) setArchived(payload.documents);
+      })
+      // The tree is the page; failing to read the archive closes the section
+      // rather than taking the binder down with it.
+      .catch(() => {
+        if (!cancelled) {
+          setArchiveOpen(false);
+          setActError("Unable to read the archive.");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [archiveOpen, archived, org, binder, draft]);
+
   // Leaving edit mode ends any rename in progress. The input has nowhere to
   // commit to once the draft is gone, and leaving it on screen would offer a
   // rename that silently does nothing.
@@ -205,6 +287,7 @@ export function BinderDocuments({
     setDragging(null);
     setOver(null);
     setMoving(null);
+    setArchiveOpen(false);
   }, [draft]);
 
   const tree = useMemo(
@@ -251,6 +334,11 @@ export function BinderDocuments({
     try {
       await act();
       onEdited?.();
+      // Every act can move the archive — archiving puts a policy in it and
+      // restoring takes one out — and the section is read once and kept. Drop
+      // what was read so an open archive re-reads with the rest of the tree,
+      // rather than showing the answer from before the act.
+      setArchived(null);
       load();
     } catch (err) {
       setActError(
@@ -345,6 +433,29 @@ export function BinderDocuments({
     );
   };
 
+  /**
+   * Bring a policy back, into the draft in hand.
+   *
+   * **An ordinary change, not an undo.** It returns at the filename it left
+   * with, so it keeps its identity and rejoins as its next version rather
+   * than as a new policy at v1 — which is what the button says, because the
+   * effect on the history is the question somebody hesitating here has.
+   */
+  const restoreDocument = async (uid: string) => {
+    if (!draft) return;
+    setRestoring(uid);
+    try {
+      // `runAct` drops what was read from the archive already — every act can
+      // move it, not only this one.
+      await runAct(
+        () => restoreBinderDocument(org, binder, uid, { draft }),
+        "Unable to restore that policy.",
+      );
+    } finally {
+      setRestoring(null);
+    }
+  };
+
   /** What a row is, as something that can be picked up. */
   const subjectOf = (node: BinderTreeNode): DragSubject =>
     node.kind === "folder"
@@ -377,6 +488,9 @@ export function BinderDocuments({
         dragging !== null && sameNode(dragging, subjectOf(node))
           ? "binder-tree-row--dragging"
           : "",
+        // A row you have moved, renamed or added in this draft. Quiet: it
+        // marks the work, it does not celebrate it.
+        isTouched(node) ? "binder-tree-row--dirty" : "",
       ]
         .filter(Boolean)
         .join(" "),
@@ -426,7 +540,45 @@ export function BinderDocuments({
   const policyCount = documents?.length ?? 0;
   const folderCount = everyFolder.length;
 
+  /**
+   * The rows this draft has touched.
+   *
+   * Every act carries the files it wrote, which is exactly what a row needs to
+   * know whether it is one of them. A folder counts as touched when the act
+   * made it — its `.gitkeep` — rather than when anything inside it changed,
+   * because "somewhere under here" is not a fact worth a mark on every
+   * ancestor of every edit.
+   */
+  const touched = useMemo(() => {
+    const paths = new Set<string>();
+    for (const act of draftActs) {
+      for (const path of act.paths) paths.add(path);
+    }
+    return paths;
+  }, [draftActs]);
+
+  const isTouched = (node: BinderTreeNode): boolean => {
+    if (!draft) return false;
+    if (node.kind === "document") return touched.has(node.document.path);
+
+    // A folder is touched when something landed in it or left it — which is
+    // what renaming one looks like from the commit's side, because every file
+    // it holds is written at its new address. Only its own children count:
+    // "something changed somewhere under here" would put a dot on every
+    // ancestor of every edit, which marks the tree rather than the work.
+    const prefix = `${node.path}/`;
+    for (const path of touched) {
+      if (!path.startsWith(prefix)) continue;
+      if (!path.slice(prefix.length).includes("/")) return true;
+    }
+    return false;
+  };
+
   const renderAside = (node: BinderTreeNode) => {
+    // **Nothing but your own work, while you are rearranging.** Versions and
+    // change subjects are what a reader wants; an editor has to read past
+    // them to find the row they just moved.
+    if (draft) return null;
     if (node.kind !== "document") return null;
     const last = describeLastChange(node.document);
     if (!last) return null;
@@ -466,25 +618,60 @@ export function BinderDocuments({
       <div className="bs-panel">
         {/* The controls that act on the list live in the list's own bar. */}
         <div className="bs-panel-bar">
-          <input
-            className="bs-input bs-input--sm binder-filter"
-            type="search"
-            value={filter}
-            placeholder="Filter this binder…"
-            aria-label="Filter this binder"
-            disabled={documents === null || policyCount === 0}
-            onChange={(event) => setFilter(event.target.value)}
-          />
-          <span className="bs-panel-bar-spacer" />
-          {documents === null ? null : (
-            <span className="binder-count">
-              {policyCount === 1 ? "1 policy" : `${policyCount} policies`}
-              {folderCount === 0
-                ? ""
-                : folderCount === 1
-                  ? " in 1 folder"
-                  : ` in ${folderCount} folders`}
-            </span>
+          {draft ? (
+            <>
+              {/* **Which of your drafts this is**, and the way to the others.
+                  In the list's own bar because it is a fact about the tree
+                  below it, not about the binder. */}
+              {draftPicker}
+              {/* Beside the tree they add to, and in the same two slots
+                  whichever you press first. */}
+              <button
+                type="button"
+                className="bs-btn bs-btn--sm bs-btn-secondary"
+                onClick={onNewFolder}
+                disabled={committing || !onNewFolder}
+              >
+                New folder
+              </button>
+              <button
+                type="button"
+                className="bs-btn bs-btn--sm bs-btn-secondary"
+                onClick={onAddPolicy}
+                disabled={committing || !onAddPolicy}
+              >
+                Add a policy
+              </button>
+              <span className="bs-panel-bar-spacer" />
+              {/* Continuous save, said where the eye already is. */}
+              <span className="bs-saved">
+                <Check size={13} strokeWidth={2} aria-hidden="true" />
+                {committing ? "Saving…" : "Saved"}
+              </span>
+            </>
+          ) : (
+            <>
+              <input
+                className="bs-input bs-input--sm binder-filter"
+                type="search"
+                value={filter}
+                placeholder="Filter this binder…"
+                aria-label="Filter this binder"
+                disabled={documents === null || policyCount === 0}
+                onChange={(event) => setFilter(event.target.value)}
+              />
+              <span className="bs-panel-bar-spacer" />
+              {documents === null ? null : (
+                <span className="binder-count">
+                  {policyCount === 1 ? "1 policy" : `${policyCount} policies`}
+                  {folderCount === 0
+                    ? ""
+                    : folderCount === 1
+                      ? " in 1 folder"
+                      : ` in ${folderCount} folders`}
+                </span>
+              )}
+            </>
           )}
         </div>
 
@@ -522,7 +709,7 @@ export function BinderDocuments({
         ) : (
           <BinderTreeView
             nodes={shown}
-            collapsed={needle === "" ? collapsed : NOTHING_SHUT}
+            isFolderOpen={needle === "" ? isOpen : EVERYTHING_OPEN}
             onToggleFolder={toggle}
             onOpenDocument={onOpenDocument}
             activeDocument={activeDocument}
@@ -554,8 +741,9 @@ export function BinderDocuments({
                       <>
                         <button
                           type="button"
-                          className="binder-tree-action"
+                          className="bs-rowact"
                           aria-label={`Rename ${label}`}
+                          title="Rename"
                           disabled={committing}
                           onClick={() =>
                             setRenaming(
@@ -586,8 +774,9 @@ export function BinderDocuments({
                             case. */}
                         <button
                           type="button"
-                          className="binder-tree-action"
+                          className="bs-rowact"
                           aria-label={`Move ${label}`}
+                          title="Move"
                           disabled={committing}
                           onClick={() =>
                             setMoving({ subject: subjectOf(node), label })
@@ -608,8 +797,9 @@ export function BinderDocuments({
                         {node.kind === "document" ? (
                           <button
                             type="button"
-                            className="binder-tree-action"
+                            className="bs-rowact bs-rowact--danger"
                             aria-label={`Archive ${label}`}
+                            title="Archive"
                             disabled={committing}
                             onClick={() => void archiveDocument(node)}
                           >
@@ -656,12 +846,74 @@ export function BinderDocuments({
           </div>
         ) : null}
 
+        {/* **The archive, in the tree.** It was a page of its own reachable
+            only from the reading view, so edit mode — the one place somebody
+            can act on what they find — had no way in and no way back. */}
+        {draft && archivedCount > 0 ? (
+          <div className="bs-archived">
+            <button
+              type="button"
+              className="bs-disclose"
+              aria-expanded={archiveOpen}
+              onClick={() => setArchiveOpen((open) => !open)}
+            >
+              {archiveOpen ? (
+                <ChevronDown size={14} strokeWidth={1.6} aria-hidden="true" />
+              ) : (
+                <ChevronRight size={14} strokeWidth={1.6} aria-hidden="true" />
+              )}
+              <Archive size={14} strokeWidth={1.5} aria-hidden="true" />
+              {archivedCount === 1
+                ? "Archived · 1 policy"
+                : `Archived · ${archivedCount} policies`}
+            </button>
+
+            {archiveOpen && archived === null ? (
+              <p className="bs-empty">Reading the archive…</p>
+            ) : null}
+
+            {archiveOpen && archived
+              ? archived.map((entry) => (
+                  <div className="binder-tree-row" key={entry.uid}>
+                    <span className="binder-tree-main binder-tree-main--inert">
+                      <span className="binder-tree-twisty" aria-hidden="true" />
+                      <span className="binder-tree-icon" aria-hidden="true">
+                        <FileText size={16} strokeWidth={1.4} />
+                      </span>
+                      <span className="binder-tree-label">{entry.title}</span>
+                    </span>
+                    <span className="bs-row-when">
+                      {entry.slugPath
+                        ? `Was filed at ${entry.slugPath}`
+                        : "Its folder is gone"}
+                    </span>
+                    {/* Never hover-revealed: hover-reveal is for the
+                        secondary acts on a row you are reading, never for the
+                        only one. */}
+                    <span className="bs-rowacts bs-rowacts--always binder-tree-actions">
+                      <button
+                        type="button"
+                        className="bs-btn bs-btn--sm bs-btn-secondary"
+                        disabled={committing || restoring !== null}
+                        onClick={() => void restoreDocument(entry.uid)}
+                      >
+                        {restoring === entry.uid
+                          ? "Restoring…"
+                          : `Restore as v${entry.lastVersion + 1}`}
+                      </button>
+                    </span>
+                  </div>
+                ))
+              : null}
+          </div>
+        ) : null}
+
         {/* The way into the archive, and gone when there is nothing in it: a
             binder that has never archived anything should not carry a link to
             an empty page. The panel's own foot rather than the header, because
             it is about what this binder *held* — a question somebody asks
             after failing to find something, not before. */}
-        {archivedCount > 0 && onOpenArchive ? (
+        {archivedCount > 0 && onOpenArchive && !draft ? (
           <div className="bs-panel-foot">
             <button
               type="button"
@@ -691,7 +943,7 @@ export function BinderDocuments({
 }
 
 /** Nothing shut: a filter opens every folder on the way to a match. */
-const NOTHING_SHUT: ReadonlySet<string> = new Set();
+const EVERYTHING_OPEN = () => true;
 
 /** The same row, for marking what is currently in the air. */
 function sameNode(left: DragSubject, right: DragSubject): boolean {

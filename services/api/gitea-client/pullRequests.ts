@@ -934,6 +934,32 @@ export async function setPullRequestAssignees(
   );
 }
 
+/**
+ * Rewrite what a change is asking for.
+ *
+ * A change request is open for days, and the first thing a reviewer's question
+ * produces is a better title. Once it is published the title is on the merge
+ * commit and in the version tag, which are the record — so this is an edit to
+ * a request, never to evidence.
+ */
+export async function setPullRequestSubject(params: {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+  pullNumber: number;
+  title: string;
+  body: string;
+}): Promise<void> {
+  const { client, owner, repo, pullNumber, title, body } = params;
+
+  await unwrap(
+    client.PATCH("/repos/{owner}/{repo}/pulls/{index}", {
+      params: { path: { owner, repo, index: pullNumber } },
+      body: { title, body },
+    }),
+  );
+}
+
 /** Ask these people to review. Already-requested reviewers are left alone. */
 export async function requestPullReviewers(
   params: PullReviewRequestParams,

@@ -125,7 +125,7 @@ export function ReviseDocumentModal({
             htmlFor="revise-document-file"
             className="upload-file-input-label"
           >
-            <span className="bs-label">The new file</span>
+            <span className="bs-field-label">The new file</span>
             <input
               id="revise-document-file"
               type="file"

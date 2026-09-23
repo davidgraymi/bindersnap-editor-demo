@@ -4059,6 +4059,12 @@
                           "submittedAt": {
                             "type": "string"
                           },
+                          "updatedAt": {
+                            "type": "string"
+                          },
+                          "commentCount": {
+                            "type": "number"
+                          },
                           "closedAt": {
                             "type": "string",
                             "nullable": true
@@ -4247,6 +4253,8 @@
                           "branchName",
                           "submittedBy",
                           "submittedAt",
+                          "updatedAt",
+                          "commentCount",
                           "closedAt",
                           "outcome",
                           "decidedBy",
@@ -4309,6 +4317,9 @@
                     "type": "string"
                   },
                   "description": {
+                    "type": "string"
+                  },
+                  "draft": {
                     "type": "string"
                   }
                 },
@@ -7112,6 +7123,14 @@
             "required": false,
             "name": "draft",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "change",
+            "in": "query"
           }
         ],
         "responses": {
@@ -7379,11 +7398,35 @@
             "required": true,
             "name": "documentPath",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "draft",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "change",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "ref",
+            "in": "query"
           }
         ],
         "responses": {
           "200": {
-            "description": "One document, with its published versions",
+            "description": "One document, with its published versions — on the record, in your draft, or on a change's branch",
             "content": {
               "application/json": {
                 "schema": {
@@ -8178,11 +8221,19 @@
             "required": true,
             "name": "binder",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "draft",
+            "in": "query"
           }
         ],
         "responses": {
           "200": {
-            "description": "Your draft and what is in it, plus who else is editing. `draft` is null when you are not.",
+            "description": "The draft you are in and what is in it, every draft of yours, and who else is editing. `draft` is null when you are not.",
             "content": {
               "application/json": {
                 "schema": {
@@ -8200,6 +8251,12 @@
                       "properties": {
                         "branch": {
                           "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "named": {
+                          "type": "boolean"
                         },
                         "owner": {
                           "type": "string"
@@ -8241,10 +8298,44 @@
                       },
                       "required": [
                         "branch",
+                        "name",
+                        "named",
                         "owner",
                         "updatedAt",
                         "acts"
                       ]
+                    },
+                    "drafts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "branch": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "actCount": {
+                            "type": "number"
+                          },
+                          "lastAct": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "branch",
+                          "name",
+                          "updatedAt",
+                          "actCount",
+                          "lastAct"
+                        ]
+                      }
                     },
                     "others": {
                       "type": "array",
@@ -8279,6 +8370,7 @@
                     "organization",
                     "workspace",
                     "draft",
+                    "drafts",
                     "others"
                   ]
                 }
@@ -8310,9 +8402,24 @@
             "in": "path"
           }
         ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
-            "description": "Editing started — or resumed, because pressing Edit twice must not fork your work",
+            "description": "Editing started, resumed, or a second draft begun — a press of Edit resumes, a name forks deliberately",
             "content": {
               "application/json": {
                 "schema": {
@@ -8330,6 +8437,12 @@
                       "properties": {
                         "branch": {
                           "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "named": {
+                          "type": "boolean"
                         },
                         "owner": {
                           "type": "string"
@@ -8371,10 +8484,44 @@
                       },
                       "required": [
                         "branch",
+                        "name",
+                        "named",
                         "owner",
                         "updatedAt",
                         "acts"
                       ]
+                    },
+                    "drafts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "branch": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "actCount": {
+                            "type": "number"
+                          },
+                          "lastAct": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "branch",
+                          "name",
+                          "updatedAt",
+                          "actCount",
+                          "lastAct"
+                        ]
+                      }
                     },
                     "others": {
                       "type": "array",
@@ -8409,6 +8556,200 @@
                     "organization",
                     "workspace",
                     "draft",
+                    "drafts",
+                    "others"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "renameBinderDraft",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "draft": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "draft",
+                  "name"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Your drafts, with that one renamed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "draft": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "branch": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "named": {
+                          "type": "boolean"
+                        },
+                        "owner": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "acts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "summary": {
+                                "type": "string"
+                              },
+                              "sha": {
+                                "type": "string"
+                              },
+                              "at": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "paths": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "summary",
+                              "sha",
+                              "at",
+                              "paths"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "branch",
+                        "name",
+                        "named",
+                        "owner",
+                        "updatedAt",
+                        "acts"
+                      ]
+                    },
+                    "drafts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "branch": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "actCount": {
+                            "type": "number"
+                          },
+                          "lastAct": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "branch",
+                          "name",
+                          "updatedAt",
+                          "actCount",
+                          "lastAct"
+                        ]
+                      }
+                    },
+                    "others": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "branch": {
+                            "type": "string"
+                          },
+                          "owner": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "lastAct": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "branch",
+                          "owner",
+                          "updatedAt",
+                          "lastAct"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "workspace",
+                    "draft",
+                    "drafts",
                     "others"
                   ]
                 }
@@ -8438,6 +8779,14 @@
             "required": true,
             "name": "binder",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "draft",
+            "in": "query"
           }
         ],
         "responses": {
@@ -8800,11 +9149,19 @@
             "required": true,
             "name": "binder",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "draft",
+            "in": "query"
           }
         ],
         "responses": {
           "200": {
-            "description": "Everything this binder has taken off the record — every UID with a version tag, minus every UID on `main`",
+            "description": "Everything this binder has taken off the record — every UID with a version tag, minus every UID on the tree being read",
             "content": {
               "application/json": {
                 "schema": {
@@ -9202,6 +9559,10 @@
                                 "publishedAt"
                               ]
                             }
+                          },
+                          "previousSlugPath": {
+                            "type": "string",
+                            "nullable": true
                           }
                         },
                         "required": [
@@ -9214,7 +9575,8 @@
                           "sha",
                           "nextVersion",
                           "currentVersion",
-                          "versions"
+                          "versions",
+                          "previousSlugPath"
                         ]
                       }
                     },
@@ -9229,6 +9591,27 @@
                     },
                     "canManage": {
                       "type": "boolean"
+                    },
+                    "requiredReviewers": {
+                      "type": "object",
+                      "properties": {
+                        "users": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "teams": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "users",
+                        "teams"
+                      ]
                     }
                   },
                   "required": [
@@ -9239,7 +9622,86 @@
                     "isBehind",
                     "blockOnUnresolvedThreads",
                     "unresolvedThreadCount",
-                    "canManage"
+                    "canManage",
+                    "requiredReviewers"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "editBinderChange",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "changeNumber",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "body": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "title",
+                  "body"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The change, as it now reads",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "body": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "body"
                   ]
                 }
               }

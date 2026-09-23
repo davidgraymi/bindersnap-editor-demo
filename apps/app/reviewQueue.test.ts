@@ -65,26 +65,33 @@ function binder(
   } as HomeOpenDocument;
 }
 
-test("a row names the document and the binder separately", () => {
+/**
+ * **The row says four things and no more.**
+ *
+ * It used to carry the document it touches, who requested it, an approval
+ * count, a sentence naming whoever was holding it up, and the version it would
+ * become — beside a separate "Waiting on you" flag. The customer counted the
+ * words: *"That is WAYYY too much text. KEEP IT STUPID SIMPLE."*
+ *
+ * The document is gone from it for a reason of its own: a change can touch
+ * three, and naming one of them is a claim about the other two.
+ */
+test("a row says which binder, who opened it, and when", () => {
   const [row] = buildQueueRows([binder("clinical", [change()])], "bob", NOW);
 
   expect(row?.binderName).toBe("Clinical");
-  expect(row?.documentName).toBe("Hand Hygiene Policy");
-  expect(row?.requestedBy).toBe("alice");
+  expect(row?.meta).toContain("#1");
+  expect(row?.meta).toContain("Alice");
+  // The document it touches is not on the row: a change can touch three.
+  expect(row?.meta).not.toContain("Hand Hygiene");
 });
 
-test("a change about no document is named for its binder", () => {
-  // Sign-off rules touch no document; naming one would be inventing it.
-  const [row] = buildQueueRows(
-    [binder("clinical", [change({ documentSlugPath: null })])],
-    "bob",
-    NOW,
-  );
-
-  expect(row?.documentName).toBe("Clinical");
-});
-
-test("a refusing reviewer blocks the row and is named", () => {
+/**
+ * Worst news first: a refusal outranks a full count, because a change with
+ * every approval and a reviewer asking for changes cannot publish — and
+ * reporting "Approved" for it would be a lie a reader would act on.
+ */
+test("a refusing reviewer is a change that needs changes", () => {
   const [row] = buildQueueRows(
     [
       binder("clinical", [
@@ -98,11 +105,17 @@ test("a refusing reviewer blocks the row and is named", () => {
   );
 
   expect(row?.status).toBe("blocked");
-  // The build's vocabulary, not the mockup's "Blocked".
-  expect(row?.statusReason).toBe("carol asked for changes");
+  expect(row?.standing).toBe("Changes requested");
+  expect(row?.tone).toBe("changes");
 });
 
-test("every approval in reads as ready, and says which version it becomes", () => {
+/**
+ * **"Approved", not "Ready to publish · becomes v2".**
+ *
+ * Which version it becomes is a fact about a document, and belongs on the
+ * change's own page where there is room to name each one.
+ */
+test("every approval in reads as approved, in one word", () => {
   const [row] = buildQueueRows(
     [
       binder("clinical", [
@@ -118,8 +131,8 @@ test("every approval in reads as ready, and says which version it becomes", () =
   );
 
   expect(row?.status).toBe("ready");
-  expect(row?.statusReason).toBe("Ready to publish");
-  expect(row?.becomesVersion).toBe(2);
+  expect(row?.standing).toBe("Approved");
+  expect(row?.tone).toBe("approved");
 });
 
 test("a requested reviewer who has not answered is waiting on", () => {

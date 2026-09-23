@@ -52,6 +52,19 @@ export function editModeFromSearch(search: string): BinderEditMode {
 }
 
 /**
+ * Which of your drafts the address is asking for, if it names one.
+ *
+ * Null for "whichever is newest" — a bare `?edit=1` from before drafts were
+ * plural, or a person with one draft, which is most of them. Never trusted:
+ * the server checks the branch is yours and is still a draft before anything
+ * is read at it, and falls back to the newest when it is not.
+ */
+export function draftFromSearch(search: string): string | null {
+  const raw = new URLSearchParams(search).get("draft")?.trim() ?? "";
+  return raw === "" ? null : raw;
+}
+
+/**
  * Whether the address is asking for the archive rather than the binder.
  *
  * Its own key rather than a seventh tab. The archive is a view of the
@@ -81,6 +94,15 @@ export function buildBinderUrl(params: {
   view?: DocumentChangeView;
   /** Editing the binder's contents, or writing up the draft to propose it. */
   edit?: BinderEditMode;
+  /**
+   * Which of your drafts you are editing in.
+   *
+   * A person may have several (D8), so the address has to say which — a
+   * reload, a back button or a pasted link all have to land in the same work.
+   * Unsaid means the newest, which is what it meant when there could only be
+   * one.
+   */
+  draft?: string | null;
   /** The archive — what this binder has taken off the record. */
   archive?: boolean;
 }): string {
@@ -91,6 +113,7 @@ export function buildBinderUrl(params: {
     change,
     view,
     edit = "off",
+    draft = null,
     archive = false,
   } = params;
   const query = new URLSearchParams();
@@ -100,6 +123,9 @@ export function buildBinderUrl(params: {
   // address stays the short one.
   if (edit === "editing") query.set("edit", "1");
   if (edit === "proposing") query.set("edit", "propose");
+  // Only while editing: a draft named on an address that is not an edit is a
+  // claim about a state the page is not in.
+  if (edit !== "off" && draft) query.set("draft", draft);
   if (archive) query.set("archive", "1");
   if (change !== undefined) query.set("change", String(change));
   // The discussion is where a decision is made, so it is the screen a bare

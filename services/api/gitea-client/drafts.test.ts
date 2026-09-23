@@ -56,7 +56,9 @@ test("a draft branch is named for the person whose work it is", () => {
     "alice",
     new Date("2026-09-12T14:35:22Z"),
   );
-  expect(branch).toBe("draft/alice/20260912143522");
+  // To the millisecond: starting a second draft is a deliberate act now, and
+  // two in one second is a double-click rather than a mistake worth an error.
+  expect(branch).toBe("draft/alice/20260912143522000");
   expect(draftOwner(branch)).toBe("alice");
   expect(isDraftBranch(branch)).toBe(true);
 });
@@ -84,7 +86,7 @@ test("a draft with a change request open on it is no longer a draft", async () =
       "/repos/{owner}/{repo}/branches": () => [
         { name: "main", commit: { timestamp: "2026-09-01T00:00:00Z" } },
         {
-          name: "draft/alice/20260912143522",
+          name: "draft/alice/20260912143522000",
           commit: {
             timestamp: "2026-09-12T14:40:00Z",
             message: "Make the folder nursing\n\nmore",
@@ -112,7 +114,7 @@ test("a draft with a change request open on it is no longer a draft", async () =
 
   expect(drafts).toEqual([
     {
-      branch: "draft/alice/20260912143522",
+      branch: "draft/alice/20260912143522000",
       owner: "alice",
       updatedAt: "2026-09-12T14:40:00Z",
       // The subject alone: a list of drafts reads as a list of work.
@@ -130,7 +132,7 @@ test("drafts are listed newest first, and can be narrowed to one person", async 
           commit: { timestamp: "2026-09-11T00:00:00Z", message: "Bob's work" },
         },
         {
-          name: "draft/alice/20260912143522",
+          name: "draft/alice/20260912143522000",
           commit: {
             timestamp: "2026-09-12T14:35:22Z",
             message: "Alice's work",
@@ -164,7 +166,7 @@ test("pressing Edit twice resumes the draft rather than forking it", async () =>
     GET: {
       "/repos/{owner}/{repo}/branches": () => [
         {
-          name: "draft/alice/20260912143522",
+          name: "draft/alice/20260912143522000",
           commit: {
             timestamp: "2026-09-12T14:35:22Z",
             message: "Add a policy",
@@ -182,7 +184,7 @@ test("pressing Edit twice resumes the draft rather than forking it", async () =>
     username: "alice",
   });
 
-  expect(draft.branch).toBe("draft/alice/20260912143522");
+  expect(draft.branch).toBe("draft/alice/20260912143522000");
   // And no branch was made: a second press has to land you back in your work.
   expect(mockPost).not.toHaveBeenCalled();
 });
@@ -205,14 +207,14 @@ test("a person with no draft gets one made from main", async () => {
   });
 
   expect(draft).toEqual({
-    branch: "draft/alice/20260912143522",
+    branch: "draft/alice/20260912143522000",
     owner: "alice",
     updatedAt: null,
     lastAct: null,
   });
   expect(mockPost.mock.calls[0]?.[1]).toMatchObject({
     body: {
-      new_branch_name: "draft/alice/20260912143522",
+      new_branch_name: "draft/alice/20260912143522000",
       old_branch_name: "main",
     },
   });
@@ -266,7 +268,7 @@ test("what is on a draft is the commits main does not have", async () => {
     client,
     org: "o",
     workspace: "w",
-    branch: "draft/alice/20260912143522",
+    branch: "draft/alice/20260912143522000",
   });
 
   expect(acts.map((act) => act.summary)).toEqual([
@@ -278,7 +280,7 @@ test("what is on a draft is the commits main does not have", async () => {
 
   expect(mockGet.mock.calls[0]?.[1]).toMatchObject({
     params: {
-      query: { sha: "draft/alice/20260912143522", not: "main" },
+      query: { sha: "draft/alice/20260912143522000", not: "main" },
     },
   });
 });
@@ -292,7 +294,7 @@ test("a draft made a second ago with nothing on it is empty, not broken", async 
       client,
       org: "o",
       workspace: "w",
-      branch: "draft/alice/20260912143522",
+      branch: "draft/alice/20260912143522000",
     }),
   ).toEqual([]);
 });

@@ -590,7 +590,7 @@ function GroupDetail({
   return (
     <div className="org-group-body">
       <div className="org-group-part">
-        <h4 className="bs-label">People</h4>
+        <h4 className="bs-field-label">People</h4>
         {group.members.length === 0 ? (
           <p className="doc-rail-note">Nobody in it yet.</p>
         ) : (
@@ -651,7 +651,7 @@ function GroupDetail({
       </div>
 
       <div className="org-group-part">
-        <h4 className="bs-label">Binders</h4>
+        <h4 className="bs-field-label">Binders</h4>
 
         {owners ? (
           // Not a grant, so not something to add to or take away from: Gitea
@@ -880,7 +880,7 @@ function AddOrgPersonForm({
       <h3 className="doc-rail-title">Add someone</h3>
 
       <label className="create-document-field">
-        <span className="bs-label">Who</span>
+        <span className="bs-field-label">Who</span>
         <input
           className="bs-input org-group-select"
           value={picked ? picked.fullName || picked.login : query}
@@ -932,7 +932,7 @@ function AddOrgPersonForm({
       ) : null}
 
       <fieldset className="org-visibility-choice">
-        <legend className="bs-label">Role</legend>
+        <legend className="bs-field-label">Role</legend>
         <label className="org-choice">
           <input
             type="radio"
@@ -1036,7 +1036,7 @@ function NewGroupForm({
       <h3 className="doc-rail-title">New group</h3>
 
       <label className="create-document-field">
-        <span className="bs-label">Name</span>
+        <span className="bs-field-label">Name</span>
         <input
           className="bs-input org-group-select"
           value={name}
@@ -1061,7 +1061,7 @@ function NewGroupForm({
       )}
 
       <fieldset className="org-visibility-choice">
-        <legend className="bs-label">Level</legend>
+        <legend className="bs-field-label">Level</legend>
         {GROUP_LEVELS.map((option) => (
           <label className="org-choice" key={option.value}>
             <input

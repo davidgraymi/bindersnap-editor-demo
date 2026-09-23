@@ -28,27 +28,90 @@ export function parseRequestedChange(search: string): number | null {
 }
 
 /**
- * "Hand Hygiene · v2 → v3", or "Hand Hygiene · new, will be v1".
+ * What this change does to one document, as a row reads it.
  *
- * Once the change has been decided the arrow is a lie: the version on record
- * *is* what this change wrote, and the next one belongs to somebody else's
- * change. So a decided change names what it published instead.
+ * **A change request was designed around one document and now routinely holds
+ * several**, so the page had one sentence for a list of them: the header said
+ * "becomes v2 when published", which is a fact about whichever row happened to
+ * be selected, and the rows themselves showed the raw filename — identity
+ * segment and all — as if a reader had asked which bytes were on disk.
+ *
+ * The answer is to say per row what the change does to that document, in the
+ * words somebody would use: what it is called, where it is filed, and what
+ * happens to it. Three facts, and each is separately true:
+ *
+ * - `title` — the policy's name, which is what it is.
+ * - `effect` — added, versioned, archived: the thing being decided.
+ * - `move` — renamed or refiled, when it was. **A rename is a change even
+ *   when not a word of the document changed**, and the comparison cannot show
+ *   it: the identity survives a rename and the address does not, so two
+ *   versions of a renamed policy read identically and the page said "nothing
+ *   changed" about a change that plainly did something.
  */
-export function describeVersionStep(
+export interface ChangedDocumentFacts {
+  title: string;
+  /** `nursing/hand-hygiene` — where it is filed, without the identity. */
+  address: string;
+  effect: string;
+  /** "Renamed from Hand Hygiene", "Moved from Nursing", or null. */
+  move: string | null;
+}
+
+export function describeChangedDocument(
   document: WorkspaceChangedDocument,
   decided = false,
-): string {
-  const name = formatDocumentName(document.name);
+): ChangedDocumentFacts {
+  const title = formatDocumentName(document.name);
 
-  if (decided) {
-    return document.currentVersion
-      ? `${name} · v${document.currentVersion.version}`
-      : name;
+  const effect = document.currentVersion
+    ? decided
+      ? `Published v${document.currentVersion.version}`
+      : `v${document.currentVersion.version} → v${document.nextVersion}`
+    : decided
+      ? "Added"
+      : `New — becomes v${document.nextVersion}`;
+
+  return {
+    title,
+    address: document.slugPath,
+    effect,
+    move: describeMove(document),
+  };
+}
+
+/**
+ * "Renamed from Hand Hygiene", "Moved from Nursing", or both at once.
+ *
+ * Told apart rather than lumped together as "moved", because they are
+ * different acts to the person reading: one changes what a policy is called
+ * and the other changes where it is looked for.
+ */
+export function describeMove(
+  document: WorkspaceChangedDocument,
+): string | null {
+  const was = document.previousSlugPath;
+  if (!was || was === document.slugPath) return null;
+
+  const cut = (path: string) => {
+    const at = path.lastIndexOf("/");
+    return at === -1
+      ? { folder: "", name: path }
+      : { folder: path.slice(0, at), name: path.slice(at + 1) };
+  };
+
+  const from = cut(was);
+  const to = cut(document.slugPath);
+  const renamed = from.name !== to.name;
+  const moved = from.folder !== to.folder;
+
+  const where = (folder: string) =>
+    folder === "" ? "the top level" : formatDocumentName(folder);
+
+  if (renamed && moved) {
+    return `Renamed from ${formatDocumentName(from.name)} and moved from ${where(from.folder)}`;
   }
-
-  return document.currentVersion
-    ? `${name} · v${document.currentVersion.version} → v${document.nextVersion}`
-    : `${name} · new, will be v${document.nextVersion}`;
+  if (renamed) return `Renamed from ${formatDocumentName(from.name)}`;
+  return `Moved from ${where(from.folder)}`;
 }
 
 /**
@@ -86,6 +149,9 @@ export function workspaceChangeToRecord(
     reviewers: change.reviewers,
     approvalCount: change.approvalCount,
     requiredApprovals: change.requiredApprovals,
+    updatedAt: change.updatedAt,
+    commentCount: change.commentCount,
+    isRejected: change.isRejected,
   };
 }
 

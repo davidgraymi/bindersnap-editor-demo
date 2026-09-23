@@ -10,6 +10,7 @@ import {
   renderCodeowners,
   ruleFromPattern,
   rulePattern,
+  signOffOwnersForPaths,
   tokenizeCodeownersLine,
   validateSignOffRules,
   type SignOffRule,
@@ -609,5 +610,87 @@ describe("a rule over the sign-off rules themselves", () => {
     });
     expect(result.ok).toBe(false);
     expect(result.problems.join(" ")).toContain("two sign-off rules");
+  });
+});
+
+// ── whose rule is on this change ───────────────────────────────────
+
+test("a folder rule puts its owners on a change that touches that folder", () => {
+  const rules = [
+    {
+      scope: "folder" as const,
+      target: "nursing",
+      teams: ["infection-control"],
+      users: [],
+    },
+    {
+      scope: "folder" as const,
+      target: "training",
+      teams: ["learning"],
+      users: [],
+    },
+  ];
+
+  expect(
+    signOffOwnersForPaths(rules, ["nursing/hand-hygiene.01J8.md"]),
+  ).toEqual({ teams: ["infection-control"], users: [] });
+});
+
+test("a rule for one folder does not match a folder whose name starts the same", () => {
+  // Anchored, the way Gitea anchors them. `nursing` must not reach
+  // `nursing-archive`, or the screen would name owners who are not on it.
+  const rules = [
+    {
+      scope: "folder" as const,
+      target: "nursing",
+      teams: ["infection-control"],
+      users: [],
+    },
+  ];
+
+  expect(signOffOwnersForPaths(rules, ["nursing-archive/old.01J8.md"])).toEqual(
+    { teams: [], users: [] },
+  );
+});
+
+test("a binder rule is on every change, and a document rule follows its identity", () => {
+  const rules = [
+    { scope: "binder" as const, target: "", teams: [], users: ["priya"] },
+    {
+      scope: "document" as const,
+      target: "01J8XZ4K7MQ9V3B0RN7YHS2E1D",
+      teams: [],
+      users: ["tom"],
+    },
+  ];
+
+  // The document rule matches wherever the file has been moved to, because it
+  // is written against the identity in the filename rather than the path.
+  expect(
+    signOffOwnersForPaths(rules, [
+      "administrative/hand-hygiene.01J8XZ4K7MQ9V3B0RN7YHS2E1D.md",
+    ]),
+  ).toEqual({ teams: [], users: ["priya", "tom"] });
+
+  expect(signOffOwnersForPaths(rules, ["training/other.01J9.md"])).toEqual({
+    teams: [],
+    users: ["priya"],
+  });
+});
+
+test("owners are named once, however many rules name them", () => {
+  const rules = [
+    { scope: "binder" as const, target: "", teams: ["compliance"], users: [] },
+    {
+      scope: "folder" as const,
+      target: "nursing",
+      teams: ["compliance"],
+      users: [],
+    },
+  ];
+
+  expect(signOffOwnersForPaths(rules, ["nursing/a.01J8.md"])).toEqual({
+    teams: ["compliance"],
+    users: [],
   });
 });

@@ -71,6 +71,7 @@ import {
 import {
   discardDraft,
   findCurrentDraft,
+  startDraft,
   isDraftBranch,
   listBinderDrafts,
   openDraft,
@@ -168,6 +169,7 @@ import {
   type WorkspaceRepo,
 } from "./gitea-client/repos";
 import { proposeSignOffRules, readSignOffRules } from "./gitea-client/signOff";
+import { requiredReviewersFor } from "./requiredReviewers";
 import {
   validateSignOffRules,
   type SignOffRule,
@@ -195,6 +197,7 @@ import {
   updateChangeBranch,
   removePullReviewers,
   requestPullReviewers,
+  setPullRequestSubject,
   setPullRequestAssignees,
   submitReview,
   type PullRequestWithApprovalState,
@@ -209,6 +212,13 @@ import {
   readRequestedReviewers,
 } from "./change-assignments";
 import { buildChangeUpdates } from "./change-updates";
+import type { DraftNameRecord } from "./draft-names";
+import {
+  defaultDraftName,
+  describeUnnamedDraft,
+  draftNameStore,
+  normalizeDraftName,
+} from "./draft-names";
 import {
   buildArchiveStamp,
   buildVersionStamp,
@@ -764,6 +774,48 @@ async function readRequiredApprovals(
     return protection?.requiredApprovals ?? 0;
   } catch (err) {
     logger.error("Failed to read required approvals", {
+      owner,
+      repo,
+      branch,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
+
+/**
+ * Which review requests this binder's protection actually holds the merge for.
+ *
+ * Read with the service account for the same reason the approval count is: the
+ * whitelists on the same object are admin-only, and the reviewers who need to
+ * know whether they are blocking are precisely the ones who cannot read it.
+ * Only the two booleans come back.
+ *
+ * Null when it cannot be read, and the caller then marks nobody required — a
+ * "Required" that is wrong on a compliance product is worse than none.
+ */
+async function readSignOffGate(
+  owner: string,
+  repo: string,
+  branch = "main",
+): Promise<{ officialBlocks: boolean; codeownersBlock: boolean } | null> {
+  const client = createPrivilegedGiteaClient();
+  if (!client) return null;
+
+  try {
+    const protection = await getRepoBranchProtection(
+      client,
+      owner,
+      repo,
+      branch,
+    );
+    if (!protection) return null;
+    return {
+      officialBlocks: protection.blockOnOfficialReviewRequests,
+      codeownersBlock: protection.blockOnCodeownerReviews,
+    };
+  } catch (err) {
+    logger.error("Failed to read a binder's sign-off gate", {
       owner,
       repo,
       branch,
@@ -2839,7 +2891,10 @@ async function handleChangeUpdates(
     return json(
       200,
       {
-        updates: buildChangeUpdates(commits),
+        // Dated from when the change opened, so the acts a draft was built
+        // out of are the submission rather than seven "updated the proposed
+        // version" entries in a discussion nobody has joined yet.
+        updates: buildChangeUpdates(commits, pullRequest.created_at ?? null),
         resetsApprovals: branchProtection?.dismissStaleApprovals ?? false,
       },
       baseHeaders,
@@ -4145,6 +4200,8 @@ async function handleWorkspaceChangeDetail(
       reviewSettings,
       discussions,
       access,
+      signOff,
+      gate,
     ] = await Promise.all([
       getPullRequestWithReviews({
         client,
@@ -4167,7 +4224,32 @@ async function handleWorkspaceChangeDetail(
         pullNumber,
       }),
       readWorkspaceAccess({ client, org: orgName, name: workspaceName }),
+      // The rules as they stand on the base branch, which is where Gitea reads
+      // them from when it decides who to ask.
+      readSignOffRules({
+        client,
+        org: orgName,
+        workspace: workspaceName,
+      }).catch(() => ({ exists: false, rules: [], unreadable: [] })),
+      readSignOffGate(orgName, workspaceName),
     ]);
+
+    // **Where each document is filed on the base**, so a change that renamed
+    // or moved one can say so. The identity survives a rename and the address
+    // does not (ADR 0005), so this is the address the same identity has on the
+    // branch this change would land on. A read that fails costs the sentence
+    // and not the page: nothing below it is a gate.
+    const onBase = await readWorkspaceTree({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      ref: entry.pullRequest.base?.ref || "main",
+    }).catch(() => null);
+    const baseAddresses = new Map<string, string>(
+      (onBase?.documents ?? []).flatMap((document) =>
+        document.uid ? [[document.uid, document.slugPath] as const] : [],
+      ),
+    );
 
     // The version each document reaches if this is published. One call per
     // document the change touches — which is a handful, on a page about one
@@ -4180,11 +4262,16 @@ async function handleWorkspaceChangeDetail(
           workspace: workspaceName,
           uid: document.uid,
         });
+        const was = document.uid ? baseAddresses.get(document.uid) : undefined;
         return {
           ...document,
           nextVersion: nextVersionFrom(versions),
           currentVersion: versions[0] ?? null,
           versions,
+          // Null when it is filed where it always was, and for a document
+          // being added — which has no "was" to report.
+          previousSlugPath:
+            was !== undefined && was !== document.slugPath ? was : null,
         };
       }),
     );
@@ -4203,6 +4290,13 @@ async function handleWorkspaceChangeDetail(
         blockOnUnresolvedThreads: reviewSettings.blockOnUnresolvedThreads,
         unresolvedThreadCount: discussions.unresolvedCount,
         canManage: access.push,
+        // Who this change is actually held for, out of the people its rules
+        // named. Read rather than guessed: see `requiredReviewers.ts`.
+        requiredReviewers: requiredReviewersFor({
+          rules: signOff.rules,
+          paths: documents.map((document) => document.path),
+          gate,
+        }),
       },
       baseHeaders,
     );
@@ -4215,6 +4309,104 @@ async function handleWorkspaceChangeDetail(
       error: err instanceof Error ? err.message : String(err),
     });
     return responseFromError(err, baseHeaders, "Unable to read the change.");
+  }
+}
+
+/**
+ * Rewrite what a change is asking for.
+ *
+ * **The author's, and only while it is open.** A change request is open for
+ * days and the first thing a reviewer's question produces is a better title;
+ * once it is published the title is on the merge commit and in the version
+ * tag, which are the record and are not ours to edit afterwards.
+ *
+ * A binder administrator may also fix one — the same people who can rename the
+ * binder — because a change whose author has left is a title nobody can
+ * correct.
+ */
+async function handleWorkspaceChangeEdit(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+  pullNumber: number,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { client, session } = auth;
+
+  try {
+    const [entry, access] = await Promise.all([
+      getPullRequestWithReviews({
+        client,
+        owner: orgName,
+        repo: workspaceName,
+        pullNumber,
+      }),
+      readWorkspaceAccess({ client, org: orgName, name: workspaceName }),
+    ]);
+
+    if (entry.pullRequest.state !== "open") {
+      return json(
+        409,
+        {
+          error:
+            "This change has been decided. Its title is on the record now and cannot be rewritten.",
+        },
+        baseHeaders,
+      );
+    }
+
+    const isAuthor =
+      (entry.pullRequest.user?.login ?? "").toLowerCase() ===
+      session.username.toLowerCase();
+    if (!isAuthor && !access.admin) {
+      return json(
+        403,
+        { error: "Only the author can rewrite this change." },
+        baseHeaders,
+      );
+    }
+
+    const payload = await readJson<{ title?: unknown; body?: unknown }>(req);
+    const title =
+      typeof payload?.title === "string" ? payload.title.trim() : "";
+    const body = typeof payload?.body === "string" ? payload.body : "";
+    if (title === "") {
+      return json(
+        400,
+        { error: "A change request needs a title." },
+        baseHeaders,
+      );
+    }
+
+    await setPullRequestSubject({
+      client,
+      owner: orgName,
+      repo: workspaceName,
+      pullNumber,
+      title,
+      body,
+    });
+
+    logger.info("Change request rewritten", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      pullNumber,
+    });
+
+    return json(200, { title, body }, baseHeaders);
+  } catch (err) {
+    logger.error("Failed to rewrite a change request", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      pullNumber,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to edit this change.");
   }
 }
 
@@ -4547,6 +4739,13 @@ async function handleListWorkspaceChanges(
           branchName: row.branchName,
           submittedBy: pullRequest.user?.login ?? "",
           submittedAt: pullRequest.created_at ?? "",
+          // Gitea gives both on the pull request itself, so a list of changes
+          // reads "updated 2 hours ago · 3 comments" without a call per row.
+          updatedAt:
+            (pullRequest as { updated_at?: string }).updated_at ??
+            pullRequest.created_at ??
+            "",
+          commentCount: (pullRequest as { comments?: number }).comments ?? 0,
           closedAt: isOpen
             ? null
             : ((pullRequest as { merged_at?: string; closed_at?: string })
@@ -6722,6 +6921,7 @@ async function handleBinderArchive(
   baseHeaders: Headers,
   orgName: string,
   workspaceName: string,
+  draftRaw: string | null,
 ): Promise<Response> {
   // A read, so a session is enough. An organization whose subscription lapsed
   // can still see what it archived — that is its own record, and charging for
@@ -6741,11 +6941,63 @@ async function handleBinderArchive(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
+    // **Read where the count was counted.** The set difference below is
+    // against a tree, and the binder's own list counts the archive at the
+    // draft's ref while it is being edited — so reading this one from `main`
+    // said "Archived · 1 policy" on the tree and then listed nothing, because
+    // the policy archived a moment ago is still on `main` and always will be
+    // until the change is published. Two reads of one question, answered from
+    // two branches.
+    const draft = await resolveOwnDraftBranch({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      username: session.username,
+      draftRaw,
+    });
+    // 409 rather than 404: the binder is readable and what failed is the claim
+    // about the draft, which the page can drop out of edit mode on.
+    if (draft && "error" in draft) {
+      return json(409, { error: draft.error }, baseHeaders);
+    }
+
     // Two reads, both already implemented and both already needed elsewhere.
-    const [tree, tags] = await Promise.all([
-      readWorkspaceTree({ client, org: orgName, workspace: workspaceName }),
+    //
+    // Three while a draft is open, and the third earns itself: a policy
+    // archived in a draft has no `archived-<n>` tag yet — that is written when
+    // the change publishes — so the only stamp is its last version's, and a
+    // binder whose tags predate the stamp has nothing to read a name out of.
+    // `main` still holds the file, under the name it had an act ago, which is
+    // better evidence than printing a 26-character identity at somebody.
+    const [tree, tags, onMain] = await Promise.all([
+      readWorkspaceTree({
+        client,
+        org: orgName,
+        workspace: workspaceName,
+        ...(draft ? { ref: draft.branch } : {}),
+      }),
       listAllTags({ client, owner: orgName, repo: workspaceName }),
+      draft
+        ? readWorkspaceTree({
+            client,
+            org: orgName,
+            workspace: workspaceName,
+          }).catch(() => null)
+        : Promise.resolve(null),
     ]);
+
+    /** What `main` calls each identity, for the fallback above. */
+    const namedOnMain = new Map<string, { name: string; slugPath: string }>();
+    for (const document of onMain?.documents ?? []) {
+      if (document.uid) {
+        namedOnMain.set(document.uid, {
+          // The same rendering the tree gives every other row, so a policy
+          // reads the same in the archive as it did a moment ago in the list.
+          name: formatDocumentName(document.name),
+          slugPath: document.slugPath,
+        });
+      }
+    }
 
     const onRecord = new Set(
       tree.documents.flatMap((document) =>
@@ -6816,13 +7068,16 @@ async function handleBinderArchive(
           lastArchiving?.message || latest.message,
         );
 
+        // The stamp first — it is point-in-time evidence of what the policy
+        // was called when it left. `main` second, which only ever answers
+        // while a draft is being read. The identity last, and never invented:
+        // a heading that says the identity is more use than one that guesses.
+        const named = namedOnMain.get(uid) ?? null;
+
         return {
           uid,
-          // Never invented. A tag with no readable stamp — written under ADR
-          // 0004, or by hand — costs a heading, and a heading that says the
-          // identity is more use than one that guesses a name.
-          title: stamp.title ?? uid,
-          slugPath: stamp.slugPath,
+          title: stamp.title ?? named?.name ?? uid,
+          slugPath: stamp.slugPath || (named?.slugPath ?? ""),
           lastVersion: latest.version,
           lastPublishedAt: latest.at || null,
           archivedAt: lastArchiving?.at ?? null,
@@ -6859,6 +7114,7 @@ async function handleListWorkspaceDocuments(
   orgName: string,
   workspaceName: string,
   draftRaw: string | null,
+  changeRaw: string | null,
 ): Promise<Response> {
   const auth = await requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
@@ -6888,6 +7144,26 @@ async function handleListWorkspaceDocuments(
       return json(409, { error: draft.error }, baseHeaders);
     }
 
+    // **The binder as a change request would leave it.** Reading a document on
+    // a change's branch puts its contents in the navigation beside it, and a
+    // tree pinned to `main` there would list the policy under the name the
+    // change renamed it away from — and lead to an address that does not exist
+    // on the branch you are reading.
+    const changeNumber = Number.parseInt(changeRaw ?? "", 10);
+    const onChange =
+      !draft && Number.isFinite(changeNumber) && changeNumber > 0
+        ? await getPullRequestWithReviews({
+            client: auth.client,
+            owner: orgName,
+            repo: workspaceName,
+            pullNumber: changeNumber,
+          })
+            .then((entry) => entry.pullRequest.branchName || null)
+            .catch(() => null)
+        : null;
+
+    const ref = draft ? draft.branch : onChange;
+
     return json(
       200,
       {
@@ -6899,7 +7175,7 @@ async function handleListWorkspaceDocuments(
           org: orgName,
           workspace: workspaceName,
           withLastChange: true,
-          ...(draft ? { ref: draft.branch } : {}),
+          ...(ref ? { ref } : {}),
         })),
       },
       baseHeaders,
@@ -7146,6 +7422,9 @@ async function handleWorkspaceDocumentDetail(
   orgName: string,
   workspaceName: string,
   documentPath: string,
+  draftRaw: string | null,
+  changeRaw: string | null,
+  refRaw: string | null,
 ): Promise<Response> {
   const auth = await requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
@@ -7160,17 +7439,139 @@ async function handleWorkspaceDocumentDetail(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
-    let ref = "main";
+    /**
+     * The branch the address names, read directly.
+     *
+     * **A file lives on a branch, and that is the address it should have** —
+     * *"When I open a file in a PR on GitHub… it goes to the file on the
+     * commit that it was made on. Similarly we should navigate to the branch
+     * view instead of the change view."* A change request is one thing that
+     * happens to a branch; the branch is the thing the file is on.
+     *
+     * **Somebody else's draft is refused here**, which is the one rule a raw
+     * ref would otherwise walk straight through. Gitea lets every
+     * collaborator read every branch in the repository, and the product's rule
+     * is narrower: other people's drafts are visible as existing and never as
+     * contents. So a `draft/` branch goes through the same ownership check
+     * every other draft read uses, and anything else is an ordinary branch
+     * anybody who can read the binder may read.
+     */
+    const askedRef = (refRaw ?? "").trim();
+    let onRef: string | null = null;
+    if (askedRef !== "") {
+      // **Only an unproposed draft is private.** The moment a change request
+      // sits on a branch it stops being a draft and becomes the thing every
+      // reviewer is being asked to read — `listBinderDrafts` already subtracts
+      // those, so a branch still in that list is somebody's work in progress
+      // and a branch that has left it is a change request.
+      const unproposed = isDraftBranch(askedRef)
+        ? await listBinderDrafts({
+            client: auth.client,
+            org: orgName,
+            workspace: workspaceName,
+          })
+        : [];
+      const stillADraft = unproposed.find((entry) => entry.branch === askedRef);
+
+      if (stillADraft && stillADraft.owner !== auth.session.username) {
+        return json(
+          409,
+          {
+            error:
+              "That draft is not yours. Other people's drafts are visible as existing and never as contents.",
+          },
+          baseHeaders,
+        );
+      }
+
+      onRef = askedRef;
+    }
+
+    /**
+     * The branch a change request proposes, when the address names one.
+     *
+     * **A change request is a branch, and a document on it has an address.**
+     * Reading the proposed version used to happen on the change's own page, in
+     * a panel beside the discussion — so a policy was shown in half a column,
+     * under a heading naming the change rather than the document, at a URL
+     * that said nothing about which document it was. It is the binder at
+     * another ref, which is what every other git front end does and what a
+     * reader already knows how to use.
+     *
+     * A closed change keeps working: the branch may be gone, in which case the
+     * read below falls back and the page says what it can.
+     */
+    const changeNumber = Number.parseInt(changeRaw ?? "", 10);
+    const onChange =
+      Number.isFinite(changeNumber) && changeNumber > 0
+        ? await getPullRequestWithReviews({
+            client: auth.client,
+            owner: orgName,
+            repo: workspaceName,
+            pullNumber: changeNumber,
+          })
+            .then((entry) => entry.pullRequest.branchName || null)
+            .catch(() => null)
+        : null;
+
+    // **A policy renamed a moment ago is only at that name in the draft.**
+    // Clicking a row in the tree while editing opened this on `main`, where
+    // the new address has never existed, and the answer was that the document
+    // does not exist — of a document sitting on screen. Your own draft only,
+    // which is the rule every draft-aware read here follows.
+    const draft = await resolveOwnDraftBranch({
+      client: auth.client,
+      org: orgName,
+      workspace: workspaceName,
+      username: auth.session.username,
+      draftRaw,
+    });
+    if (draft && "error" in draft) {
+      return json(409, { error: draft.error }, baseHeaders);
+    }
+
+    // A draft is yours and a change is everybody's, so a request naming both
+    // is answered with the draft — the one that had to be checked.
+    // A draft is yours, a ref is explicit, and a change is a lookup. The most
+    // specific claim the caller made wins.
+    const readAt = draft ? draft.branch : (onRef ?? onChange);
+    let ref = readAt ?? "main";
+    // **Not decided by the ref.** "Proposed" means the document is not on the
+    // record at all, which is a question about its version tags rather than
+    // about which branch is being read. A policy at v1, read on a change that
+    // would make it v2, is published and being revised — and printing "this
+    // policy is not in the binder yet" over the top of it is false. It is
+    // settled below, once the versions are known.
     let state: "published" | "proposed" = "published";
 
     // One read of the tree answers both "which document is this" and "what
     // folders could it be moved to", so the page that offers a move has the
     // list without a second call.
-    const tree = await readWorkspaceTree({
-      client: auth.client,
-      org: orgName,
-      workspace: workspaceName,
-    });
+    // **A ref that is not there is said plainly.** Gitea answers a missing
+    // branch with `sha not found [no-such-branch]`, which is its vocabulary
+    // and not a sentence anybody following a stale link can act on.
+    const tree = readAt
+      ? await readWorkspaceTree({
+          client: auth.client,
+          org: orgName,
+          workspace: workspaceName,
+          ref: readAt,
+        }).catch(() => null)
+      : await readWorkspaceTree({
+          client: auth.client,
+          org: orgName,
+          workspace: workspaceName,
+        });
+
+    if (!tree) {
+      return json(
+        404,
+        {
+          error: `This binder has no branch called "${readAt}". It may have been published or discarded since that link was made.`,
+        },
+        baseHeaders,
+      );
+    }
 
     let document =
       tree.documents.find((entry) => entry.path === documentPath) ??
@@ -7228,6 +7629,11 @@ async function handleWorkspaceDocumentDetail(
         state: "open",
       }),
     ]);
+
+    // A document read on a branch and never published is proposed: the branch
+    // is the only place it exists. One that has versions is on the record and
+    // is being revised, whichever branch it was read from.
+    if (readAt && versions.length === 0) state = "proposed";
 
     return json(
       200,
@@ -7629,7 +8035,16 @@ async function handleBinderDraft(
       org: orgName,
       workspace: workspaceName,
     });
-    const mine = drafts.find((draft) => draft.owner === session.username);
+    const own = drafts.filter((draft) => draft.owner === session.username);
+
+    // **Which one you are in is the address's to say, not this route's to
+    // guess.** A person may have several, and the page carries the branch it
+    // is editing in `?draft=`. A branch that is not yours, or that has been
+    // proposed since the link was made, falls back to the newest rather than
+    // failing — this is a read, and landing somebody in their most recent work
+    // is a better answer than an error about a branch name they never typed.
+    const asked = new URL(req.url).searchParams.get("draft")?.trim() ?? "";
+    const mine = own.find((draft) => draft.branch === asked) ?? own[0] ?? null;
 
     return json(
       200,
@@ -7637,7 +8052,8 @@ async function handleBinderDraft(
         client,
         org: orgName,
         workspace: workspaceName,
-        mine: mine ?? null,
+        giteaRepoId: workspace.id,
+        mine,
         drafts,
         username: session.username,
       }),
@@ -7655,11 +8071,18 @@ async function handleBinderDraft(
 }
 
 /**
- * Start editing, or carry on where you were.
+ * Start editing, carry on where you were, or start another draft.
  *
- * Pressing Edit is not a destructive act and must not read like one: the
- * second press puts a person back in the work they already have rather than
- * forking it, which is why {@link openDraft} is idempotent.
+ * **Two acts on one route, and the body says which.** A `name` means "start
+ * another one, and call it this" — a deliberate act, from the picker, with a
+ * sentence attached. No name means a press of Edit, which is not destructive
+ * and must not read like one: the second press puts a person back in the work
+ * they already have rather than forking it.
+ *
+ * That asymmetry is the whole of D8's model change. Several drafts are worth
+ * having — two unrelated reorganisations should not be approved or refused
+ * together because one person did both — but forking work by accident is the
+ * mistake the one-draft rule existed to prevent, and it still is.
  */
 async function handleOpenBinderDraft(
   req: Request,
@@ -7682,12 +8105,71 @@ async function handleOpenBinderDraft(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
-    const mine = await openDraft({
-      client,
-      org: orgName,
-      workspace: workspaceName,
-      username: session.username,
-    });
+    const body = ((await req.json().catch(() => null)) ?? {}) as Record<
+      string,
+      unknown
+    >;
+    const named = normalizeDraftName(body.name);
+
+    // A name that was sent and is only whitespace is a mistake worth saying
+    // out loud, rather than one that quietly starts an unnamed draft.
+    if (body.name !== undefined && named === null) {
+      return json(
+        400,
+        { error: "A draft needs a name, so you can tell it from the others." },
+        baseHeaders,
+      );
+    }
+
+    // A name means "another one", so it never resumes. Without one this is a
+    // press of Edit: carry on where you were, and start your first draft only
+    // if you have none.
+    const existing = named
+      ? null
+      : await findCurrentDraft({
+          client,
+          org: orgName,
+          workspace: workspaceName,
+          owner: session.username,
+        });
+
+    const mine =
+      existing ??
+      (await startDraft({
+        client,
+        org: orgName,
+        workspace: workspaceName,
+        username: session.username,
+      }));
+
+    if (!existing) {
+      // **Every draft is named from the moment it exists**, so the picker, the
+      // bar and the propose screen never have to invent one between them and
+      // disagree. A press of Edit does not ask — the common case is one draft,
+      // and a name earns itself when there is something to tell apart — so it
+      // takes today's date, which is what somebody would call it anyway.
+      //
+      // After the branch, so a name is never stored for a draft that does not
+      // exist. A name that fails to store costs a label, not the draft.
+      await draftNameStore
+        .set({
+          giteaRepoId: workspace.id,
+          branch: mine.branch,
+          name: named ?? defaultDraftName(),
+          authored: named !== null,
+          owner: session.username,
+        })
+        .catch((err: unknown) => {
+          logger.error("Failed to name a binder draft", {
+            username: session.username,
+            organization: orgName,
+            workspace: workspaceName,
+            branch: mine.branch,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
+    }
+
     const drafts = await listBinderDrafts({
       client,
       org: orgName,
@@ -7699,6 +8181,7 @@ async function handleOpenBinderDraft(
       organization: orgName,
       workspace: workspaceName,
       branch: mine.branch,
+      named: named !== null,
     });
 
     return json(
@@ -7707,6 +8190,7 @@ async function handleOpenBinderDraft(
         client,
         org: orgName,
         workspace: workspaceName,
+        giteaRepoId: workspace.id,
         mine,
         drafts,
         username: session.username,
@@ -7743,12 +8227,37 @@ async function handleDiscardBinderDraft(
   const { session, client } = auth;
 
   try {
-    const mine = await findCurrentDraft({
+    const workspace = await findWorkspaceRepo({
       client,
       org: orgName,
-      workspace: workspaceName,
-      owner: session.username,
+      name: workspaceName,
     });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    // **The one the request names**, because a person may have several and
+    // discarding the wrong one is not recoverable. Unnamed falls back to the
+    // newest, which is what this did before there was more than one.
+    const asked = new URL(req.url).searchParams.get("draft")?.trim() ?? "";
+    const mine = asked
+      ? await resolveOwnDraftBranch({
+          client,
+          org: orgName,
+          workspace: workspaceName,
+          username: session.username,
+          draftRaw: asked,
+        })
+      : await findCurrentDraft({
+          client,
+          org: orgName,
+          workspace: workspaceName,
+          owner: session.username,
+        });
+
+    if (mine && "error" in mine) {
+      return json(409, { error: mine.error }, baseHeaders);
+    }
     if (!mine) {
       return json(
         404,
@@ -7763,6 +8272,10 @@ async function handleDiscardBinderDraft(
       workspace: workspaceName,
       branch: mine.branch,
     });
+
+    // The branch is gone, so its name is a row about nothing. Not fatal if it
+    // fails: nothing reads a name without the branch.
+    await draftNameStore.forget(workspace.id, mine.branch).catch(() => {});
 
     logger.info("Binder draft discarded", {
       username: session.username,
@@ -7780,6 +8293,106 @@ async function handleDiscardBinderDraft(
       error: err instanceof Error ? err.message : String(err),
     });
     return responseFromError(err, baseHeaders, "Unable to discard your draft.");
+  }
+}
+
+/**
+ * Call a draft something else.
+ *
+ * **A name is the only thing about a draft that is not a commit**, so this is
+ * the only route that writes one on its own. It exists because the name is how
+ * a person tells three drafts apart, and the first name somebody types is
+ * rarely the one that describes what the work turned into.
+ *
+ * Refuses a branch that is not yours through the same check every other draft
+ * route uses. A name can never widen what anybody may do — it is a label on
+ * work Gitea already agreed is theirs.
+ */
+async function handleRenameBinderDraft(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { session, client } = auth;
+
+  try {
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    const body = ((await req.json().catch(() => null)) ?? {}) as Record<
+      string,
+      unknown
+    >;
+    const name = normalizeDraftName(body.name);
+    if (name === null) {
+      return json(
+        400,
+        { error: "A draft needs a name, so you can tell it from the others." },
+        baseHeaders,
+      );
+    }
+
+    const mine = await resolveOwnDraftBranch({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      username: session.username,
+      draftRaw: body.draft,
+    });
+    if (mine && "error" in mine) {
+      return json(409, { error: mine.error }, baseHeaders);
+    }
+    if (!mine) {
+      return json(400, { error: "Which draft?" }, baseHeaders);
+    }
+
+    await draftNameStore.set({
+      giteaRepoId: workspace.id,
+      branch: mine.branch,
+      name,
+      authored: true,
+      owner: session.username,
+    });
+
+    const drafts = await listBinderDrafts({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+    });
+    const renamed =
+      drafts.find((draft) => draft.branch === mine.branch) ?? null;
+
+    return json(
+      200,
+      await describeDraft({
+        client,
+        org: orgName,
+        workspace: workspaceName,
+        giteaRepoId: workspace.id,
+        mine: renamed,
+        drafts,
+        username: session.username,
+      }),
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to rename a binder draft", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to rename your draft.");
   }
 }
 
@@ -7825,12 +8438,37 @@ async function handleProposeBinderDraft(
       );
     }
 
-    const mine = await findCurrentDraft({
+    const workspace = await findWorkspaceRepo({
       client,
       org: orgName,
-      workspace: workspaceName,
-      owner: session.username,
+      name: workspaceName,
     });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    // The draft the propose screen was showing, not whichever is newest: a
+    // person may have several, and proposing the wrong one sends unrelated
+    // work to reviewers under a title written about something else.
+    const asked = typeof body.draft === "string" ? body.draft.trim() : "";
+    const mine = asked
+      ? await resolveOwnDraftBranch({
+          client,
+          org: orgName,
+          workspace: workspaceName,
+          username: session.username,
+          draftRaw: asked,
+        })
+      : await findCurrentDraft({
+          client,
+          org: orgName,
+          workspace: workspaceName,
+          owner: session.username,
+        });
+
+    if (mine && "error" in mine) {
+      return json(409, { error: mine.error }, baseHeaders);
+    }
     if (!mine) {
       return json(
         404,
@@ -7880,6 +8518,12 @@ ${description}`,
       );
     }
 
+    // **It has stopped being a draft**, so it stops having a draft's name: the
+    // title the author just wrote is on the change request now, which is in
+    // Gitea and is the record. Keeping the row would put a proposed branch in
+    // the picker beside work nobody has seen.
+    await draftNameStore.forget(workspace.id, mine.branch).catch(() => {});
+
     logger.info("Binder draft proposed", {
       username: session.username,
       organization: orgName,
@@ -7915,25 +8559,82 @@ ${description}`,
 }
 
 /**
- * The draft payload both draft routes answer with.
+ * The draft payload every draft route answers with.
  *
- * Other people's drafts are listed without their contents. Knowing somebody is
- * editing the binder is what stops two people making the same folder twice;
- * reading what they have not proposed yet is not a thing a draft offers.
+ * Three lists, and which is which matters:
+ *
+ * - `draft` is the one you are **in** — the only one with its acts, because
+ *   the page draws them and only one draft is on screen at a time.
+ * - `drafts` is every draft of yours, so the picker has something to pick
+ *   between. Each carries the name its author wrote and how many acts are in
+ *   it; the mockup's row is "Reorganise nursing · 3 changes · edited 4 minutes
+ *   ago" and every word of that comes from here.
+ * - `others` is everybody else's, **without their contents**. Knowing somebody
+ *   is editing the binder is what stops two people making the same folder
+ *   twice; reading what they have not proposed yet is not a thing a draft
+ *   offers.
  */
 async function describeDraft(params: {
   client: GiteaClient;
   org: string;
   workspace: string;
+  giteaRepoId: number;
   mine: BinderDraft | null;
   drafts: BinderDraft[];
   username: string;
 }): Promise<Record<string, unknown>> {
-  const { client, org, workspace, mine, drafts, username } = params;
+  const { client, org, workspace, giteaRepoId, mine, drafts, username } =
+    params;
 
-  const acts = mine
-    ? await readDraftActs({ client, org, workspace, branch: mine.branch })
-    : [];
+  const ownDrafts = drafts.filter((draft) => draft.owner === username);
+
+  // One read per draft of yours, in parallel, and bounded by how many drafts a
+  // person plausibly has open. A name that cannot be read costs a label and
+  // never a gate, so a failure here answers with the branch's date instead.
+  const [names, actsByBranch] = await Promise.all([
+    draftNameStore
+      .forBranches(
+        giteaRepoId,
+        ownDrafts.map((draft) => draft.branch),
+      )
+      .catch(() => new Map<string, DraftNameRecord>()),
+    Promise.all(
+      ownDrafts.map(async (draft) => {
+        const acts = await readDraftActs({
+          client,
+          org,
+          workspace,
+          branch: draft.branch,
+        }).catch(() => []);
+        return [draft.branch, acts] as const;
+      }),
+    ).then((entries) => new Map(entries)),
+  ]);
+
+  /**
+   * Whether a person wrote this draft's name.
+   *
+   * **It decides whether the propose screen prefills the title with it.** A
+   * draft called "Reorganise nursing" has already said what the work is for;
+   * "Draft of 19 September" has said nothing, and offering that as a change
+   * request's title is what the propose screen exists to prevent.
+   */
+  const authoredName = (draft: BinderDraft) =>
+    names.get(draft.branch)?.authored ?? false;
+
+  const nameOf = (draft: BinderDraft) =>
+    names.get(draft.branch)?.name ??
+    // The list's own copy of the branch, because a freshly made one carries no
+    // `updatedAt` of its own and the list does. Two ways of answering one
+    // question is how the bar came to say "Untitled draft" beside a picker
+    // saying something else.
+    describeUnnamedDraft(
+      draft.updatedAt ??
+        ownDrafts.find((entry) => entry.branch === draft.branch)?.updatedAt ??
+        null,
+    );
+
+  const acts = mine ? (actsByBranch.get(mine.branch) ?? []) : [];
 
   return {
     organization: org,
@@ -7941,6 +8642,8 @@ async function describeDraft(params: {
     draft: mine
       ? {
           branch: mine.branch,
+          name: nameOf(mine),
+          named: authoredName(mine),
           owner: mine.owner,
           updatedAt: mine.updatedAt,
           acts: acts.map((act) => ({
@@ -7951,6 +8654,13 @@ async function describeDraft(params: {
           })),
         }
       : null,
+    drafts: ownDrafts.map((draft) => ({
+      branch: draft.branch,
+      name: nameOf(draft),
+      updatedAt: draft.updatedAt,
+      actCount: (actsByBranch.get(draft.branch) ?? []).length,
+      lastAct: draft.lastAct,
+    })),
     others: drafts
       .filter((draft) => draft.owner !== username)
       .map((draft) => ({
@@ -9953,6 +10663,7 @@ export function createApiServer() {
             workspaceDocumentsMatch[1]!,
             workspaceDocumentsMatch[2]!,
             url.searchParams.get("draft"),
+            url.searchParams.get("change"),
           );
         } else if (workspaceChangeReviewMatch && method === "POST") {
           response = await handleWorkspaceChangeReview(
@@ -10071,6 +10782,13 @@ export function createApiServer() {
             workspaceDraftMatch[1]!,
             workspaceDraftMatch[2]!,
           );
+        } else if (workspaceDraftMatch && method === "PATCH") {
+          response = await handleRenameBinderDraft(
+            req,
+            baseHeaders,
+            workspaceDraftMatch[1]!,
+            workspaceDraftMatch[2]!,
+          );
         } else if (workspaceDraftMatch && method === "DELETE") {
           response = await handleDiscardBinderDraft(
             req,
@@ -10100,6 +10818,14 @@ export function createApiServer() {
             workspaceChangeUpdateMatch[2]!,
             Number.parseInt(workspaceChangeUpdateMatch[3] ?? "", 10),
           );
+        } else if (workspaceChangeMatch && method === "PATCH") {
+          response = await handleWorkspaceChangeEdit(
+            req,
+            baseHeaders,
+            workspaceChangeMatch[1]!,
+            workspaceChangeMatch[2]!,
+            Number.parseInt(workspaceChangeMatch[3] ?? "", 10),
+          );
         } else if (workspaceChangeMatch && method === "GET") {
           response = await handleWorkspaceChangeDetail(
             req,
@@ -10123,6 +10849,9 @@ export function createApiServer() {
             workspaceDocumentMatch[1]!,
             workspaceDocumentMatch[2]!,
             decodeURIComponent(workspaceDocumentMatch[3]!),
+            url.searchParams.get("draft"),
+            url.searchParams.get("change"),
+            url.searchParams.get("ref"),
           );
         } else if (workspaceOverviewMatch && method === "GET") {
           response = await handleWorkspaceOverview(
@@ -10260,6 +10989,7 @@ export function createApiServer() {
             baseHeaders,
             workspaceArchiveMatch[1]!,
             workspaceArchiveMatch[2]!,
+            url.searchParams.get("draft"),
           );
         } else if (workspaceDocumentRevisionsMatch && method === "POST") {
           return await handleReviseWorkspaceDocument(
