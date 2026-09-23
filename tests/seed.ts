@@ -13,17 +13,40 @@
 
 import { pathToFileURL } from "node:url";
 
-import { ROLE_TEAM_OPTIONS } from "../services/api/gitea-client/orgs";
+import {
+  CODEOWNERS_PATH,
+  renderCodeowners,
+  type SignOffRule,
+} from "../packages/utils/codeowners";
+import { formatDocumentName } from "../packages/utils/documentTitle";
+import {
+  ROLE_TEAM_DESCRIPTIONS,
+  ROLE_TEAM_OPTIONS,
+  STAFF_TEAM_NAME,
+} from "../services/api/gitea-client/orgs";
+import {
+  buildVersionStamp,
+  buildArchiveStamp,
+} from "../services/api/version-stamp";
 import { renderSeedDocumentFile } from "./seed-documents";
 import {
+  binderDocumentSlugPath,
   loadSeedScenario,
+  canonicalFileNameFor,
   seedDocumentUid,
+  type SeedAct,
+  type SeedAssignment,
+  type SeedBinderChange,
   type SeedChange,
   type SeedBinder,
   type SeedBinderDocument,
+  type SeedDocumentFormat,
+  type SeedGroup,
   type SeedOrganization,
   type SeedScenario,
+  type SeedSignOffRule,
   type SeedThread,
+  type SeedUser,
 } from "./seed-scenario";
 
 const DEFAULT_GITEA_URL = `http://localhost:${process.env.GITEA_PORT ?? "3000"}`;
@@ -73,6 +96,8 @@ type GiteaContentFile = {
 type GiteaPull = {
   number: number;
   title: string;
+  /** The first line is the name every screen shows — see `changeBody`. */
+  body?: string;
   state?: string;
   merged?: boolean;
   head?: { ref?: string };
@@ -267,6 +292,14 @@ async function ensureUser(
   password: string,
   email: string,
   fullName: string,
+  /**
+   * Whether this account runs Bindersnap itself.
+   *
+   * Sent on both paths, and sent as `false` as well as `true`: turning the flag
+   * off in the YAML has to demote the account on the next run, or the seed can
+   * only ever add powers to a warm stack.
+   */
+  siteAdmin: boolean,
   log: (message: string) => void,
 ): Promise<void> {
   const created = await giteaRequest(baseUrl, "/api/v1/admin/users", {
@@ -280,12 +313,13 @@ async function ensureUser(
       full_name: fullName,
       must_change_password: false,
       send_notify: false,
+      admin: siteAdmin,
     }),
     expectedStatuses: [201, 422],
   });
 
   if (created.status === 201) {
-    log(`Created user: ${username}`);
+    log(`Created user: ${username}${siteAdmin ? " (site admin)" : ""}`);
     return;
   }
 
@@ -301,11 +335,38 @@ async function ensureUser(
         password,
         full_name: fullName,
         must_change_password: false,
+        admin: siteAdmin,
       }),
       expectedStatuses: [200, 403, 422],
     },
   );
   log(`User already exists, refreshed: ${username}`);
+}
+
+/** The install admin's name and email, which the install form never asked for. */
+async function refreshAdminProfile(
+  baseUrl: string,
+  adminAuth: BasicAuth,
+  user: SeedUser | undefined,
+  log: (message: string) => void,
+): Promise<void> {
+  if (!user) return;
+
+  await giteaRequest(
+    baseUrl,
+    `/api/v1/admin/users/${encodeURIComponent(user.username)}`,
+    {
+      method: "PATCH",
+      auth: adminAuth,
+      body: JSON.stringify({
+        login_name: user.username,
+        email: user.email,
+        full_name: user.fullName,
+      }),
+      expectedStatuses: [200, 403, 422],
+    },
+  );
+  log(`Refreshed the administrator's profile: ${user.username}`);
 }
 
 /**
@@ -344,10 +405,17 @@ async function ensureOrganization(
       : `Organization already exists: ${name}`,
   );
 
-  // Everybody in the scenario is a member of the one organization — ADR 0004
-  // is explicit that a second binder should cost no new membership list.
+  // Almost everybody in the scenario is a member of the one organization — ADR
+  // 0004 is explicit that a second binder should cost no new membership list.
+  // The exception is deliberate: an account that belongs to no organization is
+  // a state the product has to have an answer for, and the only way to look at
+  // that answer is to have one to sign in as.
   for (const user of scenario.users) {
     if (user.username === owner) continue;
+    if (!user.organizationMember) {
+      log(`Left outside the organization: ${user.username}`);
+      continue;
+    }
     await giteaRequest(
       baseUrl,
       `/api/v1/orgs/${encodeURIComponent(name)}/members/${encodeURIComponent(user.username)}`,
@@ -356,6 +424,223 @@ async function ensureOrganization(
         auth: adminAuth,
         expectedStatuses: [204, 403, 404, 405],
       },
+    );
+  }
+
+  // The Owners team, which Gitea made and put the creating account in. An
+  // organization owner who is not also the site administrator is the persona
+  // most of the billing and people screens are written for, and the seed had
+  // no way to produce one.
+  if (scenario.organization.owners.length > 0) {
+    const owners = await findTeam(baseUrl, adminAuth, name, "Owners");
+    if (owners) {
+      for (const extra of scenario.organization.owners) {
+        await giteaRequest(
+          baseUrl,
+          `/api/v1/teams/${owners.id}/members/${encodeURIComponent(extra)}`,
+          { method: "PUT", auth: adminAuth, expectedStatuses: [204, 404, 405] },
+        );
+        log(`Added organization owner: ${extra}`);
+      }
+    }
+  }
+}
+
+/**
+ * Make a team hold exactly these people — **removals included**.
+ *
+ * Adding alone is not reconciling, and the difference shows the first time
+ * somebody's role changes in the YAML: moving an account from authors to
+ * admins left it in both teams on every warm stack, and the only way back was
+ * `up --fresh`. A seed whose job is to make the stack match the file has to be
+ * able to take something away.
+ */
+async function reconcileTeamMembers(
+  baseUrl: string,
+  adminAuth: BasicAuth,
+  teamId: number,
+  wanted: readonly string[],
+  log: (message: string) => void,
+): Promise<void> {
+  const current = await giteaJson<Array<{ login?: string }>>(
+    baseUrl,
+    `/api/v1/teams/${teamId}/members?limit=100`,
+    { auth: adminAuth, expectedStatuses: [200] },
+  ).catch(() => []);
+
+  const have = new Set(
+    current
+      .map((member) => member.login)
+      .filter((login) => login !== undefined),
+  );
+
+  for (const member of wanted) {
+    if (have.has(member)) continue;
+    await giteaRequest(
+      baseUrl,
+      `/api/v1/teams/${teamId}/members/${encodeURIComponent(member)}`,
+      { method: "PUT", auth: adminAuth, expectedStatuses: [204, 404, 405] },
+    );
+  }
+
+  for (const member of have) {
+    if (wanted.includes(member)) continue;
+    await giteaRequest(
+      baseUrl,
+      `/api/v1/teams/${teamId}/members/${encodeURIComponent(member)}`,
+      { method: "DELETE", auth: adminAuth, expectedStatuses: [204, 404, 405] },
+    );
+    log(
+      `Removed ${member} from team ${teamId} — the scenario no longer has them there`,
+    );
+  }
+}
+
+/** One of the organization's teams, by name, or null if it has none. */
+async function findTeam(
+  baseUrl: string,
+  adminAuth: BasicAuth,
+  org: string,
+  name: string,
+): Promise<{ id: number; name: string } | null> {
+  const teams = await giteaJson<Array<{ id: number; name: string }>>(
+    baseUrl,
+    `/api/v1/orgs/${encodeURIComponent(org)}/teams?limit=100`,
+    { auth: adminAuth },
+  );
+  return teams.find((team) => team.name === name) ?? null;
+}
+
+/**
+ * The customer's own groups: a Quality Committee, a Legal team.
+ *
+ * Distinct from a binder's three role teams, which the binder makes for itself.
+ * These are made once and granted onto as many binders as the customer likes —
+ * which is the entire argument for the level, and is also what a sign-off rule
+ * needs, since a rule names a team rather than a list of people.
+ *
+ * A group is a Gitea team carrying one of the role unit maps, so the level
+ * travels with the name. Reused rather than restated: a second definition of
+ * what "editor" means is how the seed's binder teams once came out with
+ * permission "none".
+ */
+async function ensureOrganizationGroups(
+  baseUrl: string,
+  adminAuth: BasicAuth,
+  org: string,
+  groups: SeedGroup[],
+  log: (message: string) => void,
+): Promise<void> {
+  if (groups.length === 0) return;
+
+  const existing = await giteaJson<Array<{ id: number; name: string }>>(
+    baseUrl,
+    `/api/v1/orgs/${encodeURIComponent(org)}/teams?limit=100`,
+    { auth: adminAuth },
+  );
+
+  const roleFor = {
+    admin: "admins",
+    editor: "authors",
+    reviewer: "reviewers",
+  } as const;
+
+  for (const group of groups) {
+    const options = {
+      ...ROLE_TEAM_OPTIONS[roleFor[group.level]],
+      name: group.name,
+      description: group.description,
+    };
+
+    let team = existing.find((candidate) => candidate.name === group.name);
+
+    if (team) {
+      await giteaRequest(baseUrl, `/api/v1/teams/${team.id}`, {
+        method: "PATCH",
+        auth: adminAuth,
+        body: JSON.stringify(options),
+        expectedStatuses: [200, 404],
+      });
+    } else {
+      const created = await giteaRequest(
+        baseUrl,
+        `/api/v1/orgs/${encodeURIComponent(org)}/teams`,
+        {
+          method: "POST",
+          auth: adminAuth,
+          body: JSON.stringify(options),
+          expectedStatuses: [201, 422],
+        },
+      );
+      team = (await created.json()) as { id: number; name: string };
+      existing.push(team);
+    }
+
+    await reconcileTeamMembers(baseUrl, adminAuth, team.id, group.members, log);
+
+    log(`Ensured group: ${org}/${group.name} (${group.level})`);
+  }
+}
+
+/**
+ * The organization's `staff` team, which is the "open to the organization"
+ * switch rather than Gitea's repository visibility.
+ *
+ * Made here rather than assumed, because the seed creates its organization
+ * over raw HTTP and never goes through the provisioning path that would
+ * otherwise have made it.
+ */
+async function ensureStaffTeamId(
+  baseUrl: string,
+  adminAuth: BasicAuth,
+  org: string,
+  log: (message: string) => void,
+): Promise<number | null> {
+  const existing = await findTeam(baseUrl, adminAuth, org, STAFF_TEAM_NAME);
+  if (existing) return existing.id;
+
+  const created = await giteaRequest(
+    baseUrl,
+    `/api/v1/orgs/${encodeURIComponent(org)}/teams`,
+    {
+      method: "POST",
+      auth: adminAuth,
+      body: JSON.stringify({
+        name: STAFF_TEAM_NAME,
+        description:
+          "Everyone at this organization. Granted onto a binder to let the whole staff read it.",
+        permission: "read",
+        includes_all_repositories: false,
+        can_create_org_repo: false,
+        units_map: {
+          "repo.code": "read",
+          "repo.pulls": "read",
+          "repo.issues": "read",
+        },
+      }),
+      expectedStatuses: [201, 422],
+    },
+  );
+
+  if (created.status !== 201) return null;
+  const team = (await created.json()) as { id: number };
+  log(`Created the ${STAFF_TEAM_NAME} team for ${org}`);
+  return team.id;
+}
+
+/** Everyone in the organization is in `staff`. That is what the team is. */
+async function ensureStaffMembers(
+  baseUrl: string,
+  adminAuth: BasicAuth,
+  teamId: number,
+  scenario: SeedScenario,
+): Promise<void> {
+  for (const user of scenario.users) {
+    if (!user.organizationMember) continue;
+    await giteaRequest(
+      baseUrl,
+      `/api/v1/teams/${teamId}/members/${encodeURIComponent(user.username)}`,
+      { method: "PUT", auth: adminAuth, expectedStatuses: [204, 404, 405] },
     );
   }
 }
@@ -427,6 +712,7 @@ async function ensureBinderTeams(
     const options = {
       ...ROLE_TEAM_OPTIONS[role],
       name: teamName,
+      description: ROLE_TEAM_DESCRIPTIONS[role],
     };
 
     if (team) {
@@ -460,15 +746,15 @@ async function ensureBinderTeams(
       { method: "PUT", auth: adminAuth, expectedStatuses: [204, 404, 405] },
     );
 
-    for (const member of binder.members.filter(
-      (candidate) => candidate.role === role,
-    )) {
-      await giteaRequest(
-        baseUrl,
-        `/api/v1/teams/${team.id}/members/${encodeURIComponent(member.user)}`,
-        { method: "PUT", auth: adminAuth, expectedStatuses: [204, 404, 405] },
-      );
-    }
+    await reconcileTeamMembers(
+      baseUrl,
+      adminAuth,
+      team.id,
+      binder.members
+        .filter((candidate) => candidate.role === role)
+        .map((member) => member.user),
+      log,
+    );
   }
 
   // Whatever is granted here has to be on the approvals whitelist, or its
@@ -574,11 +860,12 @@ async function ensureMainBranchProtection(
   adminAuth: BasicAuth,
   owner: string,
   repo: string,
+  requiredApprovals: number,
   log: (message: string) => void,
 ): Promise<void> {
   const body = {
     rule_name: "main",
-    required_approvals: 1,
+    required_approvals: requiredApprovals,
     enable_approvals_whitelist: false,
     enable_merge_whitelist: false,
     block_on_rejected_reviews: true,
@@ -706,6 +993,14 @@ async function ensureCollaborator(
   log(`Ensured collaborator: ${collaborator} (${permission}) on ${repo}`);
 }
 
+/**
+ * The branch, and **whether this run is the one that made it**.
+ *
+ * The answer matters to a change whose commit is a list of moves and deletes:
+ * replaying those onto a branch that already has them applied is not a no-op,
+ * it is a rename of a file that is no longer there. Only the run that creates
+ * the branch commits to it.
+ */
 async function ensureBranch(
   baseUrl: string,
   auth: BasicAuth,
@@ -714,7 +1009,7 @@ async function ensureBranch(
   branchName: string,
   sourceRef: string,
   log: (message: string) => void,
-): Promise<void> {
+): Promise<boolean> {
   const getResponse = await giteaRequest(
     baseUrl,
     `${repoPath(owner, repo)}/branches/${encodeURIComponent(branchName)}`,
@@ -726,7 +1021,7 @@ async function ensureBranch(
 
   if (getResponse.status === 200) {
     log(`Branch already exists: ${branchName}`);
-    return;
+    return false;
   }
 
   const createResponse = await giteaRequest(
@@ -748,6 +1043,7 @@ async function ensureBranch(
       ? `Created branch: ${branchName}`
       : `Branch already exists: ${branchName}`,
   );
+  return createResponse.status === 201;
 }
 
 async function findPullRequest(
@@ -783,22 +1079,30 @@ async function ensurePullRequest(
     branchName,
   );
   if (existing) {
-    if (existing.title !== title) {
+    // The body as well as the title, because the body is where the name every
+    // screen shows actually lives. Reconciling only the title left a warm
+    // stack listing changes under a body written by an older seed.
+    const wanted = changeBody(title, body);
+    if (existing.title !== title || (existing.body ?? "") !== wanted) {
       await giteaRequest(
         baseUrl,
         `${repoPath(owner, repo)}/issues/${existing.number}`,
         {
+          // Gitea answers this one 201, not 200 — it is the issue *edit*
+          // endpoint and it reports a create. Expecting only 200 turned an
+          // ordinary reconcile into an aborted seed halfway through the first
+          // binder.
           method: "PATCH",
           auth,
-          body: JSON.stringify({ title }),
-          expectedStatuses: [200],
+          body: JSON.stringify({ title, body: wanted }),
+          expectedStatuses: [200, 201],
         },
       );
-      log(`Updated pull request title: ${title}`);
+      log(`Updated pull request: #${existing.number} ${title}`);
     } else {
       log(`Pull request already exists: #${existing.number}`);
     }
-    return { ...existing, title };
+    return { ...existing, title, body: wanted };
   }
 
   const created = await giteaJson<GiteaPull>(
@@ -807,13 +1111,36 @@ async function ensurePullRequest(
     {
       method: "POST",
       auth,
-      body: JSON.stringify({ base: "main", head: branchName, title, body }),
+      body: JSON.stringify({
+        base: "main",
+        head: branchName,
+        title,
+        body: changeBody(title, body),
+      }),
       expectedStatuses: [201],
     },
   );
 
   log(`Created pull request: #${created.number} ${title}`);
   return created;
+}
+
+/**
+ * The change's body, written the way the app writes one.
+ *
+ * **The first line is the name every screen shows** — `parseChangeTitle` takes
+ * it, and `describeSubmission` takes the rest as the description underneath.
+ * Gitea's own `title` field is not what the app reads, which is easy to miss
+ * and was: the seed sent the summary alone as the body, so every seeded change
+ * was listed under its summary and its title appeared nowhere. It went
+ * unnoticed while the summaries happened to read like titles, and stopped
+ * being invisible the moment one of them was a sentence about the change
+ * rather than a name for it.
+ */
+function changeBody(title: string, summary: string): string {
+  const detail = summary.trim();
+  if (detail === "" || detail === title.trim()) return title;
+  return `${title}\n\n${detail}`;
 }
 
 const REVIEW_EVENTS: Record<string, string> = {
@@ -903,6 +1230,122 @@ async function ensureReviews(
   throw new Error(
     `Reviews on #${pullNumber} in ${owner}/${repo} kept being dismissed after 5 attempts.`,
   );
+}
+
+// ---------------------------------------------------------------------------
+// Who a change is waiting on
+// ---------------------------------------------------------------------------
+
+/**
+ * Set the assignee and the requested reviewers.
+ *
+ * **Requested and given are different facts.** A review already submitted is a
+ * `SeedReview`; this is the other kind — Gitea holding the change open for
+ * somebody who has not answered. A change list that never showed one had no
+ * way to look crowded, and "four people asked, one has replied" is the ordinary
+ * state of a real change request.
+ *
+ * Written with the author's own token, because requesting a review is an act
+ * on the change rather than an administrative one, and Gitea refuses a request
+ * naming the change's own author — so the author is dropped rather than
+ * failing the seed over a line that reads perfectly well.
+ */
+async function ensureAssignments(
+  baseUrl: string,
+  auth: BasicAuth,
+  owner: string,
+  repo: string,
+  pull: GiteaPull,
+  assignment: SeedAssignment,
+  author: string,
+  log: (message: string) => void,
+): Promise<void> {
+  const reviewers = assignment.reviewers.filter((name) => name !== author);
+
+  if (assignment.assignee) {
+    // Read before writing, so a second seed run is the no-op the rest of this
+    // file is. An unconditional PATCH succeeds and changes nothing, which is
+    // worse than it sounds: it is the one line of output that made a warm
+    // re-seed look like it had done something.
+    const current = await giteaJson<{ assignees?: Array<{ login?: string }> }>(
+      baseUrl,
+      `${repoPath(owner, repo)}/issues/${pull.number}`,
+      { auth },
+    );
+
+    const assigned = (current.assignees ?? []).map((person) => person.login);
+    if (!assigned.includes(assignment.assignee)) {
+      await giteaRequest(
+        baseUrl,
+        `${repoPath(owner, repo)}/issues/${pull.number}`,
+        {
+          method: "PATCH",
+          auth,
+          body: JSON.stringify({ assignees: [assignment.assignee] }),
+          expectedStatuses: [200, 201, 403, 404, 422],
+        },
+      );
+      log(`Assigned #${pull.number} to ${assignment.assignee}`);
+    }
+  }
+
+  if (reviewers.length === 0) return;
+
+  // Already asked, or already answered: either way Gitea has a review record
+  // for them and asking again either errors or resets somebody's state.
+  const existing = await giteaJson<GiteaReview[]>(
+    baseUrl,
+    `${repoPath(owner, repo)}/pulls/${pull.number}/reviews`,
+    { auth },
+  );
+  const spoken = new Set(
+    existing.map((review) => review.user?.login).filter(Boolean),
+  );
+  const missing = reviewers.filter((name) => !spoken.has(name));
+  if (missing.length === 0) return;
+
+  await giteaRequest(
+    baseUrl,
+    `${repoPath(owner, repo)}/pulls/${pull.number}/requested_reviewers`,
+    {
+      method: "POST",
+      auth,
+      body: JSON.stringify({ reviewers: missing }),
+      expectedStatuses: [201, 403, 404, 422],
+    },
+  );
+  log(`Requested reviews on #${pull.number} from ${missing.join(", ")}`);
+}
+
+// ---------------------------------------------------------------------------
+// Sign-off rules
+// ---------------------------------------------------------------------------
+
+/**
+ * Turn the scenario's rules into the app's, which means resolving a document's
+ * address into its identity.
+ *
+ * A seed author writes `nursing/hand-hygiene` because that is where they filed
+ * the policy. A rule is written against the identity instead (ADR 0005), so it
+ * survives the policy being retitled or refiled — which is exactly what one of
+ * the seeded changes then does to it, and the rule has to still be pointing at
+ * the same document afterwards or the demonstration is of nothing.
+ */
+function toSignOffRules(
+  rules: readonly SeedSignOffRule[],
+  uidFor: (address: string) => string,
+): SignOffRule[] {
+  return rules.map((rule) => ({
+    scope: rule.scope,
+    target:
+      rule.scope === "document"
+        ? uidFor(rule.target!)
+        : rule.scope === "folder"
+          ? rule.target!
+          : "",
+    teams: rule.teams,
+    users: rule.users,
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -997,95 +1440,212 @@ async function ensureThread(
 }
 
 // ---------------------------------------------------------------------------
-// Publishing
+// Publishing, and the other way a change ends
 // ---------------------------------------------------------------------------
 
 /**
- * Merge the change and tag the result — the same two steps the publish button
- * performs, so a seeded published version is indistinguishable from a real one.
+ * Close a change without publishing it.
  *
- * `version` comes from the change's position in the scenario rather than from
- * counting existing tags, so a second seed run re-derives the same tag name and
- * does nothing instead of inventing a version nobody published.
+ * **The label is not written down here, and that is the point.** A closed
+ * change with somebody's request for work standing against it reads as
+ * *declined*; one without reads as *withdrawn* — `resolveClosedOutcome` decides
+ * that from the reviews, and a seed that declared the outcome instead would be
+ * asserting a second answer to a question the product already answers.
  */
-async function publishChange(
+async function closeChange(
+  baseUrl: string,
+  auth: BasicAuth,
+  owner: string,
+  repo: string,
+  pull: GiteaPull,
+  log: (message: string) => void,
+): Promise<void> {
+  if (pull.state === "closed" || pull.merged) {
+    log(`Pull request already closed: #${pull.number}`);
+    return;
+  }
+
+  await giteaRequest(
+    baseUrl,
+    `${repoPath(owner, repo)}/issues/${pull.number}`,
+    {
+      method: "PATCH",
+      auth,
+      body: JSON.stringify({ state: "closed" }),
+      expectedStatuses: [200, 201],
+    },
+  );
+  log(`Closed pull request without publishing: #${pull.number}`);
+}
+
+/** One thing the seed does to one file, in Gitea's own wire shape. */
+interface FileOperation {
+  operation: "upload" | "rename" | "delete";
+  path: string;
+  from_path?: string;
+  content?: string;
+}
+
+/** What a publish records about one document it touched. */
+interface PublishedDocument {
+  uid: string;
+  /** The version this publish gives it. */
+  version: number;
+  /** What it is called, as the product spells it. */
+  title: string;
+  /** `nursing/hand-hygiene` — where it is filed after this change. */
+  slugPath: string;
+  /** The whole filename, identity segment included. */
+  path: string;
+}
+
+/** What a publish records about one document it took off the record. */
+interface ArchivedDocumentRef extends PublishedDocument {
+  /** Its last version, or null if it never had one. */
+  lastVersion: number | null;
+}
+
+/**
+ * Merge the change — the first of the two steps the publish button performs.
+ *
+ * Split from the tagging because a binder-level change tags as many documents
+ * as it touched, and archives others, where a document's own change tags
+ * exactly one. The merge is identical in both and was worth having once.
+ */
+async function mergeChange(
   baseUrl: string,
   auth: BasicAuth,
   owner: string,
   repo: string,
   pull: GiteaPull,
   title: string,
-  /** What the policy is called, as against what the change was called. */
-  documentTitle: string,
-  slugPath: string,
-  uid: string,
-  version: number,
   refreshReviews: () => Promise<void>,
   log: (message: string) => void,
 ): Promise<void> {
-  if (!pull.merged && pull.state !== "closed") {
-    // Gitea computes mergeability asynchronously and answers 405 until it has.
-    for (let attempt = 0; attempt < 10; attempt += 1) {
-      const response = await giteaRequest(
-        baseUrl,
-        `${repoPath(owner, repo)}/pulls/${pull.number}/merge`,
-        {
-          method: "POST",
-          auth,
-          body: JSON.stringify({
-            Do: "merge",
-            MergeTitleField: title,
-            MergeMessageField: "",
-          }),
-          expectedStatuses: [200, 405],
-        },
-      );
-
-      if (response.status === 200) {
-        log(`Merged pull request #${pull.number}`);
-        break;
-      }
-
-      const reason = await response.text();
-      if (attempt === 9) {
-        throw new Error(
-          `Could not merge #${pull.number} in ${owner}/${repo} after 10 attempts: ${reason}`,
-        );
-      }
-      if (reason.includes("approvals")) {
-        await refreshReviews();
-      }
-      await sleep(1000);
-    }
-  } else {
+  if (pull.merged || pull.state === "closed") {
     log(`Pull request already merged: #${pull.number}`);
+    return;
   }
+
+  // Gitea computes mergeability asynchronously and answers 405 until it has.
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const response = await giteaRequest(
+      baseUrl,
+      `${repoPath(owner, repo)}/pulls/${pull.number}/merge`,
+      {
+        method: "POST",
+        auth,
+        body: JSON.stringify({
+          Do: "merge",
+          MergeTitleField: title,
+          MergeMessageField: "",
+        }),
+        expectedStatuses: [200, 405],
+      },
+    );
+
+    if (response.status === 200) {
+      log(`Merged pull request #${pull.number}`);
+      return;
+    }
+
+    const reason = await response.text();
+    if (attempt === 9) {
+      throw new Error(
+        `Could not merge #${pull.number} in ${owner}/${repo} after 10 attempts: ${reason}`,
+      );
+    }
+    if (reason.includes("approvals")) {
+      await refreshReviews();
+    }
+    await sleep(1000);
+  }
+}
+
+/**
+ * The annotated tags a publish writes, which are the evidence.
+ *
+ * **The message is the app's own stamp**, not an approximation of it. It used
+ * to be one summary line, which read fine in `git tag -l` and answered none of
+ * the questions the stamp exists for: the binder's list reads the change number
+ * back out of it, and the archive reads the title and the path — an archived
+ * document is not on `main`, so its tags are the only record of what it was
+ * called. A seeded binder written without them looked right until a screen
+ * asked one of those questions.
+ *
+ * `version` comes from the change's position in the scenario rather than from
+ * counting existing tags, so a second seed run re-derives the same tag name and
+ * does nothing instead of inventing a version nobody published.
+ */
+async function tagPublish(
+  baseUrl: string,
+  auth: BasicAuth,
+  owner: string,
+  repo: string,
+  pull: GiteaPull,
+  publishedBy: string,
+  requiredApprovals: number,
+  approvedBy: string[],
+  published: readonly PublishedDocument[],
+  archived: readonly ArchivedDocumentRef[],
+  log: (message: string) => void,
+): Promise<void> {
+  const policy = {
+    requiredApprovals,
+    approvedBy,
+    // Both of the binder's own rules, as the seed sets them. The seed cannot
+    // reach the API's settings store, so the first is always the default; the
+    // second is what `ensureMainBranchProtection` writes, which is on.
+    blockOnUnresolvedThreads: false,
+    signOffEnforced: true,
+    publishedBy,
+    changeNumber: pull.number,
+  };
+
+  const write = async (tagName: string, message: string): Promise<void> => {
+    const response = await giteaRequest(
+      baseUrl,
+      `${repoPath(owner, repo)}/tags`,
+      {
+        method: "POST",
+        auth,
+        body: JSON.stringify({ tag_name: tagName, target: "main", message }),
+        expectedStatuses: [201, 409, 422],
+      },
+    );
+
+    log(
+      response.status === 201
+        ? `Tagged: ${owner}/${repo} ${tagName}`
+        : `Already tagged: ${owner}/${repo} ${tagName}`,
+    );
+  };
 
   // A binder's tags are repository-global and many documents share them, so
   // the version has to carry the document with it — and it carries the
   // *identity*, not the path (ADR 0005), so renaming a policy does not restart
   // its numbering. The message carries what the name stopped saying.
-  const tagName = `${uid}/v${version}`;
-  const response = await giteaRequest(
-    baseUrl,
-    `${repoPath(owner, repo)}/tags`,
-    {
-      method: "POST",
-      auth,
-      body: JSON.stringify({
-        tag_name: tagName,
-        target: "main",
-        message: `${documentTitle} v${version} — ${slugPath}`,
-      }),
-      expectedStatuses: [201, 409, 422],
-    },
-  );
+  for (const document of published) {
+    await write(
+      `${document.uid}/v${document.version}`,
+      buildVersionStamp({ ...policy, ...document }),
+    );
+  }
 
-  log(
-    response.status === 201
-      ? `Tagged published version: ${owner}/${repo} ${tagName}`
-      : `Published version already tagged: ${owner}/${repo}`,
-  );
+  for (const document of archived) {
+    await write(
+      `${document.uid}/archived-1`,
+      buildArchiveStamp({
+        title: document.title,
+        slugPath: document.slugPath,
+        path: document.path,
+        lastVersion: document.lastVersion,
+        sequence: 1,
+        archivedBy: publishedBy,
+        changeNumber: pull.number,
+      }),
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1177,25 +1737,106 @@ async function ensureOAuthApp(
 // The scenario walk
 // ---------------------------------------------------------------------------
 
+/**
+ * What every step below needs to know about the binder it is working in.
+ *
+ * A document no longer carries an owner — the organization owns it, and the
+ * binder decides who may act on it — so the pieces that used to read
+ * `document.owner` read this instead.
+ */
+interface BinderContext {
+  /** The organization: the binder's Gitea owner. */
+  owner: string;
+  /** The binder's repository name. */
+  repo: string;
+  /** Who created the organization, and so authors by default. */
+  organizationOwner: string;
+  /** How many approvals a change here needs, for the version stamp. */
+  requiredApprovals: number;
+}
+
+/**
+ * Where everything in the binder is, as the seed walks it.
+ *
+ * **The binder is walked in order and its shape changes underneath.** A folder
+ * is made, a policy is refiled, another is taken off the record — and the act
+ * after each of those is written against the binder as it then stands. Nothing
+ * here can be read back out of Gitea instead: a re-run has to derive the same
+ * version numbers and the same tag names as the first run, so the counting is
+ * the scenario's and not the stack's.
+ */
+interface BinderState {
+  /** By the address the YAML filed it at, which its identity comes from. */
+  documents: Map<string, SeedDocumentState>;
+  /** Where each document is now, so an act can name it as a person would. */
+  byAddress: Map<string, SeedDocumentState>;
+  /** Every file on `main`, furniture included — a folder rename moves them all. */
+  paths: Set<string>;
+}
+
+interface SeedDocumentState {
+  /** The address the identity was derived from. It never changes. */
+  declaredPath: string;
+  uid: string;
+  /** What it is stored as, so a later act can re-render it in the same format. */
+  format: SeedDocumentFormat;
+  extension: string;
+  /** Where it is filed now. A move changes this and not the identity. */
+  address: string;
+  /** Its file on `main`, or null while nothing has published it. */
+  path: string | null;
+  /** How many versions it has published. */
+  version: number;
+  /** What the last published version called it. */
+  title: string;
+}
+
+/**
+ * A copy of the binder's shape, to plan a change that will not land on it.
+ *
+ * Deep over the document states as well as the maps: an act sets `address` and
+ * `path` on the state itself, so sharing them would let a proposal rewrite the
+ * binder it is only proposing to change.
+ */
+function cloneState(state: BinderState): BinderState {
+  const documents = new Map<string, SeedDocumentState>();
+  const byAddress = new Map<string, SeedDocumentState>();
+
+  for (const [declaredPath, entry] of state.documents) {
+    documents.set(declaredPath, { ...entry });
+  }
+  for (const [address, entry] of state.byAddress) {
+    byAddress.set(address, documents.get(entry.declaredPath)!);
+  }
+
+  return { documents, byAddress, paths: new Set(state.paths) };
+}
+
+/** `nursing/hand-hygiene.01J8….md` — the address, the identity, the extension. */
+function filePathFor(state: SeedDocumentState, address: string): string {
+  return `${address}.${state.uid}${state.extension}`;
+}
+
 async function applyChange(
   baseUrl: string,
   adminAuth: BasicAuth,
   authFor: (username: string) => BasicAuth,
   context: BinderContext,
+  state: BinderState,
   document: SeedBinderDocument,
   change: SeedChange,
-  version: number,
   log: (message: string) => void,
 ): Promise<number> {
-  const { owner, repo, slugPathFor } = context;
-  const slugPath = slugPathFor(document);
-  const uid = seedDocumentUid(owner, repo, slugPath);
-  const authorAuth = authFor(change.author ?? context.organizationOwner);
+  const { owner, repo } = context;
+  const slugPath = binderDocumentSlugPath(document);
+  const entry = state.documents.get(slugPath)!;
+  const author = change.author ?? context.organizationOwner;
+  const authorAuth = authFor(author);
   const file = await renderSeedDocumentFile(
     change.document,
     document.format,
     slugPath,
-    uid,
+    entry.uid,
   );
 
   await ensureBranch(
@@ -1243,6 +1884,16 @@ async function applyChange(
     );
 
   await refreshReviews();
+  await ensureAssignments(
+    baseUrl,
+    authorAuth,
+    owner,
+    repo,
+    pull,
+    change,
+    author,
+    log,
+  );
 
   for (const thread of change.threads) {
     await ensureThread(
@@ -1257,19 +1908,45 @@ async function applyChange(
     );
   }
 
+  if (change.closed) {
+    await closeChange(baseUrl, adminAuth, owner, repo, pull, log);
+  }
+
   if (change.publish) {
-    await publishChange(
+    entry.version += 1;
+    entry.title = change.document.title;
+    entry.path = file.path;
+    state.paths.add(file.path);
+
+    await mergeChange(
       baseUrl,
       adminAuth,
       owner,
       repo,
       pull,
       change.title,
-      change.document.title,
-      slugPath,
-      uid,
-      version,
       refreshReviews,
+      log,
+    );
+    await tagPublish(
+      baseUrl,
+      adminAuth,
+      owner,
+      repo,
+      pull,
+      author,
+      context.requiredApprovals,
+      approversOf(change),
+      [
+        {
+          uid: entry.uid,
+          version: entry.version,
+          title: change.document.title,
+          slugPath: entry.address,
+          path: file.path,
+        },
+      ],
+      [],
       log,
     );
   }
@@ -1277,28 +1954,321 @@ async function applyChange(
   return pull.number;
 }
 
-/**
- * What every step below needs to know about the binder it is working in.
- *
- * A document no longer carries an owner — the organization owns it, and the
- * binder decides who may act on it — so the pieces that used to read
- * `document.owner` read this instead.
- */
-interface BinderContext {
-  /** The organization: the binder's Gitea owner. */
-  owner: string;
-  /** The binder's repository name. */
-  repo: string;
-  /** Who created the organization, and so authors by default. */
-  organizationOwner: string;
-  slugPathFor: (document: SeedBinderDocument) => string;
+/** Who approved, as the stamp records it: one line per person, not per review. */
+function approversOf(change: SeedChange | SeedBinderChange): string[] {
+  return [
+    ...new Set(
+      change.reviews
+        .filter((review) => review.state === "approved")
+        .map((review) => review.by),
+    ),
+  ];
 }
 
-/** `nursing/infection-control` — folder and name, which is the address. */
-function slugPathOf(document: SeedBinderDocument): string {
-  return document.folder
-    ? `${document.folder}/${document.name}`
-    : document.name;
+/**
+ * Turn a change's acts into the file operations that carry them out.
+ *
+ * **One commit, not one per act.** Gitea's `POST /repos/{owner}/{repo}/contents`
+ * applies a whole list atomically, which is how the app does it and what makes
+ * renaming a folder of twelve policies one thing a reviewer reads rather than
+ * twelve that can half-apply.
+ *
+ * The state is advanced as each act is planned, because the act after a rename
+ * is written against the name the rename gave it.
+ */
+async function planActs(
+  context: BinderContext,
+  state: BinderState,
+  acts: readonly SeedAct[],
+): Promise<{
+  operations: FileOperation[];
+  /** The documents this change gives a new version to, if it publishes. */
+  touched: SeedDocumentState[];
+  archived: ArchivedDocumentRef[];
+}> {
+  const operations: FileOperation[] = [];
+  /** By identity, so two acts on one document produce one version. */
+  const touched = new Map<string, SeedDocumentState>();
+  const archived: ArchivedDocumentRef[] = [];
+
+  const move = (from: string, to: string): void => {
+    operations.push({ operation: "rename", path: to, from_path: from });
+    state.paths.delete(from);
+    state.paths.add(to);
+  };
+
+  for (const act of acts) {
+    switch (act.kind) {
+      case "newFolder": {
+        // Git has no empty directories, so a folder somebody made and has not
+        // filed anything in yet is this file and nothing else.
+        const path = `${act.folder}/.gitkeep`;
+        operations.push({ operation: "upload", path, content: "" });
+        state.paths.add(path);
+        break;
+      }
+
+      case "renameFolder": {
+        for (const path of [...state.paths]) {
+          if (!path.startsWith(`${act.from}/`)) continue;
+          move(path, act.to + path.slice(act.from.length));
+        }
+        for (const entry of [...state.byAddress.values()]) {
+          if (!entry.address.startsWith(`${act.from}/`)) continue;
+          const moved = act.to + entry.address.slice(act.from.length);
+          const wasOnMain = entry.path !== null;
+          state.byAddress.delete(entry.address);
+          entry.address = moved;
+          state.byAddress.set(moved, entry);
+          // A document the folder holds but `main` does not has no file to
+          // move and no version to claim — its own change is still open, and
+          // tagging it here would point a version at a path that is not there.
+          if (wasOnMain) {
+            entry.path = filePathFor(entry, moved);
+            touched.set(entry.uid, entry);
+          }
+        }
+        break;
+      }
+
+      case "move": {
+        const entry = state.byAddress.get(act.from)!;
+        const to = filePathFor(entry, act.to);
+        move(entry.path!, to);
+        state.byAddress.delete(act.from);
+        entry.address = act.to;
+        entry.path = to;
+        state.byAddress.set(act.to, entry);
+        touched.set(entry.uid, entry);
+        break;
+      }
+
+      case "revise": {
+        const entry = state.byAddress.get(act.document)!;
+        const file = await renderSeedDocumentFile(
+          act.contents,
+          entry.format,
+          entry.address,
+          entry.uid,
+        );
+        operations.push({
+          operation: "upload",
+          path: file.path,
+          content: file.content,
+        });
+        state.paths.add(file.path);
+        entry.path = file.path;
+        entry.title = act.contents.title;
+        touched.set(entry.uid, entry);
+        break;
+      }
+
+      case "archive": {
+        const entry = state.byAddress.get(act.document)!;
+        operations.push({ operation: "delete", path: entry.path! });
+        state.paths.delete(entry.path!);
+        state.byAddress.delete(act.document);
+        archived.push({
+          uid: entry.uid,
+          // An archive tags no version; the field is here because the two
+          // tag kinds share a shape, and the stamp reads the other four.
+          version: entry.version,
+          lastVersion: entry.version === 0 ? null : entry.version,
+          title: formatDocumentName(entry.address.split("/").pop()!),
+          slugPath: entry.address,
+          path: entry.path!,
+        });
+        // Taken off the record, so nothing later in this change may touch it.
+        touched.delete(entry.uid);
+        break;
+      }
+
+      case "signOff": {
+        const rules = toSignOffRules(
+          act.rules,
+          (address) => state.byAddress.get(address)!.uid,
+        );
+        operations.push({
+          operation: "upload",
+          path: CODEOWNERS_PATH,
+          content: Buffer.from(
+            renderCodeowners(context.owner, rules),
+            "utf8",
+          ).toString("base64"),
+        });
+        state.paths.add(CODEOWNERS_PATH);
+        break;
+      }
+    }
+  }
+
+  return { operations, touched: [...touched.values()], archived };
+}
+
+/** The version a publish gives each document it touched, and its stamp facts. */
+function claimVersions(
+  touched: readonly SeedDocumentState[],
+): PublishedDocument[] {
+  return touched.map((entry) => {
+    // Claimed from the scenario rather than from counting tags, so a change
+    // touching three documents advances all three, and a re-run derives the
+    // same numbers instead of inventing versions nobody published.
+    entry.version += 1;
+    return {
+      uid: entry.uid,
+      version: entry.version,
+      title: formatDocumentName(entry.address.split("/").pop()!),
+      slugPath: entry.address,
+      path: entry.path!,
+    };
+  });
+}
+
+/**
+ * A change about the binder rather than about one document.
+ *
+ * **Committed once, and only when the branch is new.** The operations are a
+ * list of moves and deletes against a particular tree, so replaying them onto
+ * a branch that already has them applied is not a no-op — it is a rename of a
+ * file that is no longer there. A branch the seed already made is therefore
+ * left exactly as it stands, which is the same thing that happens to a real
+ * change request: its commit has already been made.
+ */
+async function applyBinderChange(
+  baseUrl: string,
+  adminAuth: BasicAuth,
+  authFor: (username: string) => BasicAuth,
+  context: BinderContext,
+  state: BinderState,
+  change: SeedBinderChange,
+  log: (message: string) => void,
+): Promise<number> {
+  const { owner, repo } = context;
+  const author = change.author ?? context.organizationOwner;
+  const authorAuth = authFor(author);
+
+  // **A change that is not published has not happened.** Planning its acts
+  // moves documents and makes folders, and every act after it — in this change
+  // or the next — is written against the binder as it then stands. An open
+  // change proposing a rename must not leave the seed believing the rename
+  // landed, or the change after it renames a file that is still where it was.
+  const workingState = change.publish ? state : cloneState(state);
+
+  const { operations, touched, archived } = await planActs(
+    context,
+    workingState,
+    change.acts,
+  );
+
+  const created = await ensureBranch(
+    baseUrl,
+    authorAuth,
+    owner,
+    repo,
+    change.branch,
+    "main",
+    log,
+  );
+
+  if (created) {
+    await giteaRequest(baseUrl, `${repoPath(owner, repo)}/contents`, {
+      method: "POST",
+      auth: authorAuth,
+      body: JSON.stringify({
+        branch: change.branch,
+        message: `seed: ${change.title}`,
+        files: operations,
+      }),
+      expectedStatuses: [200, 201],
+    });
+    log(
+      `Committed ${operations.length} file operations: ${owner}/${repo}@${change.branch}`,
+    );
+  } else {
+    log(`Branch already carries its commit: ${change.branch}`);
+  }
+
+  const pull = await ensurePullRequest(
+    baseUrl,
+    authorAuth,
+    owner,
+    repo,
+    change.branch,
+    change.title,
+    change.summary,
+    log,
+  );
+
+  const refreshReviews = (): Promise<void> =>
+    ensureReviews(
+      baseUrl,
+      adminAuth,
+      authFor,
+      owner,
+      repo,
+      pull.number,
+      change.reviews,
+      log,
+    );
+
+  await refreshReviews();
+  await ensureAssignments(
+    baseUrl,
+    authorAuth,
+    owner,
+    repo,
+    pull,
+    change,
+    author,
+    log,
+  );
+
+  for (const thread of change.threads) {
+    await ensureThread(
+      baseUrl,
+      adminAuth,
+      authFor,
+      owner,
+      repo,
+      pull.number,
+      thread,
+      log,
+    );
+  }
+
+  if (change.closed) {
+    await closeChange(baseUrl, adminAuth, owner, repo, pull, log);
+  }
+
+  if (change.publish) {
+    const published = claimVersions(touched);
+
+    await mergeChange(
+      baseUrl,
+      adminAuth,
+      owner,
+      repo,
+      pull,
+      change.title,
+      refreshReviews,
+      log,
+    );
+    await tagPublish(
+      baseUrl,
+      adminAuth,
+      owner,
+      repo,
+      pull,
+      author,
+      context.requiredApprovals,
+      approversOf(change),
+      published,
+      archived,
+      log,
+    );
+  }
+
+  return pull.number;
 }
 
 /**
@@ -1315,6 +2285,7 @@ async function applyBinder(
   authFor: (username: string) => BasicAuth,
   organization: SeedOrganization,
   binder: SeedBinder,
+  staffTeamId: number | null,
   log: (message: string) => void,
 ): Promise<Record<string, number>> {
   const owner = organization.name;
@@ -1322,42 +2293,159 @@ async function applyBinder(
 
   await ensureOrgRepo(baseUrl, adminAuth, owner, repo, binder.description, log);
   await bootstrapEmptyMainBranch(baseUrl, adminAuth, owner, repo, log);
-  await ensureBinderTeams(baseUrl, adminAuth, owner, repo, binder, log);
-  await ensureMainBranchProtection(baseUrl, adminAuth, owner, repo, log);
 
   const context: BinderContext = {
     owner,
     repo,
     organizationOwner: organization.owner,
-    slugPathFor: slugPathOf,
+    requiredApprovals: binder.requiredApprovals,
   };
+
+  const state: BinderState = {
+    documents: new Map(),
+    byAddress: new Map(),
+    paths: new Set(),
+  };
+
+  for (const document of binder.documents) {
+    const declaredPath = binderDocumentSlugPath(document);
+    const entry: SeedDocumentState = {
+      declaredPath,
+      uid: seedDocumentUid(owner, repo, declaredPath),
+      format: document.format,
+      extension: canonicalFileNameFor(document.format).replace(/^document/, ""),
+      address: declaredPath,
+      path: null,
+      version: 0,
+      title: declaredPath,
+    };
+    state.documents.set(declaredPath, entry);
+    state.byAddress.set(declaredPath, entry);
+  }
+
+  // **Before `main` is protected**, because a protected branch takes no direct
+  // push — and because these are the rules the seed's own changes are then
+  // governed by, which is the state a binder with sign-off rules is actually
+  // in. A change that proposes new ones is a separate act and goes through the
+  // ordinary path, like everything else.
+  if (binder.signOff.length > 0) {
+    const rules = toSignOffRules(
+      binder.signOff,
+      (address) => state.byAddress.get(address)!.uid,
+    );
+    await ensureFile(
+      baseUrl,
+      adminAuth,
+      owner,
+      repo,
+      CODEOWNERS_PATH,
+      Buffer.from(renderCodeowners(owner, rules), "utf8").toString("base64"),
+      "seed: who signs off on this binder",
+      "main",
+      log,
+    );
+    state.paths.add(CODEOWNERS_PATH);
+  }
+
+  await ensureBinderTeams(baseUrl, adminAuth, owner, repo, binder, log);
+  await ensureBinderGroups(
+    baseUrl,
+    adminAuth,
+    owner,
+    repo,
+    binder,
+    staffTeamId,
+    log,
+  );
+  await ensureMainBranchProtection(
+    baseUrl,
+    adminAuth,
+    owner,
+    repo,
+    binder.requiredApprovals,
+    log,
+  );
 
   const pullRequests: Record<string, number> = {};
 
   for (const document of binder.documents) {
-    // Versions are per-document: a binder's documents do not advance in
-    // lockstep, so each counts its own published changes.
-    let publishedVersions = 0;
-
     for (const change of document.changes) {
-      if (change.publish) {
-        publishedVersions += 1;
-      }
       const number = await applyChange(
         baseUrl,
         adminAuth,
         authFor,
         context,
+        state,
         document,
         change,
-        publishedVersions,
         log,
       );
       pullRequests[`${owner}/${repo}#${change.branch}`] = number;
     }
   }
 
+  // After every document's own, so a folder rename has folders to rename and a
+  // move has a published file to move.
+  for (const change of binder.changes) {
+    const number = await applyBinderChange(
+      baseUrl,
+      adminAuth,
+      authFor,
+      context,
+      state,
+      change,
+      log,
+    );
+    pullRequests[`${owner}/${repo}#${change.branch}`] = number;
+  }
+
   return pullRequests;
+}
+
+/**
+ * The groups granted onto this binder, and whether the whole staff can read it.
+ *
+ * Both are grants of an organization team onto a repository, which is why they
+ * are one step: "open to the organization" is the `staff` team granted, and
+ * nothing else. Revoking matters as much as granting — a binder that was open
+ * and is now marked closed has to actually close on the next run.
+ */
+async function ensureBinderGroups(
+  baseUrl: string,
+  adminAuth: BasicAuth,
+  owner: string,
+  repo: string,
+  binder: SeedBinder,
+  staffTeamId: number | null,
+  log: (message: string) => void,
+): Promise<void> {
+  for (const group of binder.groups) {
+    const team = await findTeam(baseUrl, adminAuth, owner, group);
+    if (!team) continue;
+    await giteaRequest(
+      baseUrl,
+      `/api/v1/teams/${team.id}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
+      { method: "PUT", auth: adminAuth, expectedStatuses: [204, 404, 405] },
+    );
+    log(`Granted group ${group} on ${owner}/${repo}`);
+  }
+
+  if (staffTeamId === null) return;
+
+  await giteaRequest(
+    baseUrl,
+    `/api/v1/teams/${staffTeamId}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
+    {
+      method: binder.openToOrganization ? "PUT" : "DELETE",
+      auth: adminAuth,
+      expectedStatuses: [204, 404, 405],
+    },
+  );
+  log(
+    binder.openToOrganization
+      ? `Opened ${owner}/${repo} to the whole organization`
+      : `Kept ${owner}/${repo} to its own members`,
+  );
 }
 
 export async function seedDevStack(
@@ -1395,6 +2483,20 @@ export async function seedDevStack(
   await waitForUrl(baseUrl, "/api/v1/settings/api", 30, 2000);
   log("Gitea is ready.");
 
+  // **The install admin included.** Gitea made that account from the install
+  // form, which takes a login and an email and no name — so the one account
+  // every developer signs in as was the only one with no full name, and every
+  // screen that shows a person showed a bare login beside ten people with
+  // proper names. Their site-admin flag is left exactly as it is: the seed
+  // authenticates as them, and demoting them would lock it out of its own
+  // stack.
+  await refreshAdminProfile(
+    baseUrl,
+    adminAuth,
+    scenario.users.find((user) => user.username === adminUser),
+    log,
+  );
+
   for (const user of scenario.users) {
     if (user.username === adminUser) {
       continue;
@@ -1406,11 +2508,29 @@ export async function seedDevStack(
       password,
       user.email,
       user.fullName,
+      user.siteAdmin,
       log,
     );
   }
 
   await ensureOrganization(baseUrl, adminAuth, scenario, log);
+  await ensureOrganizationGroups(
+    baseUrl,
+    adminAuth,
+    scenario.organization.name,
+    scenario.organization.groups,
+    log,
+  );
+
+  const staffTeamId = await ensureStaffTeamId(
+    baseUrl,
+    adminAuth,
+    scenario.organization.name,
+    log,
+  );
+  if (staffTeamId !== null) {
+    await ensureStaffMembers(baseUrl, adminAuth, staffTeamId, scenario);
+  }
 
   const pullRequests: Record<string, number> = {};
   for (const binder of scenario.binders) {
@@ -1422,6 +2542,7 @@ export async function seedDevStack(
         authFor,
         scenario.organization,
         binder,
+        staffTeamId,
         log,
       ),
     );
