@@ -77,7 +77,7 @@ export function ProposeChangePage({
 
   return (
     <section className="binder-pane propose-page">
-      <h2 className="propose-title">Propose your changes</h2>
+      <h1 className="bs-title">Propose your changes</h1>
       <p className="propose-lede">
         {acts.length === 1
           ? "One change, going to the people who sign this binder off."

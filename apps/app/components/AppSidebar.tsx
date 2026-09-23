@@ -4,11 +4,14 @@ import {
   CreditCard,
   FileText,
   FilePen,
+  History,
   Home,
   Library,
+  Settings,
   Users,
 } from "lucide-react";
 
+import type { BinderTab } from "../binderShell";
 import type { AppRoute, OrganizationTab } from "../routes";
 
 /**
@@ -24,11 +27,18 @@ import type { AppRoute, OrganizationTab } from "../routes";
  * flat list of eight would answer "where is billing" no better than the top bar
  * did.
  *
- * **The binder keeps its own tabs.** This does not replace them. A binder is a
- * place — one set of rules, one set of people, which is ADR 0004's whole reason
- * for the level — and the mockups this came from had no binder-scoped screen at
- * all. Adopting that wholesale would have deleted the level the data model is
- * built on. Binders leads to the list; a binder leads to its own tabbed home.
+ * **The binder you are in is a section of this, and it was a tab bar** (D1,
+ * the customer's call). A binder is still a place — one set of rules, one set
+ * of people, which is ADR 0004's whole reason for the level — and owning a
+ * labelled section of the map is a stronger statement of that than a strip of
+ * tabs was. What it buys is the page's one title: with the binder named here,
+ * a policy's page is titled by the policy and a change's by what it asks for,
+ * instead of both sitting under a heading naming the binder they are visibly
+ * inside.
+ *
+ * **There is no "Policies" entry, because the binder's own name is it.** A
+ * binder is its contents: pressing Clinical opens what is filed in Clinical,
+ * the way pressing a folder opens the folder.
  *
  * **Below 768px this is not rendered at all** (`.app-sidebar` is
  * `display: none`), so the top bar keeps its links for small screens and they
@@ -37,10 +47,29 @@ import type { AppRoute, OrganizationTab } from "../routes";
  * something this fixes.
  */
 
+/** The binder on screen, as its own section of the map. */
+export interface SidebarBinder {
+  org: string;
+  binder: string;
+  /** What it is called, not the slug it is addressed by. */
+  name: string;
+  /** Which of its screens is open. */
+  section: BinderTab;
+  /** Changes waiting on a decision, once the binder has counted them. */
+  openChangeCount?: number | null;
+}
+
 interface AppSidebarProps {
   route: AppRoute;
   /** The organization the org-scoped entries point at. */
   org: string | null;
+  /**
+   * The binder you are inside, if you are inside one.
+   *
+   * It appears when you enter a binder and goes when you leave, which is what
+   * makes the level visible without it costing a page's title.
+   */
+  binder?: SidebarBinder | null;
   currentUsername: string;
   currentUserFullName?: string;
   /** How many changes are in flight, once the queue has counted them. */
@@ -60,6 +89,7 @@ type Entry = {
 export function AppSidebar({
   route,
   org,
+  binder = null,
   currentUsername,
   currentUserFullName = "",
   changeCount = null,
@@ -109,6 +139,58 @@ export function AppSidebar({
         r.kind === "binderDocument",
     },
   ];
+
+  /**
+   * The binder's own screens. Three, not six: People and Sign-off rules are
+   * sections of Settings (D5), and its contents are the binder's own entry
+   * above them rather than a child repeating its parent's name.
+   */
+  const binderEntries: Entry[] = binder
+    ? [
+        {
+          key: "binder-changes",
+          label: "Changes",
+          icon: FilePen,
+          route: {
+            kind: "binder",
+            org: binder.org,
+            binder: binder.binder,
+            tab: "changes",
+          },
+          isActive: () => binder.section === "changes",
+          count: binder.openChangeCount ?? null,
+        },
+        {
+          key: "binder-history",
+          label: "History",
+          icon: History,
+          route: {
+            kind: "binder",
+            org: binder.org,
+            binder: binder.binder,
+            tab: "history",
+          },
+          isActive: () => binder.section === "history",
+        },
+        {
+          key: "binder-settings",
+          label: "Settings",
+          icon: Settings,
+          route: {
+            kind: "binder",
+            org: binder.org,
+            binder: binder.binder,
+            tab: "settings",
+          },
+          // People and Sign-off rules are sections of this page, and their
+          // addresses still resolve — so they mark it too.
+          isActive: () =>
+            binder.section === "settings" ||
+            binder.section === "people" ||
+            binder.section === "sign-off",
+        },
+      ]
+    : [];
 
   const manage: Entry[] = [
     {
@@ -182,6 +264,36 @@ export function AppSidebar({
       <nav className="app-sidebar-section" aria-label="Your work">
         {work.map(renderEntry)}
       </nav>
+
+      {binder ? (
+        <nav
+          className="app-sidebar-section app-sidebar-section--binder"
+          aria-label={binder.name}
+        >
+          <button
+            type="button"
+            className={`app-sidebar-binder${
+              binder.section === "documents"
+                ? " app-sidebar-binder--active"
+                : ""
+            }`}
+            aria-current={binder.section === "documents" ? "page" : undefined}
+            onClick={() =>
+              onNavigate({
+                kind: "binder",
+                org: binder.org,
+                binder: binder.binder,
+              })
+            }
+          >
+            <span className="app-sidebar-binder-mark" aria-hidden="true">
+              <Library size={14} strokeWidth={1.75} />
+            </span>
+            <span className="app-sidebar-binder-name">{binder.name}</span>
+          </button>
+          {binderEntries.map(renderEntry)}
+        </nav>
+      ) : null}
 
       <nav className="app-sidebar-section" aria-label="Manage">
         <div className="app-sidebar-label">Manage</div>

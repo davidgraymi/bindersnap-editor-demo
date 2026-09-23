@@ -78,25 +78,40 @@ test("the sidebar navigates, and marks where you are", async ({ page }) => {
   ).toHaveAttribute("aria-current", "page");
 });
 
-test("the sidebar did not eat the binder", async ({ page }) => {
+test("the sidebar took the binder, and gives it a section of its own", async ({
+  page,
+}) => {
   await signInAsAlice(page);
   await page.goto(`${APP_BASE_URL}/riverside-health/clinical`);
 
-  // A binder still has its own tabs, under the global sidebar.
-  for (const tab of [
-    "Documents",
-    "Change requests",
-    "History",
-    "Settings",
-  ] as const) {
-    await expect(page.getByRole("tab", { name: tab })).toBeVisible({
-      timeout: 30_000,
-    });
+  // A binder is still a place: it owns a labelled section of the map, named
+  // once, with its own screens under it — and no "Policies" entry, because
+  // the binder's own name is it.
+  const sidebar = page.locator(".app-sidebar");
+  await expect(sidebar.locator(".app-sidebar-binder-name")).toHaveText(
+    "Clinical",
+    { timeout: 30_000 },
+  );
+  for (const entry of ["Changes", "History", "Settings"] as const) {
+    await expect(
+      sidebar.getByRole("button", { name: new RegExp(`^${entry}`) }).last(),
+    ).toBeVisible();
   }
+
+  // And the page's one title is the binder's contents, not a heading naming
+  // the binder you are visibly inside.
+  await expect(page.locator("h1.bs-title")).toHaveText("Clinical");
+
+  // It goes when you leave.
+  await sidebar.getByRole("button", { name: "Home" }).click();
+  await expect(sidebar.locator(".app-sidebar-binder")).toHaveCount(0, {
+    timeout: 30_000,
+  });
+
+  await page.goto(`${APP_BASE_URL}/riverside-health/clinical`);
 
   // And the sidebar keeps your place rather than losing it: a binder, and a
   // document inside one, are both "in" Binders.
-  const sidebar = page.locator(".app-sidebar");
   await expect(
     sidebar.getByRole("button", { name: "Binders" }),
   ).toHaveAttribute("aria-current", "page");
