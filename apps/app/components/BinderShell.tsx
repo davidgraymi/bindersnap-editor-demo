@@ -32,9 +32,7 @@ import { ProposeChangePage } from "./ProposeChangePage";
 import { BinderChangePage } from "./BinderChangePage";
 import { BinderChanges } from "./BinderChanges";
 import { BinderHistory } from "./BinderHistory";
-import { BinderPeople } from "./BinderPeople";
 import { BinderSettings } from "./BinderSettings";
-import { BinderSignOff } from "./BinderSignOff";
 import { BinderDocumentPage } from "./BinderDocumentPage";
 import { BinderDocuments } from "./BinderPage";
 import { SkeletonLine } from "./Skeleton";
@@ -301,7 +299,13 @@ export function BinderShell({
   };
 
   // A document is a file in the binder, so Documents stays the tab you are on.
-  const activeTab: BinderTab = documentPath ? "documents" : tab;
+  // People and Sign-off rules were tabs of their own and are sections of
+  // Settings now; their addresses still resolve, to the section.
+  const activeTab: BinderTab = documentPath
+    ? "documents"
+    : tab === "people" || tab === "sign-off"
+      ? "settings"
+      : tab;
 
   const tabs: Array<{ id: BinderTab; label: string; count?: number }> = [
     { id: "documents", label: "Documents", count: overview?.documentCount },
@@ -310,12 +314,8 @@ export function BinderShell({
       label: "Change requests",
       count: overview?.openChangeCount,
     },
-    // No counts on these three. The two that carry one are counts of things to
-    // deal with; a number of people, of published versions, or of rules is not
-    // — and a people count would cost the header a walk of every team on every
-    // tab, to say a number nobody is waiting on.
-    { id: "people", label: "People" },
-    { id: "sign-off", label: "Sign-off rules" },
+    // No counts on these two. The two that carry one are counts of things to
+    // deal with; a number of published versions, of people or of rules is not.
     { id: "history", label: "History" },
     { id: "settings", label: "Settings" },
   ];
@@ -490,14 +490,6 @@ export function BinderShell({
           onOpenChange={openChangeNumber}
           onAddPolicy={() => setAdding(true)}
         />
-      ) : activeTab === "people" ? (
-        <BinderPeople org={org} binder={binder} />
-      ) : activeTab === "sign-off" ? (
-        <BinderSignOff
-          org={org}
-          binder={binder}
-          onOpenChange={openChangeNumber}
-        />
       ) : activeTab === "history" ? (
         <BinderHistory
           org={org}
@@ -509,6 +501,9 @@ export function BinderShell({
         <BinderSettings
           org={org}
           binder={binder}
+          focus={tab === "people" || tab === "sign-off" ? tab : undefined}
+          onOpenChange={openChangeNumber}
+          onDescribed={loadOverview}
           onRenamed={(renamed) => {
             // A new address for the same binder. Replace rather than push:
             // going Back to a name the binder no longer has is a redirect at
