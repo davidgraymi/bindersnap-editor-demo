@@ -36,7 +36,6 @@ interface DocumentChangesProps {
   onFilterChange: (filter: ChangeFilter) => void;
   onOpenChange: (pullNumber: number) => void;
   onRetryClosed: () => void;
-  onSubmitVersion: () => void;
 }
 
 /**
@@ -103,21 +102,23 @@ function ChangeRow({
   const subject = describeSubject?.(change.number) ?? null;
 
   return (
-    <li className="change-row" key={change.number}>
+    <li className="change-row">
       <button
-        className="change-row-btn"
+        className="bs-row bs-row--tall change-row-btn"
         type="button"
         onClick={() => onOpenChange(change.number)}
       >
-        <ChangeIcon change={change} />
-        <span className="change-row-main">
-          <span className="change-row-title">{change.summary}</span>
+        <span className="bs-row-icon">
+          <ChangeIcon change={change} />
+        </span>
+        <span className="bs-row-body">
+          <span className="bs-row-name change-row-title">{change.summary}</span>
           {/* No "#8". The number is Gitea's pull-request id — a GitHub habit
               that means nothing to a compliance manager and reads like it
               ought to. What identifies a change to the person reading the row
               is its title, who sent it and when, all of which are here. The
               number still addresses the change in the URL. */}
-          <span className="change-row-meta">
+          <span className="bs-row-meta">
             Submitted by {submitter}
             {submitted ? ` on ${submitted}` : ""}
             {subject
@@ -126,11 +127,9 @@ function ChangeRow({
                 ? ` · becomes v${nextVersion} when published`
                 : ""}
           </span>
-          {outcome ? (
-            <span className="change-row-outcome">{outcome}</span>
-          ) : null}
+          {outcome ? <span className="bs-row-meta">{outcome}</span> : null}
         </span>
-        <span className="change-row-side">
+        <span className="bs-row-right change-row-side">
           {showStateBadge ? (
             <span className={getChangeStateBadgeClass(change)}>
               {getChangeStateLabel(change)}
@@ -163,41 +162,40 @@ export function DocumentChanges({
   onFilterChange,
   onOpenChange,
   onRetryClosed,
-  onSubmitVersion,
 }: DocumentChangesProps) {
   const rows = filter === "open" ? openChanges : (closedChanges ?? []);
 
   return (
-    <section className="change-index" aria-label="Changes">
-      <div className="change-index-bar">
-        <div className="change-filter" role="group" aria-label="Filter changes">
+    <section className="bs-panel" aria-label="Changes">
+      {/* The filter is the list's own, so it lives in the list's bar rather
+          than floating on the page above it. */}
+      <div className="bs-panel-bar">
+        <div className="bs-segmented" role="group" aria-label="Filter changes">
           <button
-            className={`change-filter-btn${filter === "open" ? " change-filter-btn--active" : ""}`}
+            className="bs-seg"
             type="button"
             aria-pressed={filter === "open"}
             onClick={() => onFilterChange("open")}
           >
-            <FilePen size={14} strokeWidth={1.5} aria-hidden="true" />
-            {openChanges.length} Open
+            Open {openChanges.length}
           </button>
           <button
-            className={`change-filter-btn${filter === "closed" ? " change-filter-btn--active" : ""}`}
+            className="bs-seg"
             type="button"
             aria-pressed={filter === "closed"}
             onClick={() => onFilterChange("closed")}
           >
-            <CircleCheck size={14} strokeWidth={1.5} aria-hidden="true" />
-            {closedChanges === null ? "" : `${closedChanges.length} `}Closed
+            Closed{closedChanges === null ? "" : ` ${closedChanges.length}`}
           </button>
         </div>
       </div>
 
       {filter === "closed" && closedError ? (
-        <div className="change-empty">
-          <p className="change-empty-title">Unable to load closed changes</p>
-          <p className="change-empty-note">{closedError}</p>
+        <div className="bs-empty">
+          <p className="bs-empty-lead">Unable to load closed changes</p>
+          <p>{closedError}</p>
           <button
-            className="bs-btn bs-btn-secondary"
+            className="bs-btn bs-btn--sm bs-btn-secondary"
             type="button"
             onClick={onRetryClosed}
           >
@@ -205,12 +203,9 @@ export function DocumentChanges({
           </button>
         </div>
       ) : filter === "closed" && closedLoading ? (
-        <SkeletonGroup
-          label="Loading closed changes"
-          className="change-list-rows"
-        >
+        <SkeletonGroup label="Loading closed changes">
           {Array.from({ length: 3 }, (_, index) => (
-            <div className="bs-skeleton-row" key={index}>
+            <div className="bs-row bs-row--tall" key={index}>
               <SkeletonShape variant="icon" />
               <span className="bs-skeleton-lines">
                 <SkeletonLine width="wide" />
@@ -221,37 +216,26 @@ export function DocumentChanges({
           ))}
         </SkeletonGroup>
       ) : rows.length === 0 ? (
-        <div className="change-empty">
+        <div className="bs-empty">
           {filter === "open" ? (
             <>
               {/* Wording the integration suite waits on: this heading is how
                   the app says "nothing is pending". */}
-              <h2 className="change-empty-title">No pending approvals</h2>
-              <p className="change-empty-note">
+              <h2 className="bs-empty-lead">No pending approvals</h2>
+              <p>
                 Nothing is waiting on a decision. Every version has been
                 published or withdrawn.
               </p>
-              {!isAnonymous ? (
-                <button
-                  className="bs-btn bs-btn-primary"
-                  type="button"
-                  onClick={onSubmitVersion}
-                >
-                  Submit New Version
-                </button>
-              ) : null}
             </>
           ) : (
             <>
-              <h2 className="change-empty-title">No closed changes</h2>
-              <p className="change-empty-note">
-                Nothing has been published, declined, or withdrawn yet.
-              </p>
+              <h2 className="bs-empty-lead">No closed changes</h2>
+              <p>Nothing has been published, declined, or withdrawn yet.</p>
             </>
           )}
         </div>
       ) : (
-        <ul className="change-list-rows">
+        <ul className="bs-row-list">
           {rows.map((change) => (
             <ChangeRow
               key={change.number}

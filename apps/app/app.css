@@ -1827,97 +1827,8 @@ input {
   margin: 0;
 }
 
-/* Changes tab — every change this document has seen, open ones first.
-   One row each; the review itself lives on its own page, so reaching #3 never
-   means scrolling past #10. */
-.change-index {
-  display: grid;
-  gap: var(--brand-space-3);
-}
-
-.change-index-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--brand-space-3);
-  flex-wrap: wrap;
-}
-
-/* Open and closed are one control, the way a filter should be — not two
-   headings that happen to be near each other. */
-.change-filter {
-  display: inline-flex;
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-sm);
-  overflow: hidden;
-}
-
-.change-filter-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--brand-space-2);
-  padding: var(--brand-space-2) var(--brand-space-4);
-  border: none;
-  background: var(--bs-surface-1);
-  color: var(--bs-text-muted);
-  cursor: pointer;
-  font-family: var(--brand-font-sans);
-  font-size: var(--brand-text-sm);
-  font-weight: var(--brand-weight-medium);
-  transition:
-    background var(--brand-transition-base),
-    color var(--brand-transition-base);
-}
-
-.change-filter-btn + .change-filter-btn {
-  border-left: 1px solid var(--bs-rule);
-}
-
-.change-filter-btn:hover,
-.change-filter-btn:focus-visible {
-  color: var(--bs-text-primary);
-  outline: none;
-}
-
-.change-filter-btn--active {
-  background: var(--bs-surface-2);
-  color: var(--bs-text-primary);
-}
-
-.change-list-rows {
-  display: grid;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-md);
-  background: var(--bs-surface-1);
-  overflow: hidden;
-}
-
-.change-row + .change-row {
-  border-top: 1px solid var(--bs-rule-warm);
-}
-
-.change-row-btn {
-  width: 100%;
-  display: flex;
-  align-items: flex-start;
-  gap: var(--brand-space-3);
-  padding: var(--brand-space-4);
-  border: none;
-  background: none;
-  text-align: left;
-  cursor: pointer;
-  transition: background var(--brand-transition-base);
-}
-
-.change-row-btn:hover,
-.change-row-btn:focus-visible {
-  background: var(--bs-surface-2);
-  outline: none;
-}
-
+/* A change's icon carries its outcome, so the list reads before it is read.
+   The row itself is the grammar's `.bs-row--tall`. */
 .change-row-icon {
   flex: none;
   margin-top: var(--brand-space-0-5);
@@ -1938,47 +1849,16 @@ input {
   color: var(--bs-coral-text);
 }
 
-.change-row-main {
-  display: grid;
-  gap: var(--brand-space-1);
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
+/* A change's title is a sentence, and it wraps rather than being cut. */
 .change-row-title {
-  font-size: var(--brand-text-body);
-  font-weight: var(--brand-weight-medium);
-  color: var(--bs-text-primary);
-  overflow-wrap: anywhere;
-}
-
-.change-row-meta {
-  font-size: var(--brand-text-sm);
-  color: var(--bs-text-muted);
-  overflow-wrap: anywhere;
-}
-
-/* Why a closed change is closed. "Closed" on its own answers nothing. */
-.change-row-outcome {
-  font-size: var(--brand-text-xs);
-  color: var(--bs-text-faint);
-  overflow-wrap: anywhere;
-}
-
-/* Whose desk it is on. The list is only useful if it names someone. */
-.change-row-waiting {
-  font-size: var(--brand-text-xs);
-  color: var(--bs-text-muted);
+  white-space: normal;
   overflow-wrap: anywhere;
 }
 
 .change-row-side {
-  display: flex;
-  flex: none;
   flex-wrap: wrap;
-  align-items: center;
   justify-content: flex-end;
-  gap: var(--brand-space-2);
+  max-width: 45%;
 }
 
 /* How many sign-offs are in, against how many the document demands. This
@@ -2067,28 +1947,6 @@ input {
   white-space: nowrap;
 }
 
-.change-empty {
-  display: grid;
-  gap: var(--brand-space-3);
-  justify-items: start;
-  padding: var(--brand-space-8) var(--brand-space-6);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-md);
-  background: var(--bs-surface-1);
-}
-
-.change-empty-title {
-  margin: 0;
-  font-family: var(--brand-font-serif);
-  font-size: var(--brand-text-h3);
-}
-
-.change-empty-note {
-  margin: 0;
-  max-width: 60ch;
-  font-size: var(--brand-text-sm);
-  color: var(--bs-text-muted);
-}
 /* ── Change review ───────────────────────────────────────────────
    One change, reviewed inside the Changes tab. The document header and its
    tabs stay above this, so the reader never leaves the document to decide
@@ -7441,22 +7299,18 @@ input {
 
 /* ── The binder as a tree ──────────────────────────────────────────────────
    A file explorer, not a list of headings: folders nest, and the indent is
-   what says so. One bordered card holds the whole tree, so a deep binder
-   reads as one object rather than as a stack of boxes. */
-
-.binder-tree {
-  background: var(--bs-surface-1);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-xl);
-  overflow: hidden;
-}
+   what says so. It sits inside the binder's `.bs-panel`, so its rows are the
+   grammar's row — one height, one hairline, one hover — and the panel, not
+   the tree, draws the card. */
 
 .binder-tree-row {
   display: flex;
   align-items: center;
-  gap: var(--brand-space-2);
+  gap: var(--brand-space-1-5);
+  min-height: 46px;
   border-top: 1px solid var(--bs-rule-warm);
   box-sizing: border-box;
+  transition: background var(--brand-transition-fast);
 }
 
 .binder-tree-row:first-child {
@@ -7468,7 +7322,8 @@ input {
 }
 
 .binder-tree-row--active {
-  background: var(--bs-coral-dim);
+  background: var(--bs-coral-glow);
+  box-shadow: inset 2px 0 0 var(--brand-coral);
 }
 
 /* The row's own hit area. A whole row is the target — a name you have to aim
@@ -7476,10 +7331,11 @@ input {
 .binder-tree-main {
   display: flex;
   align-items: center;
-  gap: var(--brand-space-2);
+  gap: var(--brand-space-1-5);
   flex: 1;
   min-width: 0;
-  padding: var(--brand-space-2-5) var(--brand-space-4);
+  min-height: 46px;
+  padding: var(--brand-space-1) var(--brand-space-2);
   border: none;
   background: transparent;
   text-align: left;
@@ -7496,8 +7352,8 @@ input {
 /* The triangle, and the same width of nothing on a document — a ragged left
    edge is what makes a tree read as a list of unrelated things. */
 .binder-tree-twisty {
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -7509,15 +7365,16 @@ input {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  color: var(--bs-text-muted);
+  color: var(--bs-text-faint);
 }
 
 .binder-tree-row--folder .binder-tree-icon {
-  color: var(--bs-text-secondary);
+  color: var(--bs-coral-text);
 }
 
 .binder-tree-label {
-  font-size: 14.5px;
+  font-size: var(--brand-text-sm);
+  font-weight: var(--brand-weight-medium);
   color: var(--bs-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -7525,28 +7382,83 @@ input {
 }
 
 .binder-tree-row--folder .binder-tree-label {
-  font-weight: var(--brand-weight-medium);
+  font-weight: var(--brand-weight-semibold);
 }
 
-/* What a folder holds, and what version a policy is at. Pushed right and
-   quiet: it answers a question a reader has after finding the row, not
-   before. */
-.binder-tree-count,
-.binder-tree-meta {
+/* What a shut folder is hiding. Pushed right and quiet: it answers a question
+   a reader has after finding the row, not before. */
+.binder-tree-count {
   margin-left: auto;
   padding-left: var(--brand-space-3);
-  font-size: var(--brand-text-ui-sm);
+  font-size: var(--brand-text-ui-md);
   color: var(--bs-text-muted);
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+/* What last changed a policy, and when — the two columns a file list is read
+   in after the name. The subject is the change request's title, and it links
+   to that change, so "why is this different from what I remember" is one
+   click from the row that raised it. */
+.bs-row-subject {
+  flex: 1.4;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bs-row-subject a {
+  color: var(--bs-text-muted);
+  text-decoration: none;
+}
+
+.bs-row-subject a:hover {
+  color: var(--bs-coral-text);
+  text-decoration: underline;
+}
+
+.bs-row-when {
+  flex-shrink: 0;
+  min-width: 6.5rem;
+  padding-right: var(--brand-space-2);
+  color: var(--bs-text-faint);
+  font-size: var(--brand-text-ui-md);
+  text-align: right;
+  white-space: nowrap;
 }
 
 .binder-tree-actions {
   display: flex;
   align-items: center;
   gap: var(--brand-space-1);
-  padding-right: var(--brand-space-3);
+  padding-right: var(--brand-space-1-5);
   flex-shrink: 0;
+}
+
+.bs-input.binder-filter {
+  width: 15rem;
+}
+
+.binder-count {
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  /* On a phone the name needs the width; the subject is one tap away on the
+     policy's own page. */
+  .bs-row-subject {
+    display: none;
+  }
+
+  .bs-input.binder-filter {
+    width: auto;
+    flex: 1;
+  }
 }
 
 /* ── Editing a binder ──────────────────────────────────────────────────────
@@ -7641,10 +7553,12 @@ input {
 .binder-tree-main--inert {
   display: flex;
   align-items: center;
-  gap: var(--brand-space-2);
+  gap: var(--brand-space-1-5);
   flex: 1;
   min-width: 0;
-  padding: var(--brand-space-2-5) var(--brand-space-4);
+  min-height: 46px;
+  padding: var(--brand-space-1) var(--brand-space-2);
+  box-sizing: border-box;
 }
 
 .binder-tree-rename {
@@ -7782,33 +7696,6 @@ input {
   display: grid;
   gap: var(--brand-space-2);
   justify-items: start;
-}
-
-/* The way in, under the tree. Quiet, and gone when the archive is empty — a
-   binder that has never archived anything should not carry a link to nothing. */
-.binder-archive-link {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--brand-space-2);
-  align-self: start;
-  padding: var(--brand-space-2) 0;
-  border: none;
-  background: transparent;
-  font-family: var(--brand-font-sans);
-  font-size: var(--brand-text-ui-sm);
-  color: var(--bs-text-muted);
-  cursor: pointer;
-}
-
-.binder-archive-link:hover {
-  color: var(--bs-text-primary);
-  text-decoration: underline;
-}
-
-.binder-archive-link:focus-visible {
-  outline: 2px solid var(--brand-coral);
-  outline-offset: 2px;
-  border-radius: var(--brand-radius-sm);
 }
 
 /* The way back. Quiet, because the page is a record first and a control
