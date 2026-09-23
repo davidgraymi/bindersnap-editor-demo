@@ -552,7 +552,9 @@ export function BinderShell({
                   };
 
   return (
-    <section className="docw-page">
+    <section
+      className={`docw-page${documentPath ? " docw-page--document" : ""}`}
+    >
       {head ? (
         <div className="bs-pagehead">
           <div className="bs-pagehead-body">

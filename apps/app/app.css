@@ -8783,44 +8783,6 @@ a.bs-row:focus-visible {
   gap: var(--brand-space-3);
 }
 
-/* ── The binder's contents, beside the policy you are reading ──────────────
-   A reader loses the tree the moment a document takes over the page, and
-   going back to the list to open the next policy is the clunk. Only while a
-   policy is open: every other binder screen draws the tree itself. */
-
-.app-sidebar-tree {
-  display: grid;
-  margin-top: var(--brand-space-1);
-}
-
-.app-sidebar-tree-folder {
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-1-5);
-  padding: var(--brand-space-1) var(--brand-space-2) 2px;
-  font-size: var(--brand-text-ui-sm);
-  font-weight: var(--brand-weight-medium);
-  color: var(--bs-text-faint);
-  letter-spacing: 0.01em;
-}
-
-/* Indented under its folder, and one line whatever the policy is called —
-   a name that wraps turns a tree into a paragraph. */
-.app-sidebar-tree-item {
-  height: 28px;
-  padding-left: var(--brand-space-4);
-  font-size: var(--brand-text-ui-sm);
-}
-
-/* `min-width: 0` is what lets a flex item shrink below its content, and
-   without it the ellipsis never appears — the name is simply cut. */
-.app-sidebar-tree-item .app-sidebar-item-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* ── A change request in a list ────────────────────────────────────────────
    Four facts: what it asks for, who asked and when, where it stands, how much
    conversation is on it. Everything else belongs on the change's own page,
@@ -8895,4 +8857,135 @@ a.bs-row:focus-visible {
   font-size: var(--brand-text-ui-md);
   color: var(--bs-text-faint);
   font-variant-numeric: tabular-nums;
+}
+
+/* ── The binder's files, in a panel of their own ───────────────────────────
+   It lived inside the product's navigation, which answered two questions with
+   one panel: the map of the product barely changes, and a binder's contents
+   change every time you open a different binder. Two panels also let the file
+   list be as wide as a filename needs while the map stays narrow. */
+
+.app-explorer {
+  width: 272px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bs-surface-1);
+  border-right: 1px solid var(--bs-rule);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.app-explorer::-webkit-scrollbar {
+  width: 0;
+}
+
+/* Which binder these files are, and the way back to it. */
+.app-explorer-head {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  width: 100%;
+  min-height: 46px;
+  padding: 0 var(--brand-space-3);
+  border: none;
+  border-bottom: 1px solid var(--bs-rule);
+  background: transparent;
+  color: var(--bs-text-primary);
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-semibold);
+  text-align: left;
+  cursor: pointer;
+}
+
+.app-explorer-head:hover {
+  background: var(--bs-surface-2);
+}
+
+.app-explorer-tree {
+  display: grid;
+  align-content: start;
+  padding: var(--brand-space-2) var(--brand-space-1);
+}
+
+.app-explorer-group {
+  display: grid;
+}
+
+.app-explorer-folder {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  padding: var(--brand-space-2) var(--brand-space-2) 2px;
+  font-size: var(--brand-text-ui-sm);
+  font-weight: var(--brand-weight-medium);
+  color: var(--bs-text-faint);
+}
+
+.app-explorer-item {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  width: 100%;
+  min-height: 28px;
+  padding: 0 var(--brand-space-2) 0 var(--brand-space-4);
+  border: none;
+  border-radius: var(--brand-radius-md);
+  background: transparent;
+  color: var(--bs-text-secondary);
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-ui-sm);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    color var(--brand-transition-base),
+    background var(--brand-transition-base);
+}
+
+.app-explorer-item svg {
+  flex-shrink: 0;
+  opacity: 0.55;
+}
+
+.app-explorer-item:hover {
+  color: var(--bs-text-primary);
+  background: var(--bs-surface-2);
+}
+
+.app-explorer-item--active {
+  color: var(--bs-text-primary);
+  background: var(--bs-surface-2);
+  font-weight: var(--brand-weight-medium);
+}
+
+.app-explorer-item--active svg {
+  opacity: 1;
+}
+
+/* One line whatever the policy is called: a name that wraps turns a tree into
+   a paragraph. `min-width: 0` is what lets a flex item shrink below its
+   content, and without it the ellipsis never appears. */
+.app-explorer-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The explorer is a panel beside the page, and a phone has room for neither
+   it nor the map. */
+@media (max-width: 960px) {
+  .app-explorer {
+    display: none;
+  }
+}
+
+/* **A policy takes the width it is given.** Every other screen is capped at
+   the page measure, which is right for a list or a form — 60-odd characters
+   is what prose wants and a settings form has no use for more. A document is
+   the thing somebody came to read, and the panels beside it have already
+   taken their share. */
+.docw-page--document {
+  max-width: none;
 }
