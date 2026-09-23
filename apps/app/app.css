@@ -7914,3 +7914,630 @@ input {
 .binder-rename .bs-input {
   max-width: 24rem;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   The binder's grammar
+   ══════════════════════════════════════════════════════════════════════════
+   Six binder tabs were built one at a time, and each invented its own
+   containers, headings and labels — a card of rows on one, a fieldset on the
+   next, a tinted box with buttons loose on the paper on the third — so walking
+   between them read as walking between web sites. The customer's words: "the
+   content it renders is not so great and looks like a different web page."
+
+   This is the answer, and it is small on purpose. **Three containers, and
+   nothing else holds content:**
+
+     .bs-panel    a bordered card of `.bs-row`s, with an optional
+                  `.bs-panel-bar` for the controls that filter or act on it
+                  and an optional `.bs-panel-foot` for the act that adds to it
+     .bs-fields   a form block — `.bs-field-label`, the control, a hint
+     .bs-note     a tinted block, for empty states and consequences only
+
+   **One heading scale:** `.bs-title` once per screen, `.bs-section-title` for
+   everything under it. And **one row**: a folder, a policy, a change, a
+   person, a version and a rule are all `.bs-row`, one height, one hairline,
+   one hover.
+
+   Buttons and inputs are not restated here. `.bs-btn` and `.bs-input` live in
+   the token file, unified deliberately, with a test that fails when a row
+   mixes their sizes. What is here is only what was genuinely missing.
+
+   The reasoning, and the screens drawn with every class below, are
+   `docs/design/binder-screens-spec.md` and `docs/design/mockups/binder/`. */
+
+/* ── The page head ────────────────────────────────────────────────────────
+   One title per screen, and it names the subject. A policy is titled by its
+   name and a change by what it asks for; the binder is named once, in the
+   sidebar, where it stays put. */
+
+.bs-pagehead {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--brand-space-3);
+}
+
+.bs-pagehead-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.bs-pagehead-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--brand-space-1);
+}
+
+/* Where you are, in the words a person would use — Geist, not the monospace
+   path that read as a terminal to anybody who has seen one. On a change
+   request only: "Change 4" is not a name, and the way back to the list is
+   worth a row. */
+.bs-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--brand-space-1);
+  margin-bottom: var(--brand-space-1);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+}
+
+.bs-crumbs a,
+.bs-crumbs button {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--bs-text-muted);
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.bs-crumbs a:hover,
+.bs-crumbs button:hover {
+  color: var(--bs-coral-text);
+  text-decoration: underline;
+}
+
+.bs-crumbs-sep {
+  color: var(--bs-text-faint);
+}
+
+/* Exactly one per screen. Lora 26 is the page's loudest element, and nothing
+   inside the page may outrank it. */
+.bs-title {
+  margin: 0;
+  font-family: var(--brand-font-serif);
+  font-size: 26px;
+  font-weight: var(--brand-weight-semibold);
+  letter-spacing: var(--brand-tracking-snug);
+  line-height: var(--brand-leading-snug);
+  color: var(--bs-text-primary);
+}
+
+.bs-subtitle {
+  max-width: var(--brand-measure);
+  margin: var(--brand-space-1) 0 0;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+}
+
+/* The facts about the subject, on the line under its name. */
+.bs-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  margin-top: var(--brand-space-1-5);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+}
+
+/* ── Section headings ─────────────────────────────────────────────────────
+   Geist 15/600, sentence case. Never mono, never uppercase, never coral —
+   those three together were the loudest developer-tool signal in the product,
+   and `.doc-rail-title`, a class named for a document's rail, had been
+   standing in as the page section heading on four binder tabs. */
+
+.bs-section {
+  display: grid;
+  gap: var(--brand-space-1-5);
+  align-content: start;
+}
+
+.bs-section-head {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  min-height: 32px;
+}
+
+.bs-section-title {
+  margin: 0;
+  color: var(--bs-text-primary);
+  font-family: var(--brand-font-sans);
+  font-size: 15px;
+  font-weight: var(--brand-weight-semibold);
+  letter-spacing: -0.006em;
+  line-height: var(--brand-leading-snug);
+}
+
+.bs-section-count {
+  padding: 1px 7px;
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-surface-3);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-xs);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.bs-section-spacer {
+  flex: 1;
+}
+
+.bs-section-note {
+  max-width: var(--brand-measure);
+  margin: 0;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+}
+
+/* ── Container one: the panel ─────────────────────────────────────────────
+   Every list in the binder. A control that acts on a list lives in the list's
+   own bar, never floating on the page above it — that single rule is most of
+   what makes Changes, Documents and People read as one product. */
+
+.bs-panel {
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+  background: var(--bs-surface-1);
+  overflow: hidden;
+}
+
+.bs-panel-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--brand-space-1);
+  min-height: 46px;
+  padding: var(--brand-space-1) var(--brand-space-1-5) var(--brand-space-1)
+    var(--brand-space-2);
+  border-bottom: 1px solid var(--bs-rule-warm);
+  background: var(--bs-surface-2);
+  box-sizing: border-box;
+}
+
+.bs-panel-bar-title {
+  margin: 0;
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.bs-panel-bar-spacer {
+  flex: 1;
+}
+
+.bs-panel-body {
+  padding: var(--brand-space-2);
+}
+
+/* The act that adds to the list, as the list's own last line — not a row of
+   controls loose on the paper under it. */
+.bs-panel-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--brand-space-1);
+  padding: var(--brand-space-1-5) var(--brand-space-2);
+  border-top: 1px solid var(--bs-rule-warm);
+  background: var(--bs-surface-2);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+}
+
+/* ── The row ──────────────────────────────────────────────────────────────
+   One height, one hairline, one hover. Rows are either direct children of the
+   panel or of a list inside it, so the hairline is drawn between siblings
+   rather than by position in the panel. */
+
+.bs-row {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  width: 100%;
+  min-height: 46px;
+  margin: 0;
+  padding: var(--brand-space-1) var(--brand-space-2);
+  border: none;
+  border-top: 1px solid var(--bs-rule-warm);
+  background: none;
+  box-sizing: border-box;
+  color: var(--bs-text-primary);
+  font: inherit;
+  text-align: left;
+  list-style: none;
+  transition: background var(--brand-transition-fast);
+}
+
+.bs-row:first-child,
+.bs-panel-bar + .bs-row,
+.bs-panel-bar + * > .bs-row:first-child {
+  border-top: none;
+}
+
+button.bs-row,
+a.bs-row {
+  cursor: pointer;
+  text-decoration: none;
+}
+
+button.bs-row:hover,
+a.bs-row:hover,
+.bs-row--interactive:hover {
+  background: var(--bs-surface-2);
+}
+
+button.bs-row:focus-visible,
+a.bs-row:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: -2px;
+}
+
+.bs-row--tall {
+  min-height: 60px;
+  align-items: flex-start;
+  padding-top: var(--brand-space-1-5);
+  padding-bottom: var(--brand-space-1-5);
+}
+
+.bs-row--on {
+  background: var(--bs-coral-glow);
+  box-shadow: inset 2px 0 0 var(--brand-coral);
+}
+
+.bs-row-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bs-row-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 18px;
+  color: var(--bs-text-faint);
+}
+
+.bs-row-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.bs-row-name {
+  display: block;
+  overflow: hidden;
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-sm);
+  font-weight: var(--brand-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bs-row-meta {
+  display: block;
+  margin-top: 1px;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+}
+
+.bs-row-right {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+}
+
+/* ── Container two: fields ────────────────────────────────────────────────
+   Every form in the binder. */
+
+.bs-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-2-5);
+  max-width: 560px;
+}
+
+.bs-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-1);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+/* Geist 13/600, sentence case. What shipped was `.bs-label` — coral,
+   uppercase, monospace — which is the marketing site's section eyebrow
+   standing in for a form label. `.bs-label` stays exactly as it is, on the
+   landing page, where it is right. */
+.bs-field-label {
+  padding: 0;
+  color: var(--bs-text-secondary);
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-semibold);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.bs-field-optional {
+  margin-left: var(--brand-space-0-5);
+  color: var(--bs-text-faint);
+  font-weight: var(--brand-weight-regular);
+}
+
+.bs-field-hint {
+  margin: 0;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+}
+
+/* A row of controls uses one size — the rule `tests/design-consistency.pw.ts`
+   measures. The field grows; the button beside it does not. */
+.bs-field-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--brand-space-1);
+}
+
+.bs-field-row > .bs-input {
+  flex: 1;
+  width: auto;
+  min-width: 12rem;
+}
+
+/* A choice somebody made, not a switch that is on or off. Both answers are
+   spelled out, and what each costs is on the option. */
+.bs-choice {
+  display: flex;
+  gap: var(--brand-space-1-5);
+  padding: var(--brand-space-1-5);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-1);
+  cursor: pointer;
+}
+
+.bs-choice + .bs-choice {
+  margin-top: var(--brand-space-1);
+}
+
+.bs-choice--on,
+.bs-choice:has(input:checked) {
+  border-color: var(--bs-coral-border);
+  background: var(--bs-coral-glow);
+}
+
+.bs-choice input {
+  flex-shrink: 0;
+  align-self: flex-start;
+  width: 15px;
+  height: 15px;
+  margin: 2px 0 0;
+  accent-color: var(--brand-coral);
+}
+
+.bs-choice-name {
+  display: block;
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-sm);
+  font-weight: var(--brand-weight-medium);
+}
+
+.bs-choice-note {
+  display: block;
+  margin-top: 1px;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+}
+
+/* ── Container three: the note ────────────────────────────────────────────
+   Empty states and consequences, and nothing else. A note that is always
+   there is furniture; the sign-off empty state earns its place precisely
+   because it vanishes the moment a rule exists. */
+
+.bs-note {
+  max-width: var(--brand-measure);
+  padding: var(--brand-space-2);
+  border: 1px solid var(--bs-rule-warm);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-2);
+  box-sizing: border-box;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+}
+
+.bs-note p {
+  margin: 0 0 var(--brand-space-1);
+}
+
+.bs-note p:last-child {
+  margin-bottom: 0;
+}
+
+.bs-note-lead {
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-sm);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.bs-note--warn {
+  border-color: var(--bs-status-warn-border);
+  background: var(--bs-status-warn-bg);
+  color: var(--bs-status-warn-fg);
+}
+
+.bs-note--danger {
+  border-color: var(--bs-status-danger-border);
+  background: var(--bs-status-danger-bg);
+  color: var(--bs-status-danger-fg);
+}
+
+.bs-note--warn .bs-note-lead,
+.bs-note--danger .bs-note-lead {
+  color: inherit;
+}
+
+/* An empty panel says what the thing is, once, and is gone the moment there
+   is one of them. */
+.bs-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--brand-space-1);
+  padding: var(--brand-space-5) var(--brand-space-3);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+}
+
+.bs-empty-lead {
+  margin: 0;
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-body);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.bs-empty p {
+  max-width: var(--brand-measure);
+  margin: 0;
+}
+
+/* ── Buttons that were missing ────────────────────────────────────────── */
+
+/* An act whose icon already names it — Download, Export, React. A download
+   arrow with the word "Download" beside it is the word twice. Sized and
+   bordered like `.bs-btn--sm`, so a row of controls stays one height, and it
+   always carries an `aria-label` and a `title`. */
+.bs-actionbtn {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1.5px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-1);
+  box-sizing: border-box;
+  color: var(--bs-text-secondary);
+  cursor: pointer;
+  transition:
+    border-color var(--brand-transition-fast),
+    color var(--brand-transition-fast);
+}
+
+.bs-actionbtn:hover:not(:disabled) {
+  border-color: var(--brand-coral);
+  color: var(--bs-text-primary);
+}
+
+.bs-actionbtn:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 2px;
+}
+
+.bs-actionbtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.bs-actionbtn[aria-pressed="true"] {
+  border-color: var(--bs-coral-border);
+  background: var(--bs-coral-glow);
+  color: var(--bs-coral-text);
+}
+
+/* Approving is the most consequential act in the product, so it is filled —
+   and green, because green means approval here and nothing else. The page's
+   coral belongs to the next step, not to the irreversible one. */
+.bs-btn--approve {
+  background: var(--brand-green-dark);
+  color: var(--brand-on-brand);
+}
+
+.bs-btn--approve:hover:not(:disabled) {
+  background: var(--brand-green-darker);
+}
+
+/* Tertiary: an act that is real but must not compete — Discard beside
+   Propose. */
+.bs-btn--quiet {
+  border-color: transparent;
+  background: none;
+  color: var(--bs-text-muted);
+}
+
+.bs-btn--quiet:hover:not(:disabled) {
+  background: var(--bs-surface-2);
+  color: var(--bs-text-primary);
+}
+
+.bs-btn--block {
+  width: 100%;
+}
+
+/* Two or three mutually exclusive views of one list. Inside the panel bar,
+   not floating above the panel. Exactly as tall as `.bs-btn--sm`. */
+.bs-segmented {
+  display: inline-flex;
+  min-height: 32px;
+  padding: 2px;
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-surface-1);
+  box-sizing: border-box;
+}
+
+.bs-seg {
+  min-height: 26px;
+  padding: 0 var(--brand-space-1-5);
+  border: none;
+  border-radius: var(--brand-radius-sm);
+  background: none;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-medium);
+  cursor: pointer;
+}
+
+.bs-seg:hover {
+  color: var(--bs-text-primary);
+}
+
+.bs-seg--on,
+.bs-seg[aria-selected="true"],
+.bs-seg[aria-pressed="true"] {
+  background: var(--bs-surface-3);
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.bs-seg:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 1px;
+}
+
+/* Machine text, and the only monospace left in the binder: a version number,
+   a filename. */
+.bs-ver,
+.bs-filename {
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-ui-sm);
+  font-weight: var(--brand-weight-medium);
+}
