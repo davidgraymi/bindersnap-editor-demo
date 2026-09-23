@@ -1,49 +1,48 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+
+import { useRememberedToggle } from "./useRememberedToggle";
 
 /**
  * Whether the navigation is down to its icons, remembered between visits.
  *
- * **A preference about the window, not about the work.** Somebody reading a
- * long policy on a laptop wants the page and not the map; somebody moving
- * around the product wants the map. Which of those they are doing changes
- * through the day, so it is a control rather than a breakpoint — and once
- * they have set it, asking again on every page load is the thing that would
- * make it annoying.
+ * See {@link useRememberedToggle} for why a shut panel is remembered at all
+ * and why it is remembered in the browser.
  *
- * Local to the browser, for the reason {@link useCollapsedFolders} gives about
- * shut folders: it changes nothing about the record, it is worthless to
- * anybody else, and storage that is unavailable costs the memory of the
- * preference and nothing more.
+ * **Reading a policy collapses it on its own** (`narrow`). A document open in
+ * the page puts three panels beside each other — the map of the product, the
+ * binder's files, and the policy — and the one nobody is using is the map: the
+ * customer, on opening a document, *"it should also collapse the side
+ * navigation bar"*. It comes back the moment you leave, because this is a fact
+ * about the page rather than a preference somebody set.
+ *
+ * Which is why an automatic collapse is not written down. Somebody who opens
+ * the map back up while reading has it back for as long as they are reading,
+ * and their standing answer to "do I want the map" is untouched — the
+ * alternative teaches the product a preference nobody stated.
  */
 
 const STORAGE_KEY = "bindersnap.sidebar.collapsed";
 
-function read(): boolean {
-  try {
-    return window.localStorage.getItem(STORAGE_KEY) === "1";
-  } catch {
-    // Private browsing or a disabled store. Open is the right default: it is
-    // the state that shows somebody what the product has in it.
-    return false;
-  }
-}
-
-export function useCollapsedSidebar(): {
+export function useCollapsedSidebar(narrow = false): {
   collapsed: boolean;
   toggle: () => void;
 } {
-  const [collapsed, setCollapsed] = useState<boolean>(read);
+  const { on, toggle } = useRememberedToggle(STORAGE_KEY);
+  /** Said out loud while the page is narrow, overriding the automatic answer. */
+  const [said, setSaid] = useState<boolean | null>(null);
 
+  // Arriving at a document, and leaving one, both start the question again.
   useEffect(() => {
-    try {
-      if (collapsed) window.localStorage.setItem(STORAGE_KEY, "1");
-      else window.localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      // Forgetting the preference is not worth a broken page.
-    }
-  }, [collapsed]);
+    setSaid(null);
+  }, [narrow]);
 
-  const toggle = useCallback(() => setCollapsed((was) => !was), []);
+  const collapsed = said ?? (narrow ? true : on);
 
-  return { collapsed, toggle };
+  return {
+    collapsed,
+    toggle: () => {
+      if (narrow) setSaid(!collapsed);
+      else toggle();
+    },
+  };
 }

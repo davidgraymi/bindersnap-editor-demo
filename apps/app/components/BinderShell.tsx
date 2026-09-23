@@ -4,6 +4,7 @@ import { useIsReadOnly } from "../readOnlyContext";
 import {
   discardBinderDraft,
   fetchBinder,
+  fetchBinderDocuments,
   fetchBinderDraft,
   openBinderDraft,
   renameBinderDraft,
@@ -24,6 +25,7 @@ import {
 } from "../binderShell";
 import type { DocumentChangeView } from "../routes";
 import { parseRequestedChange } from "../binderChange";
+import { buildDocumentUrl, parseRequestedRef } from "../binderDocument";
 import { formatDocumentName } from "../documentDisplay";
 import { AddPolicyModal } from "./AddPolicyModal";
 import { NewFolderModal } from "./NewFolderModal";
@@ -37,6 +39,8 @@ import { BinderHistory } from "./BinderHistory";
 import { BinderSettings } from "./BinderSettings";
 import { BinderDocumentPage } from "./BinderDocumentPage";
 import { BinderDocuments } from "./BinderPage";
+import type { SidebarBinder } from "./AppSidebar";
+import type { DocumentRefView } from "../documentRefs";
 import { SkeletonLine } from "./Skeleton";
 
 /**
@@ -82,15 +86,7 @@ interface BinderShellProps {
    * and where you are inside it. Reported rather than fetched again, because
    * a second reader of the same binder is a second answer waiting to disagree.
    */
-  onBinderChange?: (
-    binder: {
-      org: string;
-      binder: string;
-      name: string;
-      section: BinderTab;
-      openChangeCount?: number | null;
-    } | null,
-  ) => void;
+  onBinderChange?: (binder: SidebarBinder | null) => void;
   /**
    * Open a document. `version` opens it at one published version — the
    * history links that way, because a row there is evidence of a version and
@@ -113,6 +109,24 @@ export function BinderShell({
   const [overview, setOverview] = useState<WorkspaceOverviewPayload | null>(
     null,
   );
+  /**
+   * The binder's contents, for the navigation beside an open policy.
+   *
+   * **Read only while one is open.** Every other binder screen draws the tree
+   * itself, so asking for it there would be a second read of what is already
+   * on the page — and two trees on one page is one too many.
+   */
+  const [contents, setContents] = useState<SidebarBinder["contents"] | null>(
+    null,
+  );
+  /**
+   * Which version of this document is on screen, told by the page reading it.
+   *
+   * The open changes touching a document come back with the document, so only
+   * that read knows them — and the control offering them lives at the top of
+   * the file panel, which is up in the shell. Straight through.
+   */
+  const [reading, setReading] = useState<DocumentRefView | null>(null);
   const [adding, setAdding] = useState(false);
   const [addingFolder, setAddingFolder] = useState(false);
 
@@ -144,6 +158,10 @@ export function BinderShell({
   const [draftBranch, setDraftBranch] = useState<string | null>(() =>
     draftFromSearch(window.location.search),
   );
+  /** The branch a document is being read on, from `?ref=`. */
+  const [documentRefFromSearch, setDocumentRef] = useState<string | null>(() =>
+    parseRequestedRef(window.location.search),
+  );
 
   /**
    * Your draft in this binder, and whose else is open.
@@ -166,6 +184,7 @@ export function BinderShell({
       setChangeView(changeViewFromSearch(window.location.search));
       setEditMode(editModeFromSearch(window.location.search));
       setDraftBranch(draftFromSearch(window.location.search));
+      setDocumentRef(parseRequestedRef(window.location.search));
       setArchive(archiveFromSearch(window.location.search));
     };
     window.addEventListener("popstate", handler);
@@ -425,6 +444,43 @@ export function BinderShell({
 
   const binderName = formatDocumentName(binder);
 
+  const draftForContents =
+    editMode === "off" ? null : (draft?.draft?.branch ?? null);
+
+  useEffect(() => {
+    if (!documentPath) {
+      setContents(null);
+      setReading(null);
+      return;
+    }
+
+    let cancelled = false;
+    fetchBinderDocuments(
+      org,
+      binder,
+      draftForContents ?? undefined,
+      openChange ?? undefined,
+    )
+      .then((payload) => {
+        if (cancelled) return;
+        setContents({
+          documents: payload.documents,
+          folders: payload.folders,
+          active: null,
+          change: openChange,
+        });
+      })
+      // Navigation beside the page, not the page: a binder whose contents
+      // cannot be read still shows the policy somebody opened.
+      .catch(() => {
+        if (!cancelled) setContents(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [org, binder, documentPath, draftForContents, openChange, reloadKey]);
+
   // The sidebar's binder section, kept in step with what is on screen.
   useEffect(() => {
     onBinderChange?.({
@@ -433,6 +489,18 @@ export function BinderShell({
       name: binderName,
       section: activeTab,
       openChangeCount: overview?.openChangeCount ?? null,
+      // The active row is the address, not what the read happened to return:
+      // the read is slower than the click, and a tree that marks the row a
+      // moment late reads as a tree that marks the wrong one.
+      contents: contents
+        ? {
+            ...contents,
+            active: documentPath ?? null,
+            // Clicking through the explorer stays on the branch being read.
+            ref: documentRefFromSearch,
+            reading,
+          }
+        : null,
     });
     // Reporting is the effect; the shell above clears it when the route
     // leaves the binder, so there is nothing to undo here.
@@ -442,6 +510,10 @@ export function BinderShell({
     binderName,
     activeTab,
     overview?.openChangeCount,
+    contents,
+    reading,
+    documentPath,
+    documentRefFromSearch,
     onBinderChange,
   ]);
 
@@ -502,7 +574,9 @@ export function BinderShell({
                   };
 
   return (
-    <section className="docw-page">
+    <section
+      className={`docw-page${documentPath ? " docw-page--document" : ""}`}
+    >
       {head ? (
         <div className="bs-pagehead">
           <div className="bs-pagehead-body">
@@ -600,7 +674,31 @@ export function BinderShell({
         </p>
       ) : null}
 
-      {openChange !== null ? (
+      {/* **A document path wins over a change number**, and that order is the
+          whole of this change. An address naming a document is asking for that
+          document; `?change=` says which ref to read it at, the way `?draft=`
+          and `?version=` do. The other way round, `/{org}/{binder}/{path}
+          ?change=7` rendered the change's page and the path was ignored. */}
+      {documentPath ? (
+        <BinderDocumentPage
+          org={org}
+          binder={binder}
+          documentPath={documentPath}
+          /* Reading what a change proposes, at the document's own address on
+             that change's branch. */
+          /* The branch the address names, which is what the page reads at.
+             The change is where the reader came from. */
+          documentRef={documentRefFromSearch}
+          change={openChange}
+          onBackToChange={openChangeNumber}
+          onRefsChange={setReading}
+          /* Opened from the tree while editing, so it is read where the name
+             it was clicked under actually exists. */
+          draft={editMode === "off" ? null : (draft?.draft?.branch ?? null)}
+          onOpenBinder={onOpenBinder}
+          onOpenChange={openChangeNumber}
+        />
+      ) : openChange !== null ? (
         <BinderChangePage
           org={org}
           binder={binder}
@@ -611,18 +709,24 @@ export function BinderShell({
           onBackToChanges={() => goTo("changes")}
           onOpenSignOffRules={() => goTo("sign-off")}
           onOpenDocument={openDocument}
+          /* The document's own address, on this change's branch — the binder
+             at another ref rather than a panel inside the change. */
+          /* **The branch, not the change.** A file lives on a branch, which
+             is the address every code host gives it; the change rides along
+             so the reader keeps the way back to where they came from. */
+          onOpenOnBranch={(slugPath, branch) =>
+            moveTo(
+              buildDocumentUrl({
+                org,
+                binder,
+                documentPath: slugPath,
+                version: null,
+                change: openChange,
+                ref: branch,
+              }),
+            )
+          }
           onChanged={loadOverview}
-        />
-      ) : documentPath ? (
-        <BinderDocumentPage
-          org={org}
-          binder={binder}
-          documentPath={documentPath}
-          /* Opened from the tree while editing, so it is read where the name
-             it was clicked under actually exists. */
-          draft={editMode === "off" ? null : (draft?.draft?.branch ?? null)}
-          onOpenBinder={onOpenBinder}
-          onOpenChange={openChangeNumber}
         />
       ) : activeTab === "changes" ? (
         <BinderChanges

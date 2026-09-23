@@ -17,6 +17,8 @@ export type ListBinderChanges200ChangesItem = {
   branchName: string;
   submittedBy: string;
   submittedAt: string;
+  updatedAt: string;
+  commentCount: number;
   /** @nullable */
   closedAt: string | null;
   outcome: ListBinderChanges200ChangesItemOutcome;

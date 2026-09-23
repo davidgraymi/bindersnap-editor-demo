@@ -10,6 +10,7 @@ import {
   parseRequestedVersion,
   resolveDocumentRef,
 } from "../binderDocument";
+import { buildReadableRefs, type DocumentRefView } from "../documentRefs";
 import {
   formatDocumentName,
   formatShortDate,
@@ -45,6 +46,43 @@ interface BinderDocumentPageProps {
    * where the name it was clicked under exists. Null on the record.
    */
   draft?: string | null;
+  /**
+   * The change request this document is being read on, from `?change=`.
+   *
+   * **A change request is a branch, and a document on it has an address.** The
+   * proposed version used to be readable only inside the change's own page, in
+   * a panel beside the discussion — half a column wide, headed by the change's
+   * title rather than the document's, at a URL that said nothing about which
+   * document it was. Here it is the document's own page, read at another ref,
+   * which is what every other git front end does.
+   */
+  change?: number | null;
+  /**
+   * The branch this is being read on.
+   *
+   * **A file lives on a branch, and that is what the page reads at.** `change`
+   * is not the ref — it is where the reader came from, and it buys the way
+   * back and nothing else.
+   */
+  /**
+   * The branch this is being read on. Named `documentRef` in the component
+   * because `ref` is React's own prop and cannot be one of ours.
+   */
+  documentRef?: string | null;
+  /** Back to the change this is being read on. */
+  onBackToChange?: ((changeNumber: number) => void) | null;
+  /**
+   * Which versions of this document exist, for the file panel's own control.
+   *
+   * **Reported rather than drawn here.** It was a warning strip over the page
+   * reading "You are reading the branch draft/alice/…", which named a git
+   * object at a reader of a policy manual and offered no way anywhere. The
+   * panel beside the page is a view of one version of the binder, so the
+   * thing naming that version belongs at the top of it — the customer, of
+   * GitHub: *"a branch selector in the file explorer so that it's clear what
+   * branch the user is viewing. We should do the same."*
+   */
+  onRefsChange?: (view: DocumentRefView | null) => void;
   onOpenBinder: () => void;
   /** Open one of this document's open changes, on the binder. */
   onOpenChange: (changeNumber: number) => void;
@@ -67,6 +105,10 @@ export function BinderDocumentPage({
   binder,
   documentPath,
   draft = null,
+  change = null,
+  documentRef = null,
+  onBackToChange = null,
+  onRefsChange,
   onOpenBinder,
   onOpenChange,
 }: BinderDocumentPageProps) {
@@ -98,7 +140,14 @@ export function BinderDocumentPage({
     setDetail(null);
     setError(null);
 
-    fetchBinderDocument(org, binder, documentPath, draft ?? undefined)
+    fetchBinderDocument(
+      org,
+      binder,
+      documentPath,
+      draft ?? undefined,
+      change ?? undefined,
+      documentRef ?? undefined,
+    )
       .then((payload) => {
         if (!cancelled) setDetail(payload);
       })
@@ -114,7 +163,7 @@ export function BinderDocumentPage({
     return () => {
       cancelled = true;
     };
-  }, [org, binder, documentPath, draft]);
+  }, [org, binder, documentPath, draft, change, documentRef]);
 
   const viewing = useMemo(
     () =>
@@ -134,6 +183,26 @@ export function BinderDocumentPage({
   // By the path the server resolved, which carries the identity — so a ref
   // that knows this document under another name still finds the file.
   const fileAddress = detail?.document.path ?? resolvedPath;
+
+  // **Told to the panel, not drawn here.** The list of versions is something
+  // only this read knows — the open changes touching a document come back with
+  // it — and the control that offers them belongs at the top of the file
+  // panel, where the rows it governs are.
+  useEffect(() => {
+    if (!onRefsChange) return;
+    if (!detail) {
+      onRefsChange(null);
+      return;
+    }
+    onRefsChange({
+      refs: buildReadableRefs({
+        openChanges: detail.openChanges,
+        ref: documentRef,
+        change,
+      }),
+      address: detail.document.path,
+    });
+  }, [detail, documentRef, change, onRefsChange]);
 
   const loadFile = useCallback(
     (gitRef: string) =>
@@ -209,6 +278,30 @@ export function BinderDocumentPage({
 
   return (
     <div className="binder-pane">
+      {/* **Which version you are reading is said by the file panel now.** It
+          was a warning strip here: "You are reading the branch
+          draft/alice/20260922131449975", which named a git object at a reader
+          of a policy manual and offered no way anywhere from it. The panel
+          beside the page is a view of one version of the binder, so the
+          control naming that version sits at the top of it — the customer, of
+          GitHub: *"a branch selector in the file explorer so that it's clear
+          what branch the user is viewing. We should do the same."*
+
+          The way back to the change stays, because it is not a fact about the
+          ref: it is where the reader came from, and somebody who came here to
+          read came here to decide. */}
+      {change !== null && onBackToChange ? (
+        <div className="doc-on-change" role="status">
+          <button
+            type="button"
+            className="bs-btn bs-btn--sm bs-btn-secondary"
+            onClick={() => onBackToChange(change)}
+          >
+            Back to change {change}
+          </button>
+        </div>
+      ) : null}
+
       <header className="bs-pagehead">
         <div className="bs-pagehead-body">
           <h1 className="bs-title">{formatDocumentName(document.name)}</h1>

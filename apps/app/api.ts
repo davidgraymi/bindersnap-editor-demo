@@ -950,12 +950,19 @@ export async function fetchBinderDocuments(
   org: string,
   binder: string,
   draft?: string,
+  /**
+   * Read the binder as a change request would leave it.
+   *
+   * A document read on a change's branch puts the binder's contents in the
+   * navigation beside it, and a tree pinned to `main` there would list a
+   * policy under the name the change renamed it away from.
+   */
+  change?: number,
 ): Promise<WorkspaceDocumentListPayload> {
-  const response = await BindersClient.listBinderDocuments(
-    org,
-    binder,
-    draft ? { draft } : undefined,
-  );
+  const response = await BindersClient.listBinderDocuments(org, binder, {
+    ...(draft ? { draft } : {}),
+    ...(change ? { change: String(change) } : {}),
+  });
   return response.data;
 }
 
@@ -990,12 +997,31 @@ export async function fetchBinderDocument(
    * was clicked under exists.
    */
   draft?: string,
+  /**
+   * Read it on a change request's branch.
+   *
+   * A change request is a branch, and a document on it has an address — so
+   * reading the proposed version is the binder at another ref rather than a
+   * panel inside the change's page.
+   */
+  change?: number,
+  /**
+   * Read it on a branch, named.
+   *
+   * A file lives on a branch, which is why every code host addresses one by
+   * ref. Somebody else's draft is refused by the server.
+   */
+  ref?: string,
 ): Promise<WorkspaceDocumentDetailPayload> {
   const response = await BindersClient.getBinderDocument(
     org,
     binder,
     documentPath,
-    draft ? { draft } : undefined,
+    {
+      ...(draft ? { draft } : {}),
+      ...(change ? { change: String(change) } : {}),
+      ...(ref ? { ref } : {}),
+    },
   );
   return response.data;
 }

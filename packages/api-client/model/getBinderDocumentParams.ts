@@ -7,4 +7,6 @@
 
 export type GetBinderDocumentParams = {
 draft?: string;
+change?: string;
+ref?: string;
 };

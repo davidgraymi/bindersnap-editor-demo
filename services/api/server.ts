@@ -212,6 +212,7 @@ import {
   readRequestedReviewers,
 } from "./change-assignments";
 import { buildChangeUpdates } from "./change-updates";
+import type { DraftNameRecord } from "./draft-names";
 import {
   defaultDraftName,
   describeUnnamedDraft,
@@ -4738,6 +4739,13 @@ async function handleListWorkspaceChanges(
           branchName: row.branchName,
           submittedBy: pullRequest.user?.login ?? "",
           submittedAt: pullRequest.created_at ?? "",
+          // Gitea gives both on the pull request itself, so a list of changes
+          // reads "updated 2 hours ago · 3 comments" without a call per row.
+          updatedAt:
+            (pullRequest as { updated_at?: string }).updated_at ??
+            pullRequest.created_at ??
+            "",
+          commentCount: (pullRequest as { comments?: number }).comments ?? 0,
           closedAt: isOpen
             ? null
             : ((pullRequest as { merged_at?: string; closed_at?: string })
@@ -7106,6 +7114,7 @@ async function handleListWorkspaceDocuments(
   orgName: string,
   workspaceName: string,
   draftRaw: string | null,
+  changeRaw: string | null,
 ): Promise<Response> {
   const auth = await requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
@@ -7135,6 +7144,26 @@ async function handleListWorkspaceDocuments(
       return json(409, { error: draft.error }, baseHeaders);
     }
 
+    // **The binder as a change request would leave it.** Reading a document on
+    // a change's branch puts its contents in the navigation beside it, and a
+    // tree pinned to `main` there would list the policy under the name the
+    // change renamed it away from — and lead to an address that does not exist
+    // on the branch you are reading.
+    const changeNumber = Number.parseInt(changeRaw ?? "", 10);
+    const onChange =
+      !draft && Number.isFinite(changeNumber) && changeNumber > 0
+        ? await getPullRequestWithReviews({
+            client: auth.client,
+            owner: orgName,
+            repo: workspaceName,
+            pullNumber: changeNumber,
+          })
+            .then((entry) => entry.pullRequest.branchName || null)
+            .catch(() => null)
+        : null;
+
+    const ref = draft ? draft.branch : onChange;
+
     return json(
       200,
       {
@@ -7146,7 +7175,7 @@ async function handleListWorkspaceDocuments(
           org: orgName,
           workspace: workspaceName,
           withLastChange: true,
-          ...(draft ? { ref: draft.branch } : {}),
+          ...(ref ? { ref } : {}),
         })),
       },
       baseHeaders,
@@ -7394,6 +7423,8 @@ async function handleWorkspaceDocumentDetail(
   workspaceName: string,
   documentPath: string,
   draftRaw: string | null,
+  changeRaw: string | null,
+  refRaw: string | null,
 ): Promise<Response> {
   const auth = await requireSession(req, baseHeaders);
   if (auth instanceof Response) return auth;
@@ -7407,6 +7438,81 @@ async function handleWorkspaceDocumentDetail(
     if (!workspace) {
       return json(404, { error: "No such binder." }, baseHeaders);
     }
+
+    /**
+     * The branch the address names, read directly.
+     *
+     * **A file lives on a branch, and that is the address it should have** —
+     * *"When I open a file in a PR on GitHub… it goes to the file on the
+     * commit that it was made on. Similarly we should navigate to the branch
+     * view instead of the change view."* A change request is one thing that
+     * happens to a branch; the branch is the thing the file is on.
+     *
+     * **Somebody else's draft is refused here**, which is the one rule a raw
+     * ref would otherwise walk straight through. Gitea lets every
+     * collaborator read every branch in the repository, and the product's rule
+     * is narrower: other people's drafts are visible as existing and never as
+     * contents. So a `draft/` branch goes through the same ownership check
+     * every other draft read uses, and anything else is an ordinary branch
+     * anybody who can read the binder may read.
+     */
+    const askedRef = (refRaw ?? "").trim();
+    let onRef: string | null = null;
+    if (askedRef !== "") {
+      // **Only an unproposed draft is private.** The moment a change request
+      // sits on a branch it stops being a draft and becomes the thing every
+      // reviewer is being asked to read — `listBinderDrafts` already subtracts
+      // those, so a branch still in that list is somebody's work in progress
+      // and a branch that has left it is a change request.
+      const unproposed = isDraftBranch(askedRef)
+        ? await listBinderDrafts({
+            client: auth.client,
+            org: orgName,
+            workspace: workspaceName,
+          })
+        : [];
+      const stillADraft = unproposed.find((entry) => entry.branch === askedRef);
+
+      if (stillADraft && stillADraft.owner !== auth.session.username) {
+        return json(
+          409,
+          {
+            error:
+              "That draft is not yours. Other people's drafts are visible as existing and never as contents.",
+          },
+          baseHeaders,
+        );
+      }
+
+      onRef = askedRef;
+    }
+
+    /**
+     * The branch a change request proposes, when the address names one.
+     *
+     * **A change request is a branch, and a document on it has an address.**
+     * Reading the proposed version used to happen on the change's own page, in
+     * a panel beside the discussion — so a policy was shown in half a column,
+     * under a heading naming the change rather than the document, at a URL
+     * that said nothing about which document it was. It is the binder at
+     * another ref, which is what every other git front end does and what a
+     * reader already knows how to use.
+     *
+     * A closed change keeps working: the branch may be gone, in which case the
+     * read below falls back and the page says what it can.
+     */
+    const changeNumber = Number.parseInt(changeRaw ?? "", 10);
+    const onChange =
+      Number.isFinite(changeNumber) && changeNumber > 0
+        ? await getPullRequestWithReviews({
+            client: auth.client,
+            owner: orgName,
+            repo: workspaceName,
+            pullNumber: changeNumber,
+          })
+            .then((entry) => entry.pullRequest.branchName || null)
+            .catch(() => null)
+        : null;
 
     // **A policy renamed a moment ago is only at that name in the draft.**
     // Clicking a row in the tree while editing opened this on `main`, where
@@ -7424,18 +7530,48 @@ async function handleWorkspaceDocumentDetail(
       return json(409, { error: draft.error }, baseHeaders);
     }
 
-    let ref = draft ? draft.branch : "main";
+    // A draft is yours and a change is everybody's, so a request naming both
+    // is answered with the draft — the one that had to be checked.
+    // A draft is yours, a ref is explicit, and a change is a lookup. The most
+    // specific claim the caller made wins.
+    const readAt = draft ? draft.branch : (onRef ?? onChange);
+    let ref = readAt ?? "main";
+    // **Not decided by the ref.** "Proposed" means the document is not on the
+    // record at all, which is a question about its version tags rather than
+    // about which branch is being read. A policy at v1, read on a change that
+    // would make it v2, is published and being revised — and printing "this
+    // policy is not in the binder yet" over the top of it is false. It is
+    // settled below, once the versions are known.
     let state: "published" | "proposed" = "published";
 
     // One read of the tree answers both "which document is this" and "what
     // folders could it be moved to", so the page that offers a move has the
     // list without a second call.
-    const tree = await readWorkspaceTree({
-      client: auth.client,
-      org: orgName,
-      workspace: workspaceName,
-      ...(draft ? { ref: draft.branch } : {}),
-    });
+    // **A ref that is not there is said plainly.** Gitea answers a missing
+    // branch with `sha not found [no-such-branch]`, which is its vocabulary
+    // and not a sentence anybody following a stale link can act on.
+    const tree = readAt
+      ? await readWorkspaceTree({
+          client: auth.client,
+          org: orgName,
+          workspace: workspaceName,
+          ref: readAt,
+        }).catch(() => null)
+      : await readWorkspaceTree({
+          client: auth.client,
+          org: orgName,
+          workspace: workspaceName,
+        });
+
+    if (!tree) {
+      return json(
+        404,
+        {
+          error: `This binder has no branch called "${readAt}". It may have been published or discarded since that link was made.`,
+        },
+        baseHeaders,
+      );
+    }
 
     let document =
       tree.documents.find((entry) => entry.path === documentPath) ??
@@ -7493,6 +7629,11 @@ async function handleWorkspaceDocumentDetail(
         state: "open",
       }),
     ]);
+
+    // A document read on a branch and never published is proposed: the branch
+    // is the only place it exists. One that has versions is on the record and
+    // is being revised, whichever branch it was read from.
+    if (readAt && versions.length === 0) state = "proposed";
 
     return json(
       200,
@@ -8456,7 +8597,7 @@ async function describeDraft(params: {
         giteaRepoId,
         ownDrafts.map((draft) => draft.branch),
       )
-      .catch(() => new Map<string, { name: string }>()),
+      .catch(() => new Map<string, DraftNameRecord>()),
     Promise.all(
       ownDrafts.map(async (draft) => {
         const acts = await readDraftActs({
@@ -10522,6 +10663,7 @@ export function createApiServer() {
             workspaceDocumentsMatch[1]!,
             workspaceDocumentsMatch[2]!,
             url.searchParams.get("draft"),
+            url.searchParams.get("change"),
           );
         } else if (workspaceChangeReviewMatch && method === "POST") {
           response = await handleWorkspaceChangeReview(
@@ -10708,6 +10850,8 @@ export function createApiServer() {
             workspaceDocumentMatch[2]!,
             decodeURIComponent(workspaceDocumentMatch[3]!),
             url.searchParams.get("draft"),
+            url.searchParams.get("change"),
+            url.searchParams.get("ref"),
           );
         } else if (workspaceOverviewMatch && method === "GET") {
           response = await handleWorkspaceOverview(

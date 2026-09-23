@@ -149,6 +149,9 @@ export function workspaceChangeToRecord(
     reviewers: change.reviewers,
     approvalCount: change.approvalCount,
     requiredApprovals: change.requiredApprovals,
+    updatedAt: change.updatedAt,
+    commentCount: change.commentCount,
+    isRejected: change.isRejected,
   };
 }
 

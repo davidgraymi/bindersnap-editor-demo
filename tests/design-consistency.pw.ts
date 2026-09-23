@@ -803,3 +803,90 @@ function assertNotClipped(
     `${what} cannot be clicked at its own centre`,
   ).toBe(true);
 }
+
+/**
+ * **A list is scanned down its columns, so the columns have to stay put.**
+ *
+ * The customer, of the change list: *"I noticed that when there is a
+ * conversation count that it moves the status to the left. I want it to be
+ * easy on peoples eyes and keep the rows aligned, so make these columns
+ * static so that the status doesn't shift left or right."*
+ *
+ * The count was rendered only on rows that had one, so a row with a
+ * conversation pushed its own standing left and a stack of rows zig-zagged.
+ * Nothing in a stylesheet says so — both rules were right — and in a diff it
+ * reads as a sensible "don't draw a zero". It is only visible in a browser,
+ * with two rows that differ, which is what this is.
+ */
+test("a change list's columns hold their place, commented or not", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+
+  // A second policy, so the binder has a second change — one to comment on
+  // and one to leave alone.
+  const second = new FormData();
+  second.set(
+    "file",
+    new Blob(["# Staff Handbook\n"], { type: "text/markdown" }),
+    "staff-handbook.md",
+  );
+  second.set("name", "Staff Handbook");
+  const added = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/documents`,
+    {
+      method: "POST",
+      headers: {
+        Cookie: `bindersnap_session=${session}`,
+        Origin: APP_BASE_URL,
+      },
+      body: second,
+    },
+  );
+  expect(added.status, await added.clone().text()).toBe(201);
+
+  const said = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/changes/1/discussions`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({ body: "Does this cover the night shift?" }),
+    },
+  );
+  expect(said.status, await said.clone().text()).toBe(201);
+
+  await page
+    .context()
+    .addCookies([
+      { name: "bindersnap_session", value: session, url: APP_BASE_URL },
+    ]);
+  await page.setViewportSize({ width: 1280, height: 900 });
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}?tab=changes`);
+  await settleOnRealShell(page);
+
+  const rows = page.locator(".change-row");
+  await expect(rows).toHaveCount(2, { timeout: 30_000 });
+
+  // One row carries a conversation and the other does not — without that the
+  // measurement below would pass on a list that has the bug.
+  const counts = await page
+    .locator(".change-row .change-row-comments")
+    .allTextContents();
+  expect(counts.filter((text) => text.trim() !== "")).toHaveLength(1);
+  expect(counts.filter((text) => text.trim() === "")).toHaveLength(1);
+
+  const lefts = await page
+    .locator(".change-row .change-standing")
+    .evaluateAll((standings) =>
+      standings.map(
+        (standing) =>
+          Math.round(standing.getBoundingClientRect().left * 10) / 10,
+      ),
+    );
+  expect(lefts).toHaveLength(2);
+  expect(
+    new Set(lefts).size,
+    `the standing sits at ${lefts.join(" and ")} — a list that zig-zags`,
+  ).toBe(1);
+});

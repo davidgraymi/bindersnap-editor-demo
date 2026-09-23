@@ -4059,6 +4059,12 @@
                           "submittedAt": {
                             "type": "string"
                           },
+                          "updatedAt": {
+                            "type": "string"
+                          },
+                          "commentCount": {
+                            "type": "number"
+                          },
                           "closedAt": {
                             "type": "string",
                             "nullable": true
@@ -4247,6 +4253,8 @@
                           "branchName",
                           "submittedBy",
                           "submittedAt",
+                          "updatedAt",
+                          "commentCount",
                           "closedAt",
                           "outcome",
                           "decidedBy",
@@ -7115,6 +7123,14 @@
             "required": false,
             "name": "draft",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "change",
+            "in": "query"
           }
         ],
         "responses": {
@@ -7390,11 +7406,27 @@
             "required": false,
             "name": "draft",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "change",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "ref",
+            "in": "query"
           }
         ],
         "responses": {
           "200": {
-            "description": "One document, with its published versions",
+            "description": "One document, with its published versions — on the record, in your draft, or on a change's branch",
             "content": {
               "application/json": {
                 "schema": {

@@ -21,7 +21,7 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { API_BASE_URL, APP_BASE_URL } from "./helpers";
+import { API_BASE_URL, APP_BASE_URL, openTreeFolder } from "./helpers";
 
 test.describe.configure({ mode: "serial", timeout: 240_000 });
 
@@ -338,8 +338,10 @@ test("renaming from the settings tab moves the address bar with it", async ({
     "Clinical Governance",
   );
 
-  // And the binder still holds what it held.
+  // And the binder still holds what it held. Folders start shut, so the
+  // drawer is opened the way a person opens it.
   await page.goto(`${APP_BASE_URL}/${org}/clinical-governance`);
+  await openTreeFolder(page, "Nursing");
   await expect(
     page.locator(".binder-tree-label", { hasText: "Hand Hygiene" }),
   ).toBeVisible({ timeout: 30_000 });
