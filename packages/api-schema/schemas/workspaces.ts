@@ -522,6 +522,22 @@ export const WorkspaceChangeSummarySchema = z.object({
   branchName: z.string(),
   submittedBy: z.string(),
   submittedAt: z.string(),
+  /**
+   * When it last moved — a commit, a review, a comment.
+   *
+   * A list of changes is read for "what has happened lately", and a row
+   * reporting only when something opened cannot answer it. Equal to
+   * `submittedAt` on a change nobody has touched since, which is how the row
+   * knows to say "opened" rather than "updated".
+   */
+  updatedAt: z.string(),
+  /**
+   * How many comments are on it.
+   *
+   * Gitea counts them on the pull request itself, so a list of changes carries
+   * this without a call per row.
+   */
+  commentCount: z.number(),
   /** Null while it is open. */
   closedAt: z.string().nullable(),
   outcome: WorkspaceChangeOutcomeSchema,

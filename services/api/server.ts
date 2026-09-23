@@ -4738,6 +4738,13 @@ async function handleListWorkspaceChanges(
           branchName: row.branchName,
           submittedBy: pullRequest.user?.login ?? "",
           submittedAt: pullRequest.created_at ?? "",
+          // Gitea gives both on the pull request itself, so a list of changes
+          // reads "updated 2 hours ago · 3 comments" without a call per row.
+          updatedAt:
+            (pullRequest as { updated_at?: string }).updated_at ??
+            pullRequest.created_at ??
+            "",
+          commentCount: (pullRequest as { comments?: number }).comments ?? 0,
           closedAt: isOpen
             ? null
             : ((pullRequest as { merged_at?: string; closed_at?: string })

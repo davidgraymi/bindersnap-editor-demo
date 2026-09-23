@@ -177,25 +177,24 @@ function QueueRowItem({
       >
         <span className="queue-row-main">
           <span className="queue-row-title">{row.title}</span>
+          {/* The binder, then who and when — the same line every other list
+              of changes carries. The document it touches is not on it: a
+              change can touch three, and naming one of them is a claim about
+              the other two. */}
           <span className="queue-row-meta">
-            {row.binderName} · {row.documentName} · {row.requestedBy} ·{" "}
-            {row.movedWhen}
+            {row.binderName} · {row.meta}
           </span>
         </span>
 
         <span className="queue-row-standing">
-          {row.waitingOnYou ? (
-            <span className="queue-row-flag">Waiting on you</span>
-          ) : null}
-          <span className={`queue-row-status queue-row-status--${row.status}`}>
-            {row.progress ? (
-              <span className="queue-row-progress">{row.progress}</span>
-            ) : null}
-            <span className="queue-row-reason">
-              {row.status === "ready" && row.becomesVersion !== null
-                ? `Ready to publish · becomes v${row.becomesVersion}`
-                : row.statusReason}
-            </span>
+          {/* One word. It was a flag saying "Waiting on you" beside a status
+              holding an approval count and a sentence — and the flag stayed up
+              on a change that was approved and ready, which is the thing the
+              customer caught. Which filter a change is under says who it
+              waits on; the row says what state it is in. */}
+          <span className={`change-standing change-standing--${row.tone}`}>
+            <span className="change-standing-dot" aria-hidden="true" />
+            {row.standing}
           </span>
         </span>
       </button>

@@ -1854,79 +1854,6 @@ input {
   max-width: 45%;
 }
 
-/* How many sign-offs are in, against how many the document demands. This
-   replaces "awaiting review", which counted nothing. */
-.approval-meter {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--brand-space-2);
-  padding: var(--brand-space-1) var(--brand-space-3);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-full);
-  background: var(--bs-surface-2);
-  color: var(--bs-text-secondary);
-  font-variant-numeric: tabular-nums;
-  font-size: var(--brand-text-xs);
-  font-weight: var(--brand-weight-medium);
-  white-space: nowrap;
-}
-
-/* Green is the product's only "this is settled" colour, and a change with
-   every approval in is exactly that. */
-.approval-meter--ready {
-  border-color: transparent;
-  background: var(--brand-green-dim);
-  color: var(--brand-green);
-}
-
-/* Coral is what the product uses for "work is owed", and a blocked change is
-   exactly that — whatever its approval count says. */
-.approval-meter--blocked {
-  border-color: transparent;
-  background: var(--bs-coral-dim);
-  color: var(--bs-coral-text);
-}
-
-/* The reason the pill exists: the count says how far, this says what is in the
-   way. Set in the body face because it is a sentence, not a measurement. */
-.approval-meter-reason {
-  padding-left: var(--brand-space-2);
-  border-left: 1px solid currentColor;
-  font-family: var(--brand-font-sans);
-  font-weight: var(--brand-weight-regular);
-  opacity: 0.85;
-}
-
-/* With nothing to its left there is no divider to draw. */
-.approval-meter-count:first-child ~ .approval-meter-reason,
-.approval-meter-reason:first-child {
-  border-left: none;
-  padding-left: 0;
-}
-
-/* The row used to carry "Waiting on …" on a line of its own; it is inside the
-   pill now, so the pill has to be allowed to wrap rather than run off the row. */
-.approval-meter--row {
-  max-width: 100%;
-  white-space: normal;
-}
-
-.approval-meter-pips {
-  display: inline-flex;
-  gap: 3px;
-}
-
-.approval-meter-pip {
-  width: 6px;
-  height: 6px;
-  border-radius: var(--brand-radius-full);
-  background: var(--bs-rule);
-}
-
-.approval-meter-pip--filled {
-  background: currentColor;
-}
-
 /* Named for a screen reader, invisible to everyone else. */
 .sr-only {
   position: absolute;
@@ -5947,34 +5874,6 @@ button.bs-knot {
   color: var(--bs-text-secondary);
 }
 
-.home-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: var(--brand-text-label);
-  font-weight: var(--brand-weight-medium);
-  letter-spacing: 0.04em;
-  border-radius: var(--brand-radius-full);
-  padding: 3px var(--brand-space-2-5);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.home-pill--review {
-  background: var(--bs-coral-dim);
-  color: var(--bs-coral-text);
-}
-
-.home-pill--approved {
-  background: var(--bs-green-dim);
-  color: var(--brand-green);
-}
-
-.home-pill--waiting {
-  background: var(--bs-surface-2);
-  color: var(--bs-text-muted);
-}
-
 .home-row-action {
   display: inline-flex;
   align-items: center;
@@ -6025,7 +5924,6 @@ button.bs-knot {
     order: 0;
   }
 
-  .home-pill,
   .home-row-action {
     order: 2;
   }
@@ -7060,53 +6958,6 @@ button.bs-knot {
   .queue-row-standing {
     flex-wrap: wrap;
   }
-}
-
-/* Cuts across the status rather than replacing it: a change can be blocked
-   *and* want something from you, and neither fact is safe to hide. */
-.queue-row-flag {
-  font-size: var(--brand-text-xs);
-  font-weight: var(--brand-weight-medium);
-  color: var(--bs-coral-text);
-  background: var(--bs-coral-dim);
-  border: 1px solid var(--bs-coral-border-soft);
-  border-radius: var(--brand-radius-full);
-  padding: 2px var(--brand-space-2-5);
-  white-space: nowrap;
-}
-
-.queue-row-status {
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-2);
-  font-size: var(--brand-text-xs);
-  border: 1px solid;
-  border-radius: var(--brand-radius-full);
-  padding: 3px var(--brand-space-3);
-  white-space: nowrap;
-}
-
-.queue-row-progress {
-  font-variant-numeric: tabular-nums;
-  opacity: 0.85;
-}
-
-.queue-row-status--in_review {
-  color: var(--bs-text-secondary);
-  background: var(--bs-surface-2);
-  border-color: var(--bs-rule);
-}
-
-.queue-row-status--ready {
-  color: var(--bs-status-ok-fg);
-  background: var(--bs-status-ok-bg);
-  border-color: var(--bs-status-ok-border);
-}
-
-.queue-row-status--blocked {
-  color: var(--bs-status-danger-fg);
-  background: var(--bs-status-danger-bg);
-  border-color: var(--bs-status-danger-border);
 }
 
 /* Two acts side by side in a page header — "New folder" beside "Add a policy",
@@ -8968,4 +8819,80 @@ a.bs-row:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ── A change request in a list ────────────────────────────────────────────
+   Four facts: what it asks for, who asked and when, where it stands, how much
+   conversation is on it. Everything else belongs on the change's own page,
+   where there is room to say it properly. */
+
+.change-row-open {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.change-row-title {
+  font-weight: var(--brand-weight-medium);
+  color: var(--bs-text-primary);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.change-row-open:hover .change-row-title {
+  color: var(--bs-coral-text);
+}
+
+.change-row-right {
+  flex-shrink: 0;
+  gap: var(--brand-space-4);
+}
+
+/* **A word, not a pill.** A pill says "this is unusual"; on every row of
+   every list it says nothing while taking the eye first. */
+.change-standing {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  font-size: var(--brand-text-ui-md);
+  color: var(--bs-text-muted);
+  white-space: nowrap;
+}
+
+.change-standing-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-text-faint);
+  flex-shrink: 0;
+}
+
+.change-standing--awaiting .change-standing-dot {
+  background: var(--bs-status-warn-fg);
+}
+
+.change-standing--changes .change-standing-dot {
+  background: var(--bs-status-danger-fg);
+}
+
+.change-standing--approved .change-standing-dot,
+.change-standing--published .change-standing-dot {
+  background: var(--brand-green);
+}
+
+.change-row-comments {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+  font-size: var(--brand-text-ui-md);
+  color: var(--bs-text-faint);
+  font-variant-numeric: tabular-nums;
 }

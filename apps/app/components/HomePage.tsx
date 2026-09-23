@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ArrowRightToLine, Check, Clock, X } from "lucide-react";
+import { ArrowRightToLine, Check, Clock, MessageSquare, X } from "lucide-react";
 
 import { getHomeChanges, type HomeOpenDocument } from "../api";
 import {
@@ -285,11 +285,19 @@ function HomeChangeRowItem({
         </span>
       </span>
 
-      <span
-        className={`home-pill home-pill--${row.kind === "needs_review" ? "review" : row.kind === "ready_to_publish" ? "approved" : "waiting"}`}
-      >
-        {row.pillLabel}
+      {/* A dot and a word. It was a pill holding a sentence, beside a meta
+          line saying the same thing in more words. */}
+      <span className={`change-standing change-standing--${row.tone}`}>
+        <span className="change-standing-dot" aria-hidden="true" />
+        {row.standing}
       </span>
+
+      {row.commentCount > 0 ? (
+        <span className="change-row-comments">
+          <MessageSquare size={13} strokeWidth={1.75} aria-hidden="true" />
+          {row.commentCount}
+        </span>
+      ) : null}
 
       {row.action ? (
         <button
@@ -348,10 +356,9 @@ function HomeDecidedRowItem({
         </span>
       </span>
 
-      <span
-        className={`home-pill home-pill--${row.outcome === "published" ? "approved" : "waiting"}`}
-      >
-        {row.pillLabel}
+      <span className={`change-standing change-standing--${row.tone}`}>
+        <span className="change-standing-dot" aria-hidden="true" />
+        {row.standing}
       </span>
     </div>
   );

@@ -4059,6 +4059,12 @@
                           "submittedAt": {
                             "type": "string"
                           },
+                          "updatedAt": {
+                            "type": "string"
+                          },
+                          "commentCount": {
+                            "type": "number"
+                          },
                           "closedAt": {
                             "type": "string",
                             "nullable": true
@@ -4247,6 +4253,8 @@
                           "branchName",
                           "submittedBy",
                           "submittedAt",
+                          "updatedAt",
+                          "commentCount",
                           "closedAt",
                           "outcome",
                           "decidedBy",

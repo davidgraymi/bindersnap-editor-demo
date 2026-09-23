@@ -33,7 +33,8 @@ import {
   parseChangeTitle,
   type ChangeStanding,
 } from "./documentDisplay";
-import { formatWhen } from "./homeChanges";
+import type { ChangeStandingTone } from "./changeRow";
+import { describeChangeMeta, describeChangeStandingWord } from "./changeRow";
 
 /**
  * Where a change stands. Mutually exclusive, and between them they cover every
@@ -50,25 +51,23 @@ export interface QueueRow {
   title: string;
   /** The binder it is filed in — "Clinical". */
   binderName: string;
-  /** The document it changes, or the binder when it changes no document. */
-  documentName: string;
-  /** Who sent it. */
-  requestedBy: string;
-  /** "1 of 2 approvals", or null when the binder demands none. */
-  progress: string | null;
+  /**
+   * "#4 · Alice opened 2 hours ago" — the line under the title.
+   *
+   * The document it touches is not on it: a change can touch three, and
+   * naming one of them is a claim about the other two.
+   */
+  meta: string;
   status: QueueStatus;
-  /** Why it stands there, naming a person where there is one to name. */
-  statusReason: string;
+  /** Where it stands, in one word. */
+  standing: string;
+  tone: ChangeStandingTone;
   /**
    * A decision of the reader's is outstanding. Cuts across `status` rather
    * than being one of its values: a change can be both blocked and waiting on
    * you, and hiding either fact would be the wrong one to hide.
    */
   waitingOnYou: boolean;
-  /** The version it publishes as, when it is ready and the document is known. */
-  becomesVersion: number | null;
-  /** When it last moved, already worded — "2h ago". */
-  movedWhen: string;
   /** Sort key. Not rendered. */
   movedAt: number;
 }
@@ -131,22 +130,6 @@ function statusFromStanding(standing: ChangeStanding | null): QueueStatus {
   return "in_review";
 }
 
-/**
- * The document a change is about, or the binder when it is about none.
- *
- * A change to a binder's sign-off rules touches no document, so naming one
- * would be inventing it.
- */
-function subjectOf(
-  document: HomeOpenDocument,
-  change: HomeOpenDocument["pendingPRs"][number],
-): string {
-  const path = change.documentSlugPath;
-  if (!path) return formatDocumentName(document.repo.name);
-  const leaf = path.split("/").pop() ?? path;
-  return formatDocumentName(leaf.replace(/\.[^.]+$/, ""));
-}
-
 /** Every open change the reader is part of, most recently moved first. */
 export function buildQueueRows(
   documents: HomeOpenDocument[],
@@ -177,19 +160,27 @@ export function buildQueueRows(
         number: change.number,
         title: parseChangeTitle(change.body, change.user?.login ?? ""),
         binderName: formatDocumentName(document.repo.name),
-        documentName: subjectOf(document, change),
-        requestedBy: change.user?.login ?? "Somebody",
-        progress: standing?.progress ?? null,
-        status,
-        // A binder that demands no approvals has no standing to report, and
-        // "in review" is the honest thing to say about it.
-        statusReason: standing?.reason ?? "In review",
-        waitingOnYou: isWaitingOnReader(document, change, username, status),
-        becomesVersion: change.nextVersion,
-        movedWhen: formatWhen(
-          change.updated_at ?? change.created_at ?? change.created,
+        meta: describeChangeMeta(
+          {
+            number: change.number,
+            submittedBy: change.user?.login ?? "",
+            submittedAt: change.created_at ?? change.created ?? "",
+            updatedAt: change.updated_at ?? undefined,
+            approvalCount: change.approvalCount,
+            requiredApprovals: change.requiredApprovals,
+          },
           now,
         ),
+        status,
+        ...describeChangeStandingWord({
+          number: change.number,
+          submittedBy: change.user?.login ?? "",
+          submittedAt: change.created_at ?? change.created ?? "",
+          approvalCount: change.approvalCount,
+          requiredApprovals: change.requiredApprovals,
+          isRejected: standing?.tone === "blocked",
+        }),
+        waitingOnYou: isWaitingOnReader(document, change, username, status),
         movedAt,
       });
     }
