@@ -227,6 +227,15 @@ async function provision(): Promise<{
 async function settleOnRealShell(page: Page): Promise<void> {
   await page.locator(".app-shell:not(.app-shell--skeleton)").waitFor();
   await page.waitForLoadState("networkidle");
+  // **And the page's own skeleton, not only the shell's.** A screen renders
+  // its heading first and its body as placeholder rows while the read is in
+  // flight, so `networkidle` can be true of the shell while the page in it is
+  // still a skeleton. Measuring then reads placeholder chrome as content —
+  // which is what CI caught on a slower machine than this was written on, and
+  // is a fault in the measurement rather than in the page.
+  await expect(page.locator(".bs-skeleton")).toHaveCount(0, {
+    timeout: 30_000,
+  });
 }
 
 test("every row of controls in the product is one size", async ({ page }) => {

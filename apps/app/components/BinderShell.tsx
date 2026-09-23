@@ -88,7 +88,12 @@ interface BinderShellProps {
       openChangeCount?: number | null;
     } | null,
   ) => void;
-  onOpenDocument: (documentPath: string) => void;
+  /**
+   * Open a document. `version` opens it at one published version — the
+   * history links that way, because a row there is evidence of a version and
+   * not a pointer at whatever the document says now.
+   */
+  onOpenDocument: (documentPath: string, version?: number | null) => void;
   onOpenBinder: () => void;
 }
 
