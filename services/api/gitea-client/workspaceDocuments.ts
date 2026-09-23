@@ -6,6 +6,7 @@ import {
   versionFromTag,
 } from "../../../packages/utils/documentPath";
 
+import { readStampedChange } from "../version-stamp";
 import { GiteaApiError, unwrap, type GiteaClient } from "./client";
 
 /**
@@ -803,6 +804,65 @@ export async function listVersionsByDocument(params: {
  * calls for a whole binder — which is the property ADR 0004 exists to buy and
  * the one this must not quietly spend.
  */
+/**
+ * The change that published each document's latest version, and when.
+ *
+ * Read off the same tags {@link groupVersionsByDocument} reads, so it costs the
+ * binder list nothing it was not already reading. The stamp on a version tag
+ * names the change it came from; a tag written without one — by hand, or
+ * before stamps carried the line — answers with its commit instead, which is
+ * the merge commit of the change that published it. Keyed by address, like
+ * the versions.
+ */
+export function latestChangeByDocument(
+  tags: readonly GitTag[],
+  documents: readonly WorkspaceDocumentEntry[],
+): Map<
+  string,
+  { changeNumber: number | null; commitSha: string; publishedAt: string }
+> {
+  const addressOf = new Map<string, string>();
+  for (const document of documents) {
+    if (document.uid !== null) addressOf.set(document.uid, document.slugPath);
+  }
+
+  const latest = new Map<
+    string,
+    {
+      version: number;
+      changeNumber: number | null;
+      commitSha: string;
+      publishedAt: string;
+    }
+  >();
+
+  for (const tag of tags ?? []) {
+    const name = tag.name ?? "";
+    const uid = documentUidFromVersionTag(name);
+    const version = versionFromTag(name);
+    if (uid === null || version === null) continue;
+
+    const slugPath = addressOf.get(uid);
+    if (slugPath === undefined) continue;
+
+    const existing = latest.get(slugPath);
+    if (existing && existing.version > version) continue;
+    latest.set(slugPath, {
+      version,
+      changeNumber: readStampedChange(tag.message ?? ""),
+      commitSha: tag.commit?.sha ?? "",
+      publishedAt: tag.commit?.created ?? "",
+    });
+  }
+
+  return new Map(
+    [...latest].map(([slugPath, { version: _version, ...rest }]) => [
+      slugPath,
+      rest,
+    ]),
+  );
+}
+
 export function groupVersionsByDocument(
   tags: readonly GitTag[],
   documents: readonly WorkspaceDocumentEntry[],

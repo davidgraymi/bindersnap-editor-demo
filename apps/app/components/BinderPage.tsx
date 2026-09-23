@@ -21,7 +21,8 @@ import {
   type DragSubject,
   type MovePlan,
 } from "../binderMove";
-import { formatDocumentName } from "../documentDisplay";
+import { formatAge, formatDocumentName } from "../documentDisplay";
+import { buildBinderUrl } from "../binderShell";
 import { useCollapsedFolders } from "../useCollapsedFolders";
 import { BinderTreeView } from "./BinderTree";
 import { MoveToFolderModal } from "./MoveToFolderModal";
@@ -61,31 +62,35 @@ interface BinderDocumentsProps {
   onDraftLost?: () => void;
   /** Open the archive — what this binder has taken off the record. */
   onOpenArchive?: () => void;
+  /** Open a change request — the one a row says last touched its policy. */
+  onOpenChange?: (changeNumber: number) => void;
 }
 
-/** "Version 3 · 1 open change", or what is true of it so far. */
-export function describeDocument(document: WorkspaceDocumentListEntry): string {
-  const parts: string[] = [];
-
-  // Every row here is on `main`, so there is no "waiting on a decision" case
-  // left to word: a binder lists the record. A document on the record with no
-  // tag is a real state — filed before versioning, or published by a change
-  // that wrote none — and it is said plainly rather than guessed at.
-  parts.push(
-    document.latestVersion
-      ? `Version ${document.latestVersion.version}`
-      : "No published version",
-  );
-
-  if (document.openChangeCount > 0) {
-    parts.push(
-      document.openChangeCount === 1
-        ? "1 open change"
-        : `${document.openChangeCount} open changes`,
-    );
-  }
-
-  return parts.join(" · ");
+/**
+ * What a policy's row says to the right of its name: the change that last
+ * touched it, and how long ago.
+ *
+ * **Not a version and not a status pill.** Four rows each carrying a coloured
+ * chip made a list of four policies look like a list of four problems, and
+ * "1 open change" is not a property of a policy — it belongs to the change
+ * request, which has its own list and its own count. What a file list is
+ * opened to find out is what changed, and when; "3 weeks ago" rather than a
+ * date, because the answer wanted is "recently" or "not recently".
+ *
+ * Null when there is nothing to say — a file published before versions
+ * recorded their change, or one this product did not write.
+ */
+export function describeLastChange(
+  document: WorkspaceDocumentListEntry,
+  now: number = Date.now(),
+): { number: number; subject: string; when: string } | null {
+  const last = document.lastChange;
+  if (!last) return null;
+  return {
+    number: last.number,
+    subject: last.title.trim() === "" ? `Change ${last.number}` : last.title,
+    when: formatAge(last.publishedAt, now),
+  };
 }
 
 /**
@@ -126,6 +131,7 @@ export function BinderDocuments({
   onEdited,
   onDraftLost,
   onOpenArchive,
+  onOpenChange,
 }: BinderDocumentsProps) {
   const isReadOnly = useIsReadOnly();
   const [documents, setDocuments] = useState<
@@ -146,6 +152,8 @@ export function BinderDocuments({
     label: string;
   } | null>(null);
   const { collapsed, toggle } = useCollapsedFolders(org, binder);
+  /** What the bar's filter holds. Empty is the whole binder. */
+  const [filter, setFilter] = useState("");
 
   const load = useCallback(() => {
     let cancelled = false;
@@ -203,6 +211,25 @@ export function BinderDocuments({
     () => (documents ? buildBinderTree(documents, folders) : []),
     [documents, folders],
   );
+
+  /**
+   * The tree, cut down to the policies whose names match the filter.
+   *
+   * Built from the matches alone, so a folder with nothing matching in it is
+   * not drawn — and every folder on the way to a match is open, whatever was
+   * shut, because a filter that finds a policy inside a shut folder has found
+   * nothing anybody can see.
+   */
+  const needle = filter.trim().toLowerCase();
+  const shown = useMemo(() => {
+    if (!documents || needle === "") return tree;
+    return buildBinderTree(
+      documents.filter((document) =>
+        formatDocumentName(document.name).toLowerCase().includes(needle),
+      ),
+      [],
+    );
+  }, [documents, needle, tree]);
 
   // Read off the tree rather than off `folders`, so the picker offers the
   // intermediate levels the tree inferred — a folder holding only other
@@ -396,204 +423,259 @@ export function BinderDocuments({
     return <p className="app-inline-error">{error}</p>;
   }
 
-  if (documents === null) {
+  const policyCount = documents?.length ?? 0;
+  const folderCount = everyFolder.length;
+
+  const renderAside = (node: BinderTreeNode) => {
+    if (node.kind !== "document") return null;
+    const last = describeLastChange(node.document);
+    if (!last) return null;
     return (
-      <div className="binder-pane">
-        <SkeletonGroup label="Opening this binder">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div
-              className="docs-list-item docs-list-item--skeleton"
-              key={index}
-            >
-              <span className="docs-list-item-icon" />
-              <span className="bs-skeleton-lines">
-                <SkeletonLine width="medium" />
-                <SkeletonLine width="short" />
-              </span>
-            </div>
-          ))}
-        </SkeletonGroup>
-      </div>
+      <>
+        <span className="bs-row-subject binder-tree-subject">
+          <a
+            href={buildBinderUrl({
+              org,
+              binder,
+              tab: "changes",
+              change: last.number,
+            })}
+            title={last.subject}
+            onClick={(event) => {
+              if (!onOpenChange) return;
+              event.preventDefault();
+              onOpenChange(last.number);
+            }}
+          >
+            {last.subject}
+          </a>
+        </span>
+        <span className="bs-row-when">{last.when}</span>
+      </>
     );
-  }
+  };
 
   return (
     <div className="binder-pane">
       {actError ? (
-        <p className="app-inline-error" role="alert">
+        <p className="bs-note bs-note--danger" role="alert">
           {actError}
         </p>
       ) : null}
 
-      {tree.length === 0 ? (
-        // Not an error, and not a failure of theirs: a binder somebody just
-        // made is empty, which is the ordinary first state.
-        //
-        // A read-only organization is told what is here, not what to do next:
-        // the sentence names an action whose control has just been taken
-        // away, and pointing at a button that is not on the page is worse
-        // than saying less.
-        <p style={{ color: "var(--bs-text-muted)" }}>
-          {isReadOnly
-            ? "Nothing filed here yet."
-            : draft
-              ? "Nothing filed here yet. Make a folder or add a policy — it goes into your draft."
-              : "Nothing filed here yet. A policy joins this binder once its change request is published."}
-        </p>
-      ) : (
-        <BinderTreeView
-          nodes={tree}
-          collapsed={collapsed}
-          onToggleFolder={toggle}
-          onOpenDocument={onOpenDocument}
-          activeDocument={activeDocument}
-          describeDocument={describeTreeDocument}
-          {...(draft
-            ? {
-                rowProps: dragPropsFor,
-                renderRowLabel: (node: BinderTreeNode) => {
-                  if (!isRenaming(renaming, node)) return null;
-                  const target = renaming!;
-                  return (
-                    <InlineRename
-                      initial={target.label}
-                      onCommit={(typed) => void commitRename(target, typed)}
-                      onCancel={() => setRenaming(null)}
-                    />
-                  );
-                },
-                renderRowActions: (node: BinderTreeNode) => {
-                  if (isRenaming(renaming, node) || !isManaged(node)) {
-                    return null;
-                  }
-                  // The name on every label, so a screen reader hears which
-                  // row's button this is rather than "Rename" eleven times.
-                  const label = formatDocumentName(
-                    node.kind === "folder" ? node.name : node.document.name,
-                  );
-                  return (
-                    <>
-                      <button
-                        type="button"
-                        className="binder-tree-action"
-                        aria-label={`Rename ${label}`}
-                        disabled={committing}
-                        onClick={() =>
-                          setRenaming(
-                            node.kind === "folder"
-                              ? {
-                                  kind: "folder",
-                                  path: node.path,
-                                  label,
-                                }
-                              : {
-                                  kind: "document",
-                                  slugPath: node.document.slugPath,
-                                  label,
-                                },
-                          )
-                        }
-                      >
-                        <Pencil
-                          size={14}
-                          strokeWidth={1.6}
-                          aria-hidden="true"
-                        />
-                      </button>
-                      {/* **Dragging is the fast path, not the only one.** It
-                          needs a pointer, both ends of the move on screen at
-                          once, and it is unreachable from a keyboard. A binder
-                          with forty folders and a scrollbar is the ordinary
-                          case. */}
-                      <button
-                        type="button"
-                        className="binder-tree-action"
-                        aria-label={`Move ${label}`}
-                        disabled={committing}
-                        onClick={() =>
-                          setMoving({ subject: subjectOf(node), label })
-                        }
-                      >
-                        <FolderInput
-                          size={14}
-                          strokeWidth={1.6}
-                          aria-hidden="true"
-                        />
-                      </button>
-                      {/* **Documents only.** Archiving a folder would mean
-                          archiving everything in it, which is a different and
-                          much larger act than the one this button looks like
-                          — and not one anybody has asked for. A folder is
-                          emptied by moving what is in it, and then it is a
-                          folder somebody can rename or leave. */}
-                      {node.kind === "document" ? (
+      <div className="bs-panel">
+        {/* The controls that act on the list live in the list's own bar. */}
+        <div className="bs-panel-bar">
+          <input
+            className="bs-input bs-input--sm binder-filter"
+            type="search"
+            value={filter}
+            placeholder="Filter this binder…"
+            aria-label="Filter this binder"
+            disabled={documents === null || policyCount === 0}
+            onChange={(event) => setFilter(event.target.value)}
+          />
+          <span className="bs-panel-bar-spacer" />
+          {documents === null ? null : (
+            <span className="binder-count">
+              {policyCount === 1 ? "1 policy" : `${policyCount} policies`}
+              {folderCount === 0
+                ? ""
+                : folderCount === 1
+                  ? " in 1 folder"
+                  : ` in ${folderCount} folders`}
+            </span>
+          )}
+        </div>
+
+        {documents === null ? (
+          <SkeletonGroup label="Opening this binder">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div className="bs-row" key={index}>
+                <span className="bs-skeleton-lines">
+                  <SkeletonLine width="medium" />
+                </span>
+              </div>
+            ))}
+          </SkeletonGroup>
+        ) : tree.length === 0 ? (
+          // Not an error, and not a failure of theirs: a binder somebody just
+          // made is empty, which is the ordinary first state.
+          //
+          // A read-only organization is told what is here, not what to do
+          // next: pointing at a button that is not on the page is worse than
+          // saying less.
+          <div className="bs-empty">
+            <p className="bs-empty-lead">Nothing filed here yet.</p>
+            {isReadOnly ? null : (
+              <p>
+                {draft
+                  ? "Make a folder or add a policy — it goes into your draft."
+                  : "A policy joins this binder once its change request is published."}
+              </p>
+            )}
+          </div>
+        ) : shown.length === 0 ? (
+          <div className="bs-empty">
+            <p>Nothing in this binder is called that.</p>
+          </div>
+        ) : (
+          <BinderTreeView
+            nodes={shown}
+            collapsed={needle === "" ? collapsed : NOTHING_SHUT}
+            onToggleFolder={toggle}
+            onOpenDocument={onOpenDocument}
+            activeDocument={activeDocument}
+            renderDocumentAside={renderAside}
+            {...(draft
+              ? {
+                  rowProps: dragPropsFor,
+                  renderRowLabel: (node: BinderTreeNode) => {
+                    if (!isRenaming(renaming, node)) return null;
+                    const target = renaming!;
+                    return (
+                      <InlineRename
+                        initial={target.label}
+                        onCommit={(typed) => void commitRename(target, typed)}
+                        onCancel={() => setRenaming(null)}
+                      />
+                    );
+                  },
+                  renderRowActions: (node: BinderTreeNode) => {
+                    if (isRenaming(renaming, node) || !isManaged(node)) {
+                      return null;
+                    }
+                    // The name on every label, so a screen reader hears which
+                    // row's button this is rather than "Rename" eleven times.
+                    const label = formatDocumentName(
+                      node.kind === "folder" ? node.name : node.document.name,
+                    );
+                    return (
+                      <>
                         <button
                           type="button"
                           className="binder-tree-action"
-                          aria-label={`Archive ${label}`}
+                          aria-label={`Rename ${label}`}
                           disabled={committing}
-                          onClick={() => void archiveDocument(node)}
+                          onClick={() =>
+                            setRenaming(
+                              node.kind === "folder"
+                                ? {
+                                    kind: "folder",
+                                    path: node.path,
+                                    label,
+                                  }
+                                : {
+                                    kind: "document",
+                                    slugPath: node.document.slugPath,
+                                    label,
+                                  },
+                            )
+                          }
                         >
-                          <Archive
+                          <Pencil
                             size={14}
                             strokeWidth={1.6}
                             aria-hidden="true"
                           />
                         </button>
-                      ) : null}
-                    </>
-                  );
-                },
-              }
-            : {})}
-        />
-      )}
+                        {/* **Dragging is the fast path, not the only one.** It
+                            needs a pointer, both ends of the move on screen at
+                            once, and it is unreachable from a keyboard. A binder
+                            with forty folders and a scrollbar is the ordinary
+                            case. */}
+                        <button
+                          type="button"
+                          className="binder-tree-action"
+                          aria-label={`Move ${label}`}
+                          disabled={committing}
+                          onClick={() =>
+                            setMoving({ subject: subjectOf(node), label })
+                          }
+                        >
+                          <FolderInput
+                            size={14}
+                            strokeWidth={1.6}
+                            aria-hidden="true"
+                          />
+                        </button>
+                        {/* **Documents only.** Archiving a folder would mean
+                            archiving everything in it, which is a different and
+                            much larger act than the one this button looks like
+                            — and not one anybody has asked for. A folder is
+                            emptied by moving what is in it, and then it is a
+                            folder somebody can rename or leave. */}
+                        {node.kind === "document" ? (
+                          <button
+                            type="button"
+                            className="binder-tree-action"
+                            aria-label={`Archive ${label}`}
+                            disabled={committing}
+                            onClick={() => void archiveDocument(node)}
+                          >
+                            <Archive
+                              size={14}
+                              strokeWidth={1.6}
+                              aria-hidden="true"
+                            />
+                          </button>
+                        ) : null}
+                      </>
+                    );
+                  },
+                }
+              : {})}
+          />
+        )}
 
-      {/* **Where you drop something to take it out of a folder.** Without it
+        {/* **Where you drop something to take it out of a folder.** Without it
           the top level is only reachable by dropping on empty space, which is
           not a target anybody can see or aim at — and in a full binder there
           is no empty space. Only while something is being dragged: a permanent
           strip under every binder would be furniture explaining a gesture
           nobody is making. */}
-      {draft && dragging !== null && acceptsDrop(dragging, "") ? (
-        <div
-          className={`binder-tree-root-drop${
-            over === "" ? " binder-tree-root-drop--over" : ""
-          }`}
-          onDragOver={(event) => {
-            event.preventDefault();
-            event.dataTransfer.dropEffect = "move";
-            setOver("");
-          }}
-          onDragLeave={() => {
-            if (over === "") setOver(null);
-          }}
-          onDrop={(event) => {
-            event.preventDefault();
-            if (dragging) void commitMove(planMove(dragging, ""));
-          }}
-        >
-          Drop here to move it to the binder’s top level
-        </div>
-      ) : null}
+        {draft && dragging !== null && acceptsDrop(dragging, "") ? (
+          <div
+            className={`binder-tree-root-drop${
+              over === "" ? " binder-tree-root-drop--over" : ""
+            }`}
+            onDragOver={(event) => {
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "move";
+              setOver("");
+            }}
+            onDragLeave={() => {
+              if (over === "") setOver(null);
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              if (dragging) void commitMove(planMove(dragging, ""));
+            }}
+          >
+            Drop here to move it to the binder’s top level
+          </div>
+        ) : null}
 
-      {/* The way into the archive, and gone when there is nothing in it: a
-          binder that has never archived anything should not carry a link to an
-          empty page. Under the tree rather than in the header, because it is
-          about what this binder *held* — a question somebody asks after
-          failing to find something, not before. */}
-      {archivedCount > 0 && onOpenArchive ? (
-        <button
-          type="button"
-          className="binder-archive-link"
-          onClick={onOpenArchive}
-        >
-          <Archive size={14} strokeWidth={1.5} aria-hidden="true" />
-          {archivedCount === 1
-            ? "1 archived policy"
-            : `${archivedCount} archived policies`}
-        </button>
-      ) : null}
+        {/* The way into the archive, and gone when there is nothing in it: a
+            binder that has never archived anything should not carry a link to
+            an empty page. The panel's own foot rather than the header, because
+            it is about what this binder *held* — a question somebody asks
+            after failing to find something, not before. */}
+        {archivedCount > 0 && onOpenArchive ? (
+          <div className="bs-panel-foot">
+            <button
+              type="button"
+              className="bs-btn bs-btn--sm bs-btn--quiet binder-archive-link"
+              onClick={onOpenArchive}
+            >
+              <Archive size={14} strokeWidth={1.5} aria-hidden="true" />
+              {archivedCount === 1
+                ? "1 archived policy"
+                : `${archivedCount} archived policies`}
+            </button>
+          </div>
+        ) : null}
+      </div>
 
       {moving ? (
         <MoveToFolderModal
@@ -607,6 +689,9 @@ export function BinderDocuments({
     </div>
   );
 }
+
+/** Nothing shut: a filter opens every folder on the way to a match. */
+const NOTHING_SHUT: ReadonlySet<string> = new Set();
 
 /** The same row, for marking what is currently in the air. */
 function sameNode(left: DragSubject, right: DragSubject): boolean {
@@ -674,9 +759,4 @@ function InlineRename({
       onClick={(event) => event.stopPropagation()}
     />
   );
-}
-
-/** The tree asks about a node; this list only ever describes documents. */
-function describeTreeDocument(node: BinderTreeNode): string {
-  return node.kind === "document" ? describeDocument(node.document) : "";
 }

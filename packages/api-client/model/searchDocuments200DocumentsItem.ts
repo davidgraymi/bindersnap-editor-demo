@@ -4,6 +4,7 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
+import type { SearchDocuments200DocumentsItemLastChange } from './searchDocuments200DocumentsItemLastChange.ts';
 import type { SearchDocuments200DocumentsItemLatestVersion } from './searchDocuments200DocumentsItemLatestVersion.ts';
 import type { SearchDocuments200DocumentsItemState } from './searchDocuments200DocumentsItemState.ts';
 
@@ -20,6 +21,8 @@ export type SearchDocuments200DocumentsItem = {
   openChangeCount: number;
   /** @nullable */
   latestVersion: SearchDocuments200DocumentsItemLatestVersion;
+  /** @nullable */
+  lastChange: SearchDocuments200DocumentsItemLastChange;
   organization: string;
   binder: string;
   binderDescription: string;

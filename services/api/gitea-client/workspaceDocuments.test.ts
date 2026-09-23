@@ -4,6 +4,7 @@ import type { GiteaClient } from "./client";
 import {
   createDocumentVersionTag,
   findWorkspaceDocument,
+  latestChangeByDocument,
   listChangedDocuments,
   listDocumentVersions,
   listVersionsByDocument,
@@ -300,6 +301,63 @@ test("a tag naming no document in the tree is left out", async () => {
   expect(byDocument.get("nursing/handover")?.map((v) => v.version)).toEqual([
     1,
   ]);
+});
+
+test("a document's last change is read off its newest version tag", () => {
+  const documents = [
+    {
+      path: `nursing/handover.${HANDOVER}.md`,
+      slugPath: "nursing/handover",
+      name: "handover",
+      uid: HANDOVER,
+      folder: "nursing",
+      size: 0,
+      sha: "",
+    },
+  ];
+  const tags = [
+    {
+      name: `${HANDOVER}/v1`,
+      commit: { sha: "a", created: "2026-08-01T00:00:00Z" },
+      message: "Handover v1\n\n  From change: #2\n",
+    },
+    {
+      name: `${HANDOVER}/v2`,
+      commit: { sha: "b", created: "2026-09-01T00:00:00Z" },
+      message: "Handover v2\n\n  From change: #7\n",
+    },
+    // Somebody else's document, and a tag this app did not write.
+    { name: `${ADMISSIONS}/v1`, message: "  From change: #3" },
+    { name: "v1.0.0", message: "release" },
+  ];
+
+  expect(latestChangeByDocument(tags, documents)).toEqual(
+    new Map([
+      [
+        "nursing/handover",
+        {
+          changeNumber: 7,
+          commitSha: "b",
+          publishedAt: "2026-09-01T00:00:00Z",
+        },
+      ],
+    ]),
+  );
+
+  // A tag with no stamp still names its commit, which is the merge commit of
+  // the change that published it.
+  expect(
+    latestChangeByDocument(
+      [
+        {
+          name: `${HANDOVER}/v3`,
+          commit: { sha: "c" },
+          message: "Handover v3",
+        },
+      ],
+      documents,
+    ).get("nursing/handover"),
+  ).toEqual({ changeNumber: null, commitSha: "c", publishedAt: "" });
 });
 
 test("the next version follows the highest published one", () => {

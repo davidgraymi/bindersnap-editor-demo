@@ -118,6 +118,7 @@ function row(uid: string | null): BinderTreeNode {
       size: 0,
       sha: "",
       state: "published",
+      lastChange: null,
       openChangeCount: 0,
       latestVersion: null,
     },

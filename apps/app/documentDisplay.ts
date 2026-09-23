@@ -50,6 +50,36 @@ export function formatShortDate(timestamp: string): string {
   });
 }
 
+/**
+ * "2 hours ago", "3 weeks ago", "5 months ago" — how long ago, at any age.
+ *
+ * For a file list, which is read the way every file list is: the question is
+ * "recently, or not recently", and a date makes the reader do the subtraction.
+ * Nothing on a change's own page uses this; that is where the date belongs.
+ */
+export function formatAge(timestamp: string, now: number = Date.now()): string {
+  if (!timestamp) return "";
+  const at = new Date(timestamp).getTime();
+  if (Number.isNaN(at)) return "";
+
+  const plural = (count: number, unit: string) =>
+    `${count} ${unit}${count === 1 ? "" : "s"} ago`;
+
+  const minutes = Math.floor(Math.max(0, now - at) / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return plural(minutes, "minute");
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return plural(hours, "hour");
+
+  const days = Math.floor(hours / 24);
+  if (days === 1) return "yesterday";
+  if (days < 7) return plural(days, "day");
+  if (days < 30) return plural(Math.floor(days / 7), "week");
+  if (days < 365) return plural(Math.max(1, Math.floor(days / 30)), "month");
+  return plural(Math.floor(days / 365), "year");
+}
+
 export function formatTimestamp(timestamp: string): string {
   if (!timestamp) return "";
   const date = new Date(timestamp);

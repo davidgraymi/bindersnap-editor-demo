@@ -2726,6 +2726,26 @@
                               "publishedAt"
                             ]
                           },
+                          "lastChange": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "number": {
+                                "type": "number"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "publishedAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "number",
+                              "title",
+                              "publishedAt"
+                            ]
+                          },
                           "organization": {
                             "type": "string"
                           },
@@ -2747,6 +2767,7 @@
                           "state",
                           "openChangeCount",
                           "latestVersion",
+                          "lastChange",
                           "organization",
                           "binder",
                           "binderDescription"
@@ -3382,6 +3403,26 @@
                               "publishedAt"
                             ]
                           },
+                          "lastChange": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "number": {
+                                "type": "number"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "publishedAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "number",
+                              "title",
+                              "publishedAt"
+                            ]
+                          },
                           "organization": {
                             "type": "string"
                           },
@@ -3403,6 +3444,7 @@
                           "state",
                           "openChangeCount",
                           "latestVersion",
+                          "lastChange",
                           "organization",
                           "binder",
                           "binderDescription"
@@ -7117,6 +7159,26 @@
                               "commitSha",
                               "publishedAt"
                             ]
+                          },
+                          "lastChange": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "number": {
+                                "type": "number"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "publishedAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "number",
+                              "title",
+                              "publishedAt"
+                            ]
                           }
                         },
                         "required": [
@@ -7129,7 +7191,8 @@
                           "sha",
                           "state",
                           "openChangeCount",
-                          "latestVersion"
+                          "latestVersion",
+                          "lastChange"
                         ]
                       }
                     },

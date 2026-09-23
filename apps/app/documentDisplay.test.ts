@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import {
+  formatAge,
   closedChangeToRecord,
   describeApprovalProgress,
   describeSubmission,
@@ -363,4 +364,21 @@ test("a one-line body is the title and leaves no description", () => {
     "Tighten hand hygiene auditing",
   );
   expect(describeSubmission("Tighten hand hygiene auditing")).toBe("");
+});
+
+test("a file list says how long ago, at any age", () => {
+  const now = Date.parse("2026-09-17T12:00:00Z");
+  const ago = (ms: number) => new Date(now - ms).toISOString();
+  const MINUTE = 60_000;
+  const DAY = 24 * 60 * MINUTE;
+
+  expect(formatAge(ago(20_000), now)).toBe("just now");
+  expect(formatAge(ago(1 * MINUTE), now)).toBe("1 minute ago");
+  expect(formatAge(ago(2 * 60 * MINUTE), now)).toBe("2 hours ago");
+  expect(formatAge(ago(1 * DAY), now)).toBe("yesterday");
+  expect(formatAge(ago(4 * DAY), now)).toBe("4 days ago");
+  expect(formatAge(ago(21 * DAY), now)).toBe("3 weeks ago");
+  expect(formatAge(ago(150 * DAY), now)).toBe("5 months ago");
+  expect(formatAge(ago(800 * DAY), now)).toBe("2 years ago");
+  expect(formatAge("", now)).toBe("");
 });

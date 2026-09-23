@@ -488,7 +488,6 @@ export function BinderShell({
           org={org}
           binder={binder}
           onOpenChange={openChangeNumber}
-          onAddPolicy={() => setAdding(true)}
         />
       ) : activeTab === "history" ? (
         <BinderHistory
@@ -554,6 +553,7 @@ export function BinderShell({
           onEdited={refreshDraft}
           onDraftLost={leaveEditMode}
           onOpenArchive={() => goToArchive(true)}
+          onOpenChange={openChangeNumber}
         />
       )}
 

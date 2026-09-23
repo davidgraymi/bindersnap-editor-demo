@@ -218,6 +218,20 @@ export function readVersionStamp(message: string): StampedIdentity {
   };
 }
 
+/**
+ * The change a version was published from, read back out of its stamp.
+ *
+ * **What the binder's list says about a policy** — "the change that last
+ * touched this, and when" — and the tag already records it, on the same
+ * labelled line a person reading `git show` finds it on. Null for a tag written
+ * without one, which costs the row a subject rather than the row.
+ */
+export function readStampedChange(message: string): number | null {
+  const value = labelled(message, "From change");
+  const match = value?.match(/^#?(\d+)$/);
+  return match ? Number(match[1]) : null;
+}
+
 function labelled(message: string, label: string): string | null {
   for (const line of message.split("\n")) {
     const trimmed = line.trim();

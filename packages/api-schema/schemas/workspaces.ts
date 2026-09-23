@@ -215,6 +215,22 @@ export const WorkspaceDocumentListEntrySchema = z.object({
   openChangeCount: z.number(),
   /** The version on record, or null for a document nobody has published. */
   latestVersion: DocumentVersionSchema.nullable(),
+  /**
+   * The change that published that version — its number, its subject and when
+   * it was merged — which is what a file list is opened to find out: what last
+   * changed this, and how long ago.
+   *
+   * Read off the version tag's stamp, so it is null for a version written
+   * without one, and null on a list that did not ask for it (the library,
+   * which reads every binder and does not show it).
+   */
+  lastChange: z
+    .object({
+      number: z.number(),
+      title: z.string(),
+      publishedAt: z.string(),
+    })
+    .nullable(),
 });
 export type WorkspaceDocumentListEntry = z.infer<
   typeof WorkspaceDocumentListEntrySchema
