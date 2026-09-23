@@ -1742,3 +1742,54 @@ test("Open on a change lands on the branch, and browsing stays there", async ({
     { timeout: 30_000 },
   );
 });
+
+/**
+ * **It is a file explorer, not a list.**
+ *
+ * The customer pointed at GitHub's: *"here is how github does file exploring
+ * and I really like how it works."* Three things make the difference, and a
+ * binder with forty policies in eight departments needs all three.
+ */
+test("the file panel opens and shuts folders, filters, and hides itself", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provisionBinder();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/nursing/hand-hygiene`);
+  await expect(page.locator(".app-explorer")).toBeVisible({ timeout: 30_000 });
+
+  // Both policies, one of them inside Nursing.
+  const files = page.locator(".app-explorer-item");
+  await expect(files).toHaveCount(2);
+
+  // **Folders shut.** Without that a long binder is a wall rather than
+  // something you navigate.
+  await page.locator(".app-explorer-folder", { hasText: "Nursing" }).click();
+  await expect(files).toHaveCount(1);
+  await page.locator(".app-explorer-folder", { hasText: "Nursing" }).click();
+  await expect(files).toHaveCount(2);
+
+  // **A filter**, because past a certain size finding a policy by eye is
+  // slower than typing three letters of its name — and it reaches inside a
+  // folder, because a match nobody can see is not a match.
+  // "hygiene", not "hand": Staff Handbook contains "hand" too, which is the
+  // filter working rather than failing.
+  await page.getByPlaceholder("Go to file").fill("hygiene");
+  await expect(files).toHaveCount(1);
+  await expect(files.first()).toContainText("Hand Hygiene");
+  await page.getByPlaceholder("Go to file").fill("nothing matches this");
+  await expect(page.locator(".app-explorer-empty")).toBeVisible();
+  await page.getByPlaceholder("Go to file").fill("");
+
+  // **The panel shuts**, and leaves a rail — one that vanishes completely is
+  // a feature nobody finds again.
+  await page.getByRole("button", { name: "Hide the files" }).click();
+  await expect(files).toHaveCount(0);
+  const rail = await page.locator(".app-explorer").boundingBox();
+  expect(rail!.width).toBeLessThan(60);
+  expect(rail!.width).toBeGreaterThan(0);
+
+  await page.getByRole("button", { name: "Show the files" }).click();
+  await expect(files).toHaveCount(2);
+});

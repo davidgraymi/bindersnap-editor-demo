@@ -14,6 +14,7 @@ import {
 
 import type { BinderTab } from "../binderShell";
 import type { AppRoute, OrganizationTab } from "../routes";
+import type { WorkspaceDocumentListEntry } from "../../../packages/api-schema/schemas/workspaces";
 import { useCollapsedSidebar } from "../useCollapsedSidebar";
 
 /**
@@ -76,8 +77,16 @@ export interface SidebarBinder {
 }
 
 export interface SidebarBinderContents {
-  /** Filed order, as the binder's own list gives it. */
-  documents: ReadonlyArray<{ slugPath: string; name: string; folder: string }>;
+  /**
+   * The binder's documents, as its own list gives them.
+   *
+   * Whole entries rather than three fields of each, so the explorer can build
+   * its tree with `buildBinderTree` — the same function the binder's own page
+   * uses. Two tree builders would disagree about nesting within a month.
+   */
+  documents: readonly WorkspaceDocumentListEntry[];
+  /** Folders the tree read named, so an empty one is still in the tree. */
+  folders: readonly string[];
   /** The one being read, so its row is marked. */
   active: string | null;
   /**

@@ -8880,27 +8880,61 @@ a.bs-row:focus-visible {
   width: 0;
 }
 
-/* Which binder these files are, and the way back to it. */
+/* Shut, it leaves a rail. A panel that disappears completely is a feature
+   nobody finds again. */
+.app-explorer--shut {
+  width: 40px;
+  align-items: center;
+  padding-top: var(--brand-space-2);
+}
+
 .app-explorer-head {
   display: flex;
   align-items: center;
   gap: var(--brand-space-2);
-  width: 100%;
   min-height: 46px;
-  padding: 0 var(--brand-space-3);
-  border: none;
+  padding: 0 var(--brand-space-2) 0 var(--brand-space-3);
   border-bottom: 1px solid var(--bs-rule);
-  background: transparent;
-  color: var(--bs-text-primary);
-  font-family: var(--brand-font-sans);
-  font-size: var(--brand-text-ui-md);
-  font-weight: var(--brand-weight-semibold);
-  text-align: left;
-  cursor: pointer;
 }
 
-.app-explorer-head:hover {
+.app-explorer-heading {
+  flex: 1;
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-semibold);
+  color: var(--bs-text-primary);
+}
+
+.app-explorer-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: var(--brand-radius-md);
+  background: transparent;
+  color: var(--bs-text-faint);
+  cursor: pointer;
+  transition:
+    color var(--brand-transition-base),
+    background var(--brand-transition-base);
+}
+
+.app-explorer-toggle:hover,
+.app-explorer-toggle:focus-visible {
+  color: var(--bs-text-primary);
   background: var(--bs-surface-2);
+}
+
+/* Past a certain size, finding a policy by eye is slower than typing three
+   letters of its name. */
+.app-explorer-filter {
+  padding: var(--brand-space-2) var(--brand-space-2) 0;
+}
+
+.app-explorer-filter .bs-input {
+  width: 100%;
 }
 
 .app-explorer-tree {
@@ -8913,13 +8947,33 @@ a.bs-row:focus-visible {
   display: grid;
 }
 
+/* A folder opens and shuts, so a binder with forty policies in eight
+   departments is navigable rather than a wall. */
 .app-explorer-folder {
   display: flex;
   align-items: center;
   gap: var(--brand-space-1-5);
-  padding: var(--brand-space-2) var(--brand-space-2) 2px;
+  width: 100%;
+  min-height: 28px;
+  padding-right: var(--brand-space-2);
+  border: none;
+  border-radius: var(--brand-radius-md);
+  background: transparent;
+  color: var(--bs-text-secondary);
+  font-family: var(--brand-font-sans);
   font-size: var(--brand-text-ui-sm);
   font-weight: var(--brand-weight-medium);
+  text-align: left;
+  cursor: pointer;
+}
+
+.app-explorer-folder:hover {
+  background: var(--bs-surface-2);
+  color: var(--bs-text-primary);
+}
+
+.app-explorer-folder svg {
+  flex-shrink: 0;
   color: var(--bs-text-faint);
 }
 
@@ -8929,7 +8983,7 @@ a.bs-row:focus-visible {
   gap: var(--brand-space-2);
   width: 100%;
   min-height: 28px;
-  padding: 0 var(--brand-space-2) 0 var(--brand-space-4);
+  padding-right: var(--brand-space-2);
   border: none;
   border-radius: var(--brand-radius-md);
   background: transparent;
@@ -8971,6 +9025,13 @@ a.bs-row:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.app-explorer-empty {
+  margin: 0;
+  padding: var(--brand-space-3) var(--brand-space-2);
+  font-size: var(--brand-text-ui-sm);
+  color: var(--bs-text-faint);
 }
 
 /* The explorer is a panel beside the page, and a phone has room for neither

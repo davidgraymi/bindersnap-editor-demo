@@ -454,11 +454,8 @@ export function BinderShell({
       .then((payload) => {
         if (cancelled) return;
         setContents({
-          documents: payload.documents.map((document) => ({
-            slugPath: document.slugPath,
-            name: document.name,
-            folder: document.folder,
-          })),
+          documents: payload.documents,
+          folders: payload.folders,
           active: null,
           change: openChange,
         });
