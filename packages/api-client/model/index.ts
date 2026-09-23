@@ -159,6 +159,7 @@ export * from './getBinder200.ts';
 export * from './getBinder200Workspace.ts';
 export * from './getBinderArchive200.ts';
 export * from './getBinderArchive200DocumentsItem.ts';
+export * from './getBinderArchiveParams.ts';
 export * from './getBinderChange200.ts';
 export * from './getBinderChange200Change.ts';
 export * from './getBinderChange200ChangeApprovalState.ts';

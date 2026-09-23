@@ -8800,11 +8800,19 @@
             "required": true,
             "name": "binder",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "draft",
+            "in": "query"
           }
         ],
         "responses": {
           "200": {
-            "description": "Everything this binder has taken off the record — every UID with a version tag, minus every UID on `main`",
+            "description": "Everything this binder has taken off the record — every UID with a version tag, minus every UID on the tree being read",
             "content": {
               "application/json": {
                 "schema": {

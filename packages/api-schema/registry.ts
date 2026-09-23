@@ -1378,11 +1378,23 @@ registry.registerPath({
   path: "/api/app/binders/{org}/{binder}/archive",
   operationId: "getBinderArchive",
   tags: ["workspaces"],
-  request: { params: z.object({ org: z.string(), binder: z.string() }) },
+  request: {
+    params: z.object({ org: z.string(), binder: z.string() }),
+    /**
+     * Take the difference against your own draft rather than against `main`.
+     *
+     * A policy archived while editing is off the draft's tree and still on
+     * `main` — and will be until the change request publishes. Without this
+     * the binder counted the archive from the draft and then listed it from
+     * `main`, so the tree said "Archived · 1 policy" and opening it showed
+     * nothing. Your own draft only; naming somebody else's is refused.
+     */
+    query: z.object({ draft: z.string().optional() }),
+  },
   responses: {
     200: {
       description:
-        "Everything this binder has taken off the record — every UID with a version tag, minus every UID on `main`",
+        "Everything this binder has taken off the record — every UID with a version tag, minus every UID on the tree being read",
       content: {
         "application/json": { schema: BinderArchivePayloadSchema },
       },

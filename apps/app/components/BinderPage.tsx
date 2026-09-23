@@ -240,7 +240,11 @@ export function BinderDocuments({
     if (!archiveOpen || archived !== null) return;
 
     let cancelled = false;
-    fetchBinderArchive(org, binder)
+    // **At the draft's ref while editing**, because that is where the count
+    // beside this section was counted. A policy archived a moment ago is off
+    // the draft's tree and still on `main`, so reading from `main` listed
+    // nothing under a heading that said one thing was in there.
+    fetchBinderArchive(org, binder, draft ?? undefined)
       .then((payload) => {
         if (!cancelled) setArchived(payload.documents);
       })
@@ -256,7 +260,7 @@ export function BinderDocuments({
     return () => {
       cancelled = true;
     };
-  }, [archiveOpen, archived, org, binder]);
+  }, [archiveOpen, archived, org, binder, draft]);
 
   // Leaving edit mode ends any rename in progress. The input has nowhere to
   // commit to once the draft is gone, and leaving it on screen would offer a
@@ -314,6 +318,11 @@ export function BinderDocuments({
     try {
       await act();
       onEdited?.();
+      // Every act can move the archive — archiving puts a policy in it and
+      // restoring takes one out — and the section is read once and kept. Drop
+      // what was read so an open archive re-reads with the rest of the tree,
+      // rather than showing the answer from before the act.
+      setArchived(null);
       load();
     } catch (err) {
       setActError(
@@ -420,11 +429,12 @@ export function BinderDocuments({
     if (!draft) return;
     setRestoring(uid);
     try {
+      // `runAct` drops what was read from the archive already — every act can
+      // move it, not only this one.
       await runAct(
         () => restoreBinderDocument(org, binder, uid, { draft }),
         "Unable to restore that policy.",
       );
-      setArchived(null);
     } finally {
       setRestoring(null);
     }
