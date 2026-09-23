@@ -348,8 +348,11 @@ test("the library lists a policy across every binder it can reach", async ({
   // catches the rail heading of every binder whose name ends in "policies",
   // so the assertion passed until the stack had two of them and then failed
   // on a strict-mode violation about data the test never created.
+  // **Named for the entry that opens it.** It was "Policies" while the
+  // navigation said "Documents", so the page a reader arrived at was not the
+  // page they had clicked.
   await expect(
-    page.getByRole("heading", { name: "Policies", exact: true }),
+    page.getByRole("heading", { name: "Documents", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: clinical, exact: false }),

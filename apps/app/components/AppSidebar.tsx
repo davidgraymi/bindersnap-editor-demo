@@ -1,6 +1,5 @@
 import {
   Activity,
-  Building2,
   CreditCard,
   FileText,
   FilePen,
@@ -267,14 +266,20 @@ export function AppSidebar({
     },
   ];
 
+  /**
+   * **One destination per entry.**
+   *
+   * "Organization" pointed at the organization's page — which is the binder
+   * list, which "Binders" above it already opens, which the org button in the
+   * top bar also opens. Three entries, one destination, and a reader learning
+   * the product from the map would conclude two of them were broken.
+   *
+   * It is gone rather than repointed: "Binders" is the organization's home
+   * and "People & access" under Manage is the rest of it, so there was nothing
+   * left for a third entry to mean. Billing is the only thing under Settings
+   * that is genuinely a setting.
+   */
   const settings: Entry[] = [
-    {
-      key: "organization",
-      label: "Organization",
-      icon: Building2,
-      route: orgRoute(),
-      isActive: () => false,
-    },
     {
       key: "billing",
       label: "Billing",
