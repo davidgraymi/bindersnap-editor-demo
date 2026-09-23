@@ -417,6 +417,30 @@ export const WorkspaceChangeDetailPayloadSchema = z.object({
    * honest.
    */
   canManage: z.boolean(),
+  /**
+   * The reviewers this binder's sign-off rules **hold the publish for**.
+   *
+   * Gitea writes a review request for every rule in `.gitea/CODEOWNERS`
+   * matching a changed file, read from the base branch — so a sign-off rule
+   * puts its owners on a change the moment it opens. Whether that request
+   * blocks is the part the interface has to read rather than assume:
+   *
+   * - a **user** code owner is an official request and blocks the merge;
+   * - a **team** code owner has its own `official` flag cleared by Gitea
+   *   (`AddTeamReviewRequest`, still true on 28.0.0), so under the
+   *   officialness gate it blocks nothing;
+   * - on 28.0.0 `block_on_codeowner_reviews` ignores officialness entirely,
+   *   and under that gate a team code owner does block.
+   *
+   * Both flags are on `RepoBranchProtection`, so this is read rather than
+   * guessed. **A required marker that is wrong on a compliance product is
+   * worse than no marker**, which is why nobody is named here when the flags
+   * cannot be read.
+   */
+  requiredReviewers: z.object({
+    users: z.array(z.string()),
+    teams: z.array(z.string()),
+  }),
 });
 export type WorkspaceChangeDetailPayload = z.infer<
   typeof WorkspaceChangeDetailPayloadSchema

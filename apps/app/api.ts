@@ -1408,6 +1408,34 @@ export async function renameBinder(
 }
 
 /**
+ * Rewrite what a change is asking for.
+ *
+ * The author's, and only while it is open: once it is published the title is
+ * on the merge commit and in the version tag, which are the record.
+ */
+export async function editBinderChange(
+  org: string,
+  binder: string,
+  changeNumber: number,
+  subject: { title: string; body: string },
+): Promise<{ title: string; body: string }> {
+  try {
+    const response = await BindersClient.editBinderChange(
+      org,
+      binder,
+      String(changeNumber),
+      subject,
+    );
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/binders/${org}/${binder}/changes/${changeNumber}`,
+      error,
+    );
+  }
+}
+
+/**
  * Say what a binder is for.
  *
  * Unlike a rename this moves nothing — it is the repository's own description,

@@ -1667,7 +1667,6 @@ input {
   color: var(--bs-text-muted);
 }
 
-.doc-rail-card-link,
 .doc-rail-more,
 .doc-team-manage {
   appearance: none;
@@ -1680,18 +1679,12 @@ input {
   text-align: left;
 }
 
-.doc-rail-card-link {
-  font-size: var(--brand-text-ui-md);
-  font-weight: var(--brand-weight-semibold);
-}
-
 .doc-rail-more,
 .doc-team-manage {
   font-size: var(--brand-text-ui-sm);
   font-weight: var(--brand-weight-medium);
 }
 
-.doc-rail-card-link:hover,
 .doc-rail-more:hover,
 .doc-team-manage:hover {
   color: var(--brand-coral);
@@ -1975,35 +1968,10 @@ input {
   color: var(--bs-text-primary);
 }
 
-.rev-header {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--brand-space-4);
-}
-
-.rev-header-main {
-  flex: 1;
-  min-width: 0;
-  display: grid;
-  gap: var(--brand-space-1-5);
-}
-
 /* A change's title wraps rather than being cut: it is a sentence about what
    is being asked for, and the page is named by it. */
 .rev-title {
   overflow-wrap: anywhere;
-}
-
-/* One sentence: who asked for this, and what the document becomes. */
-.rev-meta {
-  margin: 0;
-  font-size: var(--brand-text-ui-md);
-  color: var(--bs-text-muted);
-}
-
-.rev-meta strong {
-  color: var(--bs-text-primary);
-  font-weight: var(--brand-weight-semibold);
 }
 
 /* The author's own words. The single most useful thing on the page, and the
@@ -2061,59 +2029,11 @@ input {
   color: var(--bs-text-secondary);
 }
 
-/* A quiet line for the things that are neither an event nor an action:
-   "you submitted this", "you cannot publish this". */
-.rev-note {
-  margin: 0;
-  font-size: var(--brand-text-ui-md);
-  color: var(--bs-text-muted);
-}
-
 /* ── Proposed version ──────────────────────────────────────────────
    Fixed chrome in the same place on every change: the thing being approved,
    which update of it, and one button to go and read it. A reviewer should
    never have to hunt for the file they are being asked to sign off.
    ------------------------------------------------------------------ */
-
-.rev-proposed {
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-4);
-  padding: 14px 18px;
-  background: var(--bs-surface-1);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-lg);
-}
-
-.rev-proposed-icon {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 36px;
-  height: 36px;
-  border-radius: var(--brand-radius-md);
-  background: var(--bs-surface-2);
-  color: var(--bs-text-muted);
-}
-
-.rev-proposed-main {
-  flex: 1;
-  min-width: 0;
-}
-
-.rev-proposed-title {
-  margin: 0;
-  font-size: var(--brand-text-sm);
-  font-weight: var(--brand-weight-semibold);
-  color: var(--bs-text-primary);
-}
-
-.rev-proposed-meta {
-  margin: var(--brand-space-0-5) 0 0;
-  font-size: 11.5px;
-  color: var(--bs-text-muted);
-  overflow-wrap: anywhere;
-}
 
 /* ── Reviewers ─────────────────────────────────────────────────────
    One row, no assignee. Two names for "who is this on" asked a reader to
@@ -2126,21 +2046,6 @@ input {
   align-items: center;
   flex-wrap: wrap;
   gap: var(--brand-space-2) var(--brand-space-5);
-}
-
-.rev-reviewers-label {
-  margin: 0;
-  font-size: var(--brand-text-ui-xs);
-  font-weight: var(--brand-weight-medium);
-  letter-spacing: var(--brand-tracking-wider);
-  text-transform: uppercase;
-  color: var(--bs-text-muted);
-}
-
-.rev-reviewers-empty {
-  margin: 0;
-  font-size: var(--brand-text-ui-sm);
-  color: var(--bs-text-muted);
 }
 
 .rev-reviewer-list {
@@ -2856,32 +2761,22 @@ input {
    to scroll back through the argument to record what they decided.
    ------------------------------------------------------------------ */
 
+/* **The floating pill is gone.** It floated because it was the only home the
+   decision had; given a sticky rail it is on screen at every scroll depth
+   anyway — and it stops covering the comment somebody is reading in order to
+   decide (D6). What is left is a column of two buttons in the rail. */
 .rev-decision {
-  position: fixed;
-  right: var(--brand-space-12);
-  bottom: var(--brand-space-10);
-  z-index: var(--brand-z-overlay);
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-3);
-  padding: var(--brand-space-2-5) var(--brand-space-3);
-  background: var(--bs-surface-1);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-full);
-  box-shadow: var(--bs-shadow-lg);
-}
-
-/* Approving and asking for changes both need a sentence first, so the pill
-   grows a panel rather than opening a dialog over the change being decided. */
-.rev-decision:has(.rev-decision-confirm) {
-  border-radius: var(--brand-radius-xl);
-  padding: var(--brand-space-4);
+  display: grid;
+  gap: var(--brand-space-1-5);
 }
 
 .rev-decision-confirm {
   display: grid;
-  gap: var(--brand-space-3);
-  width: min(360px, 70vw);
+  gap: var(--brand-space-2);
+  padding: var(--brand-space-2);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+  background: var(--bs-surface-1);
 }
 
 .rev-decision-confirm-line {
@@ -2911,33 +2806,6 @@ input {
 }
 
 @media (max-width: 900px) {
-  /* A decision bar stretched across a narrow window reads as a page section
-     rather than the one button it is, so the pill keeps floating and just
-     tucks closer to the corner. */
-  .rev-decision {
-    right: var(--brand-space-4);
-    bottom: var(--brand-space-4);
-  }
-
-  /* A pill drawn around a single floating button is a ring around a ring, so
-     on a narrow screen the buttons carry the shadow and float on their own. The
-     confirm panel still needs a surface to sit on, so it keeps its pill. */
-  .rev-decision:not(:has(.rev-decision-confirm)) {
-    padding: 0;
-    background: none;
-    border: none;
-    box-shadow: none;
-  }
-
-  .rev-decision:not(:has(.rev-decision-confirm)) .rev-btn {
-    box-shadow: var(--bs-shadow-lg);
-  }
-
-  /* It floats over the tail of the conversation, so the conversation gets
-     room to scroll clear of it. */
-  .change-detail {
-    padding-bottom: var(--brand-space-12);
-  }
 }
 
 .doc-empty {
@@ -8755,4 +8623,83 @@ a.bs-row:focus-visible {
   .bs-rail {
     position: static;
   }
+}
+
+/* ── One change request ────────────────────────────────────────────────────
+   Everything needed to decide is in the rail, in the same order on every
+   change: what is proposed, who it is waiting on, what is in the way, and the
+   two buttons. It was scattered down one column between comments, with the
+   approval meter floating top-right into the title. */
+
+.change-detail.bs-with-rail {
+  display: grid;
+}
+
+.change-main {
+  display: grid;
+  gap: var(--brand-space-4);
+  align-content: start;
+  min-width: 0;
+}
+
+.bs-rail-note {
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+}
+
+/* The mark on a reviewer this change is actually held for. Only "Required" is
+   drawn: a reviewer with no marker is one nothing is waiting on, and printing
+   "optional" on every other row labels the absence of a constraint. */
+.bs-required {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 1px;
+  color: var(--bs-status-warn-fg);
+  font-size: var(--brand-text-ui-sm);
+  font-weight: var(--brand-weight-semibold);
+}
+
+/* A link that is a button because it moves the app rather than the page. */
+.bs-linkbtn {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--bs-coral-text);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.bs-linkbtn:hover {
+  color: var(--brand-coral-dark);
+}
+
+.change-behind {
+  display: grid;
+  gap: var(--brand-space-2);
+  justify-items: start;
+  max-width: none;
+}
+
+.rev-reviewer {
+  gap: var(--brand-space-1-5);
+}
+
+.change-subject-edit {
+  max-width: none;
+}
+
+/* The meter reads as one line inside the panel's bar: bars, then the count.
+   Stacked, it sat on top of its own number. */
+.bs-panel-bar .rev-approvals {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--brand-space-1);
+}
+
+.change-open-document {
+  margin: 0;
+  font-size: var(--brand-text-ui-md);
 }
