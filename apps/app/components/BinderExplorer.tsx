@@ -14,7 +14,7 @@ import {
   type BinderTreeNode,
 } from "../binderTree";
 import { formatDocumentName } from "../documentDisplay";
-import { useCollapsedFolders } from "../useCollapsedFolders";
+import { useOpenFolders } from "../useOpenFolders";
 import { useRememberedToggle } from "../useRememberedToggle";
 import type { SidebarBinder, SidebarBinderContents } from "./AppSidebar";
 
@@ -32,8 +32,9 @@ import type { SidebarBinder, SidebarBinderContents } from "./AppSidebar";
  * from the reference the customer pointed at:
  *
  * - **Folders open and shut**, so a binder with forty policies in eight
- *   departments is navigable rather than a wall. Shut is remembered per
- *   binder, by the same hook the binder's own tree uses.
+ *   departments is navigable rather than a wall. Shut is where a folder
+ *   starts, open is remembered per binder, and the folders holding the policy
+ *   on screen are opened for you — the same hook the binder's own tree uses.
  * - **A filter**, because past a certain size finding a policy by eye is
  *   slower than typing three letters of its name.
  * - **The panel itself shuts**, for the reader who wants the page and not the
@@ -54,10 +55,13 @@ export function BinderExplorer({ binder, onNavigate }: BinderExplorerProps) {
   const { contents } = binder;
   const { on: shut, toggle } = useRememberedToggle(STORAGE_KEY);
   const {
-    collapsed,
+    isOpen,
     toggle: toggleFolder,
-    reveal,
-  } = useCollapsedFolders(binder.org, binder.binder);
+    open: openFolders,
+    // The folders holding the policy on screen are open, whatever was shut:
+    // a file explorer that does not contain the file you are reading is a
+    // panel showing somebody else's binder.
+  } = useOpenFolders(binder.org, binder.binder, contents.active);
   const [filter, setFilter] = useState("");
 
   const tree = useMemo(
@@ -141,7 +145,7 @@ export function BinderExplorer({ binder, onNavigate }: BinderExplorerProps) {
 
     // A filter that found something inside a shut folder has found nothing
     // anybody can see, so a filtered tree is open whatever was shut.
-    const open = needle !== "" || !collapsed.has(node.path);
+    const open = needle !== "" || isOpen(node.path);
 
     return (
       <div className="app-explorer-group" key={`folder:${node.path}`}>
@@ -193,7 +197,7 @@ export function BinderExplorer({ binder, onNavigate }: BinderExplorerProps) {
             setFilter(event.target.value);
             // Opening the folders a match is in survives clearing the filter,
             // which is what somebody who just found a policy wants.
-            if (event.target.value.trim() !== "") reveal(everyFolder);
+            if (event.target.value.trim() !== "") openFolders(everyFolder);
           }}
         />
       </div>

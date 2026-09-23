@@ -22,7 +22,7 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { API_BASE_URL, APP_BASE_URL } from "./helpers";
+import { API_BASE_URL, APP_BASE_URL, openTreeFolder } from "./helpers";
 
 test.describe.configure({ mode: "serial", timeout: 240_000 });
 
@@ -374,6 +374,8 @@ test("a rename in the tree lands in the draft, and the row keeps it", async ({
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
+  // Hand Hygiene is filed in Nursing, and folders start shut.
+  await openTreeFolder(page, "Nursing");
   await page.getByRole("button", { name: "Rename Hand Hygiene" }).click();
   const box = page.getByRole("textbox", { name: "New name" });
   await expect(box).toBeFocused();
@@ -427,6 +429,8 @@ test("Propose opens the change request, with the words the author wrote", async 
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
+  // Hand Hygiene is filed in Nursing, and folders start shut.
+  await openTreeFolder(page, "Nursing");
   await page.getByRole("button", { name: "Rename Hand Hygiene" }).click();
   const box = page.getByRole("textbox", { name: "New name" });
   await box.fill("Hand Hygiene and PPE");
@@ -475,6 +479,8 @@ test("Discard throws the draft away and leaves the binder as it was", async ({
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
+  // Hand Hygiene is filed in Nursing, and folders start shut.
+  await openTreeFolder(page, "Nursing");
   await page.getByRole("button", { name: "Rename Hand Hygiene" }).click();
   const box = page.getByRole("textbox", { name: "New name" });
   await box.fill("Hand Hygiene and PPE");
@@ -626,6 +632,7 @@ test("a folder cannot be dropped inside itself", async ({ page }) => {
   await page.goto(`${APP_BASE_URL}/${org}/${binder}?edit=1`);
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
+  await openTreeFolder(page, "Nursing");
   await page
     .locator(".binder-tree-row--folder")
     .filter({ hasText: "Nursing" })
@@ -678,6 +685,8 @@ test("a policy dragged out of its folder lands at the top level", async ({
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
+
+  await openTreeFolder(page, "Nursing");
 
   // The root zone only exists while something is in the air, so the drag has
   // to be driven by hand rather than by `dragTo`.
@@ -781,6 +790,8 @@ test("clicking a renamed policy in the tree opens it, not an error", async ({
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
+  // Hand Hygiene is filed in Nursing, and folders start shut.
+  await openTreeFolder(page, "Nursing");
   await page.getByRole("button", { name: "Rename Hand Hygiene" }).click();
   const box = page.getByRole("textbox", { name: "New name" });
   await box.fill("Hand Hygiene and PPE");
@@ -1395,6 +1406,7 @@ test("the binder's files sit in a panel beside an open policy", async ({
   // The binder's own page has the tree, so the explorer does not repeat it.
   await expect(page.locator(".app-explorer-item")).toHaveCount(0);
 
+  await openTreeFolder(page, "Nursing");
   await page.locator(".binder-tree-label", { hasText: "Hand Hygiene" }).click();
   await expect(
     page.locator(".app-main h1:not(.doc-preview-prose h1)"),
