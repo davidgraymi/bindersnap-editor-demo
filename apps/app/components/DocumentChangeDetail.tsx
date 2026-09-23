@@ -797,26 +797,13 @@ export function DocumentChangeDetail({
             currentUser={currentUser}
             openThreadAuthors={openThreadAuthors}
             requiredReviewers={requiredReviewers}
+            /* The button and the caveat share one foot, the way the mockup
+               draws them — so the list owns both rather than having a second
+               foot stacked under its own. */
+            onOpenSignOffRules={onOpenSignOffRules}
             canManage={canManageAssignments && change.open}
             onChanged={onChanged}
           />
-          {/* The answer to "why is Priya on this" is one click from the row
-              that raises it, rather than a sentence saying the rules exist. */}
-          {requiredReviewers.length > 0 && onOpenSignOffRules ? (
-            <div className="bs-panel-foot">
-              <span className="bs-panel-foot-note">
-                Required reviewers come from this binder&rsquo;s{" "}
-                <button
-                  type="button"
-                  className="bs-linkbtn"
-                  onClick={onOpenSignOffRules}
-                >
-                  sign-off rules
-                </button>
-                .
-              </span>
-            </div>
-          ) : null}
         </div>
 
         {blockers.length > 0 ? (

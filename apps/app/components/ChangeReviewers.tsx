@@ -22,6 +22,9 @@ const SEARCH_DEBOUNCE_MS = 250;
 const SEARCH_PAGE_SIZE = 6;
 /** Enough names to pick from without the popover becoming a page of its own. */
 const SUGGESTION_LIMIT = 8;
+/** How wide the floating picker is, and how much room it needs below. */
+const PICKER_WIDTH = 320;
+const PICKER_MAX_HEIGHT = 320;
 
 interface ChangeReviewersProps {
   /** Which repository this change lives in — a document's, or a binder. */
@@ -46,6 +49,14 @@ interface ChangeReviewersProps {
    * row is labelling the absence of a constraint.
    */
   requiredReviewers?: readonly string[];
+  /**
+   * Open the binder's sign-off rules.
+   *
+   * The caveat under "+ Reviewer" and the button itself share one panel foot,
+   * the way the mockup draws them: the answer to "why is Priya on this" is one
+   * click from the row that raises it. Null where there is no page to open.
+   */
+  onOpenSignOffRules?: (() => void) | null;
   /** Whether this reader may change who has to sign the change off. */
   canManage: boolean;
   /** Refetch the change: reviewers are server state, not local state. */
@@ -94,6 +105,7 @@ export function ChangeReviewers({
   currentUser,
   openThreadAuthors,
   requiredReviewers = [],
+  onOpenSignOffRules = null,
   canManage: canManageProp,
   onChanged,
 }: ChangeReviewersProps) {
@@ -112,6 +124,18 @@ export function ChangeReviewers({
   const [collaborators, setCollaborators] = useState<UserOption[]>([]);
   const searchRequestId = useRef(0);
   const sectionRef = useRef<HTMLDivElement | null>(null);
+  const addRef = useRef<HTMLButtonElement | null>(null);
+  /**
+   * Where the picker sits on the page, in viewport coordinates.
+   *
+   * **It floats rather than being laid out.** The picker lives inside the
+   * Approvals panel, and a panel is a squircle — `overflow: hidden` is what
+   * rounds its corners, and it cut the search box down to the few pixels of
+   * panel below the button. A menu that is clipped by the thing it belongs to
+   * is unusable, so this one is `position: fixed` and measured from the
+   * button, the way every other popover on the page behaves.
+   */
+  const [at, setAt] = useState<{ left: number; top: number } | null>(null);
 
   const reviewerLogins = useMemo(
     () => new Set(reviewers.map((reviewer) => reviewer.login)),
@@ -230,6 +254,43 @@ export function ChangeReviewers({
     };
   }, [picking]);
 
+  /**
+   * Keep the floating picker on its button.
+   *
+   * A fixed element does not move with the page, and the rail it is anchored
+   * to is sticky inside a scrolling column — so without this the menu would
+   * stay where it opened while the button slid away underneath it. Capture,
+   * because the column that scrolls is not the window.
+   */
+  useEffect(() => {
+    if (!picking) return;
+
+    const place = () => {
+      const button = addRef.current;
+      if (!button) return;
+      const rect = button.getBoundingClientRect();
+      const width = Math.min(PICKER_WIDTH, window.innerWidth - 16);
+      // Below the button, unless the bottom of the window is nearer than the
+      // menu is tall — then above it, so it is never half off the screen.
+      const below = window.innerHeight - rect.bottom;
+      setAt({
+        left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
+        top:
+          below < PICKER_MAX_HEIGHT && rect.top > below
+            ? Math.max(8, rect.top - PICKER_MAX_HEIGHT - 8)
+            : rect.bottom + 8,
+      });
+    };
+
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [picking]);
+
   function closePicker() {
     setPicking(false);
     setQuery("");
@@ -328,22 +389,52 @@ export function ChangeReviewers({
         </ul>
       )}
 
-      {canManage ? (
-        <div className="rev-reviewers-anchor">
-          <button
-            className="rev-btn rev-btn--pill"
-            type="button"
-            disabled={busy}
-            aria-expanded={picking}
-            aria-haspopup="true"
-            onClick={() => (picking ? closePicker() : setPicking(true))}
-          >
-            <Plus size={11} strokeWidth={2} aria-hidden="true" />
-            Reviewer
-          </button>
+      {/* **The button and its caveat share one panel foot**, the way the
+          mockup draws them. It used to sit on the reviewer row itself, flush
+          against the panel's right edge with nothing around it. */}
+      {canManage || (requiredReviewers.length > 0 && onOpenSignOffRules) ? (
+        <div className="bs-panel-foot rev-reviewers-foot">
+          {canManage ? (
+            <button
+              className="bs-btn bs-btn--sm bs-btn--quiet rev-reviewers-add"
+              type="button"
+              ref={addRef}
+              disabled={busy}
+              aria-expanded={picking}
+              aria-haspopup="true"
+              onClick={() => (picking ? closePicker() : setPicking(true))}
+            >
+              <Plus size={13} strokeWidth={2} aria-hidden="true" />
+              Reviewer
+            </button>
+          ) : null}
+
+          {/* The answer to "why is Priya on this" is one click from the row
+              that raises it, rather than a sentence saying the rules exist. */}
+          {requiredReviewers.length > 0 && onOpenSignOffRules ? (
+            <p className="bs-panel-foot-note">
+              Required reviewers come from this binder&rsquo;s{" "}
+              <button
+                type="button"
+                className="bs-linkbtn"
+                onClick={onOpenSignOffRules}
+              >
+                sign-off rules
+              </button>
+              .
+            </p>
+          ) : null}
 
           {picking ? (
-            <div className="rev-picker" role="group">
+            <div
+              className="rev-picker"
+              role="group"
+              style={
+                at
+                  ? { left: `${at.left}px`, top: `${at.top}px` }
+                  : { visibility: "hidden" }
+              }
+            >
               <label className="sr-only" htmlFor="rev-reviewer-search">
                 Search for a reviewer
               </label>
@@ -406,10 +497,14 @@ export function ChangeReviewers({
         </div>
       ) : null}
 
+      {/* Inside the panel's own body, so it is padded like everything else in
+          it rather than running to the border. */}
       {error ? (
-        <p className="vault-pr-error" role="alert">
-          {error}
-        </p>
+        <div className="bs-panel-body">
+          <p className="bs-note bs-note--danger" role="alert">
+            {error}
+          </p>
+        </div>
       ) : null}
     </div>
   );
