@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import type { BinderTab } from "../binderShell";
+import type { DocumentRefView } from "../documentRefs";
 import type { AppRoute, OrganizationTab } from "../routes";
 import type { WorkspaceDocumentListEntry } from "../../../packages/api-schema/schemas/workspaces";
 import { useCollapsedSidebar } from "../useCollapsedSidebar";
@@ -99,6 +100,19 @@ export interface SidebarBinderContents {
   change?: number | null;
   /** The branch they were read at, so a row leads to the same branch. */
   ref?: string | null;
+  /**
+   * Which version of this document you are reading, and the others on offer.
+   *
+   * **The panel is where this belongs**, and the customer said so: *"GitHub
+   * handles this by putting a branch selector in the file explorer so that
+   * it's clear what branch the user is viewing."* The rows of this panel are
+   * addresses on one version of the binder, so the thing naming that version
+   * sits at the top of them rather than in a strip over the page.
+   *
+   * Reported by the document's own page, because the open changes touching a
+   * document are something only the document read knows. Empty until it has.
+   */
+  reading?: DocumentRefView | null;
 }
 
 interface AppSidebarProps {
