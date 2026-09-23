@@ -22,7 +22,12 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { API_BASE_URL, APP_BASE_URL, openBinderSection } from "./helpers";
+import {
+  API_BASE_URL,
+  APP_BASE_URL,
+  openBinderSection,
+  openTreeFolder,
+} from "./helpers";
 
 // Signup, an organization, two binders and several page loads on a stack that
 // may be cold. The suite default is nowhere near enough.
@@ -400,6 +405,9 @@ test("the binder's tabs still work once a document is open", async ({
   // clicking it in that list, which is the journey this test is about.
   await publishTheOpenChange(sessionCookie, org, binder);
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  // It was filed in Nursing, and folders start shut — so the drawer is opened
+  // first, the same way a person reaches it.
+  await openTreeFolder(page, "Nursing");
   await page
     .getByRole("button", { name: "Hand Hygiene Policy" })
     .click({ timeout: 30_000 });
