@@ -9580,6 +9580,70 @@
                         ]
                       }
                     },
+                    "removedDocuments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "slugPath": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "uid": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "folder": {
+                            "type": "string"
+                          },
+                          "size": {
+                            "type": "number"
+                          },
+                          "sha": {
+                            "type": "string"
+                          },
+                          "lastVersion": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "tag": {
+                                "type": "string"
+                              },
+                              "version": {
+                                "type": "number"
+                              },
+                              "commitSha": {
+                                "type": "string"
+                              },
+                              "publishedAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "tag",
+                              "version",
+                              "commitSha",
+                              "publishedAt"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "slugPath",
+                          "name",
+                          "uid",
+                          "folder",
+                          "size",
+                          "sha",
+                          "lastVersion"
+                        ]
+                      }
+                    },
                     "isBehind": {
                       "type": "boolean"
                     },
@@ -9619,6 +9683,7 @@
                     "workspace",
                     "change",
                     "documents",
+                    "removedDocuments",
                     "isBehind",
                     "blockOnUnresolvedThreads",
                     "unresolvedThreadCount",

@@ -99,10 +99,53 @@ nothing to re-sync — but the editor is still the authoring surface inside the 
 
 ### The change comparison
 
-`apps/app/components/DocumentComparison.tsx` renders a change against the
-version it replaces for every file type the app previews. What it compares and
-what it says about it lives in `apps/app/documentComparison.ts`, so both are
-testable without a browser.
+`apps/app/components/ChangeComparisonPage.tsx` is the screen: **everything one
+change does to a binder, on one page.** A change is the unit of approval and
+may touch several documents, so the question a reviewer opens it with is what
+the _change_ does — not what it does to whichever document a selector happens
+to be pointing at. It is reached from the change at
+`?tab=changes&change=3&view=compare`, and each document's section carries an
+anchor (`#cmp-nursing-hand-hygiene`) so "look at the hand hygiene diff" is a
+link somebody can send.
+
+Three shapes, because a change does three things to a document and only one of
+them is a diff: a revision is read against the version it replaces, a new
+document has nothing to be read against so it is read whole, and a removal has
+no file on the branch at all — it offers the last version on record instead.
+What is in the list and what each row says lives in
+`apps/app/changedDocuments.ts`, testable without a browser.
+
+**It is drawn in the binder's grammar and owns almost no containers of its
+own.** One document is a `.bs-panel` whose `.bs-panel-bar` says what is
+happening to it and whose `.bs-panel-foot` holds the acts on it; the map beside
+it is a `.bs-panel` of `.bs-row`s in the standard `.bs-rail`. The first draft
+invented its own rail, row, card and head — it looked fine alone and read as a
+different product the moment you arrived from the change request, which is the
+failure the grammar exists to prevent. The rail is on the **right**, matching
+the change request's, so the reading column does not jump across the page as a
+reviewer moves between the two.
+
+The rail is the map: every document, its version step, its word counts as each
+comparison finishes, and which one is being read. Comparisons mount a screen
+ahead of the viewport rather than all at once — comparing one Word file or PDF
+means fetching two files and loading a parser, and a change touching eight
+documents would otherwise spend a reviewer's first ten seconds on documents
+they have not looked at. Ticking a document as read is a bookmark in
+`sessionStorage` and says so on screen: the record of who approved what is in
+Gitea, and nothing in a browser tab may look like part of it.
+
+**Every file read on this screen goes by identity, never by address.** A change
+that renames a policy has two different addresses for one document and the base
+ref has never heard of the new one, so a read by `slugPath` 404s at one of the
+two refs — on exactly the change the screen exists to explain. The scope is
+built from `row.path`, which carries the identity (ADR 0005). The rename itself
+is stated above the diff from `describeMove`, because the diff cannot say it:
+both refs read identically, so it would report that nothing changed.
+
+One document's comparison is `apps/app/components/DocumentComparison.tsx`,
+which renders a change against the version it replaces for every file type the
+app previews. What it compares and what it says about it lives in
+`apps/app/documentComparison.ts`, so both are testable without a browser.
 
 The comparison is built on libraries, not hand-rolled: `diff` for word-level
 text, `node-htmldiff` for diffing two rendered documents as markup,
@@ -152,6 +195,11 @@ directly.
 - `POST /api/app/documents` — create repo + upload initial file
 - `GET /api/app/documents/:owner/:repo` — document detail
 - `GET /api/app/documents/:owner/:repo/changes/closed` — closed changes with how each ended
+- A binder change's detail carries `documents` (what publishing would version)
+  **and** `removedDocuments` (what it takes off the record) — separate lists,
+  because a tag on a file that is no longer in the merged tree is the bug the
+  publish guard exists to prevent. A rename is in neither: Gitea reports one as
+  a delete plus an add, and the server subtracts the UIDs that came back
 - `POST /api/app/documents/:owner/:repo/versions` — upload new version
 - `POST /api/app/documents/:owner/:repo/pull-requests/:n/reviews` — submit review
 - `PUT /api/app/documents/:owner/:repo/pull-requests/:n/assignments` — set the assignee and reviewers

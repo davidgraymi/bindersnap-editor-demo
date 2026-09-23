@@ -5,7 +5,11 @@ import { sanitizeHtml } from "../../../packages/utils/sanitizer";
 import { downloadDocument } from "../api";
 import { blocksToHtml, blocksToText, htmlToText } from "../documentBlocks";
 import type { ChangeScope } from "../changeScope";
-import type { ComparisonBase, DiffSegment } from "../documentComparison";
+import type {
+  ComparisonBase,
+  ComparisonSummary,
+  DiffSegment,
+} from "../documentComparison";
 import {
   diffRenderedHtml,
   diffWords,
@@ -29,6 +33,16 @@ interface DocumentComparisonProps {
   fileName: string | null;
   /** Save one side of the comparison. */
   onDownload: (gitRef: string) => void;
+  /**
+   * How much moved, reported upwards once both sides have been read.
+   *
+   * The all-documents screen puts these counts beside each document in its
+   * rail and adds them into one line at the top, and only the comparison can
+   * know them: the words are inside two files nobody has opened until it
+   * opens them. Null for a file a browser cannot read inside, which is a
+   * different thing from "nothing changed" and has to stay tellable apart.
+   */
+  onSummary?: (summary: ComparisonSummary | null) => void;
 }
 
 /** Same ceiling the single-file preview uses: a browser is not a log viewer. */
@@ -92,6 +106,7 @@ export function DocumentComparison({
   headLabel,
   fileName,
   onDownload,
+  onSummary,
 }: DocumentComparisonProps) {
   const [state, setState] = useState<ComparisonState>({ status: "loading" });
   const [imageMode, setImageMode] = useState<ImageMode>("side-by-side");
@@ -224,6 +239,15 @@ export function DocumentComparison({
     }
     return null;
   }, [state]);
+
+  // Only once the comparison has settled. Reporting during `loading` would
+  // have the page above announce "no wording changed" about two files it has
+  // not finished reading, and then quietly correct itself.
+  const settled = state.status !== "loading";
+  useEffect(() => {
+    if (!settled) return;
+    onSummary?.(summary);
+  }, [settled, summary, onSummary]);
 
   if (kind === "unsupported" || state.status === "unsupported") {
     return (

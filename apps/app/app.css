@@ -663,6 +663,15 @@ input {
   gap: var(--brand-space-3);
 }
 
+/* The list's title, and the way to all of them at once. */
+.change-documents-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--brand-space-4);
+  flex-wrap: wrap;
+}
+
 /* The document whose file is on screen, when a change touches several. */
 .docs-list-item--active {
   background: var(--bs-coral-dim);
@@ -6731,6 +6740,264 @@ button.bs-knot {
   /* Two columns in a phone's width is two unreadable columns. */
   .doc-compare-columns {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ── Everything one change does, on one screen ──────────────────────────────
+   Almost nothing, on purpose. The binder's grammar already owns the
+   containers this screen needs — one document is a `.bs-panel` whose bar says
+   what is happening to it, the map beside it is a `.bs-panel` of `.bs-row`s
+   in the standard `.bs-rail` — so what is left here is only what the grammar
+   has no opinion about: a bar that follows you down a long diff, a fold, and
+   the three tints that tell added from revised from removed.
+
+   The first draft of this screen invented its own rail, its own row, its own
+   card and its own head. It looked fine alone and read as a different product
+   the moment you arrived from the change request, which is the whole failure
+   the grammar exists to prevent. */
+
+.change-compare {
+  min-width: 0;
+}
+
+/* Only when there is no rail: with one, `.bs-with-rail` is the grid and
+   restating the columns here would fight it. */
+.change-compare:not(.bs-with-rail) {
+  display: grid;
+  gap: var(--brand-space-4);
+  align-content: start;
+}
+
+/* How big this change is, under its title. Sized as prose rather than as a
+   label: it is a sentence, and it wraps like one. */
+.cmp-scale {
+  margin: var(--brand-space-1) 0 0;
+  max-width: var(--brand-measure);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+}
+
+.cmp-stream {
+  display: grid;
+  gap: var(--brand-space-4);
+  align-content: start;
+  min-width: 0;
+}
+
+/* ── One document's panel ──────────────────────────────────────────────── */
+
+.cmp-file {
+  /* **`.bs-panel` clips its overflow, and a clipped ancestor is a scrollport.**
+     A sticky bar inside one sticks to a box that never scrolls, which is the
+     same as not being sticky at all. Visible here, and the bar takes the top
+     corners itself so the radius still reads. */
+  overflow: visible;
+  /* Land the panel's head clear of the bar above it when a link, the rail or
+     `focusDocument` scrolls to this document. */
+  scroll-margin-top: var(--brand-space-3);
+}
+
+/* Read is dimmed, not hidden: a reviewer who ticked something and wants it
+   back should find it where they left it. */
+.cmp-file--read {
+  opacity: 0.72;
+}
+
+.cmp-file--read:hover,
+.cmp-file--read:focus-within {
+  opacity: 1;
+}
+
+/* The one thing that follows you: on a policy that runs for three screens,
+   the name of what you are reading and the acts on it stay put. */
+.cmp-file-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  border-radius: var(--brand-radius-lg) var(--brand-radius-lg) 0 0;
+}
+
+.cmp-file-fold {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--brand-radius-sm);
+  background: none;
+  color: var(--bs-text-muted);
+  cursor: pointer;
+  transition: background var(--brand-transition-fast);
+}
+
+.cmp-file-fold:hover {
+  background: var(--bs-surface-3);
+  color: var(--bs-text-primary);
+}
+
+.cmp-file-fold:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 1px;
+}
+
+/* The chevron is the whole label to a sighted reader; a screen reader needs
+   the sentence. */
+.cmp-file-fold-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.cmp-file-chevron--shut {
+  transform: rotate(-90deg);
+}
+
+.cmp-file-main {
+  min-width: 0;
+}
+
+/* The address, in the only monospace the binder keeps: a path is machine text
+   and a reader checks it character by character. */
+.cmp-file-path {
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-ui-sm);
+}
+
+/* ── Added, revised, removed ────────────────────────────────────────────────
+   Three tints on the grammar's own status pill, because the three are what a
+   reviewer needs told apart at a glance and none of the existing states mean
+   them. Removed is the danger family without the outline: it is an act being
+   proposed, not an outcome already reached. */
+
+.cmp-kind--added {
+  background: var(--bs-status-ok-bg);
+  color: var(--bs-status-ok-fg);
+}
+
+.cmp-kind--revised {
+  background: var(--bs-status-info-bg);
+  color: var(--bs-status-info-fg);
+}
+
+.cmp-kind--removed {
+  background: var(--bs-status-danger-bg);
+  color: var(--bs-status-danger-fg);
+}
+
+/* A bookmark, drawn as one. Deliberately not a checkbox and deliberately not
+   green until pressed — the record of who approved what is in Gitea, and
+   nothing in a browser tab may look like part of it. */
+.cmp-file-read {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px var(--brand-space-1-5);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-surface-1);
+  color: var(--bs-text-muted);
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-ui-sm);
+  cursor: pointer;
+  transition:
+    background var(--brand-transition-fast),
+    color var(--brand-transition-fast);
+}
+
+.cmp-file-read:hover {
+  color: var(--bs-text-primary);
+}
+
+.cmp-file-read:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 1px;
+}
+
+.cmp-file-read--on {
+  border-color: var(--bs-status-ok-border);
+  background: var(--bs-status-ok-bg);
+  color: var(--bs-status-ok-fg);
+}
+
+.cmp-file-body {
+  display: grid;
+  gap: var(--brand-space-3);
+  padding: var(--brand-space-3);
+}
+
+/* An author rule beats the user agent's `[hidden] { display: none }`, so
+   folding a document did nothing until this said so. */
+.cmp-file-body[hidden] {
+  display: none;
+}
+
+/* **A document whose wording did not change says so in a line.**
+   `.doc-compare-body` holds a 320px floor, which is right when one comparison
+   is the whole screen and wrong when six are stacked: a change that refiles
+   four policies without editing them became four screens of empty box with a
+   sentence at the top of each. */
+.cmp-file-body .doc-compare-body:has(> .doc-compare-identical) {
+  min-height: 0;
+  padding: var(--brand-space-5) 56px;
+}
+
+/* The one claim on this page the diff under it cannot make. */
+.cmp-file-move {
+  margin: 0;
+}
+
+.cmp-file-waiting,
+.cmp-file-note {
+  margin: 0;
+  max-width: var(--brand-measure);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-md);
+}
+
+/* ── What is coming off the record ─────────────────────────────────────── */
+
+.cmp-removed-line {
+  margin: 0;
+  max-width: var(--brand-measure);
+}
+
+.cmp-removed-line strong {
+  font-weight: var(--brand-weight-semibold);
+}
+
+/* ── The map ───────────────────────────────────────────────────────────── */
+
+.cmp-rail-icon--added {
+  color: var(--bs-status-ok-fg);
+}
+
+.cmp-rail-icon--revised {
+  color: var(--bs-status-info-fg);
+}
+
+.cmp-rail-icon--removed {
+  color: var(--bs-status-danger-fg);
+}
+
+.cmp-rail-row--read .bs-row-name {
+  color: var(--bs-text-muted);
+}
+
+@media (max-width: 900px) {
+  /* `.bs-with-rail` has already put the map above the reading and stopped it
+     being sticky. What is left is the bar: two stacked sticky layers on a
+     phone is most of the screen gone before a word of the policy. */
+  .cmp-file-head {
+    position: static;
+  }
+
+  .cmp-file-body .doc-compare-body {
+    padding: var(--brand-space-6) var(--brand-space-5);
   }
 }
 
