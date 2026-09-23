@@ -202,6 +202,47 @@ export function rulePattern(rule: {
 }
 
 /**
+ * Who the binder's rules put on a change, given the files it touches.
+ *
+ * **This is what Gitea itself does**, written down so the interface can say
+ * which reviewers are there because a rule put them there. Gitea reads
+ * `.gitea/CODEOWNERS` from the **base** branch when a change opens and writes
+ * a review request for every rule matching a changed file — so these people
+ * are on the change before anybody asks them, and "why is Priya on this" is a
+ * question the screen should be able to answer.
+ *
+ * Whether such a request actually *blocks* the merge is a separate question,
+ * and it is branch protection's: see the two flags on `RepoBranchProtection`.
+ * This answers only "whose rule matched".
+ */
+export function signOffOwnersForPaths(
+  rules: readonly SignOffRule[],
+  paths: readonly string[],
+): { teams: string[]; users: string[] } {
+  const teams = new Set<string>();
+  const users = new Set<string>();
+
+  for (const rule of rules) {
+    // Anchored, the way Gitea anchors them: a rule for `nursing` must not
+    // match `archive/nursing-old`.
+    let pattern: RegExp;
+    try {
+      pattern = new RegExp(`^${rulePattern(rule)}$`);
+    } catch {
+      // A rule Gitea could not compile enforces nothing, and neither does it
+      // here. The sign-off page is where that is said out loud.
+      continue;
+    }
+
+    if (!paths.some((path) => pattern.test(path))) continue;
+    for (const team of rule.teams) teams.add(team);
+    for (const user of rule.users) users.add(user);
+  }
+
+  return { teams: [...teams], users: [...users] };
+}
+
+/**
  * The text that actually goes in the file: the pattern above, escaped a second
  * time for the tokenizer.
  *

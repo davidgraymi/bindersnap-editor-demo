@@ -5,6 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { OpenBinderDraft201Draft } from './openBinderDraft201Draft.ts';
+import type { OpenBinderDraft201DraftsItem } from './openBinderDraft201DraftsItem.ts';
 import type { OpenBinderDraft201OthersItem } from './openBinderDraft201OthersItem.ts';
 
 export type OpenBinderDraft201 = {
@@ -12,5 +13,6 @@ export type OpenBinderDraft201 = {
   workspace: string;
   /** @nullable */
   draft: OpenBinderDraft201Draft;
+  drafts: OpenBinderDraft201DraftsItem[];
   others: OpenBinderDraft201OthersItem[];
 };

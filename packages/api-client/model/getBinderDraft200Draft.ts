@@ -11,6 +11,8 @@ import type { GetBinderDraft200DraftActsItem } from './getBinderDraft200DraftAct
  */
 export type GetBinderDraft200Draft = {
   branch: string;
+  name: string;
+  named: boolean;
   owner: string;
   /** @nullable */
   updatedAt: string | null;

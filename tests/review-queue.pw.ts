@@ -53,10 +53,11 @@ test("the queue gathers changes from every binder into one list", async ({
   await expect(meta.filter({ hasText: "Clinical" }).first()).toBeVisible();
   await expect(meta.filter({ hasText: "Corporate" }).first()).toBeVisible();
 
-  // A row names the document, not just the binder it is filed in.
-  await expect(
-    meta.filter({ hasText: "Infection Control Policy" }).first(),
-  ).toBeVisible();
+  // A row says who asked and when, and does not name a document. A change can
+  // touch three; naming one of them is a claim about the other two, and the
+  // customer caught exactly that: *"the summary breaks with multiple
+  // documents"*. Which documents it touches is on the change's own page.
+  await expect(meta.first()).toHaveText(/#\d+ · \S+.* (opened|· updated) /);
 });
 
 test("the counters are the filters, and they agree with the list", async ({
@@ -129,7 +130,7 @@ test("a row opens the change it names", async ({ page }) => {
   expect(url.searchParams.get("change")).not.toBeNull();
 });
 
-test("the queue keeps the build's status words, not a state name", async ({
+test("a row's standing is one word, and the row says nothing else", async ({
   page,
 }) => {
   await signInAsAlice(page);
@@ -142,14 +143,30 @@ test("the queue keeps the build's status words, not a state name", async ({
     timeout: 30_000,
   });
 
-  // "Carol Mendes asked for changes" beats "Blocked": it says who, and it says
-  // what would unblock it. The seed has one of these waiting.
-  await expect(
-    page.locator(".queue-row-reason").filter({ hasText: /asked for changes/ }),
-  ).not.toHaveCount(0);
+  // **The customer's instruction, as an assertion.** *"I hate the 'X of X
+  // approvals · Ready to publish · Becomes vX'. That is WAYYY too much text.
+  // KEEP IT STUPID SIMPLE."* So: a word a reader already knows, and nothing
+  // arithmetic beside it. The approval count and the version it becomes are
+  // on the change's own page, where there is room to say them properly.
+  const standings = page.locator(".queue-row .change-standing");
+  await expect(standings.first()).toBeVisible();
 
-  // And a ready change says which version publishing it produces.
+  for (const text of await standings.allInnerTexts()) {
+    expect([
+      "Awaiting approval",
+      "Changes requested",
+      "Approved",
+      "Published",
+      "Declined",
+      "Withdrawn",
+    ]).toContain(text.trim());
+  }
+
+  // And "Waiting on you" is not a standing — it is a statement about the
+  // reader, and it was being printed on changes that were approved and ready.
+  // Which counter you are under says who it waits on. Scoped to the list on
+  // purpose: the counter that filters to them is legitimately named that.
   await expect(
-    page.locator(".queue-row-reason").filter({ hasText: /becomes v\d/ }),
-  ).not.toHaveCount(0);
+    page.locator(".queue-list").getByText(/Waiting on you|approvals|becomes v/),
+  ).toHaveCount(0);
 });

@@ -292,6 +292,12 @@ export interface ChangeRecord {
    * "nothing left to collect".
    */
   requiredApprovals: number | null;
+  /** When it last moved. Equal to `submittedAt` when nothing has. */
+  updatedAt?: string;
+  /** How many comments are on it, which Gitea counts for us. */
+  commentCount?: number;
+  /** Whether a reviewer has asked for changes and not withdrawn it. */
+  isRejected?: boolean;
 }
 
 export type ChangeOutcome = "published" | "declined" | "withdrawn";

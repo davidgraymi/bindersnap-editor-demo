@@ -1,18 +1,22 @@
 import {
   Activity,
-  Building2,
   CreditCard,
   FileText,
   FilePen,
   History,
   Home,
   Library,
+  PanelLeftClose,
+  PanelLeftOpen,
   Settings,
   Users,
 } from "lucide-react";
 
 import type { BinderTab } from "../binderShell";
+import type { DocumentRefView } from "../documentRefs";
 import type { AppRoute, OrganizationTab } from "../routes";
+import type { WorkspaceDocumentListEntry } from "../../../packages/api-schema/schemas/workspaces";
+import { useCollapsedSidebar } from "../useCollapsedSidebar";
 
 /**
  * The map of the product, always on screen.
@@ -57,6 +61,58 @@ export interface SidebarBinder {
   section: BinderTab;
   /** Changes waiting on a decision, once the binder has counted them. */
   openChangeCount?: number | null;
+  /**
+   * The binder's contents, while a policy is open.
+   *
+   * **So you can keep moving while you read**, which is the thing a reader
+   * loses the moment a document takes over the page: the binder's own tree is
+   * on the binder's page, and opening a policy replaced it. Every other file
+   * browser keeps the tree beside the file, and a policy manual is read by
+   * looking rather than by navigating — going back to the list to open the
+   * next one is the clunk.
+   *
+   * Null on every screen that already shows the tree, which is most of them.
+   * Two trees on one page is one too many.
+   */
+  contents?: SidebarBinderContents | null;
+}
+
+export interface SidebarBinderContents {
+  /**
+   * The binder's documents, as its own list gives them.
+   *
+   * Whole entries rather than three fields of each, so the explorer can build
+   * its tree with `buildBinderTree` — the same function the binder's own page
+   * uses. Two tree builders would disagree about nesting within a month.
+   */
+  documents: readonly WorkspaceDocumentListEntry[];
+  /** Folders the tree read named, so an empty one is still in the tree. */
+  folders: readonly string[];
+  /** The one being read, so its row is marked. */
+  active: string | null;
+  /**
+   * The ref these contents were read at, so a row leads somewhere that exists.
+   *
+   * Clicking through a change's tree stays on that change: the addresses are
+   * the branch's, and following one back to `main` would be following a policy
+   * to a name it does not have there.
+   */
+  change?: number | null;
+  /** The branch they were read at, so a row leads to the same branch. */
+  ref?: string | null;
+  /**
+   * Which version of this document you are reading, and the others on offer.
+   *
+   * **The panel is where this belongs**, and the customer said so: *"GitHub
+   * handles this by putting a branch selector in the file explorer so that
+   * it's clear what branch the user is viewing."* The rows of this panel are
+   * addresses on one version of the binder, so the thing naming that version
+   * sits at the top of them rather than in a strip over the page.
+   *
+   * Reported by the document's own page, because the open changes touching a
+   * document are something only the document read knows. Empty until it has.
+   */
+  reading?: DocumentRefView | null;
 }
 
 interface AppSidebarProps {
@@ -95,6 +151,12 @@ export function AppSidebar({
   changeCount = null,
   onNavigate,
 }: AppSidebarProps) {
+  // A policy open in the page is three panels wide — the map, the binder's
+  // files, and the policy — and the map is the one nobody is reading.
+  const { collapsed, toggle } = useCollapsedSidebar(
+    route.kind === "binderDocument",
+  );
+
   // The org-scoped entries have nowhere to point until we know which
   // organization is on screen. Rendered muted and inert rather than hidden:
   // a map that changes shape as you walk around it is not a map.
@@ -209,14 +271,20 @@ export function AppSidebar({
     },
   ];
 
+  /**
+   * **One destination per entry.**
+   *
+   * "Organization" pointed at the organization's page — which is the binder
+   * list, which "Binders" above it already opens, which the org button in the
+   * top bar also opens. Three entries, one destination, and a reader learning
+   * the product from the map would conclude two of them were broken.
+   *
+   * It is gone rather than repointed: "Binders" is the organization's home
+   * and "People & access" under Manage is the rest of it, so there was nothing
+   * left for a third entry to mean. Billing is the only thing under Settings
+   * that is genuinely a setting.
+   */
   const settings: Entry[] = [
-    {
-      key: "organization",
-      label: "Organization",
-      icon: Building2,
-      route: orgRoute(),
-      isActive: () => false,
-    },
     {
       key: "billing",
       label: "Billing",
@@ -240,10 +308,16 @@ export function AppSidebar({
           disabled ? " app-sidebar-item--muted" : ""
         }`}
         aria-current={active ? "page" : undefined}
+        // Collapsed, the icon is the whole of the row, so the name has to be
+        // reachable some other way. The label stays in the DOM and is hidden
+        // in CSS rather than removed — a screen reader still reads the same
+        // navigation whichever width it is at — and the title puts it back for
+        // a pointer.
+        title={collapsed ? entry.label : undefined}
         onClick={() => entry.route && onNavigate(entry.route)}
       >
         <Icon size={15} strokeWidth={1.75} aria-hidden="true" />
-        {entry.label}
+        <span className="app-sidebar-item-label">{entry.label}</span>
         {typeof entry.count === "number" && entry.count > 0 ? (
           <span className="app-sidebar-item-count">{entry.count}</span>
         ) : null}
@@ -260,7 +334,9 @@ export function AppSidebar({
       .join("") || currentUsername.slice(0, 2).toUpperCase();
 
   return (
-    <aside className="app-sidebar">
+    <aside
+      className={`app-sidebar${collapsed ? " app-sidebar--collapsed" : ""}`}
+    >
       <nav className="app-sidebar-section" aria-label="Your work">
         {work.map(renderEntry)}
       </nav>
@@ -291,6 +367,7 @@ export function AppSidebar({
             </span>
             <span className="app-sidebar-binder-name">{binder.name}</span>
           </button>
+
           {binderEntries.map(renderEntry)}
         </nav>
       ) : null}
@@ -311,11 +388,32 @@ export function AppSidebar({
         <span className="app-sidebar-user-avatar" aria-hidden="true">
           {initials}
         </span>
-        <span>
+        <span className="app-sidebar-user-label">
           <span className="app-sidebar-user-name">
             {currentUserFullName || currentUsername}
           </span>
         </span>
+        {/* **In the foot, at the far end**, which is where a control that acts
+            on the panel itself belongs — not among the destinations, which are
+            about where you are going rather than about the furniture. The
+            glyph is the state it will produce, the way every panel toggle
+            behaves. */}
+        <button
+          type="button"
+          className="app-sidebar-collapse"
+          aria-expanded={!collapsed}
+          aria-label={
+            collapsed ? "Expand the navigation" : "Collapse the navigation"
+          }
+          title={collapsed ? "Expand" : "Collapse"}
+          onClick={toggle}
+        >
+          {collapsed ? (
+            <PanelLeftOpen size={15} strokeWidth={1.75} aria-hidden="true" />
+          ) : (
+            <PanelLeftClose size={15} strokeWidth={1.75} aria-hidden="true" />
+          )}
+        </button>
       </div>
     </aside>
   );

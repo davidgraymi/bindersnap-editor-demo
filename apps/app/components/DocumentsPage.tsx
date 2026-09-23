@@ -106,7 +106,10 @@ export function DocumentsPage({ onSelectDocument }: DocumentsPageProps) {
 
   return (
     <section className="docs-page">
-      <h1 className="docs-title">Policies</h1>
+      {/* Named for the entry that opens it. It was "Policies" while the
+          navigation said "Documents", so the page a reader arrived at was not
+          the page they had clicked. */}
+      <h1 className="docs-title">Documents</h1>
       <p className="docs-count">
         {library === null
           ? "Reading your binders…"

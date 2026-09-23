@@ -177,42 +177,100 @@ bun test services/api scripts infra/backups
 After Gitea is healthy, the `seed` container runs `tests/seed.ts`, which applies
 the scenario described in **[`tests/seed-data/dev.yaml`](seed-data/dev.yaml)**.
 
-**That YAML file is the seed data.** Want another account, another document, or a
-document parked in a particular review state? Edit the YAML. `seed.ts` is only the
-engine that turns the description into Gitea calls — you should not need to read it.
+**That YAML file is the seed data.** Want another account, another binder, or a
+policy parked in a particular review state? Edit the YAML. `seed.ts` is only the
+engine that turns the description into Gitea calls — you should not need to read
+it.
 
-Every seeded account signs in with the password `dev`:
+The premise is that **you should not have to build a state by hand to look at
+it**. Everything below is already in the stack the moment `bun run up` finishes.
+The YAML's own header carries the same index, next to the data.
 
-| User    | Password | Who they are                                         |
-| ------- | -------- | ---------------------------------------------------- |
-| `alice` | `dev`    | Compliance manager — owns most documents, site admin |
-| `bob`   | `dev`    | Legal counsel — the reviewer who blocks and approves |
-| `carol` | `dev`    | Operations lead — owns documents of her own          |
-| `dan`   | `dev`    | External auditor — read-only access                  |
+### The people
 
-The documents cover every status the workspace list can show:
+Every seeded account signs in with the password `dev`.
 
-| Document                          | Owner | Status                   |
-| --------------------------------- | ----- | ------------------------ |
-| `alice/quarterly-report`          | alice | Changes requested        |
-| `alice/vendor-contracts`          | alice | In review                |
-| `alice/incident-response-plan`    | alice | Ready to publish         |
-| `alice/data-processing-agreement` | alice | Published                |
-| `alice/employee-handbook`         | alice | Draft                    |
-| `carol/vendor-security-review`    | carol | Published + open change  |
-| `bob/hipaa-training-policy`       | bob   | Published (two versions) |
+| User    | Who they are                                                                                                                             |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `alice` | Runs Bindersnap itself — the only **site administrator** — and owns Riverside Health                                                     |
+| `priya` | Quality director. An **organization owner who is not a site admin**, which is who most of the billing and people screens are written for |
+| `bob`   | Legal counsel. Publishes in three binders and signs off on contracts                                                                     |
+| `carol` | Operations lead. The other administrator of the HR binder                                                                                |
+| `dan`   | External auditor. Reviews everywhere and **can publish nothing**                                                                         |
+| `grace` | Infection control lead                                                                                                                   |
+| `hugo`  | Pharmacy director. Reviewer only                                                                                                         |
+| `ines`  | Ward manager                                                                                                                             |
+| `omar`  | Facilities manager — the only author in that binder                                                                                      |
+| `erin`  | In the organization and **in no binder's teams**. Sees only what the organization is open to                                             |
+| `frank` | Signed up and belongs to **no organization at all**                                                                                      |
 
-Three more are the same clinic policy manual in the three file types the app
-actually meets, so the preview and comparison screens can be judged on the file
-type rather than on the prose. Each is published once and has a second version
-open for review, and each second version makes the same three kinds of edit — a
-deadline shortened, a clause reworded, a paragraph added:
+### The binders
 
-| Document                                 | File    | What it shows                                                |
-| ---------------------------------------- | ------- | ------------------------------------------------------------ |
-| `alice/infection-control-policy`         | `.docx` | A file a browser cannot read inside — both versions offered  |
-| `alice/medication-administration-policy` | `.pdf`  | The comparison reading a PDF's text layer back with pdf.js   |
-| `alice/patient-grievance-policy`         | `.md`   | The rendered comparison: the change marked inside the policy |
+Seven, each there for a shape the others do not have. All are owned by the
+`riverside-health` organization — ADR 0004's first level.
+
+| Binder              | What it is there for                                                                                             |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `clinical`          | The everyday binder: every depth of folder, every file type, one of each review state, and **no sign-off rules** |
+| `corporate`         | The awkward change requests — out of date, crowded with reviewers, heavy with discussion, one that archives      |
+| `governance`        | **Covered in sign-off rules** (all four scopes) and the only binder asking for **two approvals**                 |
+| `facilities`        | An admin team and authors and **no reviewers**                                                                   |
+| `safety`            | Admins, authors and reviewers, and **open to the whole organization**                                            |
+| `hr-investigations` | **An admin team and nobody else.** Why "open to everyone" is a switch and not a law                              |
+| `retired-policies`  | **Nothing in it.** What every new customer sees first                                                            |
+
+"Public" and "private" here are the product's, not Gitea's: a binder is open to
+the organization when the org's `staff` team is granted read on it. Sign in as
+`erin` to see the difference — she is in no binder's teams, so `safety` is the
+only one she can open.
+
+### The filing
+
+| What                            | Where                                                    |
+| ------------------------------- | -------------------------------------------------------- |
+| A document at a binder's root   | `clinical/code-of-conduct`                               |
+| One folder deep                 | `clinical/nursing/…`                                     |
+| Two folders deep                | `clinical/nursing/wards/handover-standard`               |
+| A folder with nothing in it     | `clinical/nursing/wards/ward-7` — a committed `.gitkeep` |
+| A document nobody has published | `clinical/administrative/records-retention` (Draft)      |
+
+### The change requests
+
+| What                                          | Where                                         |
+| --------------------------------------------- | --------------------------------------------- |
+| Out of date by three of its own versions      | `corporate/security/access-control-standard`  |
+| Out of date behind other people's work        | `corporate/finance/purchasing-policy`         |
+| Six reviewers asked, one has answered         | `corporate/security/business-continuity-plan` |
+| Many discussions, every one closed            | `corporate/finance/expenses-policy`           |
+| Discussions still open                        | `corporate/finance/travel-policy`             |
+| Moves, renames and rewrites in one change     | `clinical`, the open shape change             |
+| Makes empty folders                           | `clinical`, the published shape change        |
+| Renames a folder, moving every file under it  | `facilities`, `plant` became `estates`        |
+| Takes a document off the record               | `corporate`, the published archive            |
+| Changes who signs things off                  | `governance`, the open sign-off change        |
+| Closed with work still asked for — _Declined_ | `clinical/nursing/infection-control-policy`   |
+| Closed with nobody having asked — _Withdrawn_ | `clinical/code-of-conduct`                    |
+
+Plus every review state the list can show — Draft, In review, Changes
+requested, Ready to publish, Published — and a document (`clinical`'s HIPAA
+training policy) that has been through **five** published versions.
+
+`closed: true` on a change closes it without publishing. How it _reads_ is not
+declared: a closed change with somebody's request for work standing against it
+is **Declined** and one without is **Withdrawn**, which the product works out
+from the reviews. Say what happened and the label follows.
+
+### The file types
+
+The same house structure in each of the four formats, so the preview and
+comparison screens can be judged on the file type rather than on the prose.
+
+| Format        | An example                                          |
+| ------------- | --------------------------------------------------- |
+| `prosemirror` | Most of them — the editor's own JSON                |
+| `markdown`    | `clinical/administrative/patient-grievance-policy`  |
+| `docx`        | `clinical/nursing/infection-control-policy`         |
+| `pdf`         | `clinical/nursing/medication-administration-policy` |
 
 Set a document's `format:` in the YAML (`prosemirror`, `markdown`, `pdf`, or
 `docx`) and the prose beneath it is rendered into that file. Word files and PDFs
@@ -221,13 +279,49 @@ editing a policy is still a YAML edit. Their timestamps are pinned — otherwise
 identical prose would produce different bytes on every run and each re-seed
 would silently add another update to every open change.
 
-Plus review threads (open and resolved), read-only collaborators, protected `main`
-branches, `doc/vNNNN` version tags, and a public OAuth2 app registered for PKCE
-login at the app's redirect URI.
+Plus review threads (open and resolved), the customer's own reusable groups,
+protected `main` branches, `<uid>/vN` version tags carrying the approval policy
+in force at each publish, and a public OAuth2 app registered for PKCE login at
+the app's redirect URI.
+
+### Writing a scenario
+
+A binder's `documents` carry the changes that are about one policy. A binder's
+own `changes` carry the ones that are not — a folder made, a policy refiled,
+the sign-off rules rewritten — each as a list of **acts**:
+
+```yaml
+changes:
+  - branch: shape/alice/20260310090000
+    title: Make room for ward 7
+    summary: A folder, empty until the policies for it are written.
+    publish: true
+    acts:
+      - newFolder: nursing/wards/ward-7
+    reviews:
+      - by: carol
+        state: approved
+        body: Ward 7 opens in April. Approved.
+```
+
+The acts are `newFolder`, `renameFolder`, `move`, `revise`, `archive` and
+`signOff`. Binder changes are applied after every document's own, so a rename
+has something to rename.
+
+The parser refuses a scenario that would seed successfully and leave the stack
+quietly wrong — an approval from somebody whose approval Gitea would not count,
+a change approved by its own author, a sign-off rule naming a group the binder
+has not granted, a branch prefix that would make the binder list a policy that
+does not exist. Each of those otherwise costs ten seconds of merge retries and
+an error in Gitea's words rather than a line number in the YAML.
 
 Integration tests call `seedDevStack()` from `seed.ts` themselves to ensure these
-fixtures are present before asserting against them. Seeding is idempotent — re-running
-it against an already-seeded Gitea is safe, including after a password change.
+fixtures are present before asserting against them. Seeding is idempotent —
+re-running it against an already-seeded Gitea is safe, including after a password
+change, and it _reconciles_: somebody moved from one team to another in the YAML
+is removed from the old one. The single exception is a change made of acts. Its
+commit is a list of moves against a particular tree, so the branch is written
+once and then left alone — exactly as a real change request's commit is.
 
 Validate the scenario without starting anything:
 

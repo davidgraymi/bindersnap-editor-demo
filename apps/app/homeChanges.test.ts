@@ -133,10 +133,14 @@ describe("buildOpenChangeRows", () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0]?.kind).toBe("needs_review");
-    expect(rows[0]?.pillLabel).toBe("Needs your review");
+    // **Which section it is in says it needs the reader's review.** The row
+    // says what state the change is in, which is a different question — and
+    // the two were being answered on the same line.
+    expect(rows[0]?.standing).toBe("Awaiting approval");
     expect(rows[0]?.action).toBe("Review");
     expect(rows[0]?.documentName).toBe("Vendor Agreement");
-    expect(rows[0]?.meta).toBe("Maya submitted 2h ago · 2 of 3 approvals");
+    expect(rows[0]?.meta).toContain("Maya");
+    expect(rows[0]?.meta).not.toContain("approvals");
   });
 
   test("a reader whose approval went stale is asked again", () => {
@@ -177,11 +181,14 @@ describe("buildOpenChangeRows", () => {
     );
 
     expect(rows[0]?.kind).toBe("ready_to_publish");
-    expect(rows[0]?.pillLabel).toBe("Ready to publish");
+    // *"why does a CR say 'Waiting on you' when it's approved to be
+    // published? It should say 'Approved'."*
+    expect(rows[0]?.standing).toBe("Approved");
     expect(rows[0]?.action).toBe("Publish");
-    expect(rows[0]?.meta).toBe(
-      "all approvals in · becomes v2 when you publish",
-    );
+    // Which version it becomes is a fact about a document, and a change can
+    // touch three. It belongs on the change's own page.
+    expect(rows[0]?.meta).not.toContain("becomes v");
+    expect(rows[0]?.meta).not.toContain("approvals");
   });
 
   test("the reader's own open change names who it is waiting on", () => {
@@ -204,10 +211,8 @@ describe("buildOpenChangeRows", () => {
     );
 
     expect(rows[0]?.kind).toBe("submission");
-    expect(rows[0]?.meta).toBe(
-      "waiting on Priya and Tom · submitted yesterday",
-    );
-    expect(rows[0]?.pillLabel).toBe("1 of 3 approvals");
+    expect(rows[0]?.standing).toBe("Awaiting approval");
+    expect(rows[0]?.meta).not.toContain("approvals");
     expect(rows[0]?.action).toBeNull();
   });
 
@@ -298,7 +303,10 @@ describe("buildDecidedChangeRows", () => {
     expect(rows[0]?.outcome).toBe("published");
     expect(rows[0]?.documentName).toBe("Employee Handbook");
     expect(rows[0]?.meta).toBe("you and 2 others approved");
-    expect(rows[0]?.pillLabel).toBe("Published as v6 · Aug 19");
+    // One word. The date it closed is already on the row's meta line, and
+    // repeating it inside the standing was the same fact twice.
+    expect(rows[0]?.standing).toBe("Published");
+    expect(rows[0]?.tone).toBe("published");
   });
 
   test("a withdrawn change says who withdrew it", () => {
@@ -323,7 +331,7 @@ describe("buildDecidedChangeRows", () => {
 
     expect(rows[0]?.outcome).toBe("closed");
     expect(rows[0]?.meta).toBe("withdrawn by Tom");
-    expect(rows[0]?.pillLabel).toBe("Closed · Aug 12");
+    expect(rows[0]?.standing).toBe("Closed");
   });
 
   test("a decision the reader had no part in is left off", () => {
@@ -452,7 +460,15 @@ describe("naming what a row is about", () => {
     expect(rows[0]?.documentName).toBe("Clinical");
   });
 
-  test("a change ready to publish says the version it becomes", () => {
+  /**
+   * **A row no longer promises a version, and that is the fix.**
+   *
+   * "becomes v4 when you publish" is a fact about one document, and a change
+   * can touch three that do not advance in lockstep — so the sentence was
+   * either about one of them or about none. It belongs on the change's own
+   * page, which names each document and what happens to it.
+   */
+  test("a change ready to publish does not promise a version", () => {
     const rows = buildOpenChangeRows(
       [
         document({
@@ -470,13 +486,15 @@ describe("naming what a row is about", () => {
       NOW,
     );
 
-    expect(rows[0]?.meta).toContain("becomes v4 when you publish");
+    expect(rows[0]?.standing).toBe("Approved");
+    expect(rows[0]?.meta).not.toContain("becomes v");
   });
 
-  test("a change with no document says it is ready, without inventing v1", () => {
-    // The bug this replaced: `latestTag` matched the retired `doc/vNNNN`
-    // format, so it was always null and every row said "becomes v1" however
-    // many versions the document already had.
+  test("a change with no document reads the same as any other", () => {
+    // The row used to have a second wording for this case, because it could
+    // not name a version. With no version on the row at all there is nothing
+    // to special-case — which is the good kind of simplification: a branch
+    // that existed only to avoid inventing "v1" has nothing left to avoid.
     const rows = buildOpenChangeRows(
       [
         document({
@@ -495,7 +513,7 @@ describe("naming what a row is about", () => {
       NOW,
     );
 
-    expect(rows[0]?.meta).toBe("all approvals in · ready to publish");
+    expect(rows[0]?.standing).toBe("Approved");
     expect(rows[0]?.meta).not.toContain("v1");
   });
 });

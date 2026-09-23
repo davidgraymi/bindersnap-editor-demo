@@ -3,10 +3,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { WorkspaceChangeDetailPayload } from "../../../packages/api-schema/schemas/workspaces";
 import {
   downloadBinderDocument,
+  editBinderChange,
   fetchBinderChange,
   updateBinderChange,
 } from "../api";
-import { describeVersionStep } from "../binderChange";
+import { describeChangedDocument, describeMove } from "../binderChange";
 import { downloadFileName } from "../binderDocument";
 import type { ChangeScope } from "../changeScope";
 import { resolveComparisonBase } from "../documentComparison";
@@ -37,8 +38,17 @@ interface BinderChangePageProps {
   onViewChange: (view: DocumentChangeView) => void;
   onBackToChanges: () => void;
   onOpenDocument: (slugPath: string) => void;
+  /**
+   * Open a document at its own address, on this change's branch.
+   *
+   * A change request is a branch, and a document on it has an address — so
+   * "read what this proposes" is a navigation rather than a panel.
+   */
+  onOpenOnBranch: (slugPath: string, branch: string) => void;
   /** Something about the change moved: the binder's own counts have too. */
   onChanged: () => void;
+  /** Where the required reviewers come from, for the reader who asks. */
+  onOpenSignOffRules: () => void;
 }
 
 function triggerBrowserDownload(blob: Blob, fileName: string): void {
@@ -63,6 +73,8 @@ export function BinderChangePage({
   onBackToChanges,
   onOpenDocument,
   onChanged,
+  onOpenSignOffRules,
+  onOpenOnBranch,
 }: BinderChangePageProps) {
   const [detail, setDetail] = useState<WorkspaceChangeDetailPayload | null>(
     null,
@@ -109,10 +121,34 @@ export function BinderChangePage({
       kind: "binder",
       org,
       binder,
-      documentPath: shown?.slugPath ?? "",
+      // **The file path, which carries the identity — not the address.** The
+      // file operations on a change read at two refs: the proposed version on
+      // the change's branch, and the version it replaces on the base. A change
+      // that renames a policy has two different addresses for one document,
+      // and the base ref has never heard of the new one. The identity is the
+      // thing that is the same at both (ADR 0005), and it rides in the
+      // filename.
+      documentPath: shown?.path ?? shown?.slugPath ?? "",
     }),
-    [org, binder, shown?.slugPath],
+    [org, binder, shown?.path, shown?.slugPath],
   );
+
+  /**
+   * An address still asking for the old in-page preview.
+   *
+   * **There is no in-page preview any more** — reading what a change proposes
+   * happens at the document's own address on the change's branch, where it
+   * has its own title and the whole width of the page. A link somebody saved
+   * lands there rather than on a view that no longer exists.
+   */
+  useEffect(() => {
+    if (view === "preview" && shown && detail?.change.branchName) {
+      onOpenOnBranch(shown.slugPath, detail.change.branchName);
+    }
+    // `onOpenOnBranch` is a navigation closure over org and binder, both of
+    // which change only by unmounting this page.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, shown?.slugPath, detail?.change.branchName]);
 
   const record = useMemo(
     () =>
@@ -150,7 +186,15 @@ export function BinderChangePage({
     try {
       const blob =
         loaded ??
-        (await downloadBinderDocument(org, binder, shown.slugPath, gitRef));
+        // By identity, for the same reason the scope is: a download of the
+        // version this change replaces is a read at a ref that does not know
+        // the new name.
+        (await downloadBinderDocument(
+          org,
+          binder,
+          shown.path || shown.slugPath,
+          gitRef,
+        ));
       triggerBrowserDownload(blob, downloadFileName(shown));
     } finally {
       setDownloadingRef(null);
@@ -160,7 +204,9 @@ export function BinderChangePage({
   if (error) {
     return (
       <div className="binder-pane">
-        <p className="app-inline-error">{error}</p>
+        <p className="bs-note bs-note--danger" role="alert">
+          {error}
+        </p>
         <p>
           <button
             className="bs-btn bs-btn-secondary"
@@ -187,67 +233,101 @@ export function BinderChangePage({
 
   const isOpen = detail.change.state === "open";
 
+  /**
+   * What the page has to say before it can be acted on, if anything.
+   *
+   * **Not above the way back.** The stale-branch banner used to render before
+   * the crumbs, so the first sentence on the page was about a state nobody had
+   * told you you were in. It is drawn inside the review now, where the reader
+   * has the change's own name first.
+   */
+  const behind =
+    detail.isBehind && isOpen ? (
+      <div className="bs-note bs-note--warn change-behind" role="status">
+        <p>
+          <strong>The binder has moved on since this change was made.</strong>{" "}
+          Updating it pulls in everything published since. Approvals already
+          given are dismissed, because they were for different content.
+        </p>
+        <button
+          className="bs-btn bs-btn--sm bs-btn-secondary"
+          type="button"
+          disabled={catchingUp}
+          onClick={() => void runCatchUp()}
+        >
+          {catchingUp ? "Bringing up to date…" : "Bring up to date"}
+        </button>
+      </div>
+    ) : null;
+
   return (
     <div className="binder-pane">
-      {/* A binder's change can fall behind: `main` moved on after it branched
-          off, and the binder refuses the merge however many approvals it has.
-          Said here, above the review, because until it is fixed nothing below
-          can finish — and because bringing it up to date dismisses the
-          approvals already given. */}
-      {detail.isBehind && isOpen ? (
-        <div className="change-behind" role="status">
-          <div>
-            <strong>The binder has moved on since this change was made.</strong>{" "}
-            Updating it will pull in everything published since. Approvals
-            already given are dismissed, because they were for different
-            content.
-          </div>
-          <button
-            className="bs-btn bs-btn-secondary"
-            type="button"
-            disabled={catchingUp}
-            onClick={() => void runCatchUp()}
-          >
-            {catchingUp ? "Bringing up to date…" : "Bring up to date"}
-          </button>
-        </div>
-      ) : null}
-
       {catchUpError ? (
-        <p className="vault-pr-error" role="alert">
+        <p className="bs-note bs-note--danger" role="alert">
           {catchUpError}
         </p>
       ) : null}
 
-      {/* Which documents this change is about. A change is the unit of
-          approval and may version several, so when it does, the file screens
-          below need to be told which one they are showing. */}
-      {documents.length > 1 ? (
-        <section className="change-documents">
-          <h2 className="doc-rail-title">
-            This change publishes {documents.length} documents
-          </h2>
-          <div className="docs-list">
-            {documents.map((document) => (
-              <button
-                className={`docs-list-item${document.slugPath === shown?.slugPath ? " docs-list-item--active" : ""}`}
-                type="button"
-                key={document.slugPath}
-                onClick={() => setViewing(document.slugPath)}
-              >
-                <span className="docs-list-item-body">
-                  <span className="docs-list-item-name">
-                    {describeVersionStep(document, !isOpen)}
-                  </span>
-                  <span className="docs-list-item-meta">{document.path}</span>
-                </span>
-              </button>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
       <DocumentChangeDetail
+        banner={behind}
+        documentPicker={
+          documents.length > 1 ? (
+            /* **What this change does, document by document.** A change is the
+               unit of approval and routinely touches several, and this panel
+               was a picker rather than an answer: it showed the raw filename,
+               identity segment and all, and left the one thing a reviewer
+               wants — what happens to each — to a version string in the
+               header that changed as you clicked. */
+            <div className="bs-panel change-does">
+              <div className="bs-panel-bar">
+                <h2 className="bs-panel-bar-title">What this change does</h2>
+                <span className="bs-panel-bar-spacer" />
+                <span className="binder-count">
+                  {documents.length} documents
+                </span>
+              </div>
+              <ul className="bs-row-list">
+                {documents.map((document) => {
+                  const facts = describeChangedDocument(document, !isOpen);
+                  const on = document.slugPath === shown?.slugPath;
+
+                  return (
+                    <li key={document.slugPath}>
+                      <button
+                        className={`bs-row${on ? " bs-row--on" : ""}`}
+                        type="button"
+                        aria-current={on ? "true" : undefined}
+                        onClick={() => setViewing(document.slugPath)}
+                      >
+                        <span className="bs-row-body">
+                          <span className="bs-row-name">{facts.title}</span>
+                          {/* The address, not the file path: the identity
+                              segment is a thing the server mints and nobody
+                              reads. */}
+                          <span className="bs-row-meta">{facts.address}</span>
+                        </span>
+                        <span className="bs-row-right">
+                          {facts.move ? (
+                            <span className="bs-status bs-status--working">
+                              {facts.move}
+                            </span>
+                          ) : null}
+                          <span className="bs-ver">{facts.effect}</span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ) : null
+        }
+        requiredReviewers={detail.requiredReviewers.users}
+        onOpenSignOffRules={onOpenSignOffRules}
+        onEditSubject={async (subject) => {
+          await editBinderChange(org, binder, changeNumber, subject);
+          await load();
+        }}
         scope={scope}
         currentUser={currentUser}
         isAnonymous={false}
@@ -260,6 +340,22 @@ export function BinderChangePage({
         blockOnUnresolvedThreads={detail.blockOnUnresolvedThreads}
         canManageAssignments={detail.canManage}
         nextVersion={shown?.nextVersion ?? 1}
+        /* **How many documents this change touches**, which decides whether
+           the header may claim a version. "becomes v2 when published" sits
+           under the change's own title, so with several documents it is a
+           sentence about the change carrying a fact about whichever row
+           happened to be selected — and it changed as you clicked between
+           them. With more than one, the versions belong on the rows that own
+           them and the header says nothing about any. */
+        documentCount={documents.length}
+        /* A rename is a change even when not a word of the document changed,
+           and the comparison cannot show it. */
+        documentMove={shown ? describeMove(shown) : null}
+        onOpenOnBranch={
+          shown && detail.change.branchName
+            ? () => onOpenOnBranch(shown.slugPath, detail.change.branchName)
+            : null
+        }
         // A change that touches no document is a change to this binder's
         // sign-off rules — the one kind that goes through review and versions
         // nothing. Saying so replaces the version wording and the file panel,
@@ -305,7 +401,7 @@ export function BinderChangePage({
       {shown ? (
         <p className="change-open-document">
           <button
-            className="doc-rail-card-link"
+            className="bs-linkbtn"
             type="button"
             onClick={() => onOpenDocument(shown.slugPath)}
           >

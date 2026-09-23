@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ArrowRightToLine, Check, Clock, X } from "lucide-react";
+import { ArrowRightToLine, Check, Clock, MessageSquare, X } from "lucide-react";
 
 import { getHomeChanges, type HomeOpenDocument } from "../api";
 import {
@@ -285,10 +285,27 @@ function HomeChangeRowItem({
         </span>
       </span>
 
+      {/* A dot and a word. It was a pill holding a sentence, beside a meta
+          line saying the same thing in more words. */}
+      <span className={`change-standing change-standing--${row.tone}`}>
+        <span className="change-standing-dot" aria-hidden="true" />
+        {row.standing}
+      </span>
+
+      {/* Always the slot, only sometimes the count — the same static column
+          the change list keeps, for the same reason: home stacks these rows
+          too, and a standing that sits in a different place on every other
+          row is a list nobody can scan. */}
       <span
-        className={`home-pill home-pill--${row.kind === "needs_review" ? "review" : row.kind === "ready_to_publish" ? "approved" : "waiting"}`}
+        className="change-row-comments"
+        aria-hidden={row.commentCount === 0}
       >
-        {row.pillLabel}
+        {row.commentCount > 0 ? (
+          <>
+            <MessageSquare size={13} strokeWidth={1.75} aria-hidden="true" />
+            {row.commentCount}
+          </>
+        ) : null}
       </span>
 
       {row.action ? (
@@ -348,10 +365,9 @@ function HomeDecidedRowItem({
         </span>
       </span>
 
-      <span
-        className={`home-pill home-pill--${row.outcome === "published" ? "approved" : "waiting"}`}
-      >
-        {row.pillLabel}
+      <span className={`change-standing change-standing--${row.tone}`}>
+        <span className="change-standing-dot" aria-hidden="true" />
+        {row.standing}
       </span>
     </div>
   );

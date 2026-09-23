@@ -231,12 +231,20 @@ export interface FindWorkspaceDocumentParams {
 }
 
 /**
- * One document, addressed by file path or by address.
+ * One document, addressed by file path, by address, or by identity.
  *
  * A URL carries `clinical/infection-control`; a link out of a commit or a
  * change carries the full `clinical/infection-control.01J8XZ4K7M….pdf`. Both
  * resolve, because neither the identity segment nor the extension is how a
  * person refers to a policy.
+ *
+ * **And the identity resolves at any ref, which the other two do not.** A
+ * name and a folder may change; ADR 0005's identity segment may not — that is
+ * the whole reason it exists. So a caller holding a path read at one ref and
+ * asking at another — which is exactly what comparing a change against the
+ * version it replaces is — finds the file under whatever it was called there.
+ * Renaming a policy inside a change used to make Compare answer "No such
+ * document", because the base ref has never heard of the new name.
  */
 export async function findWorkspaceDocument(
   params: FindWorkspaceDocumentParams,
@@ -249,10 +257,18 @@ export async function findWorkspaceDocument(
   // two documents at one address, but a binder edited outside Bindersnap could
   // still hold two — and resolving that deterministically beats resolving it
   // alphabetically.
+  //
+  // Identity last, because the first two are what was actually asked for. It
+  // only ever answers when the exact address is not at this ref, which is the
+  // case a rename creates.
+  const asked = parseDocumentFilename(documentPath.split("/").pop() ?? "");
+
   return (
     documents.find((entry) => entry.path === documentPath) ??
     documents.find((entry) => entry.slugPath === documentPath) ??
-    null
+    (asked.uid === null
+      ? null
+      : (documents.find((entry) => entry.uid === asked.uid) ?? null))
   );
 }
 

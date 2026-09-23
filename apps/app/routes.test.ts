@@ -158,6 +158,37 @@ test("a binder route round-trips through routeToPath", () => {
   expect(getRoute(routeToPath(document))).toEqual(document);
 });
 
+/**
+ * The history links to a version, not to a document.
+ *
+ * A row on the history is evidence that a change published v2; following it to
+ * whatever the document says now answers a different question than the one
+ * that was clicked, which on an audit product is the whole point.
+ */
+test("a document route carries the version it was opened at", () => {
+  expect(
+    routeToPath({
+      kind: "binderDocument",
+      org: "riverside-health",
+      binder: "clinical",
+      documentPath: "nursing/handover",
+      version: 2,
+    }),
+  ).toBe("/riverside-health/clinical/nursing/handover?version=2");
+});
+
+/** No version means the version on record, which is every other link. */
+test("a document route with no version addresses the record", () => {
+  expect(
+    routeToPath({
+      kind: "binderDocument",
+      org: "riverside-health",
+      binder: "clinical",
+      documentPath: "nursing/handover",
+    }),
+  ).toBe("/riverside-health/clinical/nursing/handover");
+});
+
 test("a bare /{org} addresses the organization itself", () => {
   expect(getRoute("/riverside-health")).toEqual({
     kind: "organization",

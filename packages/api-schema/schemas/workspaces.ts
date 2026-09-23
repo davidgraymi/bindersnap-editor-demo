@@ -370,6 +370,20 @@ export const WorkspaceChangedDocumentSchema =
      * comparing it with itself.
      */
     versions: z.array(DocumentVersionSchema),
+    /**
+     * Where this document is filed on the branch the change would land on,
+     * when that is somewhere else.
+     *
+     * **A rename is a change even when not a word of the document changed**,
+     * and the comparison could not say so: the identity survives a rename and
+     * the address does not (ADR 0005), so two versions of a renamed policy
+     * read identically and the page reported "nothing changed" about a change
+     * that plainly did something.
+     *
+     * Null when it is filed where it always was, and for a document being
+     * added — which has no "was".
+     */
+    previousSlugPath: z.string().nullable(),
   });
 export type WorkspaceChangedDocument = z.infer<
   typeof WorkspaceChangedDocumentSchema
@@ -417,6 +431,30 @@ export const WorkspaceChangeDetailPayloadSchema = z.object({
    * honest.
    */
   canManage: z.boolean(),
+  /**
+   * The reviewers this binder's sign-off rules **hold the publish for**.
+   *
+   * Gitea writes a review request for every rule in `.gitea/CODEOWNERS`
+   * matching a changed file, read from the base branch — so a sign-off rule
+   * puts its owners on a change the moment it opens. Whether that request
+   * blocks is the part the interface has to read rather than assume:
+   *
+   * - a **user** code owner is an official request and blocks the merge;
+   * - a **team** code owner has its own `official` flag cleared by Gitea
+   *   (`AddTeamReviewRequest`, still true on 28.0.0), so under the
+   *   officialness gate it blocks nothing;
+   * - on 28.0.0 `block_on_codeowner_reviews` ignores officialness entirely,
+   *   and under that gate a team code owner does block.
+   *
+   * Both flags are on `RepoBranchProtection`, so this is read rather than
+   * guessed. **A required marker that is wrong on a compliance product is
+   * worse than no marker**, which is why nobody is named here when the flags
+   * cannot be read.
+   */
+  requiredReviewers: z.object({
+    users: z.array(z.string()),
+    teams: z.array(z.string()),
+  }),
 });
 export type WorkspaceChangeDetailPayload = z.infer<
   typeof WorkspaceChangeDetailPayloadSchema
@@ -484,6 +522,22 @@ export const WorkspaceChangeSummarySchema = z.object({
   branchName: z.string(),
   submittedBy: z.string(),
   submittedAt: z.string(),
+  /**
+   * When it last moved — a commit, a review, a comment.
+   *
+   * A list of changes is read for "what has happened lately", and a row
+   * reporting only when something opened cannot answer it. Equal to
+   * `submittedAt` on a change nobody has touched since, which is how the row
+   * knows to say "opened" rather than "updated".
+   */
+  updatedAt: z.string(),
+  /**
+   * How many comments are on it.
+   *
+   * Gitea counts them on the pull request itself, so a list of changes carries
+   * this without a call per row.
+   */
+  commentCount: z.number(),
   /** Null while it is open. */
   closedAt: z.string().nullable(),
   outcome: WorkspaceChangeOutcomeSchema,
@@ -1121,17 +1175,53 @@ export type OtherDraft = z.infer<typeof OtherDraftSchema>;
  * contents: knowing somebody is editing is what stops two people making the
  * same folder twice, and reading unproposed work is not what a draft offers.
  */
+/**
+ * One of your drafts, as the picker lists it.
+ *
+ * Its name, how much is in it and when it was last touched — "Reorganise
+ * nursing · 3 changes · edited 4 minutes ago". The acts themselves are only on
+ * the draft you are in, because only one is on screen at a time.
+ */
+export const OwnDraftSchema = z.object({
+  branch: z.string(),
+  /** What its author called it, or its date when it was made before names. */
+  name: z.string(),
+  updatedAt: z.string().nullable(),
+  /** How many acts are in it. What the picker's "3 changes" counts. */
+  actCount: z.number(),
+  lastAct: z.string().nullable(),
+});
+export type OwnDraft = z.infer<typeof OwnDraftSchema>;
+
 export const BinderDraftPayloadSchema = z.object({
   organization: z.string(),
   workspace: z.string(),
   draft: z
     .object({
       branch: z.string(),
+      name: z.string(),
+      /**
+       * Whether a person wrote the name, or it took the date it was started.
+       *
+       * The propose screen prefills its title from the name only when somebody
+       * wrote one: a draft called "Reorganise nursing" has already said what
+       * the work is for, and "Draft of 19 September" has said nothing.
+       */
+      named: z.boolean(),
       owner: z.string(),
       updatedAt: z.string().nullable(),
       acts: z.array(DraftActSchema),
     })
     .nullable(),
+  /**
+   * Every draft of yours in this binder, newest first.
+   *
+   * What the picker picks between. One per person was the old model; the
+   * customer asked for several, because two unrelated reorganisations should
+   * not have to be approved or refused together just because the same person
+   * did both.
+   */
+  drafts: z.array(OwnDraftSchema),
   others: z.array(OtherDraftSchema),
 });
 export type BinderDraftPayload = z.infer<typeof BinderDraftPayloadSchema>;

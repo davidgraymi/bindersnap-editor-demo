@@ -8,4 +8,5 @@
 export type ProposeBinderDraftBody = {
   title: string;
   description?: string;
+  draft?: string;
 };

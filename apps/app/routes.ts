@@ -1,3 +1,4 @@
+import { buildDocumentUrl } from "./binderDocument";
 import { buildBinderUrl, type BinderTab } from "./binderShell";
 
 export type AppRoute =
@@ -42,6 +43,32 @@ export type AppRoute =
       binder: string;
       /** May carry folders, and may or may not carry the file extension. */
       documentPath: string;
+      /**
+       * Which published version to open at, from `?version=`.
+       *
+       * The history links to one: a row there is a version a change wrote, and
+       * following it to whatever the document says *now* answers a different
+       * question than the one that was clicked. Absent means the version on
+       * record, which is what every other link to a document means.
+       */
+      version?: number;
+      /**
+       * Read it on a change request's branch, rather than on the record.
+       *
+       * **A change request is a branch, and a document on it has an address.**
+       * Reading a proposed version used to happen inside the change's own page
+       * — half a column wide, under a heading naming the change rather than
+       * the document. This is the binder at another ref.
+       */
+      change?: number;
+      /**
+       * The branch to read it on.
+       *
+       * A file lives on a branch, which is why every code host addresses one
+       * by ref. `change` rides along when there is one, so a reader who
+       * arrived from a change keeps the way back.
+       */
+      ref?: string;
     };
 export type DocumentChangeView = "discussion" | "preview" | "compare";
 /** The organization's own tabs. Binders is the one it opens on. */
@@ -209,7 +236,14 @@ export function routeToPath(route: AppRoute): string {
         view: route.view,
       });
     case "binderDocument":
-      return `/${route.org}/${route.binder}/${route.documentPath}`;
+      return buildDocumentUrl({
+        org: route.org,
+        binder: route.binder,
+        documentPath: route.documentPath,
+        version: route.version ?? null,
+        change: route.change ?? null,
+        ref: route.ref ?? null,
+      });
     case "home":
     case "workspace":
     default:

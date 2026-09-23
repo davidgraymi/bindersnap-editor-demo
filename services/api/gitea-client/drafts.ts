@@ -15,12 +15,18 @@
  * nothing about it is visible to a reviewer until its owner opens a change
  * request and writes the title themselves.
  *
- * **One draft per person per binder**, and the branch name says whose it is.
- * A person editing a binder is in one state, not several — "resume where I
- * was" has a single answer, and a picker between four half-finished drafts is
- * a filing problem nobody asked for. The stamp is what lets the *next* draft
- * exist after this one has been proposed: the proposed branch keeps its name
- * while its change request is open, so a fresh draft cannot reuse it.
+ * **Several drafts per person, and the branch name says whose each is.** This
+ * was one per person, on the reasoning that "resume where I was" should have a
+ * single answer. The customer asked for more, and the reason is good and is
+ * about the record rather than about convenience: two unrelated
+ * reorganisations should not have to be proposed in one change request, and
+ * approved or refused together, because the same person happened to do both.
+ *
+ * So the stamp in `draft/<username>/<stamp>` stops being defensive and becomes
+ * load-bearing — it is what makes two of a person's drafts different branches.
+ * Which draft you are in is something the caller says, not something this
+ * module guesses, and a draft carries a name its author wrote so that
+ * "resume the one from Tuesday" has an answer. See `draft-names.ts`.
  *
  * **A draft is not a change request and must never be read as one.** It has no
  * reviewers, no approvals, and no claim on anybody's attention. The moment it
@@ -68,6 +74,17 @@ export interface BinderDraft {
  * because a proposed draft keeps its branch for as long as its change request
  * is open — so `draft/alice` alone would collide with work Alice proposed an
  * hour ago and is still waiting on.
+ *
+ * **To the millisecond, because the stamp is load-bearing now.** It was to the
+ * second, which was enough when a person could only have one draft: the second
+ * press of Edit resumed rather than forking, so two branches a second apart
+ * never arose. Now that starting another is a deliberate act, two in one
+ * second is a double-click — and Gitea answers the second with "the branch
+ * already exists", which is a true sentence about nothing the person did.
+ *
+ * Fixed width, so the stamps of two drafts sort in the order they were made.
+ * {@link listBinderDrafts} leans on that to break a tie between two drafts
+ * with nothing committed to either.
  */
 export function buildDraftBranchName(
   username: string,
@@ -76,7 +93,7 @@ export function buildDraftBranchName(
   const stamp = now
     .toISOString()
     .replace(/[^0-9]/g, "")
-    .slice(0, 14);
+    .slice(0, 17);
   return `${DRAFT_BRANCH_PREFIX}${username}/${stamp}`;
 }
 
@@ -182,18 +199,24 @@ export async function listBinderDrafts(params: {
         },
       ];
     })
-    .sort((left, right) =>
-      (right.updatedAt ?? "").localeCompare(left.updatedAt ?? ""),
+    .sort(
+      (left, right) =>
+        (right.updatedAt ?? "").localeCompare(left.updatedAt ?? "") ||
+        // **Newest made wins a tie**, and ties are the ordinary case for a
+        // draft nobody has committed to: a fresh branch's newest commit is
+        // `main`'s, so two empty drafts report the same instant. The stamp in
+        // the branch name is when each was made, fixed width, so it sorts.
+        right.branch.localeCompare(left.branch),
     );
 }
 
 /**
- * The one draft a person is working in, if they have one.
+ * The draft a person was working in most recently, if they have one.
  *
- * Newest wins. There should only ever be one — a draft is retired by being
- * proposed or discarded — but a crash between "make the branch" and "commit to
- * it" could leave a stale one behind, and resuming the newest is the answer
- * that matches what somebody last did.
+ * Newest wins, which is what "carry on where I was" means when somebody has
+ * several. Pressing Edit resumes this one; starting another is a separate act
+ * with a name attached, because forking work by accident is the mistake the
+ * one-draft rule existed to prevent and it is still worth preventing.
  */
 export async function findCurrentDraft(params: {
   client: GiteaClient;
@@ -206,13 +229,20 @@ export async function findCurrentDraft(params: {
 }
 
 /**
- * Start a draft, or answer with the one already open.
+ * Make a draft. Always a new one.
  *
- * Idempotent on purpose: "edit this binder" is a button somebody presses
- * twice, and the second press has to put them back where they were rather
- * than fork their work.
+ * **This used to resume the first draft it found, and no longer does.** A
+ * person may have several, so "which one" is a question with more than one
+ * answer and is not this function's to guess — the route above it decides
+ * whether a press of Edit resumes {@link findCurrentDraft} or starts
+ * something new, and says so.
+ *
+ * The stamp is to the second, so two drafts started in the same second by the
+ * same person would collide. Gitea refuses the second branch rather than
+ * silently sharing one, which is the right failure: a caller is told, and
+ * pressing again a moment later works.
  */
-export async function openDraft(params: {
+export async function startDraft(params: {
   client: GiteaClient;
   org: string;
   workspace: string;
@@ -220,14 +250,6 @@ export async function openDraft(params: {
   now?: Date;
 }): Promise<BinderDraft> {
   const { client, org, workspace, username, now } = params;
-
-  const existing = await findCurrentDraft({
-    client,
-    org,
-    workspace,
-    owner: username,
-  });
-  if (existing) return existing;
 
   const branch = buildDraftBranchName(username, now ?? new Date());
   await createUploadBranch({
@@ -239,6 +261,32 @@ export async function openDraft(params: {
   });
 
   return { branch, owner: username, updatedAt: null, lastAct: null };
+}
+
+/**
+ * Carry on where you were, or start your first draft.
+ *
+ * What a press of Edit means. Idempotent, deliberately: Edit is not a
+ * destructive act and the second press must put a person back in the work they
+ * have rather than fork it. Starting a *second* draft is a different act, and
+ * asks for a name.
+ */
+export async function openDraft(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  username: string;
+  now?: Date;
+}): Promise<BinderDraft> {
+  const existing = await findCurrentDraft({
+    client: params.client,
+    org: params.org,
+    workspace: params.workspace,
+    owner: params.username,
+  });
+  if (existing) return existing;
+
+  return startDraft(params);
 }
 
 /**

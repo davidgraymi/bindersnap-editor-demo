@@ -227,6 +227,15 @@ async function provision(): Promise<{
 async function settleOnRealShell(page: Page): Promise<void> {
   await page.locator(".app-shell:not(.app-shell--skeleton)").waitFor();
   await page.waitForLoadState("networkidle");
+  // **And the page's own skeleton, not only the shell's.** A screen renders
+  // its heading first and its body as placeholder rows while the read is in
+  // flight, so `networkidle` can be true of the shell while the page in it is
+  // still a skeleton. Measuring then reads placeholder chrome as content —
+  // which is what CI caught on a slower machine than this was written on, and
+  // is a fault in the measurement rather than in the page.
+  await expect(page.locator(".bs-skeleton")).toHaveCount(0, {
+    timeout: 30_000,
+  });
 }
 
 test("every row of controls in the product is one size", async ({ page }) => {
@@ -302,11 +311,11 @@ test("the fields in a form are one size, picker included", async ({ page }) => {
 
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
   await page.getByRole("button", { name: "Add a policy" }).click();
-  // The picker only exists once the binder has an open change, so waiting for
-  // it is also what proves it rendered.
-  await expect(page.locator(".create-document-modal select")).toBeVisible({
-    timeout: 30_000,
-  });
+  // **Wait for the picker that loads, not for the first one drawn.** "Put it
+  // in" only exists once the binder has an open change and is filled from a
+  // read; the folder picker is drawn immediately. Waiting for the wrong one
+  // measures a form that is still one field short.
+  await expect(page.locator("#change-target")).toBeVisible({ timeout: 30_000 });
 
   const heights = await page
     .locator(
@@ -405,6 +414,151 @@ test("every page begins in the same place, at the same size", async ({
       `${other.where} is not the same shape as ${first!.where}`,
     ).toEqual(first!.shape);
   }
+});
+
+/**
+ * Nothing holds content on a binder screen except the three containers.
+ *
+ * **This is the rule that makes the grammar still true a year from now**, and
+ * it is the one the redesign exists for: six tabs were built one at a time and
+ * each invented its own container, so walking Documents → People → Sign-off
+ * rules → Settings crossed four container idioms in four clicks. The
+ * customer's words: *"the content it renders … looks like a different web
+ * page."*
+ *
+ * So a binder screen's content root may hold only three things —
+ * `.bs-panel` (a list), `.bs-fields` (a form), `.bs-note` (a consequence) —
+ * plus the chrome that is not content: the page's own head, a section that
+ * groups them, the spine, the draft bar, the rail layout.
+ *
+ * Checked at the content root rather than at every depth, which is where the
+ * idioms actually diverged: a panel containing a bespoke row is a detail, and
+ * a bespoke box sitting beside a panel is the defect.
+ */
+test("nothing but the three containers holds content in a binder", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await page
+    .context()
+    .addCookies([
+      { name: "bindersnap_session", value: session, url: APP_BASE_URL },
+    ]);
+  await page.setViewportSize({ width: 1280, height: 900 });
+
+  /** Chrome, not content: these group the containers or title the page. */
+  const ALLOWED = [
+    "bs-panel",
+    "bs-fields",
+    "bs-note",
+    "bs-section",
+    "bs-pagehead",
+    "bs-crumbs",
+    "bs-spine",
+    "bs-with-rail",
+    "bs-rail",
+    "bs-draftbar",
+    "bs-empty",
+    "bs-section-note",
+    "binder-strip",
+    "change-main",
+  ];
+
+  const screens: Array<[string, string]> = [
+    ["the binder", `${APP_BASE_URL}/${org}/${binder}`],
+    ["its change requests", `${APP_BASE_URL}/${org}/${binder}?tab=changes`],
+    ["its history", `${APP_BASE_URL}/${org}/${binder}?tab=history`],
+    ["its settings", `${APP_BASE_URL}/${org}/${binder}?tab=settings`],
+  ];
+
+  for (const [where, url] of screens) {
+    await page.goto(url);
+    await settleOnRealShell(page);
+    await page.locator(".app-main h1").first().waitFor();
+
+    const strays = await page.evaluate((allowed) => {
+      const root = document.querySelector(".binder-pane");
+      if (!root) return null;
+
+      return (Array.from(root.children) as HTMLElement[])
+        .filter((child) => {
+          // An element with nothing in it holds no content by definition.
+          if ((child.textContent ?? "").trim() === "") return false;
+          return !allowed.some((name) => child.classList.contains(name));
+        })
+        .map((child) => ({
+          tag: child.tagName.toLowerCase(),
+          cls: child.className,
+          text: (child.textContent ?? "").trim().slice(0, 40),
+        }));
+    }, ALLOWED);
+
+    expect(strays, `${where} rendered no binder page`).not.toBeNull();
+    expect(
+      strays,
+      `On ${where}, something outside the three containers holds content:\n` +
+        (strays ?? [])
+          .map((s) => `      ${s.tag}.${s.cls} — “${s.text}”`)
+          .join("\n") +
+        "\n",
+    ).toEqual([]);
+  }
+});
+
+/**
+ * The marketing eyebrow never appears inside the app.
+ *
+ * `.bs-label` is coral, uppercase, monospace, wide-tracked — the landing
+ * page's section eyebrow, which is right where it is. It had **26 call sites
+ * in the app**, standing in for ordinary form labels: `WHAT YOU ARE ASKING
+ * FOR`, `CHOOSE FILE`, `WHO CAN SEE THIS BINDER?`. Uppercase monospace coral
+ * is the loudest "developer tool" signal the product has, and it was on the
+ * labels of every form somebody fills in.
+ *
+ * `.bs-field-label` replaces it: Geist, sentence case, the weight of a label
+ * rather than of a banner. This is the rule that keeps the eyebrow on the
+ * landing page, where it belongs.
+ */
+test("the marketing eyebrow never labels a field in the app", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await page
+    .context()
+    .addCookies([
+      { name: "bindersnap_session", value: session, url: APP_BASE_URL },
+    ]);
+  await page.setViewportSize({ width: 1280, height: 900 });
+
+  const screens: Array<[string, string]> = [
+    ["the binder", `${APP_BASE_URL}/${org}/${binder}`],
+    ["its settings", `${APP_BASE_URL}/${org}/${binder}?tab=settings`],
+    ["the organization", `${APP_BASE_URL}/${org}`],
+    ["the organization's people", `${APP_BASE_URL}/${org}?tab=people`],
+    ["the library", `${APP_BASE_URL}/documents`],
+  ];
+
+  for (const [where, url] of screens) {
+    await page.goto(url);
+    await settleOnRealShell(page);
+
+    const eyebrows = await page
+      .locator(".app-main .bs-label")
+      .evaluateAll((elements) =>
+        elements.map((element) => (element.textContent ?? "").trim()),
+      );
+
+    expect(eyebrows, `${where} labels something with the eyebrow`).toEqual([]);
+  }
+
+  // And the modal that carries the product's primary act, which is where the
+  // loudest of them was.
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await page.getByRole("button", { name: "Add a policy" }).click();
+  await expect(page.locator(".create-document-modal")).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(page.locator(".create-document-modal .bs-label")).toHaveCount(0);
 });
 
 /**
@@ -527,4 +681,212 @@ test("no heading on a page outranks the page's own title", async ({ page }) => {
         "\n",
     ).toEqual([]);
   }
+});
+
+/**
+ * A menu is never clipped by the thing it opens from.
+ *
+ * **The customer could not use the reviewer search:** *"when I click the
+ * button to add a reviewer the search is clipped to the 'Approvals' squircle
+ * making it very difficult to use."* A `.bs-panel` is rounded by
+ * `overflow: hidden`, and an absolutely positioned popover inside one is cut
+ * to whatever slice of panel happens to sit below its button — which on the
+ * change request's rail was about twenty pixels.
+ *
+ * It is the kind of failure a stylesheet diff cannot show: both rules are
+ * correct on their own, and it is only their meeting that breaks. So this
+ * opens the picker for real and measures what is actually on the screen —
+ * every edge inside the viewport, and the search box hit-testable at its own
+ * centre rather than merely present in the DOM.
+ */
+test("a popover is not clipped by the panel it opens from", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await page
+    .context()
+    .addCookies([
+      { name: "bindersnap_session", value: session, url: APP_BASE_URL },
+    ]);
+  await page.setViewportSize({ width: 1280, height: 900 });
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}?tab=changes&change=1`);
+  await settleOnRealShell(page);
+
+  const add = page.locator(".rev-reviewers-add");
+  await add.waitFor();
+  await add.click();
+
+  const measured = await measurePopover(
+    page,
+    ".rev-picker",
+    ".rev-picker-input",
+  );
+  assertNotClipped(measured, "the reviewer picker");
+
+  // **The same rule, on the other popover that lives inside a panel.** One
+  // instance is a bug fixed; two is a rule, and the draft picker sits in the
+  // tree's own bar — another `.bs-panel`, another squircle.
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await settleOnRealShell(page);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const pick = page.locator(".bs-draftpick");
+  await pick.waitFor({ timeout: 30_000 });
+  await pick.click();
+
+  assertNotClipped(
+    await measurePopover(page, ".bs-draftmenu", ".bs-draftmenu-pick"),
+    "the draft picker",
+  );
+});
+
+/** What is actually on the screen, rather than what is in the DOM. */
+async function measurePopover(
+  page: Page,
+  popover: string,
+  inner: string,
+): Promise<{
+  offscreen: boolean;
+  height: number;
+  fieldHeight: number;
+  reachable: boolean;
+} | null> {
+  // **Visible, not merely present.** Both popovers are placed by measuring
+  // their button after paint, and render `visibility: hidden` until they know
+  // where they go — so measuring the instant after the click hit-tests through
+  // them to whatever is behind, which looks exactly like being clipped.
+  await page.locator(popover).waitFor({ state: "visible", timeout: 30_000 });
+
+  return page.evaluate(
+    ([popoverSelector, innerSelector]) => {
+      const picker = document.querySelector(popoverSelector!);
+      const input = document.querySelector(innerSelector!);
+      if (!picker || !input) return null;
+
+      const box = picker.getBoundingClientRect();
+      const field = input.getBoundingClientRect();
+      const centre = document.elementFromPoint(
+        field.left + field.width / 2,
+        field.top + field.height / 2,
+      );
+
+      return {
+        offscreen:
+          box.left < 0 ||
+          box.top < 0 ||
+          box.right > window.innerWidth ||
+          box.bottom > window.innerHeight,
+        height: Math.round(box.height),
+        fieldHeight: Math.round(field.height),
+        // Clipped by an ancestor and the point belongs to whatever covers it.
+        reachable: centre === input || input.contains(centre),
+      };
+    },
+    [popover, inner] as const,
+  );
+}
+
+function assertNotClipped(
+  measured: Awaited<ReturnType<typeof measurePopover>>,
+  what: string,
+): void {
+  expect(measured, `${what} never opened`).not.toBeNull();
+  expect(measured!.offscreen, `${what} opened partly off the screen`).toBe(
+    false,
+  );
+  expect(
+    measured!.height,
+    `${what} is ${measured!.height}px tall — what is inside it is ${measured!.fieldHeight}px, so it is being cut off`,
+  ).toBeGreaterThan(measured!.fieldHeight);
+  expect(
+    measured!.reachable,
+    `${what} cannot be clicked at its own centre`,
+  ).toBe(true);
+}
+
+/**
+ * **A list is scanned down its columns, so the columns have to stay put.**
+ *
+ * The customer, of the change list: *"I noticed that when there is a
+ * conversation count that it moves the status to the left. I want it to be
+ * easy on peoples eyes and keep the rows aligned, so make these columns
+ * static so that the status doesn't shift left or right."*
+ *
+ * The count was rendered only on rows that had one, so a row with a
+ * conversation pushed its own standing left and a stack of rows zig-zagged.
+ * Nothing in a stylesheet says so — both rules were right — and in a diff it
+ * reads as a sensible "don't draw a zero". It is only visible in a browser,
+ * with two rows that differ, which is what this is.
+ */
+test("a change list's columns hold their place, commented or not", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+
+  // A second policy, so the binder has a second change — one to comment on
+  // and one to leave alone.
+  const second = new FormData();
+  second.set(
+    "file",
+    new Blob(["# Staff Handbook\n"], { type: "text/markdown" }),
+    "staff-handbook.md",
+  );
+  second.set("name", "Staff Handbook");
+  const added = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/documents`,
+    {
+      method: "POST",
+      headers: {
+        Cookie: `bindersnap_session=${session}`,
+        Origin: APP_BASE_URL,
+      },
+      body: second,
+    },
+  );
+  expect(added.status, await added.clone().text()).toBe(201);
+
+  const said = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/changes/1/discussions`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({ body: "Does this cover the night shift?" }),
+    },
+  );
+  expect(said.status, await said.clone().text()).toBe(201);
+
+  await page
+    .context()
+    .addCookies([
+      { name: "bindersnap_session", value: session, url: APP_BASE_URL },
+    ]);
+  await page.setViewportSize({ width: 1280, height: 900 });
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}?tab=changes`);
+  await settleOnRealShell(page);
+
+  const rows = page.locator(".change-row");
+  await expect(rows).toHaveCount(2, { timeout: 30_000 });
+
+  // One row carries a conversation and the other does not — without that the
+  // measurement below would pass on a list that has the bug.
+  const counts = await page
+    .locator(".change-row .change-row-comments")
+    .allTextContents();
+  expect(counts.filter((text) => text.trim() !== "")).toHaveLength(1);
+  expect(counts.filter((text) => text.trim() === "")).toHaveLength(1);
+
+  const lefts = await page
+    .locator(".change-row .change-standing")
+    .evaluateAll((standings) =>
+      standings.map(
+        (standing) =>
+          Math.round(standing.getBoundingClientRect().left * 10) / 10,
+      ),
+    );
+  expect(lefts).toHaveLength(2);
+  expect(
+    new Set(lefts).size,
+    `the standing sits at ${lefts.join(" and ")} — a list that zig-zags`,
+  ).toBe(1);
 });

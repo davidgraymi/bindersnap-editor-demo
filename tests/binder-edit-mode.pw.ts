@@ -22,7 +22,7 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { API_BASE_URL, APP_BASE_URL } from "./helpers";
+import { API_BASE_URL, APP_BASE_URL, openTreeFolder } from "./helpers";
 
 test.describe.configure({ mode: "serial", timeout: 240_000 });
 
@@ -340,15 +340,19 @@ test("Edit opens a draft, and the address says so", async ({ page }) => {
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
   // Nothing about drafts until somebody asks for one.
-  await expect(page.locator(".draft-bar")).toBeHidden();
+  await expect(page.locator(".bs-draftbar")).toBeHidden();
 
   await page.getByRole("button", { name: "Edit", exact: true }).click();
 
-  const bar = page.locator(".draft-bar");
+  const bar = page.locator(".bs-draftbar");
   await expect(bar).toBeVisible({ timeout: 30_000 });
-  await expect(bar).toContainText("Nothing in your draft yet");
-  // In the address, so a reload lands back in the same work.
-  await expect(page).toHaveURL(/\?edit=1$/);
+  await expect(bar).toContainText("Nothing in it yet");
+  // Named from the moment it exists, so the bar, the picker and the propose
+  // screen never invent one between them and disagree (D8).
+  await expect(bar).toContainText("You are editing");
+  // In the address, and *which* draft — a person may have several, so a
+  // reload, a back button and a pasted link all have to land in the same work.
+  await expect(page).toHaveURL(/\?edit=1&draft=draft%2F/);
 
   // Propose is off with nothing to propose: a change request with no changes
   // in it is a request nobody can act on.
@@ -368,8 +372,10 @@ test("a rename in the tree lands in the draft, and the row keeps it", async ({
   // draft is opened through the button, the way a person would.
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Edit", exact: true }).click();
-  await expect(page.locator(".draft-bar")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
+  // Hand Hygiene is filed in Nursing, and folders start shut.
+  await openTreeFolder(page, "Nursing");
   await page.getByRole("button", { name: "Rename Hand Hygiene" }).click();
   const box = page.getByRole("textbox", { name: "New name" });
   await expect(box).toBeFocused();
@@ -381,7 +387,7 @@ test("a rename in the tree lands in the draft, and the row keeps it", async ({
   await expect(
     page.locator(".binder-tree-label", { hasText: "Hand Hygiene And PPE" }),
   ).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator(".draft-bar")).toContainText("1 change");
+  await expect(page.locator(".bs-draftbar")).toContainText("1 change");
 
   // And the record is untouched, which is the half a screenshot cannot show.
   const onRecord = await listDocuments(session, org, binder);
@@ -399,7 +405,7 @@ test("Escape leaves the name alone", async ({ page }) => {
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Edit", exact: true }).click();
-  await expect(page.locator(".draft-bar")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   await page.getByRole("button", { name: "Rename Staff Handbook" }).click();
   const box = page.getByRole("textbox", { name: "New name" });
@@ -409,9 +415,7 @@ test("Escape leaves the name alone", async ({ page }) => {
   await expect(
     page.locator(".binder-tree-label", { hasText: "Staff Handbook" }),
   ).toBeVisible();
-  await expect(page.locator(".draft-bar")).toContainText(
-    "Nothing in your draft yet",
-  );
+  await expect(page.locator(".bs-draftbar")).toContainText("Nothing in it yet");
 });
 
 test("Propose opens the change request, with the words the author wrote", async ({
@@ -423,18 +427,21 @@ test("Propose opens the change request, with the words the author wrote", async 
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Edit", exact: true }).click();
-  await expect(page.locator(".draft-bar")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
+  // Hand Hygiene is filed in Nursing, and folders start shut.
+  await openTreeFolder(page, "Nursing");
   await page.getByRole("button", { name: "Rename Hand Hygiene" }).click();
   const box = page.getByRole("textbox", { name: "New name" });
   await box.fill("Hand Hygiene and PPE");
   await box.press("Enter");
-  await expect(page.locator(".draft-bar")).toContainText("1 change", {
+  await expect(page.locator(".bs-draftbar")).toContainText("1 change", {
     timeout: 30_000,
   });
 
   await page.getByRole("button", { name: "Propose" }).click();
-  await expect(page).toHaveURL(/\?edit=propose$/);
+  // Which draft is being proposed, because a person may have several.
+  await expect(page).toHaveURL(/\?edit=propose&draft=draft%2F/);
 
   // The description arrives written: the acts are the commits, and nobody
   // should have to retype what they just did.
@@ -470,19 +477,21 @@ test("Discard throws the draft away and leaves the binder as it was", async ({
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Edit", exact: true }).click();
-  await expect(page.locator(".draft-bar")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
+  // Hand Hygiene is filed in Nursing, and folders start shut.
+  await openTreeFolder(page, "Nursing");
   await page.getByRole("button", { name: "Rename Hand Hygiene" }).click();
   const box = page.getByRole("textbox", { name: "New name" });
   await box.fill("Hand Hygiene and PPE");
   await box.press("Enter");
-  await expect(page.locator(".draft-bar")).toContainText("1 change", {
+  await expect(page.locator(".bs-draftbar")).toContainText("1 change", {
     timeout: 30_000,
   });
 
   await page.getByRole("button", { name: "Discard" }).click();
 
-  await expect(page.locator(".draft-bar")).toBeHidden({ timeout: 30_000 });
+  await expect(page.locator(".bs-draftbar")).toBeHidden({ timeout: 30_000 });
   await expect(page).toHaveURL(new RegExp(`/${org}/${binder}$`));
   await expect(
     page.locator(".binder-tree-label", { hasText: "Hand Hygiene" }),
@@ -547,7 +556,7 @@ test("a policy dragged onto a folder is filed there", async ({ page }) => {
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Edit", exact: true }).click();
-  await expect(page.locator(".draft-bar")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   const handbook = page
     .locator(".binder-tree-row")
@@ -558,7 +567,7 @@ test("a policy dragged onto a folder is filed there", async ({ page }) => {
 
   await handbook.dragTo(nursing);
 
-  await expect(page.locator(".draft-bar")).toContainText("1 change", {
+  await expect(page.locator(".bs-draftbar")).toContainText("1 change", {
     timeout: 30_000,
   });
   expect(await draftActs(session, org, binder)).toEqual([
@@ -586,7 +595,7 @@ test("a folder dragged onto another takes everything in it", async ({
 
   await signInBrowser(page, session);
   await page.goto(`${APP_BASE_URL}/${org}/${binder}?edit=1`);
-  await expect(page.locator(".draft-bar")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   await page
     .locator(".binder-tree-row--folder")
@@ -595,7 +604,7 @@ test("a folder dragged onto another takes everything in it", async ({
       page.locator(".binder-tree-row--folder").filter({ hasText: "Clinical" }),
     );
 
-  await expect(page.locator(".draft-bar")).toContainText("2 changes", {
+  await expect(page.locator(".bs-draftbar")).toContainText("2 changes", {
     timeout: 30_000,
   });
   expect(await draftActs(session, org, binder)).toEqual([
@@ -621,8 +630,9 @@ test("a folder cannot be dropped inside itself", async ({ page }) => {
 
   await signInBrowser(page, session);
   await page.goto(`${APP_BASE_URL}/${org}/${binder}?edit=1`);
-  await expect(page.locator(".draft-bar")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
+  await openTreeFolder(page, "Nursing");
   await page
     .locator(".binder-tree-row--folder")
     .filter({ hasText: "Nursing" })
@@ -649,7 +659,7 @@ test("the Move button files something without a pointer", async ({ page }) => {
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Edit", exact: true }).click();
-  await expect(page.locator(".draft-bar")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   await page.getByRole("button", { name: "Move Staff Handbook" }).click();
   await page
@@ -657,7 +667,7 @@ test("the Move button files something without a pointer", async ({ page }) => {
     .selectOption("nursing");
   await page.getByRole("button", { name: "Move", exact: true }).click();
 
-  await expect(page.locator(".draft-bar")).toContainText("1 change", {
+  await expect(page.locator(".bs-draftbar")).toContainText("1 change", {
     timeout: 30_000,
   });
   expect(await draftActs(session, org, binder)).toEqual([
@@ -674,7 +684,9 @@ test("a policy dragged out of its folder lands at the top level", async ({
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Edit", exact: true }).click();
-  await expect(page.locator(".draft-bar")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
+
+  await openTreeFolder(page, "Nursing");
 
   // The root zone only exists while something is in the air, so the drag has
   // to be driven by hand rather than by `dragTo`.
@@ -690,7 +702,7 @@ test("a policy dragged out of its folder lands at the top level", async ({
   await zone.hover();
   await page.mouse.up();
 
-  await expect(page.locator(".draft-bar")).toContainText("1 change", {
+  await expect(page.locator(".bs-draftbar")).toContainText("1 change", {
     timeout: 30_000,
   });
   expect(await draftActs(session, org, binder)).toEqual([
@@ -716,4 +728,1108 @@ test("the binder's list carries each policy's identity", async () => {
   // A ULID — 26 characters of Crockford base32, which is what the version tags
   // are named after.
   expect(hygiene!.uid).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/);
+});
+
+/**
+ * A policy renamed in a draft still opens.
+ *
+ * **The customer hit this on a document sitting in front of them:** *"While
+ * editing a binder if I rename a document and then click on it to open it an
+ * error pops up that the document doesn't exist. This should not be the case.
+ * There should be a branch with this document."*
+ *
+ * There is, and that was the whole of it: the tree in edit mode shows the
+ * draft's names, and the page it opened asked `main` — which has never heard
+ * of the new address, and said so.
+ */
+test("a policy renamed in a draft opens at the name it was renamed to", async () => {
+  const { session, org, binder } = await provisionBinder();
+  const draft = await openDraft(session, org, binder);
+
+  await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/document-renames`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({
+        documentPath: "nursing/hand-hygiene",
+        name: "Hand Hygiene and PPE",
+        draft,
+      }),
+    },
+  );
+
+  const address = `${API_BASE_URL}/api/app/binders/${org}/${binder}/documents/nursing%2Fhand-hygiene-and-ppe`;
+
+  // On `main` that address does not exist, and saying so is correct.
+  const onRecord = await fetch(address, { headers: authHeaders(session) });
+  expect(onRecord.status).toBe(404);
+
+  const inDraft = await fetch(`${address}?draft=${encodeURIComponent(draft)}`, {
+    headers: authHeaders(session),
+  });
+  expect(inDraft.status, await inDraft.clone().text()).toBe(200);
+  const body = (await inDraft.json()) as {
+    document: { slugPath: string };
+    ref: string;
+  };
+  expect(body.document.slugPath).toBe("nursing/hand-hygiene-and-ppe");
+  // Read on the branch that holds it, so the file behind it reads too.
+  expect(body.ref).toBe(draft);
+});
+
+/** And in the browser, which is where it was reported. */
+test("clicking a renamed policy in the tree opens it, not an error", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provisionBinder();
+  await signInBrowser(page, session);
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+
+  await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
+
+  // Hand Hygiene is filed in Nursing, and folders start shut.
+  await openTreeFolder(page, "Nursing");
+  await page.getByRole("button", { name: "Rename Hand Hygiene" }).click();
+  const box = page.getByRole("textbox", { name: "New name" });
+  await box.fill("Hand Hygiene and PPE");
+  await box.press("Enter");
+
+  const row = page.locator(".binder-tree-label", {
+    hasText: "Hand Hygiene And PPE",
+  });
+  await expect(row).toBeVisible({ timeout: 30_000 });
+  await row.click();
+
+  // The document's own page, under the name it was just given. The page's own
+  // heading, not the one inside the policy: a rendered Markdown policy opens
+  // with its own `# Hand Hygiene`, so once the preview lands there are two and
+  // `.app-main h1` is a strict-mode violation rather than an assertion.
+  await expect(
+    page.locator(".app-main h1:not(.doc-preview-prose h1)"),
+  ).toHaveText("Hand Hygiene And PPE", { timeout: 30_000 });
+  await expect(page.locator(".app-main")).not.toContainText("No such document");
+  // Still editing, which is also the way back to what they were doing.
+  expect(page.url()).toContain("edit=1");
+});
+
+/**
+ * Comparing a change that renamed the policy it changed.
+ *
+ * **Also reported:** *"When I click compare on a renamed document an error
+ * pops up saying the document doesn't exist."* The comparison reads two refs —
+ * the proposed version on the change's branch, and the version it replaces on
+ * the base — and a rename gives one document two addresses. The base has never
+ * heard of the new one.
+ *
+ * The identity is what is the same at both refs (ADR 0005), and it rides in
+ * the filename, so the file operations address the document by its path rather
+ * than by where it is filed.
+ */
+test("the version a rename replaces is still readable at the base", async () => {
+  const { session, org, binder } = await provisionBinder();
+  const draft = await openDraft(session, org, binder);
+
+  await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/document-renames`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({
+        documentPath: "nursing/hand-hygiene",
+        name: "Hand Hygiene and PPE",
+        draft,
+      }),
+    },
+  );
+
+  const [renamed] = (await listDocuments(session, org, binder, draft)).documents
+    .filter((entry) => entry.slugPath === "nursing/hand-hygiene-and-ppe")
+    .map((entry) => entry.uid);
+  expect(renamed).toBeTruthy();
+
+  // The file path, which carries the identity — what the change page sends.
+  const onDraft = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/documents/nursing%2Fhand-hygiene-and-ppe?draft=${encodeURIComponent(draft)}`,
+    { headers: authHeaders(session) },
+  );
+  const { document } = (await onDraft.json()) as {
+    document: { path: string };
+  };
+
+  // Asked at `main`, where the policy is still called Hand Hygiene. The
+  // address is unknown there and the identity is not.
+  const atBase = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/raw/${document.path
+      .split("/")
+      .map(encodeURIComponent)
+      .join("/")}?ref=main`,
+    { headers: authHeaders(session) },
+  );
+  expect(atBase.status, await atBase.clone().text()).toBe(200);
+});
+
+// ── Several drafts (D8) ────────────────────────────────────────────────────
+
+/** The draft payload, which now carries every draft of yours. */
+async function readDrafts(
+  session: string,
+  org: string,
+  binder: string,
+  branch?: string,
+): Promise<{
+  draft: { branch: string; name: string } | null;
+  drafts: Array<{ branch: string; name: string; actCount: number }>;
+  others: Array<{ owner: string }>;
+}> {
+  const query = branch ? `?draft=${encodeURIComponent(branch)}` : "";
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/draft${query}`,
+    { headers: authHeaders(session) },
+  );
+  expect(response.status, await response.clone().text()).toBe(200);
+  return (await response.json()) as never;
+}
+
+async function startNamedDraft(
+  session: string,
+  org: string,
+  binder: string,
+  name: string,
+): Promise<string> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/draft`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({ name }),
+    },
+  );
+  expect(response.status, await response.clone().text()).toBe(201);
+  return ((await response.json()) as { draft: { branch: string } }).draft
+    .branch;
+}
+
+/**
+ * **Pressing Edit still resumes.** That is not a detail to preserve out of
+ * caution — accidental forks are the mistake the one-draft rule existed to
+ * prevent, and they still are. What changes is that forking is now available
+ * *deliberately*, with a name attached.
+ */
+test("pressing Edit twice resumes, and does not fork", async () => {
+  const { session, org, binder } = await provisionBinder();
+
+  const first = await openDraft(session, org, binder);
+  const again = await openDraft(session, org, binder);
+  expect(again).toBe(first);
+
+  const { drafts } = await readDrafts(session, org, binder);
+  expect(drafts).toHaveLength(1);
+});
+
+/**
+ * Two unrelated reorganisations should not have to be proposed in one change
+ * request, and approved or refused together, just because the same person did
+ * both. That is D8, and it is the customer's decision rather than ours.
+ */
+test("a named draft is a second one, alongside the first", async () => {
+  const { session, org, binder } = await provisionBinder();
+
+  const first = await openDraft(session, org, binder);
+  const second = await startNamedDraft(
+    session,
+    org,
+    binder,
+    "Retire the paper forms",
+  );
+  expect(second).not.toBe(first);
+
+  const { drafts } = await readDrafts(session, org, binder);
+  expect(drafts).toHaveLength(2);
+  expect(drafts.map((entry) => entry.name)).toContain("Retire the paper forms");
+});
+
+/** A draft with no name is the state this exists to avoid. */
+test("a draft started with an empty name is refused", async () => {
+  const { session, org, binder } = await provisionBinder();
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/draft`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({ name: "   " }),
+    },
+  );
+  expect(response.status).toBe(400);
+});
+
+/** Which draft you are in is the address's to say, and the read follows it. */
+test("the read answers with the draft it was asked for", async () => {
+  const { session, org, binder } = await provisionBinder();
+
+  const first = await openDraft(session, org, binder);
+  const second = await startNamedDraft(session, org, binder, "The other one");
+
+  expect((await readDrafts(session, org, binder, first)).draft?.branch).toBe(
+    first,
+  );
+  expect((await readDrafts(session, org, binder, second)).draft?.branch).toBe(
+    second,
+  );
+  // Unasked is the newest, which is what it meant when there was only one.
+  expect((await readDrafts(session, org, binder)).draft?.branch).toBe(second);
+});
+
+/**
+ * A read, so a branch it cannot serve falls back rather than failing.
+ *
+ * Landing somebody in their most recent work beats an error about a branch
+ * name they never typed — a stale link or a discarded draft is the ordinary
+ * case, not a fault.
+ */
+test("a draft that is not yours is not served, and not an error either", async () => {
+  const { session, org, binder } = await provisionBinder();
+  const mine = await openDraft(session, org, binder);
+
+  const { draft } = await readDrafts(
+    session,
+    org,
+    binder,
+    "draft/someone-else/20260101000000",
+  );
+  expect(draft?.branch).toBe(mine);
+});
+
+test("a draft can be called something else", async () => {
+  const { session, org, binder } = await provisionBinder();
+  const branch = await openDraft(session, org, binder);
+
+  const renamed = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/draft`,
+    {
+      method: "PATCH",
+      headers: authHeaders(session),
+      body: JSON.stringify({ draft: branch, name: "Reorganise nursing" }),
+    },
+  );
+  expect(renamed.status, await renamed.clone().text()).toBe(200);
+
+  const { drafts } = await readDrafts(session, org, binder);
+  expect(drafts[0]?.name).toBe("Reorganise nursing");
+});
+
+/** Renaming somebody else's is the same refusal every draft route makes. */
+test("renaming a draft that is not yours is refused", async () => {
+  const { session, org, binder } = await provisionBinder();
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/draft`,
+    {
+      method: "PATCH",
+      headers: authHeaders(session),
+      body: JSON.stringify({
+        draft: "draft/someone-else/20260101000000",
+        name: "Mine now",
+      }),
+    },
+  );
+  expect(response.status).toBe(409);
+});
+
+/**
+ * **Each draft is its own branch, and the acts stay where they were made.**
+ * The whole reason for several drafts: two reorganisations that do not travel
+ * together.
+ */
+test("an act in one draft is not in the other", async () => {
+  const { session, org, binder } = await provisionBinder();
+
+  const first = await openDraft(session, org, binder);
+  const second = await startNamedDraft(session, org, binder, "The other one");
+
+  await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/document-renames`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({
+        documentPath: "nursing/hand-hygiene",
+        name: "Hand Hygiene and PPE",
+        draft: first,
+      }),
+    },
+  );
+
+  const inFirst = await listDocuments(session, org, binder, first);
+  expect(inFirst.documents.map((entry) => entry.slugPath)).toContain(
+    "nursing/hand-hygiene-and-ppe",
+  );
+
+  const inSecond = await listDocuments(session, org, binder, second);
+  expect(inSecond.documents.map((entry) => entry.slugPath)).toContain(
+    "nursing/hand-hygiene",
+  );
+  expect(inSecond.documents.map((entry) => entry.slugPath)).not.toContain(
+    "nursing/hand-hygiene-and-ppe",
+  );
+});
+
+/** Discarding the one you are in must not take the other with it. */
+test("discarding one draft leaves the others alone", async () => {
+  const { session, org, binder } = await provisionBinder();
+
+  const first = await openDraft(session, org, binder);
+  const second = await startNamedDraft(session, org, binder, "The other one");
+
+  const discarded = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/draft?draft=${encodeURIComponent(second)}`,
+    { method: "DELETE", headers: authHeaders(session) },
+  );
+  expect(discarded.status, await discarded.clone().text()).toBe(200);
+
+  const { drafts } = await readDrafts(session, org, binder);
+  expect(drafts.map((entry) => entry.branch)).toEqual([first]);
+});
+
+/**
+ * And proposing proposes the one you were looking at.
+ *
+ * Proposing the newest instead would send unrelated work to reviewers under a
+ * title written about something else.
+ */
+test("proposing sends the draft it was asked to send", async () => {
+  const { session, org, binder } = await provisionBinder();
+
+  const first = await openDraft(session, org, binder);
+  await startNamedDraft(session, org, binder, "The newer one");
+
+  await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/document-renames`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({
+        documentPath: "nursing/hand-hygiene",
+        name: "Hand Hygiene and PPE",
+        draft: first,
+      }),
+    },
+  );
+
+  const proposed = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/changes`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({
+        title: "Rename hand hygiene",
+        draft: first,
+      }),
+    },
+  );
+  expect(proposed.status, await proposed.clone().text()).toBe(201);
+  expect(((await proposed.json()) as { branch: string }).branch).toBe(first);
+
+  // The proposed one stops being a draft; the other is untouched.
+  const { drafts } = await readDrafts(session, org, binder);
+  expect(drafts.map((entry) => entry.branch)).not.toContain(first);
+  expect(drafts).toHaveLength(1);
+});
+
+/**
+ * A change request that renamed a document says so.
+ *
+ * **A rename is a change even when not a word of the document changed**, and
+ * the comparison cannot show it: the identity survives a rename and the
+ * address does not (ADR 0005), so both versions read identically and the
+ * screen reported "nothing changed" about a change that plainly did
+ * something. The change knows, because the same identity is filed somewhere
+ * else on the branch it would land on.
+ */
+test("a change that renames a document reports where it was", async () => {
+  const { session, org, binder } = await provisionBinder();
+  const draft = await openDraft(session, org, binder);
+
+  await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/document-renames`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({
+        documentPath: "nursing/hand-hygiene",
+        name: "Hand Hygiene and PPE",
+        draft,
+      }),
+    },
+  );
+
+  const proposed = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/changes`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({ title: "Rename hand hygiene", draft }),
+    },
+  );
+  const { changeNumber } = (await proposed.json()) as { changeNumber: number };
+
+  const detail = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/changes/${changeNumber}`,
+    { headers: authHeaders(session) },
+  );
+  expect(detail.status, await detail.clone().text()).toBe(200);
+  const { documents } = (await detail.json()) as {
+    documents: Array<{ slugPath: string; previousSlugPath: string | null }>;
+  };
+
+  const renamed = documents.find(
+    (entry) => entry.slugPath === "nursing/hand-hygiene-and-ppe",
+  );
+  expect(renamed, "the renamed document is not in the change").toBeTruthy();
+  expect(renamed!.previousSlugPath).toBe("nursing/hand-hygiene");
+});
+
+/** A document filed where it always was has no "was" to report. */
+test("a change that only revises a document reports no move", async () => {
+  const { session, org, binder } = await provisionBinder();
+
+  const form = new FormData();
+  form.set(
+    "file",
+    new Blob(["# Hand Hygiene\n\nRewritten.\n"], { type: "text/markdown" }),
+    "hand-hygiene.md",
+  );
+  form.set("documentPath", "nursing/hand-hygiene");
+  const revised = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/document-revisions`,
+    {
+      method: "POST",
+      headers: {
+        Origin: APP_BASE_URL,
+        Cookie: `bindersnap_session=${session}`,
+      },
+      body: form,
+    },
+  );
+  const body = (await revised.json()) as {
+    changeNumber?: number;
+    pullRequestNumber?: number;
+  };
+  const number = body.changeNumber ?? body.pullRequestNumber;
+  expect(
+    number,
+    `revising opened no change: ${JSON.stringify(body)}`,
+  ).toBeTruthy();
+
+  const detail = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/changes/${number}`,
+    { headers: authHeaders(session) },
+  );
+  const { documents } = (await detail.json()) as {
+    documents: Array<{ previousSlugPath: string | null }>;
+  };
+  expect(documents[0]?.previousSlugPath).toBeNull();
+});
+
+// ── A document on a change's branch ────────────────────────────────────────
+
+/**
+ * **A change request is a branch, and a document on it has an address.**
+ *
+ * Reading what a change proposes used to happen inside the change's own page,
+ * in a panel beside the discussion: half a column wide, under a heading naming
+ * the change rather than the document, at a URL that said nothing about which
+ * document it was. It is the binder at another ref, which is what every other
+ * git front end does and what a reader already knows how to use.
+ */
+test("a document reads at its own address on a change's branch", async () => {
+  const { session, org, binder } = await provisionBinder();
+  const draft = await openDraft(session, org, binder);
+
+  const form = new FormData();
+  form.set(
+    "file",
+    new Blob(["# Hand Hygiene\n\nProposed wording.\n"], {
+      type: "text/markdown",
+    }),
+    "hand-hygiene.md",
+  );
+  form.set("documentPath", "nursing/hand-hygiene");
+  form.set("draft", draft);
+  await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/document-revisions`,
+    {
+      method: "POST",
+      headers: {
+        Origin: APP_BASE_URL,
+        Cookie: `bindersnap_session=${session}`,
+      },
+      body: form,
+    },
+  );
+
+  const proposed = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/changes`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({ title: "Reword hand hygiene", draft }),
+    },
+  );
+  const { changeNumber } = (await proposed.json()) as { changeNumber: number };
+
+  const address = `${API_BASE_URL}/api/app/binders/${org}/${binder}/documents/nursing%2Fhand-hygiene`;
+
+  const onChange = await fetch(`${address}?change=${changeNumber}`, {
+    headers: authHeaders(session),
+  });
+  expect(onChange.status, await onChange.clone().text()).toBe(200);
+  const onChangeBody = (await onChange.json()) as {
+    ref: string;
+    state: string;
+  };
+  // Read on the change's branch, so the bytes behind it are the proposed ones.
+  expect(onChangeBody.ref).not.toBe("main");
+
+  // **And it is still a published policy.** "Proposed" means the document is
+  // not on the record at all, which is a question about its version tags
+  // rather than about which branch is being read — printing "this policy is
+  // not in the binder yet" over a policy at v1 is false.
+  expect(onChangeBody.state).toBe("published");
+
+  const onRecord = await fetch(address, { headers: authHeaders(session) });
+  expect(((await onRecord.json()) as { ref: string }).ref).toBe("main");
+});
+
+/** A change nobody opened is not a ref, and asking for one falls back. */
+test("a document asked for on a change that is not there reads the record", async () => {
+  const { session, org, binder } = await provisionBinder();
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/documents/nursing%2Fhand-hygiene?change=9999`,
+    { headers: authHeaders(session) },
+  );
+  expect(response.status, await response.clone().text()).toBe(200);
+  expect(((await response.json()) as { ref: string }).ref).toBe("main");
+});
+
+/** In the browser: the document's own page, not a panel in the change's. */
+test("Open on a change lands on the document's own page", async ({ page }) => {
+  const { session, org, binder } = await provisionBinder();
+  await signInBrowser(page, session);
+
+  const form = new FormData();
+  form.set(
+    "file",
+    new Blob(["# Hand Hygiene\n\nProposed wording.\n"], {
+      type: "text/markdown",
+    }),
+    "hand-hygiene.md",
+  );
+  form.set("documentPath", "nursing/hand-hygiene");
+  const revised = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/document-revisions`,
+    {
+      method: "POST",
+      headers: {
+        Origin: APP_BASE_URL,
+        Cookie: `bindersnap_session=${session}`,
+      },
+      body: form,
+    },
+  );
+  const body = (await revised.json()) as {
+    changeNumber?: number;
+    pullRequestNumber?: number;
+  };
+  const number = body.changeNumber ?? body.pullRequestNumber;
+
+  await page.goto(
+    `${APP_BASE_URL}/${org}/${binder}?tab=changes&change=${number}`,
+  );
+  await page.getByRole("button", { name: "Open", exact: true }).click();
+
+  // The document's address, and the document's own name as the page's title.
+  // The branch is the address and the change rides along as the way back —
+  // a file lives on a branch, which is how every code host addresses one.
+  await expect(page).toHaveURL(
+    new RegExp(`/${org}/${binder}/nursing/hand-hygiene\\?ref=`),
+    { timeout: 30_000 },
+  );
+  await expect(page).toHaveURL(new RegExp(`[?&]change=${number}`));
+  // The page's own heading, not the `# Hand Hygiene` inside the policy.
+  await expect(
+    page.locator(".app-main h1:not(.doc-preview-prose h1)"),
+  ).toHaveText("Hand Hygiene", { timeout: 30_000 });
+  // Which version you are reading, said by the file panel — the customer, of
+  // GitHub: *"a branch selector in the file explorer so that it's clear what
+  // branch the user is viewing"*. It names the change, not a git object.
+  const version = page.locator(".app-explorer-versionbtn");
+  await expect(version).toHaveText(new RegExp(`Change #${number}`), {
+    timeout: 30_000,
+  });
+  // And it is a way somewhere, not a notice: the record is one click off.
+  await version.click();
+  await expect(
+    page.getByRole("menuitem", { name: /On the record/ }),
+  ).toBeVisible();
+  // Nothing in the menu says "branch", which is the word the strip used.
+  await expect(page.locator(".app-explorer-versionmenu")).not.toContainText(
+    "branch",
+  );
+  await page.keyboard.press("Escape");
+
+  // The way back to the change stays, because it is where the reader came
+  // from rather than a fact about the version.
+  await expect(page.locator(".doc-on-change")).toContainText(
+    `Back to change ${number}`,
+  );
+
+  // A link somebody saved to the old in-page preview lands there too.
+  await page.goto(
+    `${APP_BASE_URL}/${org}/${binder}?tab=changes&change=${number}&view=preview`,
+  );
+  // The branch is the address and the change rides along as the way back —
+  // a file lives on a branch, which is how every code host addresses one.
+  await expect(page).toHaveURL(
+    new RegExp(`/${org}/${binder}/nursing/hand-hygiene\\?ref=`),
+    { timeout: 30_000 },
+  );
+  await expect(page).toHaveURL(new RegExp(`[?&]change=${number}`));
+});
+
+// ── The binder's contents beside the policy you are reading ────────────────
+
+/**
+ * **So you can keep moving while you read.**
+ *
+ * *"I'm thinking about how GitHub opens a file and puts the filesystem in the
+ * left navbar. I like that because you can continue to navigate while you
+ * read."* A policy manual is read by looking rather than by navigating, and
+ * going back to the list to open the next policy is the clunk.
+ *
+ * Only while a policy is open: every other binder screen draws the tree
+ * itself, and two trees on one page is one too many.
+ */
+test("the binder's files sit in a panel beside an open policy", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provisionBinder();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
+  // The binder's own page has the tree, so the explorer does not repeat it.
+  await expect(page.locator(".app-explorer-item")).toHaveCount(0);
+
+  await openTreeFolder(page, "Nursing");
+  await page.locator(".binder-tree-label", { hasText: "Hand Hygiene" }).click();
+  await expect(
+    page.locator(".app-main h1:not(.doc-preview-prose h1)"),
+  ).toHaveText("Hand Hygiene", { timeout: 30_000 });
+
+  // Both policies are there, and the one being read is marked.
+  const rows = page.locator(".app-explorer-item");
+  await expect(rows).toHaveCount(2, { timeout: 30_000 });
+  await expect(page.locator(".app-explorer-item--active")).toHaveText(
+    "Hand Hygiene",
+  );
+
+  // And it navigates, which is the whole point of it being there.
+  await page
+    .locator(".app-explorer-item", { hasText: "Staff Handbook" })
+    .click();
+  await expect(page).toHaveURL(
+    new RegExp(`/${org}/${binder}/staff-handbook$`),
+    {
+      timeout: 30_000,
+    },
+  );
+});
+
+/**
+ * Reading a change's branch navigates that branch.
+ *
+ * A tree pinned to `main` beside a policy read on a change would list it under
+ * the name the change renamed it away from — and lead to an address that does
+ * not exist on the branch being read.
+ */
+test("the contents beside a change's policy are the change's", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provisionBinder();
+  const draft = await openDraft(session, org, binder);
+
+  await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/document-renames`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({
+        documentPath: "nursing/hand-hygiene",
+        name: "Hand Hygiene and PPE",
+        draft,
+      }),
+    },
+  );
+  const proposed = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/changes`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({ title: "Rename hand hygiene", draft }),
+    },
+  );
+  const { changeNumber } = (await proposed.json()) as { changeNumber: number };
+
+  await signInBrowser(page, session);
+  await page.goto(
+    `${APP_BASE_URL}/${org}/${binder}/nursing/hand-hygiene-and-ppe?change=${changeNumber}`,
+  );
+
+  // The branch's name for it, which `main` has never heard of.
+  await expect(
+    page.locator(".app-explorer-item", { hasText: "Hand Hygiene And PPE" }),
+  ).toBeVisible({ timeout: 30_000 });
+
+  // And a row leads somewhere that exists on the branch being read.
+  await page
+    .locator(".app-explorer-item", { hasText: "Staff Handbook" })
+    .click();
+  await expect(page).toHaveURL(
+    new RegExp(`/${org}/${binder}/staff-handbook\\?change=${changeNumber}$`),
+    { timeout: 30_000 },
+  );
+});
+
+/**
+ * **The files are a panel of their own, and the policy gets the rest.**
+ *
+ * *"Move the file explorer out of the side navigation bar into its own side
+ * navigation bar exactly like GitHub's… When you are viewing a document it
+ * should take up the entire screen width to the right of the left navigation
+ * bar."*
+ *
+ * Two panels answer two questions: the map of the product barely changes, and
+ * a binder's contents change every time you open a different binder.
+ */
+test("a policy is read beside its own file panel, at the page's full width", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provisionBinder();
+  await signInBrowser(page, session);
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/nursing/hand-hygiene`);
+  await expect(page.locator(".app-explorer")).toBeVisible({ timeout: 30_000 });
+
+  const measured = await page.evaluate(() => {
+    const box = (selector: string) => {
+      const element = document.querySelector(selector);
+      return element
+        ? {
+            left: Math.round(element.getBoundingClientRect().left),
+            width: Math.round(element.getBoundingClientRect().width),
+          }
+        : null;
+    };
+    return {
+      nav: box(".app-sidebar"),
+      explorer: box(".app-explorer"),
+      page: box(".docw-page"),
+      window: window.innerWidth,
+    };
+  });
+
+  // The explorer sits beside the map rather than inside it.
+  expect(measured.explorer!.left).toBe(
+    measured.nav!.left + measured.nav!.width,
+  );
+
+  // And the policy takes what is left, rather than the page measure a list
+  // or a form is capped at.
+  const remaining =
+    measured.window - measured.explorer!.left - measured.explorer!.width;
+  expect(measured.page!.width).toBeGreaterThan(remaining - 40);
+
+  // The map is still the map: its own entries are untouched by any of this.
+  await expect(
+    page.locator(".app-sidebar-item", { hasText: "Binders" }),
+  ).toBeVisible();
+});
+
+/** On a binder's own screens the page draws the tree, so the panel is absent. */
+test("the file panel is only there while a policy is open", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provisionBinder();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".app-explorer")).toBeHidden();
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}?tab=changes`);
+  await expect(page.locator(".app-explorer")).toBeHidden();
+});
+
+// ── A file at a ref ────────────────────────────────────────────────────────
+
+/**
+ * **A file lives on a branch, and that is the address it should have.**
+ *
+ * *"When I open a file in a PR on GitHub… it goes to the file on the commit
+ * that it was made on. Similarly we should navigate to the branch view instead
+ * of the change view."* A change request is one thing that happens to a
+ * branch; the branch is the thing the file is on, which is why every code host
+ * addresses a file by ref.
+ */
+test("a document reads at the branch the address names", async () => {
+  const { session, org, binder } = await provisionBinder();
+  const draft = await openDraft(session, org, binder);
+
+  await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/document-renames`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({
+        documentPath: "nursing/hand-hygiene",
+        name: "Hand Hygiene and PPE",
+        draft,
+      }),
+    },
+  );
+  const proposed = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/changes`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({ title: "Rename hand hygiene", draft }),
+    },
+  );
+  const { branch } = (await proposed.json()) as { branch: string };
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/documents/nursing%2Fhand-hygiene-and-ppe?ref=${encodeURIComponent(branch)}`,
+    { headers: authHeaders(session) },
+  );
+  expect(response.status, await response.clone().text()).toBe(200);
+  expect(((await response.json()) as { ref: string }).ref).toBe(branch);
+});
+
+/**
+ * **The one rule a raw ref would walk straight through.**
+ *
+ * Gitea lets every collaborator read every branch in the repository. The
+ * product's rule is narrower and is the one the draft model rests on: other
+ * people's drafts are visible as existing and never as contents. So a `draft/`
+ * ref goes through the same ownership check every other draft read uses.
+ */
+test("somebody else's draft is refused as a ref", async () => {
+  const { session, org, binder } = await provisionBinder();
+  const draft = await openDraft(session, org, binder);
+
+  const stranger = buildCredentials();
+  const strangerSession = await signUp(stranger);
+  const added = await fetch(`${API_BASE_URL}/api/app/orgs/${org}/people`, {
+    method: "POST",
+    headers: authHeaders(session),
+    body: JSON.stringify({ username: stranger.username, owner: false }),
+  });
+  expect(added.status, await added.text()).toBeLessThan(300);
+
+  // The stranger can read the binder, and Gitea would happily hand them the
+  // branch. The product's rule is narrower, and this is where it is kept.
+  const refused = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/documents/nursing%2Fhand-hygiene?ref=${encodeURIComponent(draft)}`,
+    { headers: authHeaders(strangerSession) },
+  );
+  expect(refused.status).toBe(409);
+  expect(await refused.text()).toMatch(/not yours/i);
+
+  // Their own is theirs to read.
+  const mine = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/documents/nursing%2Fhand-hygiene?ref=${encodeURIComponent(draft)}`,
+    { headers: authHeaders(session) },
+  );
+  expect(mine.status, await mine.clone().text()).toBe(200);
+});
+
+/**
+ * **A proposed draft is a change request, and its contents are the thing
+ * everybody is being asked to read.**
+ *
+ * A branch keeps its `draft/` name after it is proposed, so a rule that
+ * refused every `draft/` ref would have hidden exactly the branch reviewers
+ * need — which is what the first cut of this did.
+ */
+test("a draft that has been proposed is readable by anyone", async () => {
+  const { session, org, binder } = await provisionBinder();
+  const draft = await openDraft(session, org, binder);
+
+  await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/document-renames`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({
+        documentPath: "nursing/hand-hygiene",
+        name: "Hand Hygiene and PPE",
+        draft,
+      }),
+    },
+  );
+  await fetch(`${API_BASE_URL}/api/app/binders/${org}/${binder}/changes`, {
+    method: "POST",
+    headers: authHeaders(session),
+    body: JSON.stringify({ title: "Rename hand hygiene", draft }),
+  });
+
+  const reviewer = buildCredentials();
+  const reviewerSession = await signUp(reviewer);
+  await fetch(`${API_BASE_URL}/api/app/orgs/${org}/people`, {
+    method: "POST",
+    headers: authHeaders(session),
+    body: JSON.stringify({ username: reviewer.username, owner: false }),
+  });
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/documents/nursing%2Fhand-hygiene-and-ppe?ref=${encodeURIComponent(draft)}`,
+    { headers: authHeaders(reviewerSession) },
+  );
+  expect(response.status, await response.clone().text()).toBe(200);
+});
+
+/** Any other branch is an ordinary read for anyone who can read the binder. */
+test("a ref that is not a branch reads nothing rather than the record", async () => {
+  const { session, org, binder } = await provisionBinder();
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/documents/nursing%2Fhand-hygiene?ref=no-such-branch`,
+    { headers: authHeaders(session) },
+  );
+  // The binder is readable and the branch is not there, which is a 404 about
+  // the ref rather than a silent fall back to `main` — a reader following a
+  // stale link should be told, not quietly shown something else.
+  expect(response.status).toBe(404);
+  // And told in words rather than in Gitea's: it used to answer 400 with
+  // `sha not found [no-such-branch]`.
+  expect(await response.text()).toMatch(/no branch called/i);
+});
+
+/** In the browser: Open lands on the branch, and the explorer stays on it. */
+test("Open on a change lands on the branch, and browsing stays there", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provisionBinder();
+  await signInBrowser(page, session);
+
+  const form = new FormData();
+  form.set(
+    "file",
+    new Blob(["# Hand Hygiene\n\nProposed.\n"], { type: "text/markdown" }),
+    "hand-hygiene.md",
+  );
+  form.set("documentPath", "nursing/hand-hygiene");
+  const revised = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/document-revisions`,
+    {
+      method: "POST",
+      headers: {
+        Origin: APP_BASE_URL,
+        Cookie: `bindersnap_session=${session}`,
+      },
+      body: form,
+    },
+  );
+  const body = (await revised.json()) as {
+    changeNumber?: number;
+    pullRequestNumber?: number;
+  };
+  const number = body.changeNumber ?? body.pullRequestNumber;
+
+  await page.goto(
+    `${APP_BASE_URL}/${org}/${binder}?tab=changes&change=${number}`,
+  );
+  await page.getByRole("button", { name: "Open", exact: true }).click();
+
+  // The branch is the address, and the change rides along as the way back.
+  await expect(page).toHaveURL(/[?&]ref=/, { timeout: 30_000 });
+  await expect(page).toHaveURL(new RegExp(`[?&]change=${number}`));
+  // The file panel names the version its rows are addresses on.
+  await expect(page.locator(".app-explorer-versionbtn")).toHaveText(
+    new RegExp(`Change #${number}`),
+    { timeout: 30_000 },
+  );
+
+  // And browsing the branch's files stays on the branch.
+  await page
+    .locator(".app-explorer-item", { hasText: "Staff Handbook" })
+    .click();
+  await expect(page).toHaveURL(
+    new RegExp(`/${org}/${binder}/staff-handbook\\?ref=`),
+    { timeout: 30_000 },
+  );
+});
+
+/**
+ * **It is a file explorer, not a list.**
+ *
+ * The customer pointed at GitHub's: *"here is how github does file exploring
+ * and I really like how it works."* Three things make the difference, and a
+ * binder with forty policies in eight departments needs all three.
+ */
+test("the file panel opens and shuts folders, filters, and hides itself", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provisionBinder();
+  await signInBrowser(page, session);
+
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}/nursing/hand-hygiene`);
+  await expect(page.locator(".app-explorer")).toBeVisible({ timeout: 30_000 });
+
+  // Both policies, one of them inside Nursing.
+  const files = page.locator(".app-explorer-item");
+  await expect(files).toHaveCount(2);
+
+  // **A folder looks like a folder.** The row carried a triangle and nothing
+  // else, so the only thing telling a shut folder from a policy was a 13px
+  // twisty. Two glyphs now: the twisty, and the folder.
+  await expect(
+    page.locator(".app-explorer-folder", { hasText: "Nursing" }).locator("svg"),
+  ).toHaveCount(2);
+
+  // **Folders shut.** Without that a long binder is a wall rather than
+  // something you navigate.
+  await page.locator(".app-explorer-folder", { hasText: "Nursing" }).click();
+  await expect(files).toHaveCount(1);
+  await page.locator(".app-explorer-folder", { hasText: "Nursing" }).click();
+  await expect(files).toHaveCount(2);
+
+  // **A filter**, because past a certain size finding a policy by eye is
+  // slower than typing three letters of its name — and it reaches inside a
+  // folder, because a match nobody can see is not a match.
+  // "hygiene", not "hand": Staff Handbook contains "hand" too, which is the
+  // filter working rather than failing.
+  await page.getByPlaceholder("Go to file").fill("hygiene");
+  await expect(files).toHaveCount(1);
+  await expect(files.first()).toContainText("Hand Hygiene");
+  await page.getByPlaceholder("Go to file").fill("nothing matches this");
+  await expect(page.locator(".app-explorer-empty")).toBeVisible();
+  await page.getByPlaceholder("Go to file").fill("");
+
+  // **The panel shuts**, and leaves a rail — one that vanishes completely is
+  // a feature nobody finds again.
+  await page.getByRole("button", { name: "Hide the files" }).click();
+  await expect(files).toHaveCount(0);
+  const rail = await page.locator(".app-explorer").boundingBox();
+  expect(rail!.width).toBeLessThan(60);
+  expect(rail!.width).toBeGreaterThan(0);
+
+  await page.getByRole("button", { name: "Show the files" }).click();
+  await expect(files).toHaveCount(2);
 });

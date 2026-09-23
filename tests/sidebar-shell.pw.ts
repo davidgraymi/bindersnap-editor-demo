@@ -44,16 +44,26 @@ test("the sidebar is the map, grouped into work, manage and settings", async ({
     "Binders",
     "People & access",
     "Activity",
-    "Organization",
     "Billing",
   ] as const) {
     await expect(sidebar.getByRole("button", { name: label })).toBeVisible();
   }
 
-  // The grouping is the teaching — a flat list of eight would answer "where is
+  // The grouping is the teaching — a flat list of seven would answer "where is
   // billing" no better than the top bar did.
   await expect(sidebar.getByText("Manage", { exact: true })).toBeVisible();
   await expect(sidebar.getByText("Settings", { exact: true })).toBeVisible();
+
+  // **One destination per entry.** "Organization" opened the organization's
+  // page, which is the binder list, which "Binders" above it opens, which the
+  // org button in the top bar also opens: three entries, one destination, and
+  // the customer read the map and concluded two of them were broken. It is
+  // gone rather than repointed — "Binders" is the organization's home and
+  // "People & access" is the rest of it, so there was nothing left for a
+  // third entry to mean.
+  await expect(
+    sidebar.getByRole("button", { name: "Organization" }),
+  ).toHaveCount(0);
 });
 
 test("the sidebar navigates, and marks where you are", async ({ page }) => {

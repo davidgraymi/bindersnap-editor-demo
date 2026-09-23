@@ -27,7 +27,7 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { API_BASE_URL, APP_BASE_URL } from "./helpers";
+import { API_BASE_URL, APP_BASE_URL, openTreeFolder } from "./helpers";
 
 test.describe.configure({ mode: "serial", timeout: 240_000 });
 
@@ -247,6 +247,8 @@ async function readArchive(
   session: string,
   org: string,
   binder: string,
+  /** Take the difference against your own draft rather than against `main`. */
+  draft?: string,
 ): Promise<
   Array<{
     uid: string;
@@ -257,8 +259,9 @@ async function readArchive(
     archivings: number | null;
   }>
 > {
+  const query = draft ? `?draft=${encodeURIComponent(draft)}` : "";
   const response = await fetch(
-    `${API_BASE_URL}/api/app/binders/${org}/${binder}/archive`,
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/archive${query}`,
     { headers: authHeaders(session) },
   );
   expect(response.status, await response.clone().text()).toBe(200);
@@ -436,11 +439,13 @@ test("Archive is an act of edit mode, and the draft is the undo", async ({
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Edit", exact: true }).click();
-  await expect(page.locator(".draft-bar")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
+  // Folders start shut, so the policy is reached the way a person reaches it.
+  await openTreeFolder(page, "Nursing");
   await page.getByRole("button", { name: "Archive Hand Hygiene" }).click();
 
-  await expect(page.locator(".draft-bar")).toContainText(
+  await expect(page.locator(".bs-draftbar")).toContainText(
     "Archive Hand Hygiene",
     { timeout: 30_000 },
   );
@@ -451,7 +456,8 @@ test("Archive is an act of edit mode, and the draft is the undo", async ({
   expect(await readArchive(session, org, binder)).toEqual([]);
 
   await page.getByRole("button", { name: "Discard" }).click();
-  await expect(page.locator(".draft-bar")).toBeHidden({ timeout: 30_000 });
+  await expect(page.locator(".bs-draftbar")).toBeHidden({ timeout: 30_000 });
+  await openTreeFolder(page, "Nursing");
   await expect(
     page.locator(".binder-tree-label", { hasText: "Hand Hygiene" }),
   ).toBeVisible();
@@ -468,7 +474,7 @@ test("a folder cannot be archived, because that is a different act", async ({
 
   await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Edit", exact: true }).click();
-  await expect(page.locator(".draft-bar")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
 
   await expect(
     page.getByRole("button", { name: "Archive Nursing" }),
@@ -534,6 +540,56 @@ async function restore(
     },
   );
 }
+
+test("the archive opens in the tree, and Restore goes into the draft", async ({
+  page,
+}) => {
+  // **It was a page of its own, reachable only from the reading view** — so
+  // edit mode, the one place somebody can act on what they find there, had no
+  // way in and no way back. It is a section of the tree now, and restoring is
+  // an ordinary act of the draft like every other.
+  const { session, org, binder } = await provisionBinder();
+  await archiveAndPublish(session, org, binder, "nursing/hand-hygiene");
+
+  await signInBrowser(page, session);
+  await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
+  await expect(page.locator(".binder-tree")).toBeVisible({ timeout: 30_000 });
+
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
+
+  // Editing offers the archive in place; the link to the page of its own is
+  // for reading, so it is not drawn twice.
+  await expect(page.locator(".binder-archive-link")).toHaveCount(0);
+  const disclosure = page.getByRole("button", { name: /^Archived · / });
+  await expect(disclosure).toBeVisible();
+  await disclosure.click();
+
+  // **"Restore as v2", not "Restore".** It comes back at the filename it left
+  // with, so it keeps its identity and rejoins as its next version — which is
+  // the question somebody hesitating here actually has.
+  const restoreButton = page.getByRole("button", { name: "Restore as v2" });
+  await expect(restoreButton).toBeVisible({ timeout: 30_000 });
+  await restoreButton.click();
+
+  // Into the draft, and on the tree, and still not on the record. At the
+  // binder's top level — archiving the only policy in Nursing took the folder
+  // with it, and the draft bar says so: "to the binder's top level".
+  await expect(page.locator(".bs-draftbar")).toContainText("Restore", {
+    timeout: 30_000,
+  });
+  await expect(
+    page.locator(".binder-tree-label", { hasText: "Hand Hygiene" }),
+  ).toBeVisible({ timeout: 30_000 });
+  expect((await readArchive(session, org, binder)).length).toBe(1);
+
+  // And the draft is the undo, here as everywhere else.
+  await page.getByRole("button", { name: "Discard" }).click();
+  await expect(page.locator(".bs-draftbar")).toBeHidden({ timeout: 30_000 });
+  await expect(
+    page.locator(".binder-tree-label", { hasText: "Hand Hygiene" }),
+  ).toHaveCount(0);
+});
 
 test("a restored policy comes back on its next version, not at v1", async () => {
   // The reason ADR 0005 had to come first. The identity is a segment of the
@@ -702,4 +758,65 @@ test("Restore opens a change request rather than putting it straight back", asyn
   expect(listed.documents.map((document) => document.slugPath)).not.toContain(
     "nursing/hand-hygiene",
   );
+});
+
+/**
+ * The count and the list are one question, asked of one branch.
+ *
+ * **The customer could see the two disagree:** *"I see that the archive has 1
+ * more document in it by a count displayed, but when I try to expand the
+ * archive it does not work."* The binder counts its archive from whatever tree
+ * it is showing — the draft, while you are editing it — and the archive itself
+ * was read from `main`. A policy archived in a draft is off the draft's tree
+ * and still on `main`, and will be until the change publishes, so the heading
+ * said one and the list said none.
+ */
+test("the archive is read from the draft the count was counted in", async () => {
+  const { session, org, binder } = await provisionBinder();
+  const draft = await openDraft(session, org, binder);
+
+  const archived = await archive(session, org, binder, "nursing/hand-hygiene", {
+    draft,
+  });
+  expect(archived.status, await archived.clone().text()).toBe(201);
+
+  // Nothing has been published, so `main` is untouched and says so.
+  expect(await readArchive(session, org, binder)).toEqual([]);
+
+  const inDraft = await readArchive(session, org, binder, draft);
+  expect(inDraft).toHaveLength(1);
+  expect(inDraft[0]).toMatchObject({
+    slugPath: "nursing/hand-hygiene",
+    lastVersion: 1,
+  });
+});
+
+/**
+ * And it is named, not identified.
+ *
+ * A policy archived in a draft has no `archived-<n>` tag yet — that is written
+ * when the change publishes — so the only stamp is its last version's, and a
+ * binder tagged before stamps carried titles has nothing to read a name out
+ * of. `main` still holds the file under the name it had an act ago, which is
+ * better evidence than a 26-character identity.
+ */
+test("a policy archived in a draft is listed under its name", async () => {
+  const { session, org, binder } = await provisionBinder();
+  const draft = await openDraft(session, org, binder);
+  await archive(session, org, binder, "nursing/hand-hygiene", { draft });
+
+  const [entry] = await readArchive(session, org, binder, draft);
+  expect(entry!.title).toBe("Hand Hygiene");
+  expect(entry!.uid).not.toBe(entry!.title);
+});
+
+/** Somebody else's draft is not a ref you may read the binder at. */
+test("the archive refuses a draft that is not yours", async () => {
+  const { session, org, binder } = await provisionBinder();
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/archive?draft=draft/someone-else/20260101000000`,
+    { headers: authHeaders(session) },
+  );
+  expect(response.status).toBe(409);
 });

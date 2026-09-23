@@ -20,12 +20,18 @@ import type {
   DescribeBinder200,
   DescribeBinderBody,
   DiscardBinderDraft200,
+  DiscardBinderDraftParams,
   DownloadBinderDocumentParams,
+  EditBinderChange200,
+  EditBinderChangeBody,
   GetBinder200,
   GetBinderArchive200,
+  GetBinderArchiveParams,
   GetBinderChange200,
   GetBinderDocument200,
+  GetBinderDocumentParams,
   GetBinderDraft200,
+  GetBinderDraftParams,
   GetBinderHistory200,
   GetBinderPeople200,
   GetBinderSettings200,
@@ -42,6 +48,7 @@ import type {
   ListBinders200,
   ListOrganizationBinders200,
   OpenBinderDraft201,
+  OpenBinderDraftBody,
   ProposeBinderDraft201,
   ProposeBinderDraftBody,
   ProposeBinderSignOffRules201,
@@ -52,6 +59,8 @@ import type {
   RenameBinderBody,
   RenameBinderDocument201,
   RenameBinderDocumentBody,
+  RenameBinderDraft200,
+  RenameBinderDraftBody,
   RenameBinderFolder201,
   RenameBinderFolderBody,
   ReplyToBinderChangeDiscussion201,
@@ -779,19 +788,28 @@ export type getBinderDocumentResponse = (getBinderDocumentResponseSuccess)
 
 export const getGetBinderDocumentUrl = (org: string,
     binder: string,
-    documentPath: string,) => {
+    documentPath: string,
+    params?: GetBinderDocumentParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/app/binders/${org}/${binder}/documents/${documentPath}`
+  return stringifiedParams.length > 0 ? `/api/app/binders/${org}/${binder}/documents/${documentPath}?${stringifiedParams}` : `/api/app/binders/${org}/${binder}/documents/${documentPath}`
 }
 
 export const getBinderDocument = async (org: string,
     binder: string,
-    documentPath: string, options?: Parameters<typeof customFetch>[1]): Promise<getBinderDocumentResponse> => {
+    documentPath: string,
+    params?: GetBinderDocumentParams, options?: Parameters<typeof customFetch>[1]): Promise<getBinderDocumentResponse> => {
 
-  return customFetch<getBinderDocumentResponse>(getGetBinderDocumentUrl(org,binder,documentPath),
+  return customFetch<getBinderDocumentResponse>(getGetBinderDocumentUrl(org,binder,documentPath,params),
   {
     ...options,
     method: 'GET'
@@ -1008,18 +1026,27 @@ export type getBinderDraftResponseSuccess = (getBinderDraftResponse200) & {
 export type getBinderDraftResponse = (getBinderDraftResponseSuccess)
 
 export const getGetBinderDraftUrl = (org: string,
-    binder: string,) => {
+    binder: string,
+    params?: GetBinderDraftParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/app/binders/${org}/${binder}/draft`
+  return stringifiedParams.length > 0 ? `/api/app/binders/${org}/${binder}/draft?${stringifiedParams}` : `/api/app/binders/${org}/${binder}/draft`
 }
 
 export const getBinderDraft = async (org: string,
-    binder: string, options?: Parameters<typeof customFetch>[1]): Promise<getBinderDraftResponse> => {
+    binder: string,
+    params?: GetBinderDraftParams, options?: Parameters<typeof customFetch>[1]): Promise<getBinderDraftResponse> => {
 
-  return customFetch<getBinderDraftResponse>(getGetBinderDraftUrl(org,binder),
+  return customFetch<getBinderDraftResponse>(getGetBinderDraftUrl(org,binder,params),
   {
     ...options,
     method: 'GET'
@@ -1051,14 +1078,50 @@ export const getOpenBinderDraftUrl = (org: string,
 }
 
 export const openBinderDraft = async (org: string,
-    binder: string, options?: Parameters<typeof customFetch>[1]): Promise<openBinderDraftResponse> => {
+    binder: string,
+    openBinderDraftBody?: OpenBinderDraftBody, options?: Parameters<typeof customFetch>[1]): Promise<openBinderDraftResponse> => {
 
   return customFetch<openBinderDraftResponse>(getOpenBinderDraftUrl(org,binder),
   {
     ...options,
-    method: 'POST'
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(openBinderDraftBody)
+  }
+);}
 
 
+export type renameBinderDraftResponse200 = {
+  data: RenameBinderDraft200
+  status: 200
+}
+
+export type renameBinderDraftResponseSuccess = (renameBinderDraftResponse200) & {
+  headers: Headers;
+};
+;
+
+export type renameBinderDraftResponse = (renameBinderDraftResponseSuccess)
+
+export const getRenameBinderDraftUrl = (org: string,
+    binder: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/draft`
+}
+
+export const renameBinderDraft = async (org: string,
+    binder: string,
+    renameBinderDraftBody: RenameBinderDraftBody, options?: Parameters<typeof customFetch>[1]): Promise<renameBinderDraftResponse> => {
+
+  return customFetch<renameBinderDraftResponse>(getRenameBinderDraftUrl(org,binder),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(renameBinderDraftBody)
   }
 );}
 
@@ -1076,18 +1139,27 @@ export type discardBinderDraftResponseSuccess = (discardBinderDraftResponse200) 
 export type discardBinderDraftResponse = (discardBinderDraftResponseSuccess)
 
 export const getDiscardBinderDraftUrl = (org: string,
-    binder: string,) => {
+    binder: string,
+    params?: DiscardBinderDraftParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/app/binders/${org}/${binder}/draft`
+  return stringifiedParams.length > 0 ? `/api/app/binders/${org}/${binder}/draft?${stringifiedParams}` : `/api/app/binders/${org}/${binder}/draft`
 }
 
 export const discardBinderDraft = async (org: string,
-    binder: string, options?: Parameters<typeof customFetch>[1]): Promise<discardBinderDraftResponse> => {
+    binder: string,
+    params?: DiscardBinderDraftParams, options?: Parameters<typeof customFetch>[1]): Promise<discardBinderDraftResponse> => {
 
-  return customFetch<discardBinderDraftResponse>(getDiscardBinderDraftUrl(org,binder),
+  return customFetch<discardBinderDraftResponse>(getDiscardBinderDraftUrl(org,binder,params),
   {
     ...options,
     method: 'DELETE'
@@ -1250,18 +1322,27 @@ export type getBinderArchiveResponseSuccess = (getBinderArchiveResponse200) & {
 export type getBinderArchiveResponse = (getBinderArchiveResponseSuccess)
 
 export const getGetBinderArchiveUrl = (org: string,
-    binder: string,) => {
+    binder: string,
+    params?: GetBinderArchiveParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/app/binders/${org}/${binder}/archive`
+  return stringifiedParams.length > 0 ? `/api/app/binders/${org}/${binder}/archive?${stringifiedParams}` : `/api/app/binders/${org}/${binder}/archive`
 }
 
 export const getBinderArchive = async (org: string,
-    binder: string, options?: Parameters<typeof customFetch>[1]): Promise<getBinderArchiveResponse> => {
+    binder: string,
+    params?: GetBinderArchiveParams, options?: Parameters<typeof customFetch>[1]): Promise<getBinderArchiveResponse> => {
 
-  return customFetch<getBinderArchiveResponse>(getGetBinderArchiveUrl(org,binder),
+  return customFetch<getBinderArchiveResponse>(getGetBinderArchiveUrl(org,binder,params),
   {
     ...options,
     method: 'GET'
@@ -1303,6 +1384,43 @@ export const getBinderChange = async (org: string,
     method: 'GET'
 
 
+  }
+);}
+
+
+export type editBinderChangeResponse200 = {
+  data: EditBinderChange200
+  status: 200
+}
+
+export type editBinderChangeResponseSuccess = (editBinderChangeResponse200) & {
+  headers: Headers;
+};
+;
+
+export type editBinderChangeResponse = (editBinderChangeResponseSuccess)
+
+export const getEditBinderChangeUrl = (org: string,
+    binder: string,
+    changeNumber: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/changes/${changeNumber}`
+}
+
+export const editBinderChange = async (org: string,
+    binder: string,
+    changeNumber: string,
+    editBinderChangeBody: EditBinderChangeBody, options?: Parameters<typeof customFetch>[1]): Promise<editBinderChangeResponse> => {
+
+  return customFetch<editBinderChangeResponse>(getEditBinderChangeUrl(org,binder,changeNumber),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(editBinderChangeBody)
   }
 );}
 

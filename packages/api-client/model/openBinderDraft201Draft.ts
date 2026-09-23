@@ -11,6 +11,8 @@ import type { OpenBinderDraft201DraftActsItem } from './openBinderDraft201DraftA
  */
 export type OpenBinderDraft201Draft = {
   branch: string;
+  name: string;
+  named: boolean;
   owner: string;
   /** @nullable */
   updatedAt: string | null;

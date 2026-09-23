@@ -178,10 +178,13 @@ with `bun run down`; those two scripts are the only supported lifecycle, and
 they are safe to run concurrently from several worktrees — each claims its own
 project name and port block, so neither can touch another's containers. Ask
 `bun run stack status` which ports are yours; never assume the defaults). It
-seeds demo users and documents automatically from `tests/seed-data/dev.yaml` — which
-carries the same clinic policy as a Word file, a PDF, and a Markdown file, so
-the preview and comparison screens can be checked against every file type the
-app meets. Use this to:
+seeds eleven accounts and seven binders automatically from
+`tests/seed-data/dev.yaml`. That file is deliberately full of edge cases — a
+binder with nothing in it and one covered in sign-off rules, a change six people
+have been asked to review and one nobody has looked at in three versions, empty
+folders, every file type the comparison screen can meet — so that looking at a
+state does not mean building it first. Its header indexes what is in there and
+`tests/README.md` says the same in prose. Use this to:
 
 - Verify Gitea service implementations against a real API
 - Run integration tests (`bun run test:integration`)

@@ -1,11 +1,18 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { FileText, Upload } from "lucide-react";
 
 import {
   buildDocumentDisplayPath,
   buildDocumentSlugPath,
 } from "../../../packages/utils/documentPath";
-import { createBinderDocument, validateUploadFile } from "../api";
+import {
+  createBinderDocument,
+  fetchBinderDocuments,
+  validateUploadFile,
+} from "../api";
 import { formatFileSize } from "../documentFile";
+import { formatDocumentName } from "../documentDisplay";
+import { AppIcon } from "./AppIcon";
 import { ChangeTargetField } from "./ChangeTargetField";
 
 /**
@@ -56,6 +63,20 @@ function suggestName(fileName: string): string {
     .trim();
 }
 
+/**
+ * The picker's answer when somebody wants a folder the binder does not have.
+ *
+ * A picker of what exists is right — a typo used to file a policy in a folder
+ * nobody would ever look in — but a binder's first policy has no folders to
+ * pick from, so the picker has to be able to make one.
+ */
+const NEW_FOLDER = "\u0000new";
+
+/** `clinical/nursing` → "Clinical / Nursing". A folder is a slug too. */
+function describeFolderPath(folder: string): string {
+  return folder.split("/").map(formatDocumentName).join(" / ");
+}
+
 /** The extension the server will keep, so the preview can show it. */
 function extensionOf(fileName: string): string {
   const base = fileName.split(/[\\/]/).pop() ?? fileName;
@@ -73,6 +94,13 @@ export function AddPolicyModal({
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState("");
   const [folder, setFolder] = useState("");
+  /** What to call the folder, when the picker's answer is "a new one". */
+  const [newFolder, setNewFolder] = useState("");
+  /** The folders this binder has, so "where it goes" is a pick, not a path. */
+  const [folders, setFolders] = useState<string[] | null>(null);
+  /** True while a file is over the zone, so it says it will take it. */
+  const [over, setOver] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [changeNumber, setChangeNumber] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,30 +111,31 @@ export function AddPolicyModal({
     setError(null);
   }, [file]);
 
-  // Where it will land, worked out by the same functions the server commits
-  // with — so the address promised here is the address written.
-  //
-  // The *address*, not the filename: the server also writes a 26-character
-  // identity segment into the name (ADR 0005), minted there because only the
-  // server can mint one. Showing it here would put a blob nobody typed in front
-  // of somebody being asked to confirm where their policy is going, and it is
-  // not a thing they can act on.
-  const slugPath = useMemo(
-    () => buildDocumentSlugPath(name, folder || null),
-    [name, folder],
-  );
-  const filePath = useMemo(
-    () =>
-      file
-        ? buildDocumentDisplayPath(name, extensionOf(file.name), folder || null)
-        : "",
-    [file, name, folder],
-  );
+  useEffect(() => {
+    let cancelled = false;
+    fetchBinderDocuments(org, binder, draft)
+      .then((payload) => {
+        if (!cancelled) setFolders(payload.folders);
+      })
+      // A binder whose folders cannot be read still takes a policy, at its
+      // top level — which is what the picker then offers.
+      .catch(() => {
+        if (!cancelled) setFolders([]);
+      });
 
-  const canSubmit = file !== null && slugPath !== "" && !submitting;
+    return () => {
+      cancelled = true;
+    };
+  }, [org, binder, draft]);
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const chosen = event.target.files?.[0] ?? null;
+  /**
+   * Take a file, whichever way it arrived.
+   *
+   * **Dragged, in practice.** A policy manager has the `.docx` open in the
+   * window behind this one; what shipped was the browser's own
+   * `Choose File / No file chosen`, which has nothing to drag onto.
+   */
+  const takeFile = (chosen: File | null) => {
     if (!chosen) {
       setFile(null);
       return;
@@ -122,6 +151,38 @@ export function AddPolicyModal({
     setFile(chosen);
   };
 
+  // Where it will land, worked out by the same functions the server commits
+  // with — so the address promised here is the address written.
+  //
+  // The *address*, not the filename: the server also writes a 26-character
+  // identity segment into the name (ADR 0005), minted there because only the
+  // server can mint one. Showing it here would put a blob nobody typed in front
+  // of somebody being asked to confirm where their policy is going, and it is
+  // not a thing they can act on.
+  const filedIn = folder === NEW_FOLDER ? newFolder.trim() : folder;
+
+  const slugPath = useMemo(
+    () => buildDocumentSlugPath(name, filedIn || null),
+    [name, filedIn],
+  );
+  const filePath = useMemo(
+    () =>
+      file
+        ? buildDocumentDisplayPath(
+            name,
+            extensionOf(file.name),
+            filedIn || null,
+          )
+        : "",
+    [file, name, filedIn],
+  );
+
+  const canSubmit =
+    file !== null &&
+    slugPath !== "" &&
+    !submitting &&
+    (folder !== NEW_FOLDER || newFolder.trim() !== "");
+
   const handleSubmit = async () => {
     if (!file) return;
     setSubmitting(true);
@@ -133,7 +194,7 @@ export function AddPolicyModal({
         binder,
         file,
         name.trim(),
-        folder.trim() || undefined,
+        filedIn || undefined,
         draft ? { draft } : changeNumber ? { changeNumber } : undefined,
       );
       onAdded(created.pullRequestNumber);
@@ -160,27 +221,70 @@ export function AddPolicyModal({
       >
         <h2>Add a policy</h2>
 
-        <div className="create-document-form">
-          <label htmlFor="add-policy-file" className="upload-file-input-label">
-            <span className="bs-label">Choose file</span>
-            <input
-              id="add-policy-file"
-              type="file"
-              className="upload-file-input"
-              onChange={handleFileChange}
-              disabled={submitting}
-            />
-          </label>
+        <div className="create-document-form bs-fields">
+          {/* The file input is behind the zone: the zone is the control, and
+              clicking it opens the picker for somebody who would rather
+              browse. */}
+          <input
+            id="add-policy-file"
+            ref={fileInput}
+            type="file"
+            className="bs-hidden-file"
+            onChange={(event) => takeFile(event.target.files?.[0] ?? null)}
+            disabled={submitting}
+          />
 
           {file ? (
-            <p className="create-document-file-summary">
-              <strong>Selected:</strong> {file.name} (
-              {formatFileSize(file.size)})
-            </p>
-          ) : null}
+            <div className="bs-dropzone bs-dropzone--filled">
+              <span className="bs-dropzone-icon" aria-hidden="true">
+                <AppIcon icon={FileText} size="lg" />
+              </span>
+              <span className="bs-dropzone-file">
+                <span className="bs-dropzone-lead">{file.name}</span>
+                <span className="bs-field-hint">
+                  {formatFileSize(file.size)}
+                </span>
+              </span>
+              <button
+                type="button"
+                className="bs-btn bs-btn--sm bs-btn--quiet"
+                disabled={submitting}
+                onClick={() => fileInput.current?.click()}
+              >
+                Replace
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className={`bs-dropzone${over ? " bs-dropzone--over" : ""}`}
+              disabled={submitting}
+              onClick={() => fileInput.current?.click()}
+              onDragOver={(event) => {
+                event.preventDefault();
+                setOver(true);
+              }}
+              onDragLeave={() => setOver(false)}
+              onDrop={(event) => {
+                event.preventDefault();
+                setOver(false);
+                takeFile(event.dataTransfer.files?.[0] ?? null);
+              }}
+            >
+              <AppIcon icon={Upload} size="lg" aria-hidden="true" />
+              <span className="bs-dropzone-lead">
+                Drop the policy here, or choose a file
+              </span>
+              <span className="bs-field-hint">
+                Word, PDF, Excel — whatever it is written in, up to 25 MB.
+              </span>
+            </button>
+          )}
 
-          <label htmlFor="add-policy-name" className="create-document-field">
-            <span className="bs-label">What it is called</span>
+          <div className="bs-field">
+            <label className="bs-field-label" htmlFor="add-policy-name">
+              What it is called
+            </label>
             <input
               id="add-policy-name"
               className="bs-input"
@@ -193,23 +297,61 @@ export function AddPolicyModal({
               placeholder="Infection Control"
               disabled={submitting}
             />
-          </label>
+            {/* Derived rather than demanded, and editable rather than fixed:
+                the file is already named, and retyping its name is work the
+                screen can do. */}
+            <p className="bs-field-hint">
+              {file
+                ? "Taken from the file name. This is what people will look for it under."
+                : "Taken from the file name once you choose one."}
+            </p>
+          </div>
 
-          <label htmlFor="add-policy-folder" className="create-document-field">
-            <span className="bs-label">Folder — optional</span>
-            <input
+          <div className="bs-field">
+            <label className="bs-field-label" htmlFor="add-policy-folder">
+              Where it goes
+            </label>
+            {/* A picker of folders that exist, not a free-text path: a typo
+                filed a policy in a folder nobody else would ever look in. */}
+            <select
               id="add-policy-folder"
               className="bs-input"
-              type="text"
               value={folder}
+              disabled={submitting || folders === null}
               onChange={(event) => {
                 setFolder(event.target.value);
                 setError(null);
               }}
-              placeholder="Nursing"
-              disabled={submitting}
-            />
-          </label>
+            >
+              <option value="">The top level of the binder</option>
+              {(folders ?? []).map((entry) => (
+                <option key={entry} value={entry}>
+                  {describeFolderPath(entry)}
+                </option>
+              ))}
+              <option value={NEW_FOLDER}>A new folder…</option>
+            </select>
+          </div>
+
+          {folder === NEW_FOLDER ? (
+            <div className="bs-field">
+              <label className="bs-field-label" htmlFor="add-policy-new-folder">
+                What to call the folder
+              </label>
+              <input
+                id="add-policy-new-folder"
+                className="bs-input"
+                type="text"
+                value={newFolder}
+                onChange={(event) => {
+                  setNewFolder(event.target.value);
+                  setError(null);
+                }}
+                placeholder="Nursing"
+                disabled={submitting}
+              />
+            </div>
+          ) : null}
 
           {/* Not while editing: a draft is already the answer to "where does
               this go", and offering a change request as well would be two. */}
@@ -227,13 +369,13 @@ export function AddPolicyModal({
               anyone wants, and a customer who types one is entitled to see
               what the binder will actually call it. */}
           {filePath ? (
-            <p className="add-policy-path">
-              Files as <code>{filePath}</code>
+            <p className="bs-field-hint">
+              Files as <code className="bs-filename">{filePath}</code>
             </p>
           ) : null}
 
           {error ? (
-            <p className="upload-error-message" role="alert">
+            <p className="bs-note bs-note--danger" role="alert">
               {error}
             </p>
           ) : null}
@@ -241,7 +383,7 @@ export function AddPolicyModal({
           {/* Nothing reaches the record without a decision — the same promise
               the whole product makes, said where somebody is about to make a
               change rather than only in the marketing. */}
-          <p className="add-policy-note">
+          <p className="bs-field-hint">
             {draft
               ? "This goes into your draft. Nobody is asked to look at it until you propose it."
               : changeNumber === null

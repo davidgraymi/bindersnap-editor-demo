@@ -44,7 +44,7 @@ import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 interface BinderHistoryProps {
   org: string;
   binder: string;
-  onOpenDocument: (slugPath: string) => void;
+  onOpenDocument: (slugPath: string, version: number | null) => void;
   onOpenChange: (changeNumber: number) => void;
 }
 
@@ -249,7 +249,7 @@ function ChangeEntry({
   onOpenChange,
 }: {
   change: HistoryChange;
-  onOpenDocument: (slugPath: string) => void;
+  onOpenDocument: (slugPath: string, version: number | null) => void;
   onOpenChange: (changeNumber: number) => void;
 }) {
   return (
@@ -300,7 +300,13 @@ function ChangeEntry({
               <button
                 type="button"
                 className="bs-versionrow-name"
-                onClick={() => onOpenDocument(row.slugPath)}
+                /* **At the version this change wrote, not at whatever the
+                   document says now.** This row is evidence of a published
+                   version; opening the head would answer a different question
+                   than the one that was clicked, and on an audit product the
+                   difference is the whole point. An archived row has no
+                   version to open at, so it opens the record. */
+                onClick={() => onOpenDocument(row.slugPath, row.version)}
               >
                 {formatDocumentName(row.name)}{" "}
                 {row.folder === "" ? null : (

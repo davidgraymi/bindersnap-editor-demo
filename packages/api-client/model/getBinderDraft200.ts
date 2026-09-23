@@ -5,6 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { GetBinderDraft200Draft } from './getBinderDraft200Draft.ts';
+import type { GetBinderDraft200DraftsItem } from './getBinderDraft200DraftsItem.ts';
 import type { GetBinderDraft200OthersItem } from './getBinderDraft200OthersItem.ts';
 
 export type GetBinderDraft200 = {
@@ -12,5 +13,6 @@ export type GetBinderDraft200 = {
   workspace: string;
   /** @nullable */
   draft: GetBinderDraft200Draft;
+  drafts: GetBinderDraft200DraftsItem[];
   others: GetBinderDraft200OthersItem[];
 };

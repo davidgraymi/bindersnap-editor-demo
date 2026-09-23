@@ -4,8 +4,10 @@ import { useIsReadOnly } from "../readOnlyContext";
 import {
   discardBinderDraft,
   fetchBinder,
+  fetchBinderDocuments,
   fetchBinderDraft,
   openBinderDraft,
+  renameBinderDraft,
 } from "../api";
 import type {
   BinderDraftPayload,
@@ -16,17 +18,20 @@ import {
   binderTabFromSearch,
   buildBinderUrl,
   changeViewFromSearch,
+  draftFromSearch,
   editModeFromSearch,
   type BinderEditMode,
   type BinderTab,
 } from "../binderShell";
 import type { DocumentChangeView } from "../routes";
 import { parseRequestedChange } from "../binderChange";
+import { buildDocumentUrl, parseRequestedRef } from "../binderDocument";
 import { formatDocumentName } from "../documentDisplay";
 import { AddPolicyModal } from "./AddPolicyModal";
 import { NewFolderModal } from "./NewFolderModal";
 import { BinderArchive } from "./BinderArchive";
 import { BinderDraftBar } from "./BinderDraftBar";
+import { BinderDraftPicker } from "./BinderDraftPicker";
 import { ProposeChangePage } from "./ProposeChangePage";
 import { BinderChangePage } from "./BinderChangePage";
 import { BinderChanges } from "./BinderChanges";
@@ -34,6 +39,8 @@ import { BinderHistory } from "./BinderHistory";
 import { BinderSettings } from "./BinderSettings";
 import { BinderDocumentPage } from "./BinderDocumentPage";
 import { BinderDocuments } from "./BinderPage";
+import type { SidebarBinder } from "./AppSidebar";
+import type { DocumentRefView } from "../documentRefs";
 import { SkeletonLine } from "./Skeleton";
 
 /**
@@ -79,16 +86,13 @@ interface BinderShellProps {
    * and where you are inside it. Reported rather than fetched again, because
    * a second reader of the same binder is a second answer waiting to disagree.
    */
-  onBinderChange?: (
-    binder: {
-      org: string;
-      binder: string;
-      name: string;
-      section: BinderTab;
-      openChangeCount?: number | null;
-    } | null,
-  ) => void;
-  onOpenDocument: (documentPath: string) => void;
+  onBinderChange?: (binder: SidebarBinder | null) => void;
+  /**
+   * Open a document. `version` opens it at one published version — the
+   * history links that way, because a row there is evidence of a version and
+   * not a pointer at whatever the document says now.
+   */
+  onOpenDocument: (documentPath: string, version?: number | null) => void;
   onOpenBinder: () => void;
 }
 
@@ -105,6 +109,24 @@ export function BinderShell({
   const [overview, setOverview] = useState<WorkspaceOverviewPayload | null>(
     null,
   );
+  /**
+   * The binder's contents, for the navigation beside an open policy.
+   *
+   * **Read only while one is open.** Every other binder screen draws the tree
+   * itself, so asking for it there would be a second read of what is already
+   * on the page — and two trees on one page is one too many.
+   */
+  const [contents, setContents] = useState<SidebarBinder["contents"] | null>(
+    null,
+  );
+  /**
+   * Which version of this document is on screen, told by the page reading it.
+   *
+   * The open changes touching a document come back with the document, so only
+   * that read knows them — and the control offering them lives at the top of
+   * the file panel, which is up in the shell. Straight through.
+   */
+  const [reading, setReading] = useState<DocumentRefView | null>(null);
   const [adding, setAdding] = useState(false);
   const [addingFolder, setAddingFolder] = useState(false);
 
@@ -124,6 +146,21 @@ export function BinderShell({
   );
   const [archive, setArchive] = useState(() =>
     archiveFromSearch(window.location.search),
+  );
+  /**
+   * Which of your drafts is being edited, from the address.
+   *
+   * Null means "whichever is newest", which is what a bare `?edit=1` meant
+   * when a person could only have one. The server decides in the end: a branch
+   * that is not yours, or one proposed since the link was made, falls back
+   * rather than failing.
+   */
+  const [draftBranch, setDraftBranch] = useState<string | null>(() =>
+    draftFromSearch(window.location.search),
+  );
+  /** The branch a document is being read on, from `?ref=`. */
+  const [documentRefFromSearch, setDocumentRef] = useState<string | null>(() =>
+    parseRequestedRef(window.location.search),
   );
 
   /**
@@ -146,11 +183,31 @@ export function BinderShell({
       setOpenChange(parseRequestedChange(window.location.search));
       setChangeView(changeViewFromSearch(window.location.search));
       setEditMode(editModeFromSearch(window.location.search));
+      setDraftBranch(draftFromSearch(window.location.search));
+      setDocumentRef(parseRequestedRef(window.location.search));
       setArchive(archiveFromSearch(window.location.search));
     };
     window.addEventListener("popstate", handler);
     return () => window.removeEventListener("popstate", handler);
   }, []);
+
+  /**
+   * Open a document, staying in edit mode if that is where it was opened from.
+   *
+   * **A policy renamed a moment ago is only at that name in the draft.** The
+   * tree in edit mode shows the draft's names, and clicking one used to leave
+   * edit mode on the way — so the page it landed on asked `main` for an
+   * address `main` has never heard of, and said the document did not exist.
+   * Keeping `?edit=1` on the address keeps the draft, and is also the way back
+   * to what somebody was doing.
+   */
+  const openDocument = (documentPath: string, version?: number | null) => {
+    if (editMode === "editing" && draft?.draft) {
+      moveTo(`/${org}/${binder}/${documentPath}?edit=1`);
+      return;
+    }
+    onOpenDocument(documentPath, version);
+  };
 
   const loadOverview = useCallback(() => {
     let cancelled = false;
@@ -189,7 +246,7 @@ export function BinderShell({
     }
 
     let cancelled = false;
-    fetchBinderDraft(org, binder)
+    fetchBinderDraft(org, binder, draftBranch ?? undefined)
       .then((payload) => {
         if (cancelled) return;
         if (payload.draft) setDraft(payload);
@@ -205,11 +262,15 @@ export function BinderShell({
     // `leaveEditMode` is stable for the life of a binder: it closes over org,
     // binder and the setters, all of which are in this list already.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [org, binder, editMode]);
+  }, [org, binder, editMode, draftBranch]);
 
-  const goToEdit = (next: BinderEditMode) => {
-    moveTo(buildBinderUrl({ org, binder, edit: next }));
+  const goToEdit = (
+    next: BinderEditMode,
+    branch: string | null = draftBranch,
+  ) => {
+    moveTo(buildBinderUrl({ org, binder, edit: next, draft: branch }));
     setEditMode(next);
+    setDraftBranch(next === "off" ? null : branch);
     setArchive(false);
   };
 
@@ -244,8 +305,9 @@ export function BinderShell({
     setStartingEdit(true);
     setDraftError(null);
     try {
-      setDraft(await openBinderDraft(org, binder));
-      goToEdit("editing");
+      const payload = await openBinderDraft(org, binder);
+      setDraft(payload);
+      goToEdit("editing", payload.draft?.branch ?? null);
     } catch (err) {
       setDraftError(
         err instanceof Error && err.message.trim() !== ""
@@ -257,11 +319,70 @@ export function BinderShell({
     }
   };
 
+  /**
+   * Start another draft, called something.
+   *
+   * A deliberate fork, and the name is what makes it one: a second draft with
+   * no name is the state this whole change exists to avoid, because "resume
+   * the one from Tuesday" has no answer when both are dates.
+   */
+  const startAnother = async (name: string) => {
+    setStartingEdit(true);
+    setDraftError(null);
+    try {
+      const payload = await openBinderDraft(org, binder, name);
+      setDraft(payload);
+      goToEdit("editing", payload.draft?.branch ?? null);
+    } catch (err) {
+      setDraftError(
+        err instanceof Error && err.message.trim() !== ""
+          ? err.message
+          : "Unable to start another draft.",
+      );
+    } finally {
+      setStartingEdit(false);
+    }
+  };
+
+  /** Move to another of your drafts. The address is what carries it. */
+  const switchDraft = (branch: string) => {
+    setDraft(null);
+    goToEdit("editing", branch);
+  };
+
+  const renameDraft = async (branch: string, name: string) => {
+    setStartingEdit(true);
+    setDraftError(null);
+    try {
+      setDraft(await renameBinderDraft(org, binder, branch, name));
+    } catch (err) {
+      setDraftError(
+        err instanceof Error && err.message.trim() !== ""
+          ? err.message
+          : "Unable to rename your draft.",
+      );
+    } finally {
+      setStartingEdit(false);
+    }
+  };
+
+  /**
+   * Throw this draft away, and land in another of yours if there is one.
+   *
+   * Leaving edit mode after discarding the only draft is right; doing it when
+   * two more are open would make the picker's own Discard read as "stop
+   * editing", which is a different act.
+   */
   const discard = async () => {
     setStartingEdit(true);
     try {
-      await discardBinderDraft(org, binder);
-      leaveEditMode();
+      const gone = draft?.draft?.branch;
+      await discardBinderDraft(org, binder, gone);
+      const left = (draft?.drafts ?? []).filter(
+        (entry) => entry.branch !== gone,
+      );
+      if (left.length > 0) switchDraft(left[0]!.branch);
+      else leaveEditMode();
     } catch (err) {
       setDraftError(
         err instanceof Error && err.message.trim() !== ""
@@ -275,7 +396,7 @@ export function BinderShell({
 
   /** Re-read the draft, so the bar counts the act that just landed. */
   const refreshDraft = () => {
-    fetchBinderDraft(org, binder)
+    fetchBinderDraft(org, binder, draft?.draft?.branch ?? undefined)
       .then((payload) => {
         if (payload.draft) setDraft(payload);
         else leaveEditMode();
@@ -323,6 +444,43 @@ export function BinderShell({
 
   const binderName = formatDocumentName(binder);
 
+  const draftForContents =
+    editMode === "off" ? null : (draft?.draft?.branch ?? null);
+
+  useEffect(() => {
+    if (!documentPath) {
+      setContents(null);
+      setReading(null);
+      return;
+    }
+
+    let cancelled = false;
+    fetchBinderDocuments(
+      org,
+      binder,
+      draftForContents ?? undefined,
+      openChange ?? undefined,
+    )
+      .then((payload) => {
+        if (cancelled) return;
+        setContents({
+          documents: payload.documents,
+          folders: payload.folders,
+          active: null,
+          change: openChange,
+        });
+      })
+      // Navigation beside the page, not the page: a binder whose contents
+      // cannot be read still shows the policy somebody opened.
+      .catch(() => {
+        if (!cancelled) setContents(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [org, binder, documentPath, draftForContents, openChange, reloadKey]);
+
   // The sidebar's binder section, kept in step with what is on screen.
   useEffect(() => {
     onBinderChange?.({
@@ -331,6 +489,18 @@ export function BinderShell({
       name: binderName,
       section: activeTab,
       openChangeCount: overview?.openChangeCount ?? null,
+      // The active row is the address, not what the read happened to return:
+      // the read is slower than the click, and a tree that marks the row a
+      // moment late reads as a tree that marks the wrong one.
+      contents: contents
+        ? {
+            ...contents,
+            active: documentPath ?? null,
+            // Clicking through the explorer stays on the branch being read.
+            ref: documentRefFromSearch,
+            reading,
+          }
+        : null,
     });
     // Reporting is the effect; the shell above clears it when the route
     // leaves the binder, so there is nothing to undo here.
@@ -340,6 +510,10 @@ export function BinderShell({
     binderName,
     activeTab,
     overview?.openChangeCount,
+    contents,
+    reading,
+    documentPath,
+    documentRefFromSearch,
     onBinderChange,
   ]);
 
@@ -389,13 +563,20 @@ export function BinderShell({
                 ? { title: "Settings" }
                 : {
                     title: binderName,
-                    ...(overview?.workspace.description
-                      ? { subtitle: overview.workspace.description }
-                      : {}),
+                    ...(editMode === "editing"
+                      ? {
+                          subtitle:
+                            "Rename in place, drag to refile, make a folder. Everything you do is saved to your draft, and nobody is asked to look until you propose it.",
+                        }
+                      : overview?.workspace.description
+                        ? { subtitle: overview.workspace.description }
+                        : {}),
                   };
 
   return (
-    <section className="docw-page">
+    <section
+      className={`docw-page${documentPath ? " docw-page--document" : ""}`}
+    >
       {head ? (
         <div className="bs-pagehead">
           <div className="bs-pagehead-body">
@@ -417,12 +598,18 @@ export function BinderShell({
               not "add a policy". */}
           {isReadOnly || activeTab !== "documents" ? null : (
             <div className="bs-pagehead-actions">
-              {/* **Edit is the filled button when you are not editing.** The
-                  customer asked for one: "an edit button that puts the user in
-                  edit mode and then allows all these edits to happen on a
-                  branch". Rearranging a binder — renaming, refiling, making
-                  folders — is the work this page is for, and adding one policy
-                  is the narrower act. */}
+              {/* **The same buttons in the same slots.** Reading, the header
+                  offers Add a policy and Edit; editing, it offers the way
+                  out. What it must never do is change what the primary slot
+                  means the moment the control beside it is pressed, which is
+                  what "[Add a policy] [Edit]" becoming "[New folder] [Add a
+                  policy]" did.
+
+                  While editing there is one button and it is the way out:
+                  New folder and Add a policy have moved into the bar over the
+                  tree they act on. Two of one control on a screen is one of
+                  them in the wrong place, and the wrong one is the one that
+                  is not beside the thing it adds to. */}
               {editMode === "off" ? (
                 <>
                   <button
@@ -442,22 +629,13 @@ export function BinderShell({
                   </button>
                 </>
               ) : editMode === "editing" ? (
-                <>
-                  <button
-                    className="bs-btn bs-btn-secondary"
-                    type="button"
-                    onClick={() => setAddingFolder(true)}
-                  >
-                    New folder
-                  </button>
-                  <button
-                    className="bs-btn bs-btn-secondary"
-                    type="button"
-                    onClick={() => setAdding(true)}
-                  >
-                    Add a policy
-                  </button>
-                </>
+                <button
+                  className="bs-btn bs-btn-secondary"
+                  type="button"
+                  onClick={leaveEditMode}
+                >
+                  Done
+                </button>
               ) : null}
             </div>
           )}
@@ -496,17 +674,31 @@ export function BinderShell({
         </p>
       ) : null}
 
-      {draft?.draft && editMode !== "off" && !documentPath && !archive ? (
-        <BinderDraftBar
-          acts={draft.draft.acts}
-          others={draft.others.map((other) => other.owner)}
-          busy={startingEdit}
-          onPropose={() => goToEdit("proposing")}
-          onDiscard={() => void discard()}
+      {/* **A document path wins over a change number**, and that order is the
+          whole of this change. An address naming a document is asking for that
+          document; `?change=` says which ref to read it at, the way `?draft=`
+          and `?version=` do. The other way round, `/{org}/{binder}/{path}
+          ?change=7` rendered the change's page and the path was ignored. */}
+      {documentPath ? (
+        <BinderDocumentPage
+          org={org}
+          binder={binder}
+          documentPath={documentPath}
+          /* Reading what a change proposes, at the document's own address on
+             that change's branch. */
+          /* The branch the address names, which is what the page reads at.
+             The change is where the reader came from. */
+          documentRef={documentRefFromSearch}
+          change={openChange}
+          onBackToChange={openChangeNumber}
+          onRefsChange={setReading}
+          /* Opened from the tree while editing, so it is read where the name
+             it was clicked under actually exists. */
+          draft={editMode === "off" ? null : (draft?.draft?.branch ?? null)}
+          onOpenBinder={onOpenBinder}
+          onOpenChange={openChangeNumber}
         />
-      ) : null}
-
-      {openChange !== null ? (
+      ) : openChange !== null ? (
         <BinderChangePage
           org={org}
           binder={binder}
@@ -515,16 +707,26 @@ export function BinderShell({
           view={changeView}
           onViewChange={(next) => openChangeNumber(openChange, next)}
           onBackToChanges={() => goTo("changes")}
-          onOpenDocument={onOpenDocument}
+          onOpenSignOffRules={() => goTo("sign-off")}
+          onOpenDocument={openDocument}
+          /* The document's own address, on this change's branch — the binder
+             at another ref rather than a panel inside the change. */
+          /* **The branch, not the change.** A file lives on a branch, which
+             is the address every code host gives it; the change rides along
+             so the reader keeps the way back to where they came from. */
+          onOpenOnBranch={(slugPath, branch) =>
+            moveTo(
+              buildDocumentUrl({
+                org,
+                binder,
+                documentPath: slugPath,
+                version: null,
+                change: openChange,
+                ref: branch,
+              }),
+            )
+          }
           onChanged={loadOverview}
-        />
-      ) : documentPath ? (
-        <BinderDocumentPage
-          org={org}
-          binder={binder}
-          documentPath={documentPath}
-          onOpenBinder={onOpenBinder}
-          onOpenChange={openChangeNumber}
         />
       ) : activeTab === "changes" ? (
         <BinderChanges
@@ -536,7 +738,7 @@ export function BinderShell({
         <BinderHistory
           org={org}
           binder={binder}
-          onOpenDocument={onOpenDocument}
+          onOpenDocument={openDocument}
           onOpenChange={openChangeNumber}
         />
       ) : activeTab === "settings" ? (
@@ -572,6 +774,11 @@ export function BinderShell({
         <ProposeChangePage
           org={org}
           binder={binder}
+          draft={draft.draft.branch}
+          /* Only a name somebody wrote. A draft started by pressing Edit takes
+             the date it was made, and "Draft of 19 September" is not a sentence
+             to put in front of reviewers as what a change is for. */
+          name={draft.draft.named ? draft.draft.name : ""}
           acts={draft.draft.acts}
           onCancel={() => goToEdit("editing")}
           onProposed={(changeNumber) => {
@@ -589,16 +796,48 @@ export function BinderShell({
         <BinderDocuments
           org={org}
           binder={binder}
-          onOpenDocument={onOpenDocument}
+          onOpenDocument={openDocument}
           activeDocument={documentPath ?? null}
           draft={editMode === "off" ? null : (draft?.draft?.branch ?? null)}
+          draftPicker={
+            draft?.draft && editMode === "editing" ? (
+              <BinderDraftPicker
+                drafts={draft.drafts}
+                others={draft.others}
+                current={draft.draft.branch}
+                busy={startingEdit}
+                onSwitch={switchDraft}
+                onStart={startAnother}
+                onRename={renameDraft}
+              />
+            ) : null
+          }
+          draftActs={draft?.draft?.acts ?? []}
           reloadKey={reloadKey}
           onEdited={refreshDraft}
           onDraftLost={leaveEditMode}
           onOpenArchive={() => goToArchive(true)}
           onOpenChange={openChangeNumber}
+          onAddPolicy={() => setAdding(true)}
+          onNewFolder={() => setAddingFolder(true)}
         />
       )}
+
+      {/* Last in the page, and sticky to the bottom of the viewport: it is
+          reachable at any scroll depth and never between you and the tree.
+          Not on the propose screen — that step owns its own page, and a
+          disabled Propose above a Propose button is two of one control with
+          the nearer one dead. */}
+      {draft?.draft && editMode === "editing" && !documentPath && !archive ? (
+        <BinderDraftBar
+          name={draft.draft.name}
+          acts={draft.draft.acts}
+          others={draft.others.map((other) => other.owner)}
+          busy={startingEdit}
+          onPropose={() => goToEdit("proposing")}
+          onDiscard={() => void discard()}
+        />
+      ) : null}
 
       {addingFolder ? (
         <NewFolderModal

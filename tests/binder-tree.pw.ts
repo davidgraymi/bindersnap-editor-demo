@@ -271,12 +271,26 @@ test("folders nest, and the tree says which is inside which", async ({
 
   const tree = page.locator(".binder-tree");
   await expect(tree).toBeVisible({ timeout: 30_000 });
+  const rows = tree.locator(".binder-tree-label");
+
+  // Shut to begin with — a filing cabinet with the drawers closed, which is
+  // what a filing cabinet looks like. Forty policies in eight departments all
+  // on screen at once is a wall, not a filing system.
+  await expect(rows).toHaveText([
+    "Estates",
+    "Nursing",
+    "Pharmacy",
+    "Staff Handbook",
+  ]);
+
+  await tree.getByRole("button", { name: /^Nursing/ }).click();
+  await tree.getByRole("button", { name: /^Infection Control/ }).click();
 
   // Folders before documents, each alphabetical, and `infection-control`
-  // inside `nursing` rather than beside it.
-  const rows = tree.locator(".binder-tree-label");
-  // Folder names read like the documents under them — the binder stores
-  // `infection-control`, and nobody typed that.
+  // inside `nursing` rather than beside it. Folder names read like the
+  // documents under them — the binder stores `infection-control`, and nobody
+  // typed that. Pharmacy was not opened, so Dispensing is not on screen:
+  // opening a folder opens that folder and nothing else.
   await expect(rows).toHaveText([
     "Estates",
     "Nursing",
@@ -284,7 +298,6 @@ test("folders nest, and the tree says which is inside which", async ({
     "Handover",
     "Hand Hygiene",
     "Pharmacy",
-    "Dispensing",
     "Staff Handbook",
   ]);
 
@@ -323,7 +336,7 @@ test("an empty folder is in the binder, because somebody made it", async ({
   await expect(estates).toContainText("0 policies");
 });
 
-test("a folder shuts, and stays shut when you come back", async ({ page }) => {
+test("a folder opens, and stays open when you come back", async ({ page }) => {
   const { session, org, binder } = await provisionBinder();
   await signInBrowser(page, session);
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
@@ -331,30 +344,30 @@ test("a folder shuts, and stays shut when you come back", async ({ page }) => {
   const nursing = page.getByRole("button", { name: /^Nursing/ });
   await expect(nursing).toBeVisible({ timeout: 30_000 });
 
-  // Open to begin with — a policy manual is read by looking.
-  await expect(nursing).toHaveAttribute("aria-expanded", "true");
-  await expect(page.getByText("Hand Hygiene")).toBeVisible();
+  // Shut to begin with, and saying what it is holding — a shut folder that
+  // says nothing is a folder nobody opens. Counted all the way down.
+  await expect(nursing).toHaveAttribute("aria-expanded", "false");
+  await expect(nursing).toContainText("2 policies");
+  await expect(page.getByText("Hand Hygiene")).toBeHidden();
 
   await nursing.click();
-  await expect(nursing).toHaveAttribute("aria-expanded", "false");
-  await expect(page.getByText("Hand Hygiene")).toBeHidden();
-  // What it is hiding, counted all the way down.
-  await expect(nursing).toContainText("2 policies");
+  await expect(nursing).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByText("Hand Hygiene")).toBeVisible();
 
   // The preference is the person's, and it survives the page going away.
   await page.reload();
   await expect(page.getByRole("button", { name: /^Nursing/ })).toHaveAttribute(
     "aria-expanded",
-    "false",
+    "true",
     { timeout: 30_000 },
   );
 });
 
-test("shutting a folder in one binder does not shut it in another", async ({
+test("opening a folder in one binder does not open it in another", async ({
   page,
 }) => {
-  // The preference is per binder: shutting the departments you do not work in
-  // is a statement about that binder and nothing else.
+  // The preference is per binder: opening the departments you work in is a
+  // statement about that binder and nothing else.
   const { session, org, binder } = await provisionBinder();
   const second = await createBinder(session, org, "Corporate Policies");
   const change = await addPolicy(
@@ -371,12 +384,50 @@ test("shutting a folder in one binder does not shut it in another", async ({
   const nursing = page.getByRole("button", { name: /^Nursing/ });
   await expect(nursing).toBeVisible({ timeout: 30_000 });
   await nursing.click();
-  await expect(nursing).toHaveAttribute("aria-expanded", "false");
+  await expect(nursing).toHaveAttribute("aria-expanded", "true");
 
   await page.goto(`${APP_BASE_URL}/${org}/${second}`);
   await expect(page.getByRole("button", { name: /^Nursing/ })).toHaveAttribute(
     "aria-expanded",
-    "true",
+    "false",
     { timeout: 30_000 },
+  );
+});
+
+test("the folders holding the policy you are reading are open", async ({
+  page,
+}) => {
+  // Shut by default is only tolerable because of this. Landing on a policy
+  // three levels down with every folder shut shows a file explorer that does
+  // not contain the file on screen, which is a panel showing somebody else's
+  // binder.
+  const { session, org, binder } = await provisionBinder();
+  await signInBrowser(page, session);
+  await page.goto(
+    `${APP_BASE_URL}/${org}/${binder}/nursing/infection-control/handover`,
+  );
+
+  const explorer = page.locator(".app-explorer");
+  await expect(explorer).toBeVisible({ timeout: 30_000 });
+
+  await expect(
+    explorer.getByRole("button", { name: /^Nursing/ }),
+  ).toHaveAttribute("aria-expanded", "true");
+  await expect(
+    explorer.getByRole("button", { name: /^Infection Control/ }),
+  ).toHaveAttribute("aria-expanded", "true");
+  await expect(explorer.locator(".app-explorer-item--active")).toHaveText(
+    "Handover",
+  );
+
+  // Pharmacy is not on the way to anything being read, so it stayed shut.
+  await expect(
+    explorer.getByRole("button", { name: /^Pharmacy/ }),
+  ).toHaveAttribute("aria-expanded", "false");
+
+  // And the map of the product is down to its icons while you read: three
+  // panels beside each other, and the map is the one nobody is reading.
+  await expect(page.locator(".app-sidebar")).toHaveClass(
+    /app-sidebar--collapsed/,
   );
 });

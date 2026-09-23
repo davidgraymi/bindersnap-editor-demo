@@ -950,12 +950,19 @@ export async function fetchBinderDocuments(
   org: string,
   binder: string,
   draft?: string,
+  /**
+   * Read the binder as a change request would leave it.
+   *
+   * A document read on a change's branch puts the binder's contents in the
+   * navigation beside it, and a tree pinned to `main` there would list a
+   * policy under the name the change renamed it away from.
+   */
+  change?: number,
 ): Promise<WorkspaceDocumentListPayload> {
-  const response = await BindersClient.listBinderDocuments(
-    org,
-    binder,
-    draft ? { draft } : undefined,
-  );
+  const response = await BindersClient.listBinderDocuments(org, binder, {
+    ...(draft ? { draft } : {}),
+    ...(change ? { change: String(change) } : {}),
+  });
   return response.data;
 }
 
@@ -982,11 +989,39 @@ export async function fetchBinderDocument(
   org: string,
   binder: string,
   documentPath: string,
+  /**
+   * Read it in your own draft rather than on `main`.
+   *
+   * A policy renamed while editing is only at that name on the draft branch,
+   * so a page opened from the tree in edit mode has to ask where the name it
+   * was clicked under exists.
+   */
+  draft?: string,
+  /**
+   * Read it on a change request's branch.
+   *
+   * A change request is a branch, and a document on it has an address — so
+   * reading the proposed version is the binder at another ref rather than a
+   * panel inside the change's page.
+   */
+  change?: number,
+  /**
+   * Read it on a branch, named.
+   *
+   * A file lives on a branch, which is why every code host addresses one by
+   * ref. Somebody else's draft is refused by the server.
+   */
+  ref?: string,
 ): Promise<WorkspaceDocumentDetailPayload> {
   const response = await BindersClient.getBinderDocument(
     org,
     binder,
     documentPath,
+    {
+      ...(draft ? { draft } : {}),
+      ...(change ? { change: String(change) } : {}),
+      ...(ref ? { ref } : {}),
+    },
   );
   return response.data;
 }
@@ -1251,16 +1286,25 @@ function multipartTarget(target?: ActTarget): {
 }
 
 /**
- * Your draft in this binder, what is in it, and who else is editing.
+ * Your drafts in this binder, what is in the one you are in, and who else is
+ * editing.
  *
  * A read, so it never starts one: `draft` comes back null when you are not
  * editing, which is the ordinary state rather than a missing thing.
+ *
+ * `branch` says which of yours you are in. Unsaid means the newest, which is
+ * what this meant when a person could only have one.
  */
 export async function fetchBinderDraft(
   org: string,
   binder: string,
+  branch?: string,
 ): Promise<BinderDraftPayload> {
-  const response = await BindersClient.getBinderDraft(org, binder);
+  const response = await BindersClient.getBinderDraft(
+    org,
+    binder,
+    branch ? { draft: branch } : undefined,
+  );
   return response.data;
 }
 
@@ -1269,13 +1313,41 @@ export async function fetchBinderDraft(
  *
  * Idempotent by design — pressing Edit twice resumes rather than forks, so
  * this is safe to call without first asking whether a draft exists.
+ *
+ * **`name` makes it a different act**: start *another* draft, called that. A
+ * deliberate fork, from the picker, with a sentence attached — which is how
+ * several drafts stay a thing somebody chose rather than something that
+ * happens to them.
  */
 export async function openBinderDraft(
   org: string,
   binder: string,
+  name?: string,
 ): Promise<BinderDraftPayload> {
   try {
-    const response = await BindersClient.openBinderDraft(org, binder);
+    const response = await BindersClient.openBinderDraft(
+      org,
+      binder,
+      name ? { name } : {},
+    );
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(`/api/app/binders/${org}/${binder}/draft`, error);
+  }
+}
+
+/** Call one of your drafts something else. */
+export async function renameBinderDraft(
+  org: string,
+  binder: string,
+  branch: string,
+  name: string,
+): Promise<BinderDraftPayload> {
+  try {
+    const response = await BindersClient.renameBinderDraft(org, binder, {
+      draft: branch,
+      name,
+    });
     return response.data;
   } catch (error) {
     handlePaymentRequired(`/api/app/binders/${org}/${binder}/draft`, error);
@@ -1283,18 +1355,26 @@ export async function openBinderDraft(
 }
 
 /**
- * Throw your draft away.
+ * Throw a draft away.
  *
  * Only ever your own, and only while it is still a draft: once a change
  * request sits on the branch it is not a draft any more and the server refuses
  * — deleting it would take somebody's review with it.
+ *
+ * `branch` says which, because a person may have several and discarding the
+ * wrong one is not recoverable.
  */
 export async function discardBinderDraft(
   org: string,
   binder: string,
+  branch?: string,
 ): Promise<void> {
   try {
-    await BindersClient.discardBinderDraft(org, binder);
+    await BindersClient.discardBinderDraft(
+      org,
+      binder,
+      branch ? { draft: branch } : undefined,
+    );
   } catch (error) {
     handlePaymentRequired(`/api/app/binders/${org}/${binder}/draft`, error);
   }
@@ -1312,11 +1392,14 @@ export async function proposeBinderDraft(
   binder: string,
   title: string,
   description: string,
+  /** Which draft. The newest when unsaid. */
+  branch?: string,
 ): Promise<ProposedDraftPayload> {
   try {
     const response = await BindersClient.proposeBinderDraft(org, binder, {
       title,
       ...(description.trim() === "" ? {} : { description }),
+      ...(branch ? { draft: branch } : {}),
     });
     return response.data;
   } catch (error) {
@@ -1408,6 +1491,34 @@ export async function renameBinder(
 }
 
 /**
+ * Rewrite what a change is asking for.
+ *
+ * The author's, and only while it is open: once it is published the title is
+ * on the merge commit and in the version tag, which are the record.
+ */
+export async function editBinderChange(
+  org: string,
+  binder: string,
+  changeNumber: number,
+  subject: { title: string; body: string },
+): Promise<{ title: string; body: string }> {
+  try {
+    const response = await BindersClient.editBinderChange(
+      org,
+      binder,
+      String(changeNumber),
+      subject,
+    );
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/binders/${org}/${binder}/changes/${changeNumber}`,
+      error,
+    );
+  }
+}
+
+/**
  * Say what a binder is for.
  *
  * Unlike a rename this moves nothing — it is the repository's own description,
@@ -1435,15 +1546,25 @@ export async function describeBinder(
  * Everything this binder has taken off the record.
  *
  * Not a table: the server works it out at read time as every identity with a
- * version tag, minus every identity on `main`. Which is why it is a page of
+ * version tag, minus every identity on the tree. Which is why it is a page of
  * its own rather than a flag on the documents list — the question is about the
  * tags, not about the tree.
+ *
+ * `draft` takes the difference against your own draft instead of `main`, so a
+ * policy archived a moment ago is in the answer. Without it the binder counted
+ * the archive from the draft and listed it from `main`, and the two disagreed
+ * by exactly the policy somebody had just archived.
  */
 export async function fetchBinderArchive(
   org: string,
   binder: string,
+  draft?: string,
 ): Promise<BinderArchivePayload> {
-  const response = await BindersClient.getBinderArchive(org, binder);
+  const response = await BindersClient.getBinderArchive(
+    org,
+    binder,
+    draft ? { draft } : undefined,
+  );
   return response.data;
 }
 

@@ -77,7 +77,7 @@ export function ChangeTargetField({
 
   return (
     <label htmlFor="change-target" className="create-document-field">
-      <span className="bs-label">Put it in</span>
+      <span className="bs-field-label">Put it in</span>
       <select
         id="change-target"
         className="bs-input"

@@ -130,7 +130,11 @@ export const ROLE_TEAM_OPTIONS: Record<WorkspaceRole, CreateTeamOption> = {
   },
 };
 
-const ROLE_TEAM_DESCRIPTIONS: Record<WorkspaceRole, string> = {
+/**
+ * Exported for the same reason as {@link ROLE_TEAM_OPTIONS}: the dev seed
+ * creates these teams over raw HTTP, and a second wording would drift.
+ */
+export const ROLE_TEAM_DESCRIPTIONS: Record<WorkspaceRole, string> = {
   admins: "Workspace owners: full control of this binder and its rules.",
   authors: "Paid seats: push versions, open changes, and merge them.",
   reviewers: "Free: read, comment, approve and reject. Cannot publish.",

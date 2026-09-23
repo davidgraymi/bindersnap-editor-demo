@@ -1,11 +1,12 @@
 # Local development seed data.
 #
-# This file is the whole picture of what `docker compose up` puts in front of
-# you. Edit it — not tests/seed.ts — when you need another account, another
-# document, or another review state to work against.
+# This file is the whole picture of what `bun run up` puts in front of you.
+# Edit it — not tests/seed.ts — when you need another account, another binder,
+# another document, or another review state to work against.
 #
 # How it maps onto the product, which is ADR 0004's four levels:
 #   organization → the Gitea org that owns everything and is who we bill
+#   groups       → the customer's own reusable teams, granted onto binders
 #   binders      → one Gitea repository each: a set of policies governed
 #                  together, by the same people, under the same rules
 #   folder       → a directory inside that binder, purely a finding aid
@@ -24,49 +25,197 @@
 #   an open change that is approved   → Ready to publish
 #   only published changes            → Published
 #
-# Re-running the seed is safe: everything below is applied idempotently.
+# ---------------------------------------------------------------------------
+# What is deliberately in here, and where to find it
+#
+# The point of this file is that a developer should not have to build a state
+# by hand to look at it. Every row below is somewhere in the stack already.
+#
+#   people
+#     site administrator                     alice
+#     organization owner who is not one      priya
+#     ordinary member                        bob, carol, grace, hugo, ines, omar
+#     member of no binder at all             erin
+#     member of no organization at all       frank
+#     reviewer who can publish nothing       dan
+#
+#   binders
+#     admins only                            hr-investigations
+#     admins and authors                     facilities
+#     admins, authors and reviewers          safety, clinical, corporate
+#     open to the whole organization         safety
+#     closed to everyone but its members     hr-investigations, and the rest
+#     nothing in it at all                   retired-policies
+#     needs two approvals, not one           governance
+#     covered in sign-off rules              governance
+#     no sign-off rules whatsoever           clinical, and most others
+#
+#   filing
+#     documents at a binder's root           clinical/code-of-conduct
+#     one folder deep                        clinical/nursing/…
+#     two folders deep                       clinical/nursing/wards/…
+#     a folder with nothing in it            clinical/nursing/wards/ward-7
+#     a document nobody has published        clinical/administrative/…
+#
+#   changes
+#     out of date by three of its own        corporate/security/access-control-standard
+#     out of date behind other work          corporate/finance/purchasing-policy
+#     six reviewers asked                    corporate/security/business-continuity-plan
+#     many discussions, every one closed     corporate/finance/expenses-policy
+#     discussions still open                 corporate/finance/travel-policy
+#     moves, renames and rewrites at once    clinical, the open shape change
+#     makes folders                          clinical, the published shape change
+#     takes a document off the record        corporate, the published archive
+#     closed with work still asked for       clinical/nursing/infection-control-policy
+#     closed with nobody having asked        clinical/code-of-conduct
+#     changes who signs things off           governance, the open sign-off change
+#
+#   file types
+#     the editor's own JSON                  most
+#     Markdown                               clinical/administrative/patient-grievance-policy
+#     Word                                   clinical/nursing/infection-control-policy
+#     PDF                                    clinical/nursing/medication-administration-policy
+#
+# Re-running the seed is safe: everything below is applied idempotently. The
+# one exception is a change made of acts — its commit is a list of moves
+# against a particular tree, so the branch is written once and then left alone,
+# exactly as a real change request's commit is.
 
 # Every seeded account uses this password. Short on purpose — this stack is
 # local-only and never deployed.
 password: dev
+
 users:
   - username: alice
     fullName: Alice Nguyen
     email: alice@example.com
-    role: Compliance manager — owns most documents, site admin
+    role: Compliance manager — runs Bindersnap itself, and owns Riverside Health
+    siteAdmin: true
+
+  - username: priya
+    fullName: Priya Raman
+    email: priya@example.com
+    role: Quality director — owns the organization without running Bindersnap
+
   - username: bob
     fullName: Bob Okafor
     email: bob@example.com
     role: Legal counsel — the reviewer who blocks and approves
+
   - username: carol
     fullName: Carol Mendes
     email: carol@example.com
-    role: Operations lead — owns documents of her own
+    role: Operations lead — publishes here, administers HR investigations
+
   - username: dan
     fullName: Dan Whitfield
     email: dan@example.com
-    role: External auditor — read-only access, sees but cannot change
-# Named so it does not collide with the integration tests, several of which
-# create an organization called "Mercy Health" on purpose — including one that
-# asserts what happens when two customers of the same name sign up. The seed
-# taking that name would make those tests fight the fixture.
+    role: External auditor — reads, comments and approves; can publish nothing
+
+  - username: grace
+    fullName: Grace Ibori
+    email: grace@example.com
+    role: Infection control lead — writes the clinical standards
+
+  - username: hugo
+    fullName: Hugo Lindqvist
+    email: hugo@example.com
+    role: Pharmacy director — reviews anything about medicines
+
+  - username: ines
+    fullName: Ines Moreau
+    email: ines@example.com
+    role: Ward manager — writes ward policies
+
+  - username: omar
+    fullName: Omar Haddad
+    email: omar@example.com
+    role: Facilities manager — the only author in the facilities binder
+
+  - username: erin
+    fullName: Erin Vasquez
+    email: erin@example.com
+    role: New starter — in the organization and in no binder's teams
+
+  - username: frank
+    fullName: Frank Boyle
+    email: frank@example.com
+    role: Signed up and belongs to no organization at all
+    organizationMember: false
+
+# The one organization. Everything below belongs to it, which is ADR 0004's
+# first level: it is who we bill and who your people are.
 organization:
   name: riverside-health
   displayName: Riverside Health
   owner: alice
+  # An owner who is not the site administrator. Most of the billing and people
+  # screens are written for exactly this person, and the seed could not make
+  # one before.
+  owners:
+    - priya
+
+  # The customer's own groups, reusable across binders. A group is a Gitea team
+  # carrying one level, so the level travels with the name — a committee cannot
+  # be an editor in one binder and a reviewer in another. A sign-off rule names
+  # one of these rather than a list of people.
+  groups:
+    - name: policy-office
+      level: admin
+      description: Runs the policy manual. Signs off on the rules themselves.
+      members:
+        - alice
+        - priya
+
+    - name: infection-control
+      level: editor
+      description: Writes and signs off on the clinical standards.
+      members:
+        - grace
+        - ines
+
+    - name: legal
+      level: editor
+      description: Signs off on anything contractual.
+      members:
+        - bob
+
+    - name: quality-committee
+      level: reviewer
+      description: Reads and approves. Free — a reviewer costs no seat.
+      members:
+        - priya
+        - dan
+        - hugo
+
 binders:
+  # ===========================================================================
+  # clinical — the everyday binder. Documents at every depth, every file type,
+  # and one of each review state. It has **no sign-off rules**, which is a real
+  # state and the one most binders are in.
+  # ===========================================================================
   - name: clinical
     description: Clinical and administrative policies — one set of rules, one set of people.
     members:
       - user: alice
-        role: authors
+        role: admins
       - user: dan
         role: reviewers
       - user: bob
         role: authors
       - user: carol
         role: authors
+      - user: grace
+        role: authors
+      - user: ines
+        role: authors
+    groups:
+      - quality-committee
     documents:
+      # -----------------------------------------------------------------------
+      # Five published versions. What a policy looks like after three years of
+      # being kept up rather than after being written once.
+      # -----------------------------------------------------------------------
       - name: hipaa-training-policy
         folder: training
         description: Annual HIPAA training policy
@@ -107,6 +256,85 @@ binders:
               - by: alice
                 state: approved
                 body: Closes the gap the last audit flagged. Approved.
+          - branch: upload/training/hipaa-training-policy/20260408/090210Z-bob-1d77c904
+            title: Add the thirty-day deadline for a failed assessment
+            summary: Somebody who does not pass has a stated window to sit it again.
+            author: bob
+            publish: true
+            document:
+              title: HIPAA Training Policy
+              sections:
+                - paragraphs:
+                    - All workforce members complete HIPAA privacy and security training within thirty days of hire and annually thereafter.
+                    - Contractors with access to production systems complete the same training on the same schedule.
+                - heading: Assessment
+                  paragraphs:
+                    - Training ends in an assessment. A score below eighty per cent is a fail.
+                    - Somebody who fails sits the assessment again within thirty days. A second fail is raised with their manager.
+                - heading: Records
+                  paragraphs:
+                    - Completion records are retained for six years from the date of training.
+                    - Contractor records are held by the engaging manager and produced on request during an audit.
+            reviews:
+              - by: carol
+                state: approved
+                body: The second-fail escalation is the part we were missing. Approved.
+          - branch: upload/training/hipaa-training-policy/20260519/113340Z-grace-6ae0f1b2
+            title: Name the phishing module as part of the annual course
+            summary: The security awareness module was being run separately and recorded nowhere.
+            author: grace
+            publish: true
+            document:
+              title: HIPAA Training Policy
+              sections:
+                - paragraphs:
+                    - All workforce members complete HIPAA privacy and security training within thirty days of hire and annually thereafter.
+                    - Contractors with access to production systems complete the same training on the same schedule.
+                - heading: What the course covers
+                  paragraphs:
+                    - The annual course covers privacy, security, and a phishing and social engineering module.
+                    - The phishing module was previously run separately and its completion was not recorded. It is part of the course from this version.
+                - heading: Assessment
+                  paragraphs:
+                    - Training ends in an assessment. A score below eighty per cent is a fail.
+                    - Somebody who fails sits the assessment again within thirty days. A second fail is raised with their manager.
+                - heading: Records
+                  paragraphs:
+                    - Completion records are retained for six years from the date of training.
+                    - Contractor records are held by the engaging manager and produced on request during an audit.
+            reviews:
+              - by: alice
+                state: approved
+                body: Good. One course, one record, one date. Approved.
+          - branch: upload/training/hipaa-training-policy/20260714/151505Z-grace-93b7ca50
+            title: Agency staff on a shift of more than four weeks
+            summary: Long agency placements were falling between the workforce and contractor rules.
+            author: grace
+            publish: true
+            document:
+              title: HIPAA Training Policy
+              sections:
+                - paragraphs:
+                    - All workforce members complete HIPAA privacy and security training within thirty days of hire and annually thereafter.
+                    - Contractors with access to production systems complete the same training on the same schedule.
+                    - Agency staff placed for more than four consecutive weeks are treated as workforce members for this policy.
+                - heading: What the course covers
+                  paragraphs:
+                    - The annual course covers privacy, security, and a phishing and social engineering module.
+                    - The phishing module was previously run separately and its completion was not recorded. It is part of the course from this version.
+                - heading: Assessment
+                  paragraphs:
+                    - Training ends in an assessment. A score below eighty per cent is a fail.
+                    - Somebody who fails sits the assessment again within thirty days. A second fail is raised with their manager.
+                - heading: Records
+                  paragraphs:
+                    - Completion records are retained for six years from the date of training.
+                    - Contractor records are held by the engaging manager and produced on request during an audit.
+                    - The agency holds its own copy of the record and provides it on request.
+            reviews:
+              - by: alice
+                state: approved
+                body: Five versions in and it finally covers everybody on the ward. Approved.
       - name: infection-control-policy
         folder: nursing
         description: Infection prevention and control — clinical policy
@@ -201,6 +429,40 @@ binders:
                   - by: alice
                     body: Agency contracts already require it before first shift. This brings our policy in line with the contract rather than the other way round.
                 resolved: false
+          # Closed without publishing, with a request for work standing against
+          # it — which the product reads as **Declined**. The outcome is not
+          # declared anywhere: it falls out of the review, the same way it does
+          # for a real change.
+          - branch: upload/nursing/infection-control-policy/20251209/160000Z-grace-1b4f07ce
+            title: Require FFP3 for every aerosol-generating procedure
+            summary: Went further than the national guidance and could not be staffed.
+            author: grace
+            closed: true
+            document:
+              title: Infection Prevention and Control Policy
+              sections:
+                - paragraphs:
+                    - Standard precautions apply to every patient contact regardless of known infection status.
+                - heading: Respiratory protection
+                  paragraphs:
+                    - An FFP3 respirator is worn for every aerosol-generating procedure, on every patient, whatever their known status.
+                    - Fit testing is repeated annually and after any significant change in facial appearance.
+            reviews:
+              - by: alice
+                state: changes_requested
+                body: >-
+                  We cannot fit-test this many people on this timetable, and a
+                  policy we knowingly cannot meet is worse than the guidance we
+                  already follow. Bring it back scoped to the high-risk list.
+            threads:
+              - id: fit-testing-capacity
+                by: alice
+                body: How many people would need fit-testing under this, and over what period? The number is the whole question.
+                replies:
+                  - by: grace
+                    body: About four hundred, and occupational health can do thirty a week. I take the point.
+                resolved: true
+                resolvedBy: alice
       - name: medication-administration-policy
         folder: nursing
         description: Medication administration and error reporting — clinical policy
@@ -382,17 +644,240 @@ binders:
                     body: The manager writes what they have by day three and says who is still to be spoken to. The clock on the patient's response has not moved.
                 resolved: true
                 resolvedBy: carol
+      # -----------------------------------------------------------------------
+      # At the binder's root — no folder at all, which is its own layout case.
+      # -----------------------------------------------------------------------
+      - name: code-of-conduct
+        description: Expected conduct for everybody who works here
+        changes:
+          - branch: upload/code-of-conduct/20251201/094500Z-alice-4ea71c03
+            title: Code of conduct — first issue
+            summary: What we expect of everybody, stated once, at the front of the manual.
+            author: alice
+            publish: true
+            document:
+              title: Code of Conduct
+              sections:
+                - paragraphs:
+                    - This code applies to everybody who works here, in any capacity, on or off the premises where the work is ours.
+                - heading: Behaviour towards patients
+                  paragraphs:
+                    - Treat every patient with courtesy and keep what you learn about them to the people who need it to do their job.
+                - heading: Raising a concern
+                  paragraphs:
+                    - A concern about conduct goes to any manager, or to the confidential line if naming a manager is the problem.
+                    - Nobody is disadvantaged for raising a concern honestly, including one that turns out to be mistaken.
+            reviews:
+              - by: bob
+                state: approved
+                body: Short, and it says the thing about retaliation plainly. Approved.
+          # Closed with nobody having asked for work, which the product reads as
+          # **Withdrawn** rather than Declined. Same act, different reviews, and
+          # the difference is the whole of what the Closed tab has to tell
+          # apart.
+          - branch: upload/code-of-conduct/20260223/112000Z-carol-77b0e5a2
+            title: Add a social media section
+            summary: Overtaken by the communications policy, which covers the same ground.
+            author: carol
+            closed: true
+            document:
+              title: Code of Conduct
+              sections:
+                - paragraphs:
+                    - This code applies to everybody who works here, in any capacity, on or off the premises where the work is ours.
+                - heading: Behaviour towards patients
+                  paragraphs:
+                    - Treat every patient with courtesy and keep what you learn about them to the people who need it to do their job.
+                - heading: Social media
+                  paragraphs:
+                    - Nothing about a patient goes on social media, ever, however anonymised it looks to you.
+                - heading: Raising a concern
+                  paragraphs:
+                    - A concern about conduct goes to any manager, or to the confidential line if naming a manager is the problem.
+                    - Nobody is disadvantaged for raising a concern honestly, including one that turns out to be mistaken.
+
+      # -----------------------------------------------------------------------
+      # Two folders deep. A document's address is a path and always has been;
+      # this is the part the flat list could not show.
+      # -----------------------------------------------------------------------
+      - name: handover-standard
+        folder: nursing/wards
+        description: Ward-to-ward handover — what must be said and recorded
+        format: markdown
+        changes:
+          - branch: upload/nursing/wards/handover-standard/20260114/073000Z-ines-2fa10b6c
+            title: Handover standard — first issue
+            summary: The five things a handover has to cover, and who signs it.
+            author: ines
+            publish: true
+            document:
+              title: Ward Handover Standard
+              sections:
+                - paragraphs:
+                    - Every transfer of a patient between wards is handed over in person and recorded before the transferring nurse leaves.
+                - heading: What a handover covers
+                  paragraphs:
+                    - Identity and current diagnosis; medication given in the last twelve hours; outstanding investigations; known allergies; and anything the family has been told.
+                - heading: Recording it
+                  paragraphs:
+                    - Both nurses sign the handover record. An unsigned handover is treated as not having happened.
+            reviews:
+              - by: grace
+                state: approved
+                body: The five items match what the ward audit asks for. Approved.
+
+      - name: night-shift-escalation
+        folder: nursing/wards
+        description: Who to call overnight, and when
+        changes:
+          - branch: upload/nursing/wards/night-shift-escalation/20260204/213000Z-ines-7c0b4e12
+            title: Night shift escalation — first issue
+            summary: The overnight call order, written down rather than passed on by word of mouth.
+            author: ines
+            publish: true
+            document:
+              title: Night Shift Escalation
+              sections:
+                - paragraphs:
+                    - Between 20:00 and 08:00 the ward escalates in the order below and does not skip a step unless the patient is peri-arrest.
+                - heading: Call order
+                  paragraphs:
+                    - Nurse in charge, then the on-call registrar, then the on-call consultant, then the site manager.
+                    - A step is given ten minutes to answer before the next one is called.
+                - heading: Recording the call
+                  paragraphs:
+                    - Each call is recorded with the time it was made and the time it was answered.
+            reviews:
+              - by: grace
+                state: approved
+                body: The ten-minute rule is what the incident review asked for. Approved.
+
+      # -----------------------------------------------------------------------
+      # Never published: the Draft state, which nothing else in the binder is.
+      # -----------------------------------------------------------------------
+      - name: records-retention
+        folder: administrative
+        description: How long we keep what — working draft, never proposed
+
+    # -------------------------------------------------------------------------
+    # Changes about the binder rather than about one document.
+    # -------------------------------------------------------------------------
+    changes:
+      # A folder somebody made and has not filed anything in. It is a committed
+      # `.gitkeep` and nothing else, and it has to show up in the tree — a
+      # folder that was proposed, approved and published must not be invisible.
+      - branch: shape/alice/20260310090000
+        title: Make room for ward 7 and the refresher courses
+        summary: Two folders, both empty until the policies for them are written.
+        author: alice
+        publish: true
+        acts:
+          - newFolder: nursing/wards/ward-7
+          - newFolder: training/refreshers
+        reviews:
+          - by: carol
+            state: approved
+            body: Ward 7 opens in April. Better the folder is there first. Approved.
+
+      # A move with no rename and no edit: the document's address changes and
+      # its identity does not, so it keeps every version it had.
+      - branch: shape/ines/20260520140000
+        title: File the escalation policy with the other escalation policies
+        summary: It has never belonged in the ward folder. Nothing in it changes.
+        author: ines
+        publish: true
+        acts:
+          - move:
+              from: nursing/wards/night-shift-escalation
+              to: nursing/escalation/night-shift-escalation
+        reviews:
+          - by: grace
+            state: approved
+            body: Agreed, and it is easier to find there. Approved.
+
+      # Open: renamed, refiled and rewritten, all in one change. A rename is a
+      # change even when not a word of the document changed, and the comparison
+      # cannot show it — which is why the change page says so per document.
+      - branch: shape/carol/20260620103000
+        title: Rename the grievance policy and move it under complaints
+        summary: >-
+          Nobody calls it a grievance. The policy is renamed, filed under a
+          complaints folder with the rest of them, and the response window is
+          rewritten to say working days.
+        author: carol
+        assignee: bob
+        reviewers:
+          - bob
+          - dan
+        publish: false
+        acts:
+          - move:
+              from: administrative/patient-grievance-policy
+              to: administrative/complaints/patient-complaints-policy
+          - revise:
+              document: administrative/complaints/patient-complaints-policy
+              title: Patient Complaints Policy
+              sections:
+                - paragraphs:
+                    - A complaint is any expression of dissatisfaction with our care or conduct, however it reaches us.
+                - heading: Acknowledgement
+                  paragraphs:
+                    - Every complaint is acknowledged within three working days of the day it arrives.
+                    - Where a complaint arrives on a non-working day, the clock starts on the next working day.
+                - heading: Investigation
+                  paragraphs:
+                    - The department named in the complaint appoints an investigating manager who has had no part in the care complained about.
+                    - A full response follows within twenty working days. Where that cannot be met, the complainant is told why and given a date.
+                - heading: If the complainant is not satisfied
+                  paragraphs:
+                    - The complainant may ask for the response to be reviewed by the Chief Executive, and may go to the Ombudsman at any point.
+        reviews:
+          - by: dan
+            state: commented
+            body: No objection from the audit side. The rename is fine as long as the old name is findable.
+        threads:
+          - id: working-days-everywhere
+            by: bob
+            body: You have changed three days to three working days but left twenty as plain days further down. Which is it?
+            replies:
+              - by: carol
+                body: Working days throughout. Fixed in the version on this change.
+            resolved: true
+            resolvedBy: bob
+          - id: what-about-the-old-name
+            by: dan
+            body: Anybody searching for "grievance" after this lands finds nothing. Is there a redirect, or does the intranet page need editing?
+            replies:
+              - by: carol
+                body: The intranet page needs editing. I have raised it with communications; it is not something this change can do.
+            resolved: false
+          - id: ombudsman-wording
+            by: bob
+            body:
+              "“may go to the Ombudsman at any point” — at any point in our process, or at any point in time? Those are different promises.
+              "
+            resolved: false
+  # ===========================================================================
+  # corporate — contracts, reports and internal records. This is where the
+  # awkward change requests live: out of date, crowded with reviewers, heavy
+  # with discussion, and one that takes a document off the record.
+  # ===========================================================================
   - name: corporate
     description: Contracts, reports and internal records.
     members:
+      - user: alice
+        role: admins
       - user: bob
         role: authors
       - user: dan
         role: reviewers
       - user: carol
         role: authors
-      - user: alice
+      - user: omar
         role: authors
+    groups:
+      - legal
+      - quality-committee
     documents:
       - name: quarterly-report
         description: Quarterly compliance report
@@ -557,3 +1042,997 @@ binders:
                   - by: carol
                     body: Deliberately open — I would rather hear their number than lead them to ours.
                 resolved: false
+      # -----------------------------------------------------------------------
+      # Out of date behind other people's work. Its own version published, then
+      # five more changes landed on `main` underneath it — so the change is
+      # behind without being in conflict with anything.
+      # -----------------------------------------------------------------------
+      - name: purchasing-policy
+        folder: finance
+        description: What may be bought, by whom, and against which budget
+        changes:
+          - branch: upload/finance/purchasing-policy/20251118/101500Z-carol-3b09da71
+            title: Purchasing policy — first issue
+            summary: Thresholds, approvers and the three-quote rule.
+            author: carol
+            publish: true
+            document:
+              title: Purchasing Policy
+              sections:
+                - paragraphs:
+                    - Nothing is ordered without a purchase order raised before the commitment is made.
+                - heading: Thresholds
+                  paragraphs:
+                    - Up to 2,000 — budget holder. Up to 25,000 — director. Above that, the Finance Committee.
+                - heading: Competition
+                  paragraphs:
+                    - Anything above 10,000 needs three written quotes, or a recorded reason why three were not obtainable.
+            reviews:
+              - by: bob
+                state: approved
+                body: Thresholds match the scheme of delegation. Approved.
+          - branch: upload/finance/purchasing-policy/20260302/143000Z-carol-8c1ef220
+            title: Raise the three-quote threshold to 15,000
+            summary: Three quotes for a 10,000 order costs more in time than it saves.
+            author: carol
+            publish: false
+            reviewers:
+              - bob
+            document:
+              title: Purchasing Policy
+              sections:
+                - paragraphs:
+                    - Nothing is ordered without a purchase order raised before the commitment is made.
+                - heading: Thresholds
+                  paragraphs:
+                    - Up to 2,000 — budget holder. Up to 25,000 — director. Above that, the Finance Committee.
+                - heading: Competition
+                  paragraphs:
+                    - Anything above 15,000 needs three written quotes, or a recorded reason why three were not obtainable.
+                    - Between 10,000 and 15,000 a single quote is enough where the supplier is on the framework.
+
+      # -----------------------------------------------------------------------
+      # Out of date by three versions **of its own document**. The change was
+      # opened before any of them, and each publish since has moved the file it
+      # proposes — so it is behind and in conflict, which is the state a change
+      # nobody has looked at for six months is actually in.
+      # -----------------------------------------------------------------------
+      - name: access-control-standard
+        folder: security
+        description: Who gets access to what, and how it is taken away
+        changes:
+          - branch: upload/security/access-control-standard/20251009/090000Z-omar-0f31ab77
+            title: Access control — the original draft, never picked up again
+            summary: Opened in October and left. Three versions have published since.
+            author: omar
+            publish: false
+            document:
+              title: Access Control Standard
+              sections:
+                - paragraphs:
+                    - Access is granted on the basis of role and removed when the role ends.
+                - heading: Review
+                  paragraphs:
+                    - Access lists are reviewed annually by the system owner.
+          - branch: upload/security/access-control-standard/20251020/111500Z-bob-51b3ce08
+            title: Access control standard — first issue
+            summary: Role-based access, joiners and leavers, and the quarterly review.
+            author: bob
+            publish: true
+            document:
+              title: Access Control Standard
+              sections:
+                - paragraphs:
+                    - Access to any clinical or financial system is granted on the basis of role and removed on the day the role ends.
+                - heading: Joiners
+                  paragraphs:
+                    - A request names the role rather than the person it is being copied from. Copying an account copies whatever it should not have had.
+                - heading: Leavers
+                  paragraphs:
+                    - Human Resources notifies system owners on the day notice is given, and access ends at the end of the last working day.
+            reviews:
+              - by: carol
+                state: approved
+                body: The "name the role, not the person" line is the one that matters. Approved.
+          - branch: upload/security/access-control-standard/20260122/094500Z-bob-a70c12dd
+            title: Quarterly reviews for the clinical systems
+            summary: Annual was too slow for systems people move between every rotation.
+            author: bob
+            publish: true
+            document:
+              title: Access Control Standard
+              sections:
+                - paragraphs:
+                    - Access to any clinical or financial system is granted on the basis of role and removed on the day the role ends.
+                - heading: Joiners
+                  paragraphs:
+                    - A request names the role rather than the person it is being copied from. Copying an account copies whatever it should not have had.
+                - heading: Leavers
+                  paragraphs:
+                    - Human Resources notifies system owners on the day notice is given, and access ends at the end of the last working day.
+                - heading: Review
+                  paragraphs:
+                    - Clinical system access is reviewed quarterly. Everything else is reviewed annually.
+            reviews:
+              - by: carol
+                state: approved
+                body: Quarterly for the clinical systems is right. Approved.
+          - branch: upload/security/access-control-standard/20260428/160000Z-bob-c24b90fe
+            title: Shared accounts, and the two places we still have them
+            summary: Naming them is the first step to being rid of them.
+            author: bob
+            publish: true
+            document:
+              title: Access Control Standard
+              sections:
+                - paragraphs:
+                    - Access to any clinical or financial system is granted on the basis of role and removed on the day the role ends.
+                - heading: Joiners
+                  paragraphs:
+                    - A request names the role rather than the person it is being copied from. Copying an account copies whatever it should not have had.
+                - heading: Leavers
+                  paragraphs:
+                    - Human Resources notifies system owners on the day notice is given, and access ends at the end of the last working day.
+                - heading: Shared accounts
+                  paragraphs:
+                    - Shared accounts are not permitted. Two remain — the theatre booking terminal and the out-of-hours pharmacy line — and both are on the register with a date to be gone.
+                - heading: Review
+                  paragraphs:
+                    - Clinical system access is reviewed quarterly. Everything else is reviewed annually.
+            reviews:
+              - by: alice
+                state: approved
+                body: Naming the two we have is better than a rule everybody quietly breaks. Approved.
+
+      # -----------------------------------------------------------------------
+      # Six people asked, one has answered. What a change looks like when it
+      # has been sent round a committee.
+      # -----------------------------------------------------------------------
+      - name: business-continuity-plan
+        folder: security
+        description: How the hospital runs when a system does not
+        changes:
+          - branch: upload/security/business-continuity-plan/20251215/120000Z-carol-2d4e9a10
+            title: Business continuity plan — first issue
+            summary: Downtime procedures for the four systems we cannot work without.
+            author: carol
+            publish: true
+            document:
+              title: Business Continuity Plan
+              sections:
+                - paragraphs:
+                    - >-
+                      This plan covers the four systems whose loss stops
+                      clinical work — the patient record, the pharmacy system,
+                      the laboratory system, and the telephony.
+                - heading: Declaring downtime
+                  paragraphs:
+                    - The site manager declares downtime. Nobody waits for confirmation from the supplier before doing so.
+                - heading: Paper fallback
+                  paragraphs:
+                    - Each ward holds a downtime box, checked monthly, containing the forms needed to run for twenty-four hours.
+            reviews:
+              - by: bob
+                state: approved
+                body: The "do not wait for the supplier" line is the whole plan. Approved.
+          - branch: upload/security/business-continuity-plan/20260610/083000Z-alice-5f71b20c
+            title: Extend the plan to a forty-eight hour outage
+            summary: >-
+              The December outage ran to thirty-one hours and the downtime boxes
+              were designed for twenty-four. Sent to everybody who was in the
+              room for the review.
+            author: alice
+            assignee: carol
+            reviewers:
+              - bob
+              - carol
+              - dan
+              - omar
+              - priya
+              - hugo
+            publish: false
+            document:
+              title: Business Continuity Plan
+              sections:
+                - paragraphs:
+                    - >-
+                      This plan covers the four systems whose loss stops
+                      clinical work — the patient record, the pharmacy system,
+                      the laboratory system, and the telephony.
+                - heading: Declaring downtime
+                  paragraphs:
+                    - The site manager declares downtime. Nobody waits for confirmation from the supplier before doing so.
+                - heading: Paper fallback
+                  paragraphs:
+                    - Each ward holds a downtime box, checked monthly, containing the forms needed to run for forty-eight hours.
+                    - The December outage ran to thirty-one hours. Boxes sized for twenty-four were empty by the second morning.
+                - heading: Recovery
+                  paragraphs:
+                    - Paper records made during downtime are entered into the system within seventy-two hours of it returning, oldest first.
+            reviews:
+              - by: hugo
+                state: commented
+                body: Pharmacy can hold forty-eight hours of paper. Seventy-two hours to catch up is optimistic for us — we will need agency help.
+
+      # -----------------------------------------------------------------------
+      # Heavy with discussion and every thread closed. What a change looks like
+      # once the argument is over and the decision is not yet taken.
+      # -----------------------------------------------------------------------
+      - name: expenses-policy
+        folder: finance
+        description: What we reimburse, and against what evidence
+        changes:
+          - branch: upload/finance/expenses-policy/20251110/091500Z-carol-6d12ba49
+            title: Expenses policy — first issue
+            summary: Rates, receipts and the approval route.
+            author: carol
+            publish: true
+            document:
+              title: Expenses Policy
+              sections:
+                - paragraphs:
+                    - We reimburse what was necessary to do the work, at the rates below, against a receipt.
+                - heading: Travel
+                  paragraphs:
+                    - Standard class rail. Mileage at the approved rate where rail is not practical.
+                - heading: Approval
+                  paragraphs:
+                    - The claimant's line manager approves. Nobody approves their own claim.
+            reviews:
+              - by: bob
+                state: approved
+                body: Fine. Approved.
+          - branch: upload/finance/expenses-policy/20260505/140000Z-carol-b39f0c17
+            title: Subsistence rates, and what happens without a receipt
+            summary: >-
+              Every question raised at the finance meeting has been answered and
+              the wording agreed. It only needs a decision now.
+            author: carol
+            assignee: alice
+            reviewers:
+              - alice
+            publish: false
+            document:
+              title: Expenses Policy
+              sections:
+                - paragraphs:
+                    - We reimburse what was necessary to do the work, at the rates below, against a receipt.
+                - heading: Travel
+                  paragraphs:
+                    - Standard class rail. Mileage at the approved rate where rail is not practical.
+                    - First class is reimbursed only where it was cheaper than standard on the day, and the booking confirmation shows it.
+                - heading: Subsistence
+                  paragraphs:
+                    - Up to 6 for breakfast where travel begins before 06:00, up to 25 for an evening meal where the return is after 20:00.
+                    - Alcohol is not reimbursed under any heading.
+                - heading: Missing receipts
+                  paragraphs:
+                    - A claim without a receipt is paid once in any twelve months, up to 20, on a signed statement of what was bought.
+                - heading: Approval
+                  paragraphs:
+                    - The claimant's line manager approves. Nobody approves their own claim.
+            reviews:
+              - by: bob
+                state: commented
+                body: I have nothing further. Every point I raised is answered above.
+            threads:
+              - id: first-class-cheaper
+                by: bob
+                body: "“only where it was cheaper than standard” — cheaper at the time of booking, or cheaper than the standard fare on the day of travel?"
+                replies:
+                  - by: carol
+                    body: At the time of booking, and the confirmation is the evidence. I have said so.
+                resolved: true
+                resolvedBy: bob
+              - id: breakfast-cutoff
+                by: dan
+                body: Why 06:00 for breakfast? The rest of the sector uses 07:00 and an auditor will ask.
+                replies:
+                  - by: carol
+                    body: Because our first theatre list starts at 07:30 and anybody travelling to it leaves before six. It is deliberate and I would rather write down why.
+                  - by: dan
+                    body: Good enough for me, as long as the reason is somewhere.
+                resolved: true
+                resolvedBy: dan
+              - id: alcohol-line
+                by: alice
+                body: Is the alcohol sentence needed? It reads as though somebody has tried.
+                replies:
+                  - by: carol
+                    body: Somebody has tried. It stays.
+                resolved: true
+                resolvedBy: alice
+              - id: missing-receipt-limit
+                by: bob
+                body: Once in twelve months, up to 20 — is that twelve rolling months or the financial year?
+                replies:
+                  - by: carol
+                    body: Rolling. Changed.
+                resolved: true
+                resolvedBy: bob
+              - id: mileage-rate-where
+                by: dan
+                body: "“the approved rate” is not defined anywhere in this document. Approved by whom, and where is the number?"
+                replies:
+                  - by: carol
+                    body: It is the HMRC rate and it changes; putting the number here means the policy is wrong every time they move it. The finance intranet page carries the current one and I have linked it.
+                  - by: dan
+                    body: That works.
+                resolved: true
+                resolvedBy: dan
+              - id: who-approves-the-ceo
+                by: alice
+                body: Nobody approves their own claim — so who approves mine?
+                replies:
+                  - by: carol
+                    body: The Chair. Added to the approval section.
+                resolved: true
+                resolvedBy: alice
+
+      # -----------------------------------------------------------------------
+      # Discussion still open. Two resolved, three not — the state that stops a
+      # publish when the binder is set to refuse one.
+      # -----------------------------------------------------------------------
+      - name: travel-policy
+        folder: finance
+        description: Booking, class of travel and overseas approval
+        changes:
+          - branch: upload/finance/travel-policy/20251124/113000Z-omar-4a0cd831
+            title: Travel policy — first issue
+            summary: How travel is booked and who approves it.
+            author: omar
+            publish: true
+            document:
+              title: Travel Policy
+              sections:
+                - paragraphs:
+                    - Travel is booked through the contracted agency so that duty of care is covered.
+                - heading: Approval
+                  paragraphs:
+                    - Domestic travel is approved by the budget holder. Overseas travel is approved by a director.
+            reviews:
+              - by: carol
+                state: approved
+                body: Agency booking is a duty-of-care point, not a cost one. Worth saying. Approved.
+          - branch: upload/finance/travel-policy/20260617/102000Z-omar-e15c7a94
+            title: Overseas travel, insurance and the countries we will not send anybody to
+            summary: Three questions on this are still open.
+            author: omar
+            assignee: bob
+            reviewers:
+              - bob
+              - dan
+            publish: false
+            document:
+              title: Travel Policy
+              sections:
+                - paragraphs:
+                    - Travel is booked through the contracted agency so that duty of care is covered.
+                - heading: Approval
+                  paragraphs:
+                    - Domestic travel is approved by the budget holder. Overseas travel is approved by a director and by the Chief Executive where the destination carries a travel advisory.
+                - heading: Insurance
+                  paragraphs:
+                    - Nobody travels overseas on our business without the corporate policy in force and the number in their phone.
+                - heading: Destinations
+                  paragraphs:
+                    - We do not send anybody to a country the Foreign Office advises against all travel to, for any reason, including at the traveller's own request.
+            reviews:
+              - by: bob
+                state: changes_requested
+                body: The destinations section needs to say who may make an exception, or it will be read as absolute and then quietly broken.
+            threads:
+              - id: advisory-which-kind
+                by: bob
+                body: A travel advisory against *all but essential* travel is a different thing from one against *all* travel. The approval paragraph does not say which triggers the Chief Executive.
+                resolved: false
+              - id: exceptions-to-destinations
+                by: bob
+                body: Who can make an exception to the destinations rule? If the answer is nobody, say nobody.
+                replies:
+                  - by: omar
+                    body: I think the answer is the Chief Executive, but I would rather that came from you than from me.
+                resolved: false
+              - id: insurance-number-in-phone
+                by: dan
+                body: "“the number in their phone” is not auditable. What is the record that this was done?"
+                replies:
+                  - by: omar
+                    body: The agency booking confirmation carries the policy number. I will point at that instead.
+                resolved: false
+              - id: agency-out-of-hours
+                by: dan
+                body: Does the agency have an out-of-hours line? The 2024 incident review asked for one and I do not know if we got it.
+                replies:
+                  - by: omar
+                    body: We did — it is in the contract, twenty-four hours. I have added it to the insurance section.
+                resolved: true
+                resolvedBy: dan
+              - id: rail-vs-air-domestic
+                by: bob
+                body: Is domestic air travel allowed at all? The first issue did not say and this does not either.
+                replies:
+                  - by: omar
+                    body: Allowed where rail is over five hours. Added under Approval.
+                  - by: bob
+                    body: Good.
+                resolved: true
+                resolvedBy: bob
+
+      # -----------------------------------------------------------------------
+      # Published once and then taken off the record, so the archive has
+      # something in it and a version tag to point at.
+      # -----------------------------------------------------------------------
+      - name: legacy-supplier-terms
+        folder: vendors
+        description: Superseded standard terms, kept until the last contract on them ended
+        changes:
+          - branch: upload/vendors/legacy-supplier-terms/20250902/090000Z-bob-7b2ce401
+            title: Legacy supplier terms — reissued for the record
+            summary: The 2019 terms, published here so the contracts written on them have something to point at.
+            author: bob
+            publish: true
+            document:
+              title: Legacy Supplier Terms (2019)
+              sections:
+                - paragraphs:
+                    - These terms applied to supplier contracts entered into between January 2019 and March 2024. They are kept for reference and must not be used for a new contract.
+                - heading: Payment
+                  paragraphs:
+                    - Invoices were payable within sixty days of receipt.
+                - heading: Liability
+                  paragraphs:
+                    - Liability was capped at the value of the contract in the preceding twelve months.
+            reviews:
+              - by: carol
+                state: approved
+                body: Worth having on the record rather than in a shared drive. Approved.
+
+    # -------------------------------------------------------------------------
+    # A change that takes a document off the record. Its version tags still
+    # point at the commits that held it, so the bytes stay reachable — what the
+    # change adds is who removed it, when, and under which change.
+    # -------------------------------------------------------------------------
+    changes:
+      - branch: shape/bob/20260805110000
+        title: Retire the 2019 supplier terms
+        summary: The last contract written on them ended in March. Nothing points at them now.
+        author: bob
+        publish: true
+        acts:
+          - archive: vendors/legacy-supplier-terms
+        reviews:
+          - by: carol
+            state: approved
+            body: Checked the contract register — nothing left on the 2019 terms. Approved.
+  # ===========================================================================
+  # governance — the binder covered in sign-off rules, and the only one that
+  # asks for two approvals. Everything here is gated twice: once by the
+  # binder's own rule, once by whichever folder or document rule matches. It is
+  # the opposite state to `clinical`, which has no rules at all.
+  # ===========================================================================
+  - name: governance
+    description: The policies that govern the policies — standards, contracts and the rules themselves.
+    requiredApprovals: 2
+    members:
+      - user: alice
+        role: admins
+      - user: bob
+        role: authors
+      - user: grace
+        role: authors
+      - user: ines
+        role: authors
+      - user: dan
+        role: reviewers
+    groups:
+      - policy-office
+      - infection-control
+      - legal
+      - quality-committee
+    # Committed to `main` before it is protected, so these are the rules
+    # governing every change below — including, if somebody proposes one, a
+    # change to the rules themselves. A group named here must also be granted
+    # on the binder, or Gitea holds the merge for an approval its members
+    # cannot give.
+    signOff:
+      - scope: binder
+        teams:
+          - policy-office
+        users: []
+      - scope: folder
+        target: clinical-standards
+        teams:
+          - infection-control
+        users: []
+      - scope: folder
+        target: contracts
+        teams:
+          - legal
+        users: []
+      - scope: document
+        target: contracts/master-services-agreement
+        teams:
+          - legal
+          - quality-committee
+        users: []
+      # Who signs things off is itself a control, and a control nobody has to
+      # approve a change to is not one.
+      - scope: rules
+        teams:
+          - policy-office
+        users: []
+    documents:
+      - name: governance-charter
+        description: What the policy manual is for and who owns it
+        changes:
+          - branch: upload/governance-charter/20250915/100000Z-grace-1a7cd309
+            title: Governance charter — first issue
+            summary: The manual's purpose, its owner, and how often each policy is looked at.
+            author: grace
+            publish: true
+            document:
+              title: Governance Charter
+              sections:
+                - paragraphs:
+                    - This manual is the set of policies the organization holds itself to. A policy that is not in it is not in force.
+                - heading: Ownership
+                  paragraphs:
+                    - The Policy Office owns the manual. Each policy has a named owner who is accountable for it being current.
+                - heading: Review cycle
+                  paragraphs:
+                    - Every policy is reviewed at least every three years, and sooner where the law or an incident requires it.
+            reviews:
+              - by: alice
+                state: approved
+                body: This is the document everything else hangs off. Approved.
+              - by: priya
+                state: approved
+                body: Approved. The three-year cycle is what the board agreed.
+
+      - name: hand-hygiene
+        folder: clinical-standards
+        description: Hand hygiene and personal protective equipment
+        format: markdown
+        changes:
+          - branch: upload/clinical-standards/hand-hygiene/20251002/084500Z-grace-64b1f0aa
+            title: Hand hygiene standard — first issue
+            summary: The five moments, and what to do when a sink is out of reach.
+            author: grace
+            publish: true
+            document:
+              title: Hand Hygiene and PPE
+              sections:
+                - paragraphs:
+                    - Hands are decontaminated at the five moments of hand hygiene, without exception and regardless of whether gloves were worn.
+                - heading: When a sink is out of reach
+                  paragraphs:
+                    - Alcohol gel is used where hands are not visibly soiled. Where they are, or where the patient has a spore-forming infection, soap and water is the only acceptable answer.
+            reviews:
+              - by: alice
+                state: approved
+                body: Approved on behalf of the Policy Office.
+              - by: ines
+                state: approved
+                body: Matches what we teach on the ward. Approved.
+          - branch: upload/clinical-standards/hand-hygiene/20260216/091000Z-ines-d2f4a716
+            title: Add the bare-below-the-elbows requirement
+            summary: It has been custom for years and was written down nowhere.
+            author: ines
+            publish: true
+            document:
+              title: Hand Hygiene and PPE
+              sections:
+                - paragraphs:
+                    - Hands are decontaminated at the five moments of hand hygiene, without exception and regardless of whether gloves were worn.
+                - heading: Dress
+                  paragraphs:
+                    - Anybody giving direct care is bare below the elbows. No wrist watch, no stoned rings, no long sleeves.
+                - heading: When a sink is out of reach
+                  paragraphs:
+                    - Alcohol gel is used where hands are not visibly soiled. Where they are, or where the patient has a spore-forming infection, soap and water is the only acceptable answer.
+            reviews:
+              - by: alice
+                state: approved
+                body: Approved on behalf of the Policy Office.
+              - by: grace
+                state: approved
+                body: Long overdue in writing. Approved.
+
+      - name: sepsis-pathway
+        folder: clinical-standards
+        description: Recognition and first hour of treatment
+        changes:
+          - branch: upload/clinical-standards/sepsis-pathway/20251111/141500Z-grace-9e30cb41
+            title: Sepsis pathway — first issue
+            summary: Screening trigger, the first-hour bundle, and who is called.
+            author: grace
+            publish: true
+            document:
+              title: Sepsis Pathway
+              sections:
+                - paragraphs:
+                    - Any patient meeting the screening trigger is escalated immediately and the first-hour bundle is started without waiting for a medical review.
+                - heading: The first hour
+                  paragraphs:
+                    - Blood cultures, lactate, urine output, oxygen, fluids and antibiotics — all six started within sixty minutes of the trigger.
+                - heading: Escalation
+                  paragraphs:
+                    - The on-call registrar is called at the point of triggering, not at the end of the bundle.
+            reviews:
+              - by: alice
+                state: approved
+                body: Approved on behalf of the Policy Office.
+              - by: ines
+                state: approved
+                body: The "call at the trigger, not at the end" line is the change that matters. Approved.
+
+      - name: master-services-agreement
+        folder: contracts
+        description: Our standard terms for a supplier
+        format: docx
+        changes:
+          - branch: upload/contracts/master-services-agreement/20251205/113000Z-grace-3f7a01d2
+            title: Master services agreement — 2026 terms
+            summary: The standard terms every new supplier contract is written on.
+            author: grace
+            publish: true
+            document:
+              title: Master Services Agreement (2026)
+              sections:
+                - paragraphs:
+                    - These terms apply to every supplier contract entered into from 1 January 2026 unless a signed variation says otherwise.
+                - heading: Payment
+                  paragraphs:
+                    - Invoices are payable within thirty days of receipt of a valid invoice.
+                - heading: Liability
+                  paragraphs:
+                    - Liability is capped at the greater of the contract value in the preceding twelve months and 100,000, except for death, personal injury and data protection breaches, where it is uncapped.
+                - heading: Data protection
+                  paragraphs:
+                    - Where the supplier processes personal data on our behalf, the data processing addendum applies and takes precedence over anything inconsistent in these terms.
+            reviews:
+              - by: bob
+                state: approved
+                body: Approved. The uncapped carve-outs are the three that matter.
+              - by: alice
+                state: approved
+                body: Approved on behalf of the Policy Office.
+              - by: priya
+                state: approved
+                body: Approved for the Quality Committee.
+
+      - name: data-processing-addendum
+        folder: contracts
+        description: What a supplier must do with personal data
+        format: pdf
+        changes:
+          - branch: upload/contracts/data-processing-addendum/20260108/095500Z-grace-cc41b0e7
+            title: Data processing addendum — 2026 terms
+            summary: Subprocessors, retention and what happens at the end of the contract.
+            author: grace
+            publish: true
+            document:
+              title: Data Processing Addendum (2026)
+              sections:
+                - paragraphs:
+                    - This addendum applies wherever a supplier processes personal data on our behalf, and it takes precedence over anything inconsistent in the main agreement.
+                - heading: Subprocessors
+                  paragraphs:
+                    - No subprocessor is engaged without thirty days written notice, during which we may object and terminate without penalty.
+                - heading: Retention
+                  paragraphs:
+                    - Personal data is retained only for as long as the service requires it, and is returned or destroyed within thirty days of the contract ending.
+                - heading: Breach
+                  paragraphs:
+                    - We are told of a personal data breach without undue delay and in any event within twenty-four hours of the supplier becoming aware of it.
+            reviews:
+              - by: bob
+                state: approved
+                body: Twenty-four hours is tighter than the law asks and we should keep it. Approved.
+              - by: alice
+                state: approved
+                body: Approved on behalf of the Policy Office.
+
+    changes:
+      # A change to the sign-off rules themselves — the one kind of change that
+      # is about no document at all. It goes on a `sign-off/` branch, and while
+      # it is open the rules already in force are the ones governing it.
+      - branch: sign-off/20260702094500
+        title: Change who signs off on this binder
+        summary: >-
+          Pharmacy should be on anything in the clinical standards, and the
+          contracts folder should not need the whole Policy Office for a typo.
+        author: alice
+        assignee: priya
+        reviewers:
+          - priya
+          - bob
+        publish: false
+        acts:
+          - signOff:
+              - scope: binder
+                teams:
+                  - policy-office
+                users: []
+              - scope: folder
+                target: clinical-standards
+                teams:
+                  - infection-control
+                  - quality-committee
+                users: []
+              - scope: folder
+                target: contracts
+                teams:
+                  - legal
+                users: []
+              - scope: document
+                target: contracts/master-services-agreement
+                teams:
+                  - legal
+                  - quality-committee
+                users: []
+              - scope: rules
+                teams:
+                  - policy-office
+                users: []
+        threads:
+          - id: why-quality-on-standards
+            by: bob
+            body: Adding the Quality Committee to the clinical standards means four approvals for a wording fix. Is that what we want?
+            replies:
+              - by: alice
+                body: It means two groups, not four people — one approval from each is enough. But you are right that it is slower, and I would rather hear from Priya before this lands.
+            resolved: false
+
+  # ===========================================================================
+  # facilities — an admin team and authors, and **no reviewers at all**. A
+  # perfectly ordinary binder for a small department, and a membership shape
+  # nothing else here has.
+  # ===========================================================================
+  - name: facilities
+    description: Buildings, plant and grounds.
+    members:
+      - user: alice
+        role: admins
+      - user: omar
+        role: authors
+      - user: carol
+        role: authors
+    groups: []
+    documents:
+      - name: generator-testing
+        folder: plant
+        description: Standby generator — testing and record keeping
+        changes:
+          - branch: upload/plant/generator-testing/20251007/080000Z-omar-51ad3c08
+            title: Generator testing — first issue
+            summary: Monthly on-load test, annual full-load test, and the log.
+            author: omar
+            publish: true
+            document:
+              title: Standby Generator Testing
+              sections:
+                - paragraphs:
+                    - The standby generator is tested on load for thirty minutes every month and at full load for four hours every year.
+                - heading: The log
+                  paragraphs:
+                    - Each test is logged with the date, the duration, the load reached and the fuel level before and after.
+                - heading: A failed test
+                  paragraphs:
+                    - A failed test is reported to the site manager the same day and the generator is treated as unavailable until it passes.
+            reviews:
+              - by: carol
+                state: approved
+                body: Matches what the insurer asks for. Approved.
+
+      - name: fire-safety
+        folder: plant
+        description: Fire safety — detection, drills and the evacuation plan
+        format: markdown
+        changes:
+          - branch: upload/plant/fire-safety/20251021/091500Z-omar-63e0b2a4
+            title: Fire safety — first issue
+            summary: Detection, drills, and who sweeps which floor.
+            author: omar
+            publish: true
+            document:
+              title: Fire Safety
+              sections:
+                - paragraphs:
+                    - Every area has a named fire warden and a named deputy. The list is on the back of every fire door.
+                - heading: Drills
+                  paragraphs:
+                    - A full evacuation drill is held twice a year. A ward that cannot evacuate rehearses a horizontal transfer instead.
+                - heading: Detection
+                  paragraphs:
+                    - Detectors are tested weekly by zone and the whole system is serviced twice a year.
+            reviews:
+              - by: carol
+                state: approved
+                body: The horizontal transfer line is the one the ward managers asked for. Approved.
+
+      - name: car-park-policy
+        folder: grounds
+        description: Staff and visitor parking
+        changes:
+          - branch: upload/grounds/car-park-policy/20260701/090000Z-omar-90ba7f13
+            title: Car park policy — first issue
+            summary: Permits, visitor bays and what happens to a car parked in one.
+            author: omar
+            assignee: carol
+            reviewers:
+              - carol
+            publish: false
+            document:
+              title: Car Park Policy
+              sections:
+                - paragraphs:
+                    - Staff parking is by permit. Visitor bays are for visitors and are not available to staff at any hour.
+                - heading: Permits
+                  paragraphs:
+                    - Permits are issued annually and are tied to a registration rather than to a person.
+                - heading: Enforcement
+                  paragraphs:
+                    - A car in a visitor bay without a visitor ticket is wheel-clamped. There is no appeal for a staff vehicle.
+
+    changes:
+      # A folder rename: every file beneath it moves in one commit, and each
+      # document it holds gets a version for it. The policies themselves are
+      # not touched — where they are filed is the whole of the change.
+      - branch: shape/omar/20260722143000
+        title: Call it estates rather than plant
+        summary: Nobody outside maintenance calls this plant. Two policies move; neither changes.
+        author: omar
+        publish: true
+        acts:
+          - renameFolder:
+              from: plant
+              to: estates
+        reviews:
+          - by: carol
+            state: approved
+            body: Agreed. Estates is what the department is called on the org chart. Approved.
+
+  # ===========================================================================
+  # safety — admins, authors and reviewers, and **open to the whole
+  # organization**. That is this product's "public": the org's `staff` team is
+  # granted read, so every employee can read it and comment on it without a
+  # seat. Compare `hr-investigations`, which is open to nobody but its members.
+  # ===========================================================================
+  - name: safety
+    description: Patient and staff safety — readable by everybody who works here.
+    openToOrganization: true
+    members:
+      - user: alice
+        role: admins
+      - user: grace
+        role: authors
+      - user: ines
+        role: authors
+      - user: dan
+        role: reviewers
+      - user: hugo
+        role: reviewers
+    groups:
+      - quality-committee
+    documents:
+      - name: incident-reporting
+        description: How to report something that went wrong, or nearly did
+        changes:
+          - branch: upload/incident-reporting/20250922/100000Z-grace-2b7fe031
+            title: Incident reporting — first issue
+            summary: What to report, how, and what happens next.
+            author: grace
+            publish: true
+            document:
+              title: Incident Reporting
+              sections:
+                - paragraphs:
+                    - Report anything that harmed a patient or a member of staff, and anything that could have. A near miss is worth as much as an incident and costs nobody anything.
+                - heading: How
+                  paragraphs:
+                    - Through the incident form, within twenty-four hours, by whoever saw it. You do not need permission from anybody to file one.
+                - heading: What happens next
+                  paragraphs:
+                    - Every report is read within one working day and graded. Nobody is disciplined for filing one honestly.
+            reviews:
+              - by: alice
+                state: approved
+                body: The last line is the policy. Approved.
+
+      - name: manual-handling
+        folder: training
+        description: Moving and handling — training and equipment
+        changes:
+          - branch: upload/training/manual-handling/20251016/113000Z-ines-40c1ab77
+            title: Manual handling — first issue
+            summary: Training frequency, equipment, and when not to lift.
+            author: ines
+            publish: true
+            document:
+              title: Manual Handling
+              sections:
+                - paragraphs:
+                    - Nobody lifts a patient manually where equipment is available and a hoist is the safer option.
+                - heading: Training
+                  paragraphs:
+                    - Moving and handling training is annual for clinical staff and every three years for everybody else.
+            reviews:
+              - by: alice
+                state: approved
+                body: Approved.
+          - branch: upload/training/manual-handling/20260624/143000Z-ines-8e12b0c3
+            title: Add the bariatric equipment section
+            summary: Approved and waiting for somebody to press publish.
+            author: ines
+            assignee: grace
+            publish: false
+            document:
+              title: Manual Handling
+              sections:
+                - paragraphs:
+                    - Nobody lifts a patient manually where equipment is available and a hoist is the safer option.
+                - heading: Training
+                  paragraphs:
+                    - Moving and handling training is annual for clinical staff and every three years for everybody else.
+                - heading: Bariatric equipment
+                  paragraphs:
+                    - Bariatric hoists, beds and chairs are held centrally and are booked through the site manager at any hour.
+                    - A ward expecting a bariatric admission books the equipment before the patient arrives, not after.
+            reviews:
+              - by: grace
+                state: approved
+                body: Booking before the admission is the part that goes wrong. Good. Approved.
+
+  # ===========================================================================
+  # hr-investigations — an **admin team and nobody else**. No authors, no
+  # reviewers, not open to the organization. The binder that exists to show
+  # that "open to everyone" is a switch rather than a law: an HR investigation
+  # would be impossible if a staff-wide read were permanent.
+  # ===========================================================================
+  - name: hr-investigations
+    description: Investigation procedure and case handling. Closed to everybody but its administrators.
+    members:
+      - user: alice
+        role: admins
+      - user: carol
+        role: admins
+    groups: []
+    documents:
+      - name: case-handling-standard
+        description: How an investigation is run, recorded and closed
+        changes:
+          - branch: upload/case-handling-standard/20251030/140000Z-alice-b4c7e209
+            title: Case handling standard — first issue
+            summary: Appointment, evidence, timescales and who may see the file.
+            author: alice
+            publish: true
+            document:
+              title: Case Handling Standard
+              sections:
+                - paragraphs:
+                    - An investigation is commissioned in writing, by a manager with no involvement in the matter, and the terms of reference are given to the subject at the outset.
+                - heading: Evidence
+                  paragraphs:
+                    - Every meeting is recorded in notes agreed with the person spoken to. Nothing goes in the file that the subject has not been shown.
+                - heading: Access to the file
+                  paragraphs:
+                    - The file is seen by the investigating manager, the commissioning manager and Human Resources. Nobody else, at any grade, for any reason.
+            reviews:
+              - by: carol
+                state: approved
+                body: The access section is the whole reason this binder is closed. Approved.
+
+  # ===========================================================================
+  # retired-policies — **nothing in it**. A binder somebody made and has not
+  # filed anything in yet, which is the first thing every new customer sees and
+  # the state the seed could never produce.
+  # ===========================================================================
+  - name: retired-policies
+    description: Policies that are no longer in force. Empty until something is retired into it.
+    members:
+      - user: alice
+        role: admins
+    groups: []
+    documents: []
