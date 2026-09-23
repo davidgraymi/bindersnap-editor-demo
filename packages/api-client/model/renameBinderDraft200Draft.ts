@@ -4,17 +4,17 @@
  * Bindersnap BFF API
  * OpenAPI spec version: 1.0.0
  */
-import type { OpenBinderDraft201DraftActsItem } from './openBinderDraft201DraftActsItem.ts';
+import type { RenameBinderDraft200DraftActsItem } from './renameBinderDraft200DraftActsItem.ts';
 
 /**
  * @nullable
  */
-export type OpenBinderDraft201Draft = {
+export type RenameBinderDraft200Draft = {
   branch: string;
   name: string;
   named: boolean;
   owner: string;
   /** @nullable */
   updatedAt: string | null;
-  acts: OpenBinderDraft201DraftActsItem[];
+  acts: RenameBinderDraft200DraftActsItem[];
 } | null;

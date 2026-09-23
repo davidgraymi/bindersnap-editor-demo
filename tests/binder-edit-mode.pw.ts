@@ -346,9 +346,13 @@ test("Edit opens a draft, and the address says so", async ({ page }) => {
 
   const bar = page.locator(".bs-draftbar");
   await expect(bar).toBeVisible({ timeout: 30_000 });
-  await expect(bar).toContainText("Nothing in your draft yet");
-  // In the address, so a reload lands back in the same work.
-  await expect(page).toHaveURL(/\?edit=1$/);
+  await expect(bar).toContainText("Nothing in it yet");
+  // Named from the moment it exists, so the bar, the picker and the propose
+  // screen never invent one between them and disagree (D8).
+  await expect(bar).toContainText("You are editing");
+  // In the address, and *which* draft — a person may have several, so a
+  // reload, a back button and a pasted link all have to land in the same work.
+  await expect(page).toHaveURL(/\?edit=1&draft=draft%2F/);
 
   // Propose is off with nothing to propose: a change request with no changes
   // in it is a request nobody can act on.
@@ -409,9 +413,7 @@ test("Escape leaves the name alone", async ({ page }) => {
   await expect(
     page.locator(".binder-tree-label", { hasText: "Staff Handbook" }),
   ).toBeVisible();
-  await expect(page.locator(".bs-draftbar")).toContainText(
-    "Nothing in your draft yet",
-  );
+  await expect(page.locator(".bs-draftbar")).toContainText("Nothing in it yet");
 });
 
 test("Propose opens the change request, with the words the author wrote", async ({
@@ -434,7 +436,8 @@ test("Propose opens the change request, with the words the author wrote", async 
   });
 
   await page.getByRole("button", { name: "Propose" }).click();
-  await expect(page).toHaveURL(/\?edit=propose$/);
+  // Which draft is being proposed, because a person may have several.
+  await expect(page).toHaveURL(/\?edit=propose&draft=draft%2F/);
 
   // The description arrives written: the acts are the commits, and nobody
   // should have to retype what they just did.
@@ -855,4 +858,272 @@ test("the version a rename replaces is still readable at the base", async () => 
     { headers: authHeaders(session) },
   );
   expect(atBase.status, await atBase.clone().text()).toBe(200);
+});
+
+// ── Several drafts (D8) ────────────────────────────────────────────────────
+
+/** The draft payload, which now carries every draft of yours. */
+async function readDrafts(
+  session: string,
+  org: string,
+  binder: string,
+  branch?: string,
+): Promise<{
+  draft: { branch: string; name: string } | null;
+  drafts: Array<{ branch: string; name: string; actCount: number }>;
+  others: Array<{ owner: string }>;
+}> {
+  const query = branch ? `?draft=${encodeURIComponent(branch)}` : "";
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/draft${query}`,
+    { headers: authHeaders(session) },
+  );
+  expect(response.status, await response.clone().text()).toBe(200);
+  return (await response.json()) as never;
+}
+
+async function startNamedDraft(
+  session: string,
+  org: string,
+  binder: string,
+  name: string,
+): Promise<string> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/draft`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({ name }),
+    },
+  );
+  expect(response.status, await response.clone().text()).toBe(201);
+  return ((await response.json()) as { draft: { branch: string } }).draft
+    .branch;
+}
+
+/**
+ * **Pressing Edit still resumes.** That is not a detail to preserve out of
+ * caution — accidental forks are the mistake the one-draft rule existed to
+ * prevent, and they still are. What changes is that forking is now available
+ * *deliberately*, with a name attached.
+ */
+test("pressing Edit twice resumes, and does not fork", async () => {
+  const { session, org, binder } = await provisionBinder();
+
+  const first = await openDraft(session, org, binder);
+  const again = await openDraft(session, org, binder);
+  expect(again).toBe(first);
+
+  const { drafts } = await readDrafts(session, org, binder);
+  expect(drafts).toHaveLength(1);
+});
+
+/**
+ * Two unrelated reorganisations should not have to be proposed in one change
+ * request, and approved or refused together, just because the same person did
+ * both. That is D8, and it is the customer's decision rather than ours.
+ */
+test("a named draft is a second one, alongside the first", async () => {
+  const { session, org, binder } = await provisionBinder();
+
+  const first = await openDraft(session, org, binder);
+  const second = await startNamedDraft(
+    session,
+    org,
+    binder,
+    "Retire the paper forms",
+  );
+  expect(second).not.toBe(first);
+
+  const { drafts } = await readDrafts(session, org, binder);
+  expect(drafts).toHaveLength(2);
+  expect(drafts.map((entry) => entry.name)).toContain("Retire the paper forms");
+});
+
+/** A draft with no name is the state this exists to avoid. */
+test("a draft started with an empty name is refused", async () => {
+  const { session, org, binder } = await provisionBinder();
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/draft`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({ name: "   " }),
+    },
+  );
+  expect(response.status).toBe(400);
+});
+
+/** Which draft you are in is the address's to say, and the read follows it. */
+test("the read answers with the draft it was asked for", async () => {
+  const { session, org, binder } = await provisionBinder();
+
+  const first = await openDraft(session, org, binder);
+  const second = await startNamedDraft(session, org, binder, "The other one");
+
+  expect((await readDrafts(session, org, binder, first)).draft?.branch).toBe(
+    first,
+  );
+  expect((await readDrafts(session, org, binder, second)).draft?.branch).toBe(
+    second,
+  );
+  // Unasked is the newest, which is what it meant when there was only one.
+  expect((await readDrafts(session, org, binder)).draft?.branch).toBe(second);
+});
+
+/**
+ * A read, so a branch it cannot serve falls back rather than failing.
+ *
+ * Landing somebody in their most recent work beats an error about a branch
+ * name they never typed — a stale link or a discarded draft is the ordinary
+ * case, not a fault.
+ */
+test("a draft that is not yours is not served, and not an error either", async () => {
+  const { session, org, binder } = await provisionBinder();
+  const mine = await openDraft(session, org, binder);
+
+  const { draft } = await readDrafts(
+    session,
+    org,
+    binder,
+    "draft/someone-else/20260101000000",
+  );
+  expect(draft?.branch).toBe(mine);
+});
+
+test("a draft can be called something else", async () => {
+  const { session, org, binder } = await provisionBinder();
+  const branch = await openDraft(session, org, binder);
+
+  const renamed = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/draft`,
+    {
+      method: "PATCH",
+      headers: authHeaders(session),
+      body: JSON.stringify({ draft: branch, name: "Reorganise nursing" }),
+    },
+  );
+  expect(renamed.status, await renamed.clone().text()).toBe(200);
+
+  const { drafts } = await readDrafts(session, org, binder);
+  expect(drafts[0]?.name).toBe("Reorganise nursing");
+});
+
+/** Renaming somebody else's is the same refusal every draft route makes. */
+test("renaming a draft that is not yours is refused", async () => {
+  const { session, org, binder } = await provisionBinder();
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/draft`,
+    {
+      method: "PATCH",
+      headers: authHeaders(session),
+      body: JSON.stringify({
+        draft: "draft/someone-else/20260101000000",
+        name: "Mine now",
+      }),
+    },
+  );
+  expect(response.status).toBe(409);
+});
+
+/**
+ * **Each draft is its own branch, and the acts stay where they were made.**
+ * The whole reason for several drafts: two reorganisations that do not travel
+ * together.
+ */
+test("an act in one draft is not in the other", async () => {
+  const { session, org, binder } = await provisionBinder();
+
+  const first = await openDraft(session, org, binder);
+  const second = await startNamedDraft(session, org, binder, "The other one");
+
+  await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/document-renames`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({
+        documentPath: "nursing/hand-hygiene",
+        name: "Hand Hygiene and PPE",
+        draft: first,
+      }),
+    },
+  );
+
+  const inFirst = await listDocuments(session, org, binder, first);
+  expect(inFirst.documents.map((entry) => entry.slugPath)).toContain(
+    "nursing/hand-hygiene-and-ppe",
+  );
+
+  const inSecond = await listDocuments(session, org, binder, second);
+  expect(inSecond.documents.map((entry) => entry.slugPath)).toContain(
+    "nursing/hand-hygiene",
+  );
+  expect(inSecond.documents.map((entry) => entry.slugPath)).not.toContain(
+    "nursing/hand-hygiene-and-ppe",
+  );
+});
+
+/** Discarding the one you are in must not take the other with it. */
+test("discarding one draft leaves the others alone", async () => {
+  const { session, org, binder } = await provisionBinder();
+
+  const first = await openDraft(session, org, binder);
+  const second = await startNamedDraft(session, org, binder, "The other one");
+
+  const discarded = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/draft?draft=${encodeURIComponent(second)}`,
+    { method: "DELETE", headers: authHeaders(session) },
+  );
+  expect(discarded.status, await discarded.clone().text()).toBe(200);
+
+  const { drafts } = await readDrafts(session, org, binder);
+  expect(drafts.map((entry) => entry.branch)).toEqual([first]);
+});
+
+/**
+ * And proposing proposes the one you were looking at.
+ *
+ * Proposing the newest instead would send unrelated work to reviewers under a
+ * title written about something else.
+ */
+test("proposing sends the draft it was asked to send", async () => {
+  const { session, org, binder } = await provisionBinder();
+
+  const first = await openDraft(session, org, binder);
+  await startNamedDraft(session, org, binder, "The newer one");
+
+  await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/document-renames`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({
+        documentPath: "nursing/hand-hygiene",
+        name: "Hand Hygiene and PPE",
+        draft: first,
+      }),
+    },
+  );
+
+  const proposed = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/changes`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({
+        title: "Rename hand hygiene",
+        draft: first,
+      }),
+    },
+  );
+  expect(proposed.status, await proposed.clone().text()).toBe(201);
+  expect(((await proposed.json()) as { branch: string }).branch).toBe(first);
+
+  // The proposed one stops being a draft; the other is untouched.
+  const { drafts } = await readDrafts(session, org, binder);
+  expect(drafts.map((entry) => entry.branch)).not.toContain(first);
+  expect(drafts).toHaveLength(1);
 });

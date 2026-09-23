@@ -26,6 +26,24 @@ import type { DraftAct } from "../../../packages/api-schema/schemas/workspaces";
 interface ProposeChangePageProps {
   org: string;
   binder: string;
+  /** Which draft is being proposed. A person may have several. */
+  draft: string;
+  /**
+   * What its author called it, prefilled as the title when they wrote one.
+   *
+   * **The name is not a second thing to write.** Somebody who started a draft
+   * called "Reorganise nursing" has already said what this is for, and asking
+   * again on the way out invites either a worse sentence or the same one
+   * retyped. Still editable — the work a draft turned into is often not what
+   * it was started for, and this is the last chance to say so.
+   *
+   * Empty when nobody named it. A draft started by pressing Edit takes the
+   * date it was made, and "Draft of 19 September" in front of reviewers as the
+   * sentence explaining a change is exactly what this screen exists to
+   * prevent — so the box stays empty and the button stays off until somebody
+   * answers it.
+   */
+  name: string;
   /** Newest first, as the draft returns them. */
   acts: readonly DraftAct[];
   onCancel: () => void;
@@ -43,11 +61,13 @@ export function describeActs(acts: readonly DraftAct[]): string {
 export function ProposeChangePage({
   org,
   binder,
+  draft,
+  name,
   acts,
   onCancel,
   onProposed,
 }: ProposeChangePageProps) {
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState(name);
   const [description, setDescription] = useState(() => describeActs(acts));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,6 +83,7 @@ export function ProposeChangePage({
         binder,
         title.trim(),
         description,
+        draft,
       );
       onProposed(proposed.changeNumber);
     } catch (err) {

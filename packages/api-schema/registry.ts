@@ -1108,23 +1108,42 @@ registry.registerPath({
 
 /**
  * A draft is a branch with commits and no change request — work in progress
- * that has been proposed to nobody. Singular, because a person has one draft
- * in a binder: "resume where I was" has a single answer, and a picker between
- * four half-finished drafts is a filing problem nobody asked for.
+ * that has been proposed to nobody. **Several per person**, because two
+ * unrelated reorganisations should not have to be proposed in one change
+ * request, and approved or refused together, just because the same person did
+ * both. This was one per person, on the reasoning that "resume where I was"
+ * should have a single answer; the customer asked for more and the reason is
+ * about the record rather than about convenience.
  *
- * The branch is never in the URL. It carries slashes, it is the server's to
- * name, and the only draft any of these verbs acts on is the caller's own.
+ * So which draft a verb acts on is something the caller says: `?draft=` on the
+ * reads and the discard, `draft` in the body on the writes. Unsaid still means
+ * the newest, which is what these routes did when there was only ever one.
+ *
+ * The branch stays out of the path — it carries slashes, and it is the
+ * server's to name. Whichever way it arrives it is checked against Gitea
+ * before anything happens: a draft that is not yours is refused, never served.
  */
 registry.registerPath({
   method: "get",
   path: "/api/app/binders/{org}/{binder}/draft",
   operationId: "getBinderDraft",
   tags: ["workspaces"],
-  request: { params: z.object({ org: z.string(), binder: z.string() }) },
+  request: {
+    params: z.object({ org: z.string(), binder: z.string() }),
+    /**
+     * Which of your drafts you are in. The newest when unsaid.
+     *
+     * A read, so a branch that is not yours — or that has been proposed since
+     * the link was made — falls back rather than failing. Landing somebody in
+     * their most recent work beats an error about a branch name they never
+     * typed.
+     */
+    query: z.object({ draft: z.string().optional() }),
+  },
   responses: {
     200: {
       description:
-        "Your draft and what is in it, plus who else is editing. `draft` is null when you are not.",
+        "The draft you are in and what is in it, every draft of yours, and who else is editing. `draft` is null when you are not.",
       content: {
         "application/json": { schema: BinderDraftPayloadSchema },
       },
@@ -1137,11 +1156,63 @@ registry.registerPath({
   path: "/api/app/binders/{org}/{binder}/draft",
   operationId: "openBinderDraft",
   tags: ["workspaces"],
-  request: { params: z.object({ org: z.string(), binder: z.string() }) },
+  request: {
+    params: z.object({ org: z.string(), binder: z.string() }),
+    body: {
+      required: false,
+      content: {
+        "application/json": {
+          schema: z.object({
+            /**
+             * Start **another** draft, called this.
+             *
+             * Its presence is what distinguishes the two acts on this route.
+             * Without it this is a press of Edit, which resumes your most
+             * recent draft rather than forking it — accidental forks are the
+             * mistake the one-draft rule existed to prevent, and still are.
+             */
+            name: z.string().optional(),
+          }),
+        },
+      },
+    },
+  },
   responses: {
     201: {
       description:
-        "Editing started — or resumed, because pressing Edit twice must not fork your work",
+        "Editing started, resumed, or a second draft begun — a press of Edit resumes, a name forks deliberately",
+      content: {
+        "application/json": { schema: BinderDraftPayloadSchema },
+      },
+    },
+  },
+});
+
+/**
+ * Call a draft something else.
+ *
+ * The name is how a person tells three drafts apart, and the first name
+ * somebody types is rarely the one that describes what the work turned into.
+ */
+registry.registerPath({
+  method: "patch",
+  path: "/api/app/binders/{org}/{binder}/draft",
+  operationId: "renameBinderDraft",
+  tags: ["workspaces"],
+  request: {
+    params: z.object({ org: z.string(), binder: z.string() }),
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z.object({ draft: z.string(), name: z.string() }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Your drafts, with that one renamed",
       content: {
         "application/json": { schema: BinderDraftPayloadSchema },
       },
@@ -1154,7 +1225,11 @@ registry.registerPath({
   path: "/api/app/binders/{org}/{binder}/draft",
   operationId: "discardBinderDraft",
   tags: ["workspaces"],
-  request: { params: z.object({ org: z.string(), binder: z.string() }) },
+  request: {
+    params: z.object({ org: z.string(), binder: z.string() }),
+    /** Which one to throw away. The newest when unsaid. */
+    query: z.object({ draft: z.string().optional() }),
+  },
   responses: {
     200: {
       description: "The draft branch that was thrown away",
@@ -1190,6 +1265,8 @@ registry.registerPath({
           schema: z.object({
             title: z.string(),
             description: z.string().optional(),
+            /** Which draft to propose. The newest when unsaid. */
+            draft: z.string().optional(),
           }),
         },
       },

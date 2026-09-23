@@ -71,6 +71,7 @@ import {
 import {
   discardDraft,
   findCurrentDraft,
+  startDraft,
   isDraftBranch,
   listBinderDrafts,
   openDraft,
@@ -211,6 +212,12 @@ import {
   readRequestedReviewers,
 } from "./change-assignments";
 import { buildChangeUpdates } from "./change-updates";
+import {
+  defaultDraftName,
+  describeUnnamedDraft,
+  draftNameStore,
+  normalizeDraftName,
+} from "./draft-names";
 import {
   buildArchiveStamp,
   buildVersionStamp,
@@ -7865,7 +7872,16 @@ async function handleBinderDraft(
       org: orgName,
       workspace: workspaceName,
     });
-    const mine = drafts.find((draft) => draft.owner === session.username);
+    const own = drafts.filter((draft) => draft.owner === session.username);
+
+    // **Which one you are in is the address's to say, not this route's to
+    // guess.** A person may have several, and the page carries the branch it
+    // is editing in `?draft=`. A branch that is not yours, or that has been
+    // proposed since the link was made, falls back to the newest rather than
+    // failing — this is a read, and landing somebody in their most recent work
+    // is a better answer than an error about a branch name they never typed.
+    const asked = new URL(req.url).searchParams.get("draft")?.trim() ?? "";
+    const mine = own.find((draft) => draft.branch === asked) ?? own[0] ?? null;
 
     return json(
       200,
@@ -7873,7 +7889,8 @@ async function handleBinderDraft(
         client,
         org: orgName,
         workspace: workspaceName,
-        mine: mine ?? null,
+        giteaRepoId: workspace.id,
+        mine,
         drafts,
         username: session.username,
       }),
@@ -7891,11 +7908,18 @@ async function handleBinderDraft(
 }
 
 /**
- * Start editing, or carry on where you were.
+ * Start editing, carry on where you were, or start another draft.
  *
- * Pressing Edit is not a destructive act and must not read like one: the
- * second press puts a person back in the work they already have rather than
- * forking it, which is why {@link openDraft} is idempotent.
+ * **Two acts on one route, and the body says which.** A `name` means "start
+ * another one, and call it this" — a deliberate act, from the picker, with a
+ * sentence attached. No name means a press of Edit, which is not destructive
+ * and must not read like one: the second press puts a person back in the work
+ * they already have rather than forking it.
+ *
+ * That asymmetry is the whole of D8's model change. Several drafts are worth
+ * having — two unrelated reorganisations should not be approved or refused
+ * together because one person did both — but forking work by accident is the
+ * mistake the one-draft rule existed to prevent, and it still is.
  */
 async function handleOpenBinderDraft(
   req: Request,
@@ -7918,12 +7942,71 @@ async function handleOpenBinderDraft(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
-    const mine = await openDraft({
-      client,
-      org: orgName,
-      workspace: workspaceName,
-      username: session.username,
-    });
+    const body = ((await req.json().catch(() => null)) ?? {}) as Record<
+      string,
+      unknown
+    >;
+    const named = normalizeDraftName(body.name);
+
+    // A name that was sent and is only whitespace is a mistake worth saying
+    // out loud, rather than one that quietly starts an unnamed draft.
+    if (body.name !== undefined && named === null) {
+      return json(
+        400,
+        { error: "A draft needs a name, so you can tell it from the others." },
+        baseHeaders,
+      );
+    }
+
+    // A name means "another one", so it never resumes. Without one this is a
+    // press of Edit: carry on where you were, and start your first draft only
+    // if you have none.
+    const existing = named
+      ? null
+      : await findCurrentDraft({
+          client,
+          org: orgName,
+          workspace: workspaceName,
+          owner: session.username,
+        });
+
+    const mine =
+      existing ??
+      (await startDraft({
+        client,
+        org: orgName,
+        workspace: workspaceName,
+        username: session.username,
+      }));
+
+    if (!existing) {
+      // **Every draft is named from the moment it exists**, so the picker, the
+      // bar and the propose screen never have to invent one between them and
+      // disagree. A press of Edit does not ask — the common case is one draft,
+      // and a name earns itself when there is something to tell apart — so it
+      // takes today's date, which is what somebody would call it anyway.
+      //
+      // After the branch, so a name is never stored for a draft that does not
+      // exist. A name that fails to store costs a label, not the draft.
+      await draftNameStore
+        .set({
+          giteaRepoId: workspace.id,
+          branch: mine.branch,
+          name: named ?? defaultDraftName(),
+          authored: named !== null,
+          owner: session.username,
+        })
+        .catch((err: unknown) => {
+          logger.error("Failed to name a binder draft", {
+            username: session.username,
+            organization: orgName,
+            workspace: workspaceName,
+            branch: mine.branch,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
+    }
+
     const drafts = await listBinderDrafts({
       client,
       org: orgName,
@@ -7935,6 +8018,7 @@ async function handleOpenBinderDraft(
       organization: orgName,
       workspace: workspaceName,
       branch: mine.branch,
+      named: named !== null,
     });
 
     return json(
@@ -7943,6 +8027,7 @@ async function handleOpenBinderDraft(
         client,
         org: orgName,
         workspace: workspaceName,
+        giteaRepoId: workspace.id,
         mine,
         drafts,
         username: session.username,
@@ -7979,12 +8064,37 @@ async function handleDiscardBinderDraft(
   const { session, client } = auth;
 
   try {
-    const mine = await findCurrentDraft({
+    const workspace = await findWorkspaceRepo({
       client,
       org: orgName,
-      workspace: workspaceName,
-      owner: session.username,
+      name: workspaceName,
     });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    // **The one the request names**, because a person may have several and
+    // discarding the wrong one is not recoverable. Unnamed falls back to the
+    // newest, which is what this did before there was more than one.
+    const asked = new URL(req.url).searchParams.get("draft")?.trim() ?? "";
+    const mine = asked
+      ? await resolveOwnDraftBranch({
+          client,
+          org: orgName,
+          workspace: workspaceName,
+          username: session.username,
+          draftRaw: asked,
+        })
+      : await findCurrentDraft({
+          client,
+          org: orgName,
+          workspace: workspaceName,
+          owner: session.username,
+        });
+
+    if (mine && "error" in mine) {
+      return json(409, { error: mine.error }, baseHeaders);
+    }
     if (!mine) {
       return json(
         404,
@@ -7999,6 +8109,10 @@ async function handleDiscardBinderDraft(
       workspace: workspaceName,
       branch: mine.branch,
     });
+
+    // The branch is gone, so its name is a row about nothing. Not fatal if it
+    // fails: nothing reads a name without the branch.
+    await draftNameStore.forget(workspace.id, mine.branch).catch(() => {});
 
     logger.info("Binder draft discarded", {
       username: session.username,
@@ -8016,6 +8130,106 @@ async function handleDiscardBinderDraft(
       error: err instanceof Error ? err.message : String(err),
     });
     return responseFromError(err, baseHeaders, "Unable to discard your draft.");
+  }
+}
+
+/**
+ * Call a draft something else.
+ *
+ * **A name is the only thing about a draft that is not a commit**, so this is
+ * the only route that writes one on its own. It exists because the name is how
+ * a person tells three drafts apart, and the first name somebody types is
+ * rarely the one that describes what the work turned into.
+ *
+ * Refuses a branch that is not yours through the same check every other draft
+ * route uses. A name can never widen what anybody may do — it is a label on
+ * work Gitea already agreed is theirs.
+ */
+async function handleRenameBinderDraft(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+): Promise<Response> {
+  const auth = await requireSubscription(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+
+  const { session, client } = auth;
+
+  try {
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    const body = ((await req.json().catch(() => null)) ?? {}) as Record<
+      string,
+      unknown
+    >;
+    const name = normalizeDraftName(body.name);
+    if (name === null) {
+      return json(
+        400,
+        { error: "A draft needs a name, so you can tell it from the others." },
+        baseHeaders,
+      );
+    }
+
+    const mine = await resolveOwnDraftBranch({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      username: session.username,
+      draftRaw: body.draft,
+    });
+    if (mine && "error" in mine) {
+      return json(409, { error: mine.error }, baseHeaders);
+    }
+    if (!mine) {
+      return json(400, { error: "Which draft?" }, baseHeaders);
+    }
+
+    await draftNameStore.set({
+      giteaRepoId: workspace.id,
+      branch: mine.branch,
+      name,
+      authored: true,
+      owner: session.username,
+    });
+
+    const drafts = await listBinderDrafts({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+    });
+    const renamed =
+      drafts.find((draft) => draft.branch === mine.branch) ?? null;
+
+    return json(
+      200,
+      await describeDraft({
+        client,
+        org: orgName,
+        workspace: workspaceName,
+        giteaRepoId: workspace.id,
+        mine: renamed,
+        drafts,
+        username: session.username,
+      }),
+      baseHeaders,
+    );
+  } catch (err) {
+    logger.error("Failed to rename a binder draft", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to rename your draft.");
   }
 }
 
@@ -8061,12 +8275,37 @@ async function handleProposeBinderDraft(
       );
     }
 
-    const mine = await findCurrentDraft({
+    const workspace = await findWorkspaceRepo({
       client,
       org: orgName,
-      workspace: workspaceName,
-      owner: session.username,
+      name: workspaceName,
     });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    // The draft the propose screen was showing, not whichever is newest: a
+    // person may have several, and proposing the wrong one sends unrelated
+    // work to reviewers under a title written about something else.
+    const asked = typeof body.draft === "string" ? body.draft.trim() : "";
+    const mine = asked
+      ? await resolveOwnDraftBranch({
+          client,
+          org: orgName,
+          workspace: workspaceName,
+          username: session.username,
+          draftRaw: asked,
+        })
+      : await findCurrentDraft({
+          client,
+          org: orgName,
+          workspace: workspaceName,
+          owner: session.username,
+        });
+
+    if (mine && "error" in mine) {
+      return json(409, { error: mine.error }, baseHeaders);
+    }
     if (!mine) {
       return json(
         404,
@@ -8116,6 +8355,12 @@ ${description}`,
       );
     }
 
+    // **It has stopped being a draft**, so it stops having a draft's name: the
+    // title the author just wrote is on the change request now, which is in
+    // Gitea and is the record. Keeping the row would put a proposed branch in
+    // the picker beside work nobody has seen.
+    await draftNameStore.forget(workspace.id, mine.branch).catch(() => {});
+
     logger.info("Binder draft proposed", {
       username: session.username,
       organization: orgName,
@@ -8151,25 +8396,82 @@ ${description}`,
 }
 
 /**
- * The draft payload both draft routes answer with.
+ * The draft payload every draft route answers with.
  *
- * Other people's drafts are listed without their contents. Knowing somebody is
- * editing the binder is what stops two people making the same folder twice;
- * reading what they have not proposed yet is not a thing a draft offers.
+ * Three lists, and which is which matters:
+ *
+ * - `draft` is the one you are **in** — the only one with its acts, because
+ *   the page draws them and only one draft is on screen at a time.
+ * - `drafts` is every draft of yours, so the picker has something to pick
+ *   between. Each carries the name its author wrote and how many acts are in
+ *   it; the mockup's row is "Reorganise nursing · 3 changes · edited 4 minutes
+ *   ago" and every word of that comes from here.
+ * - `others` is everybody else's, **without their contents**. Knowing somebody
+ *   is editing the binder is what stops two people making the same folder
+ *   twice; reading what they have not proposed yet is not a thing a draft
+ *   offers.
  */
 async function describeDraft(params: {
   client: GiteaClient;
   org: string;
   workspace: string;
+  giteaRepoId: number;
   mine: BinderDraft | null;
   drafts: BinderDraft[];
   username: string;
 }): Promise<Record<string, unknown>> {
-  const { client, org, workspace, mine, drafts, username } = params;
+  const { client, org, workspace, giteaRepoId, mine, drafts, username } =
+    params;
 
-  const acts = mine
-    ? await readDraftActs({ client, org, workspace, branch: mine.branch })
-    : [];
+  const ownDrafts = drafts.filter((draft) => draft.owner === username);
+
+  // One read per draft of yours, in parallel, and bounded by how many drafts a
+  // person plausibly has open. A name that cannot be read costs a label and
+  // never a gate, so a failure here answers with the branch's date instead.
+  const [names, actsByBranch] = await Promise.all([
+    draftNameStore
+      .forBranches(
+        giteaRepoId,
+        ownDrafts.map((draft) => draft.branch),
+      )
+      .catch(() => new Map<string, { name: string }>()),
+    Promise.all(
+      ownDrafts.map(async (draft) => {
+        const acts = await readDraftActs({
+          client,
+          org,
+          workspace,
+          branch: draft.branch,
+        }).catch(() => []);
+        return [draft.branch, acts] as const;
+      }),
+    ).then((entries) => new Map(entries)),
+  ]);
+
+  /**
+   * Whether a person wrote this draft's name.
+   *
+   * **It decides whether the propose screen prefills the title with it.** A
+   * draft called "Reorganise nursing" has already said what the work is for;
+   * "Draft of 19 September" has said nothing, and offering that as a change
+   * request's title is what the propose screen exists to prevent.
+   */
+  const authoredName = (draft: BinderDraft) =>
+    names.get(draft.branch)?.authored ?? false;
+
+  const nameOf = (draft: BinderDraft) =>
+    names.get(draft.branch)?.name ??
+    // The list's own copy of the branch, because a freshly made one carries no
+    // `updatedAt` of its own and the list does. Two ways of answering one
+    // question is how the bar came to say "Untitled draft" beside a picker
+    // saying something else.
+    describeUnnamedDraft(
+      draft.updatedAt ??
+        ownDrafts.find((entry) => entry.branch === draft.branch)?.updatedAt ??
+        null,
+    );
+
+  const acts = mine ? (actsByBranch.get(mine.branch) ?? []) : [];
 
   return {
     organization: org,
@@ -8177,6 +8479,8 @@ async function describeDraft(params: {
     draft: mine
       ? {
           branch: mine.branch,
+          name: nameOf(mine),
+          named: authoredName(mine),
           owner: mine.owner,
           updatedAt: mine.updatedAt,
           acts: acts.map((act) => ({
@@ -8187,6 +8491,13 @@ async function describeDraft(params: {
           })),
         }
       : null,
+    drafts: ownDrafts.map((draft) => ({
+      branch: draft.branch,
+      name: nameOf(draft),
+      updatedAt: draft.updatedAt,
+      actCount: (actsByBranch.get(draft.branch) ?? []).length,
+      lastAct: draft.lastAct,
+    })),
     others: drafts
       .filter((draft) => draft.owner !== username)
       .map((draft) => ({
@@ -10302,6 +10613,13 @@ export function createApiServer() {
           );
         } else if (workspaceDraftMatch && method === "POST") {
           response = await handleOpenBinderDraft(
+            req,
+            baseHeaders,
+            workspaceDraftMatch[1]!,
+            workspaceDraftMatch[2]!,
+          );
+        } else if (workspaceDraftMatch && method === "PATCH") {
+          response = await handleRenameBinderDraft(
             req,
             baseHeaders,
             workspaceDraftMatch[1]!,

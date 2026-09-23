@@ -8704,3 +8704,111 @@ a.bs-row:focus-visible {
   margin: 0;
   font-size: var(--brand-text-ui-md);
 }
+
+/* ── Which draft you are in ────────────────────────────────────────────────
+   A person may have several drafts (D8), and several drafts need exactly one
+   new piece of chrome: the current one's name, and the way to the others. It
+   sits in the tree's own bar, because "which of my drafts is this" is a
+   question about the thing on screen rather than about the binder. */
+
+.bs-draftpicker {
+  position: relative;
+}
+
+.bs-draftpick {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+  min-height: 32px;
+  padding: 0 var(--brand-space-1) 0 var(--brand-space-1-5);
+  border: 1.5px solid var(--bs-coral-border);
+  border-radius: var(--brand-radius-md);
+  background: var(--bs-coral-glow);
+  color: var(--bs-text-primary);
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-semibold);
+  cursor: pointer;
+}
+
+.bs-draftpick:hover:not(:disabled) {
+  border-color: var(--brand-coral);
+}
+
+.bs-draftpick:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.bs-draftpick-count {
+  color: var(--bs-text-muted);
+  font-weight: var(--brand-weight-regular);
+}
+
+/* The menu it opens. **Fixed**, so it is not clipped by the panel whose bar
+   the button sits in — a `.bs-panel` is rounded by `overflow: hidden`, and it
+   cut this menu off mid-row. The same rule the reviewer picker is under,
+   learned the same way, and held by the same design test. The component
+   measures the button and sets `left`/`top`. */
+.bs-draftmenu {
+  position: fixed;
+  z-index: var(--brand-z-overlay);
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  max-height: 360px;
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+  background: var(--bs-surface-1);
+  box-shadow: var(--bs-elevation-menu);
+  /* Rounded corners need the clip; a long list of drafts needs the scroll. */
+  overflow: hidden auto;
+}
+
+.bs-draftmenu .bs-row {
+  min-height: 52px;
+}
+
+/* The row is the switch, so its body is a button and has to stop looking like
+   one — the row is the control, not the text inside it. */
+.bs-draftmenu-pick {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bs-draftmenu-pick:disabled {
+  cursor: default;
+}
+
+/* Somebody else's. Listed, because knowing they are editing stops two people
+   making the same folder twice; inert, because reading unproposed work is not
+   something a draft offers. */
+.bs-draftmenu .bs-row--muted {
+  background: var(--bs-surface-2);
+}
+
+.bs-draftmenu .bs-row--muted .bs-row-name {
+  color: var(--bs-text-muted);
+}
+
+.bs-draftmenu-split {
+  border-top: 1px solid var(--bs-rule);
+}
+
+.bs-draftmenu-new {
+  gap: var(--brand-space-1);
+  padding: 0;
+  min-height: 22px;
+}
+
+.bs-input.bs-draftname {
+  flex: 1;
+  min-width: 0;
+}

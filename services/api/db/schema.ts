@@ -1,4 +1,10 @@
-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import {
+  index,
+  integer,
+  primaryKey,
+  sqliteTable,
+  text,
+} from "drizzle-orm/sqlite-core";
 
 // Canonical schema for the API's SQLite database (one file on the EBS data
 // volume, BINDERSNAP_SESSIONS_DB_PATH). drizzle-kit generates migrations from
@@ -197,3 +203,62 @@ export const webhookCustomerState = sqliteTable("webhook_customer_state", {
   customerId: text("customer_id").primaryKey(),
   lastEventCreatedAt: integer("last_event_created_at").notNull(),
 });
+
+/**
+ * What a person called the draft they are working in.
+ *
+ * **A name, and nothing else — the draft itself is the branch.** Every act on
+ * a draft is a commit on `draft/<username>/<stamp>`, and that is where the
+ * work lives, permanently, in Gitea (ADR 0004). This table holds one string
+ * per branch so that "resume the one from Tuesday" has an answer, which it
+ * does not when a person has three drafts and all of them are called
+ * `draft/alice/…`.
+ *
+ * **Why this is not in Gitea, given the rule that says it should be.** ADR
+ * 0004's rule is "use the Gitea primitive where one exists and never shadow
+ * it". There is no Gitea primitive for a label on a branch: a tag labels a
+ * commit and is part of the permanent record, and minting deletable tags for
+ * unproposed work would shadow the one thing tags mean here. Encoding the name
+ * in the branch would mean slugging a sentence somebody typed and then
+ * guessing it back.
+ *
+ * So it lands where the ADR puts everything that is not evidence. And it
+ * genuinely is not evidence: a draft's name never reaches the record. The
+ * moment the draft is proposed the name becomes the change request's title —
+ * which is in Gitea, on the pull request, and then on the merge commit and the
+ * version tags. Losing this table costs labels on work nobody has been asked
+ * to look at, and costs no evidence at all.
+ *
+ * Keyed on the branch within the repository, because the branch is the draft's
+ * identity and a person may have several. Rows are deleted when the draft is
+ * discarded or proposed; one left behind by a branch deleted in Gitea directly
+ * is harmless, because nothing reads it without the branch.
+ */
+export const binderDrafts = sqliteTable(
+  "binder_drafts",
+  {
+    giteaRepoId: integer("gitea_repo_id").notNull(),
+    /** `draft/alice/20260919145255` — the branch this names. */
+    branch: text("branch").notNull(),
+    /** What it is called. Never empty; the route refuses that. */
+    name: text("name").notNull(),
+    /**
+     * Whether a person wrote this name, or it took the date it was started.
+     *
+     * **It decides whether the name is offered as the change request's
+     * title.** A draft its author called "Reorganise nursing" has already said
+     * what the work is for, and asking again on the way out invites a worse
+     * sentence. "Draft of 19 September" has said nothing, and putting it in
+     * front of reviewers as a title is exactly what the propose screen exists
+     * to prevent.
+     */
+    authored: integer("authored", { mode: "boolean" }).notNull().default(false),
+    /** Whose it is, so a stale row can be cleared out by owner. */
+    owner: text("owner").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.giteaRepoId, table.branch] }),
+    index("idx_binder_drafts_owner").on(table.giteaRepoId, table.owner),
+  ],
+);
