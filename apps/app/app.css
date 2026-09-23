@@ -2993,176 +2993,124 @@ input {
   white-space: nowrap;
 }
 
-/* ── History tab — the audit trail as a spline ─────────────────────
-   One line down the page with a knot for every published version. Each knot
-   is the change review that produced it, so the title is that review's title
-   and it links straight to it; the two people the record is about — who wrote
-   the change and who published it — sit on the line rather than inside a
-   panel nobody opens.
-   ------------------------------------------------------------------ */
-.doc-spline {
-  position: relative;
-  display: grid;
-  gap: var(--brand-space-5);
+/* ── History — the record, as one line down the page ───────────────────────
+   The knot is the change request, because that is what counts up on a
+   binder's timeline: a version belongs to a document, and a spine of version
+   numbers reading v1 · v1 · v2 counted nothing. What each change did — the
+   versions it published, the policies it took off the record — is the panel
+   beside its knot. */
+
+.bs-spine {
+  display: flex;
+  flex-direction: column;
+  gap: var(--brand-space-2);
   margin: 0;
-  padding: var(--brand-space-2) 0 var(--brand-space-2) 56px;
+  padding: 0 0 0 var(--brand-space-6);
+  border-left: 1.5px solid var(--bs-rule);
   list-style: none;
 }
 
-/* The line is the page's structure, not an inner divider, so it reads at the
-   rule colour rather than the warm 6% one used inside a card. */
-.doc-spline::before {
-  content: "";
-  position: absolute;
-  left: 21px;
-  top: var(--brand-space-3);
-  bottom: var(--brand-space-3);
-  width: 1.5px;
-  background: var(--bs-rule);
-}
-
-.doc-spline-entry {
+.bs-spine-item {
   position: relative;
+  padding: var(--brand-space-1) 0;
 }
 
-/* Opaque, always: the line showing through a knot turns the version into a
-   smudge with a rule drawn across it. */
-.doc-spline-knot {
+.bs-knot {
   position: absolute;
-  left: -56px;
-  top: 0;
-  z-index: var(--brand-z-raised);
+  top: var(--brand-space-3);
+  left: calc(var(--brand-space-6) * -1 - 17px);
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 26px;
+  width: 34px;
+  min-height: 28px;
+  padding: 0;
+  border: 1px solid var(--bs-rule);
   border-radius: var(--brand-radius-full);
   background: var(--bs-surface-1);
-  border: 1.5px solid var(--bs-rule);
-  font-size: var(--brand-text-xs);
   color: var(--bs-text-secondary);
+  font-size: var(--brand-text-ui-sm);
+  font-weight: var(--brand-weight-semibold);
 }
 
-/* The version currently open on the Document tab. Coral is the one thing on
-   this page that says "you are here". */
-.doc-spline-entry--viewing .doc-spline-knot {
+button.bs-knot {
+  cursor: pointer;
+}
+
+.bs-knot--change:hover {
   border-color: var(--brand-coral);
   color: var(--bs-coral-text);
 }
 
-.doc-spline-body {
-  display: grid;
-  gap: var(--brand-space-2);
-  min-width: 0;
+.bs-knot:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 2px;
 }
 
-.doc-spline-head {
+/* One document, and what this change did to it. A change can publish several
+   onto one merge commit, which is the whole reason the binder is the unit —
+   so this row is where the per-document history actually lives. */
+.bs-versionrow {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--brand-space-3);
+  align-items: center;
+  gap: var(--brand-space-1);
+  min-height: 40px;
+  padding: var(--brand-space-1) var(--brand-space-2);
+  border-top: 1px solid var(--bs-rule-warm);
+  font-size: var(--brand-text-ui-md);
 }
 
-.doc-spline-title {
-  margin: 0;
+.bs-versionrow:first-child {
+  border-top: none;
+}
+
+.bs-versionrow-name {
+  flex: 1;
   min-width: 0;
-  font-family: var(--brand-font-sans);
-  font-size: var(--brand-text-body);
-  font-weight: var(--brand-weight-medium);
-  color: var(--bs-text-primary);
-}
-
-.doc-spline-link {
-  color: inherit;
-  text-decoration: none;
-  border-bottom: 1px solid transparent;
-  transition: border-color var(--brand-transition-fast);
-}
-
-.doc-spline-link:hover,
-.doc-spline-link:focus-visible {
-  border-bottom-color: var(--brand-coral);
-}
-
-/* The binder's history reuses this rail, and adds the two things a
-   per-document version list does not need: when, and by whom. */
-.doc-spline-date {
-  flex-shrink: 0;
-  font-size: var(--brand-text-xs);
-  color: var(--bs-text-faint);
-  white-space: nowrap;
-}
-
-.doc-spline-note {
-  margin: 0;
-  font-size: var(--brand-text-ui-sm);
-  color: var(--bs-text-muted);
-}
-
-.doc-spline-note .doc-spline-link,
-.doc-spline-title .doc-spline-link {
-  appearance: none;
-  background: none;
-  border: none;
-  border-bottom: 1px solid transparent;
   padding: 0;
+  border: none;
+  background: none;
+  overflow: hidden;
+  color: var(--bs-text-primary);
   font: inherit;
+  font-weight: var(--brand-weight-medium);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   cursor: pointer;
 }
 
-.doc-spline-actions {
-  display: flex;
-  gap: var(--brand-space-2);
-  flex-shrink: 0;
+.bs-versionrow-name:hover {
+  color: var(--bs-coral-text);
+  text-decoration: underline;
 }
 
-/* Icon only. A row of buttons that each repeat the version number reads as a
-   form; the icon plus the version on the knot says the same thing quieter.
-   Scoped to the row so it outranks `.bs-btn`'s own padding, which is set for
-   a button with words in it. */
-.doc-spline-actions .doc-spline-icon-btn {
-  display: inline-grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-}
-
-/* A 15px icon in a grid cell narrower than its intrinsic width collapses to
-   nothing rather than overflowing. */
-.doc-spline-icon-btn svg {
-  flex: none;
-}
-
-.doc-spline-people {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--brand-space-3);
-}
-
-.doc-spline-person {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--brand-space-2);
-  min-width: 0;
-}
-
-.doc-spline-person-name {
-  font-size: var(--brand-text-sm);
-  font-weight: var(--brand-weight-medium);
-  color: var(--bs-text-secondary);
-}
-
-.doc-spline-person-role {
-  font-size: var(--brand-text-xs);
-  color: var(--bs-text-faint);
-}
-
-.doc-spline-meta {
-  margin: 0;
-  font-size: var(--brand-text-xs);
+.bs-versionrow-folder {
   color: var(--bs-text-muted);
+  font-weight: var(--brand-weight-regular);
+}
+
+.bs-input.bs-history-pick {
+  width: 16rem;
+}
+
+.bs-input.bs-history-when {
+  width: 11rem;
+}
+
+@media (max-width: 720px) {
+  .bs-spine {
+    padding-left: var(--brand-space-4);
+  }
+
+  .bs-knot {
+    left: calc(var(--brand-space-4) * -1 - 17px);
+  }
+
+  .bs-input.bs-history-pick,
+  .bs-input.bs-history-when {
+    width: auto;
+    flex: 1;
+  }
 }
 
 .doc-review-list {

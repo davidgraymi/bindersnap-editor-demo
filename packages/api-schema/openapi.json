@@ -6987,6 +6987,13 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "version",
+                              "archived"
+                            ]
+                          },
                           "slugPath": {
                             "type": "string"
                           },
@@ -6997,7 +7004,8 @@
                             "type": "string"
                           },
                           "version": {
-                            "type": "number"
+                            "type": "number",
+                            "nullable": true
                           },
                           "tag": {
                             "type": "string"
@@ -7026,6 +7034,7 @@
                           }
                         },
                         "required": [
+                          "kind",
                           "slugPath",
                           "name",
                           "folder",
