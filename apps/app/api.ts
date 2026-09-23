@@ -1408,6 +1408,30 @@ export async function renameBinder(
 }
 
 /**
+ * Say what a binder is for.
+ *
+ * Unlike a rename this moves nothing — it is the repository's own description,
+ * which is where every screen already reads it from.
+ */
+export async function describeBinder(
+  org: string,
+  binder: string,
+  description: string,
+): Promise<{ description: string }> {
+  try {
+    const response = await BindersClient.describeBinder(org, binder, {
+      description,
+    });
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/binders/${org}/${binder}/description`,
+      error,
+    );
+  }
+}
+
+/**
  * Everything this binder has taken off the record.
  *
  * Not a table: the server works it out at read time as every identity with a

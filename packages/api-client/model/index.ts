@@ -86,6 +86,8 @@ export * from './createOrganizationGroup201.ts';
 export * from './createOrganizationGroup201Group.ts';
 export * from './createOrganizationGroup201GroupMembersItem.ts';
 export * from './createOrganizationGroupBody.ts';
+export * from './describeBinder200.ts';
+export * from './describeBinderBody.ts';
 export * from './discardBinderDraft200.ts';
 export * from './discussionSummary.ts';
 export * from './discussionSummaryThreadsItem.ts';

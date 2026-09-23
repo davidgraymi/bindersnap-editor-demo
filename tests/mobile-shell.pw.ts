@@ -98,7 +98,7 @@ test("every binder tab is reachable on a phone", async ({ page }) => {
   await settings.click();
 
   await expect(
-    page.getByRole("heading", { name: "The rules", exact: true }),
+    page.getByRole("heading", { name: "How changes are approved" }),
   ).toBeVisible({ timeout: 30_000 });
 });
 

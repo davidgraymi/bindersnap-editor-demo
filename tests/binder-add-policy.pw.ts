@@ -392,8 +392,9 @@ test("the binder's tabs still work once a document is open", async ({
     { timeout: 30_000 },
   );
 
-  // Leaving the document by a tab, which is the act that was broken.
-  await page.getByRole("tab", { name: "People" }).click();
+  // Leaving the document by a tab, which is the act that was broken. People
+  // is a section of Settings now, not a tab of its own.
+  await page.getByRole("tab", { name: "Settings" }).click();
 
   await expect(page.getByRole("heading", { name: "People" })).toBeVisible({
     timeout: 30_000,
@@ -411,22 +412,27 @@ test("the binder's tabs still work once a document is open", async ({
   await expect(page.getByText(/\d+ seats? · \d+ free/)).toHaveCount(0);
   await expect(page.getByText("Seat", { exact: true })).toHaveCount(0);
 
-  // And a second tab, to prove the first was not a one-off — plus the one
-  // thing the sign-off page must never say. Gitea is our plumbing, and naming
-  // it on a page a compliance manager reads explains nothing.
-  await page.getByRole("tab", { name: "Sign-off rules" }).click();
+  // Sign-off rules are on the same page — plus the one thing that section must
+  // never say. Gitea is our plumbing, and naming it on a page a compliance
+  // manager reads explains nothing.
   await expect(
     page.getByRole("heading", { name: "Sign-off rules" }),
   ).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText("Gitea")).toHaveCount(0);
+  await expect(page.locator("#sign-off").getByText("Gitea")).toHaveCount(0);
+
+  // And a second tab, to prove the first was not a one-off.
+  await page.getByRole("tab", { name: "History" }).click();
+  await expect(page.getByRole("heading", { name: "People" })).toHaveCount(0, {
+    timeout: 30_000,
+  });
 });
 
 test("the header's one filled button belongs to the tab it sits above", async ({
   page,
 }) => {
   // "Add a policy" is the header's only filled button, which makes it the most
-  // emphatic thing on whatever page it sits above. It used to sit above all six
-  // tabs — so on a change request awaiting a decision it competed with Approve,
+  // emphatic thing on whatever page it sits above. It used to sit above every
+  // tab — so on a change request awaiting a decision it competed with Approve,
   // and won on colour. It belongs to Documents and nowhere else.
   const credentials = buildCredentials();
   const sessionCookie = await signUp(credentials);
@@ -442,13 +448,7 @@ test("the header's one filled button belongs to the tab it sits above", async ({
   const addAPolicy = page.getByRole("button", { name: "Add a policy" });
   await expect(addAPolicy).toBeVisible();
 
-  for (const tab of [
-    "Change requests",
-    "People",
-    "Sign-off rules",
-    "History",
-    "Settings",
-  ] as const) {
+  for (const tab of ["Change requests", "History", "Settings"] as const) {
     await page.getByRole("tab", { name: tab }).click();
     await expect(addAPolicy).toHaveCount(0, { timeout: 30_000 });
   }

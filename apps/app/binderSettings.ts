@@ -4,56 +4,10 @@
  * Branch protection is Gitea's vocabulary — `required_approvals`,
  * `dismiss_stale_approvals`, `enable_push` — and it is the right vocabulary for
  * the merge and the wrong one for the person who has to check the rule is what
- * they asked for. This turns it into sentences, and is kept out of the
- * component so the wording is decided in one place and tested without
+ * they asked for. This turns it into the product's words, and is kept out of
+ * the component so the wording is decided in one place and tested without
  * rendering anything.
  */
-
-import type { WorkspaceRules } from "../../packages/api-schema/schemas/workspaces";
-
-/** What is true of this binder, in the order that matters most. */
-export function describeBinderRules(rules: WorkspaceRules): string[] {
-  const said: string[] = [];
-
-  // The product's core claim leads, because it is the one a customer is
-  // buying: nothing reaches the record except through a review.
-  if (rules.pushBlocked) {
-    said.push(
-      "Nothing reaches the record except a change that has been approved and published.",
-    );
-  } else {
-    // Worth saying loudly. A binder without this is not making the promise.
-    said.push(
-      "This binder's main branch is not protected, so a policy could be changed without a review.",
-    );
-  }
-
-  if (rules.requiredApprovals === null) {
-    said.push("How many approvals a change needs could not be read.");
-  } else if (rules.requiredApprovals === 0) {
-    said.push("A change needs no approvals before it can be published.");
-  } else if (rules.requiredApprovals === 1) {
-    said.push("A change needs one approval before it can be published.");
-  } else {
-    said.push(
-      `A change needs ${rules.requiredApprovals} approvals before it can be published.`,
-    );
-  }
-
-  said.push(
-    rules.dismissStaleApprovals
-      ? "Uploading a new version clears the approvals the last one collected."
-      : "Approvals carry over when a new version is uploaded.",
-  );
-
-  said.push(
-    rules.blockOnUnresolvedThreads
-      ? "A change cannot be published while a discussion thread is still open."
-      : "A change can be published with a discussion thread still open.",
-  );
-
-  return said;
-}
 
 /**
  * What a group's access means, in the ADR's own terms.

@@ -17,6 +17,8 @@ import type {
   CreateBinderDocumentBody,
   CreateBinderFolder201,
   CreateBinderFolderBody,
+  DescribeBinder200,
+  DescribeBinderBody,
   DiscardBinderDraft200,
   DownloadBinderDocumentParams,
   GetBinder200,
@@ -1161,6 +1163,41 @@ export const restoreBinderDocument = async (org: string,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(restoreBinderDocumentBody)
+  }
+);}
+
+
+export type describeBinderResponse200 = {
+  data: DescribeBinder200
+  status: 200
+}
+
+export type describeBinderResponseSuccess = (describeBinderResponse200) & {
+  headers: Headers;
+};
+;
+
+export type describeBinderResponse = (describeBinderResponseSuccess)
+
+export const getDescribeBinderUrl = (org: string,
+    binder: string,) => {
+
+
+
+
+  return `/api/app/binders/${org}/${binder}/description`
+}
+
+export const describeBinder = async (org: string,
+    binder: string,
+    describeBinderBody: DescribeBinderBody, options?: Parameters<typeof customFetch>[1]): Promise<describeBinderResponse> => {
+
+  return customFetch<describeBinderResponse>(getDescribeBinderUrl(org,binder),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(describeBinderBody)
   }
 );}
 
