@@ -8902,3 +8902,21 @@ a.bs-row:focus-visible {
 .app-sidebar--collapsed .app-sidebar-collapse {
   margin-left: 0;
 }
+
+/* ── What a change does, document by document ──────────────────────────────
+   A change routinely touches several documents. Each row says what it is,
+   where it is filed, and what happens to it — and the rows stay one height,
+   because a list whose rows grow with the length of a path stops scanning as
+   a list. The address is the one thing allowed to be cut: the name above it
+   is what identifies the policy. */
+
+.change-does .bs-row-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.change-does .bs-row-right {
+  flex-shrink: 0;
+  gap: var(--brand-space-2);
+}

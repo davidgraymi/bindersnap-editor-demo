@@ -52,6 +52,24 @@ interface DocumentChangeDetailProps {
   canManageAssignments: boolean;
   nextVersion: number;
   /**
+   * How many documents this change touches.
+   *
+   * Only the header cares: "becomes v2 when published" is printed under the
+   * change's own title, and with several documents that is a sentence about
+   * the change carrying a fact about one row of it. Publishing still uses
+   * {@link nextVersion}, which is about the document being shown.
+   */
+  documentCount?: number;
+  /**
+   * "Renamed from Hand Hygiene", when this change renamed or refiled it.
+   *
+   * **A rename is a change even when not a word of the document changed**, and
+   * the comparison cannot show it — the identity survives a rename and the
+   * address does not, so both versions read identically and the screen said
+   * "nothing changed" about a change that plainly did something.
+   */
+  documentMove?: string | null;
+  /**
    * What this change is about, when it is **not** a document.
    *
    * A binder's sign-off rules are changed through the same review as a policy
@@ -242,6 +260,8 @@ export function DocumentChangeDetail({
   blockOnUnresolvedThreads,
   canManageAssignments,
   nextVersion,
+  documentCount = 1,
+  documentMove = null,
   subject = null,
   documentName,
   fileName,
@@ -386,7 +406,10 @@ export function DocumentChangeDetail({
   // round trip that ends in a 409.
   const threadsBlockPublish = blockOnUnresolvedThreads && unresolvedCount > 0;
   const ownSubmission = currentUser === change.submittedBy;
-  const opening = describeChangeOpening(change, subject ? null : nextVersion);
+  const opening = describeChangeOpening(
+    change,
+    subject || documentCount !== 1 ? null : nextVersion,
+  );
   const description = describeChangeBody(change.summary, change.description);
   const outcome = describeChangeOutcome(change);
   const proposed = buildProposedVersionFacts({
@@ -430,6 +453,12 @@ export function DocumentChangeDetail({
             </p>
           ) : (
             <>
+              {/* **Said before the comparison, because the comparison cannot
+                  say it.** A rename or a refiling changes the document's
+                  address and not a byte of its contents, so the diff below is
+                  entitled to report that nothing changed — and on its own that
+                  reads as a change that did nothing. */}
+              {documentMove ? <p className="bs-note">{documentMove}.</p> : null}
               <p className="rev-file-note">
                 What this change does to {comparisonBase.label} — added,
                 removed, and rewritten.

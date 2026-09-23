@@ -20,4 +20,6 @@ export type GetBinderChange200DocumentsItem = {
   /** @nullable */
   currentVersion: GetBinderChange200DocumentsItemCurrentVersion;
   versions: GetBinderChange200DocumentsItemVersionsItem[];
+  /** @nullable */
+  previousSlugPath: string | null;
 };
