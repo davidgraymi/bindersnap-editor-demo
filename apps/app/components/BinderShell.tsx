@@ -4,6 +4,7 @@ import { useIsReadOnly } from "../readOnlyContext";
 import {
   discardBinderDraft,
   fetchBinder,
+  fetchBinderDocuments,
   fetchBinderDraft,
   openBinderDraft,
   renameBinderDraft,
@@ -38,6 +39,7 @@ import { BinderHistory } from "./BinderHistory";
 import { BinderSettings } from "./BinderSettings";
 import { BinderDocumentPage } from "./BinderDocumentPage";
 import { BinderDocuments } from "./BinderPage";
+import type { SidebarBinder } from "./AppSidebar";
 import { SkeletonLine } from "./Skeleton";
 
 /**
@@ -83,15 +85,7 @@ interface BinderShellProps {
    * and where you are inside it. Reported rather than fetched again, because
    * a second reader of the same binder is a second answer waiting to disagree.
    */
-  onBinderChange?: (
-    binder: {
-      org: string;
-      binder: string;
-      name: string;
-      section: BinderTab;
-      openChangeCount?: number | null;
-    } | null,
-  ) => void;
+  onBinderChange?: (binder: SidebarBinder | null) => void;
   /**
    * Open a document. `version` opens it at one published version — the
    * history links that way, because a row there is evidence of a version and
@@ -112,6 +106,16 @@ export function BinderShell({
 }: BinderShellProps) {
   const isReadOnly = useIsReadOnly();
   const [overview, setOverview] = useState<WorkspaceOverviewPayload | null>(
+    null,
+  );
+  /**
+   * The binder's contents, for the navigation beside an open policy.
+   *
+   * **Read only while one is open.** Every other binder screen draws the tree
+   * itself, so asking for it there would be a second read of what is already
+   * on the page — and two trees on one page is one too many.
+   */
+  const [contents, setContents] = useState<SidebarBinder["contents"] | null>(
     null,
   );
   const [adding, setAdding] = useState(false);
@@ -426,6 +430,45 @@ export function BinderShell({
 
   const binderName = formatDocumentName(binder);
 
+  const draftForContents =
+    editMode === "off" ? null : (draft?.draft?.branch ?? null);
+
+  useEffect(() => {
+    if (!documentPath) {
+      setContents(null);
+      return;
+    }
+
+    let cancelled = false;
+    fetchBinderDocuments(
+      org,
+      binder,
+      draftForContents ?? undefined,
+      openChange ?? undefined,
+    )
+      .then((payload) => {
+        if (cancelled) return;
+        setContents({
+          documents: payload.documents.map((document) => ({
+            slugPath: document.slugPath,
+            name: document.name,
+            folder: document.folder,
+          })),
+          active: null,
+          change: openChange,
+        });
+      })
+      // Navigation beside the page, not the page: a binder whose contents
+      // cannot be read still shows the policy somebody opened.
+      .catch(() => {
+        if (!cancelled) setContents(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [org, binder, documentPath, draftForContents, openChange, reloadKey]);
+
   // The sidebar's binder section, kept in step with what is on screen.
   useEffect(() => {
     onBinderChange?.({
@@ -434,6 +477,10 @@ export function BinderShell({
       name: binderName,
       section: activeTab,
       openChangeCount: overview?.openChangeCount ?? null,
+      // The active row is the address, not what the read happened to return:
+      // the read is slower than the click, and a tree that marks the row a
+      // moment late reads as a tree that marks the wrong one.
+      contents: contents ? { ...contents, active: documentPath ?? null } : null,
     });
     // Reporting is the effect; the shell above clears it when the route
     // leaves the binder, so there is nothing to undo here.
@@ -443,6 +490,8 @@ export function BinderShell({
     binderName,
     activeTab,
     overview?.openChangeCount,
+    contents,
+    documentPath,
     onBinderChange,
   ]);
 

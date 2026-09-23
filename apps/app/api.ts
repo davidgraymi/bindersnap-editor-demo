@@ -950,12 +950,19 @@ export async function fetchBinderDocuments(
   org: string,
   binder: string,
   draft?: string,
+  /**
+   * Read the binder as a change request would leave it.
+   *
+   * A document read on a change's branch puts the binder's contents in the
+   * navigation beside it, and a tree pinned to `main` there would list a
+   * policy under the name the change renamed it away from.
+   */
+  change?: number,
 ): Promise<WorkspaceDocumentListPayload> {
-  const response = await BindersClient.listBinderDocuments(
-    org,
-    binder,
-    draft ? { draft } : undefined,
-  );
+  const response = await BindersClient.listBinderDocuments(org, binder, {
+    ...(draft ? { draft } : {}),
+    ...(change ? { change: String(change) } : {}),
+  });
   return response.data;
 }
 

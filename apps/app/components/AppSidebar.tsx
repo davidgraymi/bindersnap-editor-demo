@@ -6,6 +6,7 @@ import {
   FilePen,
   History,
   Home,
+  Folder,
   Library,
   PanelLeftClose,
   PanelLeftOpen,
@@ -15,6 +16,7 @@ import {
 
 import type { BinderTab } from "../binderShell";
 import type { AppRoute, OrganizationTab } from "../routes";
+import { formatDocumentName } from "../documentDisplay";
 import { useCollapsedSidebar } from "../useCollapsedSidebar";
 
 /**
@@ -60,6 +62,35 @@ export interface SidebarBinder {
   section: BinderTab;
   /** Changes waiting on a decision, once the binder has counted them. */
   openChangeCount?: number | null;
+  /**
+   * The binder's contents, while a policy is open.
+   *
+   * **So you can keep moving while you read**, which is the thing a reader
+   * loses the moment a document takes over the page: the binder's own tree is
+   * on the binder's page, and opening a policy replaced it. Every other file
+   * browser keeps the tree beside the file, and a policy manual is read by
+   * looking rather than by navigating — going back to the list to open the
+   * next one is the clunk.
+   *
+   * Null on every screen that already shows the tree, which is most of them.
+   * Two trees on one page is one too many.
+   */
+  contents?: SidebarBinderContents | null;
+}
+
+export interface SidebarBinderContents {
+  /** Filed order, as the binder's own list gives it. */
+  documents: ReadonlyArray<{ slugPath: string; name: string; folder: string }>;
+  /** The one being read, so its row is marked. */
+  active: string | null;
+  /**
+   * The ref these contents were read at, so a row leads somewhere that exists.
+   *
+   * Clicking through a change's tree stays on that change: the addresses are
+   * the branch's, and following one back to `main` would be following a policy
+   * to a name it does not have there.
+   */
+  change?: number | null;
 }
 
 interface AppSidebarProps {
@@ -78,6 +109,28 @@ interface AppSidebarProps {
   /** How many changes are in flight, once the queue has counted them. */
   changeCount?: number | null;
   onNavigate: (route: AppRoute) => void;
+}
+
+/**
+ * The contents by folder, in filed order, top level first.
+ *
+ * A flat list would put `nursing/hand-hygiene` beside `hand-hygiene` with
+ * nothing saying one is inside the other — the same thing the binder's own
+ * tree exists to avoid.
+ */
+function groupByFolder(
+  documents: SidebarBinderContents["documents"],
+): Array<[string, SidebarBinderContents["documents"]]> {
+  const byFolder = new Map<string, Array<(typeof documents)[number]>>();
+  for (const document of documents) {
+    const existing = byFolder.get(document.folder);
+    if (existing) existing.push(document);
+    else byFolder.set(document.folder, [document]);
+  }
+
+  return [...byFolder.entries()].sort(([left], [right]) =>
+    left === "" ? -1 : right === "" ? 1 : left.localeCompare(right),
+  );
 }
 
 type Entry = {
@@ -304,6 +357,70 @@ export function AppSidebar({
             </span>
             <span className="app-sidebar-binder-name">{binder.name}</span>
           </button>
+
+          {/* **The binder's contents, so you can keep moving while you read.**
+              Only while a policy is open: every other binder screen shows the
+              tree already, and two trees on one page is one too many. Grouped
+              by folder, because that is how the binder is filed and how the
+              page it came from draws it. */}
+          {binder.contents && !collapsed
+            ? groupByFolder(binder.contents.documents).map(
+                ([folder, documents]) => (
+                  <div className="app-sidebar-tree" key={folder || "\u0000"}>
+                    {folder ? (
+                      <div className="app-sidebar-tree-folder">
+                        <Folder
+                          size={13}
+                          strokeWidth={1.75}
+                          aria-hidden="true"
+                        />
+                        {formatDocumentName(folder)}
+                      </div>
+                    ) : null}
+                    {documents.map((document) => (
+                      <button
+                        key={document.slugPath}
+                        type="button"
+                        className={`app-sidebar-item app-sidebar-tree-item${
+                          document.slugPath === binder.contents!.active
+                            ? " app-sidebar-item--active"
+                            : ""
+                        }`}
+                        aria-current={
+                          document.slugPath === binder.contents!.active
+                            ? "page"
+                            : undefined
+                        }
+                        title={formatDocumentName(document.name)}
+                        onClick={() =>
+                          onNavigate({
+                            kind: "binderDocument",
+                            org: binder.org,
+                            binder: binder.binder,
+                            documentPath: document.slugPath,
+                            // Clicking through a change's tree stays on that
+                            // change: these addresses are the branch's.
+                            ...(binder.contents?.change
+                              ? { change: binder.contents.change }
+                              : {}),
+                          })
+                        }
+                      >
+                        <FileText
+                          size={14}
+                          strokeWidth={1.6}
+                          aria-hidden="true"
+                        />
+                        <span className="app-sidebar-item-label">
+                          {formatDocumentName(document.name)}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ),
+              )
+            : null}
+
           {binderEntries.map(renderEntry)}
         </nav>
       ) : null}
