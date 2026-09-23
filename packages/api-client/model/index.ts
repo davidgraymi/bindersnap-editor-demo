@@ -190,6 +190,7 @@ export * from './getBinderDraft200DraftActsItem.ts';
 export * from './getBinderDraft200OthersItem.ts';
 export * from './getBinderHistory200.ts';
 export * from './getBinderHistory200VersionsItem.ts';
+export * from './getBinderHistory200VersionsItemKind.ts';
 export * from './getBinderPeople200.ts';
 export * from './getBinderPeople200GroupsItem.ts';
 export * from './getBinderPeople200GroupsItemMembersItem.ts';

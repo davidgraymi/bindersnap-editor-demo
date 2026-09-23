@@ -539,12 +539,27 @@ export type WorkspaceChangeListPayload = z.infer<
  * and everyone who signed it off.
  */
 export const WorkspaceHistoryEntrySchema = z.object({
-  /** `clinical/infection-control` — the document's identity. */
+  /**
+   * What the change did to this document.
+   *
+   * A change can take a policy off the record as well as publish one, and the
+   * `<uid>/archived-<n>` tag that records it is written in the same pass as
+   * the version tags on the same merge commit.
+   */
+  kind: z.enum(["version", "archived"]),
+  /**
+   * `clinical/infection-control` — where it was filed.
+   *
+   * From the binder's tree for a document still on the record, and from the
+   * tag's own stamp for one that has been archived, which is point-in-time
+   * evidence of what it was called then.
+   */
   slugPath: z.string(),
   name: z.string(),
   /** `clinical`, or "" at the binder's root. */
   folder: z.string(),
-  version: z.number(),
+  /** The version published, or null when the change archived the document. */
+  version: z.number().nullable(),
   tag: z.string(),
   commitSha: z.string(),
   /** When the change was merged. Empty when Gitea did not say. */
