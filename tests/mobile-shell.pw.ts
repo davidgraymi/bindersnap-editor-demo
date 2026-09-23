@@ -76,24 +76,21 @@ test("search and the account are reachable on a phone", async ({ page }) => {
   ).toBeVisible({ timeout: 30_000 });
 });
 
-test("every binder tab is reachable on a phone", async ({ page }) => {
-  // The bug: six tabs wrapped, and the last two had nothing to scroll to.
+test("every one of the binder's screens is reachable on a phone", async ({
+  page,
+}) => {
+  // A phone has no sidebar, so the binder's own screens are a strip under the
+  // page title. The bug this replaced: six tabs wrapped, and the last two had
+  // nothing to scroll to.
   await signInAsAlice(page);
   await page.goto(`${APP_BASE_URL}/riverside-health/clinical`);
 
-  const tabs = page.locator(".doc-tabs");
-  await expect(tabs).toBeVisible({ timeout: 30_000 });
+  const strip = page.locator(".binder-strip");
+  await expect(strip).toBeVisible({ timeout: 30_000 });
 
-  // The strip scrolls sideways rather than wrapping, so it is wider than the
-  // box it sits in.
-  const overflows = await tabs.evaluate(
-    (el) => el.scrollWidth > el.clientWidth + 1,
-  );
-  expect(overflows).toBe(true);
-
-  // Settings is the last tab and was the least reachable. Scrolling to it and
-  // pressing it has to work.
-  const settings = page.getByRole("tab", { name: "Settings" });
+  // Settings is the last one and was the least reachable. Scrolling to it and
+  // pressing it has to work, whether or not the strip needs to scroll at all.
+  const settings = strip.getByRole("button", { name: "Settings" });
   await settings.scrollIntoViewIfNeeded();
   await settings.click();
 

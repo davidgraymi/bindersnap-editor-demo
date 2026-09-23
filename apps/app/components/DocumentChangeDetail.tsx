@@ -378,7 +378,7 @@ export function DocumentChangeDetail({
         <button className="rev-back" type="button" onClick={onBackToList}>
           ← All changes
         </button>
-        <h2 className="rev-title">{change.summary}</h2>
+        <h1 className="bs-title rev-title">{change.summary}</h1>
         <section className="rev-file-view">
           {proposed.ref === null ? (
             <p className="vault-pr-notice">
@@ -433,7 +433,7 @@ export function DocumentChangeDetail({
         <button className="rev-back" type="button" onClick={onBackToList}>
           ← All changes
         </button>
-        <h2 className="rev-title">{change.summary}</h2>
+        <h1 className="bs-title rev-title">{change.summary}</h1>
         <section className="rev-file-view">
           {proposed.ref ? (
             <>
@@ -485,7 +485,7 @@ export function DocumentChangeDetail({
 
       <header className="rev-header">
         <div className="rev-header-main">
-          <h2 className="rev-title">{change.summary}</h2>
+          <h1 className="bs-title rev-title">{change.summary}</h1>
           <p className="rev-meta">
             {opening.who} opened this on {opening.when}
             {opening.becomes !== null ? (

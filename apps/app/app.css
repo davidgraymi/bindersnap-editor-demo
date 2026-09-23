@@ -1988,13 +1988,10 @@ input {
   gap: var(--brand-space-1-5);
 }
 
+/* A change's title wraps rather than being cut: it is a sentence about what
+   is being asked for, and the page is named by it. */
 .rev-title {
-  margin: 0;
-  font-family: var(--brand-font-serif);
-  font-size: 22px;
-  font-weight: var(--brand-weight-semibold);
-  letter-spacing: var(--brand-tracking-snug);
-  color: var(--bs-text-primary);
+  overflow-wrap: anywhere;
 }
 
 /* One sentence: who asked for this, and what the document becomes. */
@@ -7569,15 +7566,6 @@ button.bs-knot {
   max-width: 42rem;
 }
 
-.propose-title {
-  margin: 0;
-  font-family: var(--brand-font-serif);
-  font-size: 22px;
-  font-weight: var(--brand-weight-semibold);
-  letter-spacing: var(--brand-tracking-snug);
-  color: var(--bs-text-primary);
-}
-
 .propose-lede {
   margin: 0;
   font-size: var(--brand-text-sm);
@@ -8392,4 +8380,131 @@ a.bs-row:focus-visible {
   height: 16px;
   margin: 0;
   accent-color: var(--brand-coral);
+}
+
+/* ── The binder, in the sidebar ────────────────────────────────────────────
+   A binder is a place — one set of rules, one set of people — and it owns a
+   labelled section of the map while you are inside it, rather than a strip of
+   tabs on every page it contains. That is what lets each page's one title
+   name its own subject. */
+
+.app-sidebar-section--binder {
+  padding-top: var(--brand-space-2);
+}
+
+/* The binder's own entry, and its contents: pressing it opens what is filed
+   in the binder, the way pressing a folder opens the folder. No "Policies"
+   child — a row repeating its parent one indent further in is a second row
+   going to the same place. */
+.app-sidebar-binder {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  width: 100%;
+  min-height: 38px;
+  margin-bottom: var(--brand-space-0-5);
+  padding: 0 var(--brand-space-2);
+  border: none;
+  border-radius: var(--brand-radius-md);
+  background: none;
+  color: var(--bs-text-primary);
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-semibold);
+  text-align: left;
+  cursor: pointer;
+}
+
+.app-sidebar-binder:hover {
+  background: var(--bs-surface-2);
+}
+
+.app-sidebar-binder--active {
+  background: var(--bs-surface-2);
+}
+
+.app-sidebar-binder:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: -2px;
+}
+
+.app-sidebar-binder-mark {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--brand-radius-sm);
+  background: var(--bs-coral-dim);
+  color: var(--bs-coral-text);
+}
+
+.app-sidebar-binder--active .app-sidebar-binder-mark {
+  background: var(--brand-coral);
+  color: var(--brand-on-brand);
+}
+
+.app-sidebar-binder-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── The binder's screens on a phone ───────────────────────────────────────
+   Below 768px there is no sidebar, so the binder's own screens are a strip
+   under the page title — the shape the tab bar had, which already worked at
+   that width. It scrolls sideways rather than wrapping. */
+
+.binder-strip {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .binder-strip {
+    display: flex;
+    gap: var(--brand-space-1);
+    margin-bottom: var(--brand-space-4);
+    padding-bottom: var(--brand-space-1);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .binder-strip::-webkit-scrollbar {
+    display: none;
+  }
+
+  .binder-strip-item {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--brand-space-1);
+    min-height: 32px;
+    padding: 0 var(--brand-space-2);
+    border: 1px solid var(--bs-rule);
+    border-radius: var(--brand-radius-full);
+    background: var(--bs-surface-1);
+    color: var(--bs-text-muted);
+    font-family: var(--brand-font-sans);
+    font-size: var(--brand-text-ui-md);
+    font-weight: var(--brand-weight-medium);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .binder-strip-item--active {
+    border-color: var(--bs-coral-border);
+    background: var(--bs-coral-glow);
+    color: var(--bs-coral-text);
+    font-weight: var(--brand-weight-semibold);
+  }
+
+  .binder-strip-count {
+    padding: 0 5px;
+    border-radius: var(--brand-radius-full);
+    background: var(--bs-surface-3);
+    color: var(--bs-text-muted);
+    font-size: var(--brand-text-ui-xs);
+    font-weight: var(--brand-weight-semibold);
+  }
 }

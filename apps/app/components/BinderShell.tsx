@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
-import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
 
 import {
   discardBinderDraft,
@@ -72,9 +71,25 @@ interface BinderShellProps {
   /** Set when the address is `/{org}/{binder}/{path}` — a file in the binder. */
   documentPath?: string;
   currentUser: string;
+  /**
+   * Tell the shell above which binder is on screen, and which of its screens.
+   *
+   * The sidebar draws the binder's own section (D1) and needs three things
+   * this component already has: what it is called, how many changes are open,
+   * and where you are inside it. Reported rather than fetched again, because
+   * a second reader of the same binder is a second answer waiting to disagree.
+   */
+  onBinderChange?: (
+    binder: {
+      org: string;
+      binder: string;
+      name: string;
+      section: BinderTab;
+      openChangeCount?: number | null;
+    } | null,
+  ) => void;
   onOpenDocument: (documentPath: string) => void;
   onOpenBinder: () => void;
-  onOpenOrganization: () => void;
 }
 
 export function BinderShell({
@@ -82,12 +97,11 @@ export function BinderShell({
   binder,
   documentPath,
   currentUser,
+  onBinderChange,
   onOpenDocument,
   onOpenBinder,
-  onOpenOrganization,
 }: BinderShellProps) {
   const isReadOnly = useIsReadOnly();
-  const orgDisplayName = useOrganizationDisplayName(org);
   const [overview, setOverview] = useState<WorkspaceOverviewPayload | null>(
     null,
   );
@@ -307,50 +321,89 @@ export function BinderShell({
       ? "settings"
       : tab;
 
-  const tabs: Array<{ id: BinderTab; label: string; count?: number }> = [
-    { id: "documents", label: "Documents", count: overview?.documentCount },
-    {
-      id: "changes",
-      label: "Change requests",
-      count: overview?.openChangeCount,
-    },
-    // No counts on these two. The two that carry one are counts of things to
-    // deal with; a number of published versions, of people or of rules is not.
+  const binderName = formatDocumentName(binder);
+
+  // The sidebar's binder section, kept in step with what is on screen.
+  useEffect(() => {
+    onBinderChange?.({
+      org,
+      binder,
+      name: binderName,
+      section: activeTab,
+      openChangeCount: overview?.openChangeCount ?? null,
+    });
+    // Reporting is the effect; the shell above clears it when the route
+    // leaves the binder, so there is nothing to undo here.
+  }, [
+    org,
+    binder,
+    binderName,
+    activeTab,
+    overview?.openChangeCount,
+    onBinderChange,
+  ]);
+
+  /**
+   * The binder's own screens, for the strip a phone gets instead of a sidebar.
+   *
+   * Above 768px this is not rendered: the sidebar carries them, which is the
+   * whole of D1. Below it the sidebar is `display: none`, so the strip is the
+   * same shape the tab bar had — and that shape already worked.
+   */
+  const sections: Array<{ id: BinderTab; label: string; count?: number }> = [
+    { id: "documents", label: binderName, count: overview?.documentCount },
+    { id: "changes", label: "Changes", count: overview?.openChangeCount },
     { id: "history", label: "History" },
     { id: "settings", label: "Settings" },
   ];
 
+  /**
+   * The page's one title, and it names the subject.
+   *
+   * Null on the screens that title themselves — a policy, a change request,
+   * the propose step, the archive. That is the point of D1: with the binder
+   * named in the sidebar, the page's `h1` belongs to whatever the page is
+   * about, and there is exactly one of them.
+   */
+  const head: { title: string; subtitle?: string } | null = documentPath
+    ? null
+    : openChange !== null
+      ? null
+      : archive
+        ? null
+        : editMode === "proposing"
+          ? null
+          : activeTab === "changes"
+            ? {
+                title: "Change requests",
+                subtitle:
+                  "Nothing joins this binder except a change that has been approved and published.",
+              }
+            : activeTab === "history"
+              ? {
+                  title: "History",
+                  subtitle:
+                    "Every change this binder has published, and what each one did.",
+                }
+              : activeTab === "settings"
+                ? { title: "Settings" }
+                : {
+                    title: binderName,
+                    ...(overview?.workspace.description
+                      ? { subtitle: overview.workspace.description }
+                      : {}),
+                  };
+
   return (
     <section className="docw-page">
-      <header className="doc-header">
-        <div className="doc-header-top">
-          <div className="doc-header-identity">
-            <nav className="doc-crumbs" aria-label="Where this binder lives">
-              <span className="doc-crumb">
-                <button
-                  className="app-breadcrumb-back"
-                  type="button"
-                  onClick={onOpenOrganization}
-                >
-                  {orgDisplayName}
-                </button>
-              </span>
-            </nav>
-            {/* The binder titled the way a person would write it, not the
-                way the repository is addressed. A binder carries no display
-                name of its own yet — only the slug — so this derives one.
-                When binders get a real title field, read it here and keep
-                this as the fallback. */}
-            <h1 className="doc-header-title">{formatDocumentName(binder)}</h1>
-            {/* What the binder is for, in the customer's own words. Absent
-                until they have written one — a placeholder sentence would be
-                us talking, in the place their answer goes. */}
-            {overview === null ? (
+      {head ? (
+        <div className="bs-pagehead">
+          <div className="bs-pagehead-body">
+            <h1 className="bs-title">{head.title}</h1>
+            {overview === null && activeTab === "documents" ? (
               <SkeletonLine width="medium" />
-            ) : overview.workspace.description ? (
-              <p className="doc-header-fact">
-                {overview.workspace.description}
-              </p>
+            ) : head.subtitle ? (
+              <p className="bs-subtitle">{head.subtitle}</p>
             ) : null}
           </div>
 
@@ -359,31 +412,17 @@ export function BinderShell({
               than disabled while the organization is read-only: the banner
               above says why once, and a row of dead buttons says it badly.
 
-              Documents only. This is the header's one filled button, which
-              makes it the most emphatic thing on whatever page it sits above —
-              and on five of the six tabs the answer to "what is this page for"
-              is not "add a policy". On a change awaiting your decision it was
-              actively competing with Approve. Each tab that has a primary
-              action of its own already puts it in the body, next to the thing
-              it acts on. */}
-          {/* And not while a document is open, which is the Documents tab but
-              not the documents *list*. That page has a primary act of its own —
-              "New version" — and two filled buttons on one screen is two
-              answers to "what is this page for". */}
-          {isReadOnly ||
-          activeTab !== "documents" ||
-          documentPath ||
-          archive ? null : (
-            <div className="doc-header-actions">
+              The contents only. This is the page's one filled button, and on
+              the other three screens the answer to "what is this page for" is
+              not "add a policy". */}
+          {isReadOnly || activeTab !== "documents" ? null : (
+            <div className="bs-pagehead-actions">
               {/* **Edit is the filled button when you are not editing.** The
                   customer asked for one: "an edit button that puts the user in
                   edit mode and then allows all these edits to happen on a
                   branch". Rearranging a binder — renaming, refiling, making
                   folders — is the work this page is for, and adding one policy
-                  is the narrower act. While editing it is gone: the draft bar
-                  below carries Propose, which is the only thing left that
-                  finishes anything, and two filled buttons are two answers to
-                  "what is this page for". */}
+                  is the narrower act. */}
               {editMode === "off" ? (
                 <>
                   <button
@@ -423,32 +462,36 @@ export function BinderShell({
             </div>
           )}
         </div>
+      ) : null}
 
-        <nav className="doc-tabs" role="tablist" aria-label="Binder">
-          {tabs.map((entry) => (
-            <button
-              key={entry.id}
-              className={`doc-tab${activeTab === entry.id ? " doc-tab--active" : ""}`}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === entry.id}
-              onClick={() => goTo(entry.id)}
-            >
-              {entry.label}
-              {entry.count !== undefined && entry.count > 0 ? (
-                <span className="doc-tab-count">{entry.count}</span>
-              ) : null}
-            </button>
-          ))}
-        </nav>
-      </header>
+      {/* A phone has no sidebar, so the binder's screens are a strip under
+          the page title — the shape the tab bar had, which already worked at
+          that width. Above 768px it is not drawn at all. */}
+      <nav className="binder-strip" aria-label="This binder">
+        {sections.map((entry) => (
+          <button
+            key={entry.id}
+            className={`binder-strip-item${
+              activeTab === entry.id ? " binder-strip-item--active" : ""
+            }`}
+            type="button"
+            aria-current={activeTab === entry.id ? "page" : undefined}
+            onClick={() => goTo(entry.id)}
+          >
+            {entry.label}
+            {entry.count !== undefined && entry.count > 0 ? (
+              <span className="binder-strip-count">{entry.count}</span>
+            ) : null}
+          </button>
+        ))}
+      </nav>
 
       {/* Between the header and whatever is under it, because it is about the
           binder rather than about the list: the propose screen replaces the
           tree and the bar stays put above it, which is what makes "you are
           editing" a state rather than a property of one pane. */}
       {draftError ? (
-        <p className="app-inline-error" role="alert">
+        <p className="bs-note bs-note--danger" role="alert">
           {draftError}
         </p>
       ) : null}

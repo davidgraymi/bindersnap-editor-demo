@@ -13,7 +13,7 @@ import { AppIcon } from "./AppIcon";
 import { BindersnapLogoMark } from "./BindersnapLogoMark";
 import { DocumentsPage } from "./DocumentsPage";
 import { ReviewQueuePage } from "./ReviewQueuePage";
-import { AppSidebar } from "./AppSidebar";
+import { AppSidebar, type SidebarBinder } from "./AppSidebar";
 import { AppBottomNav } from "./AppBottomNav";
 import { useDefaultOrganization } from "../useOrganizationDisplayName";
 import { NewPolicyModal } from "./NewPolicyModal";
@@ -109,6 +109,17 @@ export function AppShell({
   const currentUsername = user?.username ?? "";
   const initials = displayName ? getInitials(displayName) : "?";
 
+  /**
+   * The binder on screen, for the sidebar's own section of it.
+   *
+   * Reported up by the shell that is already reading the binder rather than
+   * fetched again here: the sidebar needs its name, its open-change count and
+   * which of its screens is open, and all three are things `BinderShell` knows
+   * a moment after it loads.
+   */
+  const [sidebarBinder, setSidebarBinder] = useState<SidebarBinder | null>(
+    null,
+  );
   const [profileOpen, setProfileOpen] = useState(false);
   const [showCreateDocumentModal, setShowCreateDocumentModal] = useState(false);
   // A search that was linked to or reloaded is still the search that is on
@@ -120,6 +131,14 @@ export function AppShell({
   const openCreateDocumentModal = useCallback(() => {
     setShowCreateDocumentModal(true);
   }, []);
+
+  // Leaving a binder takes its section with it, so the map does not keep
+  // offering the screens of a binder you are no longer in.
+  useEffect(() => {
+    if (route.kind !== "binder" && route.kind !== "binderDocument") {
+      setSidebarBinder(null);
+    }
+  }, [route]);
 
   useEffect(() => {
     document.addEventListener("bs:open-create-modal", openCreateDocumentModal);
@@ -353,6 +372,7 @@ export function AppShell({
         <AppSidebar
           route={route}
           org={sidebarOrg}
+          binder={sidebarBinder}
           currentUsername={currentUsername}
           currentUserFullName={user?.fullName ?? ""}
           onNavigate={onNavigate}
@@ -406,6 +426,7 @@ export function AppShell({
                   ? { documentPath: route.documentPath }
                   : {})}
                 currentUser={currentUsername}
+                onBinderChange={setSidebarBinder}
                 onOpenDocument={(documentPath) =>
                   onNavigate({
                     kind: "binderDocument",
@@ -420,9 +441,6 @@ export function AppShell({
                     org: route.org,
                     binder: route.binder,
                   })
-                }
-                onOpenOrganization={() =>
-                  onNavigate({ kind: "organization", org: route.org })
                 }
               />
             ) : route.kind === "activity" ? (

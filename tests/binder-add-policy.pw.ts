@@ -22,7 +22,7 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { API_BASE_URL, APP_BASE_URL } from "./helpers";
+import { API_BASE_URL, APP_BASE_URL, openBinderSection } from "./helpers";
 
 // Signup, an organization, two binders and several page loads on a stack that
 // may be cold. The suite default is nowhere near enough.
@@ -387,23 +387,25 @@ test("the binder's tabs still work once a document is open", async ({
     .getByRole("button", { name: "Hand Hygiene Policy" })
     .click({ timeout: 30_000 });
 
-  await expect(page.locator("h1.doc-header-title").last()).toHaveText(
+  await expect(page.locator("h1.bs-title").last()).toHaveText(
     "Hand Hygiene Policy",
     { timeout: 30_000 },
   );
 
-  // Leaving the document by a tab, which is the act that was broken. People
-  // is a section of Settings now, not a tab of its own.
-  await page.getByRole("tab", { name: "Settings" }).click();
+  // Leaving the document by the sidebar, which is where the binder's own
+  // screens live now. People is a section of Settings, not a screen of its own.
+  await openBinderSection(page, "Settings");
 
   await expect(page.getByRole("heading", { name: "People" })).toBeVisible({
     timeout: 30_000,
   });
-  // The document is gone, not merely covered: the binder's header remains and
-  // the document's does not.
-  // The binder heads its own page by the name it was given, not by the slug
-  // the repository is addressed by.
-  await expect(page.locator("h1.doc-header-title")).toHaveText(binderTitle);
+  // The document is gone, not merely covered: the page is Settings now, and
+  // the binder is named once, in the sidebar, by the name it was given rather
+  // than by the slug the repository is addressed by.
+  await expect(page.locator("h1.bs-title")).toHaveText("Settings");
+  await expect(page.locator(".app-sidebar-binder-name")).toHaveText(
+    binderTitle,
+  );
   expect(new URL(page.url()).pathname).toBe(`/${org}/${binder}`);
 
   // Who can act here is a question about people, not about billing. The seat
@@ -420,8 +422,8 @@ test("the binder's tabs still work once a document is open", async ({
   ).toBeVisible({ timeout: 30_000 });
   await expect(page.locator("#sign-off").getByText("Gitea")).toHaveCount(0);
 
-  // And a second tab, to prove the first was not a one-off.
-  await page.getByRole("tab", { name: "History" }).click();
+  // And a second screen, to prove the first was not a one-off.
+  await openBinderSection(page, "History");
   await expect(page.getByRole("heading", { name: "People" })).toHaveCount(0, {
     timeout: 30_000,
   });
@@ -448,13 +450,13 @@ test("the header's one filled button belongs to the tab it sits above", async ({
   const addAPolicy = page.getByRole("button", { name: "Add a policy" });
   await expect(addAPolicy).toBeVisible();
 
-  for (const tab of ["Change requests", "History", "Settings"] as const) {
-    await page.getByRole("tab", { name: tab }).click();
+  for (const section of ["Changes", "History", "Settings"] as const) {
+    await openBinderSection(page, section);
     await expect(addAPolicy).toHaveCount(0, { timeout: 30_000 });
   }
 
-  // Back to Documents and it returns: scoped, not deleted.
-  await page.getByRole("tab", { name: "Documents" }).click();
+  // Back to the binder's contents and it returns: scoped, not deleted.
+  await page.locator(".app-sidebar-binder").click();
   await expect(addAPolicy).toBeVisible({ timeout: 30_000 });
 
   // Filing a policy is never more than one click away regardless — the top

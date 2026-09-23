@@ -158,8 +158,10 @@ export function BinderDocumentPage({
   if (error) {
     return (
       <div className="binder-pane">
-        <h1 className="doc-header-title">{documentPath}</h1>
-        <p className="app-inline-error">{error}</p>
+        <h1 className="bs-title">{documentPath}</h1>
+        <p className="bs-note bs-note--danger" role="alert">
+          {error}
+        </p>
         <p>
           <button
             className="bs-btn bs-btn-secondary"
@@ -194,97 +196,65 @@ export function BinderDocumentPage({
 
   return (
     <div className="binder-pane">
-      <header className="doc-header doc-header--nested">
-        {/* Which folder this is filed in. The binder's own header, above
-            this, already names the organization and the binder — what it
-            cannot say is where inside the binder you are. The folders carry
-            no link: they are real directories, but they have no page of their
-            own yet, and a link that goes nowhere is worse than plain text. */}
-        <nav className="doc-crumbs" aria-label="Where this document is filed">
-          {crumbs.map((crumb, index) => (
-            <span className="doc-crumb" key={`${crumb.label}-${index}`}>
-              {index > 0 ? (
-                <span className="app-breadcrumb-sep" aria-hidden="true">
-                  /
-                </span>
-              ) : null}
-              <span
-                className={
-                  crumb.isDocument
-                    ? "app-breadcrumb-current"
-                    : "app-breadcrumb-sep"
-                }
-              >
-                {crumb.label}
-              </span>
+      <header className="bs-pagehead">
+        <div className="bs-pagehead-body">
+          <h1 className="bs-title">{formatDocumentName(document.name)}</h1>
+          <div className="bs-facts">
+            <span
+              className={`doc-version-pill ${
+                latestVersion === null
+                  ? "doc-version-pill--none"
+                  : isViewingRecord
+                    ? "doc-version-pill--current"
+                    : "doc-version-pill--past"
+              }`}
+            >
+              {isViewingRecord
+                ? describeVersionState(latestVersion, state)
+                : `Version ${viewing.version?.version} — an earlier version`}
             </span>
-          ))}
-        </nav>
 
-        <div className="doc-header-top">
-          <div className="doc-header-identity">
-            <h1 className="doc-header-title">
-              {formatDocumentName(document.name)}
-            </h1>
-            <div className="doc-header-facts">
-              <span
-                className={`doc-version-pill ${
-                  latestVersion === null
-                    ? "doc-version-pill--none"
-                    : isViewingRecord
-                      ? "doc-version-pill--current"
-                      : "doc-version-pill--past"
-                }`}
+            {!isViewingRecord ? (
+              <button
+                className="doc-header-latest"
+                type="button"
+                onClick={() => selectVersion(null)}
               >
-                {isViewingRecord
-                  ? describeVersionState(latestVersion, state)
-                  : `Version ${viewing.version?.version} — an earlier version`}
-              </span>
+                Back to current
+              </button>
+            ) : null}
 
-              {!isViewingRecord ? (
-                <button
-                  className="doc-header-latest"
-                  type="button"
-                  onClick={() => selectVersion(null)}
-                >
-                  Back to current
-                </button>
-              ) : null}
-
-              {/* The file as a person would name it. The identity segment in
+            {/* The file as a person would name it. The identity segment in
                   the real filename is how a rename does not lose the version
                   history (ADR 0005); it is 26 characters of machinery and has
                   no business on a page somebody reads. */}
-              <span className="doc-header-fact doc-header-file">
-                {downloadFileName(document)}
-              </span>
-            </div>
+            <span className="bs-filename">{downloadFileName(document)}</span>
           </div>
+        </div>
 
-          {/* **The act that was missing.** Revising a policy used to mean
+        {/* **The act that was missing.** Revising a policy used to mean
               filing a new one and getting the name character-for-character
               right, or ending up with two policies instead of two versions.
               Only offered on the record: revising an earlier version would
               silently discard everything published since. */}
-          {!isReadOnly && isViewingRecord && state !== "proposed" ? (
-            <div className="doc-header-actions">
-              <button
-                type="button"
-                className="bs-btn bs-btn-secondary"
-                onClick={() => setRenaming(true)}
-              >
-                Rename or move
-              </button>
-              <button
-                type="button"
-                className="bs-btn bs-btn-primary"
-                onClick={() => setRevising(true)}
-              >
-                New version
-              </button>
-            </div>
-          ) : null}
-        </div>
+        {!isReadOnly && isViewingRecord && state !== "proposed" ? (
+          <div className="bs-pagehead-actions">
+            <button
+              type="button"
+              className="bs-btn bs-btn-secondary"
+              onClick={() => setRenaming(true)}
+            >
+              Rename or move
+            </button>
+            <button
+              type="button"
+              className="bs-btn bs-btn-primary"
+              onClick={() => setRevising(true)}
+            >
+              New version
+            </button>
+          </div>
+        ) : null}
       </header>
 
       {renaming ? (

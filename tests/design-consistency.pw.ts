@@ -371,7 +371,7 @@ test("every page begins in the same place, at the same size", async ({
     // And the page's own heading, because it is one of the four things
     // measured below and a route can still be a render behind its shell.
     await page
-      .locator(".doc-header-title, .docs-title, .activity-heading")
+      .locator(".bs-title, .doc-header-title, .docs-title, .activity-heading")
       .first()
       .waitFor();
 
@@ -381,7 +381,7 @@ test("every page begins in the same place, at the same size", async ({
       if (!root) return null;
       const box = root.getBoundingClientRect();
       const heading = main!.querySelector(
-        ".doc-header-title, .docs-title, .activity-heading",
+        ".bs-title, .doc-header-title, .docs-title, .activity-heading",
       );
       return {
         left: Math.round(box.left),
@@ -404,6 +404,62 @@ test("every page begins in the same place, at the same size", async ({
       other.shape,
       `${other.where} is not the same shape as ${first!.where}`,
     ).toEqual(first!.shape);
+  }
+});
+
+/**
+ * Every binder screen has exactly one `h1`, and it names the subject.
+ *
+ * **The binder used to be the page's only `h1`, on every screen it held.** A
+ * policy then rendered its own name as a second `h1` at the same size, and a
+ * change request got an `h2` — so the page's loudest heading named the thing
+ * you were visibly inside, and the thing the page was actually about was a
+ * rank below it.
+ *
+ * D1 is what fixes it: the binder is named once, in the sidebar, and each
+ * screen's title belongs to its own subject. This is the rule that keeps it
+ * true — written by putting the defect back first and watching it fail with
+ * two headings named.
+ *
+ * **The policy's own text is not the page's chrome.** A markdown policy that
+ * opens `# Hand Hygiene` renders an `h1`, and that heading belongs to the
+ * document rather than to the screen around it — so the rendered sheet is
+ * excluded, and everything the app itself draws is counted.
+ */
+test("every binder screen has exactly one heading of its own", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provision();
+  await page
+    .context()
+    .addCookies([
+      { name: "bindersnap_session", value: session, url: APP_BASE_URL },
+    ]);
+  await page.setViewportSize({ width: 1280, height: 900 });
+
+  const screens: Array<[string, string]> = [
+    ["the binder", `${APP_BASE_URL}/${org}/${binder}`],
+    ["its change requests", `${APP_BASE_URL}/${org}/${binder}?tab=changes`],
+    ["its history", `${APP_BASE_URL}/${org}/${binder}?tab=history`],
+    ["its settings", `${APP_BASE_URL}/${org}/${binder}?tab=settings`],
+    ["a policy", `${APP_BASE_URL}/${org}/${binder}/nursing/hand-hygiene`],
+  ];
+
+  for (const [where, url] of screens) {
+    await page.goto(url);
+    await settleOnRealShell(page);
+    await page.locator(".app-main h1").first().waitFor();
+
+    const headings = await page
+      .locator(".app-main h1:not(.doc-preview-prose h1)")
+      .evaluateAll((elements) =>
+        elements.map((element) => (element.textContent ?? "").trim()),
+      );
+
+    expect(
+      headings,
+      `${where} should have exactly one h1, and it should name the subject`,
+    ).toHaveLength(1);
   }
 });
 
@@ -446,7 +502,7 @@ test("no heading on a page outranks the page's own title", async ({ page }) => {
       const main = document.querySelector(".app-main");
       if (!main) return null;
       const title = main.querySelector(
-        ".doc-header-title, .docs-title, .activity-heading, .home-greeting",
+        ".bs-title, .doc-header-title, .docs-title, .activity-heading, .home-greeting",
       );
       if (!title) return [];
       const titleSize = parseFloat(getComputedStyle(title).fontSize);
