@@ -97,8 +97,11 @@ export function BinderExplorer({ binder, onNavigate }: BinderExplorerProps) {
                       org: binder.org,
                       binder: binder.binder,
                       documentPath: document.slugPath,
-                      // Clicking through a change's tree stays on that change:
-                      // these addresses are the branch's.
+                      // Clicking through a branch's tree stays on that
+                      // branch: these addresses are the branch's, and
+                      // following one to `main` would be following a policy
+                      // to a name it does not have there.
+                      ...(contents.ref ? { ref: contents.ref } : {}),
                       ...(contents.change ? { change: contents.change } : {}),
                     })
                   }

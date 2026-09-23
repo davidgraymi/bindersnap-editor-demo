@@ -1342,27 +1342,33 @@ test("Open on a change lands on the document's own page", async ({ page }) => {
   await page.getByRole("button", { name: "Open", exact: true }).click();
 
   // The document's address, and the document's own name as the page's title.
+  // The branch is the address and the change rides along as the way back —
+  // a file lives on a branch, which is how every code host addresses one.
   await expect(page).toHaveURL(
-    new RegExp(`/${org}/${binder}/nursing/hand-hygiene\\?change=${number}$`),
+    new RegExp(`/${org}/${binder}/nursing/hand-hygiene\\?ref=`),
     { timeout: 30_000 },
   );
+  await expect(page).toHaveURL(new RegExp(`[?&]change=${number}`));
   // The page's own heading, not the `# Hand Hygiene` inside the policy.
   await expect(
     page.locator(".app-main h1:not(.doc-preview-prose h1)"),
   ).toHaveText("Hand Hygiene", { timeout: 30_000 });
   // Which branch you are reading, said before anything on it.
   await expect(page.locator(".doc-on-change")).toContainText(
-    `This is what change ${number} proposes`,
+    "You are reading the branch",
   );
 
   // A link somebody saved to the old in-page preview lands there too.
   await page.goto(
     `${APP_BASE_URL}/${org}/${binder}?tab=changes&change=${number}&view=preview`,
   );
+  // The branch is the address and the change rides along as the way back —
+  // a file lives on a branch, which is how every code host addresses one.
   await expect(page).toHaveURL(
-    new RegExp(`/${org}/${binder}/nursing/hand-hygiene\\?change=${number}$`),
+    new RegExp(`/${org}/${binder}/nursing/hand-hygiene\\?ref=`),
     { timeout: 30_000 },
   );
+  await expect(page).toHaveURL(new RegExp(`[?&]change=${number}`));
 });
 
 // ── The binder's contents beside the policy you are reading ────────────────
@@ -1537,4 +1543,202 @@ test("the file panel is only there while a policy is open", async ({
 
   await page.goto(`${APP_BASE_URL}/${org}/${binder}?tab=changes`);
   await expect(page.locator(".app-explorer")).toBeHidden();
+});
+
+// ── A file at a ref ────────────────────────────────────────────────────────
+
+/**
+ * **A file lives on a branch, and that is the address it should have.**
+ *
+ * *"When I open a file in a PR on GitHub… it goes to the file on the commit
+ * that it was made on. Similarly we should navigate to the branch view instead
+ * of the change view."* A change request is one thing that happens to a
+ * branch; the branch is the thing the file is on, which is why every code host
+ * addresses a file by ref.
+ */
+test("a document reads at the branch the address names", async () => {
+  const { session, org, binder } = await provisionBinder();
+  const draft = await openDraft(session, org, binder);
+
+  await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/document-renames`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({
+        documentPath: "nursing/hand-hygiene",
+        name: "Hand Hygiene and PPE",
+        draft,
+      }),
+    },
+  );
+  const proposed = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/changes`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({ title: "Rename hand hygiene", draft }),
+    },
+  );
+  const { branch } = (await proposed.json()) as { branch: string };
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/documents/nursing%2Fhand-hygiene-and-ppe?ref=${encodeURIComponent(branch)}`,
+    { headers: authHeaders(session) },
+  );
+  expect(response.status, await response.clone().text()).toBe(200);
+  expect(((await response.json()) as { ref: string }).ref).toBe(branch);
+});
+
+/**
+ * **The one rule a raw ref would walk straight through.**
+ *
+ * Gitea lets every collaborator read every branch in the repository. The
+ * product's rule is narrower and is the one the draft model rests on: other
+ * people's drafts are visible as existing and never as contents. So a `draft/`
+ * ref goes through the same ownership check every other draft read uses.
+ */
+test("somebody else's draft is refused as a ref", async () => {
+  const { session, org, binder } = await provisionBinder();
+  const draft = await openDraft(session, org, binder);
+
+  const stranger = buildCredentials();
+  const strangerSession = await signUp(stranger);
+  const added = await fetch(`${API_BASE_URL}/api/app/orgs/${org}/people`, {
+    method: "POST",
+    headers: authHeaders(session),
+    body: JSON.stringify({ username: stranger.username, owner: false }),
+  });
+  expect(added.status, await added.text()).toBeLessThan(300);
+
+  // The stranger can read the binder, and Gitea would happily hand them the
+  // branch. The product's rule is narrower, and this is where it is kept.
+  const refused = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/documents/nursing%2Fhand-hygiene?ref=${encodeURIComponent(draft)}`,
+    { headers: authHeaders(strangerSession) },
+  );
+  expect(refused.status).toBe(409);
+  expect(await refused.text()).toMatch(/not yours/i);
+
+  // Their own is theirs to read.
+  const mine = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/documents/nursing%2Fhand-hygiene?ref=${encodeURIComponent(draft)}`,
+    { headers: authHeaders(session) },
+  );
+  expect(mine.status, await mine.clone().text()).toBe(200);
+});
+
+/**
+ * **A proposed draft is a change request, and its contents are the thing
+ * everybody is being asked to read.**
+ *
+ * A branch keeps its `draft/` name after it is proposed, so a rule that
+ * refused every `draft/` ref would have hidden exactly the branch reviewers
+ * need — which is what the first cut of this did.
+ */
+test("a draft that has been proposed is readable by anyone", async () => {
+  const { session, org, binder } = await provisionBinder();
+  const draft = await openDraft(session, org, binder);
+
+  await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/document-renames`,
+    {
+      method: "POST",
+      headers: authHeaders(session),
+      body: JSON.stringify({
+        documentPath: "nursing/hand-hygiene",
+        name: "Hand Hygiene and PPE",
+        draft,
+      }),
+    },
+  );
+  await fetch(`${API_BASE_URL}/api/app/binders/${org}/${binder}/changes`, {
+    method: "POST",
+    headers: authHeaders(session),
+    body: JSON.stringify({ title: "Rename hand hygiene", draft }),
+  });
+
+  const reviewer = buildCredentials();
+  const reviewerSession = await signUp(reviewer);
+  await fetch(`${API_BASE_URL}/api/app/orgs/${org}/people`, {
+    method: "POST",
+    headers: authHeaders(session),
+    body: JSON.stringify({ username: reviewer.username, owner: false }),
+  });
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/documents/nursing%2Fhand-hygiene-and-ppe?ref=${encodeURIComponent(draft)}`,
+    { headers: authHeaders(reviewerSession) },
+  );
+  expect(response.status, await response.clone().text()).toBe(200);
+});
+
+/** Any other branch is an ordinary read for anyone who can read the binder. */
+test("a ref that is not a branch reads nothing rather than the record", async () => {
+  const { session, org, binder } = await provisionBinder();
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/documents/nursing%2Fhand-hygiene?ref=no-such-branch`,
+    { headers: authHeaders(session) },
+  );
+  // The binder is readable and the branch is not there, which is a 404 about
+  // the ref rather than a silent fall back to `main` — a reader following a
+  // stale link should be told, not quietly shown something else.
+  expect(response.status).toBe(404);
+  // And told in words rather than in Gitea's: it used to answer 400 with
+  // `sha not found [no-such-branch]`.
+  expect(await response.text()).toMatch(/no branch called/i);
+});
+
+/** In the browser: Open lands on the branch, and the explorer stays on it. */
+test("Open on a change lands on the branch, and browsing stays there", async ({
+  page,
+}) => {
+  const { session, org, binder } = await provisionBinder();
+  await signInBrowser(page, session);
+
+  const form = new FormData();
+  form.set(
+    "file",
+    new Blob(["# Hand Hygiene\n\nProposed.\n"], { type: "text/markdown" }),
+    "hand-hygiene.md",
+  );
+  form.set("documentPath", "nursing/hand-hygiene");
+  const revised = await fetch(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/document-revisions`,
+    {
+      method: "POST",
+      headers: {
+        Origin: APP_BASE_URL,
+        Cookie: `bindersnap_session=${session}`,
+      },
+      body: form,
+    },
+  );
+  const body = (await revised.json()) as {
+    changeNumber?: number;
+    pullRequestNumber?: number;
+  };
+  const number = body.changeNumber ?? body.pullRequestNumber;
+
+  await page.goto(
+    `${APP_BASE_URL}/${org}/${binder}?tab=changes&change=${number}`,
+  );
+  await page.getByRole("button", { name: "Open", exact: true }).click();
+
+  // The branch is the address, and the change rides along as the way back.
+  await expect(page).toHaveURL(/[?&]ref=/, { timeout: 30_000 });
+  await expect(page).toHaveURL(new RegExp(`[?&]change=${number}`));
+  await expect(page.locator(".doc-on-change")).toContainText(
+    "You are reading the branch",
+  );
+
+  // And browsing the branch's files stays on the branch.
+  await page
+    .locator(".app-explorer-item", { hasText: "Staff Handbook" })
+    .click();
+  await expect(page).toHaveURL(
+    new RegExp(`/${org}/${binder}/staff-handbook\\?ref=`),
+    { timeout: 30_000 },
+  );
 });

@@ -88,6 +88,8 @@ export interface SidebarBinderContents {
    * to a name it does not have there.
    */
   change?: number | null;
+  /** The branch they were read at, so a row leads to the same branch. */
+  ref?: string | null;
 }
 
 interface AppSidebarProps {

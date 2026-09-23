@@ -44,7 +44,7 @@ interface BinderChangePageProps {
    * A change request is a branch, and a document on it has an address — so
    * "read what this proposes" is a navigation rather than a panel.
    */
-  onOpenOnBranch: (slugPath: string) => void;
+  onOpenOnBranch: (slugPath: string, branch: string) => void;
   /** Something about the change moved: the binder's own counts have too. */
   onChanged: () => void;
   /** Where the required reviewers come from, for the reader who asks. */
@@ -142,11 +142,13 @@ export function BinderChangePage({
    * lands there rather than on a view that no longer exists.
    */
   useEffect(() => {
-    if (view === "preview" && shown) onOpenOnBranch(shown.slugPath);
+    if (view === "preview" && shown && detail?.change.branchName) {
+      onOpenOnBranch(shown.slugPath, detail.change.branchName);
+    }
     // `onOpenOnBranch` is a navigation closure over org and binder, both of
     // which change only by unmounting this page.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, shown?.slugPath]);
+  }, [view, shown?.slugPath, detail?.change.branchName]);
 
   const record = useMemo(
     () =>
@@ -349,7 +351,11 @@ export function BinderChangePage({
         /* A rename is a change even when not a word of the document changed,
            and the comparison cannot show it. */
         documentMove={shown ? describeMove(shown) : null}
-        onOpenOnBranch={shown ? () => onOpenOnBranch(shown.slugPath) : null}
+        onOpenOnBranch={
+          shown && detail.change.branchName
+            ? () => onOpenOnBranch(shown.slugPath, detail.change.branchName)
+            : null
+        }
         // A change that touches no document is a change to this binder's
         // sign-off rules — the one kind that goes through review and versions
         // nothing. Saying so replaces the version wording and the file panel,
