@@ -22,4 +22,5 @@ export type GetBinderChange200DocumentsItem = {
   versions: GetBinderChange200DocumentsItemVersionsItem[];
   /** @nullable */
   previousSlugPath: string | null;
+  restored: boolean;
 };

@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent, ReactNode } from "react";
 import {
+  Archive,
+  ArchiveRestore,
   Check,
   ChevronDown,
   Columns2,
   Download,
   Eye,
-  FileMinus2,
   FilePlus2,
   FileText,
   Folder,
@@ -133,8 +134,14 @@ function KindIcon({ kind }: { kind: ChangedDocumentRow["kind"] }) {
       <FilePlus2 size={size} strokeWidth={strokeWidth} aria-hidden="true" />
     );
   if (kind === "removed")
+    return <Archive size={size} strokeWidth={strokeWidth} aria-hidden="true" />;
+  if (kind === "restored")
     return (
-      <FileMinus2 size={size} strokeWidth={strokeWidth} aria-hidden="true" />
+      <ArchiveRestore
+        size={size}
+        strokeWidth={strokeWidth}
+        aria-hidden="true"
+      />
     );
   return <FileText size={size} strokeWidth={strokeWidth} aria-hidden="true" />;
 }
@@ -671,7 +678,7 @@ export function ChangeComparisonPage({
                               }`}
                               type="button"
                               aria-current={on ? "true" : undefined}
-                              title={describeChangedKind(row.kind)}
+                              title={describeChangedKind(row.kind, open)}
                               onClick={() => goTo(row.anchor)}
                             >
                               <span
@@ -846,9 +853,9 @@ function ChangedDocumentSection({
     [scope],
   );
 
-  const badge = describeChangedBadge(row.kind);
+  const badge = describeChangedBadge(row.kind, open);
   const comparesImages =
-    row.kind === "revised" &&
+    (row.kind === "revised" || row.kind === "restored") &&
     row.base !== null &&
     classifyDocumentFile(row.fileName) === "image";
   // What Download saves: the proposed file, or — for a removal, which has
@@ -863,7 +870,7 @@ function ChangedDocumentSection({
       id={row.anchor}
       data-anchor={row.anchor}
       ref={(node) => register(row.anchor, node)}
-      aria-label={`${row.name} — ${describeChangedKind(row.kind)}`}
+      aria-label={`${row.name} — ${describeChangedKind(row.kind, open)}`}
     >
       {/* **Everything about this document, in one bar.** What it is, what is
           happening to it, and every act on it — so the bar that follows the
@@ -984,10 +991,10 @@ function ChangedDocumentSection({
              that no diff can draw. */
           <div className="bs-note cmp-removed">
             <p className="cmp-removed-line">
-              {open ? "This change takes " : "This change took "}
-              <strong>{row.name}</strong> off the record.{" "}
+              {open ? "This change archives " : "This change archived "}
+              <strong>{row.name}</strong>.{" "}
               {row.base
-                ? `Nothing is lost: ${row.base.label} and every version before it stay in the history, and can still be read and exported.`
+                ? `Nothing is lost: ${row.base.label} and every version before it stay in the history, and can still be read, exported and restored.`
                 : "It never published a version, so there is nothing on the record to keep."}
             </p>
           </div>

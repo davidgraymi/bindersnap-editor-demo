@@ -384,6 +384,16 @@ export const WorkspaceChangedDocumentSchema =
      * added — which has no "was".
      */
     previousSlugPath: z.string().nullable(),
+    /**
+     * Whether this change brings it back out of the archive.
+     *
+     * A restore writes the file back under the identity it always had, so it
+     * has versions and a diff like any revision — and read like one, which
+     * hid the one fact a reviewer most needs about it. Read off the tags: the
+     * last thing that happened to this identity before the change was an
+     * archiving.
+     */
+    restored: z.boolean(),
   });
 export type WorkspaceChangedDocument = z.infer<
   typeof WorkspaceChangedDocumentSchema

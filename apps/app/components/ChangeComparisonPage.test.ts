@@ -141,6 +141,7 @@ function changed(
     currentVersion: version(name, 2),
     versions: [version(name, 2), version(name, 1)],
     previousSlugPath: null,
+    restored: false,
     ...overrides,
   };
 }
@@ -223,7 +224,7 @@ test("the scale line adds up what the whole change does", async () => {
   unmount();
 });
 
-test("a document coming off the record says so instead of drawing a diff", async () => {
+test("a document going into the archive says so instead of drawing a diff", async () => {
   files["change-4"] = "# Hand hygiene\n\nWash for sixty seconds.";
   files["hand-hygiene-v2"] = "# Hand hygiene\n\nWash for thirty seconds.";
 
@@ -234,11 +235,11 @@ test("a document coming off the record says so instead of drawing a diff", async
   const notice =
     container.querySelector(".cmp-removed-line")?.textContent ?? "";
   expect(notice).toContain("Visitor Policy");
-  expect(notice).toContain("off the record");
+  expect(notice).toContain("archives");
   // The history is what the product sells, so the page says it survives.
   expect(notice).toContain("v4");
   expect(container.querySelector(".cmp-kind--removed")?.textContent).toContain(
-    "Taken off the record",
+    "Archiving",
   );
 
   unmount();
@@ -429,6 +430,28 @@ test("a moved policy shows its old path struck out beside the new one", async ()
   expect(container.textContent).not.toContain("Nothing changed");
   expect(container.querySelector(".cmp-file-body")?.textContent).toBe("");
   expect(container.querySelector(".cmp-counts")).toBeNull();
+
+  unmount();
+});
+
+test("a policy coming out of the archive says so in its bar, and is still diffed", async () => {
+  files["hand-hygiene-v2"] = "Wash for thirty seconds.";
+  files["change-4"] = "Wash for sixty seconds.";
+
+  const { container, unmount } = await render(
+    page([changed("hand-hygiene", { restored: true })]),
+  );
+
+  const bar = container.querySelector(".cmp-file-head");
+  // Without the badge a restore reads exactly like an edit to a policy that
+  // never left — same step, same diff.
+  expect(bar?.querySelector(".cmp-kind--restored")?.textContent).toBe(
+    "Restoring",
+  );
+  expect(bar?.querySelector(".cmp-counts")?.textContent).toBe("+1−1");
+  expect(container.querySelector(".cmp-file")?.getAttribute("aria-label")).toBe(
+    "Hand Hygiene — Coming out of the archive",
+  );
 
   unmount();
 });

@@ -29,12 +29,13 @@ import type {
 /**
  * What the change does to one document.
  *
- * Three verbs, because there are three answers a reviewer needs told apart at
- * a glance: something new arrives on the record, something on it is rewritten,
- * or something comes off it. The third is the one a compliance customer cares
- * most about and the one a diff is least able to show.
+ * Four verbs, because there are four answers a reviewer needs told apart at a
+ * glance: something new arrives on the record, something on it is rewritten,
+ * something comes back out of the archive, or something goes into it. The
+ * last two are the ones a compliance customer cares most about and the ones a
+ * diff is least able to show — a restore diffs exactly like a revision.
  */
-export type ChangedDocumentKind = "added" | "revised" | "removed";
+export type ChangedDocumentKind = "added" | "revised" | "restored" | "removed";
 
 export interface ChangedDocumentRow {
   /**
@@ -128,7 +129,7 @@ export function buildChangedDocumentRows(params: {
       path: document.path,
       name: formatDocumentName(document.name),
       fileName: downloadFileName(document),
-      kind: added ? "added" : "revised",
+      kind: added ? "added" : document.restored ? "restored" : "revised",
       versionStep: describeStep(document, open),
       previousSlugPath:
         document.previousSlugPath &&
@@ -210,10 +211,21 @@ function describeStep(
     : `New · becomes v${document.nextVersion}`;
 }
 
-/** "Revised", "New document", "Taken off the record" — said to a screen reader. */
-export function describeChangedKind(kind: ChangedDocumentKind): string {
+/**
+ * "Revised", "New document", "Being archived" — said to a screen reader.
+ *
+ * `open` because an archiving that has not been decided has not happened: the
+ * same row reads "Being archived" on the change awaiting sign-off and
+ * "Archived" once it is published.
+ */
+export function describeChangedKind(
+  kind: ChangedDocumentKind,
+  open = true,
+): string {
   if (kind === "added") return "New document";
-  if (kind === "removed") return "Taken off the record";
+  if (kind === "removed") return open ? "Being archived" : "Archived";
+  if (kind === "restored")
+    return open ? "Coming out of the archive" : "Restored from the archive";
   return "Revised";
 }
 
@@ -226,8 +238,14 @@ export function describeChangedKind(kind: ChangedDocumentKind): string {
  * reviewer nothing they did not know, and trained them to ignore the badge on
  * the two rows where it mattered: a policy arriving, and one leaving.
  */
-export function describeChangedBadge(kind: ChangedDocumentKind): string | null {
-  return kind === "revised" ? null : describeChangedKind(kind);
+export function describeChangedBadge(
+  kind: ChangedDocumentKind,
+  open = true,
+): string | null {
+  if (kind === "revised") return null;
+  if (kind === "removed") return open ? "Archiving" : "Archived";
+  if (kind === "restored") return open ? "Restoring" : "Restored";
+  return describeChangedKind(kind, open);
 }
 
 /**
@@ -251,12 +269,15 @@ export function summarizeChangeScale(params: {
   const parts = [`${rows.length} document${rows.length === 1 ? "" : "s"}`];
 
   const added = rows.filter((row) => row.kind === "added").length;
+  const restored = rows.filter((row) => row.kind === "restored").length;
   const removed = rows.filter((row) => row.kind === "removed").length;
   if (added > 0) parts.push(`${added} new`);
-  if (removed > 0) parts.push(`${removed} taken off the record`);
+  if (restored > 0) parts.push(`${restored} restored`);
+  if (removed > 0) parts.push(`${removed} archived`);
 
   /**
-   * Only a revision has a word count.
+   * Only a revision has a word count — and a restore, which is read against
+   * its last version exactly like one.
    *
    * A new document has nothing to be counted against — the screen reads it
    * whole instead — and a removal is not a diff at all. Counting them as
@@ -265,7 +286,8 @@ export function summarizeChangeScale(params: {
    * one of them was ever going to report a number.
    */
   const measurable = rows.filter(
-    (row) => row.kind === "revised" && row.base !== null,
+    (row) =>
+      (row.kind === "revised" || row.kind === "restored") && row.base !== null,
   );
   if (measurable.length === 0) return parts.join(" · ");
 

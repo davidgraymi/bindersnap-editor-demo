@@ -121,8 +121,11 @@ a link to that branch in the binder. Below it, a tree of only what changed —
 grouped by folder — sits on the **left**, and one panel per document on the
 right, in the same order. **Every fact and control about a document is in
 that panel's single bar**: its path, its word counts (`+12 −3`), its version
-step, a New or Removed badge (a revision gets none — it is what nearly every
-row is), and Viewed, View and Download. View is a real link to the exact file
+step, a badge for New, Archiving/Archived or Restoring/Restored (a revision
+gets none — it is what nearly every row is), and Viewed, View and Download.
+A restore diffs exactly like a revision, so the badge is the only thing that
+tells them apart: the server sets `restored` on a changed document from the
+tags (the last thing that happened to that identity was an archiving). View is a real link to the exact file
 on the change's branch. Nothing about a document sits below it.
 
 A move or rename is drawn in the path itself — the old path struck out in the

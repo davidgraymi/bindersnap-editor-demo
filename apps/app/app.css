@@ -6783,6 +6783,10 @@ a.cmp-branch:focus-visible {
   color: var(--bs-status-danger-fg);
 }
 
+.cmp-rail-icon--restored {
+  color: var(--bs-status-ok-fg);
+}
+
 .cmp-rail-row--read .bs-row-name {
   color: var(--bs-text-muted);
 }
@@ -6934,9 +6938,10 @@ a.cmp-branch:focus-visible {
   flex-shrink: 0;
 }
 
-/* ── New, removed ──────────────────────────────────────────────────────────
-   Only the two that are news. A revision is what nearly every document in a
-   change is having done to it, and its counts already say so. */
+/* ── New, restored, archived ───────────────────────────────────────────────
+   Only the ones that are news. A revision is what nearly every document in a
+   change is having done to it, and its counts already say so. A restore diffs
+   exactly like a revision, so the pill is the only place it says otherwise. */
 
 .cmp-kind--added {
   background: var(--bs-status-ok-bg);
@@ -6946,6 +6951,11 @@ a.cmp-branch:focus-visible {
 .cmp-kind--removed {
   background: var(--bs-status-danger-bg);
   color: var(--bs-status-danger-fg);
+}
+
+.cmp-kind--restored {
+  background: var(--bs-status-ok-bg);
+  color: var(--bs-status-ok-fg);
 }
 
 /* A bookmark, drawn as one. Not green until pressed — the record of who

@@ -49,6 +49,7 @@ import {
   groupVersionsByDocument,
   latestChangeByDocument,
   readBinderTimeline,
+  isRestoredFromArchive,
   listAllTags,
   listChangedDocuments,
   listDocumentVersions,
@@ -4203,6 +4204,7 @@ async function handleWorkspaceChangeDetail(
       access,
       signOff,
       gate,
+      tags,
     ] = await Promise.all([
       getPullRequestWithReviews({
         client,
@@ -4239,7 +4241,19 @@ async function handleWorkspaceChangeDetail(
         workspace: workspaceName,
       }).catch(() => ({ exists: false, rules: [], unreadable: [] })),
       readSignOffGate(orgName, workspaceName),
+      // Every tag, once, so a restore can be told from a revision. A read that
+      // fails costs the label and not the page.
+      listAllTags({ client, owner: orgName, repo: workspaceName }).catch(
+        () => [],
+      ),
     ]);
+
+    const pullState = entry.pullRequest as {
+      state?: string;
+      merge_commit_sha?: string | null;
+    };
+    const changeOpen = pullState.state === "open";
+    const mergeCommitSha = pullState.merge_commit_sha || null;
 
     // **Where each document is filed on the base**, so a change that renamed
     // or moved one can say so. The identity survives a rename and the address
@@ -4279,6 +4293,12 @@ async function handleWorkspaceChangeDetail(
           // being added — which has no "was" to report.
           previousSlugPath:
             was !== undefined && was !== document.slugPath ? was : null,
+          restored: isRestoredFromArchive({
+            tags,
+            uid: document.uid,
+            open: changeOpen,
+            mergeCommitSha,
+          }),
         };
       }),
     );

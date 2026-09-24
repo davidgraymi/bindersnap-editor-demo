@@ -91,7 +91,7 @@ test("a renamed policy is read by identity, not by address", async ({
   );
 });
 
-test("a document taken off the record says so, and offers what is coming off", async ({
+test("a document going into the archive says so, and offers what is going", async ({
   page,
 }) => {
   await signInAsAlice(page);
@@ -99,9 +99,7 @@ test("a document taken off the record says so, and offers what is coming off", a
 
   // The change publishes no version at all, so the old screen — which was
   // scoped to one versioned document — had nothing to show for it.
-  await expect(page.locator(".cmp-kind--removed")).toContainText(
-    "Taken off the record",
-  );
+  await expect(page.locator(".cmp-kind--removed")).toContainText("Archiv");
   await expect(page.locator(".cmp-removed-line")).toContainText(
     "Nothing is lost",
   );
