@@ -160,3 +160,14 @@ test("an archive value nobody set is not the archive", () => {
   expect(archiveFromSearch("?archive=yes")).toBe(false);
   expect(archiveFromSearch("?archive=0")).toBe(false);
 });
+
+test("the binder read at a change's branch keeps the documents tab's short address", () => {
+  expect(
+    buildBinderUrl({
+      org: "riverside",
+      binder: "clinical",
+      ref: "draft/alice-1",
+      change: 4,
+    }),
+  ).toBe("/riverside/clinical?ref=draft%2Falice-1&change=4");
+});

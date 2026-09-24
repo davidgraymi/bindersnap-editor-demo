@@ -105,6 +105,14 @@ export function buildBinderUrl(params: {
   draft?: string | null;
   /** The archive — what this binder has taken off the record. */
   archive?: boolean;
+  /**
+   * Read the binder's documents at a branch rather than on `main`.
+   *
+   * With `change` beside it and no `tab`, this is the binder as that change
+   * would leave it — where a change's branch link goes. The change says which
+   * one to ask the server for and gives the reader the way back.
+   */
+  ref?: string | null;
 }): string {
   const {
     org,
@@ -115,10 +123,12 @@ export function buildBinderUrl(params: {
     edit = "off",
     draft = null,
     archive = false,
+    ref = null,
   } = params;
   const query = new URLSearchParams();
 
   if (tab !== "documents") query.set("tab", tab);
+  if (ref) query.set("ref", ref);
   // Not editing is the ordinary state, so it says nothing — the binder's own
   // address stays the short one.
   if (edit === "editing") query.set("edit", "1");

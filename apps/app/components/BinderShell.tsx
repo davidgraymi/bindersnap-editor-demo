@@ -698,6 +698,31 @@ export function BinderShell({
           onOpenBinder={onOpenBinder}
           onOpenChange={openChangeNumber}
         />
+      ) : openChange !== null &&
+        documentRefFromSearch !== null &&
+        activeTab === "documents" ? (
+        /* **The binder at a change's branch**, from the branch link under a
+           comparison's title — the root of the branch, the way a code host
+           opens one, rather than whichever file happened to be first. */
+        <BinderDocuments
+          org={org}
+          binder={binder}
+          onChange={{ number: openChange, branch: documentRefFromSearch }}
+          onBackToChange={openChangeNumber}
+          onOpenChange={openChangeNumber}
+          onOpenDocument={(slugPath) =>
+            moveTo(
+              buildDocumentUrl({
+                org,
+                binder,
+                documentPath: slugPath,
+                version: null,
+                change: openChange,
+                ref: documentRefFromSearch,
+              }),
+            )
+          }
+        />
       ) : openChange !== null ? (
         <BinderChangePage
           org={org}
@@ -723,6 +748,16 @@ export function BinderShell({
                 version: null,
                 change: openChange,
                 ref: branch,
+              }),
+            )
+          }
+          onOpenBranch={(branch) =>
+            moveTo(
+              buildBinderUrl({
+                org,
+                binder,
+                ref: branch,
+                change: openChange,
               }),
             )
           }

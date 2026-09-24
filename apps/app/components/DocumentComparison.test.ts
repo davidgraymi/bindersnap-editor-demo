@@ -128,22 +128,27 @@ test("a Markdown change reads as one document with the change marked in it", asy
   expect(container.querySelector("h1")?.textContent).toBe("Vendor terms");
   expect(container.querySelector("del")?.textContent).toBe("thirty");
   expect(container.querySelector("ins")?.textContent).toBe("sixty");
-  expect(container.textContent).toContain("1 word added · 1 word removed");
 
   unmount();
 });
 
-test("two identical versions say so instead of showing an empty page", async () => {
+test("two identical versions draw nothing rather than announce it", async () => {
   files["v3"] = "Nothing moved.";
   files["change-4"] = "Nothing moved.";
 
-  const { container, unmount } = await render(comparison());
-
-  expect(container.textContent).toContain(
-    "Nothing changed — these two versions read the same.",
+  const summaries: unknown[] = [];
+  const { container, unmount } = await render(
+    comparison({ onSummary: (summary: unknown) => summaries.push(summary) }),
   );
-  expect(container.querySelector("ins")).toBeNull();
-  expect(container.querySelector("del")).toBeNull();
+
+  // The file's bar says what happened — a rename shows both paths — so the
+  // body has nothing to add, and no sentence saying so.
+  expect(container.textContent).toBe("");
+  expect(summaries.at(-1)).toEqual({
+    additions: 0,
+    deletions: 0,
+    identical: true,
+  });
 
   unmount();
 });

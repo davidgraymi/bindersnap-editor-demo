@@ -97,22 +97,11 @@ test("summarizeSegments counts words, not characters", () => {
   expect(summary.additions).toBe(2);
   expect(summary.deletions).toBe(2);
   expect(summary.identical).toBe(false);
-  expect(summary.headline).toBe("2 words added · 2 words removed");
 });
 
-test("summarizeSegments says so plainly when nothing moved", () => {
+test("summarizeSegments reports two identical versions as identical", () => {
   const summary = summarizeSegments(diffWords("Same words.", "Same words."));
-  expect(summary.identical).toBe(true);
-  expect(summary.headline).toBe(
-    "Nothing changed — these two versions read the same.",
-  );
-});
-
-test("summarizeSegments uses the singular for a one-word change", () => {
-  const summary = summarizeSegments(
-    diffWords("Due in days.", "Due in 30 days."),
-  );
-  expect(summary.headline).toBe("1 word added");
+  expect(summary).toEqual({ additions: 0, deletions: 0, identical: true });
 });
 
 test("a PDF's headings survive as headings, not as run-on prose", () => {

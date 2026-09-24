@@ -654,6 +654,36 @@ test("a restored policy comes back on its next version, not at v1", async () => 
   expect(await readArchive(session, org, binder)).toEqual([]);
 });
 
+test("the comparison marks a restore, which would otherwise read as an edit", async ({
+  page,
+}) => {
+  // A restore writes the file back under the identity it always had, so it
+  // has a step and a diff like any revision. The tags are what know it was in
+  // the archive, and the file's bar is where a reviewer has to be told.
+  const { session, org, binder } = await provisionBinder();
+  await archiveAndPublish(session, org, binder, "nursing/hand-hygiene");
+
+  const [entry] = await readArchive(session, org, binder);
+  const proposed = await restore(session, org, binder, entry!.uid);
+  const body = await proposed.text();
+  expect(proposed.status, body).toBe(201);
+  const change = (JSON.parse(body) as { changeNumber: number }).changeNumber;
+
+  const compare = `${APP_BASE_URL}/${org}/${binder}?tab=changes&change=${change}&view=compare`;
+  await signInBrowser(page, session);
+  await page.goto(compare);
+  await expect(page.locator(".cmp-kind--restored")).toHaveText("Restoring", {
+    timeout: 30_000,
+  });
+
+  // Once published it is history, and the badge says what it did.
+  await approveAndPublish(session, org, binder, change);
+  await page.goto(compare);
+  await expect(page.locator(".cmp-kind--restored")).toHaveText("Restored", {
+    timeout: 30_000,
+  });
+});
+
 test("the bytes come back, because a tag still points at them", async () => {
   // There is no archive branch to read from. The file is recovered from the
   // commit its last version tag points at, which git has kept for exactly this

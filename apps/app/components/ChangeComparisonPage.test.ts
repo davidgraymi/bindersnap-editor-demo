@@ -141,6 +141,7 @@ function changed(
     currentVersion: version(name, 2),
     versions: [version(name, 2), version(name, 1)],
     previousSlugPath: null,
+    restored: false,
     ...overrides,
   };
 }
@@ -174,9 +175,13 @@ function page(
       open: true,
     }),
     headRef: "change-4",
+    author: "alice",
     onBackToChange: () => {},
+    branchHref: "/riverside/clinical?ref=change-4&change=4",
+    onOpenBranch: () => {},
+    fileHref: (slugPath: string) =>
+      `/riverside/clinical/${slugPath}?ref=change-4&change=4`,
     onReadFile: () => {},
-    onOpenDocument: () => {},
     onDownload: () => {},
   });
 }
@@ -221,7 +226,7 @@ test("the scale line adds up what the whole change does", async () => {
   unmount();
 });
 
-test("a document coming off the record says so instead of drawing a diff", async () => {
+test("a document going into the archive says so instead of drawing a diff", async () => {
   files["change-4"] = "# Hand hygiene\n\nWash for sixty seconds.";
   files["hand-hygiene-v2"] = "# Hand hygiene\n\nWash for thirty seconds.";
 
@@ -232,11 +237,11 @@ test("a document coming off the record says so instead of drawing a diff", async
   const notice =
     container.querySelector(".cmp-removed-line")?.textContent ?? "";
   expect(notice).toContain("Visitor Policy");
-  expect(notice).toContain("off the record");
+  expect(notice).toContain("archives");
   // The history is what the product sells, so the page says it survives.
   expect(notice).toContain("v4");
   expect(container.querySelector(".cmp-kind--removed")?.textContent).toContain(
-    "Taken off the record",
+    "Archiving",
   );
 
   unmount();
@@ -258,16 +263,13 @@ test("a brand-new policy is read whole rather than refused", async () => {
   expect(container.querySelector(".cmp-kind--added")?.textContent).toContain(
     "New document",
   );
-  expect(container.querySelector(".cmp-file-note")?.textContent).toContain(
-    "no earlier version",
-  );
   // The whole policy, not an empty frame apologising for having no before.
   expect(container.textContent).toContain("Two per room, by appointment.");
 
   unmount();
 });
 
-test("a document can be folded away, and marking it read folds it", async () => {
+test("a document can be folded away, and marking it viewed folds it", async () => {
   files["hand-hygiene-v2"] = "Wash for thirty seconds.";
   files["visitor-policy-v2"] = "Two per room.";
   files["change-4"] = "Wash for sixty seconds.";
@@ -291,13 +293,8 @@ test("a document can be folded away, and marking it read folds it", async () => 
   click(".cmp-file .cmp-file-read");
   expect(body()?.hidden).toBe(true);
   expect(container.querySelector(".cmp-rail-row--read")).not.toBeNull();
-  expect(container.querySelector(".bs-rail-note")?.textContent).toContain(
-    "1 of 2 read",
-  );
-  // And it is a bookmark, never a review — a page about approvals cannot let
-  // a checkbox look like one.
-  expect(container.querySelector(".bs-rail-note")?.textContent).toContain(
-    "It records nothing",
+  expect(container.querySelector(".cmp-tree-progress")?.textContent).toBe(
+    "1 of 2 viewed",
   );
 
   unmount();
@@ -314,9 +311,13 @@ test("a change that versions no document says what it does instead", async () =>
     // publishes no version at all.
     rows: [],
     headRef: "sign-off/nursing",
+    author: "alice",
     onBackToChange: () => {},
+    branchHref: "/riverside/clinical?ref=change-4&change=4",
+    onOpenBranch: () => {},
+    fileHref: (slugPath: string) =>
+      `/riverside/clinical/${slugPath}?ref=change-4&change=4`,
     onReadFile: () => {},
-    onOpenDocument: () => {},
     onDownload: () => {},
   });
 
@@ -343,9 +344,13 @@ test("a change with no branch on record says why it cannot compare", async () =>
       open: true,
     }),
     headRef: null,
+    author: "alice",
     onBackToChange: () => {},
+    branchHref: "/riverside/clinical?ref=change-4&change=4",
+    onOpenBranch: () => {},
+    fileHref: (slugPath: string) =>
+      `/riverside/clinical/${slugPath}?ref=change-4&change=4`,
     onReadFile: () => {},
-    onOpenDocument: () => {},
     onDownload: () => {},
   });
 
@@ -355,6 +360,104 @@ test("a change with no branch on record says why it cannot compare", async () =>
     "no branch on record",
   );
   expect(container.querySelector(".cmp-file")).toBeNull();
+
+  unmount();
+});
+
+test("the line under the title says who wants to publish what, from where", async () => {
+  files["hand-hygiene-v2"] = "Wash for thirty seconds.";
+  files["change-4"] = "Wash for sixty seconds.";
+
+  const { container, unmount } = await render(
+    page([changed("hand-hygiene"), changed("visitor-policy")]),
+  );
+
+  const byline = container.querySelector(".cmp-byline");
+  expect(byline?.textContent).toBe(
+    "alice wants to publish 2 documents from change-4",
+  );
+  // The branch is a place, so it is a link to it — its root, not a file.
+  expect(byline?.querySelector("a.cmp-branch")?.getAttribute("href")).toBe(
+    "/riverside/clinical?ref=change-4&change=4",
+  );
+
+  unmount();
+});
+
+test("every control on a document is in its one bar, and View is a link", async () => {
+  files["hand-hygiene-v2"] = "Wash for thirty seconds.";
+  files["change-4"] = "Wash for sixty seconds.";
+
+  const { container, unmount } = await render(page([changed("hand-hygiene")]));
+
+  const bar = container.querySelector(".cmp-file-head");
+  expect(bar?.querySelector("a")?.getAttribute("href")).toBe(
+    "/riverside/clinical/clinical/hand-hygiene?ref=change-4&change=4",
+  );
+  expect(
+    [...(bar?.querySelectorAll("button, a") ?? [])].map((node) =>
+      node.textContent?.trim(),
+    ),
+  ).toEqual(["Hide Hand Hygiene", "Viewed", "View", "Download"]);
+  // Nothing below the document: no foot of acts to hunt for.
+  expect(container.querySelector(".bs-panel-foot")).toBeNull();
+  // The counts are in the bar, drawn as a diff draws them.
+  expect(bar?.querySelector(".cmp-counts")?.textContent).toBe("+1−1");
+  // A revision is what the counts already show, so it wears no badge.
+  expect(bar?.querySelector(".bs-status")).toBeNull();
+
+  unmount();
+});
+
+test("a moved policy shows its old path struck out beside the new one", async () => {
+  files["hand-hygiene-v2"] = "Wash for thirty seconds.";
+  files["change-4"] = "Wash for thirty seconds.";
+
+  const { container, unmount } = await render(
+    page([
+      changed("hand-hygiene", {
+        previousSlugPath: "nursing/hand-hygiene",
+      }),
+    ]),
+  );
+
+  const title = container.querySelector(".cmp-file-title");
+  expect(title?.querySelector("del")?.textContent).toBe("nursing/hand-hygiene");
+  expect(title?.querySelector("ins")?.textContent).toBe(
+    "clinical/hand-hygiene",
+  );
+  // Not a sentence under the bar — only a screen reader, which cannot see a
+  // strike-through, is told in words. And nothing announcing that the words
+  // did not change: the paths are the whole story, and the body is empty.
+  expect(container.querySelector(".cmp-file-move")).toBeNull();
+  expect(title?.querySelector(".sr-only")?.textContent).toBe(
+    "Moved from Nursing",
+  );
+  expect(container.textContent).not.toContain("Nothing changed");
+  expect(container.querySelector(".cmp-file-body")?.textContent).toBe("");
+  expect(container.querySelector(".cmp-counts")).toBeNull();
+
+  unmount();
+});
+
+test("a policy coming out of the archive says so in its bar, and is still diffed", async () => {
+  files["hand-hygiene-v2"] = "Wash for thirty seconds.";
+  files["change-4"] = "Wash for sixty seconds.";
+
+  const { container, unmount } = await render(
+    page([changed("hand-hygiene", { restored: true })]),
+  );
+
+  const bar = container.querySelector(".cmp-file-head");
+  // Without the badge a restore reads exactly like an edit to a policy that
+  // never left — same step, same diff.
+  expect(bar?.querySelector(".cmp-kind--restored")?.textContent).toBe(
+    "Restoring",
+  );
+  expect(bar?.querySelector(".cmp-counts")?.textContent).toBe("+1−1");
+  expect(container.querySelector(".cmp-file")?.getAttribute("aria-label")).toBe(
+    "Hand Hygiene — Coming out of the archive",
+  );
 
   unmount();
 });
