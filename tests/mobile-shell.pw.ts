@@ -139,3 +139,33 @@ test("a desktop viewport keeps the sidebar and has no bottom bar", async ({
   await expect(page.locator(".app-sidebar")).toBeVisible({ timeout: 30_000 });
   await expect(page.locator(".app-bottom-nav")).toBeHidden();
 });
+
+test("no page scrolls sideways on a phone", async ({ page }) => {
+  await signInAsAlice(page);
+
+  // The policy page was the one that did: its title and its two actions sat
+  // side by side, wider than the screen, and dragged the whole page — the
+  // policy and its Download button with it — past the right edge.
+  for (const path of [
+    "/riverside-health/clinical/nursing/wards/handover-standard",
+    "/riverside-health/clinical",
+    "/riverside-health/clinical?tab=changes",
+    "/riverside-health/clinical?tab=history",
+    "/riverside-health/clinical?tab=settings",
+    "/riverside-health",
+    "/changes",
+    "/documents",
+    "/",
+  ]) {
+    await page.goto(`${APP_BASE_URL}${path}`);
+    await expect(page.locator(".app-main h1").first()).toBeVisible({
+      timeout: 30_000,
+    });
+    const overflow = await page.evaluate(
+      () =>
+        document.scrollingElement!.scrollWidth -
+        document.documentElement.clientWidth,
+    );
+    expect(overflow, `${path} is wider than the phone`).toBeLessThanOrEqual(0);
+  }
+});
