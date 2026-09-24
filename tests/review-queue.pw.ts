@@ -44,12 +44,12 @@ test("the queue gathers changes from every binder into one list", async ({
     .getByRole("button", { name: /All changes/ })
     .click();
 
-  const rows = page.locator(".queue-row");
+  const rows = page.locator(".change-row");
   await expect(rows.first()).toBeVisible({ timeout: 30_000 });
 
   // **The point of the page.** Both seeded binders are represented, which is
   // what no other screen in the app can show at once.
-  const meta = page.locator(".queue-row-meta");
+  const meta = page.locator(".bs-row-meta");
   await expect(meta.filter({ hasText: "Clinical" }).first()).toBeVisible();
   await expect(meta.filter({ hasText: "Corporate" }).first()).toBeVisible();
 
@@ -97,7 +97,7 @@ test("the counters are the filters, and they agree with the list", async ({
         async () => {
           const [shown, rows] = await Promise.all([
             counter.locator(".queue-counter-value").innerText(),
-            page.locator(".queue-row").count(),
+            page.locator(".change-row").count(),
           ]);
           return `${Number(shown.trim())}/${rows}`;
         },
@@ -115,9 +115,11 @@ test("a row opens the change it names", async ({ page }) => {
     .getByRole("button", { name: /All changes/ })
     .click();
 
-  const firstRow = page.locator(".queue-row-btn").first();
+  const firstRow = page.locator(".change-row-open").first();
   await expect(firstRow).toBeVisible({ timeout: 30_000 });
-  const title = (await firstRow.locator(".queue-row-title").innerText()).trim();
+  const title = (
+    await firstRow.locator(".change-row-title").innerText()
+  ).trim();
 
   await firstRow.click();
 
@@ -139,7 +141,7 @@ test("a row's standing is one word, and the row says nothing else", async ({
     .locator(".queue-counters")
     .getByRole("button", { name: /All changes/ })
     .click();
-  await expect(page.locator(".queue-row").first()).toBeVisible({
+  await expect(page.locator(".change-row").first()).toBeVisible({
     timeout: 30_000,
   });
 
@@ -148,7 +150,7 @@ test("a row's standing is one word, and the row says nothing else", async ({
   // KEEP IT STUPID SIMPLE."* So: a word a reader already knows, and nothing
   // arithmetic beside it. The approval count and the version it becomes are
   // on the change's own page, where there is room to say them properly.
-  const standings = page.locator(".queue-row .change-standing");
+  const standings = page.locator(".change-row .change-standing");
   await expect(standings.first()).toBeVisible();
 
   for (const text of await standings.allInnerTexts()) {

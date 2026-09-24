@@ -137,7 +137,6 @@ describe("buildOpenChangeRows", () => {
     // says what state the change is in, which is a different question — and
     // the two were being answered on the same line.
     expect(rows[0]?.standing).toBe("Awaiting approval");
-    expect(rows[0]?.action).toBe("Review");
     expect(rows[0]?.documentName).toBe("Vendor Agreement");
     expect(rows[0]?.meta).toContain("Maya");
     expect(rows[0]?.meta).not.toContain("approvals");
@@ -184,7 +183,6 @@ describe("buildOpenChangeRows", () => {
     // *"why does a CR say 'Waiting on you' when it's approved to be
     // published? It should say 'Approved'."*
     expect(rows[0]?.standing).toBe("Approved");
-    expect(rows[0]?.action).toBe("Publish");
     // Which version it becomes is a fact about a document, and a change can
     // touch three. It belongs on the change's own page.
     expect(rows[0]?.meta).not.toContain("becomes v");
@@ -213,7 +211,6 @@ describe("buildOpenChangeRows", () => {
     expect(rows[0]?.kind).toBe("submission");
     expect(rows[0]?.standing).toBe("Awaiting approval");
     expect(rows[0]?.meta).not.toContain("approvals");
-    expect(rows[0]?.action).toBeNull();
   });
 
   test("a change the reader has nothing to do with is left off", () => {

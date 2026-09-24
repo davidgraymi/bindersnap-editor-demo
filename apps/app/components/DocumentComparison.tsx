@@ -17,6 +17,7 @@ import {
 } from "../documentComparison";
 import { classifyDocumentFile, describeFileKind } from "../documentFile";
 import { docxToHtml } from "../docxHtml";
+import { editorDocumentToHtml } from "../editorDocumentHtml";
 import { markdownToHtml } from "../markdown";
 import { extractPdfBlocks } from "../pdfText";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
@@ -161,6 +162,28 @@ export function DocumentComparison({
             readText(after),
           ]);
           if (cancelled) return;
+
+          // Two versions of a policy written in the editor are compared as
+          // the policy — rendered, then diffed as markup like a Word file —
+          // rather than as two walls of JSON with the braces marked.
+          const [leftHtml, rightHtml] =
+            left.cut || right.cut
+              ? [null, null]
+              : await Promise.all([
+                  editorDocumentToHtml(left.text),
+                  editorDocumentToHtml(right.text),
+                ]);
+          if (cancelled) return;
+          if (leftHtml !== null && rightHtml !== null) {
+            setState({
+              status: "rendered",
+              html: sanitizeHtml(diffRenderedHtml(leftHtml, rightHtml)),
+              segments: diffWords(htmlToText(leftHtml), htmlToText(rightHtml)),
+              empty: false,
+            });
+            return;
+          }
+
           setState({
             status: "text",
             segments: diffWords(left.text, right.text),
