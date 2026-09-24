@@ -56,6 +56,12 @@ variable "api_log_group_name" {
   default     = "/bindersnap/api"
 }
 
+variable "dlm_policy_id" {
+  description = "DLM policy ID from infra/backups (output dlm_policy_id). Null skips the backup alarms."
+  type        = string
+  default     = null
+}
+
 locals {
   alerts_topic_name      = "${var.project}-alerts"
   email_subscription     = var.alert_email != null && trimspace(var.alert_email) != ""
@@ -119,6 +125,9 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high_warning" {
 
 # Disk usage alarm — requires CloudWatch agent emitting to Bindersnap namespace.
 # Triggers when any monitored mount (/, /data) exceeds 85% for 10 minutes.
+# The agent tags disk metrics with path/device/fstype as well, so this
+# InstanceId-only series exists only because cloudwatch-agent-config.json
+# aggregates on [InstanceId]; Maximum then reads the fullest mount.
 resource "aws_cloudwatch_metric_alarm" "disk_high" {
   alarm_name          = "${var.project}-instance-disk-high"
   alarm_description   = "Alert when disk usage exceeds 85% on any mount for 10+ minutes"
@@ -135,6 +144,70 @@ resource "aws_cloudwatch_metric_alarm" "disk_high" {
   dimensions = {
     InstanceId = var.instance_id
   }
+
+  tags = local.common_tags
+}
+
+# ---------- Backup alarms ----------
+# The EBS snapshots are the only backup of the git repositories, and until these
+# alarms a policy that took no snapshots (missing role, volume lost its tag,
+# policy disabled) failed silently. DLM publishes to AWS/EBS per DLMPolicyId.
+
+resource "aws_cloudwatch_metric_alarm" "dlm_snapshot_failed" {
+  count = var.dlm_policy_id == null ? 0 : 1
+
+  alarm_name          = "${var.project}-backup-snapshot-failed"
+  alarm_description   = "A scheduled EBS snapshot of the data volume failed"
+  namespace           = "AWS/EBS"
+  metric_name         = "SnapshotsCreateFailed"
+  dimensions          = { DLMPolicyId = var.dlm_policy_id }
+  statistic           = "Sum"
+  period              = 3600
+  evaluation_periods  = 1
+  threshold           = 0
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+
+  tags = local.common_tags
+}
+
+# The schedule is hourly, so six hours without a completed snapshot means the
+# policy has stopped working. Missing data is the failure being watched for.
+resource "aws_cloudwatch_metric_alarm" "dlm_no_recent_snapshot" {
+  count = var.dlm_policy_id == null ? 0 : 1
+
+  alarm_name          = "${var.project}-backup-no-recent-snapshot"
+  alarm_description   = "No EBS snapshot of the data volume completed in the last 6 hours"
+  namespace           = "AWS/EBS"
+  metric_name         = "SnapshotsCreateCompleted"
+  dimensions          = { DLMPolicyId = var.dlm_policy_id }
+  statistic           = "Sum"
+  period              = 21600
+  evaluation_periods  = 1
+  threshold           = 1
+  comparison_operator = "LessThanThreshold"
+  treat_missing_data  = "breaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+
+  tags = local.common_tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "dlm_cross_region_copy_failed" {
+  count = var.dlm_policy_id == null ? 0 : 1
+
+  alarm_name          = "${var.project}-backup-dr-copy-failed"
+  alarm_description   = "Copying the daily EBS snapshot to the DR region failed"
+  namespace           = "AWS/EBS"
+  metric_name         = "SnapshotsCopiedRegionFailed"
+  dimensions          = { DLMPolicyId = var.dlm_policy_id }
+  statistic           = "Sum"
+  period              = 3600
+  evaluation_periods  = 1
+  threshold           = 0
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
 
   tags = local.common_tags
 }

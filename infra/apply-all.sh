@@ -244,10 +244,15 @@ tf_run "backups" \
   "gitea_data_volume_id=${DATA_VOLUME_ID}"
 
 LITESTREAM_BUCKET="$(tf_output backups litestream_bucket_name)"
-echo "  Backups outputs: litestream_bucket=${LITESTREAM_BUCKET}"
+DLM_POLICY_ID="$(tf_output backups dlm_policy_id)"
+echo "  Backups outputs: litestream_bucket=${LITESTREAM_BUCKET} dlm_policy=${DLM_POLICY_ID:-<none>}"
 
-# 4. Monitoring (needs instance ID)
-tf_run "monitoring" "instance_id=${INSTANCE_ID}"
+# 4. Monitoring (needs instance ID; backup alarms need the DLM policy ID)
+MONITORING_VARS=("instance_id=${INSTANCE_ID}")
+if [[ -n "$DLM_POLICY_ID" ]]; then
+  MONITORING_VARS+=("dlm_policy_id=${DLM_POLICY_ID}")
+fi
+tf_run "monitoring" "${MONITORING_VARS[@]}"
 
 # 5. CI (SPA bucket + CloudFront dist come from tfvars — no upstream module yet)
 tf_run "ci"
