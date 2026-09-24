@@ -89,9 +89,7 @@ test("the sidebar navigates, and marks where you are", async ({ page }) => {
   // **No entry for a page that does not exist yet.** Activity was a "coming
   // soon" placeholder in the map, which a reader who has never used GitHub
   // reads as broken.
-  await expect(sidebar.getByRole("link", { name: "Activity" })).toHaveCount(
-    0,
-  );
+  await expect(sidebar.getByRole("link", { name: "Activity" })).toHaveCount(0);
 });
 
 test("the sidebar took the binder, and gives it a section of its own", async ({
