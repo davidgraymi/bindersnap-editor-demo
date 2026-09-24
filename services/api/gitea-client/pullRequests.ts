@@ -628,14 +628,58 @@ export async function mergeWorkspaceChange(params: {
     await new Promise<void>((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
   }
 
-  // Gitea's own words, kept: a conflict and a protection rule that was not
-  // satisfied are different problems for the person reading this, and
-  // flattening them into one sentence is what sent the last three failures
-  // chasing the wrong cause.
-  throw toGiteaApiError(
-    409,
-    `This change could not be merged into the binder's main branch: ${lastError}`,
-  );
+  // The reader gets the plain sentence; the log keeps Gitea's own words.
+  const refusal = toGiteaApiError(409, describeMergeRefusal(lastError));
+  refusal.cause = lastError;
+  throw refusal;
+}
+
+/**
+ * Gitea's reasons for refusing a merge, in the words of the person publishing.
+ *
+ * Gitea speaks git — "head branch", "base branch", "status checks" — and the
+ * person pressing Publish writes policies, not code. Each reason still gets its
+ * own sentence: a conflict and an unmet protection rule are different problems
+ * with different ways out, and flattening them into one message is what once
+ * sent three failures chasing the wrong cause. Gitea's words ride along as
+ * the error's `cause`, so the log still says exactly what was refused.
+ */
+const MERGE_REFUSALS: ReadonlyArray<readonly [string, string]> = [
+  [
+    "behind the base branch",
+    "The binder has moved on since this change was made. Bring the change up to date, then publish it.",
+  ],
+  [
+    "conflict",
+    "This change edits the same content as something published since it was made. Resolve the overlap, then publish it.",
+  ],
+  [
+    "enough approvals",
+    "This change does not have enough approvals to be published yet.",
+  ],
+  [
+    "requested changes",
+    "A reviewer has asked for changes. Address them before publishing.",
+  ],
+  [
+    "official review request",
+    "A requested review has not been given yet. Wait for it before publishing.",
+  ],
+  ["status check", "The required checks on this change have not passed yet."],
+  ["work in progress", "This change is marked as a draft."],
+  ["already been merged", "This change has already been published."],
+  [
+    "not allowed to merge",
+    "You do not have permission to publish this change.",
+  ],
+];
+
+export function describeMergeRefusal(giteaMessage: string): string {
+  const lowered = giteaMessage.toLowerCase();
+  for (const [needle, sentence] of MERGE_REFUSALS) {
+    if (lowered.includes(needle)) return sentence;
+  }
+  return "This change could not be published. Try again in a moment, and if it keeps happening, contact your administrator.";
 }
 
 /**
