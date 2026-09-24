@@ -6,7 +6,7 @@ import {
   Undo2,
 } from "lucide-react";
 
-import type { ChangeRowInput } from "../changeRow";
+import type { ChangeRowInput, ChangeStandingTone } from "../changeRow";
 import { describeChangeRow } from "../changeRow";
 
 /**
@@ -16,20 +16,21 @@ import { describeChangeRow } from "../changeRow";
  * different ways and all three said too much. One component now, so they
  * cannot drift again and so "what does a change row say" has one answer.
  *
+ * Two layers, because the lists know different things: a binder's list has
+ * the change itself and lets `ChangeRow` work out what to say, while Home and
+ * the queue arrive with the sentence already decided (whose turn it is, which
+ * binder) and hand it to `ChangeRowView`. Either way it is drawn once.
+ *
+ * No buttons on the row. A list is for finding the change; every act on it —
+ * approving, publishing — is a decision, and a decision is taken on the
+ * change's own page, where what it does is in front of you.
+ *
  * See `changeRow.ts` for what it says and why it says so little.
  */
 
 interface ChangeRowProps {
   change: ChangeRowInput & { title: string; commentCount?: number };
   onOpen: () => void;
-  /**
-   * The act this row offers, when it offers one.
-   *
-   * Publish, on a change that is ready and yours to publish. Nothing else: a
-   * list is for finding the thing you want, and every button on every row is
-   * a decision taken without opening what it is about.
-   */
-  action?: React.ReactNode;
 }
 
 /**
@@ -73,31 +74,74 @@ function ChangeIcon({ outcome }: { outcome: ChangeRowInput["outcome"] }) {
   );
 }
 
-export function ChangeRow({ change, onOpen, action = null }: ChangeRowProps) {
+export function ChangeRow({ change, onOpen }: ChangeRowProps) {
   const facts = describeChangeRow(change);
-  const comments = change.commentCount ?? 0;
+  return (
+    <ChangeRowView
+      title={change.title}
+      meta={facts.meta}
+      tone={facts.tone}
+      standing={facts.standing}
+      outcome={change.outcome}
+      commentCount={change.commentCount ?? 0}
+      onOpen={onOpen}
+    />
+  );
+}
 
+interface ChangeRowViewProps {
+  title: string;
+  /** "#4 · Alice opened 2 hours ago". */
+  meta: string;
+  /**
+   * Where the change is, when the list spans more than one place — the binder
+   * or the document, set before the meta in the same muted line.
+   */
+  context?: string | null;
+  tone: ChangeStandingTone;
+  standing: string;
+  outcome?: ChangeRowInput["outcome"];
+  commentCount?: number;
+  onOpen: () => void;
+}
+
+/** The row itself, for a list that has already decided what it says. */
+export function ChangeRowView({
+  title,
+  meta,
+  context = null,
+  tone,
+  standing,
+  outcome,
+  commentCount = 0,
+  onOpen,
+}: ChangeRowViewProps) {
   return (
     <li className="bs-row change-row">
       <span className="bs-row-icon">
-        <ChangeIcon outcome={change.outcome} />
+        <ChangeIcon outcome={outcome} />
       </span>
       <button
         type="button"
         className="bs-row-body change-row-open"
         onClick={onOpen}
       >
-        <span className="bs-row-name change-row-title">{change.title}</span>
-        <span className="bs-row-meta">{facts.meta}</span>
+        <span className="bs-row-name change-row-title">{title}</span>
+        <span className="bs-row-meta">
+          {context ? (
+            <span className="change-row-context">{context} · </span>
+          ) : null}
+          {meta}
+        </span>
       </button>
 
       <span className="bs-row-right change-row-right">
         {/* A dot carries the colour and the word carries the meaning. A pill
             is a shape that says "this is unusual", and on every row of every
             list it says nothing while taking the eye first. */}
-        <span className={`change-standing change-standing--${facts.tone}`}>
+        <span className={`change-standing change-standing--${tone}`}>
           <span className="change-standing-dot" aria-hidden="true" />
-          {facts.standing}
+          {standing}
         </span>
 
         {/* **The slot is always here; what goes in it is not.** A count that
@@ -108,19 +152,20 @@ export function ChangeRow({ change, onOpen, action = null }: ChangeRowProps) {
             zero: a zero beside every row is still a column of zeroes. */}
         <span
           className="change-row-comments"
-          {...(comments > 0
-            ? { title: comments === 1 ? "1 comment" : `${comments} comments` }
+          {...(commentCount > 0
+            ? {
+                title:
+                  commentCount === 1 ? "1 comment" : `${commentCount} comments`,
+              }
             : { "aria-hidden": true })}
         >
-          {comments > 0 ? (
+          {commentCount > 0 ? (
             <>
               <MessageSquare size={13} strokeWidth={1.75} aria-hidden="true" />
-              {comments}
+              {commentCount}
             </>
           ) : null}
         </span>
-
-        {action}
       </span>
     </li>
   );
