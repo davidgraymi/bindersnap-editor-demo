@@ -6176,11 +6176,55 @@ button.bs-knot {
  * them look like duplicates.
  */
 .docs-binder-group {
-  margin-bottom: var(--brand-space-6);
+  margin-bottom: var(--brand-space-5);
 }
 
-.docs-binder-group .doc-rail-title {
-  margin-bottom: var(--brand-space-3);
+/* The binder's name in its panel's bar, and the way into it. Quiet until it
+   is pointed at, the way a group's name is in a code host's breadcrumb: it is
+   a heading first and a link second. */
+.docs-binder-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  padding: 2px var(--brand-space-1);
+  border-radius: var(--brand-radius-sm);
+  color: inherit;
+  text-decoration: none;
+}
+
+.docs-binder-link svg {
+  color: var(--bs-text-faint);
+}
+
+.docs-binder-link:hover {
+  color: var(--bs-coral-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.docs-binder-link:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 1px;
+}
+
+/* A version column as wide as "v99", so the status dots line up down the
+   list whether or not a row has a version on record. */
+.docs-row-version {
+  min-width: 36px;
+  text-align: right;
+  color: var(--bs-text-secondary);
+}
+
+@media (max-width: 720px) {
+  /* On a phone the name needs the width; the version is on the policy's own
+     page, one tap away. */
+  .docs-row-version {
+    display: none;
+  }
+
+  .docs-row .change-standing {
+    min-width: 0;
+  }
 }
 
 .docs-sorted-by {
@@ -7878,6 +7922,15 @@ a.cmp-file-act {
 .bs-panel-bar + .bs-row,
 .bs-panel-bar + * > .bs-row:first-child {
   border-top: none;
+}
+
+/* **A row wrapped in its own `<li>` is still one row of a list.** A link or a
+   button inside an item is that item's first child, so the rule above took
+   the hairline off every one of them and the list ran together — "What this
+   change does" had been drawn that way since it was written. Drawn between
+   the items instead. */
+.bs-row-list > li + li > .bs-row:first-child {
+  border-top: 1px solid var(--bs-rule-warm);
 }
 
 button.bs-row,

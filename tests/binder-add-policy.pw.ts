@@ -361,22 +361,28 @@ test("the library lists a policy across every binder it can reach", async ({
   await expect(
     page.getByRole("heading", { name: "Documents", exact: true }),
   ).toBeVisible();
+  // Each binder heads its own panel, titled the way the binder is everywhere
+  // else, and the heading is the way into it. One organization, so the name
+  // alone: the organization only appears when it tells two binders apart.
   await expect(
-    page.getByRole("heading", { name: clinical, exact: false }),
+    page.getByRole("heading", { name: "Clinical Policies", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: corporate, exact: false }),
+    page.getByRole("heading", { name: "Corporate Policies", exact: true }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Clinical Policies", exact: true }),
+  ).toHaveAttribute("href", `/${org}/${clinical}`);
 
   // Searching narrows it to one, which is the question the page exists for.
   await page
     .getByRole("searchbox", { name: "Search documents" })
     .fill("expenses");
   await expect(
-    page.getByRole("heading", { name: clinical, exact: false }),
+    page.getByRole("heading", { name: "Clinical Policies", exact: true }),
   ).toHaveCount(0, { timeout: 30_000 });
   await expect(
-    page.getByRole("heading", { name: corporate, exact: false }),
+    page.getByRole("heading", { name: "Corporate Policies", exact: true }),
   ).toBeVisible();
 });
 
