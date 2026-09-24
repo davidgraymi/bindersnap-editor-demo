@@ -9,10 +9,11 @@ import {
 } from "../api";
 import { describeChangedDocument, describeMove } from "../binderChange";
 import { downloadFileName } from "../binderDocument";
+import { buildChangedDocumentRows } from "../changedDocuments";
 import type { ChangeScope } from "../changeScope";
-import { resolveComparisonBase } from "../documentComparison";
 import { formatDocumentName, toChangeRecord } from "../documentDisplay";
 import type { DocumentChangeView } from "../routes";
+import { ChangeComparisonPage } from "./ChangeComparisonPage";
 import { DocumentChangeDetail } from "./DocumentChangeDetail";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
@@ -163,6 +164,25 @@ export function BinderChangePage({
     [detail],
   );
 
+  /**
+   * Every document this change touches, versioned and retired alike.
+   *
+   * Built here rather than inside the comparison screen so the page above
+   * already knows how many there are — the link to it can say so — and so the
+   * comparison base is resolved per document. It used to be resolved once,
+   * for whichever row happened to be selected, which is the same bug the
+   * header's "becomes v2" had.
+   */
+  const comparisonRows = useMemo(
+    () =>
+      buildChangedDocumentRows({
+        documents: detail?.documents ?? [],
+        removedDocuments: detail?.removedDocuments ?? [],
+        open: detail?.change.state === "open",
+      }),
+    [detail],
+  );
+
   const runCatchUp = async () => {
     setCatchingUp(true);
     setCatchUpError(null);
@@ -201,6 +221,32 @@ export function BinderChangePage({
     }
   };
 
+  /**
+   * Download one document out of the comparison, at whichever ref it asks for.
+   *
+   * Separate from {@link handleDownload} because that one is about the
+   * document on screen, and on the comparison screen every document is on
+   * screen. By identity for the same reason: a download of the version being
+   * replaced is a read at a ref that has never heard of a new name.
+   */
+  const handleRowDownload = async (
+    row: { path: string; slugPath: string; fileName: string },
+    gitRef: string,
+  ) => {
+    setDownloadingRef(gitRef);
+    try {
+      const blob = await downloadBinderDocument(
+        org,
+        binder,
+        row.path || row.slugPath,
+        gitRef,
+      );
+      triggerBrowserDownload(blob, row.fileName);
+    } finally {
+      setDownloadingRef(null);
+    }
+  };
+
   if (error) {
     return (
       <div className="binder-pane">
@@ -232,6 +278,47 @@ export function BinderChangePage({
   }
 
   const isOpen = detail.change.state === "open";
+
+  /**
+   * Everything this change does, on one screen.
+   *
+   * Its own screen rather than a panel on this one, and a full-width one: a
+   * change that touches six documents is six comparisons, and a comparison in
+   * half a column beside a discussion is a diff nobody can read. `?view=compare`
+   * addresses it, so a reviewer can send "the diff" rather than "open the
+   * change and press Compare".
+   *
+   * `key` on the change number, because everything the screen remembers —
+   * which documents are folded, which are ticked, where the reader had got to
+   * — is about *this* change and must not survive into the next one.
+   */
+  if (view === "compare") {
+    return (
+      <div className="binder-pane">
+        <ChangeComparisonPage
+          key={changeNumber}
+          org={org}
+          binder={binder}
+          changeNumber={changeNumber}
+          title={record.summary}
+          open={isOpen}
+          rows={comparisonRows}
+          headRef={detail.change.branchName || null}
+          /* Arriving from a particular document's Compare button opens on that
+             document rather than at the top of a page of six. */
+          focusDocument={shown?.slugPath ?? null}
+          onBackToChange={() => onViewChange("discussion")}
+          onReadFile={(slugPath) => {
+            if (detail.change.branchName) {
+              onOpenOnBranch(slugPath, detail.change.branchName);
+            }
+          }}
+          onOpenDocument={onOpenDocument}
+          onDownload={(row, gitRef) => void handleRowDownload(row, gitRef)}
+        />
+      </div>
+    );
+  }
 
   /**
    * What the page has to say before it can be acted on, if anything.
@@ -285,6 +372,19 @@ export function BinderChangePage({
                 <span className="binder-count">
                   {documents.length} documents
                 </span>
+                {/* **The list answers "what", this answers "what changed".**
+                    Picking each row in turn and reading its diff was the only
+                    way to see what a change did to all of it — the "which
+                    version did we approve?" problem one level up. In the
+                    list's own bar, because a control that acts on a list does
+                    not float on the paper above it. */}
+                <button
+                  className="bs-linkbtn"
+                  type="button"
+                  onClick={() => onViewChange("compare")}
+                >
+                  See everything that changed →
+                </button>
               </div>
               <ul className="bs-row-list">
                 {documents.map((document) => {
@@ -373,24 +473,6 @@ export function BinderChangePage({
           shown ? formatDocumentName(shown.name) : `this binder's rules`
         }
         fileName={shown ? downloadFileName(shown) : null}
-        comparisonBase={
-          shown
-            ? resolveComparisonBase({
-                open: isOpen,
-                // What this change published for the document on screen. A
-                // published change is read against the version below the one
-                // it became, not against today's record — which is itself.
-                publishedVersion: isOpen
-                  ? null
-                  : (shown.currentVersion?.version ?? null),
-                tags: shown.versions.map((version) => ({
-                  name: version.tag,
-                  version: version.version,
-                  sha: version.commitSha,
-                })),
-              })
-            : null
-        }
         downloading={downloadingRef !== null}
         onDownload={(gitRef, loaded) => void handleDownload(gitRef, loaded)}
         onChanged={load}

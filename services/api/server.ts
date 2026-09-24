@@ -4197,6 +4197,7 @@ async function handleWorkspaceChangeDetail(
     const [
       entry,
       documents,
+      absent,
       requiredApprovals,
       reviewSettings,
       discussions,
@@ -4211,6 +4212,12 @@ async function handleWorkspaceChangeDetail(
         pullNumber,
       }),
       listChangedDocuments({
+        client,
+        org: orgName,
+        workspace: workspaceName,
+        pullNumber,
+      }),
+      listRemovedDocuments({
         client,
         org: orgName,
         workspace: workspaceName,
@@ -4277,6 +4284,31 @@ async function handleWorkspaceChangeDetail(
       }),
     );
 
+    // **What this change takes off the record, as against what it moves.**
+    // Gitea reports a rename as `deleted` plus `added`, so the removed half
+    // alone would call every rename an archiving — the same subtraction the
+    // publish handler does, for the same reason. A page that listed a renamed
+    // policy as removed would be telling a compliance customer that a document
+    // left the binder when it only moved folder.
+    const stillHere = new Set(
+      documents.flatMap((document) => (document.uid ? [document.uid] : [])),
+    );
+    const removedDocuments = await Promise.all(
+      absent
+        .filter(
+          (document) => document.uid !== null && !stillHere.has(document.uid),
+        )
+        .map(async (document) => {
+          const versions = await listDocumentVersions({
+            client,
+            org: orgName,
+            workspace: workspaceName,
+            uid: document.uid,
+          });
+          return { ...document, lastVersion: versions[0] ?? null };
+        }),
+    );
+
     return json(
       200,
       {
@@ -4284,6 +4316,7 @@ async function handleWorkspaceChangeDetail(
         workspace: workspaceName,
         change: buildPendingChangeRow(entry, requiredApprovals),
         documents: withVersions,
+        removedDocuments,
         // `main` has moved on if the change's merge base is no longer the base
         // branch's head. Both are on the pull request Gitea already returned,
         // so knowing this costs nothing.

@@ -174,6 +174,8 @@ export * from './getBinderChange200ChangeUser.ts';
 export * from './getBinderChange200DocumentsItem.ts';
 export * from './getBinderChange200DocumentsItemCurrentVersion.ts';
 export * from './getBinderChange200DocumentsItemVersionsItem.ts';
+export * from './getBinderChange200RemovedDocumentsItem.ts';
+export * from './getBinderChange200RemovedDocumentsItemLastVersion.ts';
 export * from './getBinderChange200RequiredReviewers.ts';
 export * from './getBinderDocument200.ts';
 export * from './getBinderDocument200Document.ts';

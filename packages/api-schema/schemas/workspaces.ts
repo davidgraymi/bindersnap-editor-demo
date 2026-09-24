@@ -390,6 +390,28 @@ export type WorkspaceChangedDocument = z.infer<
 >;
 
 /**
+ * A document a change takes **off** the record.
+ *
+ * The other half of {@link WorkspaceChangedDocumentSchema}, and the reason the
+ * comparison screen can claim to show everything a change does. A removal is
+ * not a version step — nothing is published — so it carries what the document
+ * *was* rather than what it becomes, and the screen offers the last version on
+ * record to read instead of a diff.
+ *
+ * A rename is never in here. Gitea reports one as a delete plus an add, so the
+ * server subtracts the UIDs that came back on the other side; only a document
+ * absent from the merged tree entirely was archived.
+ */
+export const WorkspaceRemovedDocumentSchema =
+  WorkspaceDocumentEntrySchema.extend({
+    /** The last version it published, or null if it never published one. */
+    lastVersion: DocumentVersionSchema.nullable(),
+  });
+export type WorkspaceRemovedDocument = z.infer<
+  typeof WorkspaceRemovedDocumentSchema
+>;
+
+/**
  * One change in a binder, as its page reads it.
  *
  * A change is the unit of approval, so this is a question about the change
@@ -402,6 +424,15 @@ export const WorkspaceChangeDetailPayloadSchema = z.object({
   change: PullRequestWithApprovalStateSchema,
   /** Every document this change would version, in path order. */
   documents: z.array(WorkspaceChangedDocumentSchema),
+  /**
+   * Every document this change takes off the record, in path order.
+   *
+   * Separate from `documents` rather than a `kind` on one list, because the
+   * two are not the same question: `documents` is what publishing would tag,
+   * and a tag on a file that is no longer in the tree is the bug the publish
+   * guard exists to prevent.
+   */
+  removedDocuments: z.array(WorkspaceRemovedDocumentSchema),
   /**
    * Whether `main` has moved on since this change branched off it.
    *
