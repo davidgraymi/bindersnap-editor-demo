@@ -1538,15 +1538,19 @@ test("a policy is read beside its own file panel, at the page's full width", asy
     };
     return {
       nav: box(".app-sidebar"),
+      canvas: box(".app-canvas"),
       explorer: box(".app-explorer"),
       page: box(".docw-page"),
       window: window.innerWidth,
     };
   });
 
-  // The explorer sits beside the map rather than inside it.
-  expect(measured.explorer!.left).toBe(
-    measured.nav!.left + measured.nav!.width,
+  // The explorer sits beside the map rather than inside it: on the page's
+  // sheet, which starts where the map ends. The sheet's own edge is a hairline
+  // border, so the explorer starts just inside it.
+  expect(measured.canvas!.left).toBe(measured.nav!.left + measured.nav!.width);
+  expect(measured.explorer!.left - measured.canvas!.left).toBeLessThanOrEqual(
+    1,
   );
 
   // And the policy takes what is left, rather than the page measure a list
