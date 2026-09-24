@@ -27,6 +27,12 @@ import { ChangeRowView } from "./ChangeRow";
  * The counters are the filters. They are not decoration: each one is the
  * number of rows you get by pressing it, which is asserted in
  * reviewQueue.test.ts so the two can never drift.
+ *
+ * **They sit in the list's own bar, as tabs with counts** — GitLab's "Open 65
+ * · Merged · Closed · All", and this binder's own Changes tab's "Open 3 ·
+ * Closed". They were five tiles the size of dashboard metrics above the list,
+ * which made the page read as a report about change requests rather than a
+ * list of them, and pushed the first row halfway down the screen.
  */
 
 interface ReviewQueuePageProps {
@@ -118,65 +124,73 @@ export function ReviewQueuePage({
           </button>
         </div>
       ) : (
-        <>
+        // The same panel and the same row as a binder's own list: a change
+        // request looks like one wherever it is listed. The binder leads the
+        // line under the title, because this list spans all of them.
+        <section className="bs-panel queue-panel" aria-label="Change requests">
           {/* Counters and filters are the same control. A number you cannot
               press is a number you have to go somewhere else to act on. */}
-          <div
-            className="queue-counters"
-            role="group"
-            aria-label="Filter changes"
-          >
-            {(["all", ...QUEUE_FILTERS] as const).map((entry) => (
-              <button
-                key={entry}
-                type="button"
-                className={`queue-counter queue-counter--${entry}${
-                  activeFilter === entry ? " queue-counter--active" : ""
-                }`}
-                aria-pressed={activeFilter === entry}
-                onClick={() => setFilter(entry)}
-              >
-                <span className="queue-counter-value">{counts[entry]}</span>
-                <span className="queue-counter-label">
-                  {QUEUE_FILTER_LABELS[entry]}
-                </span>
-              </button>
-            ))}
+          <div className="bs-panel-bar">
+            <div
+              className="bs-segmented queue-counters"
+              role="group"
+              aria-label="Filter changes"
+            >
+              {(["all", ...QUEUE_FILTERS] as const).map((entry) => (
+                <button
+                  key={entry}
+                  type="button"
+                  className={`bs-seg queue-counter queue-counter--${entry}`}
+                  aria-pressed={activeFilter === entry}
+                  onClick={() => setFilter(entry)}
+                >
+                  <span className="queue-counter-label">
+                    {QUEUE_FILTER_LABELS[entry]}
+                  </span>
+                  {/* Coral only for the one count that is somebody's turn —
+                      the same coral count Home's "Waiting on you" carries. */}
+                  <span
+                    className={`queue-counter-value${
+                      entry === "waiting" && counts.waiting > 0
+                        ? " queue-counter-value--yours"
+                        : ""
+                    }`}
+                  >
+                    {counts[entry]}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
 
           {visible.length === 0 ? (
-            <div className="home-empty">
+            <div className="bs-empty">
               <p>
                 Nothing here — {QUEUE_FILTER_LABELS[activeFilter]} is empty.
               </p>
             </div>
           ) : (
-            // The same panel and the same row as a binder's own list: a change
-            // request looks like one wherever it is listed. The binder leads
-            // the line under the title, because this list spans all of them.
-            <section className="bs-panel" aria-label="Change requests">
-              <ul className="bs-row-list">
-                {visible.map((row) => (
-                  <ChangeRowView
-                    key={row.key}
-                    title={row.title}
-                    context={row.binderName}
-                    meta={row.meta}
-                    tone={row.tone}
-                    standing={row.standing}
-                    href={buildBinderUrl({
-                      org: row.owner,
-                      binder: row.repo,
-                      tab: "changes",
-                      change: row.number,
-                    })}
-                    onOpen={() => onOpenChange(row.owner, row.repo, row.number)}
-                  />
-                ))}
-              </ul>
-            </section>
+            <ul className="bs-row-list">
+              {visible.map((row) => (
+                <ChangeRowView
+                  key={row.key}
+                  title={row.title}
+                  context={row.binderName}
+                  meta={row.meta}
+                  tone={row.tone}
+                  standing={row.standing}
+                  href={buildBinderUrl({
+                    org: row.owner,
+                    binder: row.repo,
+                    tab: "changes",
+                    change: row.number,
+                  })}
+                  onOpen={() => onOpenChange(row.owner, row.repo, row.number)}
+                />
+              ))}
+            </ul>
           )}
-        </>
+        </section>
       )}
     </div>
   );

@@ -7208,60 +7208,55 @@ a.cmp-file-act {
    go somewhere else to act on.
 ──────────────────────────────────────────────────────────────── */
 
-.queue-counters {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: var(--brand-space-3);
-  margin: var(--brand-space-5) 0 var(--brand-space-5);
+/* The list sits a step below the page's heading, as every other list does. */
+.queue-panel {
+  margin-top: var(--brand-space-3);
 }
 
-@media (max-width: 900px) {
-  .queue-counters {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+/* **Tabs with counts, in the list's own bar.** The segmented control a
+   binder's Changes tab already uses, so "which of these am I looking at" is
+   answered the same way on both. Five of them do not fit a phone, so the row
+   scrolls sideways rather than wrapping into a block of buttons. */
+.queue-counters {
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.queue-counters::-webkit-scrollbar {
+  display: none;
 }
 
 .queue-counter {
-  display: grid;
-  gap: var(--brand-space-1);
-  padding: var(--brand-space-4);
-  text-align: left;
-  background: var(--bs-surface-1);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-lg);
-  cursor: pointer;
-  transition:
-    border-color var(--brand-transition-base),
-    background var(--brand-transition-base);
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  white-space: nowrap;
 }
 
-.queue-counter:hover {
-  border-color: var(--bs-coral-border);
-}
-
-.queue-counter:focus-visible {
-  outline: 2px solid var(--brand-coral);
-  outline-offset: 2px;
-}
-
-/* The pressed filter is the one the list below is showing, so it takes the
-   page's one coral edge rather than a fill — a filled tile beside four
-   outlined ones reads as a status, not as a selection. */
-.queue-counter--active {
-  border-color: var(--brand-coral);
-  background: var(--bs-coral-glow);
-}
-
+/* The count, as a code host's tab carries one: a small grey pill after the
+   word, in figures that do not shift as they change. */
 .queue-counter-value {
-  font-size: var(--brand-text-h3);
-  font-weight: var(--brand-weight-semibold);
-  color: var(--bs-text-primary);
+  min-width: 18px;
+  padding: 0 var(--brand-space-1-5);
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-surface-3);
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-ui-sm);
   font-variant-numeric: tabular-nums;
+  line-height: 18px;
+  text-align: center;
 }
 
-.queue-counter-label {
-  font-size: var(--brand-text-sm);
-  color: var(--bs-text-muted);
+.queue-counter[aria-pressed="true"] .queue-counter-value {
+  background: var(--bs-surface-1);
+}
+
+.queue-counter-value--yours,
+.queue-counter[aria-pressed="true"] .queue-counter-value--yours {
+  background: var(--bs-coral-dim);
+  color: var(--bs-coral-text);
 }
 
 /* Two acts side by side in a page header — "New folder" beside "Add a policy",
@@ -9163,6 +9158,29 @@ a.bs-row:focus-visible {
 .change-row-right {
   flex-shrink: 0;
   gap: var(--brand-space-4);
+}
+
+/* **On a phone the title gets the width.** The standing is a 148px column so
+   it lines up down a list on a desk, and at 390px that column left a change's
+   title three words a line. It goes under the title instead, lined up with
+   it, and gives up the column it no longer needs. */
+@media (max-width: 640px) {
+  .change-row {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    padding-top: var(--brand-space-1-5);
+    padding-bottom: var(--brand-space-1-5);
+  }
+
+  .change-row-right {
+    width: 100%;
+    padding-left: calc(18px + var(--brand-space-1-5));
+    gap: var(--brand-space-2);
+  }
+
+  .change-row .change-standing {
+    min-width: 0;
+  }
 }
 
 /* **A word, not a pill.** A pill says "this is unusual"; on every row of
