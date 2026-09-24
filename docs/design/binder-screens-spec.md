@@ -306,16 +306,23 @@ The rules that make it hold:
   A change request keeps one, because "Change 4" is not a name and the way
   back to the list is worth a row.
 
-  **Amended, Sep 2026: the crumbs moved to the top bar, on every page.** In
-  practice "the sidebar already says which binder" held only until a policy
-  was opened, because the sidebar collapses to icons there and the binder's
-  name goes with it. So a policy named neither its binder nor its folder, a
-  change request named its list but not its binder, and moving between them
-  felt like moving between different sites. The trail is now one line in the
-  top bar (`LocationTrail.tsx`, decided in `locationTrail.ts`) — organization,
-  binder, folders, page — the way GitHub and GitLab show where you are. The
-  in-page `.bs-crumbs` rows are gone; the page's own `h1` is still its only
-  title, and the trail never repeats it at a larger size.
+  **Amended, Sep 2026: where you are is said in two places, the way GitLab
+  says it.** "The sidebar already says which binder" held only until a policy
+  was opened: the sidebar collapses to icons there and the binder's name goes
+  with it. So a policy named neither its binder nor its folder, and moving
+  between screens felt like moving between different sites.
+
+  - **The scope, in the top bar:** organization / binder — GitHub's
+    `owner / repo` — and never anything deeper (`LocationTrail`).
+  - **The path, in the page:** `Change requests / Change 4 / Compare` or
+    `Nursing / Wards / Handover Standard`, above the page's `h1` (`PagePath`,
+    drawn by `BinderShell`). Only when there is a level above the page to go
+    back to; a path of one step would only repeat the title under it.
+
+  Both are decided in `locationTrail.ts`. The page's own `h1` is still its only
+  title. The content — the page, its path, a binder's file tree — sits on one
+  raised sheet (`.app-canvas`) with rounded top corners; the top bar and the
+  sidebar are the ground around it.
 
 Monospace survives in three places in the binder and nowhere else: a filename,
 a version number (`v2`), and the `⌘K` hint. Those are machine text.

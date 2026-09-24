@@ -43,6 +43,7 @@ import { BinderDocuments } from "./BinderPage";
 import type { SidebarBinder } from "./AppSidebar";
 import type { DocumentRefView } from "../documentRefs";
 import { SkeletonLine } from "./Skeleton";
+import { PagePath } from "./LocationTrail";
 
 /**
  * The binder, laid out the way a repository is.
@@ -664,6 +665,19 @@ export function BinderShell({
           </a>
         ))}
       </nav>
+
+      {/* Where in the binder this page is. The binder itself is in the top
+          bar; this is the part that changes as you move around inside it.
+          After the strip, so a phone reads binder, then where in it, then the
+          title. Only the screens that title themselves are deep enough to
+          draw one, so on a wide screen it is always straight above a title. */}
+      <PagePath
+        route={
+          documentPath
+            ? { kind: "binderDocument", org, binder, documentPath }
+            : { kind: "binder", org, binder }
+        }
+      />
 
       {/* Between the header and whatever is under it, because it is about the
           binder rather than about the list: the propose screen replaces the

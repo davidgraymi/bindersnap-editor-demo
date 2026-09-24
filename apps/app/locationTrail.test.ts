@@ -3,22 +3,27 @@ import { expect, test } from "bun:test";
 import { buildLocationTrail } from "./locationTrail";
 import { getRoute } from "./routes";
 
-/** The trail for an address, the way the top bar computes it. */
+/** The trail for an address, the way the shell computes it. */
 function trailFor(address: string) {
   const url = new URL(address, "http://app.test");
   return buildLocationTrail(getRoute(url.pathname), url.search);
 }
 
-const labels = (address: string) =>
-  trailFor(address).steps.map((step) => step.label);
+const path = (address: string) =>
+  trailFor(address).path.map((step) => step.label);
 
-test("a policy names its binder and its folders, which the page never did", () => {
+test("a policy's path is its folders, then itself", () => {
   const trail = trailFor(
     "/riverside-health/clinical/nursing/wards/handover-standard",
   );
 
-  expect(trail.steps).toEqual([
-    { label: "Clinical", href: "/riverside-health/clinical" },
+  // The top bar names the binder, and links to it.
+  expect(trail.binder).toEqual({
+    label: "Clinical",
+    href: "/riverside-health/clinical",
+  });
+  // The page names where in it: never the binder again.
+  expect(trail.path).toEqual([
     // A folder has no page of its own, so it is named and not linked.
     { label: "Nursing", href: null },
     { label: "Wards", href: null },
@@ -30,20 +35,20 @@ test("a policy names its binder and its folders, which the page never did", () =
 
 test("a policy's name loses its extension and its identity segment", () => {
   expect(
-    labels("/riverside-health/clinical/training/hipaa-training-policy.docx"),
-  ).toEqual(["Clinical", "Training", "HIPAA Training Policy"]);
+    path("/riverside-health/clinical/training/hipaa-training-policy.docx"),
+  ).toEqual(["Training", "HIPAA Training Policy"]);
   expect(
-    labels(
+    path(
       "/riverside-health/clinical/code-of-conduct.01J8XZ4K7MQ9V3B0RN7YHS2E1D.pdf",
     ),
-  ).toEqual(["Clinical", "Code Of Conduct"]);
+  ).toEqual(["Code Of Conduct"]);
 });
 
 test("a change request is under its binder's change requests, and links back up", () => {
   const trail = trailFor("/riverside-health/clinical?tab=changes&change=4");
 
-  expect(trail.steps).toEqual([
-    { label: "Clinical", href: "/riverside-health/clinical" },
+  expect(trail.binder?.href).toBe("/riverside-health/clinical");
+  expect(trail.path).toEqual([
     {
       label: "Change requests",
       href: "/riverside-health/clinical?tab=changes",
@@ -57,90 +62,73 @@ test("a change's comparison is one step under the change, which becomes a link",
     "/riverside-health/clinical?tab=changes&change=4&view=compare",
   );
 
-  expect(trail.steps.map((step) => step.label)).toEqual([
-    "Clinical",
+  expect(trail.path.map((step) => step.label)).toEqual([
     "Change requests",
     "Change 4",
     "Compare",
   ]);
-  expect(trail.steps[2]!.href).toBe(
+  expect(trail.path[1]!.href).toBe(
     "/riverside-health/clinical?tab=changes&change=4",
   );
-  expect(trail.steps[3]!.href).toBeNull();
+  expect(trail.path[2]!.href).toBeNull();
 });
 
 test("a policy read on a change's branch keeps the way back to the change", () => {
   expect(
-    labels(
+    path(
       "/riverside-health/clinical/nursing/hand-hygiene?ref=upload%2Fx&change=7",
     ),
-  ).toEqual([
-    "Clinical",
-    "Change requests",
-    "Change 7",
-    "Nursing",
-    "Hand Hygiene",
-  ]);
-  expect(labels("/riverside-health/clinical?ref=upload%2Fx&change=7")).toEqual([
-    "Clinical",
+  ).toEqual(["Change requests", "Change 7", "Nursing", "Hand Hygiene"]);
+  expect(path("/riverside-health/clinical?ref=upload%2Fx&change=7")).toEqual([
     "Change requests",
     "Change 7",
     "Proposed files",
   ]);
 });
 
-test("each of a binder's screens is one step under the binder", () => {
-  expect(labels("/riverside-health/clinical?tab=history")).toEqual([
-    "Clinical",
-    "History",
-  ]);
-  expect(labels("/riverside-health/clinical?tab=settings")).toEqual([
-    "Clinical",
-    "Settings",
-  ]);
+test("each of a binder's screens is one step into the binder", () => {
+  expect(path("/riverside-health/clinical?tab=history")).toEqual(["History"]);
+  expect(path("/riverside-health/clinical?tab=settings")).toEqual(["Settings"]);
   // Old addresses for what are now sections of Settings land on Settings.
-  expect(labels("/riverside-health/clinical?tab=people")).toEqual([
-    "Clinical",
-    "Settings",
-  ]);
-  expect(labels("/riverside-health/clinical?tab=sign-off")).toEqual([
-    "Clinical",
-    "Settings",
-  ]);
-  expect(labels("/riverside-health/clinical?archive=1")).toEqual([
-    "Clinical",
-    "Archive",
-  ]);
-  expect(labels("/riverside-health/clinical?edit=1")).toEqual([
-    "Clinical",
-    "Editing",
-  ]);
-  expect(labels("/riverside-health/clinical?edit=propose")).toEqual([
-    "Clinical",
+  expect(path("/riverside-health/clinical?tab=people")).toEqual(["Settings"]);
+  expect(path("/riverside-health/clinical?tab=sign-off")).toEqual(["Settings"]);
+  expect(path("/riverside-health/clinical?archive=1")).toEqual(["Archive"]);
+  expect(path("/riverside-health/clinical?edit=1")).toEqual(["Editing"]);
+  expect(path("/riverside-health/clinical?edit=propose")).toEqual([
     "Propose changes",
   ]);
+  // Off its contents, the binder in the top bar is the way back to them.
+  expect(trailFor("/riverside-health/clinical?tab=history").binder?.href).toBe(
+    "/riverside-health/clinical",
+  );
 });
 
-test("the binder's own contents are the last step, and not a link", () => {
-  expect(trailFor("/riverside-health/clinical").steps).toEqual([
-    { label: "Clinical", href: null },
-  ]);
+test("on the binder's own contents the binder is the page, and not a link", () => {
+  expect(trailFor("/riverside-health/clinical")).toEqual({
+    binder: { label: "Clinical", href: null },
+    path: [],
+    organizationIsCurrent: false,
+  });
 });
 
 test("the organization's binder list is the organization itself", () => {
   expect(trailFor("/riverside-health")).toEqual({
-    steps: [],
+    binder: null,
+    path: [],
     organizationIsCurrent: true,
   });
   // A typed or reloaded address carries the tab in the query only.
-  expect(labels("/riverside-health?tab=people")).toEqual(["People"]);
+  expect(trailFor("/riverside-health?tab=people").organizationIsCurrent).toBe(
+    false,
+  );
 });
 
-test("pages across the organization name themselves once", () => {
-  expect(labels("/changes")).toEqual(["Change requests"]);
-  expect(labels("/documents")).toEqual(["Documents"]);
-  expect(labels("/activity")).toEqual(["Activity"]);
-  expect(labels("/billing")).toEqual(["Billing"]);
-  // Home greets you itself; a step saying "Home" would be a second name for it.
-  expect(labels("/")).toEqual([]);
+test("pages across the organization have no path: their title names them", () => {
+  for (const address of ["/changes", "/documents", "/billing", "/"]) {
+    expect(trailFor(address)).toEqual({
+      binder: null,
+      path: [],
+      organizationIsCurrent: false,
+    });
+  }
 });

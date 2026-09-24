@@ -172,7 +172,7 @@ test("a member files a policy from the binder's own page", async ({ page }) => {
     timeout: 30_000,
   });
   await expect(
-    page.locator(".app-trail").getByRole("link", { name: "Change requests" }),
+    page.locator(".page-path").getByRole("link", { name: "Change requests" }),
   ).toBeVisible();
 
   // And the binder still holds nothing, because nothing has been published.

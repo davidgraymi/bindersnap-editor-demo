@@ -161,7 +161,7 @@ test("exactly one navigation exists at any width", async ({ page }) => {
   await expect(page.locator(".app-topnav-nav")).toBeHidden();
 });
 
-test("the top bar says where you are, and every step above it is a link", async ({
+test("the top bar names the binder; the page names where in it", async ({
   page,
 }) => {
   await signInAsAlice(page);
@@ -173,38 +173,46 @@ test("the top bar says where you are, and every step above it is a link", async 
     `${APP_BASE_URL}/riverside-health/clinical/nursing/wards/handover-standard`,
   );
   const trail = page.locator(".app-trail");
-  await expect(trail.locator("[aria-current='page']")).toHaveText(
-    "Handover Standard",
-    { timeout: 30_000 },
-  );
-  await expect(trail).toContainText("Clinical");
-  await expect(trail).toContainText("Nursing");
-  await expect(trail).toContainText("Wards");
+  const path = page.locator(".app-main .page-path");
 
-  // A step is a real link — it opens in a new tab like any other — and a
-  // plain click still moves inside the app.
+  // The scope, up top — organization and binder, like GitHub's owner / repo,
+  // and nothing deeper.
   const binderStep = trail.getByRole("link", { name: "Clinical" });
   await expect(binderStep).toHaveAttribute(
     "href",
     "/riverside-health/clinical",
+    { timeout: 30_000 },
   );
+  await expect(trail).not.toContainText("Nursing");
+
+  // The path, in the page: its folders, then itself.
+  await expect(path.locator("[aria-current='page']")).toHaveText(
+    "Handover Standard",
+  );
+  await expect(path).toContainText("Nursing");
+  await expect(path).toContainText("Wards");
+
+  // A step is a real link — it opens in a new tab like any other — and a
+  // plain click still moves inside the app.
   await binderStep.click();
   await expect(page).toHaveURL(/\/riverside-health\/clinical$/, {
     timeout: 30_000,
   });
+  // On its own contents the binder is the page, and the page has no path.
   await expect(trail.locator("[aria-current='page']")).toHaveText("Clinical");
+  await expect(path).toHaveCount(0);
 
-  // A change request is under its binder's list, and the way back is the same
-  // line every page has rather than a second trail inside the page.
+  // A change request is under its binder's list, and the way back up is the
+  // path above its title.
   await page.goto(`${APP_BASE_URL}/riverside-health/clinical?tab=changes`);
   await page.locator(".change-row-open").first().click();
   await expect(page).toHaveURL(/change=\d+/, { timeout: 30_000 });
-  await expect(trail.locator("[aria-current='page']")).toHaveText(
+  await expect(path.locator("[aria-current='page']")).toHaveText(
     /^Change \d+$/,
   );
   await expect(page.locator(".app-main .bs-crumbs")).toHaveCount(0);
 
-  await trail.getByRole("link", { name: "Change requests" }).click();
+  await path.getByRole("link", { name: "Change requests" }).click();
   await expect(page).toHaveURL(/tab=changes$/, { timeout: 30_000 });
 });
 

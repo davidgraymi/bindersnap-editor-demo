@@ -4261,8 +4261,9 @@ button.bs-knot {
 
 .app-topnav {
   height: var(--brand-nav-height);
-  background: var(--bs-nav-bg);
-  border-bottom: 1px solid var(--bs-rule);
+  /* The same ground as the sidebar: the bar and the map are the frame, and
+     the sheet under them is the only thing that is raised. */
+  background: var(--bs-surface-2);
   display: flex;
   align-items: center;
   padding: 0 var(--brand-space-8);
@@ -4406,10 +4407,9 @@ button.bs-knot {
 }
 
 /* ── LOCATION TRAIL ──────────────────────────────────────────
-   Organization / binder / folder / page, in the top bar on every
-   page — the line GitHub and GitLab keep above everything. It takes
-   the room between the brand and search, and gives it back from the
-   middle: the organization and the page you are on are the last to go.
+   Organization / binder, in the top bar — GitHub's owner / repo.
+   The scope and never the page: where inside the binder you are is
+   the page path's job, inside the content (see PAGE PATH).
 ──────────────────────────────────────────────────────────────── */
 
 .app-topnav-brand {
@@ -4452,12 +4452,6 @@ button.bs-knot {
   flex-shrink: 1;
 }
 
-/* The page you are on is the step worth reading, so it gives way last. */
-.app-trail-step--last {
-  flex-shrink: 0;
-  max-width: 40ch;
-}
-
 .app-trail-sep {
   padding: 0 var(--brand-space-1);
   color: var(--bs-text-faint);
@@ -4484,16 +4478,12 @@ button.bs-knot {
 
 .app-trail-link:hover {
   color: var(--bs-text-primary);
-  background: var(--bs-surface-2);
+  background: var(--bs-surface-3);
 }
 
 .app-trail-link:focus-visible {
   outline: 2px solid var(--bs-coral-text);
   outline-offset: 1px;
-}
-
-.app-trail-text {
-  color: var(--bs-text-muted);
 }
 
 .app-trail-text--current {
@@ -4510,14 +4500,80 @@ button.bs-knot {
     margin-left: var(--brand-space-3);
   }
 
-  /* **A phone keeps the organization and nothing after it.** Below this
-     width the page already says the rest: the binder is the first chip of
-     the strip under the top bar and the page's own title is right beneath
-     it, so a trail here would be the same two words squeezed a third time —
-     at the cost of the search button beside it. */
+  /* **A phone keeps the organization and nothing after it.** The binder is
+     the first chip of the strip under the top bar, so naming it here too
+     would cost the search button beside it for a word already on screen. */
   .app-trail-step {
     display: none;
   }
+}
+
+/* ── PAGE PATH ───────────────────────────────────────────────
+   Change requests / Change 4 / Compare, above a binder page's
+   title. Inside the content because it is about the content —
+   GitLab's file path, not its header. Quieter than the title it
+   leads to, and every step above the last is a link back up.
+──────────────────────────────────────────────────────────────── */
+
+.page-path {
+  margin: 0 0 var(--brand-space-3);
+}
+
+.page-path-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  row-gap: var(--brand-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--brand-text-ui-md);
+}
+
+.page-path-step {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.page-path-sep {
+  padding: 0 var(--brand-space-1-5);
+  color: var(--bs-text-faint);
+  user-select: none;
+}
+
+.page-path-link,
+.page-path-text {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.page-path-link {
+  color: var(--bs-text-secondary);
+  text-decoration: none;
+  border-radius: var(--brand-radius-sm);
+}
+
+.page-path-link:hover {
+  color: var(--bs-coral-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.page-path-link:focus-visible {
+  outline: 2px solid var(--bs-coral-text);
+  outline-offset: 2px;
+}
+
+.page-path-text {
+  color: var(--bs-text-muted);
+}
+
+.page-path-text--current {
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-medium);
 }
 
 .app-workspace-pill {
@@ -5105,6 +5161,47 @@ button.bs-knot {
   flex: 1 1 0;
   min-height: 0;
   overflow: hidden;
+  background: var(--bs-surface-2);
+}
+
+/* ── CANVAS ──────────────────────────────────────────────────
+   **The content, in a sheet of its own.** Everything about what
+   is on screen — a binder's files, the page, its path — sits on
+   one raised sheet; the things that are not about it (the brand,
+   the organization, search, the account, the map of the product)
+   sit on the warm ground around it. The sheet runs to the bottom
+   of the screen and rounds only its top corners, so it reads as
+   rising out of the frame rather than floating in it.
+──────────────────────────────────────────────────────────────── */
+
+.app-canvas {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  margin: 0 var(--brand-space-2) 0 0;
+  overflow: hidden;
+  background: var(--bs-page-bg);
+  border: 1px solid var(--bs-rule);
+  border-bottom: none;
+  border-radius: var(--brand-radius-xl) var(--brand-radius-xl) 0 0;
+  box-shadow: var(--bs-shadow-sm);
+}
+
+@media (max-width: 768px) {
+  /* No sidebar beside it, so no ground to rise from on the sides: edge to
+     edge, keeping the rounded top that separates it from the bar. */
+  .app-canvas {
+    margin: 0;
+    border-left: none;
+    border-right: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-canvas {
+    display: block;
+    overflow: visible;
+  }
 }
 
 /* ── SIDEBAR ─────────────────────────────────────────────────── */
@@ -5112,8 +5209,8 @@ button.bs-knot {
 .app-sidebar {
   width: 220px;
   flex-shrink: 0;
-  background: var(--bs-surface-1);
-  border-right: 1px solid var(--bs-rule);
+  /* On the ground, not a panel: the sheet beside it is the panel. */
+  background: transparent;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
@@ -5166,12 +5263,12 @@ button.bs-knot {
 
 .app-sidebar-item:hover {
   color: var(--bs-text-primary);
-  background: var(--bs-surface-2);
+  background: var(--bs-surface-3);
 }
 
 .app-sidebar-item--active {
   color: var(--bs-text-primary);
-  background: var(--bs-surface-2);
+  background: var(--bs-surface-3);
   font-weight: var(--brand-weight-medium);
 }
 

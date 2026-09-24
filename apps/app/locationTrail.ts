@@ -1,22 +1,20 @@
 /**
- * Where you are, as one line: `Riverside Health / Clinical / Nursing / Hand Hygiene`.
+ * Where you are, in two parts, the way GitLab draws it.
  *
- * **The same answer, in the same place, on every page.** Before this, each
- * screen answered "where am I" its own way or not at all: a policy named
- * neither its binder nor its folder (the sidebar collapses to icons while one
- * is open, so the binder's name went with it), a change request drew its own
- * "All changes / Change 4" inside the page without naming the binder, and the
- * top bar only ever named the organization. Moving between those screens is
- * what felt disjointed.
+ * **The scope, in the top bar:** `Riverside Health / Clinical`. The
+ * organization and the binder — GitHub's `owner / repo` — and nothing deeper,
+ * so the top bar says the same thing on every screen of a binder and never
+ * grows with the page.
  *
- * GitHub puts `owner / repo` in its header and the path above the file; GitLab
- * puts `group / project / Merge requests / !12` above every page. Same idea
- * here, in the top bar, so it never moves and never competes with a page's
- * own title.
+ * **The path, in the page:** `Change requests / Change 4 / Compare`, or
+ * `Nursing / Wards / Handover Standard`, just above the page's title. It is
+ * about the content, so it sits inside the content's own boundary, beside the
+ * thing it names.
  *
- * The organization is not a step in this list: the top bar draws it as the
- * switcher, because for somebody in two organizations it is a control and not
- * only a place.
+ * Before this, each screen answered "where am I" its own way or not at all: a
+ * policy named neither its binder nor its folder, and a change request drew its
+ * own "All changes / Change 4" without naming the binder. Moving between those
+ * screens is what felt disjointed.
  */
 
 import { parseDocumentFilename } from "../../packages/utils/documentPath";
@@ -38,13 +36,22 @@ export interface TrailStep {
 }
 
 export interface LocationTrail {
-  /** The steps after the organization, outermost first. */
-  steps: TrailStep[];
+  /**
+   * The binder the page belongs to, for the top bar — null off a binder.
+   *
+   * A link unless the binder's own contents are the page.
+   */
+  binder: TrailStep | null;
+  /**
+   * Where inside the binder the page is, outermost first, for the line above
+   * the page's title. Ends at the page itself.
+   */
+  path: TrailStep[];
   /**
    * Whether the organization is itself the page — its binder list.
    *
-   * The organization step is drawn by the top bar rather than listed here,
-   * so it needs telling when it is the last word.
+   * The organization is drawn by the top bar rather than listed here, so it
+   * needs telling when it is the last word.
    */
   organizationIsCurrent: boolean;
 }
@@ -72,12 +79,9 @@ function documentLabel(filename: string): string {
   return formatDocumentName(parseDocumentFilename(filename).name);
 }
 
-function binderTrail(org: string, binder: string, search: string): TrailStep[] {
+/** Where in a binder its screen is. Empty on the binder's own contents. */
+function binderPath(org: string, binder: string, search: string): TrailStep[] {
   const params = new URLSearchParams(search);
-  const binderStep: TrailStep = {
-    label: formatDocumentName(binder),
-    href: buildBinderUrl({ org, binder }),
-  };
 
   const change = parseRequestedChange(search);
   const tab = binderTabFromSearch(search);
@@ -102,7 +106,6 @@ function binderTrail(org: string, binder: string, search: string): TrailStep[] {
             : null;
 
     return [
-      binderStep,
       changesStep,
       subpage === null
         ? here(changeLabel)
@@ -115,48 +118,41 @@ function binderTrail(org: string, binder: string, search: string): TrailStep[] {
   }
 
   if (params.get("archive") === "1") {
-    return [binderStep, here("Archive")];
+    return [here("Archive")];
   }
 
   const edit = params.get("edit");
   if (edit === "propose") {
-    return [binderStep, here("Propose changes")];
+    return [here("Propose changes")];
   }
 
   switch (tab) {
     case "changes":
-      return [binderStep, here("Change requests")];
+      return [here("Change requests")];
     case "history":
-      return [binderStep, here("History")];
+      return [here("History")];
     // People and Sign-off rules are sections of Settings; their addresses
     // still resolve there, so they are titled by the page they land on.
     case "settings":
     case "people":
     case "sign-off":
-      return [binderStep, here("Settings")];
+      return [here("Settings")];
     case "documents":
     default:
-      return [
-        edit === "1" ? binderStep : here(binderStep.label),
-        ...(edit === "1" ? [here("Editing")] : []),
-      ];
+      return edit === "1" ? [here("Editing")] : [];
   }
 }
 
-function documentTrail(
+/** Where in a binder a document is: its folders, then the document. */
+function documentPath(
   org: string,
   binder: string,
-  documentPath: string,
+  address: string,
   search: string,
 ): TrailStep[] {
-  const segments = documentPath.split("/").filter(Boolean);
-  const filename = segments.pop() ?? documentPath;
+  const segments = address.split("/").filter(Boolean);
+  const filename = segments.pop() ?? address;
   const change = parseRequestedChange(search);
-
-  const binderStep: TrailStep = {
-    label: formatDocumentName(binder),
-    href: buildBinderUrl({ org, binder }),
-  };
 
   // Read on a change's branch: the change is where the reader came from, and
   // the way back to it is worth a step. The path under it is the file's own.
@@ -175,7 +171,6 @@ function documentTrail(
         ];
 
   return [
-    binderStep,
     ...changeSteps,
     ...folderSteps(segments.join("/")),
     here(documentLabel(filename)),
@@ -187,45 +182,39 @@ function documentTrail(
  *
  * Takes the query as well as the route because a binder's screens live in the
  * query (`?tab=changes&change=4`), which the route does not carry.
+ *
+ * Pages across the organization — the queue, Documents, Billing — have no
+ * path: they are one level deep, their title names them and the sidebar marks
+ * them, so a path of one step would be a third name for the same place.
  */
 export function buildLocationTrail(
   route: AppRoute,
   search: string,
 ): LocationTrail {
-  const none = (steps: TrailStep[]): LocationTrail => ({
-    steps,
-    organizationIsCurrent: false,
-  });
-
-  switch (route.kind) {
-    // The route only carries a tab when the app navigated there itself; an
-    // address that was typed or reloaded says it in the query.
-    case "organization":
-      return (route.tab ?? new URLSearchParams(search).get("tab")) === "people"
-        ? none([here("People")])
-        : { steps: [], organizationIsCurrent: true };
-    case "binder":
-      return none(binderTrail(route.org, route.binder, search));
-    case "binderDocument":
-      return none(
-        documentTrail(route.org, route.binder, route.documentPath, search),
-      );
-    case "changes":
-      return none([here("Change requests")]);
-    case "documents":
-      return none([here("Documents")]);
-    case "activity":
-      return none([here("Activity")]);
-    case "billing":
-      return none([here("Billing")]);
-    case "adminSubscriptions":
-      return none([here("Pro access")]);
-    case "createOrganization":
-      return none([here("New organization")]);
-    // Home is the organization's front door and says so in its own greeting;
-    // a step reading "Home" under the organization would be a second name for
-    // the same place.
-    default:
-      return none([]);
+  if (route.kind === "binder" || route.kind === "binderDocument") {
+    const path =
+      route.kind === "binder"
+        ? binderPath(route.org, route.binder, search)
+        : documentPath(route.org, route.binder, route.documentPath, search);
+    const label = formatDocumentName(route.binder);
+    return {
+      binder:
+        path.length === 0
+          ? here(label)
+          : {
+              label,
+              href: buildBinderUrl({ org: route.org, binder: route.binder }),
+            },
+      path,
+      organizationIsCurrent: false,
+    };
   }
+
+  // The route only carries a tab when the app navigated there itself; an
+  // address that was typed or reloaded says it in the query.
+  const organizationIsCurrent =
+    route.kind === "organization" &&
+    (route.tab ?? new URLSearchParams(search).get("tab")) !== "people";
+
+  return { binder: null, path: [], organizationIsCurrent };
 }
