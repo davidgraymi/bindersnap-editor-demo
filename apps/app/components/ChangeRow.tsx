@@ -21,20 +21,16 @@ import { describeChangeRow } from "../changeRow";
  * the queue arrive with the sentence already decided (whose turn it is, which
  * binder) and hand it to `ChangeRowView`. Either way it is drawn once.
  *
+ * No buttons on the row. A list is for finding the change; every act on it —
+ * approving, publishing — is a decision, and a decision is taken on the
+ * change's own page, where what it does is in front of you.
+ *
  * See `changeRow.ts` for what it says and why it says so little.
  */
 
 interface ChangeRowProps {
   change: ChangeRowInput & { title: string; commentCount?: number };
   onOpen: () => void;
-  /**
-   * The act this row offers, when it offers one.
-   *
-   * Publish, on a change that is ready and yours to publish. Nothing else: a
-   * list is for finding the thing you want, and every button on every row is
-   * a decision taken without opening what it is about.
-   */
-  action?: React.ReactNode;
 }
 
 /**
@@ -78,7 +74,7 @@ function ChangeIcon({ outcome }: { outcome: ChangeRowInput["outcome"] }) {
   );
 }
 
-export function ChangeRow({ change, onOpen, action = null }: ChangeRowProps) {
+export function ChangeRow({ change, onOpen }: ChangeRowProps) {
   const facts = describeChangeRow(change);
   return (
     <ChangeRowView
@@ -89,7 +85,6 @@ export function ChangeRow({ change, onOpen, action = null }: ChangeRowProps) {
       outcome={change.outcome}
       commentCount={change.commentCount ?? 0}
       onOpen={onOpen}
-      action={action}
     />
   );
 }
@@ -108,7 +103,6 @@ interface ChangeRowViewProps {
   outcome?: ChangeRowInput["outcome"];
   commentCount?: number;
   onOpen: () => void;
-  action?: React.ReactNode;
 }
 
 /** The row itself, for a list that has already decided what it says. */
@@ -121,7 +115,6 @@ export function ChangeRowView({
   outcome,
   commentCount = 0,
   onOpen,
-  action = null,
 }: ChangeRowViewProps) {
   return (
     <li className="bs-row change-row">
@@ -173,8 +166,6 @@ export function ChangeRowView({
             </>
           ) : null}
         </span>
-
-        {action}
       </span>
     </li>
   );

@@ -262,8 +262,6 @@ function HomeChangeRowItem({
   row: HomeChangeRow;
   onOpen: (owner: string, repo: string, changeNumber: number) => void;
 }) {
-  const open = () => onOpen(row.owner, row.repo, row.number);
-
   return (
     <ChangeRowView
       title={row.title}
@@ -272,20 +270,7 @@ function HomeChangeRowItem({
       tone={row.tone}
       standing={row.standing}
       commentCount={row.commentCount}
-      onOpen={open}
-      // Publish is the one act worth taking from a list — the decision is
-      // made and it only needs doing. Review is not: it is the row itself.
-      action={
-        row.action === "Publish" ? (
-          <button
-            type="button"
-            className="bs-btn bs-btn--sm bs-btn-secondary"
-            onClick={open}
-          >
-            Publish
-          </button>
-        ) : null
-      }
+      onOpen={() => onOpen(row.owner, row.repo, row.number)}
     />
   );
 }
