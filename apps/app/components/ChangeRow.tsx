@@ -6,7 +6,7 @@ import {
   Undo2,
 } from "lucide-react";
 
-import type { ChangeRowInput } from "../changeRow";
+import type { ChangeRowInput, ChangeStandingTone } from "../changeRow";
 import { describeChangeRow } from "../changeRow";
 
 /**
@@ -15,6 +15,11 @@ import { describeChangeRow } from "../changeRow";
  * Home, the review queue and a binder's own Changes tab drew this three
  * different ways and all three said too much. One component now, so they
  * cannot drift again and so "what does a change row say" has one answer.
+ *
+ * Two layers, because the lists know different things: a binder's list has
+ * the change itself and lets `ChangeRow` work out what to say, while Home and
+ * the queue arrive with the sentence already decided (whose turn it is, which
+ * binder) and hand it to `ChangeRowView`. Either way it is drawn once.
  *
  * See `changeRow.ts` for what it says and why it says so little.
  */
@@ -75,29 +80,75 @@ function ChangeIcon({ outcome }: { outcome: ChangeRowInput["outcome"] }) {
 
 export function ChangeRow({ change, onOpen, action = null }: ChangeRowProps) {
   const facts = describeChangeRow(change);
-  const comments = change.commentCount ?? 0;
+  return (
+    <ChangeRowView
+      title={change.title}
+      meta={facts.meta}
+      tone={facts.tone}
+      standing={facts.standing}
+      outcome={change.outcome}
+      commentCount={change.commentCount ?? 0}
+      onOpen={onOpen}
+      action={action}
+    />
+  );
+}
 
+interface ChangeRowViewProps {
+  title: string;
+  /** "#4 · Alice opened 2 hours ago". */
+  meta: string;
+  /**
+   * Where the change is, when the list spans more than one place — the binder
+   * or the document, set before the meta in the same muted line.
+   */
+  context?: string | null;
+  tone: ChangeStandingTone;
+  standing: string;
+  outcome?: ChangeRowInput["outcome"];
+  commentCount?: number;
+  onOpen: () => void;
+  action?: React.ReactNode;
+}
+
+/** The row itself, for a list that has already decided what it says. */
+export function ChangeRowView({
+  title,
+  meta,
+  context = null,
+  tone,
+  standing,
+  outcome,
+  commentCount = 0,
+  onOpen,
+  action = null,
+}: ChangeRowViewProps) {
   return (
     <li className="bs-row change-row">
       <span className="bs-row-icon">
-        <ChangeIcon outcome={change.outcome} />
+        <ChangeIcon outcome={outcome} />
       </span>
       <button
         type="button"
         className="bs-row-body change-row-open"
         onClick={onOpen}
       >
-        <span className="bs-row-name change-row-title">{change.title}</span>
-        <span className="bs-row-meta">{facts.meta}</span>
+        <span className="bs-row-name change-row-title">{title}</span>
+        <span className="bs-row-meta">
+          {context ? (
+            <span className="change-row-context">{context} · </span>
+          ) : null}
+          {meta}
+        </span>
       </button>
 
       <span className="bs-row-right change-row-right">
         {/* A dot carries the colour and the word carries the meaning. A pill
             is a shape that says "this is unusual", and on every row of every
             list it says nothing while taking the eye first. */}
-        <span className={`change-standing change-standing--${facts.tone}`}>
+        <span className={`change-standing change-standing--${tone}`}>
           <span className="change-standing-dot" aria-hidden="true" />
-          {facts.standing}
+          {standing}
         </span>
 
         {/* **The slot is always here; what goes in it is not.** A count that
@@ -108,14 +159,17 @@ export function ChangeRow({ change, onOpen, action = null }: ChangeRowProps) {
             zero: a zero beside every row is still a column of zeroes. */}
         <span
           className="change-row-comments"
-          {...(comments > 0
-            ? { title: comments === 1 ? "1 comment" : `${comments} comments` }
+          {...(commentCount > 0
+            ? {
+                title:
+                  commentCount === 1 ? "1 comment" : `${commentCount} comments`,
+              }
             : { "aria-hidden": true })}
         >
-          {comments > 0 ? (
+          {commentCount > 0 ? (
             <>
               <MessageSquare size={13} strokeWidth={1.75} aria-hidden="true" />
-              {comments}
+              {commentCount}
             </>
           ) : null}
         </span>

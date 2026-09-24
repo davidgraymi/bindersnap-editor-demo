@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { ArrowRightToLine, Check, Clock, MessageSquare, X } from "lucide-react";
 
 import { getHomeChanges, type HomeOpenDocument } from "../api";
 import {
@@ -13,6 +12,7 @@ import {
   type HomeChangeRow,
   type HomeDecidedRow,
 } from "../homeChanges";
+import { ChangeRowView } from "./ChangeRow";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
 interface HomePageProps {
@@ -108,9 +108,9 @@ export function HomePage({
       </p>
 
       {error ? (
-        <section className="home-section">
-          <div className="home-section-head">
-            <span className="home-section-label">Something went wrong</span>
+        <section className="bs-panel home-section">
+          <div className="bs-panel-bar">
+            <h2 className="bs-panel-bar-title">Something went wrong</h2>
           </div>
           <div className="home-empty">
             <p>{error}</p>
@@ -124,17 +124,17 @@ export function HomePage({
           </div>
         </section>
       ) : isLoading ? (
-        <section className="home-section">
-          <div className="home-section-head">
-            <span className="home-section-label">Waiting on you</span>
+        <section className="bs-panel home-section">
+          <div className="bs-panel-bar">
+            <h2 className="bs-panel-bar-title">Waiting on you</h2>
           </div>
           <HomeSkeletonRows count={2} />
         </section>
       ) : !hasAnything ? (
-        <section className="home-section">
-          <div className="home-section-head">
-            <span className="home-section-label">Waiting on you</span>
-            <span className="home-section-spacer" />
+        <section className="bs-panel home-section">
+          <div className="bs-panel-bar">
+            <h2 className="bs-panel-bar-title">Waiting on you</h2>
+            <span className="bs-panel-bar-spacer" />
             <button
               type="button"
               className="home-section-link"
@@ -160,44 +160,46 @@ export function HomePage({
       ) : (
         <>
           {waitingOnYou.length > 0 ? (
-            <section className="home-section">
-              <div className="home-section-head">
-                <span className="home-section-label home-section-label--urgent">
-                  Waiting on you
-                </span>
+            <section className="bs-panel home-section">
+              <div className="bs-panel-bar">
+                <h2 className="bs-panel-bar-title">Waiting on you</h2>
                 <span className="home-section-count">
                   {waitingOnYou.length}
                 </span>
               </div>
-              {waitingOnYou.map((row) => (
-                <HomeChangeRowItem
-                  key={row.key}
-                  row={row}
-                  onOpen={onOpenChange}
-                />
-              ))}
+              <ul className="bs-row-list">
+                {waitingOnYou.map((row) => (
+                  <HomeChangeRowItem
+                    key={row.key}
+                    row={row}
+                    onOpen={onOpenChange}
+                  />
+                ))}
+              </ul>
             </section>
           ) : null}
 
           {submissions.length > 0 ? (
-            <section className="home-section">
-              <div className="home-section-head">
-                <span className="home-section-label">Your submissions</span>
+            <section className="bs-panel home-section">
+              <div className="bs-panel-bar">
+                <h2 className="bs-panel-bar-title">Your submissions</h2>
               </div>
-              {submissions.map((row) => (
-                <HomeChangeRowItem
-                  key={row.key}
-                  row={row}
-                  onOpen={onOpenChange}
-                />
-              ))}
+              <ul className="bs-row-list">
+                {submissions.map((row) => (
+                  <HomeChangeRowItem
+                    key={row.key}
+                    row={row}
+                    onOpen={onOpenChange}
+                  />
+                ))}
+              </ul>
             </section>
           ) : null}
 
-          <section className="home-section">
-            <div className="home-section-head">
-              <span className="home-section-label">Recently decided</span>
-              <span className="home-section-spacer" />
+          <section className="bs-panel home-section">
+            <div className="bs-panel-bar">
+              <h2 className="bs-panel-bar-title">Recently decided</h2>
+              <span className="bs-panel-bar-spacer" />
               <button
                 type="button"
                 className="home-section-link"
@@ -211,13 +213,15 @@ export function HomePage({
                 <p>Nothing has been decided yet.</p>
               </div>
             ) : (
-              decided.map((row) => (
-                <HomeDecidedRowItem
-                  key={row.key}
-                  row={row}
-                  onOpen={onOpenChange}
-                />
-              ))
+              <ul className="bs-row-list">
+                {decided.map((row) => (
+                  <HomeDecidedRowItem
+                    key={row.key}
+                    row={row}
+                    onOpen={onOpenChange}
+                  />
+                ))}
+              </ul>
             )}
           </section>
         </>
@@ -242,6 +246,15 @@ function HomeSkeletonRows({ count }: { count: number }) {
   );
 }
 
+/**
+ * One change request on Home — the same row every other list draws.
+ *
+ * Home used to draw its own: a tinted icon tile, the document in bold, and a
+ * Review button that did exactly what clicking the row did. Three lists, three
+ * rows, one object. What Home knows that the others do not is which document
+ * the change is about and whose turn it is; the first leads the meta line, the
+ * second is the section the row is in.
+ */
 function HomeChangeRowItem({
   row,
   onOpen,
@@ -252,75 +265,28 @@ function HomeChangeRowItem({
   const open = () => onOpen(row.owner, row.repo, row.number);
 
   return (
-    <div
-      className="home-row"
-      role="button"
-      tabIndex={0}
-      onClick={open}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          open();
-        }
-      }}
-    >
-      <span
-        className={`home-row-icon home-row-icon--${row.kind === "needs_review" ? "urgent" : row.kind === "ready_to_publish" ? "done" : "quiet"}`}
-        aria-hidden="true"
-      >
-        {row.kind === "needs_review" ? (
-          <ArrowRightToLine size={16} strokeWidth={1.5} />
-        ) : row.kind === "ready_to_publish" ? (
-          <Check size={16} strokeWidth={1.6} />
-        ) : (
-          <Clock size={16} strokeWidth={1.4} />
-        )}
-      </span>
-
-      <span className="home-row-body">
-        <span className="home-row-title">{row.title}</span>
-        <span className="home-row-meta">
-          <span className="home-row-docref">{row.documentName}</span> ·{" "}
-          {row.meta}
-        </span>
-      </span>
-
-      {/* A dot and a word. It was a pill holding a sentence, beside a meta
-          line saying the same thing in more words. */}
-      <span className={`change-standing change-standing--${row.tone}`}>
-        <span className="change-standing-dot" aria-hidden="true" />
-        {row.standing}
-      </span>
-
-      {/* Always the slot, only sometimes the count — the same static column
-          the change list keeps, for the same reason: home stacks these rows
-          too, and a standing that sits in a different place on every other
-          row is a list nobody can scan. */}
-      <span
-        className="change-row-comments"
-        aria-hidden={row.commentCount === 0}
-      >
-        {row.commentCount > 0 ? (
-          <>
-            <MessageSquare size={13} strokeWidth={1.75} aria-hidden="true" />
-            {row.commentCount}
-          </>
-        ) : null}
-      </span>
-
-      {row.action ? (
-        <button
-          type="button"
-          className="home-row-action"
-          onClick={(event) => {
-            event.stopPropagation();
-            open();
-          }}
-        >
-          {row.action}
-        </button>
-      ) : null}
-    </div>
+    <ChangeRowView
+      title={row.title}
+      context={row.documentName}
+      meta={row.meta}
+      tone={row.tone}
+      standing={row.standing}
+      commentCount={row.commentCount}
+      onOpen={open}
+      // Publish is the one act worth taking from a list — the decision is
+      // made and it only needs doing. Review is not: it is the row itself.
+      action={
+        row.action === "Publish" ? (
+          <button
+            type="button"
+            className="bs-btn bs-btn--sm bs-btn-secondary"
+            onClick={open}
+          >
+            Publish
+          </button>
+        ) : null
+      }
+    />
   );
 }
 
@@ -331,44 +297,15 @@ function HomeDecidedRowItem({
   row: HomeDecidedRow;
   onOpen: (owner: string, repo: string, changeNumber: number) => void;
 }) {
-  const open = () => onOpen(row.owner, row.repo, row.number);
-
   return (
-    <div
-      className="home-row"
-      role="button"
-      tabIndex={0}
-      onClick={open}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          open();
-        }
-      }}
-    >
-      <span
-        className={`home-row-icon home-row-icon--${row.outcome === "published" ? "done" : "quiet"}`}
-        aria-hidden="true"
-      >
-        {row.outcome === "published" ? (
-          <Check size={16} strokeWidth={1.6} />
-        ) : (
-          <X size={16} strokeWidth={1.5} />
-        )}
-      </span>
-
-      <span className="home-row-body">
-        <span className="home-row-title">{row.title}</span>
-        <span className="home-row-meta">
-          <span className="home-row-docref">{row.documentName}</span> ·{" "}
-          {row.meta}
-        </span>
-      </span>
-
-      <span className={`change-standing change-standing--${row.tone}`}>
-        <span className="change-standing-dot" aria-hidden="true" />
-        {row.standing}
-      </span>
-    </div>
+    <ChangeRowView
+      title={row.title}
+      context={row.documentName}
+      meta={row.meta}
+      tone={row.tone}
+      standing={row.standing}
+      outcome={row.outcome === "published" ? "published" : "declined"}
+      onOpen={() => onOpen(row.owner, row.repo, row.number)}
+    />
   );
 }
