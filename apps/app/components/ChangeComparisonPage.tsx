@@ -80,6 +80,13 @@ interface ChangeComparisonPageProps {
   focusDocument?: string | null;
   onBackToChange: () => void;
   /**
+   * The address of the change's branch at its root — the whole binder as the
+   * change would leave it. Where the branch under the title links to.
+   */
+  branchHref: string;
+  /** Go to the branch's root, in the app. */
+  onOpenBranch: () => void;
+  /**
    * The address of one document's proposed file, on the change's branch —
    * what View links to, so it can be opened in a new tab or sent to somebody.
    */
@@ -222,6 +229,8 @@ export function ChangeComparisonPage({
   headRef,
   focusDocument = null,
   onBackToChange,
+  branchHref,
+  onOpenBranch,
   fileHref,
   onReadFile,
   onDownload,
@@ -509,14 +518,6 @@ export function ChangeComparisonPage({
   const allCollapsed =
     rows.length > 0 && rows.every((row) => collapsed.has(row.anchor));
 
-  /**
-   * Where the branch link lands: the first document the change keeps, read on
-   * the branch, which puts the binder's own explorer at that branch beside it.
-   * A change that only removes documents has nothing on its branch to open,
-   * so its branch is named and not linked.
-   */
-  const branchDocument = rows.find((row) => row.kind !== "removed") ?? null;
-
   /* The way back is a crumb, not a button floating above the title — the same
      row the change request itself uses, so the two screens open the same way.
      "Change 4" is not a name, which is why a change keeps its crumbs where a
@@ -545,33 +546,21 @@ export function ChangeComparisonPage({
               {headRef ? (
                 <>
                   {" from "}
-                  {branchDocument ? (
-                    <a
-                      className="cmp-branch"
-                      href={fileHref(branchDocument.slugPath)}
-                      onClick={(event) =>
-                        followInApp(event, () =>
-                          onReadFile(branchDocument.slugPath),
-                        )
-                      }
-                    >
-                      <GitBranch
-                        size={12}
-                        strokeWidth={1.75}
-                        aria-hidden="true"
-                      />
-                      {headRef}
-                    </a>
-                  ) : (
-                    <span className="cmp-branch">
-                      <GitBranch
-                        size={12}
-                        strokeWidth={1.75}
-                        aria-hidden="true"
-                      />
-                      {headRef}
-                    </span>
-                  )}
+                  {/* The branch's root, not its first file — the whole
+                      binder as this change would leave it, which a change
+                      that only archives has as much as any other. */}
+                  <a
+                    className="cmp-branch"
+                    href={branchHref}
+                    onClick={(event) => followInApp(event, onOpenBranch)}
+                  >
+                    <GitBranch
+                      size={12}
+                      strokeWidth={1.75}
+                      aria-hidden="true"
+                    />
+                    {headRef}
+                  </a>
                 </>
               ) : null}
             </p>

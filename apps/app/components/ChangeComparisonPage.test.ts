@@ -177,6 +177,8 @@ function page(
     headRef: "change-4",
     author: "alice",
     onBackToChange: () => {},
+    branchHref: "/riverside/clinical?ref=change-4&change=4",
+    onOpenBranch: () => {},
     fileHref: (slugPath: string) =>
       `/riverside/clinical/${slugPath}?ref=change-4&change=4`,
     onReadFile: () => {},
@@ -311,6 +313,8 @@ test("a change that versions no document says what it does instead", async () =>
     headRef: "sign-off/nursing",
     author: "alice",
     onBackToChange: () => {},
+    branchHref: "/riverside/clinical?ref=change-4&change=4",
+    onOpenBranch: () => {},
     fileHref: (slugPath: string) =>
       `/riverside/clinical/${slugPath}?ref=change-4&change=4`,
     onReadFile: () => {},
@@ -342,6 +346,8 @@ test("a change with no branch on record says why it cannot compare", async () =>
     headRef: null,
     author: "alice",
     onBackToChange: () => {},
+    branchHref: "/riverside/clinical?ref=change-4&change=4",
+    onOpenBranch: () => {},
     fileHref: (slugPath: string) =>
       `/riverside/clinical/${slugPath}?ref=change-4&change=4`,
     onReadFile: () => {},
@@ -370,9 +376,9 @@ test("the line under the title says who wants to publish what, from where", asyn
   expect(byline?.textContent).toBe(
     "alice wants to publish 2 documents from change-4",
   );
-  // The branch is a place, so it is a link to it.
+  // The branch is a place, so it is a link to it — its root, not a file.
   expect(byline?.querySelector("a.cmp-branch")?.getAttribute("href")).toBe(
-    "/riverside/clinical/clinical/hand-hygiene?ref=change-4&change=4",
+    "/riverside/clinical?ref=change-4&change=4",
   );
 
   unmount();

@@ -174,29 +174,39 @@ test("folding a document keeps its bar, and every act in it", async ({
   ).toBeVisible();
 });
 
-test("the branch and View both lead to the file on the change's branch", async ({
+test("the branch opens the binder at its root, and View opens the file", async ({
   page,
 }) => {
   await signInAsAlice(page);
   await page.goto(comparisonUrl("clinical", 19));
 
-  // The branch under the title is a place, so it goes somewhere: the binder
-  // read at that branch, opened on the change's first document.
+  // The branch under the title is a place, so it goes somewhere: the whole
+  // binder read at that branch, the way a code host opens a branch.
   const branch = page.locator("a.cmp-branch");
   await expect(branch).toBeVisible();
-  const href = await branch.getAttribute("href");
-  expect(href).toMatch(/\?ref=.+&change=19$/);
+  const branchName = (await branch.textContent())!.trim();
+  await expect(branch).toHaveAttribute(
+    "href",
+    /^\/[^/]+\/clinical\?ref=.+&change=19$/,
+  );
 
-  // View in the file's bar is the same address for that one file — a real
-  // link, so it can be opened in a new tab or sent to somebody.
-  const view = page
-    .locator(".cmp-file-head")
-    .first()
-    .getByRole("link", { name: "View" });
-  await expect(view).toHaveAttribute("href", href!);
+  // View in the file's bar is that one file on the branch — a real link, so
+  // it can be opened in a new tab or sent to somebody.
+  await expect(
+    page.locator(".cmp-file-head").first().getByRole("link", { name: "View" }),
+  ).toHaveAttribute("href", /\/clinical\/.+\?ref=.+&change=19$/);
 
   await branch.click();
-  await expect(page).toHaveURL(
-    /\/clinical\/administrative\/complaints\/patient-complaints-policy\?ref=/,
-  );
+  await expect(page).toHaveURL(/\/clinical\?ref=.+&change=19$/);
+  // The tree, named for the branch it is read on, with the way back.
+  await expect(page.locator(".binder-pane .cmp-branch")).toHaveText(branchName);
+  await expect(page.locator(".binder-tree-row").first()).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Back to change 19" }),
+  ).toBeVisible();
+
+  // A policy opened from there is still read on the branch.
+  await page.getByRole("button", { name: "Code Of Conduct" }).click();
+  await expect(page).toHaveURL(/\/clinical\/[^?]+\?ref=.+&change=19$/);
+  await expect(page.locator("h1.bs-title")).toHaveText(/code of conduct/i);
 });

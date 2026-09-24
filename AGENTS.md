@@ -117,7 +117,8 @@ What is in the list and what each row says lives in
 
 **It is laid out the way a code review is.** Under the title, one line says
 who wants to publish how many documents from which branch, and the branch is
-a link to that branch in the binder. Below it, a tree of only what changed —
+a link to the binder's root read at that branch (`/{org}/{binder}?ref=…&change=N`
+— the whole tree as the change would leave it, not its first file). Below it, a tree of only what changed —
 grouped by folder — sits on the **left**, and one panel per document on the
 right, in the same order. **Every fact and control about a document is in
 that panel's single bar**: its path, its word counts (`+12 −3`), its version

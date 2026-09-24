@@ -9,6 +9,7 @@ import {
 } from "../api";
 import { describeChangedDocument, describeMove } from "../binderChange";
 import { buildDocumentUrl, downloadFileName } from "../binderDocument";
+import { buildBinderUrl } from "../binderShell";
 import { buildChangedDocumentRows } from "../changedDocuments";
 import type { ChangeScope } from "../changeScope";
 import { formatDocumentName, toChangeRecord } from "../documentDisplay";
@@ -46,6 +47,8 @@ interface BinderChangePageProps {
    * "read what this proposes" is a navigation rather than a panel.
    */
   onOpenOnBranch: (slugPath: string, branch: string) => void;
+  /** Open the whole binder on this change's branch, at its root. */
+  onOpenBranch: (branch: string) => void;
   /** Something about the change moved: the binder's own counts have too. */
   onChanged: () => void;
   /** Where the required reviewers come from, for the reader who asks. */
@@ -76,6 +79,7 @@ export function BinderChangePage({
   onChanged,
   onOpenSignOffRules,
   onOpenOnBranch,
+  onOpenBranch,
 }: BinderChangePageProps) {
   const [detail, setDetail] = useState<WorkspaceChangeDetailPayload | null>(
     null,
@@ -309,6 +313,18 @@ export function BinderChangePage({
              document rather than at the top of a page of six. */
           focusDocument={shown?.slugPath ?? null}
           onBackToChange={() => onViewChange("discussion")}
+          /* The branch's root: the binder as this change would leave it. */
+          branchHref={buildBinderUrl({
+            org,
+            binder,
+            ref: detail.change.branchName || null,
+            change: changeNumber,
+          })}
+          onOpenBranch={() => {
+            if (detail.change.branchName) {
+              onOpenBranch(detail.change.branchName);
+            }
+          }}
           /* The same address `onOpenOnBranch` goes to, so View is a real link:
              it opens in a new tab and can be sent to somebody. */
           fileHref={(slugPath) =>
