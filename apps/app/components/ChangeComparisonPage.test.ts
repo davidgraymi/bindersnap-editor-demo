@@ -94,12 +94,22 @@ async function render(element: ReactElement) {
   const root = createRoot(container);
   flushSync(() => root.render(element));
 
-  // Every comparison on the page fetches two files and reads both. Poll until
-  // none of them is still drawing a skeleton rather than guessing at a delay.
-  for (let attempt = 0; attempt < 200; attempt += 1) {
+  // Every comparison on the page fetches two files and reads both, and only
+  // then reports its word counts up to the page. Poll until nothing is still
+  // drawing a skeleton *and* the scale line has stopped measuring, rather than
+  // guessing at a delay: the skeletons go a render before the counts land, and
+  // a slow runner lands between the two. A page that draws no document has
+  // nothing to measure, and is settled once its skeletons are gone.
+  for (let attempt = 0; attempt < 500; attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 5));
     flushSync(() => {});
-    if (!container.querySelector(".bs-skeleton")) break;
+    if (container.querySelector(".bs-skeleton")) continue;
+    if (
+      !container.querySelector(".cmp-file") ||
+      !container.textContent?.includes("measuring the changes")
+    ) {
+      break;
+    }
   }
 
   return {
