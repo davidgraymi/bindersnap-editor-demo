@@ -4,7 +4,6 @@ import { Bell, FileText, LogOut, Moon, Shield } from "lucide-react";
 import type { SessionUser } from "../api";
 import { buildDocumentsUrl, parseDocumentsViewState } from "../documentsView";
 import type { AppRoute } from "../routes";
-import { ActivityLogPage } from "./ActivityLogPage";
 import { BinderShell } from "./BinderShell";
 import { OrganizationPage } from "./OrganizationPage";
 import { OrganizationSwitcher } from "./OrganizationSwitcher";
@@ -458,8 +457,6 @@ export function AppShell({
                   })
                 }
               />
-            ) : route.kind === "activity" ? (
-              <ActivityLogPage />
             ) : route.kind === "adminSubscriptions" ? (
               <AdminSubscriptionManagementPage
                 currentUsername={currentUsername}

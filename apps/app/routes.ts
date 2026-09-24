@@ -9,7 +9,6 @@ export type AppRoute =
   | { kind: "workspace" }
   | { kind: "documents" }
   | { kind: "changes" }
-  | { kind: "activity" }
   | { kind: "adminSubscriptions" }
   | { kind: "billing" }
   | { kind: "createOrganization" }
@@ -161,8 +160,11 @@ export function getRoute(pathname: string): AppRoute {
     return { kind: "workspace" };
   }
 
+  // There was an Activity page, a "coming soon" placeholder. An address
+  // somebody kept for it lands on Home rather than on an organization called
+  // "activity", which is why the name stays reserved.
   if (normalizedPath === "/activity") {
-    return { kind: "activity" };
+    return { kind: "workspace" };
   }
 
   if (
@@ -215,8 +217,6 @@ export function routeToPath(route: AppRoute): string {
       return "/documents";
     case "changes":
       return "/changes";
-    case "activity":
-      return "/activity";
     case "adminSubscriptions":
       return "/admin/subscriptions";
     case "billing":
@@ -256,7 +256,6 @@ export function isProtectedAppRoute(route: AppRoute): boolean {
     route.kind === "workspace" ||
     route.kind === "documents" ||
     route.kind === "changes" ||
-    route.kind === "activity" ||
     route.kind === "adminSubscriptions" ||
     // An organization's own pages need a session to resolve at all: which
     // binders you can see is a question about you.

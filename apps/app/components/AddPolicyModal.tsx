@@ -202,7 +202,7 @@ export function AddPolicyModal({
       setError(
         err instanceof Error && err.message.trim() !== ""
           ? err.message
-          : "Unable to add this policy.",
+          : "Unable to add this document.",
       );
       setSubmitting(false);
     }
@@ -219,7 +219,7 @@ export function AddPolicyModal({
         className="upload-modal create-document-modal"
         onClick={(event) => event.stopPropagation()}
       >
-        <h2>Add a policy</h2>
+        <h2>Add a document</h2>
 
         <div className="create-document-form bs-fields">
           {/* The file input is behind the zone: the zone is the control, and
@@ -273,7 +273,7 @@ export function AddPolicyModal({
             >
               <AppIcon icon={Upload} size="lg" aria-hidden="true" />
               <span className="bs-dropzone-lead">
-                Drop the policy here, or choose a file
+                Drop the document here, or choose a file
               </span>
               <span className="bs-field-hint">
                 Word, PDF, Excel — whatever it is written in, up to 25 MB.
@@ -387,8 +387,8 @@ export function AddPolicyModal({
             {draft
               ? "This goes into your draft. Nobody is asked to look at it until you propose it."
               : changeNumber === null
-                ? "This opens a change request. The policy joins the binder once it is approved and published."
-                : "This goes into that change request. The policy joins the binder once the change is approved and published."}
+                ? "This opens a change request. The document joins the binder once it is approved and published."
+                : "This goes into that change request. The document joins the binder once the change is approved and published."}
           </p>
 
           <div className="upload-modal-actions">
@@ -398,7 +398,7 @@ export function AddPolicyModal({
               onClick={() => void handleSubmit()}
               disabled={!canSubmit}
             >
-              {submitting ? "Adding…" : "Add policy"}
+              {submitting ? "Adding…" : "Add document"}
             </button>
             <button
               className="bs-btn bs-btn-secondary"

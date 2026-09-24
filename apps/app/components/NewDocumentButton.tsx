@@ -24,8 +24,8 @@ export function NewDocumentButton({ onClick }: NewDocumentButtonProps) {
       className="app-topnav-icon-btn app-topnav-new-btn"
       type="button"
       id="topnav-new-doc-btn"
-      title="New policy"
-      aria-label="New policy"
+      title="New document"
+      aria-label="New document"
       onClick={onClick}
     >
       <Plus size={16} strokeWidth={1.5} aria-hidden="true" />

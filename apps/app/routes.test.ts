@@ -198,7 +198,6 @@ test("a bare /{org} addresses the organization itself", () => {
 
 test("the app's own single-segment routes are still not organizations", () => {
   expect(getRoute("/documents").kind).toBe("documents");
-  expect(getRoute("/activity").kind).toBe("activity");
   expect(getRoute("/login").kind).toBe("login");
   expect(getRoute("/billing").kind).toBe("billing");
 });

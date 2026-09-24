@@ -1037,7 +1037,6 @@ input {
    follows it. */
 .doc-header-title,
 .docs-title,
-.activity-heading,
 .home-greeting {
   font-family: var(--brand-font-serif);
   font-size: 26px;
@@ -5938,130 +5937,6 @@ button.bs-knot {
   }
 }
 
-/* ═════════════════════════════════════════════════════════════
-   ACTIVITY LOG
-   ═════════════════════════════════════════════════════════════ */
-
-.activity-page {
-  display: grid;
-  gap: var(--brand-space-6);
-  align-content: start;
-}
-
-.activity-header {
-  display: grid;
-  gap: var(--brand-space-2);
-}
-
-.activity-heading {
-  margin: 0;
-}
-
-.activity-subtitle {
-  margin: 0;
-  max-width: 760px;
-  color: var(--bs-text-faint);
-  font-size: var(--brand-text-ui-md);
-  line-height: var(--brand-leading-relaxed);
-}
-
-.activity-preview-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--brand-space-3);
-}
-
-.activity-preview-card {
-  display: grid;
-  gap: var(--brand-space-2);
-  padding: var(--brand-space-4) 18px;
-  background: var(--bs-surface-1);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-md);
-}
-
-.activity-preview-label {
-  font-size: var(--brand-text-xs);
-  letter-spacing: var(--brand-tracking-wide);
-  text-transform: uppercase;
-  color: var(--bs-text-faint);
-}
-
-.activity-preview-value {
-  font-family: var(--brand-font-serif);
-  font-size: 20px;
-  font-weight: var(--brand-weight-semibold);
-  color: var(--bs-text-primary);
-}
-
-.activity-preview-copy {
-  margin: 0;
-  color: var(--bs-text-faint);
-  font-size: var(--brand-text-ui-md);
-  line-height: var(--brand-leading-relaxed);
-}
-
-.activity-placeholder {
-  padding: var(--brand-space-8);
-  display: grid;
-  gap: var(--brand-space-4);
-}
-
-.activity-placeholder-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--brand-space-3);
-}
-
-/* Below the page's own title, not above it. This was `--brand-text-h2` — a
-   landing-page size, up to 42px — inside a page whose name is 26px, so the
-   heading on a placeholder card outranked the heading on the page. "We need
-   less editorial and more useful tool" is what that looks like in one rule. */
-.activity-placeholder-title {
-  margin: var(--brand-space-2) 0 0;
-  font-family: var(--brand-font-serif);
-  font-size: var(--brand-text-h3);
-  font-weight: var(--brand-weight-semibold);
-  line-height: var(--brand-leading-tight);
-}
-
-.activity-placeholder-body {
-  margin: 0;
-  color: var(--bs-text-muted);
-  line-height: var(--brand-leading-relaxed);
-}
-
-.activity-placeholder-list {
-  display: grid;
-  gap: var(--brand-space-3);
-}
-
-.activity-placeholder-item {
-  display: grid;
-  gap: 4px;
-  padding: var(--brand-space-4);
-  background: var(--bs-surface-2);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-md);
-}
-
-.activity-placeholder-item-title {
-  font-family: var(--brand-font-serif);
-  font-size: var(--brand-text-body);
-  color: var(--bs-text-primary);
-}
-
-.activity-placeholder-item-copy {
-  color: var(--bs-text-faint);
-  font-size: var(--brand-text-ui-md);
-  line-height: var(--brand-leading-relaxed);
-}
-
-.activity-coming-soon {
-  margin-top: var(--brand-space-1);
-}
-
 /* ══════════════════════════════════════════════════════════════
    DOCUMENTS PAGE
    The library. Home is the queue; this is the shelf — one scope at
@@ -6403,10 +6278,6 @@ button.bs-knot {
     flex-direction: column;
     align-items: flex-start;
   }
-
-  .activity-preview-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (max-width: 640px) {
@@ -6426,11 +6297,6 @@ button.bs-knot {
 
   .docs-pill {
     margin-left: 50px;
-  }
-
-  .activity-placeholder-head {
-    flex-direction: column;
-    align-items: flex-start;
   }
 }
 

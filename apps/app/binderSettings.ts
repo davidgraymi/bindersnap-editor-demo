@@ -72,7 +72,7 @@ export const GROUP_LEVELS = [
   {
     value: "editor",
     label: "Editor",
-    note: "Writes policies and publishes approved versions. Uses a seat.",
+    note: "Writes documents and publishes approved versions. Uses a seat.",
   },
   {
     value: "admin",

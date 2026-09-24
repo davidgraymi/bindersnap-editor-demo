@@ -208,7 +208,7 @@ registry.registerPath({
   },
   responses: {
     200: {
-      description: "Every policy in every binder this person can reach",
+      description: "Every document in every binder this person can reach",
       content: {
         "application/json": { schema: LibraryPayloadSchema },
       },

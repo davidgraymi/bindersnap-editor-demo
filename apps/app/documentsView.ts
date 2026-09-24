@@ -115,8 +115,8 @@ export function applyBinderFilter(
   return rows.filter((row) => binderKey(row) === binder);
 }
 
-/** "12 policies", "1 policy", "No policies". */
+/** "12 documents", "1 document", "No documents". */
 export function describeDocumentCount(count: number): string {
-  if (count === 0) return "No policies";
-  return count === 1 ? "1 policy" : `${count} policies`;
+  if (count === 0) return "No documents";
+  return count === 1 ? "1 document" : `${count} documents`;
 }

@@ -7859,7 +7859,7 @@ async function resolveChangeToJoin(params: {
   // binder reads that branch prefix to mean "this change is about no document".
   if ((match.head?.ref ?? "").startsWith("sign-off/")) {
     return {
-      error: `Change ${changeNumber} changes who signs off on this binder. A policy cannot go in it.`,
+      error: `Change ${changeNumber} changes who signs off on this binder. A document cannot go in it.`,
     };
   }
 
@@ -8833,7 +8833,7 @@ async function handleBinderShapeChange(
             "",
             `${session.username} proposed this from Bindersnap.`,
             "",
-            "Nothing in this change alters what any policy says. It changes",
+            "Nothing in this change alters what any document says. It changes",
             "where things are filed, which the binder records like anything",
             "else.",
           ].join("\n"),
@@ -8974,7 +8974,7 @@ async function handleReviseWorkspaceDocument(
       return json(
         404,
         {
-          error: `"${documentPath}" is not in this binder. A new policy is added rather than revised.`,
+          error: `"${documentPath}" is not in this binder. A new document is added rather than revised.`,
         },
         baseHeaders,
       );
@@ -10996,7 +10996,7 @@ export function createApiServer() {
             async ({ body, tree, client }) => {
               const uid = typeof body.uid === "string" ? body.uid : "";
               if (uid === "") {
-                return { error: "Name the policy to restore." };
+                return { error: "Name the document to restore." };
               }
 
               // Straight off the version tag the policy last published at. The
@@ -11012,7 +11012,7 @@ export function createApiServer() {
               if (!archived) {
                 return {
                   error:
-                    "That policy has no published version to restore from.",
+                    "That document has no published version to restore from.",
                 };
               }
 
